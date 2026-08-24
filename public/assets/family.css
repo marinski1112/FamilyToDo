@@ -127,3 +127,14 @@ button,.btn{min-height:42px;border:0;border-radius:11px;padding:10px 14px;font-w
 .assignee-list{background:#f8fafc!important;border:1px solid #e8edf3!important;border-radius:12px!important}.checkrow{display:flex!important;align-items:center!important;gap:7px!important;min-height:34px!important}.checkrow input[type=checkbox],input[type=checkbox],input[type=radio]{accent-color:#4f46e5}.checkrow input[type=checkbox]{width:19px!important;height:19px!important;min-height:19px!important;margin:0!important;flex:0 0 19px}
 .fab{bottom:calc(var(--nav-h) + 14px)!important;right:16px!important;width:54px!important;height:54px!important}
 @media(max-width:520px){.wrap{width:calc(100% - 16px)}.card{padding:14px!important}.page-head h1{font-size:22px!important}.home-menu a{min-height:110px!important}.bottom-nav a{font-size:9px!important}.bottom-nav a span{font-size:17px!important}}
+
+/* Wave 16 - form sizing, task-linked shopping and notification UI */
+input[type="date"],input[type="datetime-local"],input[type="time"]{min-width:0!important;max-width:100%!important;width:100%!important;box-sizing:border-box!important;display:block!important}
+.form-card input[type="date"],.form-card input[type="datetime-local"],.form-card input[type="time"]{font-variant-numeric:tabular-nums}
+.batch-product{grid-template-columns:minmax(0,1fr) 70px minmax(150px,1fr) 34px!important}
+.batch-product .remove-product{grid-column:4}
+.task-shopping{margin:9px 0 0 31px;padding:8px 10px;background:#f8fafc;border:1px solid #e8edf3;border-radius:12px}
+.task-shopping summary{cursor:pointer;font-weight:800;font-size:12px;color:#374151;margin-bottom:7px}
+.linked-shopping-row{padding:7px 0;border-top:1px solid #edf0f4}.linked-shopping-row:first-of-type{border-top:0}
+.shopping-check-row{display:flex!important;align-items:center!important;gap:8px!important}.shopping-check-row input{width:19px!important;height:19px!important;min-height:19px!important;margin:0!important;flex:0 0 19px}.linked-shopping-row .meta{margin-left:27px}.task-shopping>.btn{margin-top:7px}
+@media(max-width:520px){.batch-product{grid-template-columns:minmax(0,1fr) 64px!important}.batch-product input[type="url"]{grid-column:1 / -2}.batch-product .remove-product{grid-column:3;grid-row:1;align-self:center}.task-shopping{margin-left:27px}}
