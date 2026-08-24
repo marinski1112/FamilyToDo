@@ -14,6 +14,12 @@ export default {
     try{
       if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
+      // Session-backed routes require APP_SECRET. Keep the failure explicit instead of
+      // allowing CryptoKey/session initialization to become an opaque Worker 1101.
+      if(!env.APP_SECRET){
+        console.error('[FamilyTODO] Required secret APP_SECRET is not configured for this deployment.');
+        return new Response('<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\"><title>Family TODO LINE - 設定エラー</title></head><body><h1>設定エラー</h1><p>Cloudflare Worker の APP_SECRET が設定されていません。</p><p>Cloudflare Dashboard の Variables and Secrets → Secrets で、Production Worker に APP_SECRET を登録してから再Deployしてください。</p></body></html>',{status:500,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});
+      }
       const context=await makeContext(request,env);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return liffLogin(request,context);
       if(url.pathname==='/api/family/create') return createFamily(request,context);
