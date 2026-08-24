@@ -1,8 +1,9 @@
-import { json, redirect } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
+import { json, redirect, html } from './response';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, eventEdit, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
 import { openSession, getSessionCookie } from './session';
 
 const text = (r: Response) => r;
+const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
 
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 
@@ -65,7 +66,7 @@ export default {
       if(url.pathname==='/task/delete.php') return taskDelete(request,context);
       if(url.pathname==='/task/convert_occurrence.php') return convertOccurrence(request,context);
       if(url.pathname==='/app/message_new.php') return messageNew(context);
-      if(url.pathname==='/app/shopping_new.php') return shoppingNew(context,url.searchParams.get('date')||'');
+      if(url.pathname==='/app/shopping_new.php') return shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
       if(url.pathname==='/app/settings_content.php') return settingsContent(context);
       if(url.pathname==='/app/settings_members.php') return settingsMembers(request,context);
       if(url.pathname==='/app/settings_notifications.php') return settingsNotifications(request,context);
@@ -78,6 +79,7 @@ export default {
       if(url.pathname==='/item/edit.php') return itemEdit(request,context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/app/shopping_edit.php') return shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/calendar/event/new') return eventNew(context,url.searchParams.get('date')||asDateOffset(0));
+      if(url.pathname==='/calendar/event/edit') return eventEdit(request,context,Number(url.searchParams.get('id')||0));
       return env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired) return redirect('/login.php');
@@ -86,7 +88,7 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
-    if(env.NOTIFY_MODE !== 'scheduled'){ console.log(`[Family TODO LINE] scheduled ${controller.cron}; notify_mode=${env.NOTIFY_MODE}`); return; }
+    console.log(`[Family TODO LINE] scheduled ${controller.cron}; processing notifications`);
     ctx.waitUntil(processNotifications(env));
   }
 } satisfies ExportedHandler<Env>;
@@ -98,8 +100,24 @@ async function reorderApi(request:Request,ctx:any):Promise<Response>{
   const ids=Array.isArray(b.ids)?(b.ids as unknown[]).map(Number).filter(n=>n>0):[];if(!ids.length)return json({ok:false,error:'順序がありません。'},400);
   await ctx.env.DB.batch(ids.map((id:number,i:number)=>ctx.env.DB.prepare('UPDATE tasks SET sort_order=?,updated_at=? WHERE id=? AND family_id=?').bind(i, new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' '),id,m.family_id)));return json({ok:true});}
 
-async function taskNew(ctx: any,date:string): Promise<Response>{if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all();const body=`<div class="card"><h1>📝 タスク追加</h1><form id="taskForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><input type="hidden" name="date" value="${date}"><label>タイトル</label><input name="title" required><label>日付</label><input type="date" name="dateOnly" value="${date}" required><label>開始時刻</label><input type="time" name="startTime"><label>終了時刻</label><input type="time" name="endTime"><label>場所</label><input name="location"><label>担当者</label>${members.results.map((m:any)=>`<label><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}<button>登録する</button></form></div><script>document.getElementById('taskForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;const b=Object.fromEntries(new FormData(f));b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));const r=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.href='/today.php?date='+encodeURIComponent(b.dateOnly);else alert(d.error||'登録に失敗しました');}</script>`;return new Response(layout('タスク追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})}
-async function itemNew(ctx:any,date:string):Promise<Response>{if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/item/new.php?date='+date));const body=`<div class="card"><h1>🎒 持ち物追加</h1><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" required><label>日付</label><input type="date" name="date" value="${date}"><button>登録する</button></form></div><script>document.getElementById('itemForm').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch('/api/item',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.href='/today.php?date='+encodeURIComponent(b.date);else alert(d.error||'登録に失敗しました');}</script>`;return new Response(layout('持ち物追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})}
+async function taskNew(ctx: any,date:string): Promise<Response>{
+  if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));
+  const [members,events]=await Promise.all([
+    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
+    ctx.env.DB.prepare('SELECT id,title,start_at FROM events WHERE family_id=? ORDER BY coalesce(start_at,created_at),id DESC LIMIT 100').bind(ctx.member.family_id).all()
+  ]);
+  const body=`<div class="card form-card"><h1>📝 タスク追加</h1><form id="taskForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><input type="hidden" name="date" value="${date}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label>関連予定</label><select name="event_id"><option value="0">予定なし</option>${events.results.map((e:any)=>`<option value="${e.id}">${String(e.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select><label>日付</label><input type="date" name="dateOnly" value="${date}" required><label>開始時刻</label><input type="time" name="startTime"><label>終了時刻</label><input type="time" name="endTime"><label>場所</label><input name="location"><label>説明</label><textarea name="description" maxlength="5000"></textarea><label>LINE通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へ、タスクの詳細をLINEで通知します。</p><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div><button>登録する</button></form></div><script>document.getElementById('taskForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;const b=Object.fromEntries(new FormData(f));b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));b.event_id=Number(f.event_id.value||0);const r=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.href='/today.php?date='+encodeURIComponent(b.dateOnly);else alert(d.error||'登録に失敗しました');}</script>`;
+  return new Response(layout('タスク追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
+}
+async function itemNew(ctx:any,date:string):Promise<Response>{
+  if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/item/new.php?date='+date));
+  const [members,tasks]=await Promise.all([
+    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
+    ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(ctx.member.family_id).all()
+  ]);
+  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}">${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select><label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div><button>登録する</button></form></div><script>document.getElementById('itemForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;const b=Object.fromEntries(new FormData(f));b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));b.task_id=Number(f.task_id.value||0);const r=await fetch('/api/item',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.href='/today.php?date='+encodeURIComponent(d.date||b.date);else alert(d.error||'登録に失敗しました');}</script>`;
+  return new Response(layout('持ち物追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
+}
 
 async function taskApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);
@@ -113,12 +131,19 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   const st=String(b.startTime??'').trim();const et=String(b.endTime??'').trim();
   const start=st?`${date} ${st}:00`:null;const end=et?`${date} ${et}:00`:null;
   if(start&&end&&end<start)return json({ok:false,error:'終了時刻は開始時刻以降にしてください。'},400);
+  const reminderRaw=String(b.reminderAt??'').trim();
+  const reminderAt=reminderRaw && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
+  if(reminderRaw && !reminderAt)return json({ok:false,error:'LINE通知日時が不正です。'},400);
   const now=nowJst();
-  const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,calendar_visible,task_kind,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1,NULL,0)').bind(m.family_id,title,String(b.description??'')||null,end?end:(start?start:`${date} 00:00:00`),'pending','ANY',m.id,now,now,start,end,String(b.location??'')||null).run();
+  const eventId=Number(b.event_id??0)||null;if(eventId){const ev=await ctx.env.DB.prepare('SELECT id FROM events WHERE id=? AND family_id=?').bind(eventId,m.family_id).first();if(!ev)return json({ok:false,error:'関連予定が見つかりません。'},400);} const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,event_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,calendar_visible,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,NULL,0,?)').bind(m.family_id,eventId,title,String(b.description??'')||null,end?end:(start?start:`${date} 00:00:00`),'pending','ANY',m.id,now,now,start,end,String(b.location??'')||null,reminderAt).run();
   const id=Number(r.meta.last_row_id);
   const ids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
   if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
-  return json({ok:true,id},201);
+  if(reminderAt && ids.length){
+    const recipients=await ctx.env.DB.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
+    if(recipients.results.length) await ctx.env.DB.batch(recipients.results.map((r:any)=>ctx.env.DB.prepare('INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description??'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location??'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
+  }
+  await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','task',id,JSON.stringify({title}),nowJst()).run().catch(()=>{});return json({ok:true,id},201);
 }
 
 async function itemApi(request:Request,ctx:any):Promise<Response>{
@@ -127,11 +152,16 @@ async function itemApi(request:Request,ctx:any):Promise<Response>{
   const b=await request.json().catch(()=>null) as Record<string,unknown>|null;
   if(!b)return json({ok:false,error:'JSONが不正です。'},400);
   if(String(b.csrf||'')!==String(ctx.session.csrfToken||'')) return json({ok:false,error:'CSRF検証に失敗しました。'},403);
-  const name=String(b.name??'').trim();const date=String(b.date??'').trim();
+  const name=String(b.name??'').trim(); const date=String(b.date??'').trim();
   if(!name)return json({ok:false,error:'持ち物名を入力してください。'},400);
-  const now=nowJst();const r=await ctx.env.DB.prepare(`INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at) VALUES(?,?,?,'pending','ANY',?,?,?)`).bind(m.family_id,name,/^\d{4}-\d{2}-\d{2}$/.test(date)?`${date} 00:00:00`:null,m.id,now,now).run();
-  return json({ok:true,id:Number(r.meta.last_row_id)},201);
+  const taskId=Number(b.task_id??0)||null; let dueDate=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:null;
+  if(taskId){const t=await ctx.env.DB.prepare('SELECT id,start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first();if(!t)return json({ok:false,error:'関連タスクが見つかりません。'},400);dueDate=String(t.start_at||t.due_at||'').slice(0,10)||dueDate;}
+  const now=nowJst();const r=await ctx.env.DB.prepare(`INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)`).bind(m.family_id,name,String(b.memo??'').trim()||null,dueDate?`${dueDate} 00:00:00`:null,m.id,now,now,taskId).run();
+  const id=Number(r.meta.last_row_id); const ids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
+  if(ids.length) await ctx.env.DB.batch(ids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
+  await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','item',id,JSON.stringify({name}),nowJst()).run().catch(()=>{});return json({ok:true,id,date:dueDate},201);
 }
+
 
 
 async function verifyLineWebhook(body: string, signature: string, secret: string): Promise<boolean> {
@@ -228,10 +258,11 @@ async function convertOccurrence(request:Request,ctx:any):Promise<Response>{
 }
 
 async function logsPage(ctx:any):Promise<Response>{
-  if(!ctx.member)return redirect('/login.php');
-  const m=ctx.member;const role=String(m.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return new Response('管理者権限が必要です。',{status:403});
+  const m=ctx.member;if(!m)return redirect('/login.php');
+  const role=String(m.role||'').toUpperCase();
+  if(role!=='OWNER'&&role!=='ADMIN') return html(layout('活動ログ','<div class="card"><h1>📊 家族の活動ログ</h1><p>活動ログを見るには管理者権限が必要です。</p><a class="btn" href="/app/settings.php">管理へ戻る</a></div>','/app/settings.php'));
   const rows=await ctx.env.DB.prepare('SELECT a.*,m.name member_name FROM activity_logs a LEFT JOIN members m ON m.id=a.member_id WHERE a.family_id=? ORDER BY a.occurred_at DESC,a.id DESC LIMIT 200').bind(m.family_id).all();
-  const esc=(v:any)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-  const body=`<div class="card"><h1>操作ログ</h1>${rows.results.map((r:any)=>`<div class="row"><strong>${esc(r.action)}</strong><div class="meta">${esc(r.member_name||'')} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')} ${esc(r.target_id||'')}</div></div>`).join('')||'<p>ログはありません。</p>'}</div>`;
-  return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/family.css"><title>操作ログ</title></head><body><main class="wrap">${body}<p><a class="btn" href="/app/settings.php">管理へ戻る</a></p></main></body></html>`,{headers:{'content-type':'text/html; charset=utf-8'}});
+  const label=(action:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除',LINE_MESSAGE:'LINEメッセージ',LINE_POSTBACK:'LINE操作'} as Record<string,string>)[action]||action;
+  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card history-card"><p class="small">最新200件を表示しています。</p>${rows.results.map((r:any)=>`<div class="row"><strong>${esc(label(String(r.action||'')))}</strong><div class="meta">${esc(r.member_name||'不明')} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`).join('')||'<p class="empty">ログはありません。</p>'}</div>`;
+  return html(layout('活動ログ',body,'/app/settings.php'));
 }
