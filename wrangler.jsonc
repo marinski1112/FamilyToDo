@@ -14,7 +14,8 @@
       "/app/api/*",
       "/__cf/*",
       "/login",
-      "/login.php"
+      "/login.php",
+      "/liff"
     ]
   },
   "d1_databases": [

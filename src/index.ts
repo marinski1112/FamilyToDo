@@ -1,5 +1,5 @@
 import { json, redirect } from './response';
-import { makeContext, liffLogin, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, taskView, taskEdit, itemEdit, shoppingEdit, settings, inviteCreate, invitePage, recurring, AuthRequired } from './app';
+import { makeContext, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, taskView, taskEdit, itemEdit, shoppingEdit, settings, inviteCreate, invitePage, recurring, AuthRequired } from './app';
 import { openSession, getSessionCookie } from './session';
 
 const text = (r: Response) => r;
@@ -19,6 +19,8 @@ export default {
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
+      if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
+      if(url.pathname==='/liff'||url.pathname==='/liff/') return liffEntryPage(env,url.searchParams.get('next')||'/app/index.php');
       // 認証が必要なページは、例外ベースのリダイレクトに依存せず
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
       // 例外化/Response処理の差異による1101を避けるため。

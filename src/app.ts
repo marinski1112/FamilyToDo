@@ -50,6 +50,32 @@ function layout(title: string, body: string, active = ''): string {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.35"></head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
+
+
+/**
+ * LIFF専用の入口。LIFF Endpoint URLをこのURLにすると、
+ * LINEアプリ内から起動→ID Token検証→Workerセッション発行→アプリ画面
+ * までを一つの導線で処理する。
+ */
+export function liffEntryPage(env: Env, nextPath = '/app/index.php'): Response {
+  const safeNext = /^\/(?!\/)/.test(nextPath) ? nextPath : '/app/index.php';
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{const status=document.getElementById('status'),error=document.getElementById('error'),retry=document.getElementById('retry');const next=${JSON.stringify(safeNext)};async function run(){try{retry.style.display='none';error.style.display='none';status.textContent='LINEを初期化しています…';await liff.init({liffId:${JSON.stringify(env.LINE_LIFF_ID)}});if(!liff.isLoggedIn()){status.textContent='LINEログインを開始します…';liff.login({redirectUri:location.href});return;}status.textContent='認証情報を確認しています…';const idToken=liff.getIDToken();if(!idToken)throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({id_token:idToken})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||('LINEログインに失敗しました（HTTP '+r.status+'）。'));status.textContent='ログインしました。アプリを開いています…';location.replace(next);}catch(e){const msg=e?.message||String(e);status.textContent='認証に失敗しました。';error.textContent=msg;error.style.display='block';retry.style.display='inline-flex';}}retry.onclick=run;run();})();</script>`;
+  return html(layout('LINE認証',body));
+}
+
+export async function authHealth(ctx: AppContext): Promise<Response> {
+  return json({
+    ok: true,
+    cookie_session: Boolean(ctx.session && ctx.session.iat),
+    line_user_id_present: Boolean(ctx.session.lineUserId),
+    member_id_present: Boolean(ctx.session.memberId),
+    family_id_present: Boolean(ctx.session.familyId),
+    csrf_present: Boolean(ctx.session.csrfToken),
+    member_exists: Boolean(ctx.member),
+    member_active: Boolean(ctx.member?.active),
+  });
+}
+
 export function loginPage(env: Env): Response {
   const body = `<div class="card"><h1>Family TODO LINE</h1><p>LINE認証を開始します。</p><p id="status" class="meta">認証を準備しています…</p><button id="retry" style="display:none">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{const status=document.getElementById('status'),retry=document.getElementById('retry');async function run(){try{retry.style.display='none';status.textContent='LINEを初期化しています…';await liff.init({liffId:${JSON.stringify(env.LINE_LIFF_ID)}});if(!liff.isLoggedIn()){liff.login();return;}status.textContent='認証情報を確認しています…';const idToken=liff.getIDToken();if(!idToken)throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id_token:idToken})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'LINEログインに失敗しました。');location.href=d.redirect;}catch(e){status.textContent=e?.message||String(e);retry.style.display='inline-block';}}retry.onclick=run;run();})();</script>`;
   return html(layout('LINE認証',body));
