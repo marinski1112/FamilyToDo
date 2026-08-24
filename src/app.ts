@@ -434,6 +434,56 @@ export async function eventNew(ctx:AppContext,date:string):Promise<Response>{
 
 export async function messages(request:Request,ctx:AppContext):Promise<Response>{const m=requireMember(ctx);if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const text=String(b.text??'').trim();const target=Number(b.target_member_id??0)||null;if(!text)throw new BadRequest('伝言を入力してください。');const now=nowJst();await ctx.env.DB.prepare('INSERT INTO messages(family_id,sender_id,target_member_id,text,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(m.family_id,m.id,target,text,now,now).run();return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);}const rows=await ctx.env.DB.prepare('SELECT msg.*,s.name sender_name,r.name recipient_name FROM messages msg LEFT JOIN members s ON s.id=msg.sender_id LEFT JOIN members r ON r.id=msg.target_member_id WHERE msg.family_id=? ORDER BY msg.created_at DESC,msg.id DESC LIMIT 100').bind(m.family_id).all<Row>();const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();return html(layout('伝言',`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>💬 伝言</h1></div><a class="btn" href="/app/message_new.php">＋ 伝言する</a></div><div class="card message-list"><h2>伝言一覧</h2>${rows.results.map(r=>`<div class="row"><div>${esc(r.text)}</div><div class="meta">${esc(r.sender_name||'')} → ${esc(r.recipient_name||'全員')} ・ ${esc(r.created_at||'')}</div></div>`).join('')||'<p>伝言はありません。</p>'}</div><div class="card"><form id="msgForm"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken??'')}"><label>宛先</label><select name="target_member_id"><option value="0">家族全員</option>${members.results.map((r:Row)=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><label>伝言</label><textarea name="text" required></textarea><button type="submit">投稿する</button></form></div><script>document.getElementById('msgForm').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch('/api/messages',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'投稿できませんでした。');}</script>`, '/app/messages.php'));}
 
+function shoppingBatchForm(ctx:AppContext, tasks:Row[], date=''): string {
+  const csrf=ctx.session.csrfToken??'';
+  const taskOptions=tasks.map(t=>`<option value="${t.id}">${esc(t.title)}${t.start_at||t.due_at?`（${esc(String(t.start_at||t.due_at).slice(0,10))}）`:''}</option>`).join('');
+  const defaultDate=esc(date);
+  return `<div class="card form-card batch-shopping-card" id="addShopping">
+    <div class="section-head"><h2>＋ 買い物を追加</h2><span class="meta">複数商品を一度に登録できます</span></div>
+    <form id="shopBatchForm">
+      <input type="hidden" name="csrf" value="${esc(csrf)}">
+      <div id="shoppingProducts">
+        <div class="product-row batch-product"><input type="text" name="product_name[]" maxlength="255" placeholder="商品名" required><input type="text" name="product_quantity[]" value="1" inputmode="text" placeholder="数量" aria-label="数量"></div>
+      </div>
+      <button type="button" class="btn gray small add-product" id="addProduct">＋ 商品を追加</button>
+      <div class="batch-common-settings">
+        <label>カテゴリー（全商品共通）</label>
+        <input name="category" list="shoppingCategories" placeholder="例：食品">
+        <datalist id="shoppingCategories"><option value="食品"><option value="日用品"><option value="子供"><option value="薬・衛生"><option value="その他"></datalist>
+        <label>期限（全商品共通）</label>
+        <input type="date" name="due_date" value="${defaultDate}">
+        <label>関連タスク（全商品共通）</label>
+        <select name="task_id"><option value="0">タスクなし</option>${taskOptions}</select>
+        <label>メモ（全商品共通・任意）</label>
+        <textarea name="memo" placeholder="例：低脂肪、○○店で購入"></textarea>
+      </div>
+      <button type="submit">まとめて登録する</button>
+    </form>
+  </div>
+  <script>
+  (()=>{
+    const list=document.getElementById('shoppingProducts');
+    const add=document.getElementById('addProduct');
+    const form=document.getElementById('shopBatchForm');
+    add.addEventListener('click',()=>{
+      const row=document.createElement('div');row.className='product-row batch-product';
+      row.innerHTML='<input type="text" name="product_name[]" maxlength="255" placeholder="商品名" required><input type="text" name="product_quantity[]" value="1" inputmode="text" placeholder="数量" aria-label="数量"><button type="button" class="remove-product" aria-label="削除">×</button>';
+      list.appendChild(row);row.querySelector('input')?.focus();
+    });
+    list.addEventListener('click',e=>{const b=e.target.closest('.remove-product');if(!b)return;const rows=list.querySelectorAll('.batch-product');if(rows.length>1)b.closest('.batch-product').remove();});
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const names=[...form.querySelectorAll('[name="product_name[]"]')].map(x=>x.value.trim());
+      const quantities=[...form.querySelectorAll('[name="product_quantity[]"]')].map(x=>x.value.trim()||'1');
+      if(!names.length||names.some(x=>!x)){alert('商品名を入力してください。');return;}
+      const body={action:'add_batch',csrf:${JSON.stringify(csrf)},products:names.map((name,i)=>({name,quantity:quantities[i]||'1'})),category:form.category.value.trim(),due_date:form.due_date.value,task_id:Number(form.task_id.value||0),memo:form.memo.value.trim()};
+      const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||'追加に失敗しました。');location.href='/app/shopping.php';}catch(err){alert(err.message);}finally{button.disabled=false;}
+    });
+  })();
+  </script>`;
+}
+
 export async function shopping(request:Request,ctx:AppContext):Promise<Response>{
   const m=requireMember(ctx);
   if(request.method==='POST'){
@@ -441,30 +491,54 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
     const action=String(b.action??'add');
     if(action==='toggle'){
       const id=Number(b.id);const completed=Boolean(b.completed);const now=nowJst();
-      await ctx.env.DB.prepare('UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(completed?'completed':'pending',completed?m.id:null,completed?now:null,now,id,m.family_id).run();
+      const current=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
+      if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+      await ctx.env.DB.batch([
+        ctx.env.DB.prepare('UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(completed?'completed':'pending',completed?m.id:null,completed?now:null,now,id,m.family_id),
+        ctx.env.DB.prepare('INSERT INTO shopping_completion_history(shopping_item_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now),
+      ]);
       return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
+    }
+    if(action==='add_batch'){
+      const products=Array.isArray(b.products)?b.products as unknown[]:[];
+      const normalized=products.map(v=>({name:String((v as any)?.name??'').trim(),quantity:String((v as any)?.quantity??'1').trim()||'1'})).filter(v=>v.name);
+      if(!normalized.length)throw new BadRequest('商品名を1つ以上入力してください。');
+      if(normalized.length>50)throw new BadRequest('一度に登録できる商品は50件までです。');
+      const category=String(b.category??'').trim()||null;
+      const memo=String(b.memo??'').trim()||null;
+      let due=String(b.due_date??'').trim()||null;
+      if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
+      const taskId=Number(b.task_id??0)||null;
+      if(taskId){
+        const t=await ctx.env.DB.prepare('SELECT id,start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();
+        if(!t)throw new BadRequest('関連タスクが見つかりません。');
+        if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;
+      }
+      const now=nowJst();
+      const statements=normalized.map(p=>ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?)").bind(m.family_id,p.name,p.quantity,category,memo,due,m.id,now,now,taskId));
+      await ctx.env.DB.batch(statements);
+      return commitSession(json({ok:true,count:normalized.length}),ctx.session,ctx.env.APP_SECRET);
     }
     if(action==='add'){
       const name=String(b.name??'').trim();if(!name)throw new BadRequest('商品名を入力してください。');
       const qty=String(b.quantity??'1').trim()||'1';
       const category=String(b.category??'').trim()||null;
       const memo=String(b.memo??'').trim()||null;
-      const due=String(b.due_date??'').trim()||null;
+      let due=String(b.due_date??'').trim()||null;
       if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
-      const taskId=Number(b.task_id??0)||null;let taskDue=due;
-      if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');taskDue=String(t.start_at||t.due_at||'').slice(0,10)||due;}
+      const taskId=Number(b.task_id??0)||null;
+      if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;}
       const now=nowJst();
-      await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?)").bind(m.family_id,name,qty,category,memo,taskDue,m.id,now,now,taskId).run();
+      await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?)").bind(m.family_id,name,qty,category,memo,due,m.id,now,now,taskId).run();
       return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
     }
   }
-  const rows=await ctx.env.DB.prepare('SELECT * FROM shopping_items WHERE family_id=? ORDER BY status,(due_date IS NULL),due_date,category,name,id').bind(m.family_id).all<Row>();
-  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 100").bind(m.family_id).all<Row>();
-  const csrf=ctx.session.csrfToken??'';
+  const rows=await ctx.env.DB.prepare('SELECT s.*,t.title task_title FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id').bind(m.family_id).all<Row>();
+  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(m.family_id).all<Row>();
   const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物</h1></div><a class="btn" href="#addShopping">＋ 追加</a></div>
-  <div class="card shopping-list"><h2>買い物リスト</h2>${rows.results.map(r=>`<div class="row shopping-row"><label class="shopping-check-row"><input class="shop-toggle" type="checkbox" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}"><a href="/app/shopping_edit.php?id=${r.id}">${esc(r.name)}</a>${r.quantity&&r.quantity!=='1'?` × ${esc(r.quantity)}`:''}</span></label><div class="meta">${[r.category,r.due_date?'期限 '+r.due_date:'',r.memo].filter(Boolean).map(x=>esc(x)).join(' ・ ')}</div></div>`).join('')||'<p class="empty">買い物はありません。</p>'}</div>
-  <div class="card form-card" id="addShopping"><h2>＋ 買い物を追加</h2><form id="shopForm"><input type="hidden" name="csrf" value="${esc(csrf)}"><label>商品名</label><input name="name" maxlength="255" required><label>数量</label><input name="quantity" value="1" inputmode="numeric"><label>カテゴリー</label><input name="category" list="shoppingCategories" placeholder="例：食品"><datalist id="shoppingCategories"><option value="食品"><option value="日用品"><option value="子供"><option value="薬・衛生"><option value="その他"></datalist><label>期限</label><input type="date" name="due_date"><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('')}</select><label>メモ</label><textarea name="memo" placeholder="例：低脂肪"></textarea><button type="submit">登録する</button></form></div>
-  <script>document.querySelectorAll('.shop-toggle').forEach(e=>e.onchange=async()=>{const checked=e.checked;e.disabled=true;try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'toggle',id:Number(e.dataset.id),completed:checked,csrf:${JSON.stringify(csrf)}})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'更新に失敗しました');e.nextElementSibling?.classList.toggle('done',checked);}catch(err){e.checked=!checked;alert(err.message)}finally{e.disabled=false}});document.getElementById('shopForm').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'add',...b})});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'追加に失敗しました。');};</script>`;
+  <div class="card shopping-list"><h2>買い物リスト</h2>${rows.results.map(r=>`<div class="row shopping-row"><label class="shopping-check-row"><input class="shop-toggle" type="checkbox" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}"><a href="/app/shopping_edit.php?id=${r.id}">${esc(r.name)}</a>${r.quantity&&r.quantity!=='1'?` × ${esc(r.quantity)}`:''}</span></label><div class="meta">${[r.category,r.due_date?'期限 '+r.due_date:'',r.task_title?'タスク '+r.task_title:'',r.memo].filter(Boolean).map(x=>esc(x)).join(' ・ ')}</div></div>`).join('')||'<p class="empty">買い物はありません。</p>'}</div>
+  ${shoppingBatchForm(ctx,tasks.results)}
+  <script>document.querySelectorAll('.shop-toggle').forEach(e=>e.onchange=async()=>{const checked=e.checked;e.disabled=true;try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'toggle',id:Number(e.dataset.id),completed:checked,csrf:${JSON.stringify(ctx.session.csrfToken??'')}})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'更新に失敗しました');e.nextElementSibling?.classList.toggle('done',checked);}catch(err){e.checked=!checked;alert(err.message)}finally{e.disabled=false}});</script>`;
   return html(layout('買い物',body,'/app/shopping.php'));
 }
 
@@ -559,7 +633,8 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
 
 export async function shoppingNew(ctx:AppContext,date?:string):Promise<Response>{
   const m=requireMember(ctx); const d=date&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
-  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div><div class="card form-card"><form id="shoppingNew"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" maxlength="255" required autofocus><label>数量</label><input name="quantity" value="1" inputmode="numeric"><label>カテゴリー</label><input name="category" list="shoppingCategories" placeholder="例：食品"><datalist id="shoppingCategories"><option value="食品"><option value="日用品"><option value="子供"><option value="薬・衛生"><option value="その他"></datalist><label>期限</label><input type="date" name="due_date" value="${esc(d)}"><label>メモ</label><textarea name="memo" placeholder="例：低脂肪"></textarea><button>登録する</button></form></div><script>document.getElementById('shoppingNew').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'add',...b})});const d=await r.json();if(d.ok)location.href='/app/shopping.php';else alert(d.error||'登録に失敗しました。');};</script>`;
+  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(m.family_id).all<Row>();
+  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d)}`;
   return html(layout('買い物を追加',body,'/app/shopping.php'));
 }
 

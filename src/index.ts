@@ -20,7 +20,13 @@ export default {
       }
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
-      if(url.pathname==='/liff'||url.pathname==='/liff/') return liffEntryPage(env,url.searchParams.get('next')||'/app/index.php');
+      if(url.pathname==='/liff'||url.pathname==='/liff/') {
+        const liffContext=await makeContext(request,env);
+        // LIFF起動時に既存のWorkerセッションが有効なら、再度IDトークン検証を要求しない。
+        // LINE内ブラウザで他ページが正常表示できるのにトップだけ認証画面へ戻るケースを防ぐ。
+        if(liffContext.member) return home(liffContext);
+        return liffEntryPage(env,url.searchParams.get('next')||'/app/index.php');
+      }
       // 認証が必要なページは、例外ベースのリダイレクトに依存せず
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
       // 例外化/Response処理の差異による1101を避けるため。
