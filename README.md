@@ -82,3 +82,8 @@ Not yet migrated:
 - existing LINE message behavior
 
 Those are intentionally left as TODOs so this foundation does not accidentally replace a working XREA implementation with incomplete code.
+
+
+### Cloudflare Workers の型定義について
+
+Cloudflare の現行推奨方式に合わせ、`@cloudflare/workers-types` の日付固定版には依存しません。Wrangler v4 の `wrangler types` で `worker-configuration.d.ts` を生成し、`tsconfig.json` はその生成ファイルを参照します。これにより、Cloudflare の compatibility date と実行環境に対応した型が生成されます。
