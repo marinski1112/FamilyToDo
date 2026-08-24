@@ -220,9 +220,184 @@ function renderDailyPage(ctx:AppContext,date:string,data:{tasks:Row[];items:Row[
 export async function toggle(request:Request,ctx:AppContext):Promise<Response>{const m=requireMember(ctx);const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const type=String(b.type??'');const id=Number(b.id??0);const completed=Boolean(b.completed);if(!['task','item','shopping','recurrence'].includes(type)||!id)throw new BadRequest('対象が不正です。');
   if(type==='recurrence'){const occId=Number(b.occurrence_id||id);const occ=await ctx.env.DB.prepare('SELECT o.id,o.family_id FROM recurrence_occurrences o WHERE o.id=? AND o.family_id=?').bind(occId,m.family_id).first<Row>();if(!occ)return json({ok:false,error:'定期タスクの発生日が見つかりません。'},404);const now=nowJst();await ctx.env.DB.prepare('UPDATE recurrence_occurrences SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(completed?'completed':'pending',completed?m.id:null,completed?now:null,now,occId,m.family_id).run();return commitSession(json({ok:true,status:completed?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);}const tables={task:['tasks','task_id','task_completion_history'],item:['items','item_id','item_completion_history'],shopping:['shopping_items','shopping_item_id','shopping_completion_history']} as const;const [table,hid,hist]=tables[type as keyof typeof tables];const current=await ctx.env.DB.prepare(`SELECT id,status FROM ${table} WHERE id=? AND family_id=? LIMIT 1`).bind(id,m.family_id).first<Row>();if(!current) return json({ok:false,error:'対象が見つかりません。'},404);const now=nowJst();const newStatus=completed?'completed':'pending';await ctx.env.DB.batch([ctx.env.DB.prepare(`UPDATE ${table} SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?`).bind(newStatus,completed?m.id:null,completed?now:null,now,id,m.family_id),ctx.env.DB.prepare(`INSERT INTO ${hist}(${hid},member_id,action,occurred_at) VALUES(?,?,?,?)`).bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now)]);return commitSession(json({ok:true,status:newStatus}),ctx.session,ctx.env.APP_SECRET);}
 
-export async function calendar(request:Request,ctx:AppContext,month:string):Promise<Response>{requireMember(ctx);const m=/^\d{4}-\d{2}$/.test(month)?month:dateOnly().slice(0,7);const [y,mo]=m.split('-').map(Number);const first=new Date(Date.UTC(y,mo-1,1));const start=new Date(first);start.setUTCDate(1-first.getUTCDay());const end=new Date(Date.UTC(y,mo,0));end.setUTCDate(end.getUTCDate()+(6-end.getUTCDay()));const from=start.toISOString().slice(0,10),to=end.toISOString().slice(0,10);const tasks=await ctx.env.DB.prepare(`SELECT t.*,GROUP_CONCAT(m.name,'、') assignees FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id=t.id LEFT JOIN members m ON m.id=ta.member_id WHERE t.family_id=? AND t.calendar_visible=1 AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?))) OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at) BETWEEN date(?) AND date(?))) GROUP BY t.id ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,to,from,from,to).all<Row>();const events=await ctx.env.DB.prepare('SELECT * FROM events WHERE family_id=? AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND date(start_at) BETWEEN date(?) AND date(?))) ORDER BY coalesce(start_at,end_at),id').bind(ctx.member!.family_id,to,from,from,to).all<Row>();const recurRows:Row[]=[]; for(let d=new Date(`${from}T12:00:00Z`);d<=new Date(`${to}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+1)){ const ds=d.toISOString().slice(0,10); recurRows.push(...await recurringForDate(ctx,ds)); } return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...recurRows],events.results));}
 
-function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],events:Row[]):string{const map:Record<string,Row[]>=Object.create(null);for(const t of ([...tasks,...events.map(e=>({...e,_event:true}))] as Row[])){const s=String(t.start_at||t.due_at||'').slice(0,10);const e=String(t.end_at||s).slice(0,10);if(!s)continue;let d=new Date(`${s}T12:00:00Z`),last=new Date(`${e}T12:00:00Z`);if(last<d)last=d;for(;d<=last;d.setUTCDate(d.getUTCDate()+1)){const k=d.toISOString().slice(0,10);(map[k]??=[]).push(t)}}let cells='';const cursor=new Date(start);for(;cursor<=end;cursor.setUTCDate(cursor.getUTCDate()+1)){const d=cursor.toISOString().slice(0,10),inMonth=d.startsWith(month),items=map[d]||[];cells+=`<button class="calendar-cell ${inMonth?'':'other'}" data-date="${d}"><div class="num">${Number(d.slice(8))}</div><div class="calendar-items">${items.slice(0,4).map(t=>`<div class="calendar-item ${t._event?'event':''}">${esc(t.title)}</div>`).join('')}${items.length>4?`<div class="meta">+${items.length-4}件</div>`:''}</div></button>`}const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7),next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);return layout('カレンダー',`<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><div class="meta">${month}</div></div><div><a class="btn gray" href="/app/calendar.php?month=${prev}">‹</a> <a class="btn gray" href="/app/calendar.php?month=${next}">›</a></div></div><div class="card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>${cells}</div></div><div class="card" id="dayDetail"><h2>日付を選択</h2><p>日付をタップすると予定の詳細を表示します。新規追加もここから行えます。</p></div><script>const detail=${JSON.stringify(Object.fromEntries(Object.entries(map).map(([k,v])=>[k,v.map(t=>({id:t.id,title:t.title,start_at:t.start_at,end_at:t.end_at,due_at:t.due_at,location:t.location,description:t.description,event:!!t._event,recurring:Number(t.id)<0}))])))};document.querySelectorAll('.calendar-cell').forEach(b=>b.addEventListener('click',()=>{const d=b.dataset.date,x=detail[d]||[],box=document.getElementById('dayDetail');box.innerHTML='<h2>'+d+'の予定</h2>'+ (x.length?x.map(t=>'<div class="row"><strong>'+(t.event||t.recurring?esc(t.title)+(t.recurring?' <small>(定期)</small>':''):'<a href="/task/view.php?id='+t.id+'">'+esc(t.title)+'</a>')+'</strong><div class="meta">'+esc(t.start_at?String(t.start_at).slice(11,16):t.due_at?String(t.due_at).slice(11,16)==='00:00'?'終日':String(t.due_at).slice(11,16):'')+'</div><div class="meta">'+esc(t.location||'')+'</div></div>').join(''):'<p>予定はありません。</p>')+'<p><a class="btn" href="/task/new.php?date='+d+'&return=calendar">＋ この日にタスクを追加</a> <a class="btn secondary" href="/calendar/event/new?date='+d+'">＋ 予定を追加</a></p>';}));</script>`, '/app/calendar.php');}
+function jpHolidayBase(date:string): string | null {
+  const d=new Date(`${date}T12:00:00Z`);
+  const y=d.getUTCFullYear(), m=d.getUTCMonth()+1, day=d.getUTCDate();
+  const nthMonday=(month:number,nth:number)=>{
+    const first=new Date(Date.UTC(y,month-1,1));
+    return 1+((8-first.getUTCDay())%7)+(nth-1)*7;
+  };
+  const vernal=Math.floor(20.8431+0.242194*(y-1980)-Math.floor((y-1980)/4));
+  const autumnal=Math.floor(23.2488+0.242194*(y-1980)-Math.floor((y-1980)/4));
+  const fixed:Record<string,string>={
+    [`${y}-01-01`]:'元日',
+    [`${y}-02-11`]:'建国記念の日',
+    [`${y}-02-23`]:'天皇誕生日',
+    [`${y}-03-${String(vernal).padStart(2,'0')}`]:'春分の日',
+    [`${y}-04-29`]:'昭和の日',
+    [`${y}-05-03`]:'憲法記念日',
+    [`${y}-05-04`]:'みどりの日',
+    [`${y}-05-05`]:'こどもの日',
+    [`${y}-08-11`]:'山の日',
+    [`${y}-09-${String(autumnal).padStart(2,'0')}`]:'秋分の日',
+    [`${y}-11-03`]:'文化の日',
+    [`${y}-11-23`]:'勤労感謝の日'
+  };
+  if(fixed[date]) return fixed[date];
+  if(m===1&&day===nthMonday(1,2)) return '成人の日';
+  if(m===7&&day===nthMonday(7,3)) return '海の日';
+  if(m===9&&day===nthMonday(9,3)) return '敬老の日';
+  if(m===10&&day===nthMonday(10,2)) return 'スポーツの日';
+  return null;
+}
+function jpHolidayName(date:string): string | null {
+  const d=new Date(`${date}T12:00:00Z`);
+  const wd=d.getUTCDay();
+  const base=jpHolidayBase(date);
+  if(base) return base;
+  if(wd>=1&&wd<=5){
+    const prev=new Date(d);prev.setUTCDate(prev.getUTCDate()-1);
+    const next=new Date(d);next.setUTCDate(next.getUTCDate()+1);
+    if(jpHolidayBase(prev.toISOString().slice(0,10))&&jpHolidayBase(next.toISOString().slice(0,10))) return '国民の休日';
+    for(let n=1;n<=7;n++){
+      const candidate=new Date(d);candidate.setUTCDate(candidate.getUTCDate()-n);
+      if(candidate.getUTCDay()!==0) continue;
+      if(!jpHolidayBase(candidate.toISOString().slice(0,10))) continue;
+      let ok=true;
+      const cursor=new Date(candidate);cursor.setUTCDate(cursor.getUTCDate()+1);
+      while(cursor<d){
+        if(jpHolidayBase(cursor.toISOString().slice(0,10))){ok=false;break;}
+        cursor.setUTCDate(cursor.getUTCDate()+1);
+      }
+      if(ok) return '振替休日';
+      break;
+    }
+  }
+  return null;
+}
+
+export async function calendar(request:Request,ctx:AppContext,month:string):Promise<Response>{
+  const member=requireMember(ctx);
+  const m=/^\d{4}-\d{2}$/.test(month)?month:dateOnly().slice(0,7);
+  const [y,mo]=m.split('-').map(Number);
+  const first=new Date(Date.UTC(y,mo-1,1));
+  const start=new Date(first);start.setUTCDate(1-first.getUTCDay());
+  const end=new Date(Date.UTC(y,mo,0));end.setUTCDate(end.getUTCDate()+(6-end.getUTCDay()));
+  const from=start.toISOString().slice(0,10),to=end.toISOString().slice(0,10),fid=member.family_id;
+
+  const tasks=await ctx.env.DB.prepare(`
+    SELECT t.*,GROUP_CONCAT(m.name,'、') assignees
+    FROM tasks t
+    LEFT JOIN task_assignees ta ON ta.task_id=t.id
+    LEFT JOIN members m ON m.id=ta.member_id AND m.active=1
+    WHERE t.family_id=? AND t.calendar_visible=1
+      AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
+      AND (
+        (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
+        OR
+        (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at) BETWEEN date(?) AND date(?))
+      )
+    GROUP BY t.id
+    ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id
+  `).bind(fid,to,from,from,to).all<Row>();
+
+  const events=await ctx.env.DB.prepare(`
+    SELECT e.*,GROUP_CONCAT(m.name,'、') assignees
+    FROM events e
+    LEFT JOIN event_members em ON em.event_id=e.id
+    LEFT JOIN members m ON m.id=em.member_id AND m.active=1
+    WHERE e.family_id=?
+      AND e.start_at IS NOT NULL
+      AND date(e.start_at)<=date(?)
+      AND (e.end_at IS NULL OR date(e.end_at)>=date(?))
+    GROUP BY e.id
+    ORDER BY coalesce(e.start_at,e.end_at),e.id
+  `).bind(fid,to,from).all<Row>();
+
+  const recurRows:Row[]=[];
+  for(let d=new Date(`${from}T12:00:00Z`);d<=new Date(`${to}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+1)){
+    recurRows.push(...await recurringForDate(ctx,d.toISOString().slice(0,10)));
+  }
+  const visibleRecur=recurRows.filter(t=>Number(t.calendar_visible??1)===1);
+  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],events.results));
+}
+
+function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],events:Row[]):string{
+  const map:Record<string,Row[]>=Object.create(null);
+  const add=(t:Row,event=false)=>{
+    const s=String(t.start_at||t.due_at||'').slice(0,10);
+    const e=String(t.end_at||s).slice(0,10);
+    if(!s)return;
+    let d=new Date(`${s}T12:00:00Z`),last=new Date(`${e}T12:00:00Z`);
+    if(last<d)last=d;
+    for(;d<=last;d.setUTCDate(d.getUTCDate()+1)){
+      const k=d.toISOString().slice(0,10);
+      (map[k]??=[]).push({...t,_event:event});
+    }
+  };
+  tasks.forEach(t=>add(t,false));events.forEach(e=>add(e,true));
+
+  let cells='';
+  const cursor=new Date(start);
+  for(;cursor<=end;cursor.setUTCDate(cursor.getUTCDate()+1)){
+    const d=cursor.toISOString().slice(0,10);
+    const inMonth=d.startsWith(month);
+    const items=map[d]||[];
+    const holiday=jpHolidayName(d);
+    const wd=cursor.getUTCDay();
+    const cls=['calendar-cell',inMonth?'':'other',wd===0?'sun':'',wd===6?'sat':'',holiday?'holiday':''].filter(Boolean).join(' ');
+    const num=d===dateOnly()?`<span class="today-num">${Number(d.slice(8))}</span>`:String(Number(d.slice(8)));
+    cells+=`<button type="button" class="${cls}" data-date="${d}" aria-label="${esc(d+(holiday?' '+holiday:''))}"><div class="num">${num}</div>${holiday?`<div class="holiday-name">${esc(holiday)}</div>`:''}<div class="calendar-items">${items.slice(0,4).map(t=>`<div class="calendar-item ${t._event?'event':''}">${esc(t.title)}</div>`).join('')}${items.length>4?`<div class="meta">+${items.length-4}件</div>`:''}</div></button>`;
+  }
+
+  const detail=Object.fromEntries(Object.entries(map).map(([k,v])=>[k,v.map(t=>({
+    id:t.id,title:t.title,start_at:t.start_at,end_at:t.end_at,due_at:t.due_at,
+    location:t.location,description:t.description??t.memo??'',event:!!t._event,
+    recurring:Number(t.id)<0,status:t.status??'pending',assignees:t.assignees??''
+  }))]));
+  const holidays=Object.fromEntries(
+    Array.from({length:Math.round((end.getTime()-start.getTime())/86400000)+1},(_,i)=>{
+      const d=new Date(start);d.setUTCDate(d.getUTCDate()+i);
+      const k=d.toISOString().slice(0,10);return [k,jpHolidayName(k)];
+    }).filter(([,v])=>v)
+  );
+  const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7);
+  const next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);
+  const script=`<script>
+  const detail=${JSON.stringify(detail)},holidays=${JSON.stringify(holidays)};
+  const cellsEl=document.querySelectorAll('.calendar-cell'),box=document.getElementById('dayDetail'),modal=document.getElementById('dayModal'),modalBody=document.getElementById('modalBody'),modalTitle=document.getElementById('modalTitle'),modalAdd=document.getElementById('modalAdd');
+  function escJs(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function detailHtml(d){
+    const x=detail[d]||[],h=holidays[d];
+    const rows=x.map(t=>{
+      const time=t.start_at?String(t.start_at).slice(11,16):t.due_at?(String(t.due_at).slice(11,16)==='00:00'?'終日':String(t.due_at).slice(11,16)):'';
+      const meta=[t.assignees,time,t.location].filter(Boolean).join(' ・ ');
+      const title=t.event?'📅 '+escJs(t.title):'📝 '+escJs(t.title);
+      return '<div class="modal-row"><div><strong>'+(t.event?title:'<a href="/task/view.php?id='+encodeURIComponent(t.id)+'">'+title+'</a>')+'</strong>'+(meta?'<div class="meta">'+escJs(meta)+'</div>':'')+(t.description?'<div class="modal-desc">'+escJs(t.description).replace(/\r?\n/g,'<br>')+'</div>':'')+'</div></div>';
+    }).join('');
+    return (h?'<div class="modal-holiday">🎌 '+escJs(h)+'</div>':'')+(rows||'<div class="modal-row">この日の予定はありません。</div>');
+  }
+  function render(d){
+    const x=detail[d]||[],h=holidays[d];
+    box.innerHTML='<h2>'+d+'の予定</h2>'+(h?'<div class="modal-holiday">🎌 '+escJs(h)+'</div>':'')+(x.length?x.map(t=>{
+      const time=t.start_at?String(t.start_at).slice(11,16):t.due_at?(String(t.due_at).slice(11,16)==='00:00'?'終日':String(t.due_at).slice(11,16)):'';
+      const meta=[t.assignees,time,t.location].filter(Boolean).join(' ・ ');
+      return '<div class="row"><strong>'+(t.event?'📅 '+escJs(t.title):'<a href="/task/view.php?id='+encodeURIComponent(t.id)+'">📝 '+escJs(t.title)+'</a>')+'</strong>'+(meta?'<div class="meta">'+escJs(meta)+'</div>':'')+'</div>';
+    }).join(''):'<p>予定はありません。</p>')+'<p><a class="btn" href="/task/new.php?date='+d+'&return=calendar">＋ この日にタスクを追加</a> <a class="btn secondary" href="/calendar/event/new?date='+d+'">＋ 予定を追加</a></p>';
+    modalTitle.textContent=d+' の詳細';modalBody.innerHTML=detailHtml(d);modalAdd.href='/task/new.php?date='+d+'&return=calendar';modal.classList.add('open');
+  }
+  cellsEl.forEach(b=>b.addEventListener('click',()=>render(b.dataset.date)));
+  document.getElementById('modalClose').onclick=()=>modal.classList.remove('open');
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+  </script>`;
+  const body='<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><div class="meta">'+month.slice(0,4)+'年'+Number(month.slice(5))+'月</div></div><div><a class="btn gray" href="/app/calendar.php?month='+prev+'">‹</a> <a class="btn gray" href="/app/calendar.php?month='+next+'">›</a></div></div>'+
+    '<div class="card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
+    '<a class="fab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a>'+
+    '<div class="card" id="dayDetail"><h2>日付を選択</h2><p>日付をタップすると予定・タスク・祝日の詳細を表示します。</p></div>'+
+    '<div class="modal-backdrop" id="dayModal"><div class="day-modal"><div class="modal-top"><h2 id="modalTitle"></h2><button id="modalClose" class="btn gray modal-close">×</button></div><div class="modal-scroll"><div id="modalBody" class="modal-body"></div></div><a id="modalAdd" class="modal-add-fab" href="#">＋</a></div></div>'+script;
+  return layout('カレンダー',body,'/app/calendar.php');
+}
 
 
 export async function eventApi(request:Request,ctx:AppContext):Promise<Response>{
