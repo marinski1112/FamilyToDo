@@ -27,7 +27,7 @@ function requireMember(ctx: AppContext): CurrentMember {
   return ctx.member;
 }
 
-class AuthRequired extends Error {}
+export class AuthRequired extends Error {}
 class BadRequest extends Error {}
 
 async function bodyJson(request: Request): Promise<Record<string, unknown>> {

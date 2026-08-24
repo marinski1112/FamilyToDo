@@ -1,5 +1,5 @@
 import { json, redirect } from './response';
-import { makeContext, liffLogin, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, taskView, taskEdit, itemEdit, shoppingEdit, settings, inviteCreate, invitePage, recurring } from './app';
+import { makeContext, liffLogin, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, eventApi, eventNew, taskView, taskEdit, itemEdit, shoppingEdit, settings, inviteCreate, invitePage, recurring, AuthRequired } from './app';
 import { openSession, getSessionCookie } from './session';
 
 const text = (r: Response) => r;
@@ -50,7 +50,7 @@ export default {
       if(url.pathname==='/calendar/event/new') return eventNew(context,url.searchParams.get('date')||asDateOffset(0));
       return env.ASSETS.fetch(request);
     }catch(e:any){
-      if(e?.constructor?.name==='AuthRequired') return redirect('/login.php');
+      if(e instanceof AuthRequired) return redirect('/login.php');
       console.error(e);
       return json({ok:false,error:e?.message||'内部エラーです。'},500);
     }
