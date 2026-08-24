@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "familytodo-cloudflare-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/app/api/*", "/__cf/*", "/login", "/login.php"]
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "LINE_CHANNEL_SECRET",
+      "LINE_CHANNEL_ID",
+      "LINE_LIFF_ID",
+      "LINE_ACCESS_TOKEN",
+      "APP_SECRET",
+      "NOTIFY_SECRET"
+    ]
+  },
+  "vars": {
+    "APP_NAME": "家族TODO LINE",
+    "APP_URL": "https://family.tsuchy.jp",
+    "APP_TIMEZONE": "Asia/Tokyo",
+    "NOTIFY_MODE": "manual",
+    "ENVIRONMENT": "staging"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

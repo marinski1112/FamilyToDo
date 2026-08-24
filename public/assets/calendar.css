@@ -1,0 +1,143 @@
+/* Family TODO LINE - calendar layout (v12.26)
+ *
+ * The calendar body is a normal vertical flex column. Each .week is a
+ * non-shrinking 86px row. The day grid remains in normal flow; only the
+ * event bars are absolutely positioned inside their week. This avoids the
+ * iOS Safari height/overflow interactions that previously caused the final
+ * week to collapse or all weeks to overlap.
+ */
+.cal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.month-nav{display:flex;align-items:center;gap:4px}
+.month-btn{width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:50%!important;font-size:14px}
+.month-label{min-width:76px;text-align:center;font-weight:800}
+
+.cal{
+  background:rgba(255,255,255,.82);
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+  overflow:hidden;
+  touch-action:pan-y;
+}
+.wd{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;width:100%!important;height:40px!important}
+.wd>div{
+  display:flex!important;width:auto!important;min-width:0!important;
+  align-items:center;justify-content:center;text-align:center;
+  font-size:10px;color:#6b7280;padding:4px 0;
+  border-bottom:1px solid #eee;box-sizing:border-box;
+}
+
+/* IMPORTANT: six independent, non-shrinking rows. */
+#calBody{
+  display:flex!important;
+  flex-direction:column!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:516px!important;
+  max-height:none!important;
+  overflow:visible!important;
+  box-sizing:border-box!important;
+}
+#calBody .week{
+  display:block!important;
+  position:relative!important;
+  flex:0 0 86px!important;
+  width:100%!important;
+  height:86px!important;
+  min-height:86px!important;
+  margin:0!important;padding:0!important;
+  box-sizing:border-box!important;
+  overflow:visible!important;
+}
+#calBody .week-days{
+  display:grid!important;
+  grid-template-columns:repeat(7,minmax(0,1fr))!important;
+  grid-template-rows:86px!important;
+  width:100%!important;
+  height:86px!important;
+  min-height:86px!important;
+  margin:0!important;padding:0!important;
+  box-sizing:border-box!important;
+}
+#calBody .day{
+  display:block!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:86px!important;
+  min-height:86px!important;
+  margin:0!important;
+  padding:3px!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+  position:relative!important;
+  z-index:2!important;
+  cursor:pointer!important;
+  touch-action:manipulation!important;
+  box-shadow:inset -1px 0 0 #eee,inset 0 -1px 0 #eee;
+}
+#calBody .day:focus{outline:2px solid rgba(79,70,229,.35);outline-offset:-2px}
+.other{background:rgba(250,250,250,.72);color:#9ca3af}
+.sat .num{color:#2563eb}.sun .num{color:#dc2626}
+.num{font-size:10px;font-weight:700;margin-bottom:2px}
+.today-num{display:inline-flex;width:18px;height:18px;border-radius:50%;background:#4f46e5;color:#fff;align-items:center;justify-content:center}
+
+#calBody .week-bars{
+  position:absolute!important;
+  left:0!important;right:0!important;top:24px!important;
+  display:grid!important;
+  grid-template-columns:repeat(7,minmax(0,1fr))!important;
+  grid-auto-rows:14px!important;
+  gap:2px 0!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:0 1px!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  z-index:4!important;
+  pointer-events:none!important;
+}
+#calBody .week-bars .bar{
+  display:block;color:#fff;font-size:8px;line-height:14px;height:14px;
+  min-width:0;padding:0 4px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;position:relative;z-index:2;text-decoration:none;
+  pointer-events:auto;box-sizing:border-box;
+}
+.taskbar{background:#7c3aed}
+.seg-start{border-radius:5px 0 0 5px}.seg-mid{border-radius:0}.seg-end{border-radius:0 5px 5px 0}.single{border-radius:5px}
+#calBody .week-more{position:absolute;left:0;right:0;bottom:1px;display:grid;grid-template-columns:repeat(7,1fr);font-size:7px;color:#64748b;pointer-events:none;z-index:5}
+.week-more span{text-align:right;padding-right:2px}.more{font-size:8px;color:#6b7280;padding:0 2px}
+
+.modal-backdrop{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:12px}
+.modal-backdrop.open{display:flex}
+.day-modal{width:min(560px,100%);height:min(570px,78vh);background:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.48);border-radius:24px;box-shadow:0 20px 70px rgba(15,23,42,.12);animation:modalIn .2s ease-out;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.modal-top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 14px 0}.modal-close{width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:50%!important}
+.modal-scroll{flex:1;overflow:auto;padding:6px 14px 58px}.modal-row{padding:10px 0;display:flex;align-items:center;gap:7px;border-bottom:1px solid rgba(148,163,184,.14)}
+.modal-row a{text-decoration:none;font-weight:750;color:inherit}.modal-body.leaving{opacity:0}.modal-desc{margin-top:4px;font-size:12px;color:#475569;line-height:1.45;overflow-wrap:anywhere}
+.modal-add-fab{position:absolute;right:12px;bottom:12px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:21px;background:#4f46e5;color:#fff;box-shadow:0 8px 20px rgba(79,70,229,.22);z-index:130!important;pointer-events:auto!important}
+.fab{position:fixed;right:18px;bottom:80px;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:25px;background:#4f46e5;color:#fff;box-shadow:0 10px 25px rgba(79,70,229,.22);z-index:80!important;transition:opacity .16s ease,transform .16s ease}
+.fab.ad-obscured{opacity:0!important;pointer-events:none!important;transform:scale(.9)!important}
+.modal-backdrop{z-index:120!important;pointer-events:none!important}.modal-backdrop.open{pointer-events:auto!important}.day-modal{position:relative;z-index:121!important}
+.bottom-nav a{gap:2px!important;flex-direction:column!important}.bottom-nav a span{display:block!important;font-size:17px!important;line-height:1!important;height:19px!important}.bottom-nav a:not(.active){font-weight:600}
+
+.modal-holiday{padding:8px 10px;margin:4px 0 6px;border-radius:10px;background:rgba(254,226,226,.72);color:#b91c1c;font-size:13px;font-weight:750}
+
+/* Keep the advertisement in normal document flow and below the complete six-week grid. */
+.calendar-page .wrap{padding-bottom:calc(var(--nav-h) + 110px)!important}
+.calendar-page #calendar{margin-bottom:20px}
+.calendar-page .ad-bottom,.calendar-page .xrea-bottom-ad{
+  position:relative!important;z-index:2!important;display:block!important;clear:both!important;
+  width:100%!important;max-width:100%!important;box-sizing:border-box!important;
+  min-height:50px!important;margin:24px 0 calc(var(--nav-h) + 24px)!important;
+  padding:14px 0 8px!important;overflow:visible!important;
+}
+.calendar-page .ad-bottom iframe,.calendar-page .xrea-bottom-ad iframe{max-width:100%!important}
+
+@keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+@media(max-width:600px){
+  .month-label{min-width:70px}
+  .wd{height:40px!important}
+  #calBody{min-height:516px!important}
+  #calBody .week,#calBody .week-days,#calBody .day{height:86px!important;min-height:86px!important}
+  #calBody .week{flex-basis:86px!important}
+  .day-modal{height:76vh}
+}
