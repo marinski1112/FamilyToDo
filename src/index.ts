@@ -61,7 +61,7 @@ export default {
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
-      if(url.pathname.startsWith('/app/api/webhook')) return webhook(request,env);
+      if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return webhook(request,env);
       if(url.pathname==='/logout.php'||url.pathname==='/logout') return logout(request,env);
       if(url.pathname==='/task/delete.php') return taskDelete(request,context);
       if(url.pathname==='/task/convert_occurrence.php') return convertOccurrence(request,context);
