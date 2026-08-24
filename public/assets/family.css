@@ -41,3 +41,28 @@ body{padding-bottom:env(safe-area-inset-bottom)}
 .bottom-nav{padding-bottom:env(safe-area-inset-bottom)}
 .liff-entry{text-align:center;margin-top:8vh}
 .liff-entry .error{text-align:left}
+
+/* =========================================================
+   Wave 9 - v12.35 visual migration baseline
+   Keep the original Family TODO LINE card/menu language,
+   while normalizing every Cloudflare page for LIFF/mobile.
+   ========================================================= */
+:root{--today:#fff7ed;--tomorrow:#eef2ff;--calendar:#f5f3ff;--shopping:#ecfdf5;--message:#fdf4ff;--settings:#f3f4f6;--shadow:0 6px 24px rgba(15,23,42,.055)}
+body{background:linear-gradient(180deg,#f5f7fb 0,#f1f4f9 100%)}
+.wrap{padding-top:20px}
+.eyebrow{font-size:11px;letter-spacing:.08em;color:#8a93a3;font-weight:800;text-transform:uppercase;margin-bottom:3px}
+.home-hero{padding:8px 4px 18px}.home-hero h1{margin:0 0 6px}.home-hero p{margin:0;color:var(--muted);font-size:14px}
+.home-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 14px}
+.home-menu a{min-height:126px;padding:18px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;border:1px solid var(--line);border-radius:18px;text-decoration:none;box-shadow:var(--shadow);transition:transform .12s ease,box-shadow .12s ease}
+.home-menu a:active{transform:scale(.985)}
+.home-menu a.today{background:var(--today)}.home-menu a.tomorrow{background:var(--tomorrow)}.home-menu a.calendar{background:var(--calendar)}.home-menu a.shopping{background:var(--shopping)}.home-menu a.message{background:var(--message)}.home-menu a.settings{background:var(--settings)}
+.menu-icon{font-size:29px;line-height:1;margin-bottom:4px}.home-menu strong{font-size:17px}.home-menu small{font-size:11px;color:#687386}
+.quick-card{box-shadow:var(--shadow)}.quick-actions{display:flex;gap:8px;flex-wrap:wrap}
+.daily-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:2px 2px 14px}.daily-head h1{margin:0 0 3px}.date-title{font-size:20px;font-weight:800;color:#374151}.date-nav{display:flex;gap:6px}.date-nav .btn{min-width:42px}
+.section-card{box-shadow:var(--shadow)}.section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}.section-head h2{margin:0}.section-card .row{padding:12px 0;border-bottom:1px solid #edf0f4}.section-card .row:last-child{border-bottom:0}.section-card .row a{text-decoration:none;font-weight:700}.section-card .meta{margin:3px 0 0 31px}.empty{color:#8b95a5;padding:8px 0 4px}.task-section{border-top:4px solid #f59e0b}.item-section{border-top:4px solid #64748b}
+.form-card label{display:block;font-weight:750;font-size:14px;margin:0 0 6px}.form-card input,.form-card select,.form-card textarea{margin-bottom:14px}.form-card button{margin-top:4px}
+.member-list{padding-top:6px}.member-row,.content-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid #edf0f4}.member-row:last-child,.content-row:last-child{border-bottom:0}.member-row .actions{flex-shrink:0}.content-admin h2{margin-bottom:2px}.content-row strong{display:block;max-width:58vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.checkrow{margin:9px 0}.checkrow input{width:20px!important;height:20px!important;margin:0!important}.choice-list{margin-bottom:14px}
+@media(max-width:520px){.home-menu{gap:9px}.home-menu a{min-height:116px;padding:15px}.menu-icon{font-size:26px}.daily-head{align-items:flex-start}.date-nav .btn{min-width:38px;padding:8px}.content-row strong{max-width:52vw}}
+.settings-links{display:grid;gap:0}.settings-links .section-link{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #edf0f4}.settings-links .section-link:first-child{padding-top:0}.settings-links .section-link:last-child{border-bottom:0;padding-bottom:0}.settings-links h2{margin:0 0 3px;font-size:16px}
+.message-list .row,.shopping-list .row{padding:13px 0;border-bottom:1px solid #edf0f4}.message-list .row:last-child,.shopping-list .row:last-child{border-bottom:0}.message-list .row>div:first-child{font-size:15px;white-space:pre-wrap;overflow-wrap:anywhere}.shopping-list .row{min-height:52px}.shopping-list a{text-decoration:none;font-weight:750}
