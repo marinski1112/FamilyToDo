@@ -55,6 +55,13 @@ export default {
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
       if(url.pathname.startsWith('/app/api/webhook')) return webhook(request,env);
+      if(url.pathname==='/logout.php'||url.pathname==='/logout') return logout(request,env);
+      if(url.pathname==='/task/delete.php') return taskDelete(request,context);
+      if(url.pathname==='/task/convert_occurrence.php') return convertOccurrence(request,context);
+      if(url.pathname==='/app/message_new.php') return messages(request,context);
+      if(url.pathname==='/app/shopping_new.php') return shopping(request,context);
+      if(url.pathname==='/app/settings_content.php'||url.pathname==='/app/settings_members.php'||url.pathname==='/app/settings_notifications.php'||url.pathname==='/app/settings_recurring.php') return settings(request,context);
+      if(url.pathname==='/app/logs.php') return logsPage(context);
       if(url.pathname==='/task/new.php') return taskNew(context,url.searchParams.get('date')||asDateOffset(0));
       if(url.pathname==='/task/view.php') return taskView(context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/task/edit.php') return taskEdit(request,context,Number(url.searchParams.get('id')||0));
@@ -165,4 +172,55 @@ async function processNotifications(env: Env): Promise<void> {
       console.error('[Family TODO LINE] notification',e);
     }
   }
+}
+
+
+async function logout(request:Request,env:Env):Promise<Response>{
+  const headers=new Headers({'Location':'/login.php','Set-Cookie':'family_line_cf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
+  return new Response(null,{status:302,headers});
+}
+
+async function taskDelete(request:Request,ctx:any):Promise<Response>{
+  if(request.method!=='POST'&&request.method!=='DELETE') return json({ok:false,error:'POST/DELETE only'},405);
+  const m=ctx.member;if(!m)return redirect('/login.php');
+  const id=Number(new URL(request.url).searchParams.get('id')||0) || Number((await request.clone().json().catch(()=>({}))).id||0);
+  if(!id)return json({ok:false,error:'idが不正です。'},400);
+  const body=request.method==='POST'?await request.clone().json().catch(()=>({})):{};
+  const csrf=request.headers.get('x-csrf')||String(body.csrf||'');
+  if(csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました。'},403);
+  const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<any>();
+  if(!task)return json({ok:false,error:'対象が見つかりません。'},404);
+  const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);
+  await ctx.env.DB.batch([
+    ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id),
+  ]);
+  return json({ok:true,redirect:'/today.php'});
+}
+
+async function convertOccurrence(request:Request,ctx:any):Promise<Response>{
+  if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
+  const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);
+  const b=await request.json().catch(()=>({})) as any;
+  if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました。'},403);
+  const occId=Number(b.occurrence_id||0);if(!occId)return json({ok:false,error:'発生日が不正です。'},400);
+  const occ=await ctx.env.DB.prepare('SELECT o.*,r.task_id,r.name,r.recurrence_type,t.title,t.description,t.start_at,t.end_at,t.location,t.all_day,t.calendar_visible,t.completion_mode FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id JOIN tasks t ON t.id=r.task_id WHERE o.id=? AND o.family_id=? LIMIT 1').bind(occId,m.family_id).first<any>();
+  if(!occ)return json({ok:false,error:'発生日が見つかりません。'},404);
+  if(occ.exception_task_id)return json({ok:true,task_id:Number(occ.exception_task_id),redirect:`/task/view.php?id=${Number(occ.exception_task_id)}`});
+  const date=String(occ.occurrence_date);const base=String(occ.start_at||'');const st=base.slice(11,19);const et=String(occ.end_at||'').slice(11,19);const now=nowJst();
+  const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,task_kind,recurrence_rule,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,0)').bind(m.family_id,occ.title,occ.description||null,`${date} ${st||'00:00:00'}`,'pending',occ.completion_mode||'ANY',m.id,now,now,st?`${date} ${st}`:null,et?`${date} ${et}`:null,occ.location||null,Number(occ.all_day??1),Number(occ.calendar_visible??1),'OCCURRENCE',null,0).run();
+  const taskId=Number(r.meta.last_row_id);
+  await ctx.env.DB.prepare('UPDATE recurrence_occurrences SET exception_task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(taskId,now,occId,m.family_id).run();
+  return json({ok:true,task_id:taskId,redirect:`/task/view.php?id=${taskId}`});
+}
+
+async function logsPage(ctx:any):Promise<Response>{
+  if(!ctx.member)return redirect('/login.php');
+  const m=ctx.member;const role=String(m.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return new Response('管理者権限が必要です。',{status:403});
+  const rows=await ctx.env.DB.prepare('SELECT a.*,m.name member_name FROM activity_logs a LEFT JOIN members m ON m.id=a.member_id WHERE a.family_id=? ORDER BY a.occurred_at DESC,a.id DESC LIMIT 200').bind(m.family_id).all<any>();
+  const esc=(v:any)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+  const body=`<div class="card"><h1>操作ログ</h1>${rows.results.map((r:any)=>`<div class="row"><strong>${esc(r.action)}</strong><div class="meta">${esc(r.member_name||'')} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')} ${esc(r.target_id||'')}</div></div>`).join('')||'<p>ログはありません。</p>'}</div>`;
+  return new Response(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/family.css"><title>操作ログ</title></head><body><main class="wrap">${body}<p><a class="btn" href="/app/settings.php">管理へ戻る</a></p></main></body></html>`,{headers:{'content-type':'text/html; charset=utf-8'}});
 }

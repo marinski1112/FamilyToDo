@@ -59,42 +59,10 @@ function layout(title: string, body: string, active = ''): string {
  */
 export function liffEntryPage(env: Env, nextPath = '/app/index.php'): Response {
   const safeNext = /^\/(?!\/)/.test(nextPath) ? nextPath : '/app/index.php';
-  const liffId = env.LINE_LIFF_ID || '';
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LIFFを準備しています…</p><div id="error" class="error" style="display:none;white-space:pre-wrap"></div><div id="diag" class="meta" style="white-space:pre-wrap;margin-top:12px"></div><button id="retry" style="display:none" class="btn">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{
-const status=document.getElementById('status'),error=document.getElementById('error'),diag=document.getElementById('diag'),retry=document.getElementById('retry');
-const next=${JSON.stringify(safeNext)}, liffId=${JSON.stringify(liffId)};
-const showDiag=(o)=>{diag.textContent=Object.entries(o).map(([k,v])=>k+': '+String(v)).join('\\n')};
-const showError=(stage,e,extra={})=>{const name=e&&e.name?e.name:'';const message=e&&e.message?e.message:String(e);showDiag({stage,liffIdPresent:Boolean(liffId),url:location.href,inClient:typeof liff!=='undefined'&&liff.isInClient?liff.isInClient():'unknown',loggedIn:typeof liff!=='undefined'&&liff.isLoggedIn?liff.isLoggedIn():'unknown',...extra});error.textContent='LIFFエラー\\n'+name+'\\n'+message;error.style.display='block';status.textContent='LIFF初期化に失敗しました。';retry.style.display='inline-flex';console.error('[Family TODO LINE][LIFF]',stage,e)};
-async function run(){
-  retry.style.display='none';error.style.display='none';status.textContent='LIFF SDKを確認しています…';
-  if(typeof liff==='undefined'){showError('sdk_load',new Error('LIFF SDKを読み込めませんでした。'));return;}
-  showDiag({stage:'before_init',liffIdPresent:Boolean(liffId),url:location.href,userAgent:navigator.userAgent,inClient:liff.isInClient()});
-  try{
-    status.textContent='LIFFを初期化しています…';
-    await liff.init({liffId});
-    showDiag({stage:'init_ok',liffIdPresent:Boolean(liffId),url:location.href,inClient:liff.isInClient(),loggedIn:liff.isLoggedIn(),os:liff.getOS(),language:liff.getLanguage(),version:liff.getVersion()});
-    if(!liff.isLoggedIn()){
-      status.textContent='LINEログインを開始します…';
-      liff.login({redirectUri:location.href});
-      return;
-    }
-    status.textContent='LINE認証情報を確認しています…';
-    const idToken=liff.getIDToken();
-    if(!idToken) throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');
-    showDiag({stage:'id_token_ok',liffIdPresent:Boolean(liffId),url:location.href,inClient:liff.isInClient(),loggedIn:true,tokenPresent:true});
-    const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({id_token:idToken})});
-    const raw=await r.text();
-    let d=null;try{d=JSON.parse(raw)}catch{}
-    showDiag({stage:'worker_login_response',httpStatus:r.status,contentType:r.headers.get('content-type')||'',ok:d?.ok===true,workerError:d?.error||''});
-    if(!r.ok||!d?.ok) throw new Error(d?.error||('Cloudflare WorkerのLINEログイン処理に失敗しました（HTTP '+r.status+'）。'));
-    status.textContent='ログインしました。アプリを開いています…';
-    location.replace(next);
-  }catch(e){showError('liff_flow',e)}
-}
-retry.onclick=run;run();
-})();</script>`;
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{const status=document.getElementById('status'),error=document.getElementById('error'),retry=document.getElementById('retry');const next=${JSON.stringify(safeNext)};async function run(){try{retry.style.display='none';error.style.display='none';status.textContent='LINEを初期化しています…';await liff.init({liffId:${JSON.stringify(env.LINE_LIFF_ID)}});if(!liff.isLoggedIn()){status.textContent='LINEログインを開始します…';liff.login({redirectUri:location.href});return;}status.textContent='認証情報を確認しています…';const idToken=liff.getIDToken();if(!idToken)throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({id_token:idToken})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||('LINEログインに失敗しました（HTTP '+r.status+'）。'));status.textContent='ログインしました。アプリを開いています…';location.replace(next);}catch(e){const msg=e?.message||String(e);status.textContent='認証に失敗しました。';error.textContent=msg;error.style.display='block';retry.style.display='inline-flex';}}retry.onclick=run;run();})();</script>`;
   return html(layout('LINE認証',body));
 }
+
 export async function authHealth(ctx: AppContext): Promise<Response> {
   return json({
     ok: true,
@@ -163,15 +131,29 @@ export async function createFamily(request: Request, ctx: AppContext): Promise<R
 export async function joinFamily(request: Request, ctx: AppContext): Promise<Response> {
   if (request.method !== 'POST') return json({ok:false,error:'POST only'},405);
   if (!ctx.session.lineUserId) return json({ok:false,error:'LINE認証が必要です。'},401);
-  const body = await bodyJson(request); const code=String(body.family_code??'').trim().toUpperCase();
+  const body = await bodyJson(request);
+  const token = String(body.token ?? '').trim();
+  const code = String(body.family_code ?? '').trim().toUpperCase();
   const name=String(body.member_name??ctx.session.lineDisplayName??'').trim()||'メンバー';
-  if(!code) return json({ok:false,error:'家族コードを入力してください。'},400);
-  const family=await ctx.env.DB.prepare('SELECT id,name FROM families WHERE family_code=? LIMIT 1').bind(code).first<{id:number;name:string}>();
-  if(!family) return json({ok:false,error:'家族コードが見つかりません。'},404);
+  if(!token && !code) return json({ok:false,error:'家族コードまたは招待情報を入力してください。'},400);
+  let family: {id:number;name:string}|null = null;
+  if(token){
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token));
+    const hash=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,'0')).join('');
+    family=await ctx.env.DB.prepare('SELECT f.id,f.name FROM family_invitations i JOIN families f ON f.id=i.family_id WHERE i.token_hash=? AND i.expires_at>=? LIMIT 1').bind(hash,nowJst()).first<{id:number;name:string}>();
+    if(!family) return json({ok:false,error:'招待リンクが無効または期限切れです。'},404);
+  } else {
+    family=await ctx.env.DB.prepare('SELECT id,name FROM families WHERE family_code=? LIMIT 1').bind(code).first<{id:number;name:string}>();
+    if(!family) return json({ok:false,error:'家族コードが見つかりません。'},404);
+  }
   const now=nowJst();
   const existing=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND line_user_id=? LIMIT 1').bind(family.id,ctx.session.lineUserId).first<{id:number}>();
   let memberId=existing?.id;
-  if(!memberId){const r=await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(family.id,ctx.session.lineUserId,name,'ADULT','MEMBER',1,1,now,now).run();memberId=Number(r.meta.last_row_id);}
+  if(memberId){
+    await ctx.env.DB.prepare('UPDATE members SET name=?,active=1,updated_at=? WHERE id=? AND family_id=?').bind(name,now,memberId,family.id).run();
+  } else {
+    const r=await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(family.id,ctx.session.lineUserId,name,'ADULT','MEMBER',1,1,now,now).run();memberId=Number(r.meta.last_row_id);
+  }
   ctx.session.memberId=memberId;ctx.session.familyId=family.id;
   return commitSession(json({ok:true,redirect:'/app/index.php',family_id:family.id}),ctx.session,ctx.env.APP_SECRET);
 }
