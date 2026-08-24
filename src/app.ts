@@ -59,10 +59,42 @@ function layout(title: string, body: string, active = ''): string {
  */
 export function liffEntryPage(env: Env, nextPath = '/app/index.php'): Response {
   const safeNext = /^\/(?!\/)/.test(nextPath) ? nextPath : '/app/index.php';
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{const status=document.getElementById('status'),error=document.getElementById('error'),retry=document.getElementById('retry');const next=${JSON.stringify(safeNext)};async function run(){try{retry.style.display='none';error.style.display='none';status.textContent='LINEを初期化しています…';await liff.init({liffId:${JSON.stringify(env.LINE_LIFF_ID)}});if(!liff.isLoggedIn()){status.textContent='LINEログインを開始します…';liff.login({redirectUri:location.href});return;}status.textContent='認証情報を確認しています…';const idToken=liff.getIDToken();if(!idToken)throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({id_token:idToken})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||('LINEログインに失敗しました（HTTP '+r.status+'）。'));status.textContent='ログインしました。アプリを開いています…';location.replace(next);}catch(e){const msg=e?.message||String(e);status.textContent='認証に失敗しました。';error.textContent=msg;error.style.display='block';retry.style.display='inline-flex';}}retry.onclick=run;run();})();</script>`;
+  const liffId = env.LINE_LIFF_ID || '';
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LIFFを準備しています…</p><div id="error" class="error" style="display:none;white-space:pre-wrap"></div><div id="diag" class="meta" style="white-space:pre-wrap;margin-top:12px"></div><button id="retry" style="display:none" class="btn">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script>(async()=>{
+const status=document.getElementById('status'),error=document.getElementById('error'),diag=document.getElementById('diag'),retry=document.getElementById('retry');
+const next=${JSON.stringify(safeNext)}, liffId=${JSON.stringify(liffId)};
+const showDiag=(o)=>{diag.textContent=Object.entries(o).map(([k,v])=>k+': '+String(v)).join('\\n')};
+const showError=(stage,e,extra={})=>{const name=e&&e.name?e.name:'';const message=e&&e.message?e.message:String(e);showDiag({stage,liffIdPresent:Boolean(liffId),url:location.href,inClient:typeof liff!=='undefined'&&liff.isInClient?liff.isInClient():'unknown',loggedIn:typeof liff!=='undefined'&&liff.isLoggedIn?liff.isLoggedIn():'unknown',...extra});error.textContent='LIFFエラー\\n'+name+'\\n'+message;error.style.display='block';status.textContent='LIFF初期化に失敗しました。';retry.style.display='inline-flex';console.error('[Family TODO LINE][LIFF]',stage,e)};
+async function run(){
+  retry.style.display='none';error.style.display='none';status.textContent='LIFF SDKを確認しています…';
+  if(typeof liff==='undefined'){showError('sdk_load',new Error('LIFF SDKを読み込めませんでした。'));return;}
+  showDiag({stage:'before_init',liffIdPresent:Boolean(liffId),url:location.href,userAgent:navigator.userAgent,inClient:liff.isInClient()});
+  try{
+    status.textContent='LIFFを初期化しています…';
+    await liff.init({liffId});
+    showDiag({stage:'init_ok',liffIdPresent:Boolean(liffId),url:location.href,inClient:liff.isInClient(),loggedIn:liff.isLoggedIn(),os:liff.getOS(),language:liff.getLanguage(),version:liff.getVersion()});
+    if(!liff.isLoggedIn()){
+      status.textContent='LINEログインを開始します…';
+      liff.login({redirectUri:location.href});
+      return;
+    }
+    status.textContent='LINE認証情報を確認しています…';
+    const idToken=liff.getIDToken();
+    if(!idToken) throw new Error('LINE IDトークンを取得できませんでした。LIFFのopenid権限を確認してください。');
+    showDiag({stage:'id_token_ok',liffIdPresent:Boolean(liffId),url:location.href,inClient:liff.isInClient(),loggedIn:true,tokenPresent:true});
+    const r=await fetch('/app/api/liff_login.php',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'same-origin',body:JSON.stringify({id_token:idToken})});
+    const raw=await r.text();
+    let d=null;try{d=JSON.parse(raw)}catch{}
+    showDiag({stage:'worker_login_response',httpStatus:r.status,contentType:r.headers.get('content-type')||'',ok:d?.ok===true,workerError:d?.error||''});
+    if(!r.ok||!d?.ok) throw new Error(d?.error||('Cloudflare WorkerのLINEログイン処理に失敗しました（HTTP '+r.status+'）。'));
+    status.textContent='ログインしました。アプリを開いています…';
+    location.replace(next);
+  }catch(e){showError('liff_flow',e)}
+}
+retry.onclick=run;run();
+})();</script>`;
   return html(layout('LINE認証',body));
 }
-
 export async function authHealth(ctx: AppContext): Promise<Response> {
   return json({
     ok: true,
