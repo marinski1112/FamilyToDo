@@ -115,6 +115,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 
     source_template_id INTEGER NULL,
 
+    reminder_at TEXT NULL,
+
     created_by INTEGER NULL,
 
     created_at TEXT NOT NULL,
@@ -351,6 +353,8 @@ CREATE TABLE IF NOT EXISTS messages (
     target_member_id INTEGER NULL,
 
     text TEXT NOT NULL,
+
+    reminder_at TEXT NULL,
 
     converted_to_shopping_id
         INTEGER NULL,
