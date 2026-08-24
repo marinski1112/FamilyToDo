@@ -19,6 +19,13 @@
 - basic settings: profile, member suspend/reopen/delete, notification settings
 - D1 initial schema + v12.35 compatibility migration
 
+## Wave 5 — recurring task management
+- recurring task edit flow
+- recurring task deletion flow
+- monthly week-number and business-day fields wired to D1
+- recurring task template fields: description, location, time, all-day, calendar visibility, completion mode
+- recurring POST session/CSRF persistence hardened
+
 ## Still pending
 - exact visual parity with every v12.35 PHP screen
 - full recurring-task creation/edit/occurrence generation parity

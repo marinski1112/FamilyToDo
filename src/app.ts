@@ -320,32 +320,142 @@ export async function invitePage(ctx: AppContext, token: string): Promise<Respon
 
 export async function recurring(request: Request, ctx: AppContext): Promise<Response> {
   const m = requireMember(ctx);
-  const role = String(m.role||'').toUpperCase();
+  const role = String(m.role || '').toUpperCase();
+  const isAdmin = role === 'OWNER' || role === 'ADMIN';
+  if (!isAdmin) return request.method === 'GET'
+    ? html(layout('定期タスク', '<div class="card"><h1>🔁 定期タスク</h1><p>定期タスクの管理には管理者権限が必要です。</p><a class="btn" href="/app/settings.php">管理へ戻る</a></div>', '/app/settings.php'))
+    : json({ok:false,error:'管理者権限が必要です。'},403);
+
   if (request.method === 'POST') {
-    const b = await bodyJson(request); await ensureCsrf(ctx,b.csrf);
-    if (role !== 'OWNER' && role !== 'ADMIN') return json({ok:false,error:'管理者権限が必要です。'},403);
-    const action = String(b.action||'create');
+    const b = await bodyJson(request);
+    await ensureCsrf(ctx, b.csrf);
+    const action = String(b.action || 'create');
+
     if (action === 'toggle') {
-      const id = Number(b.id||0); if (!id) throw new BadRequest('対象が不正です。');
-      await ctx.env.DB.prepare('UPDATE recurrence_rules SET active=?,updated_at=? WHERE id=? AND family_id=?').bind(b.active?1:0,nowJst(),id,m.family_id).run();
-      return json({ok:true});
+      const id = Number(b.id || 0);
+      if (!id) throw new BadRequest('対象が不正です。');
+      const active = b.active ? 1 : 0;
+      const result = await ctx.env.DB.prepare('UPDATE recurrence_rules SET active=?,updated_at=? WHERE id=? AND family_id=?')
+        .bind(active, nowJst(), id, m.family_id).run();
+      if (!result.meta.changes) return json({ok:false,error:'定期タスクが見つかりません。'},404);
+      return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
     }
-    const title = String(b.title||'').trim();
-    const type = String(b.recurrence_type||'DAILY').trim();
-    const startDate = String(b.start_date||'').trim();
-    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new BadRequest('タイトルと開始日を入力してください。');
-    const interval = Math.max(1,Number(b.interval_value||1));
-    const weekdays = Array.isArray(b.weekdays) ? (b.weekdays as unknown[]).map(Number).filter(n=>n>=0&&n<=6) : [];
-    const monthdays = Array.isArray(b.monthdays) ? (b.monthdays as unknown[]).map(Number).filter(n=>n>=1&&n<=31) : [];
-    const endDate = String(b.end_date||'').trim();
-    const taskR = await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,all_day,calendar_visible,task_kind,recurrence_rule) VALUES(?,?,?,?,?,?,?,?,?,1,1,?,?)').bind(m.family_id,title,String(b.description||'')||null,`${startDate} 00:00:00`,'pending',String(b.completion_mode||'ANY'),m.id,nowJst(),nowJst(),'RECURRING',JSON.stringify({type,interval,weekdays,monthdays})).run();
+
+    if (action === 'delete') {
+      const id = Number(b.id || 0);
+      if (!id) throw new BadRequest('対象が不正です。');
+      const rule = await ctx.env.DB.prepare('SELECT id,task_id FROM recurrence_rules WHERE id=? AND family_id=? LIMIT 1')
+        .bind(id, m.family_id).first<Row>();
+      if (!rule) return json({ok:false,error:'定期タスクが見つかりません。'},404);
+      const taskId = Number(rule.task_id || 0);
+      const statements = [
+        ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(id,m.family_id),
+        ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(id,m.family_id)
+      ];
+      if (taskId) statements.push(ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id));
+      await ctx.env.DB.batch(statements);
+      return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
+    }
+
+    if (action === 'update') {
+      const id = Number(b.id || 0);
+      if (!id) throw new BadRequest('対象が不正です。');
+      const rule = await ctx.env.DB.prepare('SELECT id,task_id FROM recurrence_rules WHERE id=? AND family_id=? LIMIT 1')
+        .bind(id,m.family_id).first<Row>();
+      if (!rule) return json({ok:false,error:'定期タスクが見つかりません。'},404);
+      const taskId = Number(rule.task_id || 0);
+      const title = String(b.title || '').trim();
+      const type = String(b.recurrence_type || 'DAILY').trim();
+      const startDate = String(b.start_date || '').trim();
+      const endDate = String(b.end_date || '').trim();
+      const allowed = ['DAILY','INTERVAL_DAYS','WEEKLY','INTERVAL_WEEKS','MONTHLY_DAY','MONTHLY_WEEKDAY','MONTHLY_BUSINESS_DAY'];
+      if (!title || title.length > 255) throw new BadRequest('タイトルを入力してください。');
+      if (!allowed.includes(type)) throw new BadRequest('繰り返し種類が不正です。');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new BadRequest('開始日が不正です。');
+      if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new BadRequest('終了日が不正です。');
+      if (endDate && endDate < startDate) throw new BadRequest('終了日は開始日以降にしてください。');
+      const interval = Math.max(1, Math.min(365, Number(b.interval_value || 1)));
+      const weekdays = Array.isArray(b.weekdays) ? (b.weekdays as unknown[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6) : [];
+      const monthdays = Array.isArray(b.monthdays) ? (b.monthdays as unknown[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=31) : [];
+      const weekNumber = Math.max(1, Math.min(5, Number(b.week_number || 1)));
+      const businessOrdinal = Math.max(1, Math.min(23, Number(b.business_day_ordinal || 1)));
+      const completionMode = String(b.completion_mode || 'ANY').toUpperCase() === 'ALL' ? 'ALL' : 'ANY';
+      const description = String(b.description || '').trim() || null;
+      const location = String(b.location || '').trim() || null;
+      const startTime = String(b.start_time || '').trim();
+      const endTime = String(b.end_time || '').trim();
+      const allDay = b.all_day ? 1 : 0;
+      const calendarVisible = b.calendar_visible === false || String(b.calendar_visible) === '0' ? 0 : 1;
+      const startAt = allDay || !startTime ? `${startDate} 00:00:00` : `${startDate} ${startTime}:00`;
+      const endAt = allDay || !endTime ? null : `${startDate} ${endTime}:00`;
+      if (startAt && endAt && endAt < startAt) throw new BadRequest('終了時刻は開始時刻以降にしてください。');
+      const now = nowJst();
+      const statements = [
+        ctx.env.DB.prepare(`UPDATE recurrence_rules SET name=?,recurrence_type=?,interval_value=?,weekday=?,monthday=?,start_date=?,end_date=?,week_number=?,business_day_ordinal=?,weekdays_json=?,monthdays_json=?,updated_at=? WHERE id=? AND family_id=?`).bind(title,type,interval,weekdays.length?weekdays[0]:null,monthdays.length?monthdays[0]:null,startDate,endDate||null,type==='MONTHLY_WEEKDAY'?weekNumber:null,type==='MONTHLY_BUSINESS_DAY'?businessOrdinal:null,JSON.stringify(weekdays),JSON.stringify(monthdays),now,id,m.family_id),
+        ctx.env.DB.prepare(`UPDATE tasks SET title=?,description=?,due_at=?,completion_mode=?,updated_at=?,start_at=?,end_at=?,location=?,calendar_visible=?,all_day=? WHERE id=? AND family_id=?`).bind(title,description,startAt,completionMode,now,startAt,endAt,location,calendarVisible,allDay,taskId,m.family_id)
+      ];
+      await ctx.env.DB.batch(statements);
+      return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
+    }
+
+    // create
+    const title = String(b.title || '').trim();
+    const type = String(b.recurrence_type || 'DAILY').trim();
+    const startDate = String(b.start_date || '').trim();
+    const endDate = String(b.end_date || '').trim();
+    const allowed = ['DAILY','INTERVAL_DAYS','WEEKLY','INTERVAL_WEEKS','MONTHLY_DAY','MONTHLY_WEEKDAY','MONTHLY_BUSINESS_DAY'];
+    if (!title || title.length > 255) throw new BadRequest('タイトルを入力してください。');
+    if (!allowed.includes(type)) throw new BadRequest('繰り返し種類が不正です。');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new BadRequest('タイトルと開始日を入力してください。');
+    if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new BadRequest('終了日が不正です。');
+    if (endDate && endDate < startDate) throw new BadRequest('終了日は開始日以降にしてください。');
+    const interval = Math.max(1, Math.min(365, Number(b.interval_value || 1)));
+    const weekdays = Array.isArray(b.weekdays) ? (b.weekdays as unknown[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6) : [];
+    const monthdays = Array.isArray(b.monthdays) ? (b.monthdays as unknown[]).map(Number).filter(n=>Number.isInteger(n)&&n>=1&&n<=31) : [];
+    const weekNumber = Math.max(1, Math.min(5, Number(b.week_number || 1)));
+    const businessOrdinal = Math.max(1, Math.min(23, Number(b.business_day_ordinal || 1)));
+    const completionMode = String(b.completion_mode || 'ANY').toUpperCase() === 'ALL' ? 'ALL' : 'ANY';
+    const description = String(b.description || '').trim() || null;
+    const location = String(b.location || '').trim() || null;
+    const startTime = String(b.start_time || '').trim();
+    const endTime = String(b.end_time || '').trim();
+    const allDay = b.all_day ? 1 : 0;
+    const calendarVisible = b.calendar_visible === false || String(b.calendar_visible) === '0' ? 0 : 1;
+    const startAt = allDay || !startTime ? `${startDate} 00:00:00` : `${startDate} ${startTime}:00`;
+    const endAt = allDay || !endTime ? null : `${startDate} ${endTime}:00`;
+    if (endAt && endAt < startAt) throw new BadRequest('終了時刻は開始時刻以降にしてください。');
+    const now = nowJst();
+    const taskR = await ctx.env.DB.prepare(`INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,task_kind,recurrence_rule,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,0)`)
+      .bind(m.family_id,title,description,startAt,'pending',completionMode,m.id,now,now,startAt,endAt,location,allDay,calendarVisible,'RECURRING',null).run();
     const taskId = Number(taskR.meta.last_row_id);
-    const ruleR = await ctx.env.DB.prepare('INSERT INTO recurrence_rules(family_id,task_id,name,recurrence_type,interval_value,weekday,monthday,start_date,end_date,active,created_at,updated_at,weekdays_json,monthdays_json) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?)').bind(m.family_id,taskId,title,type,interval,weekdays.length?weekdays[0]:null,monthdays.length?monthdays[0]:null,startDate,endDate||null,nowJst(),nowJst(),JSON.stringify(weekdays),JSON.stringify(monthdays)).run();
-    await ctx.env.DB.prepare('UPDATE tasks SET recurrence_rule=? WHERE id=?').bind(JSON.stringify({recurrence_rule_id:Number(ruleR.meta.last_row_id)}),taskId).run();
-    return json({ok:true,id:Number(ruleR.meta.last_row_id),task_id:taskId},201);
+    const ruleR = await ctx.env.DB.prepare(`INSERT INTO recurrence_rules(family_id,task_id,name,recurrence_type,interval_value,weekday,monthday,start_date,end_date,active,created_at,updated_at,week_number,business_day_ordinal,weekdays_json,monthdays_json) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)`)
+      .bind(m.family_id,taskId,title,type,interval,weekdays.length?weekdays[0]:null,monthdays.length?monthdays[0]:null,startDate,endDate||null,now,now,type==='MONTHLY_WEEKDAY'?weekNumber:null,type==='MONTHLY_BUSINESS_DAY'?businessOrdinal:null,JSON.stringify(weekdays),JSON.stringify(monthdays)).run();
+    const ruleId = Number(ruleR.meta.last_row_id);
+    await ctx.env.DB.prepare('UPDATE tasks SET recurrence_rule=? WHERE id=? AND family_id=?').bind(JSON.stringify({recurrence_rule_id:ruleId}),taskId,m.family_id).run();
+    return commitSession(json({ok:true,id:ruleId,task_id:taskId}), ctx.session, ctx.env.APP_SECRET);
   }
-  const rows = await ctx.env.DB.prepare('SELECT r.*,t.title,t.description FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id WHERE r.family_id=? ORDER BY r.active DESC,r.id DESC').bind(m.family_id).all<Row>();
-  const csrf = esc(ctx.session.csrfToken||'');
-  const body = `<div class="page-head"><h1>🔁 定期タスク</h1><a class="btn" href="/app/settings.php">管理へ戻る</a></div><div class="card"><form id="recForm"><input type="hidden" name="csrf" value="${csrf}"><input name="title" placeholder="タイトル" required><label>種類</label><select name="recurrence_type"><option value="DAILY">毎日</option><option value="INTERVAL_DAYS">n日ごと</option><option value="WEEKLY">毎週</option><option value="INTERVAL_WEEKS">n週ごと</option><option value="MONTHLY_DAY">毎月指定日</option><option value="MONTHLY_WEEKDAY">毎月第n曜日</option><option value="MONTHLY_BUSINESS_DAY">毎月第n営業日</option></select><label>間隔</label><input type="number" name="interval_value" value="1" min="1"><label>開始日</label><input type="date" name="start_date" value="${dateOnly()}" required><label>終了日（任意）</label><input type="date" name="end_date"><label>曜日（週次）</label><div>${['日','月','火','水','木','金','土'].map((x,i)=>`<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="weekdays" value="${i}">${x}</label>`).join('')}</div><label>日付（毎月）</label><input name="monthdays" placeholder="1,15,25"><button>定期タスクを作成</button></form></div><div class="card"><h2>登録済み</h2>${rows.results.map(r=>`<div class="row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.start_date)}${r.end_date?' ～ '+esc(r.end_date):''} ・ ${Number(r.active)?'有効':'停止'}</div><button class="btn gray rec-toggle" data-id="${r.id}" data-active="${Number(r.active)?1:0}">${Number(r.active)?'停止':'再開'}</button></div>`).join('')||'<p>ありません。</p>'}</div><script>const f=document.getElementById('recForm'),csrf=${JSON.stringify(ctx.session.csrfToken||'')};f.onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f));b.csrf=csrf;b.weekdays=[...f.querySelectorAll('[name=weekdays]:checked')].map(x=>Number(x.value));b.monthdays=String(b.monthdays||'').split(',').map(x=>Number(x.trim())).filter(Boolean);const r=await fetch('/app/recurring.php',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'作成に失敗しました')};document.querySelectorAll('.rec-toggle').forEach(b=>b.onclick=async()=>{const active=b.dataset.active==='1';const r=await fetch('/app/recurring.php',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'toggle',id:Number(b.dataset.id),active:!active,csrf})});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'更新に失敗しました')});</script>`;
-  return html(layout('定期タスク',body,'/app/settings.php'));
+
+  const rows = await ctx.env.DB.prepare(`SELECT r.*,t.title,t.description,t.start_at,t.end_at,t.location,t.all_day,t.calendar_visible,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id WHERE r.family_id=? ORDER BY r.active DESC,r.id DESC`).bind(m.family_id).all<Row>();
+  const csrf = esc(ctx.session.csrfToken || '');
+  const ruleJson = rows.results.map(r => JSON.stringify({
+    id:Number(r.id), title:String(r.title||r.name||''), description:String(r.description||''), recurrence_type:String(r.recurrence_type||'DAILY'), interval_value:Number(r.interval_value||1),
+    start_date:String(r.start_date||''), end_date:String(r.end_date||''), weekdays:parseJsonArray(r.weekdays_json), monthdays:parseJsonArray(r.monthdays_json), week_number:Number(r.week_number||1), business_day_ordinal:Number(r.business_day_ordinal||1),
+    completion_mode:String(r.completion_mode||'ANY'), location:String(r.location||''), all_day:Number(r.all_day??1)===1, calendar_visible:Number(r.calendar_visible??1)===1,
+    start_time:String(r.start_at||'').slice(11,16), end_time:String(r.end_at||'').slice(11,16)
+  })).map(x=>x.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'));
+  const rowsHtml = rows.results.map((r,i)=>`<div class="row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.interval_value)} ・ ${esc(r.start_date)}${r.end_date?' ～ '+esc(r.end_date):''} ・ ${Number(r.active)?'有効':'停止'}</div><button type="button" class="btn gray rec-edit" data-rule="${ruleJson[i]}">編集</button> <button type="button" class="btn gray rec-toggle" data-id="${r.id}" data-active="${Number(r.active)?1:0}">${Number(r.active)?'停止':'再開'}</button> <button type="button" class="btn danger rec-delete" data-id="${r.id}">削除</button></div>`).join('');
+  const body = `<div class="page-head"><h1>🔁 定期タスク</h1><a class="btn" href="/app/settings.php">管理へ戻る</a></div>
+  <div class="card"><h2 id="recHeading">定期タスクを作成</h2><form id="recForm"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="create"><input type="hidden" name="id" value=""><label>タイトル</label><input name="title" maxlength="255" required><label>説明</label><textarea name="description"></textarea><label>種類</label><select name="recurrence_type"><option value="DAILY">毎日</option><option value="INTERVAL_DAYS">n日ごと</option><option value="WEEKLY">毎週</option><option value="INTERVAL_WEEKS">n週ごと</option><option value="MONTHLY_DAY">毎月指定日</option><option value="MONTHLY_WEEKDAY">毎月第n曜日</option><option value="MONTHLY_BUSINESS_DAY">毎月第n営業日</option></select><label>間隔</label><input type="number" name="interval_value" value="1" min="1" max="365"><label>開始日</label><input type="date" name="start_date" value="${dateOnly()}" required><label>終了日（任意）</label><input type="date" name="end_date"><label>曜日（週次）</label><div>${['日','月','火','水','木','金','土'].map((x,i)=>`<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="weekdays" value="${i}">${x}</label>`).join('')}</div><label>毎月第n曜日</label><select name="week_number"><option value="1">第1</option><option value="2">第2</option><option value="3">第3</option><option value="4">第4</option><option value="5">第5</option></select><label>毎月指定日</label><input name="monthdays" placeholder="1,15,25"><label>第n営業日</label><input type="number" name="business_day_ordinal" value="1" min="1" max="23"><label>開始時刻</label><input type="time" name="start_time"><label>終了時刻</label><input type="time" name="end_time"><label>場所</label><input name="location"><label><input type="checkbox" name="all_day" checked> 終日</label><label><input type="checkbox" name="calendar_visible" checked> カレンダーに表示</label><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">全員が完了</option></select><div style="display:flex;gap:8px"><button id="recSubmit">定期タスクを作成</button><button type="button" id="recCancel" class="btn gray" style="display:none">編集をキャンセル</button></div></form></div>
+  <div class="card"><h2>登録済み</h2>${rowsHtml||'<p>ありません。</p>'}</div>
+  <script>
+  const f=document.getElementById('recForm'),csrf=${JSON.stringify(ctx.session.csrfToken||'')},heading=document.getElementById('recHeading'),submit=document.getElementById('recSubmit'),cancel=document.getElementById('recCancel');
+  const setVal=(name,v)=>{const e=f.elements[name];if(e)e.value=v??''};
+  function resetForm(){f.reset();setVal('action','create');setVal('id','');setVal('start_date',${JSON.stringify(dateOnly())});setVal('interval_value',1);setVal('week_number',1);setVal('business_day_ordinal',1);heading.textContent='定期タスクを作成';submit.textContent='定期タスクを作成';cancel.style.display='none';f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=false);}
+  f.onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f));b.csrf=csrf;b.weekdays=[...f.querySelectorAll('[name=weekdays]:checked')].map(x=>Number(x.value));b.monthdays=String(b.monthdays||'').split(',').map(x=>Number(x.trim())).filter(Boolean);b.all_day=f.all_day.checked;b.calendar_visible=f.calendar_visible.checked;const r=await fetch('/app/recurring.php',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json().catch(()=>({ok:false,error:'応答を読み取れませんでした'}));if(d.ok)location.reload();else alert(d.error||'保存に失敗しました');};
+  document.querySelectorAll('.rec-edit').forEach(b=>b.onclick=()=>{const d=JSON.parse(b.dataset.rule);setVal('action','update');setVal('id',d.id);setVal('title',d.title);setVal('description',d.description);setVal('recurrence_type',d.recurrence_type);setVal('interval_value',d.interval_value);setVal('start_date',d.start_date);setVal('end_date',d.end_date);setVal('week_number',d.week_number);setVal('business_day_ordinal',d.business_day_ordinal);setVal('monthdays',d.monthdays.join(','));setVal('start_time',d.start_time);setVal('end_time',d.end_time);setVal('location',d.location);setVal('completion_mode',d.completion_mode);f.all_day.checked=d.all_day;f.calendar_visible.checked=d.calendar_visible;f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=d.weekdays.includes(Number(x.value)));heading.textContent='定期タスクを編集';submit.textContent='変更を保存';cancel.style.display='inline-block';window.scrollTo({top:0,behavior:'smooth'});});
+  cancel.onclick=resetForm;
+  document.querySelectorAll('.rec-toggle').forEach(b=>b.onclick=async()=>{const active=b.dataset.active==='1';const r=await fetch('/app/recurring.php',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'toggle',id:Number(b.dataset.id),active:!active,csrf})});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'更新に失敗しました');});
+  document.querySelectorAll('.rec-delete').forEach(b=>b.onclick=async()=>{if(!confirm('この定期タスクを削除しますか？\n過去の発生日記録も削除されます。'))return;const r=await fetch('/app/recurring.php',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'delete',id:Number(b.dataset.id),csrf})});const d=await r.json();if(d.ok)location.reload();else alert(d.error||'削除に失敗しました');});
+  </script>`;
+  return html(layout('定期タスク', body, '/app/settings.php'));
 }
