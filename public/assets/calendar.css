@@ -153,6 +153,10 @@
 .calendar-item.event{background:#2563eb}
 .calendar-cell .meta{font-size:8px;line-height:12px}
 
+/* Wave 10: force the current Worker calendar into a real 7-column month grid. */
+.calendar-grid{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;grid-auto-flow:row!important}
+.calendar-grid>.weekday{grid-column:1/-1!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important}
+.calendar-grid>.calendar-cell{grid-column:auto!important}
 /* Wave 9: current Worker calendar uses .calendar-grid/.calendar-cell. */
 .calendar-page-head{align-items:center}.calendar-page-head .btn{min-width:44px;height:44px;font-size:25px;padding:0}
 .calendar-grid{background:#fff;border:1px solid #e1e5eb;border-radius:18px;overflow:hidden;box-shadow:0 5px 22px rgba(15,23,42,.05)}
