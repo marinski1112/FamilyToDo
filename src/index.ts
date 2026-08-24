@@ -1,4 +1,4 @@
-import { withDb } from './db';
+import { withDb, execute, query } from './db';
 import { verifyLineIdToken } from './line';
 import { openSession, commitSession, getSessionCookie } from './session';
 import { verifyLineSignature } from './security';
@@ -15,7 +15,8 @@ const PORTING_ROUTES = [
 async function memberFromSession(session: SessionData, env: Env): Promise<CurrentMember | null> {
   if (!session.memberId) return null;
   return withDb(env, async (db) => {
-    const [rows] = await db.execute(
+    const [rows] = await execute(
+      db,
       'SELECT * FROM members WHERE id = ? AND active = 1 LIMIT 1',
       [session.memberId],
     );
@@ -46,7 +47,8 @@ async function liffLogin(request: Request, env: Env, session: SessionData): Prom
 
   try {
     const member = await withDb(env, async (db) => {
-      const [rows] = await db.execute(
+      const [rows] = await execute(
+        db,
         'SELECT id, family_id, name FROM members WHERE line_user_id = ? AND active = 1 LIMIT 1',
         [verified.sub],
       );
@@ -84,7 +86,7 @@ async function webhook(request: Request, env: Env): Promise<Response> {
 }
 
 function migrationHome(env: Env): Response {
-  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Family TODO LINE - Cloudflare staging</title><link rel="stylesheet" href="/assets/family.css"></head><body><div class="wrap"><div class="card"><h1>Family TODO LINE</h1><p>Cloudflare移行用の土台です。現在はXREA版を変更せず、Cloudflare側で段階的に機能を移植します。</p><p><strong>Environment:</strong> ${escapeHtml(env.ENVIRONMENT)}</p><p><strong>Database:</strong> Hyperdrive binding configured</p><p><strong>LINE:</strong> Webhook / LIFF verify routes prepared</p></div></div></body></html>`);
+  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Family TODO LINE - Cloudflare staging</title><link rel="stylesheet" href="/assets/family.css"></head><body><div class="wrap"><div class="card"><h1>Family TODO LINE</h1><p>Cloudflare移行用の土台です。現在はXREA版を変更せず、Cloudflare側で段階的に機能を移植します。</p><p><strong>Environment:</strong> ${escapeHtml(env.ENVIRONMENT)}</p><p><strong>Database:</strong> D1 binding configured</p><p><strong>LINE:</strong> Webhook / LIFF verify routes prepared</p></div></div></body></html>`);
 }
 
 function escapeHtml(value: string): string {
@@ -103,7 +105,7 @@ export default {
     if (url.pathname === '/__cf/db-health') {
       try {
         const result = await withDb(env, async (db) => {
-          const [rows] = await db.query('SELECT 1 AS ok');
+          const rows = await query(db, 'SELECT 1 AS ok');
           return rows;
         });
         return json({ ok: true, database: 'reachable', result });

@@ -1,0 +1,13 @@
+Cloudflare D1 setup for Family TODO LINE
+
+Existing D1 database:
+  name: familytodo
+  id: 9d9d6de8-ff45-4dd6-9fec-0de70ee1d093
+
+1. Install dependencies.
+2. Run: npx wrangler types
+3. Run: npx wrangler d1 migrations apply familytodo --remote
+4. Deploy the Worker.
+5. Test: /__cf/health and /__cf/db-health
+
+Do not change DNS or LINE webhook yet.

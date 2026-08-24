@@ -6,14 +6,15 @@ The XREA/PHP source is not modified by this migration scaffold.
 ## Architecture
 
 - Cloudflare Workers: runtime for PHP replacement code
-- Hyperdrive: connection from Workers to the existing MySQL database
+- D1: Cloudflare-native SQLite database for the migrated application
 - Workers Static Assets: CSS/images/static files
 - Worker Secrets: LINE secrets, application secret, notification secret
 - Cron Triggers: reserved for the existing notification job; not enabled yet because the current app uses `notify_mode=manual`
 
-Cloudflare currently recommends Hyperdrive for existing MySQL databases, and `mysql2@3.13.0+` is supported with the Promise API. See the official documentation:
+Cloudflare D1 is the active database target for this migration. D1 is accessed through the Workers Binding API with SQLite-compatible prepared statements. See the official documentation:
 
-- https://developers.cloudflare.com/hyperdrive/examples/connect-to-mysql/
+- https://developers.cloudflare.com/d1/worker-api/
+- https://developers.cloudflare.com/d1/worker-api/prepared-statements/
 - https://developers.cloudflare.com/workers/static-assets/
 - https://developers.cloudflare.com/workers/configuration/secrets/
 - https://developers.cloudflare.com/workers/configuration/cron-triggers/
@@ -30,14 +31,15 @@ Rotate those credentials before the Cloudflare production cutover if the ZIP has
 2. Open a terminal in this `cloudflare` directory.
 3. Run `npm install`.
 4. Run `npx wrangler login`.
-5. Create the Hyperdrive configuration for the existing MySQL database. Replace the placeholders with the actual DB host/user/password/database values that are currently used by XREA:
+5. Create or bind the Hyperdrive configuration for the existing MySQL database. Replace the placeholders with the actual DB host/user/password/database values that are currently used by XREA:
 
    `npx wrangler hyperdrive create familytodo-db --connection-string="mysql://USER:PASSWORD@HOST:3306/DATABASE"`
 
-6. Copy the returned Hyperdrive ID into `wrangler.jsonc` in place of `REPLACE_WITH_HYPERDRIVE_ID`.
-7. Copy `.dev.vars.example` to `.dev.vars` and enter **staging/test credentials only** if you have them.
-8. Run `npx wrangler dev`.
-9. Test:
+6. The D1 database is already bound in `wrangler.jsonc`.
+7. Apply the schema remotely with `npx wrangler d1 migrations apply familytodo --remote`.
+8. Copy `.dev.vars.example` to `.dev.vars` and enter **staging/test credentials only** if you have them.
+9. Run `npx wrangler dev --remote`.
+10. Test:
    - `http://localhost:8787/__cf/health`
    - `http://localhost:8787/__cf/db-health`
 
@@ -60,7 +62,7 @@ Implemented in this foundation:
 
 - Worker entry point
 - static asset delivery
-- Hyperdrive/MySQL adapter
+- D1/SQLite adapter
 - encrypted stateless session cookie
 - CSRF verification primitive
 - LINE ID-token verification primitive

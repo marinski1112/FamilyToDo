@@ -1,4 +1,1 @@
-# Run once after confirming the existing MySQL server accepts external TLS connections.
-# Replace all placeholders. Do not put this command into source control with real credentials.
-
-npx wrangler hyperdrive create familytodo-db --connection-string="mysql://USER:PASSWORD@HOST:3306/DATABASE"
+D1 migration selected for Family TODO LINE. Hyperdrive setup is no longer part of the active Cloudflare foundation.
