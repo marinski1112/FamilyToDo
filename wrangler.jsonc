@@ -25,16 +25,6 @@
       "migrations_dir": "./migrations"
     }
   ],
-  "secrets": {
-    "required": [
-      "LINE_CHANNEL_SECRET",
-      "LINE_CHANNEL_ID",
-      "LINE_LIFF_ID",
-      "LINE_ACCESS_TOKEN",
-      "APP_SECRET",
-      "NOTIFY_SECRET"
-    ]
-  },
   "vars": {
     "APP_NAME": "家族TODO LINE",
     "APP_URL": "https://family.tsuchy.jp",
