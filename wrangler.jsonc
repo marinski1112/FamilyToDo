@@ -32,6 +32,9 @@
     "NOTIFY_MODE": "manual",
     "ENVIRONMENT": "staging"
   },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
   "observability": {
     "enabled": true
   }
