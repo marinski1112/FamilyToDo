@@ -30,11 +30,11 @@
     "APP_NAME": "家族TODO LINE",
     "APP_URL": "https://family.tsuchy.jp",
     "APP_TIMEZONE": "Asia/Tokyo",
-    "NOTIFY_MODE": "manual",
+    "NOTIFY_MODE": "scheduled",
     "ENVIRONMENT": "staging"
   },
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["*/5 * * * *"]
   },
   "observability": {
     "enabled": true
