@@ -26,14 +26,19 @@
 - recurring task template fields: description, location, time, all-day, calendar visibility, completion mode
 - recurring POST session/CSRF persistence hardened
 
+## Wave 7 — consolidated legacy-route and family-operation migration
+- invitation-token join flow fixed and connected to D1 `family_invitations`
+- legacy route aliases added for message/shopping/settings subpages
+- task deletion compatibility endpoint added
+- recurring occurrence conversion endpoint added
+- admin activity-log page added
+- logout compatibility route added
+
 ## Still pending
 - exact visual parity with every v12.35 PHP screen
 - full recurring-task creation/edit/occurrence generation parity
 - full shopping/category/group behavior
-- invitation token join flow parity
-- family member role management parity
 - LINE Webhook event business logic and push notifications
-- scheduled notification processing
 - diagnostics/reorder UX parity
 - XREA bottom-ad behavior replacement for Cloudflare
 - comprehensive end-to-end testing with real data
@@ -49,3 +54,11 @@ The original XREA/PHP implementation remains the reference implementation and is
 - scheduled notification dispatcher via LINE Push API
 - 15-minute Cron Trigger configured (execution remains disabled while NOTIFY_MODE=manual)
 - D1 performance indexes for recurring/invitation/notification queries
+
+
+## Wave 9 — 全ページ一括移植ベース
+- v12.35の元UIを基準に全主要ページの導線・カードUIを統一
+- 今日/明日、カレンダー、買い物、伝言、管理、メンバー、通知、投稿管理、定期タスクを一通り接続
+- カレンダー専用CSSを実際のWorkerページへ読み込むよう修正
+- D1 migration追加なし
+- TypeScript typecheck 成功
