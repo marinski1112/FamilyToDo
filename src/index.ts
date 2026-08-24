@@ -19,6 +19,14 @@ export default {
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
+      // 認証が必要なページは、例外ベースのリダイレクトに依存せず
+      // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
+      // 例外化/Response処理の差異による1101を避けるため。
+      if(url.pathname==='/app/recurring.php') {
+        const context=await makeContext(request,env);
+        if(!context.member) return new Response(null,{status:302,headers:{Location:new URL('/login.php',request.url).toString()}});
+        return recurring(request,context);
+      }
       const context=await makeContext(request,env);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return liffLogin(request,context);
       if(url.pathname==='/api/family/create') return createFamily(request,context);
@@ -35,7 +43,6 @@ export default {
       if(url.pathname==='/login.php'||url.pathname==='/login') return loginPage(env);
       if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return createFamilyPage(context);
       if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return invitePage(context,url.searchParams.get('token')||'');
-      if(url.pathname==='/app/recurring.php') return recurring(request,context);
       if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return home(context);
       if(url.pathname==='/today.php') return today(request,context,url.searchParams.get('date')||asDateOffset(0));
       if(url.pathname==='/tomorrow.php') return tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1));
