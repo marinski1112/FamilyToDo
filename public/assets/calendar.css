@@ -141,3 +141,14 @@
   #calBody .week{flex-basis:86px!important}
   .day-modal{height:76vh}
 }
+/* Wave 8: holiday/task visibility and mobile calendar details */
+.calendar-cell{position:relative;min-height:86px;overflow:hidden;background:#fff}
+.calendar-cell.holiday{background:rgba(254,226,226,.28)}
+.calendar-cell.holiday .num,.calendar-cell.sun .num{color:#dc2626}
+.calendar-cell.sat .num{color:#2563eb}
+.calendar-cell.other{opacity:.65}
+.holiday-name{font-size:9px;line-height:1.1;color:#dc2626;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:1px 2px 2px}
+.calendar-items{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding:0 2px}
+.calendar-item{font-size:9px;line-height:15px;height:15px;padding:0 4px;border-radius:4px;background:#7c3aed;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.calendar-item.event{background:#2563eb}
+.calendar-cell .meta{font-size:8px;line-height:12px}
