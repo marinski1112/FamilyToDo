@@ -69,7 +69,7 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner">${[
     ['/today.php','☀️','今日'],['/tomorrow.php','🌙','明日'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ].map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.53-wave34">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.53-wave34">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.54-wave35">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.54-wave35">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
 
@@ -224,7 +224,7 @@ async function recurringForDate(ctx:AppContext,date:string):Promise<Row[]> {
 
 async function makeViewData(ctx: AppContext, date:string) {
   const [tasks,items,recurring,shopping,expiredTasks] = await Promise.all([
-    ctx.env.DB.prepare(`SELECT t.*, GROUP_CONCAT(m.name, '、') AS assignees,
+    ctx.env.DB.prepare(`SELECT t.*, GROUP_CONCAT(m.name, '、') AS assignees
       FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id=t.id LEFT JOIN members m ON m.id=ta.member_id
       WHERE t.family_id=? AND t.status IN ('pending','completed') AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?))) OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?)))
       GROUP BY t.id ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,date,date,date).all<Row>(),
@@ -508,7 +508,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     const x=detail[d]||[],h=holidays[d];
     const shops=shoppingDetail[d]||[];
     const carries=itemDetail[d]||[];
-    selectedDate=d;modalTitle.textContent=d+' の詳細';modalBody.innerHTML=detailHtml(d);modalAdd.href='/task/new.php?date='+d+'&return=calendar';if(modalShoppingAdd)modalShoppingAdd.href='/app/shopping_new.php?date='+d; if(modalItemAdd)modalItemAdd.href='/item/new.php?date='+d; if(modalPrev)modalPrev.setAttribute('aria-label',shiftDate(d,-1)+' の詳細');if(modalNext)modalNext.setAttribute('aria-label',shiftDate(d,1)+' の詳細');modal.classList.add('open');
+    selectedDate=d;modalTitle.textContent=d+' の詳細';modalBody.innerHTML=detailHtml(d);if(modalAdd)modalAdd.href='/task/new.php?date='+d+'&return=calendar';if(modalPrev)modalPrev.setAttribute('aria-label',shiftDate(d,-1)+' の詳細');if(modalNext)modalNext.setAttribute('aria-label',shiftDate(d,1)+' の詳細');modal.classList.add('open');
   }
   cellsEl.forEach(b=>b.addEventListener('click',()=>render(b.dataset.date)));
   document.getElementById('modalClose').onclick=()=>modal.classList.remove('open');
