@@ -69,3 +69,9 @@ The original XREA/PHP implementation remains the reference implementation and is
 - 伝言の編集・削除、通知日時変更、旧通知削除を追加。
 - 伝言一覧へ通知日時表示を追加。
 - CSS cache version 12.51-wave29.
+
+
+## Wave40 residual hardening
+- Japanese monthly business-day recurrence now excludes Japanese holidays, matching the XREA recurrence implementation.
+- Legacy `/app/create.php`, `/app/join.php`, `/login_error.php`, and LIFF diagnostic routes are retained as Cloudflare compatibility aliases.
+- Family creation now uses D1 `run().meta.last_row_id` instead of a follow-up `last_insert_rowid()` statement.
