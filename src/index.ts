@@ -262,7 +262,14 @@ async function taskDelete(request:Request,ctx:any):Promise<Response>{
   const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);
   const childShopping=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const childItems=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
+  const recurrenceRules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const statements:any[]=[];
+  statements.push(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id));
+  for(const r of recurrenceRules.results){
+    statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(Number(r.id),m.family_id));
+    statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(Number(r.id),m.family_id));
+    statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
+  }
   for(const r of childShopping.results){statements.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));}
   for(const r of childItems.results){statements.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));}
   statements.push(ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));

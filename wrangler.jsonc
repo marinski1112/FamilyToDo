@@ -28,7 +28,7 @@
   ],
   "vars": {
     "APP_NAME": "家族TODO LINE",
-    "APP_URL": "https://family.tsuchy.jp",
+    "APP_URL": "https://familytodo.marinski1112.workers.dev",
     "APP_TIMEZONE": "Asia/Tokyo",
     "NOTIFY_MODE": "scheduled",
     "ENVIRONMENT": "staging"

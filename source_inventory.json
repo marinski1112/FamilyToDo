@@ -23,8 +23,6 @@
   "database_tables": [
     "families",
     "members",
-    "events",
-    "event_members",
     "tasks",
     "task_assignees",
     "task_completion_history",
@@ -52,6 +50,6 @@
       "events",
       "event_members"
     ],
-    "event_note": "イベント機能はアプリケーションソースから廃止。既存D1のイベントテーブルはデータ保全のため現時点ではDB上に残す。"
+    "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave33 migration 0009で events / event_members をDROP。"
   }
 }

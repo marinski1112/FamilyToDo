@@ -912,7 +912,18 @@ export async function taskApiLegacy(request:Request,ctx:AppContext):Promise<Resp
   const m=requireMember(ctx); const id=Number(new URL(request.url).searchParams.get('id')||0); if(!id) return json({ok:false,error:'idが不正です。'},400);
   const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); if(!task) return json({ok:false,error:'対象が見つかりません。'},404);
   const role=String(m.role||'').toUpperCase(); if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id)) return json({ok:false,error:'権限がありません。'},403);
-  if(request.method==='DELETE'){const csrf=request.headers.get('x-csrf'); await ensureCsrf(ctx,csrf); await ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).run(); return json({ok:true});}
+  if(request.method==='DELETE'){
+    const csrf=request.headers.get('x-csrf'); await ensureCsrf(ctx,csrf);
+    const shops=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
+    const items=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
+    const rules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
+    const stm:any[]=[ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id)];
+    for(const r of shops.results) stm.push(ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
+    for(const r of items.results) stm.push(ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
+    for(const r of rules.results) stm.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(Number(r.id),m.family_id),ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(Number(r.id),m.family_id),ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
+    stm.push(ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));
+    await ctx.env.DB.batch(stm); return json({ok:true});
+  }
   return json({ok:false,error:'Method Not Allowed'},405);
 }
 
@@ -1057,11 +1068,17 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
         .bind(id, m.family_id).first<Row>();
       if (!rule) return json({ok:false,error:'定期タスクが見つかりません。'},404);
       const taskId = Number(rule.task_id || 0);
-      const statements = [
+      const statements:any[] = [
+        ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(id,m.family_id),
         ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(id,m.family_id),
         ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(id,m.family_id)
       ];
-      if (taskId) statements.push(ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id));
+      if (taskId) {
+        statements.unshift(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM shopping_items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id));
+      }
       await ctx.env.DB.batch(statements);
       return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
     }

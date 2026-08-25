@@ -44,59 +44,10 @@ CREATE TABLE IF NOT EXISTS members (
         ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-    family_id INTEGER NOT NULL,
-
-    title TEXT NOT NULL,
-
-    start_at TEXT NULL,
-    end_at TEXT NULL,
-
-    location TEXT NULL,
-
-    memo TEXT NULL,
-
-    created_by INTEGER NULL,
-
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-
-    FOREIGN KEY (family_id)
-        REFERENCES families(id)
-        ON DELETE CASCADE,
-
-    FOREIGN KEY (created_by)
-        REFERENCES members(id)
-        ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS event_members (
-    event_id INTEGER NOT NULL,
-    member_id INTEGER NOT NULL,
-
-    PRIMARY KEY (
-        event_id,
-        member_id
-    ),
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE CASCADE,
-
-    FOREIGN KEY (member_id)
-        REFERENCES members(id)
-        ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
     family_id INTEGER NOT NULL,
-
-    event_id INTEGER NULL,
-
     title TEXT NOT NULL,
 
     description TEXT NULL,
@@ -125,10 +76,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     FOREIGN KEY (family_id)
         REFERENCES families(id)
         ON DELETE CASCADE,
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE SET NULL,
 
     FOREIGN KEY (completed_by)
         REFERENCES members(id)
@@ -181,9 +128,6 @@ CREATE TABLE IF NOT EXISTS items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
     family_id INTEGER NOT NULL,
-
-    event_id INTEGER NULL,
-
     name TEXT NOT NULL,
 
     memo TEXT NULL,
@@ -206,10 +150,6 @@ CREATE TABLE IF NOT EXISTS items (
     FOREIGN KEY (family_id)
         REFERENCES families(id)
         ON DELETE CASCADE,
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE SET NULL,
 
     FOREIGN KEY (completed_by)
         REFERENCES members(id)
@@ -262,9 +202,6 @@ CREATE TABLE IF NOT EXISTS shopping_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
     family_id INTEGER NOT NULL,
-
-    event_id INTEGER NULL,
-
     name TEXT NOT NULL,
 
     quantity TEXT NULL,
@@ -289,10 +226,6 @@ CREATE TABLE IF NOT EXISTS shopping_items (
     FOREIGN KEY (family_id)
         REFERENCES families(id)
         ON DELETE CASCADE,
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE SET NULL,
 
     FOREIGN KEY (completed_by)
         REFERENCES members(id)
@@ -345,9 +278,6 @@ CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
     family_id INTEGER NOT NULL,
-
-    event_id INTEGER NULL,
-
     sender_id INTEGER NULL,
 
     target_member_id INTEGER NULL,
@@ -368,10 +298,6 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (family_id)
         REFERENCES families(id)
         ON DELETE CASCADE,
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE SET NULL,
 
     FOREIGN KEY (sender_id)
         REFERENCES members(id)
@@ -412,9 +338,6 @@ CREATE TABLE IF NOT EXISTS recurring_tasks (
     start_date TEXT NOT NULL,
 
     end_date TEXT NULL,
-
-    event_id INTEGER NULL,
-
     completion_mode TEXT NOT NULL DEFAULT 'ANY',
 
     active INTEGER
@@ -428,10 +351,6 @@ CREATE TABLE IF NOT EXISTS recurring_tasks (
     FOREIGN KEY (family_id)
         REFERENCES families(id)
         ON DELETE CASCADE,
-
-    FOREIGN KEY (event_id)
-        REFERENCES events(id)
-        ON DELETE SET NULL,
 
     FOREIGN KEY (created_by)
         REFERENCES members(id)
@@ -612,13 +531,9 @@ CREATE INDEX IF NOT EXISTS idx_members_line_user_id ON members (line_user_id);
 
 CREATE INDEX IF NOT EXISTS idx_members_active ON members (family_id, active);
 
-CREATE INDEX IF NOT EXISTS idx_events_family_id ON events (family_id);
 
-CREATE INDEX IF NOT EXISTS idx_events_start_at ON events (family_id, start_at);
 
-CREATE INDEX IF NOT EXISTS idx_events_created_by ON events (created_by);
 
-CREATE INDEX IF NOT EXISTS idx_event_members_member ON event_members (member_id);
 
 CREATE INDEX IF NOT EXISTS idx_tasks_family ON tasks (family_id);
 
@@ -626,7 +541,6 @@ CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks (family_id, due_at);
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (family_id, status);
 
-CREATE INDEX IF NOT EXISTS idx_tasks_event ON tasks (event_id);
 
 CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks (completed_by);
 
@@ -640,7 +554,6 @@ CREATE INDEX IF NOT EXISTS idx_items_family ON items (family_id);
 
 CREATE INDEX IF NOT EXISTS idx_items_due ON items (family_id, due_at);
 
-CREATE INDEX IF NOT EXISTS idx_items_event ON items (event_id);
 
 CREATE INDEX IF NOT EXISTS idx_items_status ON items (family_id, status);
 
@@ -656,7 +569,6 @@ CREATE INDEX IF NOT EXISTS idx_shopping_due ON shopping_items (family_id, due_da
 
 CREATE INDEX IF NOT EXISTS idx_shopping_status ON shopping_items (family_id, status);
 
-CREATE INDEX IF NOT EXISTS idx_shopping_event ON shopping_items (event_id);
 
 CREATE INDEX IF NOT EXISTS idx_shopping_assignees_member ON shopping_assignees (member_id);
 
@@ -666,7 +578,6 @@ CREATE INDEX IF NOT EXISTS idx_shopping_history_member ON shopping_completion_hi
 
 CREATE INDEX IF NOT EXISTS idx_messages_family ON messages (family_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_messages_event ON messages (event_id);
 
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);
 
