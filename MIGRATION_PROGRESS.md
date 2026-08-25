@@ -62,3 +62,10 @@ The original XREA/PHP implementation remains the reference implementation and is
 - カレンダー専用CSSを実際のWorkerページへ読み込むよう修正
 - D1 migration追加なし
 - TypeScript typecheck 成功
+
+## Wave29
+- 通知設定保存フローをJSON化し、複数メンバー選択を正常化。
+- タスク編集時の旧未送信通知を削除してから再生成。
+- 伝言の編集・削除、通知日時変更、旧通知削除を追加。
+- 伝言一覧へ通知日時表示を追加。
+- CSS cache version 12.51-wave29.

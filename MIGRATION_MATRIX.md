@@ -9,13 +9,13 @@ Source: `FamilyTODO_v12_35_full_latest.zip`
 | `app/api/liff_login.php` | `/app/api/liff_login.php` | foundation, behavior not fully ported |
 | `app/api/webhook.php` | `/app/api/webhook.php` | foundation, event handling not fully ported |
 | `login.php` | Worker `/login.php` | placeholder |
-| `today.php` | Worker route | placeholder |
-| `tomorrow.php` | Worker route | placeholder |
-| `app/calendar.php` | Worker route/API + static CSS | pending full port |
+| `today.php` | Worker route | implemented + unorganized tasks |
+| `tomorrow.php` | Worker route | implemented + unorganized tasks |
+| `app/calendar.php` | Worker route/API + static CSS | implemented, interaction polish ongoing |
 | `app/recurrence.php` | Worker service module | pending |
-| `task/*.php` | Worker routes | pending |
+| `task/*.php` | Worker routes | implemented, residual polish ongoing |
 | `item/*.php` | Worker routes | pending |
-| `app/shopping*.php` | Worker routes | pending |
+| `app/shopping*.php` | Worker routes | implemented, residual polish ongoing |
 | `app/message*.php` / `messages.php` | Worker routes | pending |
 | `app/settings*.php` | Worker routes | pending |
 | `family/*.php` | Worker routes | pending |

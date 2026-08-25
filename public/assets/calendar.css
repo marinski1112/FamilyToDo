@@ -171,3 +171,50 @@
 
 /* Wave 13 */
 .calendar-grid .calendar-item.item{background:#64748b}.calendar-grid .calendar-shopping{font-size:8px;line-height:13px;color:#15803d;font-weight:800;white-space:nowrap;overflow:hidden}.calendar-grid .calendar-cell{box-sizing:border-box}.calendar-page .card{overflow:hidden}
+
+/* Wave 17 - calendar interaction polish */
+.calendar-grid .holiday-name{display:none!important}
+.calendar-grid .num{justify-content:flex-start!important;text-align:left!important;align-items:flex-start!important;padding-top:1px!important}
+.day-modal .modal-top{display:grid;grid-template-columns:40px minmax(0,1fr) 40px 40px;align-items:center;gap:4px;padding:10px 10px 6px;border-bottom:1px solid rgba(148,163,184,.14)}
+.day-modal .modal-top h2{margin:0;text-align:center;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-day-nav{width:38px;height:38px;border:0;border-radius:10px;background:#f1f3f5;color:#374151;font-size:25px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.modal-day-nav:active{transform:scale(.96)}
+.day-modal .modal-scroll{touch-action:pan-y}
+@media(max-width:520px){.day-modal .modal-top{grid-template-columns:36px minmax(0,1fr) 36px 36px}.modal-day-nav{width:34px;height:34px;font-size:23px}}
+
+/* Wave 19: final calendar polish */
+.calendar-grid .calendar-item.seg-start{border-radius:5px 5px 5px 0}
+.calendar-grid .calendar-item.seg-mid{border-radius:0;opacity:.94}
+.calendar-grid .calendar-item.seg-end{border-radius:0 5px 5px 5px}
+.calendar-grid .calendar-item.seg-mid{padding-left:3px}
+.calendar-grid .calendar-item[title]{cursor:pointer}
+.nth-week-list{display:flex;flex-wrap:wrap;gap:6px 8px;margin:4px 0 10px}
+.nth-week-list .checkrow{margin:0!important;padding:7px 9px;border:1px solid #e5e7eb;border-radius:9px;background:#fff}
+@media(max-width:600px){.calendar-grid .calendar-item.seg-mid{font-size:6.5px}.calendar-grid .calendar-item.seg-start,.calendar-grid .calendar-item.seg-end{font-size:7px}}
+
+/* Wave19 calendar alignment polish.
+
+/* Wave21 - calendar color support is applied inline from a whitelist. */ */
+#calBody .day .num{
+  display:block;
+  width:100%;
+  text-align:left;
+  margin:0 0 2px 1px;
+  line-height:18px;
+}
+#calBody .day .today-num{
+  display:inline-flex;
+  width:18px;
+  min-width:18px;
+  height:18px;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  margin-left:0;
+}
+
+/* Wave23 - day detail quick actions and touch behavior */
+.modal-quick-add{display:flex;flex-wrap:wrap;gap:7px;padding:10px 0 4px;border-top:1px solid rgba(148,163,184,.14)}
+.modal-quick-add .btn{flex:1 1 calc(50% - 7px);text-align:center;text-decoration:none}
+.calendar-grid{touch-action:pan-y}
+@media(max-width:520px){.modal-quick-add .btn{flex-basis:calc(50% - 7px);min-height:38px}}

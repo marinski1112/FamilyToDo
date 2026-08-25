@@ -138,3 +138,77 @@ input[type="date"],input[type="datetime-local"],input[type="time"]{min-width:0!i
 .linked-shopping-row{padding:7px 0;border-top:1px solid #edf0f4}.linked-shopping-row:first-of-type{border-top:0}
 .shopping-check-row{display:flex!important;align-items:center!important;gap:8px!important}.shopping-check-row input{width:19px!important;height:19px!important;min-height:19px!important;margin:0!important;flex:0 0 19px}.linked-shopping-row .meta{margin-left:27px}.task-shopping>.btn{margin-top:7px}
 @media(max-width:520px){.batch-product{grid-template-columns:minmax(0,1fr) 64px!important}.batch-product input[type="url"]{grid-column:1 / -2}.batch-product .remove-product{grid-column:3;grid-row:1;align-self:center}.task-shopping{margin-left:27px}}
+
+/* Wave 17 - daily action buttons use a neutral treatment for readability */
+.section-head>.btn.small{background:#f1f3f5!important;color:#374151!important;border:1px solid #dfe3e8!important;box-shadow:none!important}
+.section-head>.btn.small:active{background:#e5e7eb!important}
+
+
+/* Wave18: shared form sizing and shopping grouping */
+input,select,textarea,button{max-width:100%;box-sizing:border-box}
+input[type="date"],input[type="time"],input[type="datetime-local"]{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.shopping-category-group{margin-top:12px;padding-top:4px}.shopping-category-group h3{margin:8px 0 4px;font-size:14px}.shopping-completed{margin-top:14px;border-top:1px solid #e5e7eb;padding-top:10px}.shopping-completed summary{cursor:pointer;font-weight:700;color:#64748b}.batch-shopping-card .product-row{display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);gap:8px;align-items:center}.batch-shopping-card .product-row input{min-width:0}.batch-shopping-card input[type="date"]{width:150px;max-width:100%}@media(max-width:520px){.batch-shopping-card .product-row{grid-template-columns:minmax(0,1fr) 58px}.batch-shopping-card .product-row input[type="url"]{grid-column:1/-1}.batch-shopping-card input[type="date"]{width:150px}}
+
+.sub-card{background:#f8fafc;border:1px solid #e9edf3;border-radius:13px;padding:12px;margin:12px 0}.section-button{width:100%;text-align:left;background:#fff;border:1px solid #dbe2ea;color:#334155;border-radius:12px;padding:12px 14px;font-weight:700;font-size:15px}.sub-card .product-row{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:8px;margin:8px 0}.sub-card .product-row input[type="url"]{grid-column:1/-1}.sub-card .product-row input{min-width:0}.item-entry{margin:8px 0}.item-entry input{width:100%}
+
+/* Wave19 residual polish: prevent native date/datetime controls from overflowing cards. */
+.form-card input[type=date],
+.form-card input[type=datetime-local],
+.form-card input[type=time],
+.form-card input[type=number],
+.form-card input[type=text],
+.form-card input[type=url],
+.form-card select,
+.form-card textarea{
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.datetime-grid{min-width:0}
+.datetime-grid>*{min-width:0}
+.product-row,.task-child-row,.item-entry{min-width:0}
+.product-row>*{min-width:0;box-sizing:border-box}
+
+/* Wave21 - shopping parity */
+.shopping-row-actions{display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 0 27px}.shopping-filter{padding:12px!important}.shopping-filter .filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:7px;align-items:center}.shopping-filter select{margin:0;min-height:38px;padding:8px;font-size:13px}.expired-trigger{width:100%}.expired-modal{display:none;position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.34);align-items:center;justify-content:center;padding:16px}.expired-modal.open{display:flex}.expired-box{width:min(560px,100%);max-height:78vh;overflow:auto;background:#fff;border-radius:18px;padding:16px}.expired-row{padding:10px 0;border-bottom:1px solid #edf0f4}.expired-row:last-child{border-bottom:0}@media(max-width:600px){.shopping-filter .filter-grid{grid-template-columns:1fr 1fr}.shopping-row-actions{margin-left:27px}}
+
+
+/* Wave 27 - operation-flow form sizing and consistent action affordances */
+.form-card input[type=date], .form-card input[type=datetime-local], .form-card input[type=time],
+.task-edit input[type=date], .task-edit input[type=datetime-local], .task-edit input[type=time],
+input.compact-date { width:min(100%, 156px); max-width:100%; }
+.form-card input[type=datetime-local], .task-edit input[type=datetime-local] { width:min(100%, 230px); }
+.datetime-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+@media(max-width:520px){
+  .datetime-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .form-card input[type=date], .form-card input[type=datetime-local], .form-card input[type=time], .task-edit input[type=date], .task-edit input[type=datetime-local], .task-edit input[type=time]{width:100%;min-width:0}
+}
+.unlinked-shopping-section details{margin:0}
+.unlinked-shopping-section summary{cursor:pointer;font-weight:750;list-style:none}
+.unlinked-shopping-section summary::-webkit-details-marker{display:none}
+.unlinked-shopping-section summary:before{content:'＋';display:inline-flex;width:22px;height:22px;align-items:center;justify-content:center;margin-right:6px;border-radius:50%;background:#eef2ff;color:#4f46e5;font-weight:800}
+.unlinked-shopping-section details[open] summary:before{content:'−'}
+.task-shopping-add{margin-top:6px}
+
+/* Wave28: optional no-date task controls stay inside the card. */
+.date-option-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;min-width:0}.date-option-row input[type=date]{margin:5px 0 12px}.date-option-row .checkrow{white-space:nowrap;margin:5px 0 12px!important}@media(max-width:520px){.date-option-row{grid-template-columns:1fr}.date-option-row .checkrow{justify-self:start;margin-top:0!important}}
+
+
+/* Wave30: native date controls must stay compact inside cards, especially iOS/LINE WebView. */
+.form-card input[type=date], .task-edit input[type=date], input.compact-date {
+  width: min(100%, 150px) !important;
+  max-width: 150px !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+.form-card input[type=datetime-local], .task-edit input[type=datetime-local] {
+  width: min(100%, 220px) !important;
+  max-width: 220px !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+@media (max-width: 520px) {
+  .form-card input[type=date], .task-edit input[type=date], input.compact-date { width: min(100%, 150px) !important; }
+  .form-card input[type=datetime-local], .task-edit input[type=datetime-local] { width: min(100%, 220px) !important; }
+}
