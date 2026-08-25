@@ -51,5 +51,10 @@
       "event_members"
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave33 migration 0009で events / event_members をDROP。"
-  }
+  },
+  "cloudflare_wave": "Wave34",
+  "notes": [
+    "Events/event_members removed in Wave33",
+    "Wave34 adds notification lifecycle cleanup and mobile form normalization"
+  ]
 }

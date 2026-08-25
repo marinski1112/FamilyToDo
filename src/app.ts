@@ -69,7 +69,7 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner">${[
     ['/today.php','☀️','今日'],['/tomorrow.php','🌙','明日'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ].map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.53-wave32">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.53-wave32">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.53-wave34">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.53-wave34">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
 
@@ -547,6 +547,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       const role=String(m.role||'').toUpperCase(); if(Number(msg.sender_id)!==m.id&&role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'権限がありません。'},403);
       const text=String(b.text??'').trim(); const target=Number(b.target_member_id??0)||null; if(!text)throw new BadRequest('伝言を入力してください。');
       const reminderRaw=String(b.reminder_at??'').trim(); const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null; if(reminderRaw&&!reminderAt)throw new BadRequest('LINE通知日時が不正です。');
+      if(reminderAt && reminderAt <= nowJst()) throw new BadRequest('LINE通知日時は現在より後の日時を指定してください。');
       await ctx.env.DB.prepare('UPDATE messages SET target_member_id=?,text=?,reminder_at=?,updated_at=? WHERE id=? AND family_id=?').bind(target,text,reminderAt,now,id,m.family_id).run();
       await ctx.env.DB.prepare('DELETE FROM notifications WHERE target_type=\'message\' AND target_id=? AND family_id=? AND status IN (\'pending\',\'retry\')').bind(id,m.family_id).run();
       if(reminderAt){ const rs=target ? await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(target,m.family_id).all<Row>() : await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND id<>?').bind(m.family_id,m.id).all<Row>(); if(rs.results.length) await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',id,reminderAt,'pending',`【伝言】\n${text}`,now))); }
@@ -571,6 +572,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
     }
     const text=String(b.text??'').trim(); const target=Number(b.target_member_id??0)||null; if(!text)throw new BadRequest('伝言を入力してください。');
     const reminderRaw=String(b.reminder_at??'').trim(); const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null; if(reminderRaw&&!reminderAt)throw new BadRequest('LINE通知日時が不正です。');
+    if(reminderAt && reminderAt <= nowJst()) throw new BadRequest('LINE通知日時は現在より後の日時を指定してください。');
     const ins=await ctx.env.DB.prepare('INSERT INTO messages(family_id,sender_id,target_member_id,text,reminder_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,target,text,reminderAt,now,now).run(); const msgId=Number(ins.meta.last_row_id);
     if(reminderAt){ const rs=target ? await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(target,m.family_id).all<Row>() : await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND id<>?').bind(m.family_id,m.id).all<Row>(); if(rs.results.length) await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',msgId,reminderAt,'pending',`【伝言】\n${text}`,now))); }
     return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
@@ -804,6 +806,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
     if(reminderRaw&&!reminderAt) throw new BadRequest('LINE通知日時が不正です。');
     const now=nowJst();
+    if(reminderAt && reminderAt <= now) throw new BadRequest('LINE通知日時は現在より後の日時を指定してください。');
         const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
     const allDay=b.all_day?1:0;
     const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
@@ -952,7 +955,7 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
   const m=requireMember(ctx); const role=String(m.role||'').toUpperCase(); const isAdmin=role==='OWNER'||role==='ADMIN';
   if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'');
     if(action==='profile'){const name=String(b.name||'').trim();if(!name)throw new BadRequest('名前を入力してください。');await ctx.env.DB.prepare('UPDATE members SET name=?,updated_at=? WHERE id=? AND family_id=?').bind(name,nowJst(),m.id,m.family_id).run();ctx.member={...m,name};return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);}
-    if(action==='member_toggle'||action==='member_delete'){if(!isAdmin) return json({ok:false,error:'管理者権限が必要です。'},403);const target=Number(b.member_id||0);if(target===m.id||!target)return json({ok:false,error:'対象が不正です。'},400);const targetMember=await ctx.env.DB.prepare('SELECT id,role,active FROM members WHERE id=? AND family_id=?').bind(target,m.family_id).first<Row>();if(!targetMember)return json({ok:false,error:'メンバーが見つかりません。'},404);if(String(targetMember.role).toUpperCase()==='OWNER')return json({ok:false,error:'OWNERは変更できません。'},400);if(action==='member_toggle'){await ctx.env.DB.prepare('UPDATE members SET active=?,updated_at=? WHERE id=? AND family_id=?').bind(Number(targetMember.active)?0:1,nowJst(),target,m.family_id).run();return json({ok:true});}await ctx.env.DB.prepare('DELETE FROM members WHERE id=? AND family_id=?').bind(target,m.family_id).run();return json({ok:true});}
+    if(action==='member_toggle'||action==='member_delete'){if(!isAdmin) return json({ok:false,error:'管理者権限が必要です。'},403);const target=Number(b.member_id||0);if(target===m.id||!target)return json({ok:false,error:'対象が不正です。'},400);const targetMember=await ctx.env.DB.prepare('SELECT id,role,active FROM members WHERE id=? AND family_id=?').bind(target,m.family_id).first<Row>();if(!targetMember)return json({ok:false,error:'メンバーが見つかりません。'},404);if(String(targetMember.role).toUpperCase()==='OWNER')return json({ok:false,error:'OWNERは変更できません。'},400);if(action==='member_toggle'){const nextActive=Number(targetMember.active)?0:1;const now=nowJst();await ctx.env.DB.prepare('UPDATE members SET active=?,updated_at=? WHERE id=? AND family_id=?').bind(nextActive,now,target,m.family_id).run();if(!nextActive) await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND status IN ('pending','retry')").bind(now,target).run();await logActivity(ctx,nextActive?'MEMBER_REACTIVATED':'MEMBER_DEACTIVATED','member',target);return json({ok:true});}const now=nowJst();await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND status IN ('pending','retry')").bind(now,target).run();await ctx.env.DB.prepare('DELETE FROM members WHERE id=? AND family_id=?').bind(target,m.family_id).run();await logActivity(ctx,'MEMBER_DELETED','member',target);return json({ok:true});}
     if(action==='notification'){const enabled=b.enabled?1:0;await ctx.env.DB.prepare('UPDATE members SET notification_enabled=?,updated_at=? WHERE id=? AND family_id=?').bind(enabled,nowJst(),m.id,m.family_id).run();return json({ok:true});}
   }
   const members=await ctx.env.DB.prepare('SELECT id,name,role,active,notification_enabled FROM members WHERE family_id=? ORDER BY id').bind(m.family_id).all<Row>();
@@ -1075,11 +1078,20 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
       ];
       if (taskId) {
         statements.unshift(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id IN (SELECT id FROM shopping_items WHERE task_id=? AND family_id=?)').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id IN (SELECT id FROM shopping_items WHERE task_id=? AND family_id=?)').bind(taskId,m.family_id));
         statements.push(ctx.env.DB.prepare('DELETE FROM shopping_items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id IN (SELECT id FROM items WHERE task_id=? AND family_id=?)').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id IN (SELECT id FROM items WHERE task_id=? AND family_id=?)').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id IN (SELECT id FROM items WHERE task_id=? AND family_id=?)').bind(taskId,m.family_id));
         statements.push(ctx.env.DB.prepare('DELETE FROM items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id));
+        statements.push(ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(taskId));
+        statements.push(ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(taskId));
+        statements.push(ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(taskId));
         statements.push(ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id));
       }
       await ctx.env.DB.batch(statements);
+      await logActivity(ctx,'DELETED','recurrence_rule',id,{task_id:taskId});
       return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
     }
 

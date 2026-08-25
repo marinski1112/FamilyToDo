@@ -224,7 +224,17 @@ async function webhook(request: Request, env: Env): Promise<Response> {
   return new Response('OK',{status:200});
 }
 
+async function cleanupNotificationLifecycle(env: Env): Promise<void> {
+  const now=nowJst();
+  // Disable pending work for members who opted out or were deactivated.
+  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0)").bind(now).run();
+  // Remove the operational tail of notifications whose target was completed or deleted.
+  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='task' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id) OR EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND t.status='completed'))").bind(now).run();
+  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='message' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM messages x WHERE x.id=notifications.target_id AND x.family_id=notifications.family_id))").bind(now).run();
+}
+
 async function processNotifications(env: Env): Promise<void> {
+  await cleanupNotificationLifecycle(env);
   const due = await env.DB.prepare(`SELECT n.id,n.member_id,n.type,n.target_type,n.target_id,n.message,m.line_user_id FROM notifications n JOIN members m ON m.id=n.member_id WHERE n.status IN ('pending','retry') AND n.sent_at IS NULL AND n.notify_at<=? AND m.active=1 AND m.notification_enabled=1 AND m.line_user_id IS NOT NULL ORDER BY n.notify_at,n.id LIMIT 50`).bind(nowJst()).all();
   for(const n of due.results) {
     try {

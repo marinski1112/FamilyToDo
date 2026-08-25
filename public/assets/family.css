@@ -262,3 +262,28 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 .bottom-nav{padding-left:max(4px,env(safe-area-inset-left));padding-right:max(4px,env(safe-area-inset-right));padding-bottom:max(0px,env(safe-area-inset-bottom))}
 @media(max-width:600px){.wrap{width:calc(100% - 12px);padding-top:12px;padding-bottom:calc(var(--nav-h) + 24px)}.card{padding:12px;border-radius:14px;margin-bottom:10px}.page-head{align-items:flex-start}.date-option-row{grid-template-columns:minmax(0,1fr);align-items:start}.date-option-row .checkrow{white-space:normal!important}.datetime-grid{grid-template-columns:1fr}input[type=date],input[type=datetime-local],input[type=time],input[type=number],select{font-size:16px!important}.actions .btn{min-width:0}.task-actions,.message-actions{flex-wrap:wrap}.task-actions .btn,.message-actions .btn{flex:1 1 auto}}
 @media(max-width:360px){.wrap{width:calc(100% - 8px)}.card{padding:10px}}
+
+
+/* Wave34: unified mobile form geometry. Native date/time controls stay inside the card. */
+.form-card input[type=date],.form-card input[type=datetime-local],.form-card input[type=time],.form-card input[type=number],.form-card input[type=text],.form-card input[type=url],.form-card select,.form-card textarea,
+.task-edit input[type=date],.task-edit input[type=datetime-local],.task-edit input[type=time],.task-edit input[type=number],
+.batch-shopping-card input[type=date],.batch-shopping-card input[type=datetime-local],.batch-shopping-card input[type=time]{
+  width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;
+}
+.datetime-grid,.date-option-row,.batch-common-settings,.product-row,.batch-product{min-width:0!important;max-width:100%!important;box-sizing:border-box}
+.datetime-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:520px){
+  .wrap{width:calc(100% - 16px)!important;padding-top:12px!important}
+  .card{padding:13px!important;border-radius:14px!important}
+  .page-head{align-items:flex-start!important}
+  .page-head .btn{flex:0 0 auto;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .datetime-grid{grid-template-columns:1fr}
+  .date-option-row{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+  .date-option-row .checkrow{margin-top:0!important}
+  .batch-product{grid-template-columns:minmax(0,1fr) 64px!important}
+  .batch-product input[type=url]{grid-column:1/-1!important}
+  .bottom-nav{padding-left:5px!important;padding-right:5px!important}
+  .bottom-nav a{min-height:48px!important}
+  .section-head{align-items:flex-start!important}
+  .section-head>.btn{white-space:nowrap}
+}
