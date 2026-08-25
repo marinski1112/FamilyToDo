@@ -49,7 +49,10 @@ export default {
       if(url.pathname==='/api/messages') return messages(request,context);
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
-      if(url.pathname==='/login.php'||url.pathname==='/login') return loginPage(env);
+      if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return loginPage(env);
+      if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return liffConfigDiagnose(env);
+      if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return createFamilyPage(context);
+      if(url.pathname==='/app/join.php'||url.pathname==='/app/join') return url.searchParams.get('token') ? invitePage(context,url.searchParams.get('token')||'') : createFamilyPage(context);
       if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return createFamilyPage(context);
       if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return invitePage(context,url.searchParams.get('token')||'');
       if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return home(context);
@@ -91,6 +94,24 @@ export default {
   }
 } satisfies ExportedHandler<Env>;
 
+async function liffConfigDiagnose(env:Env):Promise<Response>{
+  const liffId=String(env.LINE_LIFF_ID||'');
+  const channelId=String(env.LINE_CHANNEL_ID||'');
+  let prefix='';
+  let matches=false;
+  if(liffId.includes('-')){ prefix=liffId.split('-',1)[0]; matches=Boolean(channelId)&&prefix===channelId; }
+  return new Response([
+    'LIFF configuration diagnostic',
+    '=============================',
+    `line_liff_id present: ${liffId?'YES':'NO'}`,
+    `line_channel_id present: ${channelId?'YES':'NO'}`,
+    prefix?`LIFF ID channel prefix: ${prefix}`:'LIFF ID channel prefix: (unavailable)',
+    `Configured Channel ID: ${channelId||'(missing)'}`,
+    `Channel ID matches LIFF prefix: ${prefix?(matches?'YES':'NO'):'N/A'}`,
+    'Runtime: Cloudflare Workers',
+  ].join('\n')+'\n',{headers:{'content-type':'text/plain; charset=utf-8'}});
+}
+
 async function reorderApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
   const b=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!b)return json({ok:false,error:'JSONが不正です。'},400);
@@ -107,10 +128,10 @@ async function taskNew(ctx: any,date:string): Promise<Response>{
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
     ctx.env.DB.prepare("SELECT DISTINCT category FROM shopping_items WHERE family_id=? AND category IS NOT NULL AND category<>'' ORDER BY category").bind(ctx.member.family_id).all()
   ]);
-  const body=`<div class="card form-card"><h1>📝 タスク追加</h1><form id="taskForm" autocomplete="off"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label>説明</label><textarea name="description" maxlength="5000"></textarea><label>日付</label><div class="date-option-row"><input id="taskDate" type="date" name="dateOnly" value="${date}"><label class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div><label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="datetime-grid" style="display:none"><div><label>開始日時</label><input type="datetime-local" name="startTime"></div><div><label>終了日時</label><input type="datetime-local" name="endTime"></div></div><label>場所</label><input name="location"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select><label>カレンダー表示</label><label class="checkrow"><input type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}</div><label>LINE通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へタスク詳細をLINE通知します。通知設定はON/OFFのみです。</p><div class="sub-card"><button type="button" class="section-button" id="shoppingToggle">＋ このタスクに買い物を追加</button><div id="shoppingBox" style="display:none"><label>カテゴリー</label><select name="shopping_category"><option value="">カテゴリーなし</option>${categories.results.map((c:any)=>`<option value="${String(c.category).replace(/[&<>\"]/g,'')}">${String(c.category).replace(/[&<>\"]/g,'')}</option>`).join('')}<option value="__custom__">自由入力</option></select><input id="shoppingCustom" name="shopping_category_custom" placeholder="新しいカテゴリー" style="display:none"><div id="shoppingRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="addShoppingRow">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="itemsToggle">＋ このタスクに持ち物を追加</button><div id="itemsBox" style="display:none"><div id="itemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div><button>登録する</button></form></div><script>
-const f=document.getElementById('taskForm'),all=document.getElementById('allDay'),times=document.getElementById('dateTimes'),dateInput=document.getElementById('taskDate'),noDate=document.getElementById('noDate');const syncDate=()=>{dateInput.disabled=noDate.checked;if(noDate.checked){dateInput.value='';times.style.display='none';all.checked=true;all.disabled=true;}else{dateInput.disabled=false;all.disabled=false;}};noDate.onchange=syncDate;all.onchange=()=>{if(!noDate.checked)times.style.display=all.checked?'none':'grid'};syncDate();
+  const body=`<div class="card form-card"><h1>📝 タスク追加</h1><form id="taskForm" autocomplete="off"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label>説明</label><textarea name="description" maxlength="5000"></textarea><label>日付</label><div class="date-option-row"><div><span class="small">開始日</span><input id="taskDate" type="date" name="dateOnly" value="${date}"></div><div id="endDateWrap"><span class="small">終了日</span><input id="taskEndDate" type="date" name="endDateOnly" value="${date}"></div><label class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div><label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="datetime-grid" style="display:none"><div><label>開始日時</label><input type="datetime-local" name="startTime"></div><div><label>終了日時</label><input type="datetime-local" name="endTime"></div></div><label>場所</label><input name="location"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select><label>カレンダー表示</label><label class="checkrow"><input type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}</div><label>LINE通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へタスク詳細をLINE通知します。通知設定はON/OFFのみです。</p><div class="sub-card"><button type="button" class="section-button" id="shoppingToggle">＋ このタスクに買い物を追加</button><div id="shoppingBox" style="display:none"><label>カテゴリー</label><select name="shopping_category"><option value="">カテゴリーなし</option>${categories.results.map((c:any)=>`<option value="${String(c.category).replace(/[&<>\"]/g,'')}">${String(c.category).replace(/[&<>\"]/g,'')}</option>`).join('')}<option value="__custom__">自由入力</option></select><input id="shoppingCustom" name="shopping_category_custom" placeholder="新しいカテゴリー" style="display:none"><div id="shoppingRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="addShoppingRow">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="itemsToggle">＋ このタスクに持ち物を追加</button><div id="itemsBox" style="display:none"><div id="itemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div><button>登録する</button></form></div><script>
+const f=document.getElementById('taskForm'),all=document.getElementById('allDay'),times=document.getElementById('dateTimes'),dateInput=document.getElementById('taskDate'),endDateInput=document.getElementById('taskEndDate'),endDateWrap=document.getElementById('endDateWrap'),noDate=document.getElementById('noDate');const syncDate=()=>{dateInput.disabled=noDate.checked;endDateInput.disabled=noDate.checked;if(noDate.checked){dateInput.value='';endDateInput.value='';times.style.display='none';endDateWrap.style.display='none';all.checked=true;all.disabled=true;}else{dateInput.disabled=false;endDateInput.disabled=false;all.disabled=false;endDateWrap.style.display=all.checked?'block':'none';if(!endDateInput.value)endDateInput.value=dateInput.value;}};noDate.onchange=syncDate;dateInput.onchange=()=>{if(!endDateInput.value)endDateInput.value=dateInput.value};all.onchange=()=>{if(!noDate.checked){times.style.display=all.checked?'none':'grid';endDateWrap.style.display=all.checked?'block':'none'}};syncDate();
 document.getElementById('shoppingToggle').onclick=()=>{const b=document.getElementById('shoppingBox');b.style.display=b.style.display==='none'?'block':'none'};document.querySelector('[name=shopping_category]').onchange=e=>document.getElementById('shoppingCustom').style.display=e.target.value==='__custom__'?'block':'none';document.getElementById('addShoppingRow').onclick=()=>{const d=document.createElement('div');d.className='product-row';d.innerHTML='<input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）">';document.getElementById('shoppingRows').appendChild(d)};document.getElementById('itemsToggle').onclick=()=>{const b=document.getElementById('itemsBox');b.style.display=b.style.display==='none'?'block':'none'};document.getElementById('addItemRow').onclick=()=>{const d=document.createElement('div');d.className='item-entry';d.innerHTML='<input name="item_name[]" placeholder="持ち物名">';document.getElementById('itemRows').appendChild(d)};
-f.onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f));b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));b.completion_mode=f.completion_mode.value;b.calendar_color=f.calendar_color.value;b.allDay=all.checked;b.noDate=noDate.checked;b.calendar_visible=f.calendar_visible.checked;b.shopping=[...f.querySelectorAll('[name="shopping_name[]"]')].map((x,i)=>({name:x.value.trim(),quantity:f.querySelectorAll('[name="shopping_quantity[]"]')[i].value.trim()||'1',url:f.querySelectorAll('[name="shopping_url[]"]')[i].value.trim()})).filter(x=>x.name);b.shopping_category=f.shopping_category.value;b.shopping_category_custom=f.shopping_category_custom.value;b.items=[...f.querySelectorAll('[name="item_name[]"]')].map(x=>x.value.trim()).filter(Boolean);const r=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json().catch(()=>null);if(d?.ok)location.href=b.noDate?'/today.php':'/today.php?date='+encodeURIComponent(b.dateOnly||'');else alert(d?.error||'登録に失敗しました');};
+f.onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(f));b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));b.completion_mode=f.completion_mode.value;b.calendar_color=f.calendar_color.value;b.allDay=all.checked;b.noDate=noDate.checked;b.endDateOnly=endDateInput.value;b.calendar_visible=f.calendar_visible.checked;b.shopping=[...f.querySelectorAll('[name="shopping_name[]"]')].map((x,i)=>({name:x.value.trim(),quantity:f.querySelectorAll('[name="shopping_quantity[]"]')[i].value.trim()||'1',url:f.querySelectorAll('[name="shopping_url[]"]')[i].value.trim()})).filter(x=>x.name);b.shopping_category=f.shopping_category.value;b.shopping_category_custom=f.shopping_category_custom.value;b.items=[...f.querySelectorAll('[name="item_name[]"]')].map(x=>x.value.trim()).filter(Boolean);const r=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});const d=await r.json().catch(()=>null);if(d?.ok)location.href=b.noDate?'/today.php':'/today.php?date='+encodeURIComponent(b.dateOnly||'');else alert(d?.error||'登録に失敗しました');};
 </script>`;
   return new Response(layout('タスク追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
 }
@@ -126,7 +147,60 @@ async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
 
 async function taskApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);
-  if(request.method==='DELETE'){const id=Number(new URL(request.url).searchParams.get('id')||0);const csrf=request.headers.get('x-csrf')||'';if(!id||csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'削除情報が不正です。'},403);const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first();if(!task)return json({ok:false,error:'対象が見つかりません。'},404);const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);const shops=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();const items=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();const q:any[]=[ctx.env.DB.prepare("DELETE FROM notifications WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(id,m.family_id),ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id)];for(const r of shops.results)q.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=?').bind(Number(r.id)));for(const r of items.results)q.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM items WHERE id=?').bind(Number(r.id)));q.push(ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));await ctx.env.DB.batch(q);return json({ok:true});}
+  if(request.method==='DELETE'){
+    const id=Number(new URL(request.url).searchParams.get('id')||0);
+    const csrf=request.headers.get('x-csrf')||'';
+    if(!id||csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'削除情報が不正です。'},403);
+    const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first();
+    if(!task)return json({ok:false,error:'対象が見つかりません。'},404);
+    const role=String(m.role||'').toUpperCase();
+    if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);
+    const now=nowJst();
+    const shops=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
+    const items=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
+    const rules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
+    const q:any[]=[
+      ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,id,m.family_id),
+    ];
+    for(const r of rules.results){
+      q.push(
+        ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'recurrence_occurrence', c.occurrence_id, c.member_id, 'COMPLETED', c.completed_at, 'recurrence_occurrence', c.occurrence_id, ? FROM recurrence_occurrence_completions c JOIN recurrence_occurrences o ON o.id=c.occurrence_id AND o.family_id=? WHERE o.recurrence_rule_id=?").bind(m.family_id,now,m.family_id,Number(r.id)),
+        ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(Number(r.id),m.family_id),
+        ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(Number(r.id),m.family_id),
+        ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id)
+      );
+    }
+    for(const r of shops.results){
+      const sid=Number(r.id);
+      q.push(
+        ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(sid),
+        ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'shopping', shopping_item_id, member_id, action, occurred_at, 'shopping_item', shopping_item_id, ? FROM shopping_completion_history WHERE shopping_item_id=?").bind(m.family_id,now,sid),
+        ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(sid),
+        ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(sid,m.family_id)
+      );
+    }
+    for(const r of items.results){
+      const iid=Number(r.id);
+      q.push(
+        ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(iid),
+        ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'item', item_id, member_id, action, occurred_at, 'item', item_id, ? FROM item_completion_history WHERE item_id=?").bind(m.family_id,now,iid),
+        ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(iid),
+        ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'item', item_id, member_id, action, completed_at, 'item_legacy_completion', item_id, ? FROM item_completions WHERE item_id=?").bind(m.family_id,now,iid),
+        ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(iid),
+        ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(iid,m.family_id)
+      );
+    }
+    q.push(
+      ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
+      ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'task', task_id, member_id, action, occurred_at, 'task', task_id, ? FROM task_completion_history WHERE task_id=?").bind(m.family_id,now,id),
+      ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),
+      ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'task', task_id, member_id, action, completed_at, 'task_legacy_completion', task_id, ? FROM task_completions WHERE task_id=?").bind(m.family_id,now,id),
+      ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),
+      ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
+    );
+    await ctx.env.DB.batch(q);
+    return json({ok:true});
+  }
   if(request.method!=='POST') return json({ok:false,error:'POST only'},405);
   const b=await (async()=>{const v=await request.json().catch(()=>null);return v&&typeof v==='object'?v as Record<string,unknown>:null})();
   if(!b) return json({ok:false,error:'JSONが不正です。'},400);
@@ -134,9 +208,9 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   const title=String(b.title??'').trim();const date=String(b.dateOnly??'').trim();const noDate=Boolean(b.noDate)||date==='';
   if(!title)return json({ok:false,error:'タイトルを入力してください。'},400);
   if(!noDate&&!/^\d{4}-\d{2}-\d{2}$/.test(date))return json({ok:false,error:'日付が不正です。'},400);
-  const allDay=Boolean(b.allDay); const st=String(b.startTime??'').trim();const et=String(b.endTime??'').trim();
+  const allDay=Boolean(b.allDay); const endDate=String(b.endDateOnly??date).trim(); if(!noDate&&!/^\d{4}-\d{2}-\d{2}$/.test(endDate))return json({ok:false,error:'終了日が不正です。'},400); if(!noDate&&endDate<date)return json({ok:false,error:'終了日は開始日以降にしてください。'},400); const st=String(b.startTime??'').trim();const et=String(b.endTime??'').trim();
   const normalizeDateTime=(v:string)=>{if(!v)return null; if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v))return v.replace('T',' ')+':00'; if(/^\d{2}:\d{2}$/.test(v))return `${date} ${v}:00`; return null;};
-  const start=noDate?null:(allDay?null:normalizeDateTime(st));const end=noDate?null:(allDay?null:normalizeDateTime(et));
+  const start=noDate?null:(allDay?`${date} 00:00:00`:normalizeDateTime(st));const end=noDate?null:(allDay?(endDate!==date?`${endDate} 23:59:59`:null):normalizeDateTime(et));
   if(!noDate&&!allDay&&!start)return json({ok:false,error:'開始日時を指定してください。'},400);
   if(st&&!start)return json({ok:false,error:'開始日時が不正です。'},400); if(et&&!end)return json({ok:false,error:'終了日時が不正です。'},400);
   if(start&&end&&end<start)return json({ok:false,error:'終了日時は開始日時以降にしてください。'},400);
@@ -276,7 +350,10 @@ async function taskDelete(request:Request,ctx:any):Promise<Response>{
   const statements:any[]=[];
   statements.push(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id));
   for(const r of recurrenceRules.results){
-    statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(Number(r.id),m.family_id));
+    statements.push(
+      ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'recurrence_occurrence', c.occurrence_id, c.member_id, 'COMPLETED', c.completed_at, 'recurrence_occurrence', c.occurrence_id, ? FROM recurrence_occurrence_completions c JOIN recurrence_occurrences o ON o.id=c.occurrence_id AND o.family_id=? WHERE o.recurrence_rule_id=?").bind(m.family_id,nowJst(),m.family_id,Number(r.id)),
+      ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id IN (SELECT id FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?)').bind(Number(r.id),m.family_id)
+    );
     statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(Number(r.id),m.family_id));
     statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
   }

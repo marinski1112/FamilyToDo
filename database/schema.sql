@@ -899,6 +899,7 @@ CREATE TABLE IF NOT EXISTS task_completions (
     action VARCHAR(30) NOT NULL DEFAULT 'completed',
     completed_at DATETIME NOT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY ux_task_completion_member (task_id,member_id),
     KEY idx_task_completion_task (task_id),
     KEY idx_task_completion_member (member_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -910,6 +911,7 @@ CREATE TABLE IF NOT EXISTS item_completions (
     action VARCHAR(30) NOT NULL DEFAULT 'completed',
     completed_at DATETIME NOT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY ux_item_completion_member (item_id,member_id),
     KEY idx_item_completion_item (item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -920,6 +922,7 @@ CREATE TABLE IF NOT EXISTS shopping_completions (
     action VARCHAR(30) NOT NULL DEFAULT 'completed',
     completed_at DATETIME NOT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY ux_shopping_completion_member (shopping_item_id,member_id),
     KEY idx_shopping_completion_item (
         shopping_item_id
     )

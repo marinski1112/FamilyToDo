@@ -42,7 +42,9 @@
     "item_completions",
     "shopping_completions",
     "recurrence_rules",
-    "notification_settings"
+    "notification_settings",
+    "recurrence_occurrence_completions",
+    "deleted_completion_history"
   ],
   "secrets_excluded": true,
   "legacy": {
@@ -52,9 +54,11 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave33 migration 0009で events / event_members をDROP。"
   },
-  "cloudflare_wave": "Wave34",
+  "cloudflare_wave": "Wave44",
   "notes": [
-    "Events/event_members removed in Wave33",
-    "Wave34 adds notification lifecycle cleanup and mobile form normalization"
+    "Events/event_members remain legacy schema artifacts; application behavior and migrated production D1 are task-only after Wave33.",
+    "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
+    "Wave43 preserves deleted completion history in deleted_completion_history.",
+    "Wave44 closes remaining alternate task-delete paths, recurrence-delete paths, notification hard-delete paths, and deleted-member reactivation paths."
   ]
 }

@@ -287,3 +287,19 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
   .section-head{align-items:flex-start!important}
   .section-head>.btn{white-space:nowrap}
 }
+
+/* Wave38 mobile form hardening */
+.form-card input[type=date],.form-card input[type=datetime-local],.form-card input[type=time],.form-card input[type=url]{width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;}
+.date-option-row>div{min-width:0!important;max-width:100%!important;}
+@media(max-width:600px){.date-option-row{gap:8px!important}.date-option-row input[type=date],.date-option-row input[type=datetime-local]{width:100%!important;max-width:100%!important;}.batch-product{grid-template-columns:minmax(0,1fr) 68px 34px!important}.product-row{min-width:0!important;}.product-row input{min-width:0!important;}}
+
+
+/* Wave42 lifecycle/UI groundwork: avoid destructive-looking member actions on small screens. */
+.member-row,.content-row{min-width:0}
+.member-row .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.member-row .actions .btn{min-height:42px}
+@media(max-width:600px){
+  .member-row,.content-row{gap:10px;align-items:flex-start}
+  .member-row .actions{width:100%;justify-content:stretch}
+  .member-row .actions .btn{flex:1 1 0;min-width:0}
+}

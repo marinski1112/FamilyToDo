@@ -233,3 +233,61 @@
 /* Wave35 - calendar day detail task-add affordance */
 .modal-add-fab{position:absolute!important;right:14px!important;bottom:14px!important;width:48px!important;height:48px!important;min-width:48px!important;border-radius:50%!important;display:flex!important;align-items:center!important;justify-content:center!important;background:#4f46e5!important;color:#fff!important;font-size:25px!important;font-weight:800!important;text-decoration:none!important;box-shadow:0 8px 22px rgba(79,70,229,.28)!important;z-index:300!important;pointer-events:auto!important}
 .day-modal .modal-scroll{padding-bottom:78px!important}
+
+/* Wave36: calendar interaction hardening */
+.calendar-card{position:relative;overflow:visible!important}
+.calendar-page-head{position:relative;z-index:2}
+.calendar-fab{position:fixed!important;right:16px!important;bottom:calc(var(--nav-h) + 16px)!important;z-index:70!important;display:flex!important;pointer-events:auto!important;touch-action:manipulation!important}
+.calendar-grid .calendar-cell{vertical-align:top!important;align-items:flex-start!important}
+.calendar-grid .calendar-cell .num{position:relative!important;top:0!important;left:0!important;align-items:flex-start!important;justify-content:flex-start!important;text-align:left!important}
+.calendar-grid{touch-action:pan-y!important;user-select:none;-webkit-user-select:none}
+@media(max-width:520px){.calendar-fab{right:14px!important;bottom:calc(var(--nav-h) + 14px)!important}.calendar-grid .calendar-cell{height:78px!important;min-height:78px!important}.calendar-grid .calendar-cell .num{height:20px!important;line-height:18px!important}}
+
+/* Wave37: calendar cells are interactive buttons; reset native button chrome and keep the day number top-left. */
+.calendar-grid .calendar-cell{font:inherit!important;-webkit-tap-highlight-color:transparent!important;touch-action:pan-y!important;cursor:pointer!important;}
+.calendar-grid .calendar-cell:focus-visible{outline:2px solid #4f46e5!important;outline-offset:-2px!important;}
+.calendar-grid .calendar-cell .num{position:relative!important;top:0!important;left:0!important;align-self:flex-start!important;}
+
+/* Wave38 calendar alignment */
+.calendar-grid .calendar-cell .num{position:relative!important;display:block!important;align-self:flex-start!important;text-align:left!important;vertical-align:top!important;transform:none!important;}
+.calendar-grid .calendar-cell{align-items:flex-start!important;justify-content:flex-start!important;vertical-align:top!important;}
+
+
+/* Wave41: smartphone interaction hardening */
+.calendar-page{overflow-x:hidden}
+.calendar-page .calendar-grid{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.calendar-grid .calendar-cell{-webkit-tap-highlight-color:rgba(79,70,229,.10);touch-action:manipulation}
+.calendar-grid .calendar-cell:active{background:#f5f7ff!important}
+.calendar-grid .calendar-cell .num{font-size:12px;min-height:18px}
+.calendar-grid .calendar-item{font-size:9px;line-height:17px;height:17px;min-height:17px}
+.calendar-grid .calendar-shopping{font-size:8px;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calendar-modal-open{overflow:hidden;position:fixed;width:100%;height:100%;overscroll-behavior:none}
+.day-modal{padding-bottom:env(safe-area-inset-bottom)}
+.modal-top{min-height:56px}
+.modal-day-nav,.modal-close{min-width:42px!important;min-height:42px!important}
+.modal-top h2{min-width:0;flex:1;text-align:center;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.modal-check-row,.modal-row-main{min-height:42px;display:flex;align-items:center;gap:9px}
+.modal-check-row input,.calendar-task-toggle{width:22px!important;height:22px!important;min-width:22px!important;flex:0 0 22px!important}
+.modal-row-main>div{min-width:0;flex:1}
+.modal-add-fab{bottom:calc(12px + env(safe-area-inset-bottom));width:48px;height:48px}
+.calendar-fab{bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));width:56px;height:56px;font-size:28px}
+@media(max-width:600px){
+  .calendar-page .wrap{width:100%;padding-left:6px;padding-right:6px}
+  .calendar-page-head{padding:0 2px}
+  .calendar-page-head .btn{min-width:46px!important;min-height:44px!important}
+  .calendar-grid{border-radius:14px}
+  .calendar-grid .weekday{height:34px}
+  .calendar-grid .calendar-cell{height:78px;min-height:78px;padding:4px 3px!important}
+  .calendar-grid .calendar-items{gap:2px;margin-top:1px}
+  .calendar-grid .calendar-item{font-size:8px;height:15px;line-height:15px;padding:0 3px}
+  .calendar-grid .calendar-cell .num{font-size:11px}
+  .day-modal{width:100%;height:calc(100dvh - 16px);max-height:none;border-radius:20px}
+  .modal-backdrop{padding:8px}
+  .modal-scroll{padding:4px 12px calc(72px + env(safe-area-inset-bottom))}
+}
+@media(max-width:380px){
+  .calendar-page .wrap{padding-left:3px;padding-right:3px}
+  .calendar-grid .calendar-cell{height:72px;min-height:72px;padding:3px 2px!important}
+  .calendar-grid .calendar-item{font-size:7px;height:14px;line-height:14px}
+}
