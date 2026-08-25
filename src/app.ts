@@ -69,7 +69,7 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner">${[
     ['/today.php','☀️','今日'],['/tomorrow.php','🌙','明日'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ].map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.52-wave30">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.52-wave30">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.53-wave32">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.53-wave32">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
 
@@ -329,6 +329,7 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
       const latest=stillComplete ? await ctx.env.DB.prepare('SELECT member_id,completed_at FROM task_completions WHERE task_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1').bind(id).first<Row>() : null;
       await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(stillComplete?'completed':'pending',stillComplete?Number(latest?.member_id||0)||null: null,stillComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run();
     }
+    if(String((await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>())?.status||'pending')==='completed') await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,id,m.family_id).run();
     await ctx.env.DB.prepare('INSERT INTO task_completion_history(task_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run(); await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','task',id,{status:completed?'completed':'pending'});
     const latest=await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); return commitSession(json({ok:true,status:String(latest?.status||'pending')}),ctx.session,ctx.env.APP_SECRET);
   }
@@ -443,7 +444,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   const map:Record<string,Row[]>=Object.create(null);
   const shoppingMap:Record<string,Row[]>=Object.create(null);
   const itemMap:Record<string,Row[]>=Object.create(null);
-  const add=(t:Row,event=false)=>{
+  const add=(t:Row)=>{
     const s=String(t.start_at||t.due_at||'').slice(0,10);
     const e=String(t.end_at||s).slice(0,10);
     if(!s)return;
@@ -451,10 +452,10 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     if(last<d)last=d;
     for(;d<=last;d.setUTCDate(d.getUTCDate()+1)){
       const k=d.toISOString().slice(0,10);
-      (map[k]??=[]).push({...t,_event:event,_segment:d.getTime()===new Date(`${s}T12:00:00Z`).getTime()?'start':d.getTime()===last.getTime()?'end':'mid',_spanDays:Math.max(1,Math.round((last.getTime()-new Date(`${s}T12:00:00Z`).getTime())/86400000)+1)});
+      (map[k]??=[]).push({...t,_segment:d.getTime()===new Date(`${s}T12:00:00Z`).getTime()?'start':d.getTime()===last.getTime()?'end':'mid',_spanDays:Math.max(1,Math.round((last.getTime()-new Date(`${s}T12:00:00Z`).getTime())/86400000)+1)});
     }
   };
-  tasks.forEach(t=>add(t,false));
+  tasks.forEach(t=>add(t));
   for(const item of shopping){const d=String(item.due_date||'').slice(0,10);if(d)(shoppingMap[d]??=[]).push(item);}
   for(const item of items){const d=String(item.due_at||'').slice(0,10);if(d)(itemMap[d]??=[]).push(item);}
 
@@ -468,14 +469,14 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     const wd=cursor.getUTCDay();
     const cls=['calendar-cell',inMonth?'':'other',wd===0?'sun':'',wd===6?'sat':'',holiday?'holiday':''].filter(Boolean).join(' ');
     const num=d===dateOnly()?`<span class="today-num">${Number(d.slice(8))}</span>`:String(Number(d.slice(8)));
-    cells+=`<button type="button" class="${cls}" data-date="${d}" aria-label="${esc(d+(holiday?' '+holiday:''))}"><div class="num">${num}</div><div class="calendar-items">${items.slice(0,4).map(t=>{const cc=String(t.calendar_color||'').trim();const allowed=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];const style=!t._event&&allowed.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item ${t._segment==='start'?'seg-start':t._segment==='end'?'seg-end':t._segment==='mid'?'seg-mid':'seg-single'}" title="${esc(t.title)}"${style}>${t._segment==='mid'?'↳ ':''}${esc(t.title)}</div>`}).join('')}${items.length>4?`<div class="meta">+${items.length-4}件</div>`:''}${itemMap[d]?.slice(0,2).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[d].length}件</div>`:''}</div></button>`;
+    cells+=`<button type="button" class="${cls}" data-date="${d}" aria-label="${esc(d+(holiday?' '+holiday:''))}"><div class="num">${num}</div><div class="calendar-items">${items.slice(0,4).map(t=>{const cc=String(t.calendar_color||'').trim();const allowed=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];const style=allowed.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item ${t._segment==='start'?'seg-start':t._segment==='end'?'seg-end':t._segment==='mid'?'seg-mid':'seg-single'}" title="${esc(t.title)}"${style}>${t._segment==='mid'?'↳ ':''}${esc(t.title)}</div>`}).join('')}${items.length>4?`<div class="meta">+${items.length-4}件</div>`:''}${itemMap[d]?.slice(0,2).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[d].length}件</div>`:''}</div></button>`;
   }
 
   const shoppingDetail=Object.fromEntries(Object.entries(shoppingMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,quantity:t.quantity,category:t.category,status:t.status,due_date:t.due_date,task_title:t.task_title,assignees:t.assignees}))]));
   const itemDetail=Object.fromEntries(Object.entries(itemMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,status:t.status,due_at:t.due_at,assignees:t.assignees}))]));
   const detail=Object.fromEntries(Object.entries(map).map(([k,v])=>[k,v.map(t=>({
     id:t.id,title:t.title,start_at:t.start_at,end_at:t.end_at,due_at:t.due_at,
-    location:t.location,description:t.description??t.memo??'',event:false,event_id:0,
+    location:t.location,description:t.description??t.memo??'',
     recurring:Number(t.id)<0,recurrence_occurrence_id:t.recurrence_occurrence_id??0,status:t.status??'pending',assignees:t.assignees??'',segment:t._segment??'single',spanDays:Number(t._spanDays||1),calendar_color:t.calendar_color??''
   }))]));
   const holidays=Object.fromEntries(
@@ -501,7 +502,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     }).join('');
     const shops=(shoppingDetail[d]||[]).map(i=>'<div class="modal-row"><div><label class="modal-check-row"><input type="checkbox" class="calendar-shop-toggle" data-id="'+i.id+'" '+(i.status==='completed'?'checked':'')+'> <strong>🛒 '+escJs(i.name)+(i.quantity&&i.quantity!=='1'?' × '+escJs(i.quantity):'')+'</strong></label></div></div>').join('');
     const carry=(itemDetail[d]||[]).map(i=>'<div class="modal-row"><div><label class="modal-check-row"><input type="checkbox" class="calendar-item-toggle" data-id="'+i.id+'" '+(i.status==='completed'?'checked':'')+'> <strong>🎒 '+escJs(i.name)+'</strong></label>'+(i.assignees?'<div class="meta">担当 '+escJs(i.assignees)+'</div>':'')+'</div></div>').join('');
-    return (h?'<div class="modal-holiday">🎌 '+escJs(h)+'</div>':'')+(rows||'<div class="modal-row">この日の予定はありません。</div>')+(carry?'<div class="modal-subhead">持ち物</div>'+carry:'')+(shops?'<div class="modal-subhead">買い物</div>'+shops:'');
+    return (h?'<div class="modal-holiday">🎌 '+escJs(h)+'</div>':'')+(rows||'<div class="modal-row">この日のタスクはありません。</div>')+(carry?'<div class="modal-subhead">持ち物</div>'+carry:'')+(shops?'<div class="modal-subhead">買い物</div>'+shops:'');
   }
   function render(d){
     const x=detail[d]||[],h=holidays[d];
@@ -672,14 +673,13 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
       let due=String(b.due_date??'').trim()||null;
       if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
       const taskId=Number(b.task_id??0)||null;
-      const eventId=null;
-      if(taskId){
+            if(taskId){
         const t=await ctx.env.DB.prepare('SELECT id,start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();
         if(!t)throw new BadRequest('関連タスクが見つかりません。');
         if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;
       }
       const now=nowJst();
-      const statements=normalized.map(p=>ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,event_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,eventId,p.name,p.quantity,category,memo,due,m.id,now,now,taskId,p.url||null));
+      const statements=normalized.map(p=>ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,p.name,p.quantity,category,memo,due,m.id,now,now,taskId,p.url||null));
       const result=await ctx.env.DB.batch(statements);
       const assignees=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
       if(assignees.length){const ids=result.map((r:any)=>Number(r.meta?.last_row_id||0)).filter(Boolean);for(const sid of ids){await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}}
@@ -693,10 +693,9 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
       let due=String(b.due_date??'').trim()||null;
       if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
       const taskId=Number(b.task_id??0)||null;
-      const eventId=null;
-      if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;}
+            if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;}
       const now=nowJst();
-      const rawUrl=String(b.url??'').trim(); if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('商品URLが不正です。');}} await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,event_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,eventId,name,qty,category,memo,due,m.id,now,now,taskId,rawUrl||null).run();
+      const rawUrl=String(b.url??'').trim(); if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('商品URLが不正です。');}} await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,memo,due,m.id,now,now,taskId,rawUrl||null).run();
       return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
     }
   }
@@ -805,8 +804,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
     if(reminderRaw&&!reminderAt) throw new BadRequest('LINE通知日時が不正です。');
     const now=nowJst();
-    const eventId=null;
-    const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
+        const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
     const allDay=b.all_day?1:0;
     const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
     const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):String(task.calendar_color||'#7c3aed');
@@ -817,8 +815,8 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     for(const v of shopping){const u=String((v as any)?.url||'').trim();if(!validUrl(u))throw new BadRequest('買い物URLが不正です。');}
 
     await ctx.env.DB.prepare("DELETE FROM notifications WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(id,m.family_id).run();
-    await ctx.env.DB.prepare('UPDATE tasks SET title=?,description=?,due_at=?,event_id=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,updated_at=? WHERE id=? AND family_id=?')
-      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),eventId,start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,now,id,m.family_id).run();
+    await ctx.env.DB.prepare('UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,updated_at=? WHERE id=? AND family_id=?')
+      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,now,id,m.family_id).run();
 
     await ctx.env.DB.prepare("DELETE FROM notifications WHERE target_type='task' AND target_id=? AND status IN ('pending','retry')").bind(id).run();
     await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id).run();
@@ -935,7 +933,7 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
   const assigned=await ctx.env.DB.prepare('SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?').bind(id).all<Row>();
   const history=await ctx.env.DB.prepare('SELECT h.*,m.name member_name FROM shopping_completion_history h LEFT JOIN members m ON m.id=h.member_id WHERE h.shopping_item_id=? ORDER BY h.occurred_at DESC,h.id DESC LIMIT 30').bind(id).all<Row>();
   const assignedSet=new Set(assigned.results.map(x=>Number(x.member_id)));
-  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save');if(action==='delete'){await ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).run();return redirect('/app/shopping.php');}const name=String(b.name||'').trim();if(!name)throw new BadRequest('商品名を入力してください。');const rawUrl=String(b.url||'').trim();if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('URLが不正です。');}}const qty=String(b.quantity||'1').trim()||'1';const taskId=Number(b.task_id||0)||null;const eventId=null;let due=String(b.due_date||'').trim()||null;if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,event_id=?,task_id=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,qty,String(b.category||'')||null,String(b.memo||'')||null,due,eventId,taskId,rawUrl||null,nowJst(),id,m.family_id).run();await ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));return redirect('/app/shopping.php');}
+  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save');if(action==='delete'){await ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).run();return redirect('/app/shopping.php');}const name=String(b.name||'').trim();if(!name)throw new BadRequest('商品名を入力してください。');const rawUrl=String(b.url||'').trim();if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('URLが不正です。');}}const qty=String(b.quantity||'1').trim()||'1';const taskId=Number(b.task_id||0)||null;let due=String(b.due_date||'').trim()||null;if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,qty,String(b.category||'')||null,String(b.memo||'')||null,due,taskId,rawUrl||null,nowJst(),id,m.family_id).run();await ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));return redirect('/app/shopping.php');}
   const body=`<div class="card"><h1>🛒 買い物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" required value="${esc(item.name)}"><label>数量</label><input type="text" name="quantity" value="${esc(item.quantity||'1')}"><label>カテゴリー</label><input name="category" value="${esc(item.category||'')}"><label>URL</label><input type="url" name="url" value="${esc(item.url||'')}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>担当者</label>${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}" ${assignedSet.has(Number(x.id))?'checked':''}> ${esc(x.name)}</label>`).join('')}<label>紐づくタスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map(t=>`<option value="${t.id}" ${Number(item.task_id)===Number(t.id)?'selected':''}>${esc(t.title)}</option>`).join('')}</select><label>期限日</label><input type="date" name="due_date" value="${esc(item.due_date||'')}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(h=>`<div class="row">${esc(h.action)} ・ ${esc(h.member_name||'')} ・ ${esc(h.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この買い物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;return html(layout('買い物編集',body,''));
 }
 
@@ -1116,7 +1114,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
       await ctx.env.DB.prepare('DELETE FROM shopping_items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id).run();
       await ctx.env.DB.prepare('DELETE FROM items WHERE task_id=? AND family_id=?').bind(taskId,m.family_id).run();
       const shopping = Array.isArray(b.shopping) ? (b.shopping as unknown[]).slice(0,50) : [];
-      for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16),url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
+      for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16),url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
       const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
       for(const name of itemNames){ const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,`${startDate} 00:00:00`,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16)).run(); const iid=Number(ir.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id))); }
       return commitSession(json({ok:true}), ctx.session, ctx.env.APP_SECRET);
@@ -1163,7 +1161,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     const assignees = Array.isArray(b.assignees) ? (b.assignees as unknown[]).map(Number).filter(n=>n>0) : [];
     if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(taskId,mid,m.family_id)));
     const shopping = Array.isArray(b.shopping) ? (b.shopping as unknown[]).slice(0,50) : [];
-    for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16),url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
+    for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16),url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
     const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
     for(const name of itemNames){ const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,`${startDate} 00:00:00`,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16)).run(); const iid=Number(ir.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id))); }
     return commitSession(json({ok:true,id:ruleId,task_id:taskId}), ctx.session, ctx.env.APP_SECRET);

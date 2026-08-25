@@ -212,3 +212,35 @@ input.compact-date { width:min(100%, 156px); max-width:100%; }
   .form-card input[type=date], .task-edit input[type=date], input.compact-date { width: min(100%, 150px) !important; }
   .form-card input[type=datetime-local], .task-edit input[type=datetime-local] { width: min(100%, 220px) !important; }
 }
+
+
+/* Wave32: mobile-first form and safe-area polish */
+html{background:#f5f7fb;-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
+.wrap{width:min(720px,calc(100% - 24px));margin-inline:auto;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.card,.form-card,.section-card{min-width:0;overflow:hidden}
+.form-card form,.form-card .field,.form-card .datetime-grid,.form-card .date-option-row{min-width:0}
+.form-card input,.form-card select,.form-card textarea{font-size:16px;max-width:100%;min-width:0}
+.form-card input[type=date],.task-edit input[type=date],input.compact-date{width:150px!important;max-width:100%!important;min-width:0!important}
+.form-card input[type=time],.task-edit input[type=time]{width:120px!important;max-width:100%!important;min-width:0!important}
+.form-card input[type=datetime-local],.task-edit input[type=datetime-local]{width:220px!important;max-width:100%!important;min-width:0!important}
+.date-option-row{grid-template-columns:minmax(0,150px) minmax(0,1fr)!important;align-items:center}
+.datetime-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+.bottom-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}
+.bottom-nav .nav-inner{max-width:720px;margin:auto}
+.task-row,.row,.message-row,.content-row{min-width:0;overflow-wrap:anywhere}
+.task-main,.shopping-check-row{min-width:0}
+.task-main>span,.shopping-check-row>span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:520px){
+  .wrap{width:calc(100% - 16px);padding-top:12px}
+  .card,.form-card,.section-card{padding:12px;border-radius:14px;margin:9px 0}
+  .page-head,.daily-head{gap:8px;align-items:flex-start}
+  .page-head h1,.daily-head h1{font-size:21px}
+  .date-option-row{grid-template-columns:1fr!important;gap:0!important}
+  .date-option-row input[type=date]{width:150px!important}
+  .datetime-grid{grid-template-columns:1fr 1fr!important;gap:7px}
+  .form-card input[type=datetime-local],.task-edit input[type=datetime-local]{width:100%!important}
+  .form-card input[type=date],.task-edit input[type=date],input.compact-date{width:150px!important}
+  .bottom-nav a{min-width:0;font-size:10px}
+  .bottom-nav a span{font-size:16px!important}
+}

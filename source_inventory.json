@@ -46,5 +46,12 @@
     "recurrence_rules",
     "notification_settings"
   ],
-  "secrets_excluded": true
+  "secrets_excluded": true,
+  "legacy": {
+    "event_tables": [
+      "events",
+      "event_members"
+    ],
+    "event_note": "イベント機能はアプリケーションソースから廃止。既存D1のイベントテーブルはデータ保全のため現時点ではDB上に残す。"
+  }
 }

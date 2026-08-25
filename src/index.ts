@@ -46,7 +46,6 @@ export default {
       if(url.pathname==='/api/toggle') return toggle(request,context);
       if(url.pathname==='/api/task') return taskApi(request,context);
       if(url.pathname==='/api/item') return itemApi(request,context);
-      if(url.pathname==='/api/event') return json({ok:false,error:'予定機能は廃止され、タスクに統合されました。'},410);
       if(url.pathname==='/api/messages') return messages(request,context);
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
@@ -79,7 +78,6 @@ export default {
       if(url.pathname==='/item/new.php') return itemNew(context,url.searchParams.get('date')||asDateOffset(0),Number(url.searchParams.get('task_id')||0));
       if(url.pathname==='/item/edit.php') return itemEdit(request,context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/app/shopping_edit.php') return shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
-      if(url.pathname==='/calendar/event/new'||url.pathname==='/calendar/event/edit') return new Response('予定機能は廃止され、タスクに統合されました。',{status:410,headers:{'content-type':'text/plain; charset=utf-8'}});
       return env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired) return redirect('/login.php');
@@ -99,6 +97,9 @@ async function reorderApi(request:Request,ctx:any):Promise<Response>{
   if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました。'},403);
   const ids=Array.isArray(b.ids)?(b.ids as unknown[]).map(Number).filter(n=>n>0):[];if(!ids.length)return json({ok:false,error:'順序がありません。'},400);
   await ctx.env.DB.batch(ids.map((id:number,i:number)=>ctx.env.DB.prepare('UPDATE tasks SET sort_order=?,updated_at=? WHERE id=? AND family_id=?').bind(i, new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' '),id,m.family_id)));return json({ok:true});}
+
+
+function calendarVisibleFlag(b: Record<string, unknown>): number { return b.calendar_visible===false || String(b.calendar_visible)==='0' ? 0 : 1; }
 
 async function taskNew(ctx: any,date:string): Promise<Response>{
   if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));
@@ -125,7 +126,7 @@ async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
 
 async function taskApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);
-  if(request.method==='DELETE'){const id=Number(new URL(request.url).searchParams.get('id')||0);const csrf=request.headers.get('x-csrf')||'';if(!id||csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'削除情報が不正です。'},403);const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first();if(!task)return json({ok:false,error:'対象が見つかりません。'},404);const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);await ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).run();return json({ok:true});}
+  if(request.method==='DELETE'){const id=Number(new URL(request.url).searchParams.get('id')||0);const csrf=request.headers.get('x-csrf')||'';if(!id||csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'削除情報が不正です。'},403);const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first();if(!task)return json({ok:false,error:'対象が見つかりません。'},404);const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);const shops=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();const items=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();const q:any[]=[ctx.env.DB.prepare("DELETE FROM notifications WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(id,m.family_id),ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id)];for(const r of shops.results)q.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=?').bind(Number(r.id)));for(const r of items.results)q.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM items WHERE id=?').bind(Number(r.id)));q.push(ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));await ctx.env.DB.batch(q);return json({ok:true});}
   if(request.method!=='POST') return json({ok:false,error:'POST only'},405);
   const b=await (async()=>{const v=await request.json().catch(()=>null);return v&&typeof v==='object'?v as Record<string,unknown>:null})();
   if(!b) return json({ok:false,error:'JSONが不正です。'},400);
@@ -147,7 +148,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   const now=nowJst();const completionMode=String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY';
   const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
   const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
-  const eventId=null; const dueValue=noDate?null:(end||start||`${date} 00:00:00`); const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,event_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,NULL,0,?)').bind(m.family_id,eventId,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarColor,reminderAt).run();
+  const dueValue=noDate?null:(end||start||`${date} 00:00:00`); const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(m.family_id,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarVisibleFlag(b),calendarColor,'TASK',0,reminderAt).run();
   const id=Number(r.meta.last_row_id);
   const ids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
   if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
@@ -157,7 +158,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
     const category=String(b.shopping_category==='__custom__'?b.shopping_category_custom:b.shopping_category||'').trim()||null;
     if(category && b.shopping_category==='__custom__') await ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_categories(family_id,name,created_at) VALUES(?,?,?)').bind(m.family_id,category,now2).run().catch(()=>{});
     const dueDate=noDate?null:date; const group=crypto.randomUUID().replaceAll('-','').slice(0,16);
-    for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,event_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,eventId,name,qty,category,null,dueDate,m.id,now2,now2,id,group,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
+    for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,qty,category,null,dueDate,m.id,now2,now2,id,group,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
   }
   const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
   if(itemNames.length){const group=crypto.randomUUID().replaceAll('-','').slice(0,16);for(const name of itemNames){const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,null,date?`${date} 00:00:00`:null,m.id,now2,now2,id,group).run();const iid=Number(ir.meta.last_row_id);if(ids.length)await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id)));}}
