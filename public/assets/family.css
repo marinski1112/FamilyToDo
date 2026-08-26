@@ -434,3 +434,17 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 .message-shopping-dialog textarea{min-height:92px}
 .message-shopping-dialog #messageShoppingStatus{min-height:1.4em;margin:8px 0}
 @media(max-width:520px){.message-shopping-dialog{max-height:92vh;padding:16px}}
+
+/* Wave66: explicit lifecycle choices and recurring edit scope. */
+.exception-delete-backdrop{
+  position:fixed;inset:0;z-index:1200;display:none;align-items:flex-end;justify-content:center;
+  background:rgba(15,23,42,.42);padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom));box-sizing:border-box;
+}
+.exception-delete-backdrop.open{display:flex}
+.exception-delete-sheet{
+  width:min(560px,100%);max-height:min(78vh,680px);overflow:auto;background:#fff;border-radius:18px;
+  padding:18px;box-shadow:0 -12px 38px rgba(15,23,42,.22);
+}
+.exception-delete-choice{display:flex;width:100%;justify-content:center;margin-top:10px;min-height:46px}
+.rec-edit-scope{padding:12px;border:1px solid #dbe2ea;border-radius:12px;background:#f8fafc;margin-bottom:14px}
+.rec-edit-scope label:first-child{margin-top:0}

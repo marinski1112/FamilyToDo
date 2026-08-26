@@ -625,3 +625,11 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   .calendar-week-bands{top:34px!important}
   .calendar-week-days .calendar-items{margin-top:calc(var(--calendar-date-zone) + var(--calendar-band-rows) * var(--calendar-band-step))!important}
 }
+
+/* Wave66: keep ordinary single-day plans at the first available row. */
+.calendar-week-days .calendar-items{
+  justify-content:flex-start!important;
+}
+.calendar-week[style*="--calendar-band-rows:0"] .calendar-week-days .calendar-items{
+  margin-top:var(--calendar-date-zone)!important;
+}
