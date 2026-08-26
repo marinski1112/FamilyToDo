@@ -338,3 +338,24 @@
   }
 }
 
+
+/* Wave59 - XREA parity: in-place month transitions and clearer day detail interaction */
+.calendar-month-actions{display:flex;align-items:center;gap:6px}
+.calendar-card .calendar-grid{transition:transform .18s ease,opacity .18s ease;will-change:transform,opacity}
+.calendar-card .calendar-grid.month-changing{pointer-events:none}
+.modal-swipe-hint{text-align:center;font-size:10px;color:#94a3b8;padding:2px 12px 0;line-height:1.3}
+.modal-body{transition:transform .16s ease,opacity .16s ease;will-change:transform,opacity}
+.modal-body.day-changing{opacity:.35}
+.modal-row.is-completed .modal-row-main>div{opacity:.58}
+.modal-row.is-completed .modal-row-main strong a{text-decoration:line-through;text-decoration-thickness:1px}
+.modal-row-main strong small{font-size:10px;color:#64748b;font-weight:700;margin-left:3px}
+@media(max-width:520px){
+  .calendar-page-head{gap:8px}
+  .calendar-page-head>div:first-child{min-width:0}
+  .calendar-page-head h1{white-space:nowrap}
+  .calendar-month-actions{gap:4px;flex:0 0 auto}
+  .modal-swipe-hint{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .calendar-card .calendar-grid,.modal-body{transition:none!important}
+}
