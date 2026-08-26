@@ -633,3 +633,11 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 .calendar-week[style*="--calendar-band-rows:0"] .calendar-week-days .calendar-items{
   margin-top:var(--calendar-date-zone)!important;
 }
+
+/* Wave67: reserve multi-day lane space per date, not per whole week. */
+.calendar-week-days>.calendar-cell{
+  --calendar-day-band-rows:0;
+}
+.calendar-week-days>.calendar-cell .calendar-items{
+  margin-top:calc(var(--calendar-date-zone) + var(--calendar-day-band-rows) * var(--calendar-band-step))!important;
+}

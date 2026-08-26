@@ -448,3 +448,11 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 .exception-delete-choice{display:flex;width:100%;justify-content:center;margin-top:10px;min-height:46px}
 .rec-edit-scope{padding:12px;border:1px solid #dbe2ea;border-radius:12px;background:#f8fafc;margin-bottom:14px}
 .rec-edit-scope label:first-child{margin-top:0}
+
+/* Wave67: recurring lifecycle / lineage management */
+.rec-lineage{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.rec-lineage-badge{display:inline-flex;align-items:center;min-height:24px;padding:3px 8px;border-radius:999px;background:#f3f4f6;color:#4b5563;font-size:11px;font-weight:700}
+.rec-excluded-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rec-excluded-row>div{min-width:0}
+.rec-excluded-row form{flex:0 0 auto}
+@media(max-width:520px){.rec-excluded-row{align-items:flex-start}.rec-lineage-badge{font-size:10px}}
