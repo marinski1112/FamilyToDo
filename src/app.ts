@@ -85,7 +85,7 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner">${[
     ['/today.php','☀️','今日'],['/tomorrow.php','🌙','明日'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ].map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.85-wave66">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.85-wave66">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.86-wave67">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.86-wave67">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
 
@@ -476,25 +476,29 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
     ctx.env.DB.prepare(`SELECT s.*,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,from,to).all<Row>(),
     ctx.env.DB.prepare(`SELECT i.*,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,from,to).all<Row>()
   ]);
-  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results));
+  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...recurRows]));
 }
 
-function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[]):string{
+function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks):string{
   const map:Record<string,Row[]>=Object.create(null);
+  const detailMap:Record<string,Row[]>=Object.create(null);
   const shoppingMap:Record<string,Row[]>=Object.create(null);
   const itemMap:Record<string,Row[]>=Object.create(null);
-  const add=(t:Row)=>{
+  const addToMap=(target:Record<string,Row[]>,t:Row)=>{
     const s=String(t.start_at||t.due_at||'').slice(0,10);
     const e=String(t.end_at||s).slice(0,10);
     if(!s)return;
     let d=new Date(`${s}T12:00:00Z`),last=new Date(`${e}T12:00:00Z`);
     if(last<d)last=d;
+    const firstMs=new Date(`${s}T12:00:00Z`).getTime();
+    const spanDays=Math.max(1,Math.round((last.getTime()-firstMs)/86400000)+1);
     for(;d<=last;d.setUTCDate(d.getUTCDate()+1)){
       const k=d.toISOString().slice(0,10);
-      (map[k]??=[]).push({...t,_segment:d.getTime()===new Date(`${s}T12:00:00Z`).getTime()?'start':d.getTime()===last.getTime()?'end':'mid',_spanDays:Math.max(1,Math.round((last.getTime()-new Date(`${s}T12:00:00Z`).getTime())/86400000)+1)});
+      (target[k]??=[]).push({...t,_segment:d.getTime()===firstMs?'start':d.getTime()===last.getTime()?'end':'mid',_spanDays:spanDays});
     }
   };
-  tasks.forEach(t=>add(t));
+  tasks.forEach(t=>addToMap(map,t));
+  detailTasks.forEach(t=>addToMap(detailMap,t));
   for(const item of shopping){const d=String(item.due_date||'').slice(0,10);if(d)(shoppingMap[d]??=[]).push(item);}
   for(const item of items){const d=String(item.due_at||'').slice(0,10);if(d)(itemMap[d]??=[]).push(item);}
 
@@ -515,7 +519,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   let cells='';
   for(let weekStart=new Date(start);weekStart<=end;weekStart.setUTCDate(weekStart.getUTCDate()+7)){
     const weekEnd=new Date(weekStart);weekEnd.setUTCDate(weekEnd.getUTCDate()+6);
-    let dayCells='',bars='',more=''; const overflow:Record<string,number>=Object.create(null);
+    let dayCells='',bars='',more=''; const overflow:Record<string,number>=Object.create(null),dayBandRows:Record<string,number>=Object.create(null);
     const weekDays:Array<{d:string;inMonth:boolean;dayItems:Row[];holiday:string|null;wd:number;num:string;accessoryRows:number}>=[];
     let maxSingleRows=0,maxAccessoryRows=0,maxBandLane=-1;
     for(let i=0;i<7;i++){
@@ -536,12 +540,15 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
       const startCol=new Date(`${a}T12:00:00Z`).getUTCDay()+1,endCol=new Date(`${b}T12:00:00Z`).getUTCDay()+2,cc=String(r.task.calendar_color||'').trim(),color=allowedCalendarColors.includes(cc)?cc:'#7c3aed';
       const segClass=(a===r.start?'seg-start ':'')+(b===r.end?'seg-end':'seg-mid');
       bars+=`<a class="calendar-band ${segClass.trim()}" style="grid-column:${startCol}/${endCol};grid-row:${lane+1};background:${color}" href="/task/view.php?id=${encodeURIComponent(String(r.task.id))}" data-task-id="${esc(r.task.id)}" title="${esc(r.task.title)}">${esc(r.task.title)}</a>`;
+      for(let dd=new Date(`${a}T12:00:00Z`),lastDd=new Date(`${b}T12:00:00Z`);dd<=lastDd;dd.setUTCDate(dd.getUTCDate()+1)){
+        const dk=dd.toISOString().slice(0,10);dayBandRows[dk]=Math.max(dayBandRows[dk]||0,lane+1);
+      }
     }
     const bandRows=maxBandLane+1;
     for(const info of weekDays){
       const cls=['calendar-cell',info.inMonth?'':'other',info.wd===0?'sun':'',info.wd===6?'sat':'',info.holiday?'holiday':''].filter(Boolean).join(' ');
       const shown=info.dayItems.slice(0,singleTaskCap);
-      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim();const style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item seg-single" title="${esc(t.title)}"${style}>${esc(t.title)}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
+      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" style="--calendar-day-band-rows:${dayBandRows[info.d]||0}" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim();const style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item seg-single" title="${esc(t.title)}"${style}>${esc(t.title)}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
     }
     for(let i=0;i<7;i++){const d=new Date(weekStart);d.setUTCDate(d.getUTCDate()+i);const k=d.toISOString().slice(0,10);more+=`<span>${overflow[k]?`+${overflow[k]}件`:''}</span>`;}
     const weekStyle=`--calendar-band-rows:${bandRows};--calendar-single-rows:${Math.max(1,maxSingleRows)};--calendar-accessory-rows:${maxAccessoryRows}`;
@@ -550,10 +557,10 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
 
   const shoppingDetail=Object.fromEntries(Object.entries(shoppingMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,quantity:t.quantity,category:t.category,status:t.status,due_date:t.due_date,task_title:t.task_title,assignees:t.assignees}))]));
   const itemDetail=Object.fromEntries(Object.entries(itemMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,status:t.status,due_at:t.due_at,assignees:t.assignees}))]));
-  const detail=Object.fromEntries(Object.entries(map).map(([k,v])=>[k,v.map(t=>({
+  const detail=Object.fromEntries(Object.entries(detailMap).map(([k,v])=>[k,v.sort((a,b)=>(Number(Number(a.id)<0)-Number(Number(b.id)<0))||(Number(a.sort_order||0)-Number(b.sort_order||0))||(Number(a.id)-Number(b.id))).map(t=>({
     id:t.id,title:t.title,start_at:t.start_at,end_at:t.end_at,due_at:t.due_at,
     location:t.location,description:t.description??t.memo??'',
-    recurring:Number(t.id)<0,recurrence_occurrence_id:t.recurrence_occurrence_id??0,status:t.status??'pending',assignees:t.assignees??'',segment:t._segment??'single',spanDays:Number(t._spanDays||1),calendar_color:t.calendar_color??'',sort_order:Number(t.sort_order||0)
+    recurring:Number(t.id)<0,recurrence_occurrence_id:t.recurrence_occurrence_id??0,status:t.status??'pending',assignees:t.assignees??'',segment:t._segment??'single',spanDays:Number(t._spanDays||1),calendar_color:t.calendar_color??'',calendar_visible:Number(t.calendar_visible??1),sort_order:Number(t.sort_order||0)
   }))]));
   const holidays=Object.fromEntries(
     Array.from({length:Math.round((end.getTime()-start.getTime())/86400000)+1},(_,i)=>{
@@ -564,7 +571,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7);
   const next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);
   const calendarPayload=JSON.stringify({detail,shoppingDetail,itemDetail,holidays,month,prev,next,from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),today:dateOnly(),csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const script='<script src="/assets/calendar.js?v=12.85-wave66"></script>';
+  const script='<script src="/assets/calendar.js?v=12.86-wave67"></script>';
   const body='<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><div class="meta" id="monthLabel">'+month.slice(0,4)+'年'+Number(month.slice(5))+'月</div></div><div class="calendar-month-actions"><a id="prevMonth" data-month="'+prev+'" class="btn gray" href="/app/calendar.php?month='+prev+'" aria-label="前の月">‹</a> <a id="nextMonth" data-month="'+next+'" class="btn gray" href="/app/calendar.php?month='+next+'" aria-label="次の月">›</a></div></div>'+
     '<div class="card calendar-card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
     '<a class="fab calendar-fab" id="calendarFab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a><div class="modal-backdrop" id="dayModal"><div class="day-modal"><div class="modal-top"><button id="modalPrev" class="modal-day-nav" type="button" aria-label="前の日">‹</button><h2 id="modalTitle"></h2><button id="modalNext" class="modal-day-nav" type="button" aria-label="次の日">›</button><button id="modalReorder" class="btn gray small modal-reorder" type="button">並べ替え</button><button id="modalClose" class="btn gray modal-close" type="button" aria-label="閉じる">×</button></div><div class="modal-swipe-hint">左右にスワイプして日付移動</div><div class="modal-scroll"><div id="modalBody" class="modal-body"></div></div><a id="modalAdd" class="modal-add-fab" href="#" aria-label="この日にタスクを追加">＋</a></div></div><script type="application/json" id="calendarPayload">'+calendarPayload+'</script>'+script;
@@ -1323,7 +1330,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     [...new Set(bodyValues(value).flatMap(v=>String(v).split(',')).map(v=>Number(String(v).trim())).filter(n=>Number.isInteger(n)&&n>=min&&n<=max))];
   const stringValues = (value: unknown): string[] =>
     bodyValues(value).map(v=>String(v).trim()).filter(Boolean);
-  const postSuccess = (payload: Record<string, unknown>, result: 'saved'|'deleted'|'toggled'='saved') => {
+  const postSuccess = (payload: Record<string, unknown>, result: 'saved'|'deleted'|'toggled'|'restored'='saved') => {
     const accepts = (request.headers.get('accept') || '').toLowerCase();
     const response = accepts.includes('text/html') && !accepts.includes('application/json')
       ? redirect('/app/recurring.php?result='+encodeURIComponent(result))
@@ -1350,6 +1357,22 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
         if (taskId) await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE family_id=? AND target_type='task' AND target_id=? AND status IN ('pending','retry')").bind(now,m.family_id,taskId).run();
       }
       return postSuccess({},'toggled');
+    }
+
+    if (action === 'restore_excluded') {
+      const occurrenceId = Number(b.occurrence_id || 0);
+      if (!occurrenceId) throw new BadRequest('発生日が不正です。');
+      const excluded = await ctx.env.DB.prepare(`SELECT o.id occurrence_id,o.occurrence_date,o.status,r.* FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id WHERE o.id=? AND o.family_id=? AND o.status='excluded' LIMIT 1`)
+        .bind(occurrenceId,m.family_id).first<Row>();
+      if (!excluded) return json({ok:false,error:'除外済み発生日が見つかりません。'},404);
+      const occurrenceDate=String(excluded.occurrence_date||'');
+      if (occurrenceDate<String(excluded.start_date||'') || (excluded.end_date && occurrenceDate>String(excluded.end_date)) || !matchesRecurrence(excluded,occurrenceDate))
+        throw new BadRequest('現在の定期ルールではこの日を復活できません。');
+      const now=nowJst();
+      await ctx.env.DB.prepare("UPDATE recurrence_occurrences SET status='pending',exception_task_id=NULL,completed_by=NULL,completed_at=NULL,updated_at=? WHERE id=? AND family_id=? AND status='excluded'")
+        .bind(now,occurrenceId,m.family_id).run();
+      await logActivity(ctx,'RESTORED','recurrence_occurrence',occurrenceId,{occurrence_date:occurrenceDate,recurrence_rule_id:Number(excluded.id||0)});
+      return postSuccess({occurrence_id:occurrenceId},'restored');
     }
 
     if (action === 'delete') {
@@ -1564,6 +1587,14 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     ]);
     return {shopping:shops.results.map(x=>({name:String(x.name||''),quantity:String(x.quantity||'1'),category:String(x.category||''),url:String(x.url||'')})),items:items.results.map(x=>String(x.name||''))};
   }));
+  const splitLogs=await ctx.env.DB.prepare("SELECT target_id,metadata FROM activity_logs WHERE family_id=? AND action='SPLIT_FUTURE' AND target_type='recurrence_rule' ORDER BY occurred_at,id").bind(m.family_id).all<Row>();
+  const parentByRule=new Map<number,number>(),childByRule=new Map<number,number>();
+  for(const log of splitLogs.results){
+    try{const meta=JSON.parse(String(log.metadata||'{}'));const oldId=Number(log.target_id||0),newId=Number(meta.new_rule_id||0);if(oldId&&newId){childByRule.set(oldId,newId);parentByRule.set(newId,oldId);}}catch{}
+  }
+  const titleByRule=new Map(rows.results.map(r=>[Number(r.id),String(r.title||r.name||'定期タスク')]));
+  const excludedRaw=await ctx.env.DB.prepare(`SELECT o.id occurrence_id,o.occurrence_date,o.status,r.*,t.title FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE o.family_id=? AND o.status='excluded' AND r.start_date<=o.occurrence_date AND (r.end_date IS NULL OR r.end_date>=o.occurrence_date) ORDER BY o.occurrence_date DESC,o.id DESC LIMIT 100`).bind(m.family_id).all<Row>();
+  const excludedRows=excludedRaw.results.filter(x=>matchesRecurrence(x,String(x.occurrence_date||'')));
   const csrf = esc(ctx.session.csrfToken || '');
   const ruleJson = rows.results.map((r,ri) => JSON.stringify({
     id:Number(r.id), title:String(r.title||r.name||''), description:String(r.description||''), recurrence_type:String(r.recurrence_type||'DAILY'), interval_value:Number(r.interval_value||1),
@@ -1571,72 +1602,15 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     completion_mode:String(r.completion_mode||'ANY'), location:String(r.location||''), calendar_color:String(r.calendar_color||'#7c3aed'), assignees:String(r.assignee_ids||'').split(',').filter(Boolean).map(Number), all_day:Number(r.all_day??1)===1, calendar_visible:Number(r.calendar_visible??1)===1,
     start_time:String(r.start_at||'').slice(11,16), end_time:String(r.end_at||'').slice(11,16), shopping:recurringChildren[ri]?.shopping||[], items:recurringChildren[ri]?.items||[]
   })).map(x=>x.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;'));
-  const rowsHtml = rows.results.map((r,i)=>`<div class="row rec-rule-row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.interval_value)} ・ ${esc(r.start_date)}${r.end_date?' ～ '+esc(r.end_date):''} ・ ${Number(r.active)?'有効':'停止'}</div><div class="rec-row-actions"><button type="button" class="btn gray rec-edit" data-rule="${ruleJson[i]}">編集</button><form method="post" action="/app/recurring.php" class="rec-inline-form rec-toggle-form"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="active" value="${Number(r.active)?0:1}"><button type="submit" class="btn gray rec-toggle" data-id="${r.id}" data-active="${Number(r.active)?1:0}">${Number(r.active)?'停止':'再開'}</button></form><form method="post" action="/app/recurring.php" class="rec-inline-form rec-delete-form"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="${r.id}"><button type="submit" class="btn danger rec-delete" data-id="${r.id}">削除</button></form></div></div>`).join('');
+  const rowsHtml = rows.results.map((r,i)=>{const rid=Number(r.id),parent=parentByRule.get(rid),child=childByRule.get(rid);const lineage=[parent?`<span class="rec-lineage-badge">← 分割元: ${esc(titleByRule.get(parent)||'#'+parent)}</span>`:'',child?`<span class="rec-lineage-badge">次シリーズ: ${esc(titleByRule.get(child)||'#'+child)} →</span>`:''].filter(Boolean).join('');return `<div class="row rec-rule-row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.interval_value)} ・ ${esc(r.start_date)}${r.end_date?' ～ '+esc(r.end_date):''} ・ ${Number(r.active)?'有効':'停止'}</div>${lineage?`<div class="rec-lineage">${lineage}</div>`:''}<div class="rec-row-actions"><button type="button" class="btn gray rec-edit" data-rule="${ruleJson[i]}">編集</button><form method="post" action="/app/recurring.php" class="rec-inline-form rec-toggle-form"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="active" value="${Number(r.active)?0:1}"><button type="submit" class="btn gray rec-toggle" data-id="${r.id}" data-active="${Number(r.active)?1:0}">${Number(r.active)?'停止':'再開'}</button></form><form method="post" action="/app/recurring.php" class="rec-inline-form rec-delete-form"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="${r.id}"><button type="submit" class="btn danger rec-delete" data-id="${r.id}">削除</button></form></div></div>`;}).join('');
+  const excludedHtml=excludedRows.map(x=>`<div class="row rec-excluded-row"><div><strong>${esc(x.title||x.name||'定期タスク')}</strong><div class="meta">${esc(String(x.occurrence_date||''))} ・ この日だけ除外</div></div><form method="post" action="/app/recurring.php" class="rec-inline-form"><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="restore_excluded"><input type="hidden" name="occurrence_id" value="${x.occurrence_id}"><button type="submit" class="btn gray small">復活する</button></form></div>`).join('');
+  const recurringConfig=JSON.stringify({csrf:ctx.session.csrfToken||'',today:dateOnly()}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
   const body = `<div class="page-head"><h1>🔁 定期タスク</h1><a class="btn" href="/app/settings.php">管理へ戻る</a></div>
-  <div class="card"><h2 id="recHeading">定期タスクを作成</h2>${(()=>{const result=new URL(request.url).searchParams.get('result');return result==='deleted'?'<div class="notice success">定期タスクを削除しました。</div>':result==='toggled'?'<div class="notice success">定期タスクの状態を更新しました。</div>':result==='saved'?'<div class="notice success">定期タスクを保存しました。</div>':''})()}<form id="recForm" method="post" action="/app/recurring.php" novalidate><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="create"><input type="hidden" name="id" value=""><div id="recEditScope" class="rec-edit-scope" style="display:none"><label>変更範囲</label><select name="edit_scope" id="recEditScopeSelect"><option value="all">この定期タスク全体</option><option value="future">指定日以降だけ変更</option></select><div id="recEffectiveDateWrap" style="display:none"><label>変更を開始する日</label><input type="date" name="effective_date" value="${dateOnly()}"><p class="small">この日より前の履歴・発生日は現在の定期タスクに残します。</p></div></div><label>タイトル</label><input name="title" maxlength="255" required><label>説明</label><textarea name="description"></textarea><label>種類</label><select name="recurrence_type"><option value="DAILY">毎日</option><option value="INTERVAL_DAYS">n日ごと</option><option value="WEEKLY">毎週</option><option value="INTERVAL_WEEKS">n週ごと</option><option value="MONTHLY_DAY">毎月指定日</option><option value="MONTHLY_WEEKDAY">毎月第n曜日</option><option value="MONTHLY_BUSINESS_DAY">毎月第n営業日</option></select><div class="rec-conditional" data-rec-show="INTERVAL_DAYS,INTERVAL_WEEKS" style="display:none"><label>間隔</label><input type="number" name="interval_value" value="1" min="1" max="365"><p class="small">「n日ごと」「n週ごと」のときだけ使用します。</p></div><label>開始日</label><input type="date" name="start_date" value="${dateOnly()}" required><label>終了日（任意）</label><input type="date" name="end_date"><div class="rec-conditional" data-rec-show="WEEKLY,INTERVAL_WEEKS,MONTHLY_WEEKDAY" style="display:none"><label>曜日</label><div>${['日','月','火','水','木','金','土'].map((x,i)=>`<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="weekdays" value="${i}">${x}</label>`).join('')}</div></div><div class="rec-conditional" data-rec-show="MONTHLY_WEEKDAY" style="display:none"><label>第n曜日（複数選択可）</label><div class="nth-week-list">${[1,2,3,4,5].map(n=>`<label class="checkrow inline-check"><input type="checkbox" name="week_numbers" value="${n}">第${n}</label>`).join('')}</div></div><div class="rec-conditional" data-rec-show="MONTHLY_DAY" style="display:none"><label>毎月指定日</label><input name="monthdays" placeholder="1,15,25"></div><div class="rec-conditional" data-rec-show="MONTHLY_BUSINESS_DAY" style="display:none"><label>第n営業日</label><input type="number" name="business_day_ordinal" value="1" min="1" max="23"></div><label class="checkrow"><input type="checkbox" name="all_day" checked> 終日</label><div class="rec-time-fields compact-time-fields" style="display:none"><div><label>開始時刻</label><input type="time" name="start_time"></div><div><label>終了時刻</label><input type="time" name="end_time"></div></div><label>場所</label><input name="location"><label>担当者</label><div class="assignee-list">${(await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>()).results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div><label><input type="checkbox" name="calendar_visible" checked> カレンダーに表示</label><div id="recCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div><div class="sub-card"><button type="button" class="section-button" id="recShopToggle">＋ この定期タスクに買い物を追加</button><div id="recShopBox" style="display:none"><label>カテゴリー</label><input name="shopping_category" placeholder="例：食品"><div id="recShopRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="recAddShop">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="recItemToggle">＋ この定期タスクに持ち物を追加</button><div id="recItemBox" style="display:none"><div id="recItemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="recAddItem">＋ 持ち物を追加</button></div></div><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">全員が完了</option></select><div id="recStatus" class="small rec-status" aria-live="polite">登録機能を準備しています…</div><noscript><p class="small">JavaScriptが無効でも通常送信で登録できます。</p></noscript><div style="display:flex;gap:8px"><button type="submit" id="recSubmit">定期タスクを作成</button><button type="button" id="recCancel" class="btn gray" style="display:none">編集をキャンセル</button></div></form></div>
+  <div class="card"><h2 id="recHeading">定期タスクを作成</h2>${(()=>{const result=new URL(request.url).searchParams.get('result');return result==='deleted'?'<div class="notice success">定期タスクを削除しました。</div>':result==='toggled'?'<div class="notice success">定期タスクの状態を更新しました。</div>':result==='saved'?'<div class="notice success">定期タスクを保存しました。</div>':result==='restored'?'<div class="notice success">除外していた発生日を復活しました。</div>':''})()}<form id="recForm" method="post" action="/app/recurring.php" novalidate><input type="hidden" name="csrf" value="${csrf}"><input type="hidden" name="action" value="create"><input type="hidden" name="id" value=""><div id="recEditScope" class="rec-edit-scope" style="display:none"><label>変更範囲</label><select name="edit_scope" id="recEditScopeSelect"><option value="all">この定期タスク全体</option><option value="future">指定日以降だけ変更</option></select><div id="recEffectiveDateWrap" style="display:none"><label>変更を開始する日</label><input type="date" name="effective_date" value="${dateOnly()}"><p class="small">この日より前の履歴・発生日は現在の定期タスクに残します。</p></div></div><label>タイトル</label><input name="title" maxlength="255" required><label>説明</label><textarea name="description"></textarea><label>種類</label><select name="recurrence_type"><option value="DAILY">毎日</option><option value="INTERVAL_DAYS">n日ごと</option><option value="WEEKLY">毎週</option><option value="INTERVAL_WEEKS">n週ごと</option><option value="MONTHLY_DAY">毎月指定日</option><option value="MONTHLY_WEEKDAY">毎月第n曜日</option><option value="MONTHLY_BUSINESS_DAY">毎月第n営業日</option></select><div class="rec-conditional" data-rec-show="INTERVAL_DAYS,INTERVAL_WEEKS" style="display:none"><label>間隔</label><input type="number" name="interval_value" value="1" min="1" max="365"><p class="small">「n日ごと」「n週ごと」のときだけ使用します。</p></div><label>開始日</label><input type="date" name="start_date" value="${dateOnly()}" required><label>終了日（任意）</label><input type="date" name="end_date"><div class="rec-conditional" data-rec-show="WEEKLY,INTERVAL_WEEKS,MONTHLY_WEEKDAY" style="display:none"><label>曜日</label><div>${['日','月','火','水','木','金','土'].map((x,i)=>`<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="weekdays" value="${i}">${x}</label>`).join('')}</div></div><div class="rec-conditional" data-rec-show="MONTHLY_WEEKDAY" style="display:none"><label>第n曜日（複数選択可）</label><div class="nth-week-list">${[1,2,3,4,5].map(n=>`<label class="checkrow inline-check"><input type="checkbox" name="week_numbers" value="${n}">第${n}</label>`).join('')}</div></div><div class="rec-conditional" data-rec-show="MONTHLY_DAY" style="display:none"><label>毎月指定日</label><input name="monthdays" placeholder="1,15,25"></div><div class="rec-conditional" data-rec-show="MONTHLY_BUSINESS_DAY" style="display:none"><label>第n営業日</label><input type="number" name="business_day_ordinal" value="1" min="1" max="23"></div><label class="checkrow"><input type="checkbox" name="all_day" checked> 終日</label><div class="rec-time-fields compact-time-fields" style="display:none"><div><label>開始時刻</label><input type="time" name="start_time"></div><div><label>終了時刻</label><input type="time" name="end_time"></div></div><label>場所</label><input name="location"><label>担当者</label><div class="assignee-list">${(await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>()).results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div><label><input type="checkbox" name="calendar_visible" checked> カレンダーに表示</label><div id="recCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div><div class="sub-card"><button type="button" class="section-button" id="recShopToggle">＋ この定期タスクに買い物を追加</button><div id="recShopBox" style="display:none"><label>カテゴリー</label><input name="shopping_category" placeholder="例：食品"><div id="recShopRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="recAddShop">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="recItemToggle">＋ この定期タスクに持ち物を追加</button><div id="recItemBox" style="display:none"><div id="recItemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="recAddItem">＋ 持ち物を追加</button></div></div><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">全員が完了</option></select><div id="recStatus" class="small rec-status" aria-live="polite">登録機能を準備しています…</div><noscript><p class="small">JavaScriptが無効でも通常送信で登録できます。</p></noscript><div style="display:flex;gap:8px"><button type="submit" id="recSubmit">定期タスクを作成</button><button type="button" id="recCancel" class="btn gray" style="display:none">編集をキャンセル</button></div></form></div>
   <div class="card"><h2>登録済み</h2>${rowsHtml||'<p>ありません。</p>'}</div>
-  <script>
-  const f=document.getElementById('recForm'),csrf=${JSON.stringify(ctx.session.csrfToken||'')},heading=document.getElementById('recHeading'),submit=document.getElementById('recSubmit'),cancel=document.getElementById('recCancel'),status=document.getElementById('recStatus');
-  if(status)status.textContent='';
-  const q=n=>f.querySelector('[name="'+n+'"]'),setVal=(name,v)=>{const e=q(name);if(e)e.value=v??''};
-  function refreshRecurringFields(){
-    const type=String(q('recurrence_type')?.value||'DAILY');
-    document.querySelectorAll('[data-rec-show]').forEach(el=>{const allowed=String(el.dataset.recShow||'').split(',');el.style.display=allowed.includes(type)?'block':'none';});
-    const allDay=Boolean(q('all_day')?.checked);document.querySelectorAll('.rec-time-fields').forEach(el=>el.style.display=allDay?'none':'grid');
-    const cal=Boolean(q('calendar_visible')?.checked);const color=document.getElementById('recCalendarColorWrap');if(color)color.style.display=cal?'block':'none';
-  }
-  function resetChildren(){const sr=document.getElementById('recShopRows'),ir=document.getElementById('recItemRows');sr.innerHTML='<div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div>';ir.innerHTML='<div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div>';document.getElementById('recShopBox').style.display='none';document.getElementById('recItemBox').style.display='none';}
-  const editScopeWrap=document.getElementById('recEditScope'),editScope=document.getElementById('recEditScopeSelect'),effectiveDateWrap=document.getElementById('recEffectiveDateWrap');
-  function refreshEditScope(){if(effectiveDateWrap)effectiveDateWrap.style.display=editScope?.value==='future'?'block':'none';}
-  editScope?.addEventListener('change',refreshEditScope);
-  function resetForm(){f.reset();setVal('action','create');setVal('id','');setVal('start_date',${JSON.stringify(dateOnly())});setVal('interval_value',1);setVal('business_day_ordinal',1);setVal('effective_date',${JSON.stringify(dateOnly())});if(editScope)editScope.value='all';if(editScopeWrap)editScopeWrap.style.display='none';refreshEditScope();f.querySelectorAll('[name=week_numbers]').forEach(x=>x.checked=false);heading.textContent='定期タスクを作成';submit.textContent='定期タスクを作成';cancel.style.display='none';status.textContent='';f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=false);resetChildren();refreshRecurringFields();}
-  document.getElementById('recShopToggle').onclick=()=>{const b=document.getElementById('recShopBox');b.style.display=b.style.display==='none'?'block':'none'};
-  document.getElementById('recItemToggle').onclick=()=>{const b=document.getElementById('recItemBox');b.style.display=b.style.display==='none'?'block':'none'};
-  document.getElementById('recAddShop').onclick=()=>{const d=document.createElement('div');d.className='product-row';d.innerHTML='<input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）">';document.getElementById('recShopRows').appendChild(d)};
-  document.getElementById('recAddItem').onclick=()=>{const d=document.createElement('div');d.className='item-entry';d.innerHTML='<input name="item_name[]" placeholder="持ち物名">';document.getElementById('recItemRows').appendChild(d)};
-  q('recurrence_type')?.addEventListener('change',refreshRecurringFields);q('all_day')?.addEventListener('change',refreshRecurringFields);q('calendar_visible')?.addEventListener('change',refreshRecurringFields);refreshRecurringFields();
-  submit.addEventListener('click',()=>{if(status&&!submit.disabled)status.textContent='入力内容を確認しています…';});
-  f.addEventListener('submit',async e=>{
-    // JSが利用できない場合はHTML form POSTへそのままフォールバックする。
-    if(typeof fetch!=='function'||typeof FormData==='undefined')return;
-    e.preventDefault();
-    const type=String(q('recurrence_type')?.value||'DAILY');
-    const title=String(q('title')?.value||'').trim();
-    const startDate=String(q('start_date')?.value||'').trim();
-    if(!title){status.textContent='';alert('タイトルを入力してください。');q('title')?.focus();return}
-    if(!startDate){status.textContent='';alert('開始日を入力してください。');q('start_date')?.focus();return}
-    const weekdays=[...f.querySelectorAll('[name=weekdays]:checked')].map(x=>Number(x.value));
-    const weekNumbers=[...f.querySelectorAll('[name=week_numbers]:checked')].map(x=>Number(x.value));
-    const monthdays=String(q('monthdays')?.value||'').split(',').map(x=>Number(x.trim())).filter(x=>Number.isInteger(x)&&x>=1&&x<=31);
-    if((type==='WEEKLY'||type==='INTERVAL_WEEKS'||type==='MONTHLY_WEEKDAY')&&!weekdays.length){status.textContent='';alert('曜日を1つ以上選択してください。');return}
-    if(type==='MONTHLY_WEEKDAY'&&!weekNumbers.length){status.textContent='';alert('第1〜第5週を1つ以上選択してください。');return}
-    if(type==='MONTHLY_DAY'&&!monthdays.length){status.textContent='';alert('毎月指定日を1つ以上入力してください。');return}
-    const b=Object.fromEntries(new FormData(f));
-    b.csrf=csrf;b.weekdays=weekdays;b.week_numbers=weekNumbers;b.monthdays=monthdays;
-    b.assignees=[...f.querySelectorAll('[name=assignees]:checked')].map(x=>Number(x.value));
-    const shopNames=[...f.querySelectorAll('[name="shopping_name[]"]')],shopQty=[...f.querySelectorAll('[name="shopping_quantity[]"]')],shopUrl=[...f.querySelectorAll('[name="shopping_url[]"]')];
-    b.shopping=shopNames.map((x,i)=>({name:x.value.trim(),quantity:shopQty[i]?.value.trim()||'1',url:shopUrl[i]?.value.trim()||'',category:q('shopping_category')?.value||''})).filter(x=>x.name);
-    b.items=[...f.querySelectorAll('[name="item_name[]"]')].map(x=>x.value.trim()).filter(Boolean);
-    b.shopping_category=q('shopping_category')?.value||'';b.all_day=Boolean(q('all_day')?.checked);b.calendar_visible=Boolean(q('calendar_visible')?.checked);b.calendar_color=q('calendar_color')?.value||'#7c3aed';
-    submit.disabled=true;status.textContent='Cloudflareへ送信しています…';
-    try{
-      const controller=typeof AbortController!=='undefined'?new AbortController():null;
-      const timer=controller?setTimeout(()=>controller.abort(),15000):null;
-      const r=await fetch('/app/recurring.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','accept':'application/json','x-familytodo-action':'recurring-save'},body:JSON.stringify(b),signal:controller?.signal});
-      if(timer)clearTimeout(timer);
-      const d=await r.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした（HTTP '+r.status+'）'}));
-      if(!r.ok||!d.ok)throw new Error(d.error||'保存に失敗しました');
-      status.textContent='保存しました。画面を更新します…';location.href='/app/recurring.php?saved=1';
-    }catch(err){
-      status.textContent='';
-      if(err?.name==='AbortError')alert('通信が15秒以内に完了しませんでした。通信状態を確認して再度お試しください。');
-      else alert(err?.message||String(err));
-    }finally{submit.disabled=false}
-  });
-  document.querySelectorAll('.rec-edit').forEach(b=>b.onclick=()=>{const d=JSON.parse(b.dataset.rule);setVal('action','update');setVal('id',d.id);if(editScopeWrap)editScopeWrap.style.display='block';if(editScope)editScope.value='all';setVal('effective_date',${JSON.stringify(dateOnly())});refreshEditScope();setVal('title',d.title);setVal('description',d.description);setVal('recurrence_type',d.recurrence_type);setVal('interval_value',d.interval_value);setVal('start_date',d.start_date);setVal('end_date',d.end_date);setVal('business_day_ordinal',d.business_day_ordinal);f.querySelectorAll('[name=week_numbers]').forEach(x=>x.checked=d.week_numbers.includes(Number(x.value)));setVal('monthdays',d.monthdays.join(','));setVal('start_time',d.start_time);setVal('end_time',d.end_time);setVal('location',d.location);setVal('completion_mode',d.completion_mode);setVal('calendar_color',d.calendar_color);f.querySelectorAll('[name=assignees]').forEach(x=>x.checked=d.assignees.includes(Number(x.value)));q('all_day').checked=d.all_day;q('calendar_visible').checked=d.calendar_visible;f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=d.weekdays.includes(Number(x.value)));resetChildren();const sr=document.getElementById('recShopRows'),ir=document.getElementById('recItemRows');if(Array.isArray(d.shopping)&&d.shopping.length){sr.innerHTML='';d.shopping.forEach(v=>{const row=document.createElement('div');row.className='product-row';const name=document.createElement('input');name.name='shopping_name[]';name.placeholder='商品名';name.value=v.name||'';const qty=document.createElement('input');qty.name='shopping_quantity[]';qty.placeholder='数量';qty.value=v.quantity||'1';const url=document.createElement('input');url.name='shopping_url[]';url.type='url';url.placeholder='URL（任意）';url.value=v.url||'';row.append(name,qty,url);sr.appendChild(row)});setVal('shopping_category',d.shopping[0]?.category||'');document.getElementById('recShopBox').style.display='block';}if(Array.isArray(d.items)&&d.items.length){ir.innerHTML='';d.items.forEach(v=>{const row=document.createElement('div');row.className='item-entry';const name=document.createElement('input');name.name='item_name[]';name.placeholder='持ち物名';name.value=v||'';row.appendChild(name);ir.appendChild(row)});document.getElementById('recItemBox').style.display='block';}heading.textContent='定期タスクを編集';submit.textContent='変更を保存';cancel.style.display='inline-block';status.textContent='';refreshRecurringFields();window.scrollTo({top:0,behavior:'smooth'});});
-  cancel.onclick=resetForm;
-  document.querySelectorAll('.rec-toggle-form').forEach(form=>form.addEventListener('submit',async e=>{if(typeof fetch!=='function')return;e.preventDefault();const b=form.querySelector('button');b.disabled=true;try{const fd=new FormData(form);const payload=Object.fromEntries(fd);payload.active=String(payload.active)==='1';const r=await fetch('/app/recurring.php',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした'}));if(!r.ok||!d.ok)throw new Error(d.error||'更新に失敗しました');location.reload();}catch(err){alert(err?.message||String(err));b.disabled=false;}}));
-  document.querySelectorAll('.rec-delete-form').forEach(form=>form.addEventListener('submit',async e=>{if(!confirm('この定期タスクを削除しますか？'+String.fromCharCode(10)+'過去の発生日記録も削除されます。')){e.preventDefault();return;}if(typeof fetch!=='function')return;e.preventDefault();const b=form.querySelector('button');b.disabled=true;try{const payload=Object.fromEntries(new FormData(form));const r=await fetch('/app/recurring.php',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした'}));if(!r.ok||!d.ok)throw new Error(d.error||'削除に失敗しました');location.reload();}catch(err){alert(err?.message||String(err));b.disabled=false;}}));
-  </script>`;
+  ${excludedHtml?`<div class="card"><h2>除外した発生日</h2><p class="small">「この日だけ除外」の日を後から定期予定へ戻せます。</p>${excludedHtml}</div>`:''}
+  <script type="application/json" id="recurringConfig">${recurringConfig}</script>
+  <script src="/assets/recurring.js?v=12.86-wave67"></script>
+`;
   return html(layout('定期タスク', body, '/app/settings.php'));
 }
