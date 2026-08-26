@@ -404,11 +404,16 @@ async function webhook(request: Request, env: Env): Promise<Response> {
 
 async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   const now=nowJst();
-  // Disable pending work for members who opted out or were deactivated.
-  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0)").bind(now).run();
-  // Remove the operational tail of notifications whose target was completed or deleted.
-  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='task' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id) OR EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND t.status='completed'))").bind(now).run();
+  // Disable pending work for members who opted out/deactivated, or whose family no longer matches the notification.
+  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND (member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0) OR NOT EXISTS (SELECT 1 FROM members m WHERE m.id=notifications.member_id AND m.family_id=notifications.family_id))").bind(now).run();
+  // Remove operational reminders whose task is gone/completed. Recurring-template reminders are also cancelled when the series is stopped/deleted.
+  await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='task' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id) OR EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND t.status='completed') OR EXISTS (SELECT 1 FROM tasks t LEFT JOIN recurrence_rules r ON r.task_id=t.id AND r.family_id=t.family_id WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND lower(COALESCE(t.task_kind,'')) IN ('recurring','recurrence_template') AND (r.id IS NULL OR r.active=0 OR r.deleted_at IS NOT NULL)))").bind(now).run();
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='message' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM messages x WHERE x.id=notifications.target_id AND x.family_id=notifications.family_id))").bind(now).run();
+
+  // The partial unique index should prevent exact duplicates; keep a runtime audit so legacy/import anomalies are visible before sending.
+  const dup=await env.DB.prepare("SELECT COUNT(*) c FROM (SELECT member_id,target_type,target_id,notify_at,COUNT(*) n FROM notifications WHERE status IN ('pending','retry') GROUP BY member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)").first<any>();
+  const orphan=await env.DB.prepare("SELECT COUNT(*) c FROM notifications n WHERE n.status IN ('pending','retry') AND ((n.target_type='task' AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=n.target_id AND t.family_id=n.family_id)) OR (n.target_type='message' AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=n.target_id AND m.family_id=n.family_id)))").first<any>();
+  if(Number(dup?.c||0)>0||Number(orphan?.c||0)>0) console.warn('[Family TODO LINE] notification lifecycle audit',{duplicate_groups:Number(dup?.c||0),orphan_pending:Number(orphan?.c||0)});
 }
 
 async function processNotifications(env: Env): Promise<void> {
@@ -445,14 +450,37 @@ async function taskDelete(request:Request,ctx:any):Promise<Response>{
   const body=request.method==='POST'?await request.clone().json().catch(()=>({})):{};
   const csrf=request.headers.get('x-csrf')||String(body.csrf||'');
   if(csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました。'},403);
-  const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first();
+  const task=await ctx.env.DB.prepare('SELECT created_by,task_kind FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first();
   if(!task)return json({ok:false,error:'対象が見つかりません。'},404);
   const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);
+  const exceptionOrigin=await ctx.env.DB.prepare('SELECT o.id,o.recurrence_rule_id,o.occurrence_date FROM recurrence_occurrences o WHERE o.exception_task_id=? AND o.family_id=? LIMIT 1').bind(id,m.family_id).first();
+  const exceptionMode=String(new URL(request.url).searchParams.get('exception_mode')||'');
+  if(exceptionOrigin&&!['restore','exclude'].includes(exceptionMode))return json({ok:false,error:'このタスクは定期タスクの例外です。削除後の扱いを選択してください。'},400);
+  let restoredStatus='pending',restoredBy:null|number=null,restoredAt:null|string=null;
+  if(exceptionOrigin&&exceptionMode==='restore'){
+    const rr=await ctx.env.DB.prepare('SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.id=? AND r.family_id=? LIMIT 1').bind(Number(exceptionOrigin.recurrence_rule_id),m.family_id).first();
+    const assigned=Number((await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(Number(rr?.task_id||0)).first())?.c||0);
+    const completed=Number((await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=? AND ta.task_id=?').bind(Number(exceptionOrigin.id),Number(rr?.task_id||0)).first())?.c||0);
+    const last=await ctx.env.DB.prepare('SELECT member_id,completed_at FROM recurrence_occurrence_completions WHERE occurrence_id=? ORDER BY completed_at DESC LIMIT 1').bind(Number(exceptionOrigin.id)).first();
+    const mode=String(rr?.completion_mode||'ANY').toUpperCase();
+    const complete=assigned>0&&(mode==='ALL'?completed>=assigned:completed>0);
+    if(complete){restoredStatus='completed';restoredBy=Number(last?.member_id||0)||null;restoredAt=String(last?.completed_at||'')||null;}
+  }
   const childShopping=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const childItems=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const recurrenceRules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const statements:any[]=[];
-  statements.push(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id));
+  const deleteNow=nowJst();
+  statements.push(ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(deleteNow,id,m.family_id));
+  if(exceptionOrigin&&exceptionMode==='exclude'){
+    statements.push(
+      ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'recurrence_occurrence', occurrence_id, member_id, 'COMPLETED', completed_at, 'recurrence_occurrence_excluded', occurrence_id, ? FROM recurrence_occurrence_completions WHERE occurrence_id=?").bind(m.family_id,deleteNow,Number(exceptionOrigin.id)),
+      ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=?').bind(Number(exceptionOrigin.id)),
+      ctx.env.DB.prepare("UPDATE recurrence_occurrences SET exception_task_id=NULL,status='excluded',completed_by=NULL,completed_at=NULL,updated_at=? WHERE id=? AND family_id=?").bind(deleteNow,Number(exceptionOrigin.id),m.family_id)
+    );
+  }else if(exceptionOrigin&&exceptionMode==='restore'){
+    statements.push(ctx.env.DB.prepare('UPDATE recurrence_occurrences SET exception_task_id=NULL,status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(restoredStatus,restoredBy,restoredAt,deleteNow,Number(exceptionOrigin.id),m.family_id));
+  }
   for(const r of recurrenceRules.results){
     statements.push(
       ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'recurrence_occurrence', c.occurrence_id, c.member_id, 'COMPLETED', c.completed_at, 'recurrence_occurrence', c.occurrence_id, ? FROM recurrence_occurrence_completions c JOIN recurrence_occurrences o ON o.id=c.occurrence_id AND o.family_id=? WHERE o.recurrence_rule_id=?").bind(m.family_id,nowJst(),m.family_id,Number(r.id)),
