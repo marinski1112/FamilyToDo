@@ -54,13 +54,14 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
   },
-  "cloudflare_wave": "Wave53",
+  "cloudflare_wave": "Wave54",
   "notes": [
     "Events/event_members remain legacy schema artifacts; application behavior and migrated production D1 are task-only after Wave33.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
     "Wave43 preserves deleted completion history in deleted_completion_history.",
     "Wave44 closes remaining alternate task-delete paths, recurrence-delete paths, notification hard-delete paths, and deleted-member reactivation paths.",
     "Wave52 removes stale event_id columns and REFERENCES events(id) foreign keys from live D1 tables via migration 0015; application remains task-only.",
-    "Wave53 refreshes CSS cache-busting, pins calendar date numbers to the top-left on mobile, compacts shopping list UI with collapsed filters/FAB/detail modal, and adds LINE friend-add guidance to family invitations."
+    "Wave53 refreshes CSS cache-busting, pins calendar date numbers to the top-left on mobile, compacts shopping list UI with collapsed filters/FAB/detail modal, and adds LINE friend-add guidance to family invitations.",
+    "Wave54 auto-discovers LINE Official Account Basic/Premium ID via Messaging API /v2/bot/info when creating invitations, shares the friend-add URL with the invite, hardens recurring-task submission/UI, and upgrades message-to-task conversion to support existing-task attachment or full new-task configuration."
   ]
 }
