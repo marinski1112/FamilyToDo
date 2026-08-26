@@ -1,5 +1,5 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
 import { openSession, getSessionCookie } from './session';
 
 const text = (r: Response) => r;
@@ -74,6 +74,7 @@ export default {
       if(url.pathname==='/app/message_new.php') return messageNew(context);
       if(url.pathname==='/app/shopping_new.php') return shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
       if(url.pathname==='/app/settings_content.php') return settingsContent(context);
+      if(url.pathname==='/app/settings_diagnostics.php') return settingsDiagnostics(context);
       if(url.pathname==='/app/settings_members.php') return settingsMembers(request,context);
       if(url.pathname==='/app/settings_notifications.php') return settingsNotifications(request,context);
       if(url.pathname==='/app/settings_recurring.php') return recurring(request,context);
