@@ -54,7 +54,7 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
   },
-  "cloudflare_wave": "Wave60",
+  "cloudflare_wave": "Wave61",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -67,6 +67,7 @@
     "Wave57 makes recurring-task fields reliably conditional in LINE WebView, gives delete/toggle action-specific notices, fixes timed task date/time layout and multi-day end-time normalization, and applies the same time/calendar visibility rules to task edit and message-to-task forms.",
     "Wave58 fixes inline-JavaScript newline parsing failures that prevented recurring conditional fields and family invite creation in LINE WebView, hardens invite creation feedback/error handling, and refreshes CSS cache-busting.",
     "Wave59 restores XREA-style calendar interaction parity: in-place month navigation/swipe, day-detail left/right navigation across grid boundaries, return-to-selected-date after calendar task creation, clearer day detail completion state, and direct recurrence occurrence IDs for checkbox updates.",
-    "Wave60 fixes rendered calendar inline-JavaScript parsing caused by template-literal newline/regex escapes, adds direct touch-event fallback for LINE iOS WebView, and records a prioritized XREA parity/UI/lifecycle residual inventory."
+    "Wave60 fixes rendered calendar inline-JavaScript parsing caused by template-literal newline/regex escapes, adds direct touch-event fallback for LINE iOS WebView, and records a prioritized XREA parity/UI/lifecycle residual inventory.",
+    "Wave61 restores XREA-style stable multi-day task bands with global lanes, expands day-detail swipe to the whole sheet, adds swipe-follow preview and smoother month/day transitions, and keeps LINE iOS touch fallbacks."
   ]
 }
