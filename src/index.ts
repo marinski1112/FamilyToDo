@@ -257,6 +257,8 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
         ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(sid),
         ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'shopping', shopping_item_id, member_id, action, occurred_at, 'shopping_item', shopping_item_id, ? FROM shopping_completion_history WHERE shopping_item_id=?").bind(m.family_id,now,sid),
         ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(sid),
+        ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'shopping', shopping_item_id, member_id, action, completed_at, 'shopping_legacy_completion', shopping_item_id, ? FROM shopping_completions WHERE shopping_item_id=?").bind(m.family_id,now,sid),
+        ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=?').bind(sid),
         ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(sid,m.family_id)
       );
     }
@@ -414,15 +416,26 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   await env.DB.prepare("UPDATE messages SET converted_to_task_id=NULL,updated_at=? WHERE converted_to_task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=messages.converted_to_task_id AND t.family_id=messages.family_id)").bind(now).run();
   await env.DB.prepare("UPDATE messages SET converted_to_shopping_id=NULL,updated_at=? WHERE converted_to_shopping_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM shopping_items s WHERE s.id=messages.converted_to_shopping_id AND s.family_id=messages.family_id)").bind(now).run();
 
+  // Standalone shopping/items are valid, so detach only impossible cross-family/deleted task links instead of deleting the child record.
+  await env.DB.prepare("UPDATE shopping_items SET task_id=NULL,updated_at=? WHERE task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=shopping_items.task_id AND t.family_id=shopping_items.family_id)").bind(now).run();
+  await env.DB.prepare("UPDATE items SET task_id=NULL,updated_at=? WHERE task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=items.task_id AND t.family_id=items.family_id)").bind(now).run();
+
   // If legacy/import data somehow bypassed the partial unique index, keep the oldest active reminder and cancel the rest before send.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND EXISTS (SELECT 1 FROM notifications keep WHERE keep.id<notifications.id AND keep.family_id=notifications.family_id AND keep.member_id=notifications.member_id AND keep.target_type=notifications.target_type AND COALESCE(keep.target_id,-1)=COALESCE(notifications.target_id,-1) AND keep.notify_at=notifications.notify_at AND keep.status IN ('pending','retry'))").bind(now).run();
 
-  const dup=await env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,member_id,target_type,target_id,notify_at,COUNT(*) n FROM notifications WHERE status IN ('pending','retry') GROUP BY family_id,member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)").first<any>();
-  const orphan=await env.DB.prepare("SELECT COUNT(*) c FROM notifications n WHERE n.status IN ('pending','retry') AND ((n.target_type='task' AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=n.target_id AND t.family_id=n.family_id)) OR (n.target_type='message' AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=n.target_id AND m.family_id=n.family_id)))").first<any>();
-  const orphanExceptions=await env.DB.prepare("SELECT COUNT(*) c FROM recurrence_occurrences o WHERE o.exception_task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.exception_task_id AND t.family_id=o.family_id)").first<any>();
-  const orphanRules=await env.DB.prepare("SELECT COUNT(*) c FROM recurrence_rules r WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=r.task_id AND t.family_id=r.family_id)").first<any>();
-  const staleMessageLinks=await env.DB.prepare("SELECT COUNT(*) c FROM messages m WHERE (m.converted_to_task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=m.converted_to_task_id AND t.family_id=m.family_id)) OR (m.converted_to_shopping_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=m.converted_to_shopping_id AND s.family_id=m.family_id))").first<any>();
-  if(Number(dup?.c||0)>0||Number(orphan?.c||0)>0||Number(orphanExceptions?.c||0)>0||Number(orphanRules?.c||0)>0||Number(staleMessageLinks?.c||0)>0) console.warn('[Family TODO LINE] lifecycle audit',{duplicate_groups:Number(dup?.c||0),orphan_pending:Number(orphan?.c||0),orphan_exception_links:Number(orphanExceptions?.c||0),orphan_recurrence_rules:Number(orphanRules?.c||0),stale_message_conversion_links:Number(staleMessageLinks?.c||0)});
+  const [dup,orphan,orphanExceptions,orphanRules,staleMessageLinks,staleTaskChildren,orphanOperationalRows,archiveDuplicates,archiveMemberMismatch]=await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,member_id,target_type,target_id,notify_at,COUNT(*) n FROM notifications WHERE status IN ('pending','retry') GROUP BY family_id,member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM notifications n WHERE n.status IN ('pending','retry') AND ((n.target_type='task' AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=n.target_id AND t.family_id=n.family_id)) OR (n.target_type='message' AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=n.target_id AND m.family_id=n.family_id)))").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM recurrence_occurrences o WHERE o.exception_task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.exception_task_id AND t.family_id=o.family_id)").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM recurrence_rules r WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=r.task_id AND t.family_id=r.family_id)").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM messages m WHERE (m.converted_to_task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=m.converted_to_task_id AND t.family_id=m.family_id)) OR (m.converted_to_shopping_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=m.converted_to_shopping_id AND s.family_id=m.family_id))").first<any>(),
+    env.DB.prepare("SELECT (SELECT COUNT(*) FROM shopping_items s WHERE s.task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id)) + (SELECT COUNT(*) FROM items i WHERE i.task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id)) c").first<any>(),
+    env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_assignees a WHERE NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM item_assignees a WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM shopping_assignees a WHERE NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM task_completion_history h WHERE NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=h.task_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) + (SELECT COUNT(*) FROM item_completion_history h WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=h.item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) + (SELECT COUNT(*) FROM shopping_completion_history h WHERE NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=h.shopping_item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) c").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,entity_type,entity_id,COALESCE(member_id,-1) member_key,action,occurred_at,COALESCE(source_type,''),COALESCE(source_id,-1),COUNT(*) n FROM deleted_completion_history GROUP BY family_id,entity_type,entity_id,member_key,action,occurred_at,COALESCE(source_type,''),COALESCE(source_id,-1) HAVING COUNT(*)>1)").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM deleted_completion_history h WHERE h.member_id IS NOT NULL AND EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id AND m.family_id<>h.family_id)").first<any>()
+  ]);
+  const audit={duplicate_groups:Number(dup?.c||0),orphan_pending:Number(orphan?.c||0),orphan_exception_links:Number(orphanExceptions?.c||0),orphan_recurrence_rules:Number(orphanRules?.c||0),stale_message_conversion_links:Number(staleMessageLinks?.c||0),stale_task_child_links:Number(staleTaskChildren?.c||0),orphan_operational_rows:Number(orphanOperationalRows?.c||0),deleted_archive_duplicate_groups:Number(archiveDuplicates?.c||0),deleted_archive_member_family_mismatch:Number(archiveMemberMismatch?.c||0)};
+  if(Object.values(audit).some(v=>v>0)) console.warn('[Family TODO LINE] lifecycle audit',audit);
 }
 
 async function processNotifications(env: Env): Promise<void> {
@@ -498,9 +511,30 @@ async function taskDelete(request:Request,ctx:any):Promise<Response>{
     statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_occurrences WHERE recurrence_rule_id=? AND family_id=?').bind(Number(r.id),m.family_id));
     statements.push(ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
   }
-  for(const r of childShopping.results){statements.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));}
-  for(const r of childItems.results){statements.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(Number(r.id)),ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));}
-  statements.push(ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));
+  for(const r of childShopping.results){const sid=Number(r.id);statements.push(
+    ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(sid),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'shopping', shopping_item_id, member_id, action, occurred_at, 'shopping_item', shopping_item_id, ? FROM shopping_completion_history WHERE shopping_item_id=?").bind(m.family_id,deleteNow,sid),
+    ctx.env.DB.prepare('DELETE FROM shopping_completion_history WHERE shopping_item_id=?').bind(sid),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'shopping', shopping_item_id, member_id, action, completed_at, 'shopping_legacy_completion', shopping_item_id, ? FROM shopping_completions WHERE shopping_item_id=?").bind(m.family_id,deleteNow,sid),
+    ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=?').bind(sid),
+    ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(sid,m.family_id)
+  );}
+  for(const r of childItems.results){const iid=Number(r.id);statements.push(
+    ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(iid),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'item', item_id, member_id, action, occurred_at, 'item', item_id, ? FROM item_completion_history WHERE item_id=?").bind(m.family_id,deleteNow,iid),
+    ctx.env.DB.prepare('DELETE FROM item_completion_history WHERE item_id=?').bind(iid),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'item', item_id, member_id, action, completed_at, 'item_legacy_completion', item_id, ? FROM item_completions WHERE item_id=?").bind(m.family_id,deleteNow,iid),
+    ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=?').bind(iid),
+    ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(iid,m.family_id)
+  );}
+  statements.push(
+    ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'task', task_id, member_id, action, occurred_at, 'task', task_id, ? FROM task_completion_history WHERE task_id=?").bind(m.family_id,deleteNow,id),
+    ctx.env.DB.prepare('DELETE FROM task_completion_history WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare("INSERT INTO deleted_completion_history(family_id,entity_type,entity_id,member_id,action,occurred_at,source_type,source_id,archived_at) SELECT ?, 'task', task_id, member_id, action, completed_at, 'task_legacy_completion', task_id, ? FROM task_completions WHERE task_id=?").bind(m.family_id,deleteNow,id),
+    ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id),
+    ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
+  );
   await ctx.env.DB.batch(statements);
   return json({ok:true,redirect:'/today.php'});
 }
