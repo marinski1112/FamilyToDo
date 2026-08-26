@@ -641,3 +641,26 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 .calendar-week-days>.calendar-cell .calendar-items{
   margin-top:calc(var(--calendar-date-zone) + var(--calendar-day-band-rows) * var(--calendar-band-step))!important;
 }
+
+/* Wave68: anchor each day's ordinary content independently of the week's band stack.
+ * A day with no multi-day band starts immediately below the date number even when
+ * another day in the same week has long-running bands. */
+.calendar-week-days>.calendar-cell{
+  position:relative!important;
+}
+.calendar-week-days>.calendar-cell .calendar-items{
+  position:absolute!important;
+  top:var(--calendar-day-content-top, var(--calendar-date-zone))!important;
+  left:3px!important;
+  right:3px!important;
+  width:auto!important;
+  margin-top:0!important;
+  padding:0!important;
+  z-index:2!important;
+}
+.calendar-week-days>.calendar-cell[data-band-rows="0"] .calendar-items{
+  top:var(--calendar-date-zone)!important;
+}
+@media(max-width:600px){
+  .calendar-week-days>.calendar-cell .calendar-items{left:3px!important;right:3px!important}
+}
