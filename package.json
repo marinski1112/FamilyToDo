@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.76.0-wave57",
+  "version": "12.77.0-wave58",
   "private": true,
   "description": "Family TODO LINE - Cloudflare Workers migration foundation",
   "type": "module",
