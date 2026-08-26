@@ -81,3 +81,11 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Removes stale `event_id` columns / `REFERENCES events(id)` constraints left after Wave33.
 - Preserves task/item/shopping/message/recurrence IDs and direct assignee/history rows.
 - Application remains task-only; LINE Webhook `events[]` is unchanged.
+
+## Wave62
+- Calendar day-detail mobile reorder restored via ↑/↓ controls and hardened reorder API.
+- Recurrence occurrence -> normal task conversion fixed for HTML form POST, D1 binding count, assignee/completion preservation and linked shopping/item cloning.
+- Removed invalid Worker references to non-existent `shopping_items.group_key`.
+- Message edit moved from prompt() to mobile sheet.
+- Invitation history/status/revoke added.
+- No D1 migration added; latest remains 0015.
