@@ -472,3 +472,17 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 @media(prefers-reduced-motion:reduce){
   .calendar-card .calendar-grid,.modal-body{transition:none!important}
 }
+
+/* Wave62: touch-safe day-detail reorder controls. */
+.modal-reorder{margin-left:auto;white-space:nowrap}
+.calendar-reorder-controls{display:none;margin-left:auto;gap:6px;flex:0 0 auto;align-items:center}
+.calendar-reorder-mode .calendar-reorder-controls{display:flex}
+.calendar-reorder-mode .calendar-task-toggle{opacity:.45;pointer-events:none}
+.calendar-move{width:34px;height:34px;min-width:34px;border:1px solid #dbe2ea;background:#f8fafc;color:#334155;border-radius:10px;font-weight:800;font-size:16px;line-height:1;padding:0}
+.calendar-move:active{transform:scale(.96);background:#eef2f7}
+.modal-task-copy{min-width:0;flex:1}
+.calendar-reorder-mode .modal-row{background:#fbfcfe}
+@media(max-width:600px){
+  .modal-reorder{font-size:10px;padding:6px 8px;min-height:32px}
+  .calendar-move{width:32px;height:32px;min-width:32px}
+}

@@ -408,3 +408,20 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
   .task-date-row{grid-template-columns:1fr}
   .task-date-row .checkrow{grid-column:1}
 }
+
+/* Wave62: proper message edit sheet; remove prompt-based editing. */
+.message-edit-backdrop{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(15,23,42,.42);z-index:82;padding:12px}
+.message-edit-backdrop.open{display:flex}
+.message-edit-dialog{width:min(620px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:22px 22px 14px 14px;padding:18px;box-shadow:0 -12px 40px rgba(15,23,42,.18)}
+.message-edit-dialog .section-head{position:sticky;top:-18px;background:#fff;z-index:2;padding:8px 0}
+.message-edit-dialog textarea{min-height:132px}
+.message-edit-dialog #messageEditStatus{min-height:1.4em;margin:8px 0}
+@media(max-width:520px){.message-edit-dialog{max-height:92vh;padding:16px}}
+
+/* Wave62: invitation lifecycle list. */
+.invite-history{margin-top:16px;border-top:1px solid #e5e7eb;padding-top:12px}
+.invite-history>summary{cursor:pointer;font-weight:800;color:#334155;margin-bottom:8px}
+.invite-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #eef2f7}
+.invite-history-row:first-of-type{border-top:0}
+.invite-history-row .btn{align-self:center}
+@media(max-width:520px){.invite-history-row{grid-template-columns:1fr}.invite-history-row .btn{justify-self:start}}
