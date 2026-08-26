@@ -89,3 +89,9 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Message edit moved from prompt() to mobile sheet.
 - Invitation history/status/revoke added.
 - No D1 migration added; latest remains 0015.
+
+
+## Wave63
+- Calendar silent-JS regression fixed.
+- Calendar browser controller externalized to `public/assets/calendar.js` and syntax-checkable independently.
+- No DB migration. Latest remains `0015_wave52_remove_legacy_event_fk.sql`.

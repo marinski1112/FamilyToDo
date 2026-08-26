@@ -70,5 +70,7 @@
     "Wave60 fixes rendered calendar inline-JavaScript parsing caused by template-literal newline/regex escapes, adds direct touch-event fallback for LINE iOS WebView, and records a prioritized XREA parity/UI/lifecycle residual inventory.",
     "Wave61 restores XREA-style stable multi-day task bands with global lanes, expands day-detail swipe to the whole sheet, adds swipe-follow preview and smoother month/day transitions, and keeps LINE iOS touch fallbacks.",
     "Wave62 restores touch-safe day-detail task reordering, fixes recurrence occurrence exception conversion and linked-child cloning, removes invalid shopping_items.group_key SQL references, replaces prompt-based message editing with a sheet, and adds invitation history/revoke."
-  ]
+  ],
+  "version": "12.82.0-wave63",
+  "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check."
 }
