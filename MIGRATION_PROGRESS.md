@@ -75,3 +75,9 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Japanese monthly business-day recurrence now excludes Japanese holidays, matching the XREA recurrence implementation.
 - Legacy `/app/create.php`, `/app/join.php`, `/login_error.php`, and LIFF diagnostic routes are retained as Cloudflare compatibility aliases.
 - Family creation now uses D1 `run().meta.last_row_id` instead of a follow-up `last_insert_rowid()` statement.
+
+## Wave52 legacy-event FK cleanup
+- Added `0015_wave52_remove_legacy_event_fk.sql`.
+- Removes stale `event_id` columns / `REFERENCES events(id)` constraints left after Wave33.
+- Preserves task/item/shopping/message/recurrence IDs and direct assignee/history rows.
+- Application remains task-only; LINE Webhook `events[]` is unchanged.
