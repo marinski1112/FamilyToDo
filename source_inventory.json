@@ -54,7 +54,7 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
   },
-  "cloudflare_wave": "Wave56",
+  "cloudflare_wave": "Wave57",
   "notes": [
     "Events/event_members remain legacy schema artifacts; application behavior and migrated production D1 are task-only after Wave33.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -63,6 +63,7 @@
     "Wave52 removes stale event_id columns and REFERENCES events(id) foreign keys from live D1 tables via migration 0015; application remains task-only.",
     "Wave53 refreshes CSS cache-busting, pins calendar date numbers to the top-left on mobile, compacts shopping list UI with collapsed filters/FAB/detail modal, and adds LINE friend-add guidance to family invitations.",
     "Wave55 auto-discovers LINE Official Account Basic/Premium ID via Messaging API /v2/bot/info when creating invitations, shares the friend-add URL with the invite, hardens recurring-task submission/UI, and upgrades message-to-task conversion to support existing-task attachment or full new-task configuration.",
-    "Wave56 fixes recurringForDate D1 binding count, makes recurring delete/toggle work with HTML form fallback, and conditionally reveals recurrence/calendar/time fields to simplify mobile UI."
+    "Wave56 fixes recurringForDate D1 binding count, makes recurring delete/toggle work with HTML form fallback, and conditionally reveals recurrence/calendar/time fields to simplify mobile UI.",
+    "Wave57 makes recurring-task fields reliably conditional in LINE WebView, gives delete/toggle action-specific notices, fixes timed task date/time layout and multi-day end-time normalization, and applies the same time/calendar visibility rules to task edit and message-to-task forms."
   ]
 }
