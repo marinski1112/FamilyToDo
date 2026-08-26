@@ -17,3 +17,11 @@
 - Canonical task INSERT now has exactly 18 values for 18 columns.
 - TypeScript check must pass before deployment.
 - After deployment, retry task creation including task-only, shopping child, item child, assignee, and reminder combinations.
+
+
+## Wave51 findings
+
+- Wave50 package/source was verified as the supplied baseline.
+- Item creation contained a separate SQL placeholder mismatch not covered by Wave50.
+- Message creation can fail on an invalid target-member foreign key; recipient validation is added.
+- Message reminder creation can collide with the existing unique pending notification index; duplicate insertion is now ignored.
