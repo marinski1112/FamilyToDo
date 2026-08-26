@@ -95,3 +95,7 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Calendar silent-JS regression fixed.
 - Calendar browser controller externalized to `public/assets/calendar.js` and syntax-checkable independently.
 - No DB migration. Latest remains `0015_wave52_remove_legacy_event_fk.sql`.
+
+## Wave66
+- No new D1 migration.
+- Added recurrence exception delete lifecycle, future-only series split, recurring child preservation, and notification lifecycle audit.
