@@ -54,9 +54,9 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
   },
-  "cloudflare_wave": "Wave59",
+  "cloudflare_wave": "Wave60",
   "notes": [
-    "Events/event_members remain legacy schema artifacts; application behavior and migrated production D1 are task-only after Wave33.",
+    "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
     "Wave43 preserves deleted completion history in deleted_completion_history.",
     "Wave44 closes remaining alternate task-delete paths, recurrence-delete paths, notification hard-delete paths, and deleted-member reactivation paths.",
@@ -66,6 +66,7 @@
     "Wave56 fixes recurringForDate D1 binding count, makes recurring delete/toggle work with HTML form fallback, and conditionally reveals recurrence/calendar/time fields to simplify mobile UI.",
     "Wave57 makes recurring-task fields reliably conditional in LINE WebView, gives delete/toggle action-specific notices, fixes timed task date/time layout and multi-day end-time normalization, and applies the same time/calendar visibility rules to task edit and message-to-task forms.",
     "Wave58 fixes inline-JavaScript newline parsing failures that prevented recurring conditional fields and family invite creation in LINE WebView, hardens invite creation feedback/error handling, and refreshes CSS cache-busting.",
-    "Wave59 restores XREA-style calendar interaction parity: in-place month navigation/swipe, day-detail left/right navigation across grid boundaries, return-to-selected-date after calendar task creation, clearer day detail completion state, and direct recurrence occurrence IDs for checkbox updates."
+    "Wave59 restores XREA-style calendar interaction parity: in-place month navigation/swipe, day-detail left/right navigation across grid boundaries, return-to-selected-date after calendar task creation, clearer day detail completion state, and direct recurrence occurrence IDs for checkbox updates.",
+    "Wave60 fixes rendered calendar inline-JavaScript parsing caused by template-literal newline/regex escapes, adds direct touch-event fallback for LINE iOS WebView, and records a prioritized XREA parity/UI/lifecycle residual inventory."
   ]
 }
