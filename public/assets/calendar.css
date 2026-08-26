@@ -359,3 +359,9 @@
 @media(prefers-reduced-motion:reduce){
   .calendar-card .calendar-grid,.modal-body{transition:none!important}
 }
+
+/* Wave60: calendar touch/detail reliability and mobile feedback. */
+html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
+.calendar-grid .calendar-cell:active{filter:brightness(.985)}
+.day-modal .modal-scroll,.day-modal .modal-body{touch-action:pan-y}
+.calendar-card{overscroll-behavior-x:contain}
