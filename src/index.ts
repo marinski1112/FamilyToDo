@@ -20,6 +20,8 @@ export default {
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
+      if(url.pathname==='/__cf/db-schema-health') return dbSchemaHealth(env);
+      if(url.pathname==='/__cf/db-runtime-health') return dbRuntimeHealth(env);
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
       if(url.pathname==='/liff'||url.pathname==='/liff/') {
         const liffContext=await makeContext(request,env);
@@ -84,8 +86,13 @@ export default {
       return env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired) return redirect('/login.php');
-      console.error(e);
-      return json({ok:false,error:e?.message||'内部エラーです。'},500);
+      const message=String(e?.message||e||'内部エラーです。');
+      const requestId=crypto.randomUUID();
+      console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
+      if(/no such (table|column)|has no column named|no column named|UNIQUE constraint failed/i.test(message)) {
+        return json({ok:false,error:'D1のデータベース構成または制約がWorkerの最新版と一致していません。/ __cf/db-schema-health と /__cf/db-runtime-health を確認してください。',code:'DB_SCHEMA_MIGRATION_REQUIRED',path:url.pathname,request_id:requestId},503);
+      }
+      return json({ok:false,error:'内部エラーです。',code:'INTERNAL_ERROR',path:url.pathname,request_id:requestId},500);
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
@@ -93,6 +100,72 @@ export default {
     ctx.waitUntil(processNotifications(env));
   }
 } satisfies ExportedHandler<Env>;
+
+async function dbSchemaHealth(env:Env):Promise<Response>{
+  const required:Record<string,string[]>= {
+    members:['id','family_id','active','notification_enabled','deleted_at'],
+    tasks:['id','family_id','title','status','completion_mode','calendar_visible','calendar_color','task_kind','reminder_at'],
+    task_assignees:['task_id','member_id'],
+    task_completions:['task_id','member_id'],
+    task_completion_history:['task_id','member_id','action','occurred_at'],
+    items:['id','family_id','status','completion_mode'],
+    item_assignees:['item_id','member_id'],
+    item_completions:['item_id','member_id'],
+    shopping_items:['id','family_id','status','task_id'],
+    shopping_assignees:['shopping_item_id','member_id'],
+    shopping_completions:['shopping_item_id','member_id'],
+    recurrence_rules:['id','family_id','task_id','name','active','deleted_at'],
+    recurrence_occurrences:['id','family_id','recurrence_rule_id'],
+    recurrence_occurrence_completions:['occurrence_id','member_id'],
+    notifications:['id','family_id','member_id','target_type','target_id','status','notify_at'],
+    notification_settings:['family_id','member_id'],
+    activity_logs:['family_id','member_id','action','occurred_at'],
+    deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
+  };
+  const tables:any[]=[];
+  let migrationRows:any[]=[];
+  try { migrationRows=(await env.DB.prepare('SELECT id,name,applied_at FROM d1_migrations ORDER BY id').all()).results as any[]; } catch(e) { migrationRows=[]; }
+  for(const [table,columns] of Object.entries(required)) {
+    try {
+      const info=(await env.DB.prepare(`PRAGMA table_info(${table})`).all()).results as any[];
+      const have=new Set(info.map((r:any)=>String(r.name)));
+      const missing=columns.filter(c=>!have.has(c));
+      tables.push({table,exists:info.length>0,missing});
+    } catch(e:any) { tables.push({table,exists:false,missing:columns,error:String(e?.message||e)}); }
+  }
+  const failed=tables.filter(x=>!x.exists||x.missing.length);
+  return json({ok:failed.length===0,database:'reachable',schema_ok:failed.length===0,migrations:migrationRows,tables,failed_count:failed.length});
+}
+
+async function dbRuntimeHealth(env:Env):Promise<Response>{
+  const checks:[string,string][]=[
+    ['members','SELECT id,name,role,active,notification_enabled,deleted_at FROM members LIMIT 1'],
+    ['tasks','SELECT id,family_id,title,status,completion_mode,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at FROM tasks LIMIT 1'],
+    ['task_assignees','SELECT task_id,member_id FROM task_assignees LIMIT 1'],
+    ['task_completions','SELECT task_id,member_id,completed_at FROM task_completions LIMIT 1'],
+    ['task_completion_history','SELECT task_id,member_id,action,occurred_at FROM task_completion_history LIMIT 1'],
+    ['items','SELECT id,family_id,name,status,completion_mode,due_at,task_id,group_key FROM items LIMIT 1'],
+    ['item_assignees','SELECT item_id,member_id FROM item_assignees LIMIT 1'],
+    ['item_completions','SELECT item_id,member_id,completed_at FROM item_completions LIMIT 1'],
+    ['shopping_items','SELECT id,family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,group_key,url FROM shopping_items LIMIT 1'],
+    ['shopping_assignees','SELECT shopping_item_id,member_id FROM shopping_assignees LIMIT 1'],
+    ['shopping_completions','SELECT shopping_item_id,member_id,completed_at FROM shopping_completions LIMIT 1'],
+    ['notification_settings','SELECT family_id,member_id,enabled,before_day,morning,one_hour_before FROM notification_settings LIMIT 1'],
+    ['notifications','SELECT id,family_id,member_id,type,target_type,target_id,notify_at,status,message FROM notifications LIMIT 1'],
+    ['recurrence_rules','SELECT id,family_id,task_id,name,recurrence_type,interval_value,weekday,monthday,start_date,end_date,active,deleted_at,weekdays_json,monthdays_json,week_numbers_json FROM recurrence_rules LIMIT 1'],
+    ['recurrence_occurrences','SELECT id,family_id,recurrence_rule_id,status,occurrence_date FROM recurrence_occurrences LIMIT 1'],
+    ['recurrence_occurrence_completions','SELECT occurrence_id,member_id,completed_at FROM recurrence_occurrence_completions LIMIT 1'],
+    ['activity_logs','SELECT family_id,member_id,action,target_type,target_id,occurred_at FROM activity_logs LIMIT 1'],
+    ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
+  ];
+  const results:any[]=[];
+  for(const [name,sql] of checks){
+    try { await env.DB.prepare(sql).first(); results.push({name,ok:true}); }
+    catch(e:any){ results.push({name,ok:false,error:String(e?.message||e)}); }
+  }
+  const failed=results.filter(x=>!x.ok);
+  return json({ok:failed.length===0,database:'reachable',checks:results,failed_count:failed.length});
+}
 
 async function liffConfigDiagnose(env:Env):Promise<Response>{
   const liffId=String(env.LINE_LIFF_ID||'');
@@ -222,24 +295,47 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   const now=nowJst();const completionMode=String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY';
   const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
   const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
-  const dueValue=noDate?null:(end||start||`${date} 00:00:00`); const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(m.family_id,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarVisibleFlag(b),calendarColor,'TASK',0,reminderAt).run();
-  const id=Number(r.meta.last_row_id);
-  const ids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
-  if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
-  const now2=nowJst();
-  const shopping=shoppingPre;
-  if(shopping.length){
-    const category=String(b.shopping_category==='__custom__'?b.shopping_category_custom:b.shopping_category||'').trim()||null;
-    if(category && b.shopping_category==='__custom__') await ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_categories(family_id,name,created_at) VALUES(?,?,?)').bind(m.family_id,category,now2).run().catch(()=>{});
-    const dueDate=noDate?null:date; const group=crypto.randomUUID().replaceAll('-','').slice(0,16);
-    for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,qty,category,null,dueDate,m.id,now2,now2,id,group,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
+  const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
+  const ids=[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
+  if(ids.length){
+    const valid=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
+    const validIds=new Set(valid.results.map((x:any)=>Number(x.id)));
+    if(ids.some(id=>!validIds.has(id))) return json({ok:false,error:'担当者に無効なメンバーが含まれています。'},400);
   }
-  const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
-  if(itemNames.length){const group=crypto.randomUUID().replaceAll('-','').slice(0,16);for(const name of itemNames){const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,null,date?`${date} 00:00:00`:null,m.id,now2,now2,id,group).run();const iid=Number(ir.meta.last_row_id);if(ids.length)await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id)));}}
-  if(reminderAt && ids.length){
-    const recipients=await ctx.env.DB.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
-    if(recipients.results.length) await ctx.env.DB.batch(recipients.results.map((r:any)=>ctx.env.DB.prepare('INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description??'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location??'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
+  let id=0;
+  try {
+    const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(m.family_id,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarVisibleFlag(b),calendarColor,'TASK',0,reminderAt).run();
+    id=Number(r.meta.last_row_id);
+    if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
+    const now2=nowJst();
+    const shopping=shoppingPre;
+    if(shopping.length){
+      const category=String(b.shopping_category==='__custom__'?b.shopping_category_custom:b.shopping_category||'').trim()||null;
+      if(category && b.shopping_category==='__custom__') await ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_categories(family_id,name,created_at) VALUES(?,?,?)').bind(m.family_id,category,now2).run().catch(()=>{});
+      const dueDate=noDate?null:date; const group=crypto.randomUUID().replaceAll('-','').slice(0,16);
+      for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,group_key,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,qty,category,null,dueDate,m.id,now2,now2,id,group,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
+    }
+    const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
+    if(itemNames.length){const group=crypto.randomUUID().replaceAll('-','').slice(0,16);for(const name of itemNames){const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,null,date?`${date} 00:00:00`:null,m.id,now2,now2,id,group).run();const iid=Number(ir.meta.last_row_id);if(ids.length)await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id)));}}
+    if(reminderAt && ids.length){
+      const recipients=await ctx.env.DB.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
+      if(recipients.results.length) await ctx.env.DB.batch(recipients.results.map((r:any)=>ctx.env.DB.prepare('INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description??'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location??'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
+    }
+  } catch(e){
+    if(id){
+      try { await ctx.env.DB.batch([
+        ctx.env.DB.prepare("DELETE FROM notifications WHERE family_id=? AND target_type='task' AND target_id=?").bind(m.family_id,id),
+        ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id IN (SELECT id FROM shopping_items WHERE task_id=? AND family_id=?)').bind(id,m.family_id),
+        ctx.env.DB.prepare('DELETE FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id),
+        ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id IN (SELECT id FROM items WHERE task_id=? AND family_id=?)').bind(id,m.family_id),
+        ctx.env.DB.prepare('DELETE FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id),
+        ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
+        ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id),
+      ]); } catch(cleanup){ console.error('[Family TODO LINE] task creation cleanup failed',{taskId:id,error:String((cleanup as any)?.message||cleanup)}); }
+    }
+    throw e;
   }
+
   await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','task',id,JSON.stringify({title}),nowJst()).run().catch(()=>{});return json({ok:true,id},201);
 }
 
