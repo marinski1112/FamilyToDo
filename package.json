@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.86.0-wave67",
+  "version": "12.87.0-wave68",
   "private": true,
   "description": "Family TODO LINE - Cloudflare Workers migration foundation",
   "type": "module",
@@ -10,7 +10,9 @@
     "typecheck": "wrangler types && tsc --noEmit",
     "check:calendar-js": "node --check public/assets/calendar.js",
     "check:recurring-js": "node --check public/assets/recurring.js",
-    "check:browser-js": "node --check public/assets/calendar.js && node --check public/assets/recurring.js"
+    "check:browser-js": "node --check public/assets/calendar.js && node --check public/assets/recurring.js && node --check public/assets/messages.js && node --check public/assets/message-new.js && node --check public/assets/settings.js && node --check public/assets/settings-members.js",
+    "check:messages-js": "node --check public/assets/messages.js && node --check public/assets/message-new.js",
+    "check:settings-js": "node --check public/assets/settings.js && node --check public/assets/settings-members.js"
   },
   "dependencies": {},
   "devDependencies": {

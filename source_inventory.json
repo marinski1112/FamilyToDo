@@ -54,7 +54,7 @@
     ],
     "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
   },
-  "cloudflare_wave": "Wave67",
+  "cloudflare_wave": "Wave68",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -72,7 +72,8 @@
     "Wave62 restores touch-safe day-detail task reordering, fixes recurrence occurrence exception conversion and linked-child cloning, removes invalid shopping_items.group_key SQL references, replaces prompt-based message editing with a sheet, and adds invitation history/revoke.",
     "Wave64: calendar week height is dynamic by multi-day lanes and visible task rows; show up to 4 single-day tasks; keep date number above multi-day bands.",
     "Wave66: calendar ordinary-task ordering, duplicate shopping add wording cleanup, recurrence exception delete choice, future-only recurrence split, notification lifecycle audit.",
-    "Wave67: calendar uses per-date multi-day lane offset; hidden recurring occurrences remain in day detail; excluded occurrence restore UI and split-series lineage added; recurring controller externalized; lifecycle audit extended."
+    "Wave67: calendar uses per-date multi-day lane offset; hidden recurring occurrences remain in day detail; excluded occurrence restore UI and split-series lineage added; recurring controller externalized; lifecycle audit extended.",
+    "Wave68: day-local calendar item anchoring, messages/settings static JS extraction, expanded orphan/archive audit."
   ],
   "version": "12.86.0-wave67",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",

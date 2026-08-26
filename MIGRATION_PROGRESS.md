@@ -103,3 +103,8 @@ The original XREA/PHP implementation remains the reference implementation and is
 ## Wave67
 - No new D1 migration.
 - Per-date calendar band reservation, hidden recurring day-detail visibility, excluded occurrence restore UI, split-series lineage, recurring controller externalization, and expanded lifecycle/orphan audit.
+
+
+## Wave68
+- No new D1 migration.
+- Day-local calendar anchoring, static JS extraction for messages/settings, and expanded orphan/archive lifecycle audit.
