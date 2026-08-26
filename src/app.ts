@@ -85,7 +85,7 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner">${[
     ['/today.php','☀️','今日'],['/tomorrow.php','🌙','明日'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ].map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.82-wave63">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.82-wave63">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.83-wave64">':''; return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)} - Family TODO LINE</title><link rel="stylesheet" href="/assets/family.css?v=12.83-wave64">${extra}</head><body><div class="wrap">${body}</div>${nav}</body></html>`;
 }
 
 
@@ -510,29 +510,42 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   [...rangeByKey.entries()].filter(([,r])=>r.start!==r.end).sort((a,b)=>a[1].start.localeCompare(b[1].start)||a[1].end.localeCompare(b[1].end)||a[0].localeCompare(b[0])).forEach(([key,r])=>{
     let lane=0; while(laneEnd[lane]&&laneEnd[lane]>=r.start)lane++; laneByKey.set(key,lane); laneEnd[lane]=r.end;
   });
-  const laneCap=3;
+  const laneCap=4;
+  const singleTaskCap=4;
   let cells='';
   for(let weekStart=new Date(start);weekStart<=end;weekStart.setUTCDate(weekStart.getUTCDate()+7)){
     const weekEnd=new Date(weekStart);weekEnd.setUTCDate(weekEnd.getUTCDate()+6);
     let dayCells='',bars='',more=''; const overflow:Record<string,number>=Object.create(null);
+    const weekDays:Array<{d:string;inMonth:boolean;dayItems:Row[];holiday:string|null;wd:number;num:string;accessoryRows:number}>=[];
+    let maxSingleRows=0,maxAccessoryRows=0,maxBandLane=-1;
     for(let i=0;i<7;i++){
       const cursor=new Date(weekStart);cursor.setUTCDate(cursor.getUTCDate()+i);
       const d=cursor.toISOString().slice(0,10),inMonth=d.startsWith(month),dayItems=(map[d]||[]).filter(t=>Number(t._spanDays||1)<=1),holiday=jpHolidayName(d),wd=cursor.getUTCDay();
-      const cls=['calendar-cell',inMonth?'':'other',wd===0?'sun':'',wd===6?'sat':'',holiday?'holiday':''].filter(Boolean).join(' ');
       const num=d===dateOnly()?`<span class="today-num">${Number(d.slice(8))}</span>`:String(Number(d.slice(8)));
-      dayCells+=`<button type="button" class="${cls}" data-date="${d}" aria-label="${esc(d+(holiday?' '+holiday:''))}"><div class="num">${num}</div><div class="calendar-items">${dayItems.slice(0,2).map(t=>{const cc=String(t.calendar_color||'').trim();const style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item seg-single" title="${esc(t.title)}"${style}>${esc(t.title)}</div>`}).join('')}${dayItems.length>2?`<div class="meta">+${dayItems.length-2}件</div>`:''}${itemMap[d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[d].length}件</div>`:''}</div></button>`;
+      const accessoryRows=(itemMap[d]?.length?1:0)+(shoppingMap[d]?.length?1:0);
+      maxSingleRows=Math.max(maxSingleRows,Math.min(singleTaskCap,dayItems.length)+(dayItems.length>singleTaskCap?1:0));
+      maxAccessoryRows=Math.max(maxAccessoryRows,accessoryRows);
+      weekDays.push({d,inMonth,dayItems,holiday,wd,num,accessoryRows});
     }
     for(const [key,r] of rangeByKey){
       if(r.start===r.end)continue;
       const ws=weekStart.toISOString().slice(0,10),we=weekEnd.toISOString().slice(0,10),a=r.start>ws?r.start:ws,b=r.end<we?r.end:we;if(a>b)continue;
       const lane=laneByKey.get(key)??0;
       if(lane>=laneCap){for(let d=new Date(`${a}T12:00:00Z`);d<=new Date(`${b}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+1)){const k=d.toISOString().slice(0,10);overflow[k]=(overflow[k]||0)+1;}continue;}
+      maxBandLane=Math.max(maxBandLane,lane);
       const startCol=new Date(`${a}T12:00:00Z`).getUTCDay()+1,endCol=new Date(`${b}T12:00:00Z`).getUTCDay()+2,cc=String(r.task.calendar_color||'').trim(),color=allowedCalendarColors.includes(cc)?cc:'#7c3aed';
       const segClass=(a===r.start?'seg-start ':'')+(b===r.end?'seg-end':'seg-mid');
       bars+=`<a class="calendar-band ${segClass.trim()}" style="grid-column:${startCol}/${endCol};grid-row:${lane+1};background:${color}" href="/task/view.php?id=${encodeURIComponent(String(r.task.id))}" data-task-id="${esc(r.task.id)}" title="${esc(r.task.title)}">${esc(r.task.title)}</a>`;
     }
+    const bandRows=maxBandLane+1;
+    for(const info of weekDays){
+      const cls=['calendar-cell',info.inMonth?'':'other',info.wd===0?'sun':'',info.wd===6?'sat':'',info.holiday?'holiday':''].filter(Boolean).join(' ');
+      const shown=info.dayItems.slice(0,singleTaskCap);
+      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim();const style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item seg-single" title="${esc(t.title)}"${style}>${esc(t.title)}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
+    }
     for(let i=0;i<7;i++){const d=new Date(weekStart);d.setUTCDate(d.getUTCDate()+i);const k=d.toISOString().slice(0,10);more+=`<span>${overflow[k]?`+${overflow[k]}件`:''}</span>`;}
-    cells+=`<div class="calendar-week"><div class="calendar-week-days">${dayCells}</div><div class="calendar-week-bands">${bars}</div><div class="calendar-week-more">${more}</div></div>`;
+    const weekStyle=`--calendar-band-rows:${bandRows};--calendar-single-rows:${Math.max(1,maxSingleRows)};--calendar-accessory-rows:${maxAccessoryRows}`;
+    cells+=`<div class="calendar-week" style="${weekStyle}"><div class="calendar-week-days">${dayCells}</div><div class="calendar-week-bands">${bars}</div><div class="calendar-week-more">${more}</div></div>`;
   }
 
   const shoppingDetail=Object.fromEntries(Object.entries(shoppingMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,quantity:t.quantity,category:t.category,status:t.status,due_date:t.due_date,task_title:t.task_title,assignees:t.assignees}))]));
@@ -551,7 +564,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7);
   const next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);
   const calendarPayload=JSON.stringify({detail,shoppingDetail,itemDetail,holidays,month,prev,next,from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),today:dateOnly(),csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const script='<script src="/assets/calendar.js?v=12.82-wave63"></script>';
+  const script='<script src="/assets/calendar.js?v=12.83-wave64"></script>';
   const body='<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><div class="meta" id="monthLabel">'+month.slice(0,4)+'年'+Number(month.slice(5))+'月</div></div><div class="calendar-month-actions"><a id="prevMonth" data-month="'+prev+'" class="btn gray" href="/app/calendar.php?month='+prev+'" aria-label="前の月">‹</a> <a id="nextMonth" data-month="'+next+'" class="btn gray" href="/app/calendar.php?month='+next+'" aria-label="次の月">›</a></div></div>'+
     '<div class="card calendar-card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
     '<a class="fab calendar-fab" id="calendarFab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a><div class="modal-backdrop" id="dayModal"><div class="day-modal"><div class="modal-top"><button id="modalPrev" class="modal-day-nav" type="button" aria-label="前の日">‹</button><h2 id="modalTitle"></h2><button id="modalNext" class="modal-day-nav" type="button" aria-label="次の日">›</button><button id="modalReorder" class="btn gray small modal-reorder" type="button">並べ替え</button><button id="modalClose" class="btn gray modal-close" type="button" aria-label="閉じる">×</button></div><div class="modal-swipe-hint">左右にスワイプして日付移動</div><div class="modal-scroll"><div id="modalBody" class="modal-body"></div></div><a id="modalAdd" class="modal-add-fab" href="#" aria-label="この日にタスクを追加">＋</a></div></div><script type="application/json" id="calendarPayload">'+calendarPayload+'</script>'+script;
