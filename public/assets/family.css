@@ -394,3 +394,17 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 
 /* Wave54: compact task-conversion modal + LINE invitation helpers */
 .message-task-backdrop{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(15,23,42,.42);z-index:80;padding:12px}.message-task-backdrop.open{display:flex}.message-task-dialog{width:min(680px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:22px 22px 14px 14px;padding:18px;box-shadow:0 -12px 40px rgba(15,23,42,.18)}.message-task-dialog .section-head{position:sticky;top:-18px;background:#fff;z-index:2;padding:8px 0}.message-task-time{display:grid;grid-template-columns:1fr 1fr;gap:10px}.message-task-dialog #messageTaskStatus{min-height:1.4em;margin:8px 0}.invite-official,.invite-result{display:grid;gap:10px;margin-top:12px}.invite-official{grid-template-columns:1fr auto;align-items:center;padding:12px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc}.line-friend-btn{background:#06c755!important;color:#fff!important;text-decoration:none;justify-content:center}.invite-result input{width:100%;font-size:14px}.invite-result .btn{width:100%;justify-content:center}@media(max-width:520px){.message-task-dialog{max-height:92vh;padding:16px}.message-task-time{grid-template-columns:1fr}.invite-official{grid-template-columns:1fr}.invite-official .btn{width:100%}}
+
+
+/* Wave57: condition-driven forms and compact mobile date/time layout */
+.rec-conditional{margin-top:10px}
+.compact-time-fields,.task-time-fields{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}
+.compact-time-fields>div,.task-time-fields>div,.field-block{min-width:0}
+.compact-time-fields input,.task-time-fields input{width:100%;min-width:0}
+.task-date-row>div{min-width:0}
+#taskCalendarColorWrap,#editCalendarColorWrap,#messageTaskCalendarColorWrap,#recCalendarColorWrap{margin-top:8px}
+@media(max-width:560px){
+  .compact-time-fields,.task-time-fields,.message-task-time{grid-template-columns:1fr}
+  .task-date-row{grid-template-columns:1fr}
+  .task-date-row .checkrow{grid-column:1}
+}
