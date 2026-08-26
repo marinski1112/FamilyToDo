@@ -99,3 +99,7 @@ The original XREA/PHP implementation remains the reference implementation and is
 ## Wave66
 - No new D1 migration.
 - Added recurrence exception delete lifecycle, future-only series split, recurring child preservation, and notification lifecycle audit.
+
+## Wave67
+- No new D1 migration.
+- Per-date calendar band reservation, hidden recurring day-detail visibility, excluded occurrence restore UI, split-series lineage, recurring controller externalization, and expanded lifecycle/orphan audit.
