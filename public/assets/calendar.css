@@ -291,3 +291,50 @@
   .calendar-grid .calendar-cell{height:72px;min-height:72px;padding:3px 2px!important}
   .calendar-grid .calendar-item{font-size:7px;height:14px;line-height:14px}
 }
+
+/* Wave53: force calendar dates to the top-left in iOS/LIFF.
+ * Earlier rules already requested left alignment, but the shared global
+ * button display can still center content when a cached stylesheet wins.
+ * The grid layout below makes the day number's geometry explicit.
+ */
+.calendar-grid>.calendar-cell{
+  display:grid!important;
+  grid-template-rows:21px minmax(0,1fr)!important;
+  align-content:start!important;
+  align-items:start!important;
+  justify-items:stretch!important;
+  justify-content:stretch!important;
+  text-align:left!important;
+  padding-top:4px!important;
+}
+.calendar-grid>.calendar-cell>.num{
+  grid-row:1!important;
+  justify-self:start!important;
+  align-self:start!important;
+  width:100%!important;
+  max-width:100%!important;
+  height:21px!important;
+  min-height:21px!important;
+  margin:0!important;
+  padding:0 0 0 1px!important;
+  text-align:left!important;
+  line-height:18px!important;
+}
+.calendar-grid>.calendar-cell>.calendar-items{
+  grid-row:2!important;
+  align-self:start!important;
+  width:100%!important;
+  margin-top:0!important;
+}
+@media(max-width:600px){
+  .calendar-grid>.calendar-cell{
+    grid-template-rows:20px minmax(0,1fr)!important;
+    padding-top:3px!important;
+  }
+  .calendar-grid>.calendar-cell>.num{
+    height:20px!important;
+    min-height:20px!important;
+    line-height:18px!important;
+  }
+}
+
