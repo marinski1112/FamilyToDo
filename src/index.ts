@@ -35,6 +35,7 @@ export default {
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
       // 例外化/Response処理の差異による1101を避けるため。
       if(url.pathname==='/app/recurring.php') {
+        if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
         const context=await makeContext(request,env);
         if(!context.member) return new Response(null,{status:302,headers:{Location:new URL('/login.php',request.url).toString()}});
         return recurring(request,context);
