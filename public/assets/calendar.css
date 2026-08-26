@@ -486,3 +486,89 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   .modal-reorder{font-size:10px;padding:6px 8px;min-height:32px}
   .calendar-move{width:32px;height:32px;min-width:32px}
 }
+
+/* Wave64: dynamic week height so multi-day bands never cover dates and 3rd/4th tasks remain visible. */
+.calendar-week{
+  --calendar-band-rows:0;
+  --calendar-single-rows:1;
+  --calendar-accessory-rows:0;
+  --calendar-date-zone:30px;
+  --calendar-band-step:18px;
+  --calendar-task-step:17px;
+  --calendar-accessory-step:14px;
+}
+.calendar-week-days>.calendar-cell{
+  height:calc(
+    var(--calendar-date-zone)
+    + var(--calendar-band-rows) * var(--calendar-band-step)
+    + var(--calendar-single-rows) * var(--calendar-task-step)
+    + var(--calendar-accessory-rows) * var(--calendar-accessory-step)
+    + 10px
+  )!important;
+  min-height:96px!important;
+  padding-top:4px!important;
+}
+.calendar-week-days>.calendar-cell>.num{
+  position:relative!important;
+  z-index:6!important;
+  height:24px!important;
+  min-height:24px!important;
+  line-height:24px!important;
+  margin:0!important;
+  padding-left:1px!important;
+  display:flex!important;
+  align-items:flex-start!important;
+  justify-content:flex-start!important;
+}
+.calendar-week-bands{
+  top:30px!important;
+  grid-auto-rows:16px!important;
+  row-gap:2px!important;
+}
+.calendar-week-days .calendar-items{
+  margin-top:calc(var(--calendar-band-rows) * var(--calendar-band-step) + 3px)!important;
+  max-height:none!important;
+  overflow:visible!important;
+  gap:2px!important;
+}
+.calendar-week-days .calendar-item{
+  height:15px!important;
+  min-height:15px!important;
+  line-height:15px!important;
+}
+.calendar-task-overflow{
+  height:13px;
+  line-height:13px;
+  padding:0 3px;
+  font-size:8px;
+  font-weight:800;
+  color:#64748b;
+  text-align:left;
+  white-space:nowrap;
+}
+.calendar-week-more{
+  bottom:2px!important;
+  z-index:5!important;
+}
+@media(max-width:600px){
+  .calendar-week{
+    --calendar-date-zone:29px;
+    --calendar-band-step:17px;
+    --calendar-task-step:16px;
+    --calendar-accessory-step:13px;
+  }
+  .calendar-week-days>.calendar-cell{
+    min-height:92px!important;
+    height:calc(
+      var(--calendar-date-zone)
+      + var(--calendar-band-rows) * var(--calendar-band-step)
+      + var(--calendar-single-rows) * var(--calendar-task-step)
+      + var(--calendar-accessory-rows) * var(--calendar-accessory-step)
+      + 8px
+    )!important;
+  }
+  .calendar-week-bands{top:29px!important;grid-auto-rows:15px!important}
+  .calendar-week-days>.calendar-cell>.num{height:23px!important;min-height:23px!important;line-height:23px!important}
+  .calendar-week-days .calendar-items{margin-top:calc(var(--calendar-band-rows) * var(--calendar-band-step) + 2px)!important}
+  .calendar-task-overflow{font-size:7px;height:12px;line-height:12px}
+}
