@@ -5,6 +5,8 @@ import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, a
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
+import { familyAiQuery } from './family-ai';
+import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox } from './google-calendar';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -29,6 +31,7 @@ export default {
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
       if(url.pathname==='/__cf/google-home-health') return googleHomeHealth(env);
       if(url.pathname==='/oauth/google/token') return googleToken(request,env);
+      if(url.pathname==='/oauth/google-calendar/callback') return googleCalendarCallback(request,env);
       if(url.pathname==='/api/google-home/fulfillment') return googleFulfillment(request,env);
       if(url.pathname==='/liff'||url.pathname==='/liff/') {
         const liffContext=await makeContext(request,env);
@@ -49,6 +52,7 @@ export default {
       }
       const context=await makeContext(request,env);
       if(url.pathname==='/oauth/google/authorize') return googleAuthorize(request,context);
+      if(url.pathname==='/oauth/google-calendar/authorize') return googleCalendarAuthorize(request,context);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return liffLogin(request,context);
       if(url.pathname==='/api/family/create') return createFamily(request,context);
       if(url.pathname==='/api/family/join') return joinFamily(request,context);
@@ -60,6 +64,7 @@ export default {
       if(url.pathname==='/api/messages') return messages(request,context);
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/family-log') return familyLog(request,context);
+      if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
       if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
@@ -81,6 +86,7 @@ export default {
       if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/settings_google_home.php') return googleHomeSettings(request,context);
+      if(url.pathname==='/app/settings_integrations.php') return integrationsSettings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
       if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return webhook(request,env);
@@ -118,6 +124,7 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
     console.log(`[Family TODO LINE] scheduled ${controller.cron}; processing notifications`);
     ctx.waitUntil(processNotifications(env));
+    ctx.waitUntil(processCalendarOutbox(env));
   }
 } satisfies ExportedHandler<Env>;
 
@@ -152,6 +159,10 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     google_home_authorization_codes:['id','code_hash','family_id','member_id','client_id','redirect_uri','expires_at','used_at','created_at'],
     google_home_tokens:['id','family_id','member_id','access_token_hash','refresh_token_hash','access_expires_at','revoked_at','created_at','updated_at'],
     external_command_receipts:['id','provider','family_id','member_id','request_id','command_key','status','error_code','created_at','updated_at'],
+    external_calendar_accounts:['id','family_id','member_id','provider','refresh_token_ciphertext','token_key_version','calendar_id','status','last_synced_at','last_error'],
+    external_calendar_links:['id','family_id','task_id','provider','calendar_id','external_event_id','external_etag','last_synced_at','deleted_at'],
+    calendar_sync_outbox:['id','family_id','task_id','provider','operation','status','retry_count','next_retry_at','last_error'],
+    calendar_sync_state:['id','family_id','provider','calendar_id','sync_token','last_synced_at'],
   };
   const tables:any[]=[];
   let migrationRows:any[]=[];
@@ -200,6 +211,10 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['google_home_authorization_codes','SELECT id,code_hash,family_id,member_id,client_id,redirect_uri,expires_at,used_at,created_at FROM google_home_authorization_codes LIMIT 1'],
     ['google_home_tokens','SELECT id,family_id,member_id,access_token_hash,refresh_token_hash,access_expires_at,revoked_at,created_at,updated_at FROM google_home_tokens LIMIT 1'],
     ['external_command_receipts','SELECT id,provider,family_id,member_id,request_id,command_key,status,error_code,created_at,updated_at FROM external_command_receipts LIMIT 1'],
+    ['external_calendar_accounts','SELECT id,family_id,member_id,provider,token_key_version,calendar_id,status,last_synced_at,last_error FROM external_calendar_accounts LIMIT 1'],
+    ['external_calendar_links','SELECT id,family_id,task_id,provider,calendar_id,external_event_id,external_etag,last_synced_at,deleted_at FROM external_calendar_links LIMIT 1'],
+    ['calendar_sync_outbox','SELECT id,family_id,task_id,provider,operation,status,retry_count,next_retry_at,last_error FROM calendar_sync_outbox LIMIT 1'],
+    ['calendar_sync_state','SELECT id,family_id,provider,calendar_id,sync_token,last_synced_at FROM calendar_sync_state LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
     ['family_log_sleep_timer_integrity',"SELECT (SELECT COUNT(*) FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id WHERE x.log_type='SLEEP' AND x.status='running' AND COALESCE(s.subject_kind,'') NOT IN ('BABY','CHILD')) + (SELECT COUNT(*) FROM (SELECT family_id,subject_id FROM family_log_timers WHERE log_type='SLEEP' AND status='running' GROUP BY family_id,subject_id HAVING COUNT(*)>1)) + (SELECT COUNT(*) FROM family_log_timers WHERE log_type='SLEEP' AND status='running' AND (started_at_ms IS NULL OR started_at_ms<=0 OR started_at_ms>unixepoch('now')*1000 OR started_at_ms<(unixepoch('now')-172800)*1000)) issues"],
   ];
@@ -311,6 +326,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
       ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,now),
       ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
     );
+    try { await enqueueCalendarSync(ctx.env.DB,m.family_id,id,'DELETE'); } catch { /* deletion remains authoritative */ }
     await ctx.env.DB.batch(q);
     return json({ok:true});
   }
