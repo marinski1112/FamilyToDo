@@ -46,7 +46,8 @@ function requireMember(ctx: AppContext): CurrentMember {
 }
 
 export class AuthRequired extends Error {}
-class BadRequest extends Error {}
+export class BadRequest extends Error {}
+export class Forbidden extends Error {}
 
 async function bodyJson(request: Request): Promise<Record<string, unknown>> {
   const contentType = (request.headers.get('content-type') || '').toLowerCase();
@@ -80,7 +81,7 @@ async function ensureCsrf(ctx: AppContext, token: unknown) {
   if (!ctx.session.csrfToken) {
     ctx.session.csrfToken = crypto.randomUUID();
   }
-  if (typeof token !== 'string' || token !== ctx.session.csrfToken) throw new BadRequest('CSRF検証に失敗しました。');
+  if (typeof token !== 'string' || token !== ctx.session.csrfToken) throw new Forbidden('CSRF検証に失敗しました。');
 }
 
 export function layout(title: string, body: string, active = ''): string {
@@ -89,7 +90,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.97-wave78">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.99-wave80">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
 
@@ -1489,7 +1490,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
     }
     if(action==='quick_chore_restore'){
       const id=Number(b.id||0);if(!id)throw new BadRequest('家事項目が不正です。');
-      const result=await ctx.env.DB.prepare('UPDATE family_quick_chores SET active=1,updated_at=? WHERE id=? AND family_id=? AND active=0').bind(nowJst(),id,m.family_id).run();
+      const result=await ctx.env.DB.prepare('UPDATE family_quick_chores SET active=1,sort_order=(SELECT COALESCE(MAX(sort_order),0)+1 FROM family_quick_chores WHERE family_id=? AND active=1),updated_at=? WHERE id=? AND family_id=? AND active=0').bind(m.family_id,nowJst(),id,m.family_id).run();
       if(!result.meta.changes)return json({ok:false,error:'非表示の家事項目が見つかりません。'},404);
       await logActivity(ctx,'RESTORED','family_quick_chore',id,{});return json({ok:true,id});
     }
@@ -1512,8 +1513,8 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       const id=Number(b.id||0);const chore=await ctx.env.DB.prepare('SELECT id,name,icon FROM family_quick_chores WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
       if(!chore)return json({ok:false,error:'家事項目が見つかりません。'},404);
       const occurredAt=familyLogDateTime(b.occurred_at||nowJst());const now=nowJst();
-      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL)")
-        .bind(m.family_id,occurredAt,null,null,null,null,String(chore.name),null,null,null,m.id,now,now).run();
+      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at,quick_chore_id) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL,?)")
+        .bind(m.family_id,occurredAt,null,null,null,null,String(chore.name),null,null,null,m.id,now,now,id).run();
       const logId=Number(r.meta.last_row_id);await logActivity(ctx,'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:occurredAt,value_text:String(chore.name),quick_chore_id:id});
       return json({ok:true,id:logId});
     }
@@ -1568,10 +1569,13 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
     }
     if(action==='save'){
       const id=Number(b.id||0)||0;
-      const subjectId=Number(b.subject_id||0)||null;
+      let subjectId=Number(b.subject_id||0)||null;
+      const type=String(b.log_type||'').toUpperCase();if(!FAMILY_LOG_TYPES.includes(type))throw new BadRequest('記録種類が不正です。');
+      // HOUSEWORK is a family-wide event. The actor is represented by created_by,
+      // never by the log subject, including when a stale client submits a subject.
+      if(type==='HOUSEWORK')subjectId=null;
       let subjectRow:Row|undefined;
       if(subjectId){subjectRow=await ctx.env.DB.prepare('SELECT id,name,subject_kind,auto_complete_linked_task,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1').bind(subjectId,m.family_id).first<Row>()||undefined;if(!subjectRow)throw new BadRequest('記録対象が見つかりません。');}
-      const type=String(b.log_type||'').toUpperCase();if(!FAMILY_LOG_TYPES.includes(type))throw new BadRequest('記録種類が不正です。');
       const occurredAt=familyLogDateTime(b.occurred_at);
       const detail=String(b.detail_code||'').trim().toUpperCase()||null;
       if(detail&&detail.length>32)throw new BadRequest('詳細区分が長すぎます。');
@@ -1795,7 +1799,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
 
   <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyLogSubjectTitle">記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><input type="hidden" name="id"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>画面タイプ</label><select name="subject_kind"><option value="BABY">👶 赤ちゃん</option><option value="CHILD">🧒 子ども</option><option value="ADULT">👤 大人</option><option value="PET">🐾 ペット</option><option value="OTHER">⭐ その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><div class="family-log-type-setting-head"><label>表示する記録項目</label><button type="button" class="btn gray small" id="familyLogPresetApply">おすすめに戻す</button></div><div class="choice-list family-log-type-choice-grid">${subjectTypeChoices}</div><p class="small" id="familyLogSubjectGuide">対象タイプごとのおすすめ項目を使えます。</p><label class="checkrow family-log-auto-complete"><input type="checkbox" name="auto_complete_linked_task" id="familyLogAutoComplete"><span>この対象の記録時、関連タスクを記録した人の完了として反映する</span></label><p class="small">赤ちゃん・子ども・ペットではおすすめONです。担当者が未設定なら記録者を担当者として追加します。別の担当者が設定済みの場合は勝手に変更しません。</p><div id="familyLogSubjectLinked" class="notice" style="display:none"></div><button type="button" class="btn secondary" id="familyLogSubjectPromote" style="display:none">LINE本登録へ招待</button><div id="familyLogSubjectPromoteOut" class="notice" style="display:none"></div><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogSubjectDisable">対象を非表示</button></div></form><p class="small">家族メンバーは自動的に対象として表示されます。赤ちゃん・子どもは後から「LINE本登録へ招待」で同じ記録対象を家族メンバーへ引き継げます。</p></div></div>
   ${familyLogIsAdmin?`<div class="family-log-backdrop" id="familyQuickChoreModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyQuickChoreTitle">家事項目を追加</h2><button type="button" class="btn gray small" id="familyQuickChoreClose">×</button></div><form id="familyQuickChoreForm"><input type="hidden" name="id"><label>アイコン</label><input name="icon" maxlength="8" value="✨" placeholder="✨"><label>名前</label><input name="name" maxlength="80" required placeholder="例：玄関を掃く"><div id="familyQuickChoreStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyQuickChoreDisable">非表示</button></div></form><div class="family-quick-chore-manage"><div class="section-head"><h3>表示順</h3><span class="small">矢印で移動</span></div><div id="familyQuickChoreOrder"></div><div id="familyQuickChoreHidden"></div></div></div></div>`:''}
-  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.98-wave79"></script>`;
+  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.99-wave80"></script>`;
   return html(layout('家族ログ',body,'/app/family_log.php'));
 }
 

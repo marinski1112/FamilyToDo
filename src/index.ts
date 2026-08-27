@@ -1,5 +1,5 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
@@ -94,10 +94,12 @@ export default {
       return env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired) return redirect('/login.php');
+      if(e instanceof BadRequest) return json({ok:false,error:e.message||'入力内容が不正です。',code:'BAD_REQUEST'},400);
+      if(e instanceof Forbidden) return json({ok:false,error:e.message||'この操作は許可されていません。',code:'FORBIDDEN'},403);
       const message=String(e?.message||e||'内部エラーです。');
       const requestId=crypto.randomUUID();
       console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
-      if(/no such (table|column)|has no column named|no column named|UNIQUE constraint failed/i.test(message)) {
+      if(/no such (table|column)|has no column named|no column named/i.test(message)) {
         return json({ok:false,error:'D1のデータベース構成または制約がWorkerの最新版と一致していません。/ __cf/db-schema-health と /__cf/db-runtime-health を確認してください。',code:'DB_SCHEMA_MIGRATION_REQUIRED',path:url.pathname,request_id:requestId},503);
       }
       return json({ok:false,error:'内部エラーです。',code:'INTERNAL_ERROR',path:url.pathname,request_id:requestId},500);
