@@ -23,5 +23,6 @@ test "$(sqlite3 "$db" 'SELECT count(*) FROM task_completion_history')" = 1
 test "$(sqlite3 "$db" "SELECT count(*) FROM web_push_subscriptions s LEFT JOIN members m ON m.id=s.member_id WHERE s.family_id=85 AND s.failure_count>0")" = 1
 test "$(sqlite3 "$db" "SELECT count(*) FROM web_push_subscriptions s LEFT JOIN members m ON m.id=s.member_id WHERE s.family_id=85 AND s.enabled=1 AND m.active=0")" = 1
 test "$(sqlite3 "$db" "SELECT count(*) FROM web_push_subscriptions s LEFT JOIN members m ON m.id=s.member_id WHERE s.family_id=85 AND (m.id IS NULL OR m.family_id<>s.family_id)")" = 1
-! rg -n 'endpoint|p256dh|auth' <(sqlite3 "$db" "SELECT id,member_id,'failure' FROM web_push_subscriptions WHERE failure_count>0")
+diagnostic="$(sqlite3 "$db" "SELECT id,member_id,'failure' FROM web_push_subscriptions WHERE failure_count>0")"
+DIAGNOSTIC="$diagnostic" node -e "const value=process.env.DIAGNOSTIC||'';if(/endpoint|p256dh|auth/i.test(value)){console.error('push secret leaked');process.exit(1)}"
 echo 'wave85 smoke: ok'

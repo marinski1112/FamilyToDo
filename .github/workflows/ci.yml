@@ -16,5 +16,6 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm run check:browser-js
+      - run: npm run check:static-assets
       - run: npm run check:migrations
       - run: npm run check:domain-smoke
