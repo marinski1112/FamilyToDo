@@ -49,6 +49,20 @@ export class AuthRequired extends Error {}
 export class BadRequest extends Error {}
 export class Forbidden extends Error {}
 
+/** Central Wave83 predicate. There is deliberately no OWNER/ADMIN override. */
+export function taskVisibilitySql(alias='t'):string {
+  if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias))throw new Error('invalid task SQL alias');
+  return `(COALESCE(${alias}.visibility_scope,'FAMILY')='FAMILY' OR (${alias}.visibility_scope='PRIVATE' AND ${alias}.private_owner_id=?))`;
+}
+export function canAccessTask(task:Row|undefined|null,memberId:number):boolean {
+  return Boolean(task)&&(String(task!.visibility_scope||'FAMILY')==='FAMILY'||(String(task!.visibility_scope)==='PRIVATE'&&Number(task!.private_owner_id)===memberId));
+}
+async function accessibleTaskById(ctx:AppContext,id:number,columns='t.*'):Promise<Row|null>{
+  const m=requireMember(ctx);
+  return await ctx.env.DB.prepare(`SELECT ${columns} FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>()??null;
+}
+const privateTaskRequested=(b:Record<string,unknown>)=>familyLogTruthy(b.visibility_scope==='PRIVATE'||b.is_private,false);
+
 async function bodyJson(request: Request): Promise<Record<string, unknown>> {
   const contentType = (request.headers.get('content-type') || '').toLowerCase();
   if (contentType.includes('application/json')) {
@@ -290,19 +304,19 @@ async function makeViewData(ctx: AppContext, date:string) {
     ctx.env.DB.prepare(`SELECT t.*,
       (SELECT GROUP_CONCAT(m.name,'、') FROM task_assignees ta JOIN members m ON m.id=ta.member_id AND m.active=1 WHERE ta.task_id=t.id) AS assignees
       FROM tasks t
-      WHERE t.family_id=? AND t.status IN ('pending','completed')
+      WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status IN ('pending','completed')
         AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
         AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
           OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?)))
-      ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,date,date,date).all<Row>(),
+      ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,ctx.member!.id,date,date,date).all<Row>(),
     ctx.env.DB.prepare(`SELECT i.*, (SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) AS assignees
-      FROM items i WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at)=date(?) ORDER BY i.due_at,i.status,i.id`).bind(ctx.member!.family_id,date).all<Row>(),
+      FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at)=date(?) ORDER BY i.due_at,i.status,i.id`).bind(ctx.member!.family_id,ctx.member!.id,date).all<Row>(),
     recurringForDate(ctx,date),
     ctx.env.DB.prepare(`SELECT s.*, t.title AS task_title,
       (SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
-      WHERE s.family_id=? AND ((s.due_date IS NOT NULL AND s.due_date=?) OR (s.due_date IS NULL AND s.task_id IS NULL)) ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`).bind(ctx.member!.family_id,date).all<Row>(),
-    ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.description FROM tasks t WHERE t.family_id=? AND t.status='pending' AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template','event')) AND COALESCE(t.end_at,t.start_at,t.due_at) IS NOT NULL AND date(COALESCE(t.end_at,t.start_at,t.due_at)) < date(?) ORDER BY COALESCE(t.end_at,t.start_at,t.due_at),t.id`).bind(ctx.member!.family_id,date).all<Row>()
+      WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')}) AND ((s.due_date IS NOT NULL AND s.due_date=?) OR (s.due_date IS NULL AND s.task_id IS NULL)) ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`).bind(ctx.member!.family_id,ctx.member!.id,date).all<Row>(),
+    ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.description FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending' AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template','event')) AND COALESCE(t.end_at,t.start_at,t.due_at) IS NOT NULL AND date(COALESCE(t.end_at,t.start_at,t.due_at)) < date(?) ORDER BY COALESCE(t.end_at,t.start_at,t.due_at),t.id`).bind(ctx.member!.family_id,ctx.member!.id,date).all<Row>()
   ]);
   return {date,tasks:[...tasks.results,...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at))),items:items.results,shopping:shopping.results,expiredTasks:expiredTasks.results};
 }
@@ -318,7 +332,7 @@ export async function taskEvents(request: Request, ctx: AppContext, targetDate: 
   return html(renderDailyPage(ctx,safeDate,data,false,unorganized,true));
 }
 
-async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]> { return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.description,t.created_at,t.created_by,COALESCE(GROUP_CONCAT(m.name,'、'),'') assignees FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id=t.id LEFT JOIN members m ON m.id=ta.member_id AND m.active=1 WHERE t.family_id=? AND t.status='pending' AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event') AND t.start_at IS NULL AND t.end_at IS NULL AND t.due_at IS NULL GROUP BY t.id ORDER BY t.sort_order,t.id DESC LIMIT 50`).bind(ctx.member!.family_id).all<Row>()).results; }
+async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]> { return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.description,t.created_at,t.created_by,COALESCE(GROUP_CONCAT(m.name,'、'),'') assignees FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id=t.id LEFT JOIN members m ON m.id=ta.member_id AND m.active=1 WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending' AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event') AND t.start_at IS NULL AND t.end_at IS NULL AND t.due_at IS NULL GROUP BY t.id ORDER BY t.sort_order,t.id DESC LIMIT 50`).bind(ctx.member!.family_id,ctx.member!.id).all<Row>()).results; }
 
 function renderDailyPage(ctx:AppContext,date:string,data:{tasks:Row[];items:Row[];shopping:Row[];expiredTasks:Row[]},tomorrow:boolean,unorganized:Row[]=[],unified=false):string {
   const csrf=ctx.session.csrfToken ?? '';
@@ -368,6 +382,16 @@ function renderDailyPage(ctx:AppContext,date:string,data:{tasks:Row[];items:Row[
 async function logActivity(ctx: AppContext, action: string, targetType: string, targetId: number | null, metadata: Row = {}) {
   if (!ctx.member) return;
   try {
+    // Family activity logs are shared. Never place private task/child data there.
+    if(targetId&&targetType==='task'){
+      const task=await ctx.env.DB.prepare("SELECT visibility_scope FROM tasks WHERE id=? AND family_id=?").bind(targetId,ctx.member.family_id).first<Row>();
+      if(String(task?.visibility_scope)==='PRIVATE')return;
+    }
+    if(targetId&&(targetType==='item'||targetType==='shopping')){
+      const table=targetType==='item'?'items':'shopping_items';
+      const child=await ctx.env.DB.prepare(`SELECT t.visibility_scope FROM ${table} c JOIN tasks t ON t.id=c.task_id AND t.family_id=c.family_id WHERE c.id=? AND c.family_id=?`).bind(targetId,ctx.member.family_id).first<Row>();
+      if(String(child?.visibility_scope)==='PRIVATE')return;
+    }
     await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)')
       .bind(ctx.member.family_id,ctx.member.id,action,targetType,targetId,JSON.stringify(metadata),nowJst()).run();
   } catch (e) { console.error('[Family TODO LINE] activity log', e); }
@@ -405,7 +429,7 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
   }
 
   if(type==='task'){
-    const task=await ctx.env.DB.prepare('SELECT id,status,completion_mode,task_kind FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>(); if(!task)return json({ok:false,error:'タスクが見つかりません。'},404);
+    const task=await accessibleTaskById(ctx,id,'t.id,t.status,t.completion_mode,t.task_kind,t.visibility_scope,t.private_owner_id'); if(!task)return json({ok:false,error:'タスクが見つかりません。'},404);
     if(String(task.task_kind||'').toLowerCase()==='event')return json({ok:false,error:'イベントは完了チェックの対象外です。'},409);
     const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(id).first<Row>();
     const actorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
@@ -429,7 +453,7 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     const latest=await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); return commitSession(json({ok:true,status:String(latest?.status||'pending')}),ctx.session,ctx.env.APP_SECRET);
   }
   if(type==='item'){
-    const item=await ctx.env.DB.prepare('SELECT id FROM items WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>(); if(!item)return json({ok:false,error:'持ち物が見つかりません。'},404);
+    const item=await ctx.env.DB.prepare(`SELECT i.id FROM items i WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>(); if(!item)return json({ok:false,error:'持ち物が見つかりません。'},404);
     const itemAssigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=?').bind(id).first<Row>();
     const itemActorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=? AND ia.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
     if(Number(itemAssigned?.c||0)===0) return json({ok:false,error:'担当者が設定されていない持ち物は完了できません。'},409);
@@ -443,7 +467,7 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     const latest=itemComplete ? await ctx.env.DB.prepare('SELECT member_id,completed_at FROM item_completions WHERE item_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1').bind(id).first<Row>() : null;
     await ctx.env.DB.prepare('UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(itemComplete?'completed':'pending',itemComplete?Number(latest?.member_id||0)||null:null,itemComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run(); await ctx.env.DB.prepare('INSERT INTO item_completion_history(item_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run(); await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','item',id,{status:itemComplete?'completed':'pending'}); return commitSession(json({ok:true,status:itemComplete?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);
   }
-  const current=await ctx.env.DB.prepare('SELECT id,completion_mode FROM shopping_items WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>(); if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+  const current=await ctx.env.DB.prepare(`SELECT s.id,s.completion_mode FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>(); if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
   const shopAssigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=?').bind(id).first<Row>();
   const shopActorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=? AND sa.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
   if(Number(shopAssigned?.c||0)===0) return json({ok:false,error:'担当者が設定されていない買い物は完了できません。'},409);
@@ -524,7 +548,7 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
     FROM tasks t
     LEFT JOIN task_assignees ta ON ta.task_id=t.id
     LEFT JOIN members m ON m.id=ta.member_id AND m.active=1
-    WHERE t.family_id=? AND t.calendar_visible=1
+    WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.calendar_visible=1
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
       AND (
         (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
@@ -533,7 +557,7 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
       )
     GROUP BY t.id
     ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id
-  `).bind(fid,to,from,from,to).all<Row>();
+  `).bind(fid,member.id,to,from,from,to).all<Row>();
 
 
 
@@ -543,8 +567,8 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
   }
   const visibleRecur=recurRows.filter(t=>Number(t.calendar_visible??1)===1);
   const [shopping,items]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT s.*,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,from,to).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.*,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,from,to).all<Row>()
+    ctx.env.DB.prepare(`SELECT s.*,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')}) AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
+    ctx.env.DB.prepare(`SELECT i.*,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>()
   ]);
   return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...recurRows]));
 }
@@ -689,7 +713,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
         const url=String(b.url||'').trim()||null;
         if(url){try{const parsed=new URL(url);if(parsed.protocol!=='http:'&&parsed.protocol!=='https:')throw new Error();}catch{throw new BadRequest('商品URLが不正です。');}}
         const taskId=Number(b.task_id||0)||null;
-        if(taskId){const tr=await ctx.env.DB.prepare("SELECT id FROM tasks WHERE id=? AND family_id=? AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(taskId,m.family_id).first<Row>();if(!tr)throw new BadRequest('紐付け先タスクが見つかりません。');}
+        if(taskId){const tr=await ctx.env.DB.prepare("SELECT id FROM tasks WHERE id=? AND family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(taskId,m.family_id).first<Row>();if(!tr)throw new BadRequest('紐付け先タスクが見つかりません。');}
         const assignees=[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
         if(!assignees.length&&target)assignees.push(target);
         if(assignees.length){const valid=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();const ids=new Set(valid.results.map(x=>Number(x.id)));if(assignees.some(x=>!ids.has(x)))throw new BadRequest('担当者に無効なメンバーが含まれています。');}
@@ -704,7 +728,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       if(mode==='existing'){
         const taskId=Number(b.task_id||0);
         if(!taskId) throw new BadRequest('追加先のタスクを選択してください。');
-        const task=await ctx.env.DB.prepare("SELECT id,description FROM tasks WHERE id=? AND family_id=? AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(taskId,m.family_id).first<Row>();
+        const task=await ctx.env.DB.prepare("SELECT id,description FROM tasks WHERE id=? AND family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(taskId,m.family_id).first<Row>();
         if(!task) throw new BadRequest('追加先のタスクが見つかりません。');
         if(b.append_message!==false && String(b.append_message)!=='0'){
           const current=String(task.description||'').trim(); const addition=String(msg.text||'').trim();
@@ -757,9 +781,9 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
     return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
   }
   const [rows,members,tasks]=await Promise.all([
-    ctx.env.DB.prepare('SELECT msg.*,s.name sender_name,r.name recipient_name,sh.name shopping_name,t.title task_title FROM messages msg LEFT JOIN members s ON s.id=msg.sender_id LEFT JOIN members r ON r.id=msg.target_member_id LEFT JOIN shopping_items sh ON sh.id=msg.converted_to_shopping_id LEFT JOIN tasks t ON t.id=msg.converted_to_task_id WHERE msg.family_id=? ORDER BY msg.created_at DESC,msg.id DESC LIMIT 100').bind(m.family_id).all<Row>(),
+    ctx.env.DB.prepare(`SELECT msg.*,s.name sender_name,r.name recipient_name,sh.name shopping_name,t.title task_title FROM messages msg LEFT JOIN members s ON s.id=msg.sender_id LEFT JOIN members r ON r.id=msg.target_member_id LEFT JOIN shopping_items sh ON sh.id=msg.converted_to_shopping_id LEFT JOIN tasks t ON t.id=msg.converted_to_task_id AND (t.visibility_scope='FAMILY' OR t.private_owner_id=?) WHERE msg.family_id=? ORDER BY msg.created_at DESC,msg.id DESC LIMIT 100`).bind(m.id,m.family_id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
-    ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) ORDER BY COALESCE(start_at,due_at),id DESC LIMIT 200").bind(m.family_id).all<Row>()
+    ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) ORDER BY COALESCE(start_at,due_at),id DESC LIMIT 200").bind(m.family_id).all<Row>()
   ]);
   const today=dateOnly();
   const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>💬 伝言</h1></div><a class="btn" href="/app/message_new.php">＋ 伝言する</a></div>
@@ -814,7 +838,7 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
     const action=String(b.action??'add');
     if(action==='to_task'){
       const id=Number(b.id||0);
-      const item=await ctx.env.DB.prepare('SELECT * FROM shopping_items WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>();
+      const item=await ctx.env.DB.prepare(`SELECT s.* FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
       if(!item) return json({ok:false,error:'買い物項目が見つかりません。'},404);
       const now=nowJst();
       const due=String(item.due_date||'').trim();
@@ -845,7 +869,7 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
       if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
       const taskId=Number(b.task_id??0)||null;
             if(taskId){
-        const t=await ctx.env.DB.prepare('SELECT id,start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();
+        const t=await ctx.env.DB.prepare(`SELECT t.id,t.start_at,t.due_at FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first<Row>();
         if(!t)throw new BadRequest('関連タスクが見つかりません。');
         if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;
       }
@@ -864,7 +888,7 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
       let due=String(b.due_date??'').trim()||null;
       if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('期限の日付が不正です。');
       const taskId=Number(b.task_id??0)||null;
-            if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;}
+            if(taskId){const t=await ctx.env.DB.prepare(`SELECT t.start_at,t.due_at FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first<Row>();if(!t)throw new BadRequest('関連タスクが見つかりません。');if(!due)due=String(t.start_at||t.due_at||'').slice(0,10)||null;}
       const now=nowJst();
       const rawUrl=String(b.url??'').trim(); if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('商品URLが不正です。');}} await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,memo,due,m.id,now,now,taskId,rawUrl||null).run();
       return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
@@ -912,7 +936,7 @@ export async function home(ctx:AppContext):Promise<Response>{
   const m=ctx.member;if(!m)return redirect('/liff?next=%2Fapp%2Findex.php');
   const family=await ctx.env.DB.prepare('SELECT * FROM families WHERE id=? LIMIT 1').bind(m.family_id).first<Row>();
   const today=dateOnly();const td=new Date(`${today}T12:00:00Z`);td.setUTCDate(td.getUTCDate()+1);const tomorrowDate=td.toISOString().slice(0,10);
-  const taskRowsForDate=(date:string)=>ctx.env.DB.prepare(`SELECT id,status,task_kind FROM tasks WHERE family_id=? AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?)))`).bind(m.family_id,date,date,date).all<Row>();
+  const taskRowsForDate=(date:string)=>ctx.env.DB.prepare(`SELECT id,status,task_kind FROM tasks t WHERE family_id=? AND ${taskVisibilitySql('t')} AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?)))`).bind(m.family_id,m.id,date,date,date).all<Row>();
   const [todayPhysical,tomorrowPhysical,todayRecurring,tomorrowRecurring,shoppingCount,messageCount,familyLogCount]=await Promise.all([
     taskRowsForDate(today),taskRowsForDate(tomorrowDate),recurringForDate(ctx,today),recurringForDate(ctx,tomorrowDate),
     ctx.env.DB.prepare("SELECT count(*) c FROM shopping_items WHERE family_id=? AND status='pending'").bind(m.family_id).first<Row>(),
@@ -989,7 +1013,7 @@ function allDayDateEnd(startDate:string,endDate:string):boolean{return startDate
 
 export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{
   const m=requireMember(ctx);
-  const task=await ctx.env.DB.prepare('SELECT * FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>();
+  const task=await accessibleTaskById(ctx,id);
   if(!task) return new Response('タスクが見つかりません。',{status:404});
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id)) return new Response('編集権限がありません。',{status:403});
@@ -1005,6 +1029,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const b=await bodyJson(request); await ensureCsrf(ctx,b.csrf);
     const title=String(b.title||'').trim();
     const isEvent=Boolean(b.is_event);
+    const makePrivate=!isEvent&&privateTaskRequested(b);
     const date=String(b.date||'').trim(); const noDate=!isEvent&&(Boolean(b.no_date)||date==='');
     if(!title) throw new BadRequest('タイトルを入力してください。');
     if(isEvent&&!date) throw new BadRequest('イベントには日付を指定してください。');
@@ -1031,11 +1056,11 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     for(const v of shopping){const u=String((v as any)?.url||'').trim();if(!validUrl(u))throw new BadRequest('買い物URLが不正です。');}
 
     await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id).run();
-    await ctx.env.DB.prepare("UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,task_kind=?,status=CASE WHEN ?=1 THEN 'pending' ELSE status END,completed_by=CASE WHEN ?=1 THEN NULL ELSE completed_by END,completed_at=CASE WHEN ?=1 THEN NULL ELSE completed_at END,updated_at=? WHERE id=? AND family_id=?")
-      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
+    await ctx.env.DB.prepare("UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,task_kind=?,visibility_scope=?,private_owner_id=?,completion_mode=CASE WHEN ?='PRIVATE' THEN 'ANY' ELSE completion_mode END,status=CASE WHEN ?=1 THEN 'pending' ELSE status END,completed_by=CASE WHEN ?=1 THEN NULL ELSE completed_by END,completed_at=CASE WHEN ?=1 THEN NULL ELSE completed_at END,updated_at=? WHERE id=? AND family_id=?")
+      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null,makePrivate?'PRIVATE':'FAMILY',isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
     if(isEvent) await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id).run();
 
-    const assignees=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
+    const assignees=makePrivate?[m.id]:(Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[]);
     await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id).run();
     if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
     // 担当変更時は、現在の担当外になったメンバーの operational completion を解除する。履歴は保持する。
@@ -1115,7 +1140,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label>日付</label><div class="date-option-row"><div><span class="small">開始日</span><input id="editTaskDate" type="date" name="date" value="${safe(d)}"></div><div><span class="small">終了日</span><input id="editTaskEndDate" type="date" name="end_date" value="${safe(String(task.end_at||task.start_at||task.due_at||'').slice(0,10))}"></div><label class="checkrow"><input id="editNoDate" type="checkbox" name="no_date" ${noDate?'checked':''}> <span>期限なし（未整理）</span></label></div>
     <div id="editTimeFields" class="task-time-fields"><div class="field-block"><label>開始時刻</label><input type="time" name="start_time" value="${safe(st)}"></div><div class="field-block"><label>終了時刻</label><input type="time" name="end_time" value="${safe(et)}"></div></div>
     <label>場所</label><input name="location" value="${safe(task.location||'')}">
-    <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea>
+    <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea><label class="checkrow"><input id="editIsPrivate" type="checkbox" name="is_private" ${String(task.visibility_scope||'FAMILY')==='PRIVATE'?'checked':''}><span>🔒 自分専用</span></label><p class="small">他の家族にはタスク・カレンダー・詳細を表示しません</p>
     <label class="checkrow"><input id="editAllDay" type="checkbox" name="all_day" ${Number(task.all_day??0)?'checked':''}> 終日</label>
     <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed" ${String(task.calendar_color||'#7c3aed')==='#7c3aed'?'selected':''}>紫</option><option value="#2563eb" ${String(task.calendar_color||'')==='#2563eb'?'selected':''}>青</option><option value="#16a34a" ${String(task.calendar_color||'')==='#16a34a'?'selected':''}>緑</option><option value="#ea580c" ${String(task.calendar_color||'')==='#ea580c'?'selected':''}>橙</option><option value="#dc2626" ${String(task.calendar_color||'')==='#dc2626'?'selected':''}>赤</option><option value="#db2777" ${String(task.calendar_color||'')==='#db2777'?'selected':''}>ピンク</option><option value="#0891b2" ${String(task.calendar_color||'')==='#0891b2'?'selected':''}>水色</option><option value="#64748b" ${String(task.calendar_color||'')==='#64748b'?'selected':''}>灰</option></select></div>
     <label>担当者</label><div class="assignee-list">${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}" ${selected.has(Number(x.id))?'checked':''}> ${safe(x.name)}</label>`).join('')}</div>
@@ -1123,13 +1148,13 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><label>カテゴリー（全商品共通）</label><input name="shopping_category" value="${safe(shops.results[0]?.category||'')}" list="taskShopCategories" placeholder="例：食品"><datalist id="taskShopCategories">${categories.results.map(c=>`<option value="${safe(c.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
     <div class="sub-card"><button type="button" class="section-button" id="itemToggle">🎒 持ち物を編集</button><div id="itemBox" ${items.results.length?'':'style="display:none"'}><div id="itemRows">${itemRows||`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="0"><input name="item_name[]" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
-    <script src="/assets/task-edit.js?v=12.97-wave78"></script>`;
+    <script src="/assets/task-edit.js?v=12.102-wave83"></script>`;
   return html(layout('タスク・イベント編集',body,''));
 }
 
 export async function taskApiLegacy(request:Request,ctx:AppContext):Promise<Response>{
   const m=requireMember(ctx); const id=Number(new URL(request.url).searchParams.get('id')||0); if(!id) return json({ok:false,error:'idが不正です。'},400);
-  const task=await ctx.env.DB.prepare('SELECT created_by FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); if(!task) return json({ok:false,error:'対象が見つかりません。'},404);
+  const task=await accessibleTaskById(ctx,id,'t.created_by,t.visibility_scope,t.private_owner_id'); if(!task) return json({ok:false,error:'対象が見つかりません。'},404);
   const role=String(m.role||'').toUpperCase(); if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id)) return json({ok:false,error:'権限がありません。'},403);
   if(request.method==='DELETE'){
     const csrf=request.headers.get('x-csrf'); await ensureCsrf(ctx,csrf);
@@ -1155,23 +1180,23 @@ export async function taskApiLegacy(request:Request,ctx:AppContext):Promise<Resp
 }
 
 export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{
-  const m=requireMember(ctx); const item=await ctx.env.DB.prepare('SELECT * FROM items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); if(!item) return new Response('持ち物が見つかりません。',{status:404});
+  const m=requireMember(ctx); const item=await ctx.env.DB.prepare(`SELECT i.* FROM items i WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id AND ${taskVisibilitySql('t')}))`).bind(id,m.family_id,m.id).first<Row>(); if(!item) return new Response('持ち物が見つかりません。',{status:404});
   const role=String(m.role||'').toUpperCase(); if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id)) return new Response('編集権限がありません。',{status:403});
-  const tasks=await ctx.env.DB.prepare(`SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id`).bind(m.family_id).all<Row>();
+  const tasks=await ctx.env.DB.prepare(`SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id`).bind(m.family_id).all<Row>();
   const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(); const assigned=await ctx.env.DB.prepare('SELECT member_id FROM item_assignees WHERE item_id=?').bind(id).all<Row>(); const assignedSet=new Set(assigned.results.map(x=>Number(x.member_id)));
   const history=await ctx.env.DB.prepare('SELECT h.*,m.name member_name FROM item_completion_history h LEFT JOIN members m ON m.id=h.member_id WHERE h.item_id=? ORDER BY h.occurred_at DESC,h.id DESC LIMIT 30').bind(id).all<Row>();
-  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save'); if(action==='delete'){await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id),...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(id,m.family_id)]);return redirect('/app/tasks.php');} const name=String(b.name||'').trim();if(!name)throw new BadRequest('持ち物名を入力してください。');const taskId=Number(b.task_id||0)||null;let due: string|null=null;if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}else if(String(b.due_mode||'none')==='date'){due=String(b.due_date||'').trim()||null;if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('日付が不正です。');}await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,due_at=?,task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(name,String(b.memo||'')||null,due,taskId,nowJst(),id,m.family_id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];await ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id).run();if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT member_id FROM item_assignees WHERE item_id=?)').bind(id,id).run();await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>=(SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();return redirect(`/app/tasks.php${due?'?date='+encodeURIComponent(due):''}`);}
+  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save'); if(action==='delete'){await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id),...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(id,m.family_id)]);return redirect('/app/tasks.php');} const name=String(b.name||'').trim();if(!name)throw new BadRequest('持ち物名を入力してください。');const taskId=Number(b.task_id||0)||null;let due: string|null=null;if(taskId){const t=await ctx.env.DB.prepare(`SELECT t.start_at,t.due_at FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}else if(String(b.due_mode||'none')==='date'){due=String(b.due_date||'').trim()||null;if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))throw new BadRequest('日付が不正です。');}await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,due_at=?,task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(name,String(b.memo||'')||null,due,taskId,nowJst(),id,m.family_id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];await ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id).run();if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT member_id FROM item_assignees WHERE item_id=?)').bind(id,id).run();await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>=(SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();return redirect(`/app/tasks.php${due?'?date='+encodeURIComponent(due):''}`);}
   const d=String(item.due_at||'').slice(0,10); const body=`<div class="card"><h1>🎒 持ち物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="id" value="${id}"><label>持ち物</label><input name="name" required value="${esc(item.name)}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map(t=>`<option value="${t.id}" ${Number(item.task_id)===Number(t.id)?'selected':''}>${esc(t.title)}</option>`).join('')}</select><label>日付（タスクを指定しない場合）</label><input type="date" name="due_date" value="${esc(d)}"><label>担当者</label><div class="assignee-list">${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}" ${assignedSet.has(Number(x.id))?'checked':''}> ${esc(x.name)}</label>`).join('')}</div><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(h=>`<div class="row">${esc(h.action)} ・ ${esc(h.member_name||'')} ・ ${esc(h.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この持ち物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;return html(layout('持ち物編集',body,''));
 }
 
 export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{
-  const m=requireMember(ctx); const item=await ctx.env.DB.prepare('SELECT * FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>(); if(!item) return new Response('買い物が見つかりません。',{status:404}); const role=String(m.role||'').toUpperCase(); if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id)) return new Response('編集権限がありません。',{status:403});
-  const tasks=await ctx.env.DB.prepare(`SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id`).bind(m.family_id).all<Row>();
+  const m=requireMember(ctx); const item=await ctx.env.DB.prepare(`SELECT s.* FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')}))`).bind(id,m.family_id,m.id).first<Row>(); if(!item) return new Response('買い物が見つかりません。',{status:404}); const role=String(m.role||'').toUpperCase(); if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id)) return new Response('編集権限がありません。',{status:403});
+  const tasks=await ctx.env.DB.prepare(`SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id`).bind(m.family_id).all<Row>();
   const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
   const assigned=await ctx.env.DB.prepare('SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?').bind(id).all<Row>();
   const history=await ctx.env.DB.prepare('SELECT h.*,m.name member_name FROM shopping_completion_history h LEFT JOIN members m ON m.id=h.member_id WHERE h.shopping_item_id=? ORDER BY h.occurred_at DESC,h.id DESC LIMIT 30').bind(id).all<Row>();
   const assignedSet=new Set(assigned.results.map(x=>Number(x.member_id)));
-  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save');if(action==='delete'){await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id),...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id)]);return redirect('/app/shopping.php');}const name=String(b.name||'').trim();if(!name)throw new BadRequest('商品名を入力してください。');const rawUrl=String(b.url||'').trim();if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('URLが不正です。');}}const qty=String(b.quantity||'1').trim()||'1';const taskId=Number(b.task_id||0)||null;let due=String(b.due_date||'').trim()||null;if(taskId){const t=await ctx.env.DB.prepare('SELECT start_at,due_at FROM tasks WHERE id=? AND family_id=?').bind(taskId,m.family_id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,qty,String(b.category||'')||null,String(b.memo||'')||null,due,taskId,rawUrl||null,nowJst(),id,m.family_id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];await ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id).run();if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));await ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?)').bind(id,id).run();await ctx.env.DB.prepare("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=shopping_items.id)=0 THEN 'pending' WHEN (SELECT COUNT(*) FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=shopping_items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();return redirect('/app/shopping.php');}
+  if(request.method==='POST'){const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);const action=String(b.action||'save');if(action==='delete'){await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id),...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id)]);return redirect('/app/shopping.php');}const name=String(b.name||'').trim();if(!name)throw new BadRequest('商品名を入力してください。');const rawUrl=String(b.url||'').trim();if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{throw new BadRequest('URLが不正です。');}}const qty=String(b.quantity||'1').trim()||'1';const taskId=Number(b.task_id||0)||null;let due=String(b.due_date||'').trim()||null;if(taskId){const t=await ctx.env.DB.prepare(`SELECT t.start_at,t.due_at FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first<Row>();if(!t)throw new BadRequest('タスクが見つかりません。');due=String(t.start_at||t.due_at||'').slice(0,10)||null;}await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,qty,String(b.category||'')||null,String(b.memo||'')||null,due,taskId,rawUrl||null,nowJst(),id,m.family_id).run();const aids=Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];await ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id).run();if(aids.length)await ctx.env.DB.batch(aids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));await ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?)').bind(id,id).run();await ctx.env.DB.prepare("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=shopping_items.id)=0 THEN 'pending' WHEN (SELECT COUNT(*) FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=shopping_items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();return redirect('/app/shopping.php');}
   const body=`<div class="card"><h1>🛒 買い物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" required value="${esc(item.name)}"><label>数量</label><input type="text" name="quantity" value="${esc(item.quantity||'1')}"><label>カテゴリー</label><input name="category" value="${esc(item.category||'')}"><label>URL</label><input type="url" name="url" value="${esc(item.url||'')}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>担当者</label>${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}" ${assignedSet.has(Number(x.id))?'checked':''}> ${esc(x.name)}</label>`).join('')}<label>紐づくタスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map(t=>`<option value="${t.id}" ${Number(item.task_id)===Number(t.id)?'selected':''}>${esc(t.title)}</option>`).join('')}</select><label>期限日</label><input type="date" name="due_date" value="${esc(item.due_date||'')}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(h=>`<div class="row">${esc(h.action)} ・ ${esc(h.member_name||'')} ・ ${esc(h.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この買い物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;return html(layout('買い物編集',body,''));
 }
 
@@ -1237,7 +1262,7 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
 
 export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):Promise<Response>{
   const m=requireMember(ctx); const d=date&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
-  const [tasks,members]=await Promise.all([ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(m.family_id).all<Row>(),ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>()]);
+  const [tasks,members]=await Promise.all([ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(m.family_id).all<Row>(),ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>()]);
   const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId)}`;
   return html(layout('買い物を追加',body,'/app/shopping.php'));
 }
@@ -1416,16 +1441,22 @@ function familyLogTruthy(value:unknown, fallback=false):boolean{
   if(typeof value==='boolean')return value;
   return ['1','true','on','yes'].includes(String(value).toLowerCase());
 }
-async function saveTaskFamilyLogTemplate(ctx:AppContext,taskId:number,b:Record<string,unknown>):Promise<void>{
-  const m=requireMember(ctx),enabled=familyLogTruthy(b.family_log_enabled,false),now=nowJst();
-  const current=await ctx.env.DB.prepare('SELECT id FROM task_family_log_templates WHERE task_id=? AND family_id=? AND active=1 LIMIT 1').bind(taskId,m.family_id).first<Row>();
-  if(!enabled){if(current)await ctx.env.DB.prepare('UPDATE task_family_log_templates SET active=0,updated_at=? WHERE id=? AND family_id=?').bind(now,Number(current.id),m.family_id).run();return;}
+type ValidatedTaskFamilyLogTemplate={enabled:boolean;values:unknown[]};
+async function validateTaskFamilyLogTemplateInput(ctx:AppContext,b:Record<string,unknown>):Promise<ValidatedTaskFamilyLogTemplate>{
+  const m=requireMember(ctx),enabled=familyLogTruthy(b.family_log_enabled,false);
+  if(!enabled)return {enabled:false,values:[]};
   const logType=String(b.family_log_type||'').toUpperCase();if(!FAMILY_LOG_TYPES.includes(logType))throw new BadRequest('家族ログの記録種類が不正です。');
   let subjectId=Number(b.family_log_subject_id||0)||null;
   if(logType==='HOUSEWORK')subjectId=null;
   if(subjectId){const subject=await ctx.env.DB.prepare('SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(subjectId,m.family_id).first<Row>();if(!subject||!familyLogEnabledTypes(subject).includes(logType))throw new BadRequest('家族ログの対象または記録種類を利用できません。');}
   else if(logType!=='HOUSEWORK')throw new BadRequest('家族ログの記録対象を選択してください。');
-  const values=[subjectId,logType,String(b.family_log_detail_code||'').trim()||null,Number.isFinite(Number(b.family_log_amount))&&String(b.family_log_amount??'')!==''?Number(b.family_log_amount):null,String(b.family_log_unit||'').trim().slice(0,40)||null,Number.isInteger(Number(b.family_log_duration_minutes))&&String(b.family_log_duration_minutes??'')!==''?Math.max(0,Math.min(10080,Number(b.family_log_duration_minutes))):null,String(b.family_log_value_text||'').trim().slice(0,255)||null,String(b.family_log_note||'').trim().slice(0,2000)||null];
+  return {enabled:true,values:[subjectId,logType,String(b.family_log_detail_code||'').trim()||null,Number.isFinite(Number(b.family_log_amount))&&String(b.family_log_amount??'')!==''?Number(b.family_log_amount):null,String(b.family_log_unit||'').trim().slice(0,40)||null,Number.isInteger(Number(b.family_log_duration_minutes))&&String(b.family_log_duration_minutes??'')!==''?Math.max(0,Math.min(10080,Number(b.family_log_duration_minutes))):null,String(b.family_log_value_text||'').trim().slice(0,255)||null,String(b.family_log_note||'').trim().slice(0,2000)||null]};
+}
+async function saveTaskFamilyLogTemplate(ctx:AppContext,taskId:number,b:Record<string,unknown>,validated?:ValidatedTaskFamilyLogTemplate):Promise<void>{
+  const m=requireMember(ctx),parsed=validated??await validateTaskFamilyLogTemplateInput(ctx,b),enabled=parsed.enabled,now=nowJst();
+  const current=await ctx.env.DB.prepare('SELECT id FROM task_family_log_templates WHERE task_id=? AND family_id=? AND active=1 LIMIT 1').bind(taskId,m.family_id).first<Row>();
+  if(!enabled){if(current)await ctx.env.DB.prepare('UPDATE task_family_log_templates SET active=0,updated_at=? WHERE id=? AND family_id=?').bind(now,Number(current.id),m.family_id).run();return;}
+  const values=parsed.values;
   if(current)await ctx.env.DB.prepare('UPDATE task_family_log_templates SET subject_id=?,log_type=?,detail_code=?,amount=?,unit=?,duration_minutes=?,value_text=?,note=?,updated_at=? WHERE id=? AND family_id=?').bind(...values,now,Number(current.id),m.family_id).run();
   else await ctx.env.DB.prepare('INSERT INTO task_family_log_templates(family_id,task_id,subject_id,log_type,detail_code,amount,unit,duration_minutes,value_text,note,active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,?,?,?)').bind(m.family_id,taskId,...values,m.id,now,now).run();
 }
@@ -1711,7 +1742,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const timerWhere=selectedSubject?"x.family_id=? AND x.status='running' AND x.subject_id=?":"x.family_id=? AND x.status='running'";
   const timerParams=selectedSubject?[m.family_id,selectedSubject]:[m.family_id];
   const timers=await ctx.env.DB.prepare(`SELECT x.*,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE ${timerWhere} ORDER BY x.started_at_ms`).bind(...timerParams).all<Row>();
-  const physical=await ctx.env.DB.prepare(`SELECT id,title,task_kind FROM tasks WHERE family_id=? AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?))) ORDER BY sort_order,id`).bind(m.family_id,selectedDate,selectedDate,selectedDate).all<Row>();
+  const physical=await ctx.env.DB.prepare(`SELECT id,title,task_kind FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?))) ORDER BY sort_order,id`).bind(m.family_id,selectedDate,selectedDate,selectedDate).all<Row>();
   const recurring=await recurringForDate(ctx,selectedDate);
   const quickChores=await ctx.env.DB.prepare('SELECT id,name,icon,sort_order,active FROM family_quick_chores WHERE family_id=? ORDER BY active DESC,sort_order,id').bind(m.family_id).all<Row>();
   const choreAggregateRows=await ctx.env.DB.prepare(`WITH periods(period,start_date) AS (
@@ -1874,7 +1905,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
 export async function settingsContent(ctx:AppContext):Promise<Response>{
   const m=requireMember(ctx),role=String(m.role||'').toUpperCase(),admin=role==='OWNER'||role==='ADMIN';
   const [tasks,items,shops,msgs,familyLogs]=await Promise.all([
-    ctx.env.DB.prepare('SELECT id,title,status,created_at,created_by FROM tasks WHERE family_id=? ORDER BY id DESC LIMIT 30').bind(m.family_id).all<Row>(),
+    ctx.env.DB.prepare(`SELECT id,title,status,created_at,created_by FROM tasks t WHERE family_id=? AND ${taskVisibilitySql('t')} ORDER BY id DESC LIMIT 30`).bind(m.family_id,m.id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name,status,created_at,created_by FROM items WHERE family_id=? ORDER BY id DESC LIMIT 30').bind(m.family_id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name,status,created_at,created_by FROM shopping_items WHERE family_id=? ORDER BY id DESC LIMIT 30').bind(m.family_id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,text,created_at,sender_id FROM messages WHERE family_id=? ORDER BY id DESC LIMIT 30').bind(m.family_id).all<Row>(),
@@ -1904,7 +1935,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id)) + (SELECT COUNT(*) FROM item_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id)) + (SELECT COUNT(*) FROM shopping_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id)) c").bind(familyId,familyId,familyId).first<Row>(),
     ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id)) + (SELECT COUNT(*) FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.quick_chore_id IS NOT NULL AND (l.log_type<>'HOUSEWORK' OR NOT EXISTS(SELECT 1 FROM family_quick_chores q WHERE q.id=l.quick_chore_id AND q.family_id=l.family_id))) c").bind(familyId,familyId,familyId,familyId).first<Row>(),
     ctx.env.DB.prepare("SELECT COUNT(*) c FROM family_invitations i WHERE i.family_id=? AND i.family_log_subject_id IS NOT NULL AND i.used_at IS NULL AND i.expires_at>? AND (NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1) OR EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1 AND s.member_id IS NOT NULL))").bind(familyId,diagnosticNow).first<Row>(),
-    ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_family_log_templates ft WHERE ft.family_id=? AND (NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=ft.task_id AND t.family_id=ft.family_id) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1)) OR (ft.log_type='HOUSEWORK' AND ft.subject_id IS NOT NULL))) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.task_family_log_template_id IS NOT NULL AND (l.linked_occurrence_id IS NULL OR NOT EXISTS(SELECT 1 FROM task_family_log_templates ft WHERE ft.id=l.task_family_log_template_id AND ft.family_id=l.family_id))) c").bind(familyId,familyId).first<Row>()
+    ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_family_log_templates ft WHERE ft.family_id=? AND (NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=ft.task_id AND t.family_id=ft.family_id) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1)) OR (ft.log_type='HOUSEWORK' AND ft.subject_id IS NOT NULL) OR (ft.log_type<>'HOUSEWORK' AND ft.subject_id IS NULL) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1 AND (fs.enabled_types_json IS NULL OR instr(fs.enabled_types_json,ft.log_type)>0))))) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.task_family_log_template_id IS NOT NULL AND (l.linked_occurrence_id IS NULL OR NOT EXISTS(SELECT 1 FROM task_family_log_templates ft WHERE ft.id=l.task_family_log_template_id AND ft.family_id=l.family_id))) c").bind(familyId,familyId).first<Row>()
   ]);
   const labels=[
     ['通知の重複グループ','同じ宛先・対象・日時でpending/retryが複数ある状態'],
@@ -1934,7 +1965,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     ctx.env.DB.prepare("SELECT 'task' kind,a.task_id entity_id,a.member_id FROM task_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id) UNION ALL SELECT 'item',a.item_id,a.member_id FROM item_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id) UNION ALL SELECT 'shopping',a.shopping_item_id,a.member_id FROM shopping_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id) LIMIT 20").bind(familyId,familyId,familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT 'subject_member' kind,s.id entity_id,s.member_id linked_id FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id) UNION ALL SELECT 'log_subject',l.id,l.subject_id FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id) UNION ALL SELECT 'timer_subject',x.id,x.subject_id FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id) UNION ALL SELECT CASE WHEN l.log_type<>'HOUSEWORK' THEN 'quick_chore_wrong_type' WHEN q.id IS NULL THEN 'quick_chore_missing' ELSE 'quick_chore_family_mismatch' END,l.id,l.quick_chore_id FROM family_logs l LEFT JOIN family_quick_chores q ON q.id=l.quick_chore_id WHERE l.family_id=? AND l.quick_chore_id IS NOT NULL AND (l.log_type<>'HOUSEWORK' OR q.id IS NULL OR q.family_id<>l.family_id) LIMIT 20").bind(familyId,familyId,familyId,familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT i.id,i.family_log_subject_id,i.expires_at,s.name subject_name,s.active subject_active,s.member_id FROM family_invitations i LEFT JOIN family_log_subjects s ON s.id=i.family_log_subject_id AND s.family_id=i.family_id WHERE i.family_id=? AND i.family_log_subject_id IS NOT NULL AND i.used_at IS NULL AND i.expires_at>? AND (s.id IS NULL OR s.active<>1 OR s.member_id IS NOT NULL) LIMIT 20").bind(familyId,diagnosticNow).all<Row>(),
-    ctx.env.DB.prepare("SELECT 'template' kind,ft.id,ft.task_id linked_id FROM task_family_log_templates ft WHERE ft.family_id=? AND (NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=ft.task_id AND t.family_id=ft.family_id) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1)) OR (ft.log_type='HOUSEWORK' AND ft.subject_id IS NOT NULL)) UNION ALL SELECT 'log',l.id,l.linked_occurrence_id FROM family_logs l WHERE l.family_id=? AND l.task_family_log_template_id IS NOT NULL AND (l.linked_occurrence_id IS NULL OR NOT EXISTS(SELECT 1 FROM task_family_log_templates ft WHERE ft.id=l.task_family_log_template_id AND ft.family_id=l.family_id)) LIMIT 20").bind(familyId,familyId).all<Row>()
+    ctx.env.DB.prepare("SELECT 'template' kind,ft.id,ft.task_id linked_id FROM task_family_log_templates ft WHERE ft.family_id=? AND (NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=ft.task_id AND t.family_id=ft.family_id) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1)) OR (ft.log_type='HOUSEWORK' AND ft.subject_id IS NOT NULL) OR (ft.log_type<>'HOUSEWORK' AND ft.subject_id IS NULL) OR (ft.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects fs WHERE fs.id=ft.subject_id AND fs.family_id=ft.family_id AND fs.active=1 AND (fs.enabled_types_json IS NULL OR instr(fs.enabled_types_json,ft.log_type)>0)))) UNION ALL SELECT 'log',l.id,l.linked_occurrence_id FROM family_logs l WHERE l.family_id=? AND l.task_family_log_template_id IS NOT NULL AND (l.linked_occurrence_id IS NULL OR NOT EXISTS(SELECT 1 FROM task_family_log_templates ft WHERE ft.id=l.task_family_log_template_id AND ft.family_id=l.family_id)) LIMIT 20").bind(familyId,familyId).all<Row>()
   ]);
   const cards=labels.map((v,i)=>{const sample=detailSamples[i]?.results||[];const detail=counts[i]?`<details class="diagnostic-detail"><summary>詳細を表示（最大20件）</summary>${sample.map(r=>`<div class="diagnostic-sample"><code>${esc(JSON.stringify(r))}</code></div>`).join('')||'<p class="small">詳細行を取得できませんでした。</p>'}</details>`:'';return `<div class="diagnostic-row ${counts[i]?'has-issue':'is-ok'}"><div><strong>${esc(v[0])}</strong><div class="small">${esc(v[1])}</div>${detail}</div><span class="diagnostic-count">${counts[i]}</span></div>`}).join('');
   const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>🩺 データ診断</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>ライフサイクル整合性</h2><span class="${total?'diagnostic-summary-warn':'diagnostic-summary-ok'}">${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">表示は現在の家族データに対する読み取り専用診断です。Cronのcleanupで安全に自動修復できる項目は通常0件になります。</p>${cards}</div><div class="card"><h2>診断の扱い</h2><p class="small">削除完了履歴は、本体削除後も履歴を保存する目的で外部キーを持ちません。そのため「元タスクが存在しない」だけでは異常扱いしません。自動判断できないデータはこの画面やCloudflareログで確認してから修復します。</p></div>`;
@@ -2035,6 +2066,8 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     const b = await bodyJson(request);
     await ensureCsrf(ctx, b.csrf);
     const action = String(b.action || 'create');
+    // All Family Log input errors are resolved before any recurrence/task mutation.
+    const validatedFamilyLogTemplate=await validateTaskFamilyLogTemplateInput(ctx,b);
 
     if (action === 'toggle') {
       const id = Number(b.id || 0);
@@ -2180,7 +2213,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
         if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(newTaskId,mid,m.family_id)));
         for(const v of shopping){const o=v as any;const name=String(o?.name||'').trim();if(!name)continue;const qty=String(o?.quantity||'1').trim()||'1';const url=String(o?.url||'').trim()||null;const category=String(o?.category||b.shopping_category||'').trim()||null;const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,effectiveDate,m.id,now,now,newTaskId,url).run();const sid=Number(sr.meta.last_row_id);if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
         for(const name of itemNames){const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,`${effectiveDate} 00:00:00`,m.id,now,now,newTaskId,crypto.randomUUID().replaceAll('-','').slice(0,16)).run();const iid=Number(ir.meta.last_row_id);if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id)));}
-        await saveTaskFamilyLogTemplate(ctx,newTaskId,b);
+        await saveTaskFamilyLogTemplate(ctx,newTaskId,b,validatedFamilyLogTemplate);
         await logActivity(ctx,'SPLIT_FUTURE','recurrence_rule',id,{task_id:taskId,new_rule_id:newRuleId,new_task_id:newTaskId,effective_date:effectiveDate});
         return postSuccess({id:newRuleId,task_id:newTaskId,split_from:id,effective_date:effectiveDate});
       }
@@ -2209,7 +2242,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
       ]);
       for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
       for(const name of itemNames){ const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,`${startDate} 00:00:00`,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16)).run(); const iid=Number(ir.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id))); }
-      await saveTaskFamilyLogTemplate(ctx,taskId,b);
+      await saveTaskFamilyLogTemplate(ctx,taskId,b,validatedFamilyLogTemplate);
       await logActivity(ctx,'UPDATED','recurrence_rule',id,{task_id:taskId});
       return postSuccess({});
     }
@@ -2265,7 +2298,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
     for(const v of shopping){ const o=v as any; const name=String(o?.name||'').trim(); if(!name) continue; const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const category=String(o?.category||b.shopping_category||'').trim()||null; const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,startDate,m.id,now,now,taskId,url).run(); const sid=Number(sr.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id))); }
     const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):stringValues(b['item_name[]']).slice(0,50);
     for(const name of itemNames){ const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,`${startDate} 00:00:00`,m.id,now,now,taskId,crypto.randomUUID().replaceAll('-','').slice(0,16)).run(); const iid=Number(ir.meta.last_row_id); if(assignees.length) await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id))); }
-    await saveTaskFamilyLogTemplate(ctx,taskId,b);
+    await saveTaskFamilyLogTemplate(ctx,taskId,b,validatedFamilyLogTemplate);
     await logActivity(ctx,'CREATED','recurrence_rule',ruleId,{task_id:taskId});
     return postSuccess({id:ruleId,task_id:taskId});
   }
