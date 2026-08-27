@@ -970,7 +970,7 @@ export async function taskView(ctx:AppContext, id:number):Promise<Response>{
   const isEvent=!isVirtual&&String(task.task_kind||'').toLowerCase()==='event';
   const role=String(m.role||'').toUpperCase(); const canEdit=!isVirtual&&(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id);
   const dateForChildren=String(task.start_at||task.due_at||'').slice(0,10);
-  const childShoppingHtml=`<div class="card"><div class="section-head"><h2>🛒 このタスクの買い物 <span class="small">(${linkedShopping.results.length})</span></h2>${!isVirtual?`<a class="btn gray small" href="/app/shopping_new.php?date=${encodeURIComponent(dateForChildren)}&task_id=${baseTaskId}">＋ 追加</a>`:''}</div>${linkedShopping.results.map(r=>`<div class="row"><label class="shopping-check-row"><input type="checkbox" class="task-child-toggle" data-type="shopping" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}">${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>`:esc(r.name)}${r.quantity&&r.quantity!=='1'?` × ${esc(r.quantity)}`:''}</span></label><div class="meta">${[r.category,r.assignees?'担当 '+r.assignees:'',r.due_date?'期限 '+r.due_date:''].filter(Boolean).map(esc).join(' ・ ')}</div></div>`).join('')||'<p class="empty">紐付く買い物はありません。</p>'}</div>`;
+  const childShoppingHtml=linkedShopping.results.length?`<div class="card"><div class="section-head"><h2>🛒 このタスクの買い物 <span class="small">(${linkedShopping.results.length})</span></h2>${!isVirtual?`<a class="btn gray small" href="/app/shopping_new.php?date=${encodeURIComponent(dateForChildren)}&task_id=${baseTaskId}">＋ 追加</a>`:''}</div>${linkedShopping.results.map(r=>`<div class="row"><label class="shopping-check-row"><input type="checkbox" class="task-child-toggle" data-type="shopping" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}">${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>`:esc(r.name)}${r.quantity&&r.quantity!=='1'?` × ${esc(r.quantity)}`:''}</span></label><div class="meta">${[r.category,r.assignees?'担当 '+r.assignees:'',r.due_date?'期限 '+r.due_date:''].filter(Boolean).map(esc).join(' ・ ')}</div></div>`).join('')}</div>`:'';
   const childItemsHtml=`<div class="card"><div class="section-head"><h2>🎒 このタスクの持ち物 <span class="small">(${linkedItems.results.length})</span></h2>${!isVirtual?`<a class="btn gray small" href="/item/new.php?date=${encodeURIComponent(dateForChildren)}&task_id=${baseTaskId}">＋ 追加</a>`:''}</div>${linkedItems.results.map(r=>`<div class="row"><label class="shopping-check-row"><input type="checkbox" class="task-child-toggle" data-type="item" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}">${esc(r.name)}</span></label><div class="meta">${esc(r.assignees||'')}</div></div>`).join('')||'<p class="empty">紐付く持ち物はありません。</p>'}</div>`;
   const reminderHtml=reminders.results.length?`<div class="card"><h2>🔔 通知</h2>${reminders.results.map(r=>`<div class="row"><div>${esc(String(r.notify_at||'').slice(0,16))} ・ ${esc(r.status)}</div><div class="meta">${esc(r.message||'')}</div></div>`).join('')}</div>`:'';
   const convertHtml=isVirtual?`<form method="post" action="/task/convert_occurrence.php" class="card"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="occurrence_id" value="${occurrenceId}"><button class="btn">この日だけ通常タスクにする</button></form>`:'';
@@ -1338,7 +1338,7 @@ const FAMILY_LOG_TYPE_META:Record<string,{icon:string;label:string}>={
   MILK:{icon:'🍼',label:'ミルク'},BREASTFEED:{icon:'🤱',label:'母乳'},MEAL:{icon:'🍚',label:'食事'},DIAPER:{icon:'🧷',label:'おむつ'},
   SLEEP:{icon:'😴',label:'睡眠'},BATH:{icon:'🛁',label:'お風呂'},TEMPERATURE:{icon:'🌡️',label:'体温'},MEDICINE:{icon:'💊',label:'薬'},
   CONDITION:{icon:'🙂',label:'体調'},WEIGHT:{icon:'⚖️',label:'体重'},HEIGHT:{icon:'📏',label:'身長'},BLOOD_PRESSURE:{icon:'🫀',label:'血圧'},
-  EXERCISE:{icon:'🏃',label:'運動'},WATER:{icon:'💧',label:'水分'},TOILET:{icon:'🚻',label:'トイレ'},WALK:{icon:'🐕',label:'散歩'},MEMO:{icon:'📝',label:'メモ'}
+  EXERCISE:{icon:'🏃',label:'運動'},WATER:{icon:'💧',label:'水分'},TOILET:{icon:'🚻',label:'トイレ'},WALK:{icon:'🐕',label:'散歩'},HOUSEWORK:{icon:'🧹',label:'ちょこっと家事'},MEMO:{icon:'📝',label:'メモ'}
 };
 const FAMILY_LOG_TYPES=Object.keys(FAMILY_LOG_TYPE_META);
 const FAMILY_LOG_DETAILS:Record<string,string>={
@@ -1468,6 +1468,31 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   if(request.method==='POST'){
     const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);
     const action=String(b.action||'save');
+    if(action==='quick_chore_add'){
+      const name=String(b.name||'').trim();
+      if(!name||name.length>80)throw new BadRequest('家事の名前を80文字以内で入力してください。');
+      const icon=String(b.icon||'✨').trim().slice(0,8)||'✨';const now=nowJst();
+      const order=await ctx.env.DB.prepare('SELECT COALESCE(MAX(sort_order),0)+1 n FROM family_quick_chores WHERE family_id=?').bind(m.family_id).first<Row>();
+      const r=await ctx.env.DB.prepare('INSERT INTO family_quick_chores(family_id,name,icon,sort_order,active,created_by,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?)').bind(m.family_id,name,icon,Number(order?.n||1),m.id,now,now).run();
+      await logActivity(ctx,'CREATED','family_quick_chore',Number(r.meta.last_row_id),{name,icon});
+      return json({ok:true,id:Number(r.meta.last_row_id)});
+    }
+    if(action==='quick_chore_remove'){
+      const id=Number(b.id||0);if(!id)throw new BadRequest('家事項目が不正です。');const now=nowJst();
+      const row=await ctx.env.DB.prepare('SELECT id,name FROM family_quick_chores WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
+      if(!row)return json({ok:false,error:'家事項目が見つかりません。'},404);
+      await ctx.env.DB.prepare('UPDATE family_quick_chores SET active=0,updated_at=? WHERE id=? AND family_id=?').bind(now,id,m.family_id).run();
+      await logActivity(ctx,'DISABLED','family_quick_chore',id,{name:String(row.name||'')});return json({ok:true});
+    }
+    if(action==='quick_chore_record'){
+      const id=Number(b.id||0);const chore=await ctx.env.DB.prepare('SELECT id,name,icon FROM family_quick_chores WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
+      if(!chore)return json({ok:false,error:'家事項目が見つかりません。'},404);
+      const occurredAt=familyLogDateTime(b.occurred_at||nowJst());const now=nowJst();
+      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL)")
+        .bind(m.family_id,occurredAt,null,null,null,null,String(chore.name),null,null,null,m.id,now,now).run();
+      const logId=Number(r.meta.last_row_id);await logActivity(ctx,'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:occurredAt,value_text:String(chore.name),quick_chore_id:id});
+      return json({ok:true,id:logId});
+    }
     if(action==='subject_create'||action==='subject_update'){
       const id=action==='subject_update'?Number(b.id||0):0;
       const name=String(b.name||'').trim();
@@ -1627,6 +1652,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const timers=await ctx.env.DB.prepare(`SELECT x.*,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE ${timerWhere} ORDER BY x.started_at_ms`).bind(...timerParams).all<Row>();
   const physical=await ctx.env.DB.prepare(`SELECT id,title,task_kind FROM tasks WHERE family_id=? AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?))) ORDER BY sort_order,id`).bind(m.family_id,selectedDate,selectedDate,selectedDate).all<Row>();
   const recurring=await recurringForDate(ctx,selectedDate);
+  const quickChores=await ctx.env.DB.prepare('SELECT id,name,icon FROM family_quick_chores WHERE family_id=? AND active=1 ORDER BY sort_order,id').bind(m.family_id).all<Row>();
 
   const logMap=Object.fromEntries(logs.results.map(r=>[String(r.id),{
     id:Number(r.id),subject_id:Number(r.subject_id||0),log_type:String(r.log_type||''),occurred_at:String(r.occurred_at||''),
@@ -1724,6 +1750,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const timerStartHtml=selectedSubject
     ?`<div class="family-log-timer-actions">${hasType('SLEEP')&&!runningTimerTypes.has('SLEEP')?`<button type="button" class="btn secondary family-log-timer-start" data-type="SLEEP" data-subject="${selectedSubject}">😴 睡眠開始</button>`:''}${hasType('BREASTFEED')&&!runningTimerTypes.has('BREASTFEED')?`<button type="button" class="btn secondary family-log-timer-start" data-type="BREASTFEED" data-subject="${selectedSubject}">🤱 母乳開始</button>`:''}${hasType('EXERCISE')&&!runningTimerTypes.has('EXERCISE')?`<button type="button" class="btn secondary family-log-timer-start" data-type="EXERCISE" data-subject="${selectedSubject}">🏃 運動開始</button>`:''}${hasType('WALK')&&!runningTimerTypes.has('WALK')?`<button type="button" class="btn secondary family-log-timer-start" data-type="WALK" data-subject="${selectedSubject}">🐕 散歩開始</button>`:''}</div>`
     :'<p class="small">対象を選ぶと、その人の有効項目に応じて睡眠・母乳・運動・散歩タイマーを開始できます。</p>';
+  const quickChoreHtml=quickChores.results.map(x=>`<div class="family-quick-chore"><button type="button" class="family-quick-chore-record" data-id="${x.id}"><span>${esc(x.icon||'✨')}</span><strong>${esc(x.name)}</strong><small>タップで記録</small></button><button type="button" class="family-quick-chore-remove" data-id="${x.id}" aria-label="${esc(x.name)}を削除">×</button></div>`).join('');
   const selectedSubjectLabel=selectedSubject?String(selectedSubjectRow?.name||'対象'):'家族全員';
   const selectedSubjectMode=selectedSubjectRow?FAMILY_LOG_SUBJECT_META[subjectKind]?.label||'対象':'全対象';
   const nowLocal=selectedDate===dateOnly()?nowJst().slice(0,16).replace(' ','T'):`${selectedDate}T12:00`;
@@ -1735,13 +1762,14 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   <div class="daily-head family-log-date-head"><div><div class="date-title">${esc(selectedDate)}</div></div><div class="date-nav"><a class="btn gray" href="/app/family_log.php?date=${prev}${subjectQuery}">‹</a><a class="btn gray" href="/app/family_log.php?date=${next}${subjectQuery}">›</a></div></div>
   <div class="family-log-summary">${summaryHtml}</div>
   <div class="card family-log-quick-card"><div class="section-head"><h2>すぐ記録</h2><span class="meta">${selectedSubject?`${esc(selectedSubjectLabel)}の表示項目`:'全対象の有効項目'}</span></div><div class="family-log-quick-grid">${quickButtons||'<p class="small">表示中の記録項目はありません。対象設定からONにしてください。</p>'}</div></div>
+  <div class="card family-quick-chore-card"><div class="section-head"><div><h2>🧹 ちょこっと家事</h2><p class="small">タスクにするほどでもない家事を、家族共通のボタンから一発記録します。</p></div><button type="button" class="btn gray small" id="familyQuickChoreAdd">＋ 項目</button></div><div class="family-quick-chore-grid">${quickChoreHtml||'<p class="empty">「玄関を掃く」「タオル交換」など、繰り返し使う家事を追加してください。</p>'}</div></div>
   <div class="card family-log-timer-card"><div class="section-head"><h2>⏱ タイマー</h2><span class="meta">対象ごとに管理</span></div>${timerHtml}${timerStartHtml}</div>
   <div class="card family-log-timeline"><div class="section-head"><h2>タイムライン</h2><span class="meta">${logs.results.length}件</span></div>${rowHtml||'<p class="empty">この日の記録はありません。</p>'}</div>
 
   <div class="family-log-backdrop" id="familyLogModal" aria-hidden="true"><div class="family-log-sheet"><div class="section-head"><h2 id="familyLogModalTitle">記録を追加</h2><button type="button" class="btn gray small" id="familyLogClose">×</button></div><form id="familyLogForm"><input type="hidden" name="id"><label>種類</label><select name="log_type">${FAMILY_LOG_TYPES.map(type=>`<option value="${type}">${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</option>`).join('')}</select><label>対象</label><select name="subject_id"><option value="0">家族共通</option>${subjects.results.map(s=>`<option value="${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</option>`).join('')}</select><label>日時</label><input type="datetime-local" name="occurred_at" required><div id="familyLogDetailWrap"><label>詳細</label><div id="familyLogDetailChoices" class="family-log-detail-choices"></div><select name="detail_code"><option value="">指定なし</option></select></div><div id="familyLogAmountWrap"><label id="familyLogAmountLabel">値</label><div class="family-log-value-input"><input type="number" name="amount"><span id="familyLogAmountUnit"></span><input type="hidden" name="unit"></div></div><div id="familyLogDurationWrap"><label id="familyLogDurationLabel">時間</label><div class="family-log-value-input"><input type="number" name="duration_minutes" min="0" max="10080" step="1"><span>分</span></div></div><div id="familyLogTextWrap"><label id="familyLogTextLabel">内容</label><input name="value_text" maxlength="255"></div><label>関連タスク・イベント（任意）</label><select name="linked_target"><option value="">なし</option>${linkOptions.map(x=>`<option value="${esc(x.value)}">${esc(x.label)}</option>`).join('')}</select><label>メモ</label><textarea name="note" maxlength="2000"></textarea><div id="familyLogStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogDelete">削除</button></div></form></div></div>
 
   <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyLogSubjectTitle">記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><input type="hidden" name="id"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>画面タイプ</label><select name="subject_kind"><option value="BABY">👶 赤ちゃん</option><option value="CHILD">🧒 子ども</option><option value="ADULT">👤 大人</option><option value="PET">🐾 ペット</option><option value="OTHER">⭐ その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><div class="family-log-type-setting-head"><label>表示する記録項目</label><button type="button" class="btn gray small" id="familyLogPresetApply">おすすめに戻す</button></div><div class="choice-list family-log-type-choice-grid">${subjectTypeChoices}</div><p class="small" id="familyLogSubjectGuide">対象タイプごとのおすすめ項目を使えます。</p><label class="checkrow family-log-auto-complete"><input type="checkbox" name="auto_complete_linked_task" id="familyLogAutoComplete"><span>この対象の記録時、関連タスクを記録した人の完了として反映する</span></label><p class="small">赤ちゃん・子ども・ペットではおすすめONです。担当者が未設定なら記録者を担当者として追加します。別の担当者が設定済みの場合は勝手に変更しません。</p><div id="familyLogSubjectLinked" class="notice" style="display:none"></div><button type="button" class="btn secondary" id="familyLogSubjectPromote" style="display:none">LINE本登録へ招待</button><div id="familyLogSubjectPromoteOut" class="notice" style="display:none"></div><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogSubjectDisable">対象を非表示</button></div></form><p class="small">家族メンバーは自動的に対象として表示されます。赤ちゃん・子どもは後から「LINE本登録へ招待」で同じ記録対象を家族メンバーへ引き継げます。</p></div></div>
-  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.97-wave78"></script>`;
+  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.98-wave79"></script>`;
   return html(layout('家族ログ',body,'/app/family_log.php'));
 }
 
