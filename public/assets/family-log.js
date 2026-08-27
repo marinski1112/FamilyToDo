@@ -376,6 +376,8 @@
 
   byId('familyLogSubjectOpen')?.addEventListener('click',openSubjectNew);
   byId('familyLogSubjectEdit')?.addEventListener('click',()=>openSubjectEdit(selectedSubject()));
+  document.querySelectorAll('.family-log-subject-edit').forEach(btn=>btn.addEventListener('click',()=>openSubjectEdit(Number(btn.dataset.id||0))));
+  if(managementMode&&selectedSubject())openSubjectEdit(selectedSubject());
   document.querySelectorAll('.family-log-pet-preset').forEach(btn=>btn.addEventListener('click',()=>{subjectField('subject_kind').value='PET';setSubjectTypes(PET_PRESETS[String(btn.dataset.preset)]||DEFAULT_TYPES.PET);updateSubjectGuide('PET');}));
   subjectClose?.addEventListener('click',()=>setOpen(subjectModal,false));
   subjectModal?.addEventListener('click',e=>{if(e.target===subjectModal)setOpen(subjectModal,false);});
@@ -532,6 +534,8 @@
   function openChore(item){
     if(!choreForm)return;
     choreForm.reset();choreField('id').value=item?.id||'';choreField('name').value=item?.name||'';choreField('icon').value=item?.icon||'✨';
+    const mask=Number(item?.weekday_mask??127);
+    choreForm.querySelectorAll('input[name="weekday"]').forEach(input=>{input.checked=(mask&Number(input.value))!==0;});
     byId('familyQuickChoreTitle').textContent=item?'家事項目を編集':'家事項目を追加';
     choreDisable.style.display=item?'':'none';choreStatus.textContent='';renderChoreManager();setOpen(choreModal,true);
   }
@@ -540,7 +544,8 @@
   document.querySelectorAll('.family-quick-chore-edit').forEach(btn=>btn.addEventListener('click',()=>openChore(choreItems.find(x=>x.id===Number(btn.dataset.id)))));
   choreForm?.addEventListener('submit',async e=>{
     e.preventDefault();const id=Number(choreField('id').value||0);choreStatus.textContent='保存中…';
-    try{await post({action:id?'quick_chore_update':'quick_chore_add',id,name:choreField('name').value,icon:choreField('icon').value});location.reload();}
+    const weekdayMask=[...choreForm.querySelectorAll('input[name="weekday"]:checked')].reduce((mask,input)=>mask|Number(input.value),0);
+    try{await post({action:id?'quick_chore_update':'quick_chore_add',id,name:choreField('name').value,icon:choreField('icon').value,weekday_mask:weekdayMask});location.reload();}
     catch(err){choreStatus.textContent=err?.message||String(err);}
   });
   choreDisable?.addEventListener('click',async()=>{

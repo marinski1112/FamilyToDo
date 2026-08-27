@@ -142,7 +142,7 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     family_log_import_batches:['id','family_id','subject_id','source','source_hash','record_count','imported_count','skipped_count','error_count','created_by','created_at','rolled_back_at','rolled_back_by','status','processed_count','failed_at','completed_at','chunk_manifest_json'],
     task_family_log_templates:['id','family_id','task_id','subject_id','log_type','active','created_by','created_at','updated_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
-    family_quick_chores:['id','family_id','name','icon','sort_order','active','created_by','created_at','updated_at'],
+    family_quick_chores:['id','family_id','name','icon','sort_order','active','weekday_mask','created_by','created_at','updated_at'],
   };
   const tables:any[]=[];
   let migrationRows:any[]=[];
@@ -187,9 +187,9 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_log_import_integrity',"SELECT (SELECT COUNT(*) FROM family_log_import_batches b WHERE NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=b.subject_id AND s.family_id=b.family_id)) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.family_id<>l.family_id) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) issues"],
     ['task_family_log_templates','SELECT id,family_id,task_id,subject_id,log_type,detail_code,amount,unit,duration_minutes,value_text,note,active,created_by,created_at,updated_at FROM task_family_log_templates LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
-    ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
+    ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,weekday_mask,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
-    ['family_log_sleep_timer_integrity',"SELECT (SELECT COUNT(*) FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id WHERE x.log_type='SLEEP' AND x.status='running' AND COALESCE(s.subject_kind,'')<>'CHILD') + (SELECT COUNT(*) FROM (SELECT family_id,subject_id FROM family_log_timers WHERE log_type='SLEEP' AND status='running' GROUP BY family_id,subject_id HAVING COUNT(*)>1)) + (SELECT COUNT(*) FROM family_log_timers WHERE log_type='SLEEP' AND status='running' AND (started_at_ms IS NULL OR started_at_ms<=0 OR started_at_ms>unixepoch('now')*1000 OR started_at_ms<(unixepoch('now')-172800)*1000)) issues"],
+    ['family_log_sleep_timer_integrity',"SELECT (SELECT COUNT(*) FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id WHERE x.log_type='SLEEP' AND x.status='running' AND COALESCE(s.subject_kind,'') NOT IN ('BABY','CHILD')) + (SELECT COUNT(*) FROM (SELECT family_id,subject_id FROM family_log_timers WHERE log_type='SLEEP' AND status='running' GROUP BY family_id,subject_id HAVING COUNT(*)>1)) + (SELECT COUNT(*) FROM family_log_timers WHERE log_type='SLEEP' AND status='running' AND (started_at_ms IS NULL OR started_at_ms<=0 OR started_at_ms>unixepoch('now')*1000 OR started_at_ms<(unixepoch('now')-172800)*1000)) issues"],
   ];
   const results:any[]=[];
   for(const [name,sql] of checks){
