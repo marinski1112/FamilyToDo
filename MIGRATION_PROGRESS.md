@@ -159,3 +159,12 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Added per-subject quick-entry ON/OFF settings and BABY/CHILD/ADULT/PET/OTHER UI profiles.
 - BABY view adds milk / pee / poop / sleep / temperature-oriented daily summary.
 - Diaper detail uses pee / poop / both quick choices; bath supports bath / shower.
+
+
+## Wave78
+- Added migration `0019_wave78_family_log_templates_and_promotion.sql`.
+- Family Log presets expanded for BABY / CHILD / ADULT / PET / OTHER, including adult health/lifestyle logging.
+- BABY/CHILD/PET profiles default to recording the current logger as linked-task/recurrence completion actor when task semantics permit it.
+- Admin activity logs now render Family Log records and Family-Log-originated task completion.
+- Unlinked BABY/CHILD/ADULT Family Log profiles can issue a one-time LINE promotion invitation; successful join keeps the same `family_log_subjects.id` so historical logs remain continuous.
+- Lifecycle diagnostics now include Family Log cross-family/orphan subject links and stale promotion invitations.

@@ -128,9 +128,10 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     notifications:['id','family_id','member_id','target_type','target_id','status','notify_at'],
     notification_settings:['family_id','member_id'],
     activity_logs:['family_id','member_id','action','occurred_at'],
+    family_invitations:['id','family_id','token_hash','expires_at','used_at','used_by','family_log_subject_id'],
     deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
     web_push_subscriptions:['id','family_id','member_id','endpoint','p256dh','auth','enabled','failure_count','updated_at'],
-    family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','active','created_at','updated_at'],
+    family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','auto_complete_linked_task','active','created_at','updated_at'],
     family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','deleted_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
   };
@@ -168,9 +169,10 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['recurrence_occurrences','SELECT id,family_id,recurrence_rule_id,status,occurrence_date FROM recurrence_occurrences LIMIT 1'],
     ['recurrence_occurrence_completions','SELECT occurrence_id,member_id,completed_at FROM recurrence_occurrence_completions LIMIT 1'],
     ['activity_logs','SELECT family_id,member_id,action,target_type,target_id,occurred_at FROM activity_logs LIMIT 1'],
+    ['family_invitations','SELECT id,family_id,token_hash,expires_at,used_at,used_by,family_log_subject_id FROM family_invitations LIMIT 1'],
     ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
     ['web_push_subscriptions','SELECT id,family_id,member_id,endpoint,p256dh,auth,enabled,failure_count,last_success_at,last_error,updated_at FROM web_push_subscriptions LIMIT 1'],
-    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
+    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,auto_complete_linked_task,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
     ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
@@ -426,7 +428,7 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   // If legacy/import data somehow bypassed the partial unique index, keep the oldest active reminder and cancel the rest before send.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND EXISTS (SELECT 1 FROM notifications keep WHERE keep.id<notifications.id AND keep.family_id=notifications.family_id AND keep.member_id=notifications.member_id AND keep.target_type=notifications.target_type AND COALESCE(keep.target_id,-1)=COALESCE(notifications.target_id,-1) AND keep.notify_at=notifications.notify_at AND keep.status IN ('pending','retry'))").bind(now).run();
 
-  const [dup,orphan,orphanExceptions,orphanRules,staleMessageLinks,staleTaskChildren,orphanOperationalRows,archiveDuplicates,archiveMemberMismatch]=await Promise.all([
+  const [dup,orphan,orphanExceptions,orphanRules,staleMessageLinks,staleTaskChildren,orphanOperationalRows,archiveDuplicates,archiveMemberMismatch,familyLogLinkIssues,promotionInviteIssues]=await Promise.all([
     env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,member_id,target_type,target_id,notify_at,COUNT(*) n FROM notifications WHERE status IN ('pending','retry') GROUP BY family_id,member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)").first<any>(),
     env.DB.prepare("SELECT COUNT(*) c FROM notifications n WHERE n.status IN ('pending','retry') AND ((n.target_type='task' AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=n.target_id AND t.family_id=n.family_id)) OR (n.target_type='message' AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.id=n.target_id AND m.family_id=n.family_id)))").first<any>(),
     env.DB.prepare("SELECT COUNT(*) c FROM recurrence_occurrences o WHERE o.exception_task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=o.exception_task_id AND t.family_id=o.family_id)").first<any>(),
@@ -435,9 +437,11 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
     env.DB.prepare("SELECT (SELECT COUNT(*) FROM shopping_items s WHERE s.task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id)) + (SELECT COUNT(*) FROM items i WHERE i.task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id)) c").first<any>(),
     env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_assignees a WHERE NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM item_assignees a WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM shopping_assignees a WHERE NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=a.member_id)) + (SELECT COUNT(*) FROM task_completion_history h WHERE NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=h.task_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) + (SELECT COUNT(*) FROM item_completion_history h WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.id=h.item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) + (SELECT COUNT(*) FROM shopping_completion_history h WHERE NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=h.shopping_item_id) OR NOT EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id)) c").first<any>(),
     env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,entity_type,entity_id,COALESCE(member_id,-1) member_key,action,occurred_at,COALESCE(source_type,''),COALESCE(source_id,-1),COUNT(*) n FROM deleted_completion_history GROUP BY family_id,entity_type,entity_id,member_key,action,occurred_at,COALESCE(source_type,''),COALESCE(source_id,-1) HAVING COUNT(*)>1)").first<any>(),
-    env.DB.prepare("SELECT COUNT(*) c FROM deleted_completion_history h WHERE h.member_id IS NOT NULL AND EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id AND m.family_id<>h.family_id)").first<any>()
+    env.DB.prepare("SELECT COUNT(*) c FROM deleted_completion_history h WHERE h.member_id IS NOT NULL AND EXISTS(SELECT 1 FROM members m WHERE m.id=h.member_id AND m.family_id<>h.family_id)").first<any>(),
+    env.DB.prepare("SELECT (SELECT COUNT(*) FROM family_log_subjects s WHERE s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members m WHERE m.id=s.member_id AND m.family_id=s.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id)) + (SELECT COUNT(*) FROM family_log_timers x WHERE x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id)) c").first<any>(),
+    env.DB.prepare("SELECT COUNT(*) c FROM family_invitations i WHERE i.family_log_subject_id IS NOT NULL AND i.used_at IS NULL AND i.expires_at>? AND (NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1) OR EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1 AND s.member_id IS NOT NULL))").bind(now).first<any>()
   ]);
-  const audit={duplicate_groups:Number(dup?.c||0),orphan_pending:Number(orphan?.c||0),orphan_exception_links:Number(orphanExceptions?.c||0),orphan_recurrence_rules:Number(orphanRules?.c||0),stale_message_conversion_links:Number(staleMessageLinks?.c||0),stale_task_child_links:Number(staleTaskChildren?.c||0),orphan_operational_rows:Number(orphanOperationalRows?.c||0),deleted_archive_duplicate_groups:Number(archiveDuplicates?.c||0),deleted_archive_member_family_mismatch:Number(archiveMemberMismatch?.c||0)};
+  const audit={duplicate_groups:Number(dup?.c||0),orphan_pending:Number(orphan?.c||0),orphan_exception_links:Number(orphanExceptions?.c||0),orphan_recurrence_rules:Number(orphanRules?.c||0),stale_message_conversion_links:Number(staleMessageLinks?.c||0),stale_task_child_links:Number(staleTaskChildren?.c||0),orphan_operational_rows:Number(orphanOperationalRows?.c||0),deleted_archive_duplicate_groups:Number(archiveDuplicates?.c||0),deleted_archive_member_family_mismatch:Number(archiveMemberMismatch?.c||0),family_log_link_issues:Number(familyLogLinkIssues?.c||0),promotion_invite_issues:Number(promotionInviteIssues?.c||0)};
   if(Object.values(audit).some(v=>v>0)) console.warn('[Family TODO LINE] lifecycle audit',audit);
 }
 
@@ -604,8 +608,42 @@ async function logsPage(ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return redirect('/login.php');
   const role=String(m.role||'').toUpperCase();
   if(role!=='OWNER'&&role!=='ADMIN') return html(layout('活動ログ','<div class="card"><h1>📊 家族の活動ログ</h1><p>活動ログを見るには管理者権限が必要です。</p><a class="btn" href="/app/settings.php">管理へ戻る</a></div>','/app/settings.php'));
-  const rows=await ctx.env.DB.prepare('SELECT a.*,m.name member_name FROM activity_logs a LEFT JOIN members m ON m.id=a.member_id WHERE a.family_id=? ORDER BY a.occurred_at DESC,a.id DESC LIMIT 200').bind(m.family_id).all();
-  const label=(action:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除',LINE_MESSAGE:'LINEメッセージ',LINE_POSTBACK:'LINE操作'} as Record<string,string>)[action]||action;
-  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card history-card"><p class="small">最新200件を表示しています。</p>${rows.results.map((r:any)=>`<div class="row"><strong>${esc(label(String(r.action||'')))}</strong><div class="meta">${esc(r.member_name||'不明')} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`).join('')||'<p class="empty">ログはありません。</p>'}</div>`;
+  const rows=await ctx.env.DB.prepare(`SELECT a.*,m.name member_name,
+    fl.log_type family_log_type,fl.occurred_at family_log_occurred_at,fl.detail_code family_log_detail_code,fl.amount family_log_amount,fl.unit family_log_unit,fl.duration_minutes family_log_duration_minutes,fl.value_text family_log_value_text,fl.note family_log_note,
+    fs.name family_log_subject_name,fss.name target_subject_name
+    FROM activity_logs a
+    LEFT JOIN members m ON m.id=a.member_id
+    LEFT JOIN family_logs fl ON a.target_type='family_log' AND fl.id=a.target_id AND fl.family_id=a.family_id
+    LEFT JOIN family_log_subjects fs ON fs.id=fl.subject_id AND fs.family_id=fl.family_id
+    LEFT JOIN family_log_subjects fss ON a.target_type='family_log_subject' AND fss.id=a.target_id AND fss.family_id=a.family_id
+    WHERE a.family_id=? ORDER BY a.occurred_at DESC,a.id DESC LIMIT 300`).bind(m.family_id).all();
+  const label=(action:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除',INVITED:'本登録招待',PROMOTED:'LINE本登録',DISABLED:'非表示',STARTED:'開始',STOPPED:'停止',CANCELLED:'取消',RESTORED:'復活',LINE_MESSAGE:'LINEメッセージ',LINE_POSTBACK:'LINE操作'} as Record<string,string>)[action]||action;
+  const logType=(type:string)=>({MILK:'ミルク',BREASTFEED:'母乳',MEAL:'食事',DIAPER:'おむつ',SLEEP:'睡眠',BATH:'お風呂',TEMPERATURE:'体温',MEDICINE:'薬',CONDITION:'体調',WEIGHT:'体重',HEIGHT:'身長',BLOOD_PRESSURE:'血圧',EXERCISE:'運動',WATER:'水分',TOILET:'トイレ',WALK:'散歩',MEMO:'メモ'} as Record<string,string>)[type]||type||'記録';
+  const detailLabel=(code:string)=>({LEFT:'左',RIGHT:'右',BOTH:'両方',BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',WET:'おしっこ',DIRTY:'うんち',BATH:'お風呂',SHOWER:'シャワー',GOOD:'良好',NORMAL:'ふつう',TIRED:'疲れ気味',SICK:'不調',WALK:'歩く',RUN:'走る',STRENGTH:'筋トレ',STRETCH:'ストレッチ',PLAY:'遊び'} as Record<string,string>)[code]||code;
+  const parseMeta=(raw:any)=>{try{return raw?JSON.parse(String(raw)):{};}catch{return {};}};
+  const rowHtml=(rows.results as any[]).map((r:any)=>{
+    const meta=parseMeta(r.metadata);
+    const actor=String(r.member_name||'不明');
+    const action=label(String(r.action||''));
+    if(String(r.target_type||'')==='family_log'){
+      const type=String(r.family_log_type||meta.log_type||'MEMO');
+      const subject=String(r.family_log_subject_name||meta.subject_name||'家族共通');
+      const bits:string[]=[];
+      const detail=String(r.family_log_detail_code||meta.detail_code||'');if(detail)bits.push(detailLabel(detail));
+      const amount=r.family_log_amount??meta.amount;if(amount!==null&&amount!==undefined&&amount!=='')bits.push(`${amount}${String(r.family_log_unit||meta.unit||'')}`);
+      const duration=r.family_log_duration_minutes??meta.duration_minutes;if(duration!==null&&duration!==undefined&&duration!=='')bits.push(`${duration}分`);
+      const value=String(r.family_log_value_text||meta.value_text||'');if(value)bits.push(value);
+      const occurred=String(r.family_log_occurred_at||meta.occurred_at||r.occurred_at||'');
+      return `<div class="row activity-family-log"><strong>🐣 ${esc(action)}：${esc(logType(type))}</strong><div class="meta">${esc(subject)} ・ 記録者/操作：${esc(actor)} ・ ${esc(occurred)}</div>${bits.length?`<div class="meta">${bits.map(esc).join(' ・ ')}</div>`:''}</div>`;
+    }
+    if(String(r.target_type||'')==='family_log_subject'){
+      const subject=String(r.target_subject_name||meta.name||meta.subject_name||`#${r.target_id||''}`);
+      return `<div class="row activity-family-log-subject"><strong>🐣 ${esc(action)}：${esc(subject)}</strong><div class="meta">${esc(actor)} ・ ${esc(r.occurred_at||'')}</div></div>`;
+    }
+    const source=String(meta.source||'')==='family_log'?'<span class="activity-source-badge">家族ログから</span>':'';
+    return `<div class="row"><strong>${esc(action)} ${source}</strong><div class="meta">${esc(actor)} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`;
+  }).join('');
+  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card history-card"><p class="small">最新300件を表示しています。家族ログは種類・対象・記録者まで表示します。</p>${rowHtml||'<p class="empty">ログはありません。</p>'}</div>`;
   return html(layout('活動ログ',body,'/app/settings.php'));
 }
+

@@ -14,6 +14,7 @@
   const subjectMap=payload.subjects||{};
   const selectedDate=String(payload.selectedDate||'');
   const nowLocal=String(payload.nowLocal||'');
+  const isAdmin=Boolean(payload.isAdmin);
 
   const logModal=byId('familyLogModal');
   const logForm=byId('familyLogForm');
@@ -28,6 +29,10 @@
   const subjectStatus=byId('familyLogSubjectStatus');
   const subjectLinked=byId('familyLogSubjectLinked');
   const subjectDisable=byId('familyLogSubjectDisable');
+  const subjectGuide=byId('familyLogSubjectGuide');
+  const subjectAutoComplete=byId('familyLogAutoComplete');
+  const subjectPromote=byId('familyLogSubjectPromote');
+  const subjectPromoteOut=byId('familyLogSubjectPromoteOut');
 
   const TYPE_META={
     MILK:{label:'ミルク',icon:'🍼',amountLabel:'量',unit:'ml'},
@@ -38,15 +43,31 @@
     BATH:{label:'お風呂',icon:'🛁',details:[['BATH','お風呂'],['SHOWER','シャワー']]},
     TEMPERATURE:{label:'体温',icon:'🌡️',amountLabel:'体温',unit:'℃'},
     MEDICINE:{label:'薬',icon:'💊',textLabel:'薬・内容'},
+    CONDITION:{label:'体調',icon:'🙂',details:[['GOOD','良好'],['NORMAL','ふつう'],['TIRED','疲れ気味'],['SICK','不調']],textLabel:'補足'},
+    WEIGHT:{label:'体重',icon:'⚖️',amountLabel:'体重',unit:'kg'},
+    HEIGHT:{label:'身長',icon:'📏',amountLabel:'身長',unit:'cm'},
+    BLOOD_PRESSURE:{label:'血圧',icon:'🫀',textLabel:'血圧',placeholder:'例：120/80'},
+    EXERCISE:{label:'運動',icon:'🏃',durationLabel:'運動時間',unit:'分',details:[['WALK','歩く'],['RUN','走る'],['STRENGTH','筋トレ'],['STRETCH','ストレッチ'],['OTHER','その他']]},
+    WATER:{label:'水分',icon:'💧',amountLabel:'量',unit:'ml'},
+    TOILET:{label:'トイレ',icon:'🚻',details:[['WET','💧 おしっこ'],['DIRTY','💩 うんち'],['BOTH','💧💩 両方']]},
+    WALK:{label:'散歩',icon:'🐕',durationLabel:'散歩時間',unit:'分'},
     MEMO:{label:'メモ',icon:'📝',textLabel:'内容'}
   };
   const ALL_TYPES=Object.keys(TYPE_META);
   const DEFAULT_TYPES={
-    BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','MEMO'],
-    CHILD:['MEAL','SLEEP','BATH','TEMPERATURE','MEDICINE','MEMO'],
-    ADULT:['SLEEP','TEMPERATURE','MEDICINE','MEAL','MEMO'],
-    PET:['MEAL','SLEEP','TEMPERATURE','MEDICINE','MEMO'],
-    OTHER:['MEMO','TEMPERATURE','MEDICINE','SLEEP']
+    BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','MEMO'],
+    CHILD:['MEAL','TOILET','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','EXERCISE','MEMO'],
+    ADULT:['CONDITION','SLEEP','EXERCISE','WEIGHT','BLOOD_PRESSURE','TEMPERATURE','MEDICINE','MEAL','BATH','MEMO'],
+    PET:['MEAL','WATER','TOILET','WALK','SLEEP','BATH','WEIGHT','MEDICINE','CONDITION','MEMO'],
+    OTHER:['MEMO','CONDITION','TEMPERATURE','MEDICINE','SLEEP','WEIGHT']
+  };
+  const DEFAULT_AUTO_COMPLETE={BABY:true,CHILD:true,ADULT:false,PET:true,OTHER:false};
+  const SUBJECT_GUIDE={
+    BABY:'赤ちゃん向け：授乳・おむつ・睡眠・お風呂・体温・成長を中心に記録します。',
+    CHILD:'子ども向け：食事・トイレ・睡眠・体調・成長・運動を中心に記録します。',
+    ADULT:'大人向け：体調・睡眠・運動・体重・血圧・服薬など、日々のログを中心にします。',
+    PET:'ペット向け：食事・水分・トイレ・散歩・睡眠・体重・服薬を中心に記録します。',
+    OTHER:'必要な項目だけを選んで記録できます。'
   };
 
   function setOpen(el,on){
@@ -94,6 +115,8 @@
     if(durationLabel)durationLabel.textContent=meta.durationLabel||'時間';
     const textLabel=byId('familyLogTextLabel');
     if(textLabel)textLabel.textContent=meta.textLabel||'内容';
+    const textInput=formField('value_text');
+    if(textInput instanceof HTMLInputElement)textInput.placeholder=meta.placeholder||'';
     const unitInput=formField('unit');
     if(unitInput)unitInput.value=meta.unit||'';
 
@@ -125,7 +148,7 @@
 
     const amount=formField('amount');
     if(amount instanceof HTMLInputElement){
-      amount.step=type==='TEMPERATURE'?'0.1':'1';
+      amount.step=['TEMPERATURE','WEIGHT','HEIGHT'].includes(type)?'0.1':'1';
       amount.inputMode='decimal';
     }
   }
@@ -194,6 +217,24 @@
       if(input instanceof HTMLInputElement)input.checked=selected.has(input.value);
     });
   }
+  function updateSubjectGuide(kind){
+    const normalized=normalizeKind(kind);
+    if(subjectGuide)subjectGuide.textContent=SUBJECT_GUIDE[normalized]||SUBJECT_GUIDE.OTHER;
+  }
+  function applySubjectPreset(kind,types=true){
+    const normalized=normalizeKind(kind);
+    if(types)setSubjectTypes(presetTypes(normalized));
+    if(subjectAutoComplete instanceof HTMLInputElement)subjectAutoComplete.checked=Boolean(DEFAULT_AUTO_COMPLETE[normalized]);
+    updateSubjectGuide(normalized);
+  }
+  function updatePromotionVisibility(row){
+    if(!subjectPromote)return;
+    const linked=Number(row?.member_id||0)>0;
+    const kind=normalizeKind(row?.subject_kind||subjectField('subject_kind')?.value);
+    const eligible=isAdmin&&!linked&&['BABY','CHILD','ADULT'].includes(kind)&&Number(row?.id||0)>0;
+    subjectPromote.style.display=eligible?'':'none';
+    if(subjectPromoteOut){subjectPromoteOut.innerHTML='';subjectPromoteOut.style.display='none';}
+  }
 
   function openSubjectNew(){
     if(!subjectForm)return;
@@ -201,10 +242,11 @@
     subjectForm.dataset.editing='';
     subjectField('id').value='';
     subjectField('subject_kind').value='BABY';
-    setSubjectTypes(presetTypes('BABY'));
+    applySubjectPreset('BABY');
     subjectTitle.textContent='記録対象を追加';
     subjectStatus.textContent='';
     setVisible(subjectDisable,false);
+    updatePromotionVisibility(null);
     if(subjectLinked){
       subjectLinked.textContent='';
       subjectLinked.style.display='none';
@@ -222,8 +264,11 @@
     subjectField('subject_kind').value=normalizeKind(row.subject_kind);
     subjectField('birth_date').value=String(row.birth_date||'');
     setSubjectTypes(Array.isArray(row.enabled_types)?row.enabled_types:presetTypes(row.subject_kind));
+    if(subjectAutoComplete instanceof HTMLInputElement)subjectAutoComplete.checked=Boolean(row.auto_complete_linked_task);
+    updateSubjectGuide(row.subject_kind);
     subjectTitle.textContent=`${row.icon||'👤'} ${row.name||'対象'} の設定`;
     subjectStatus.textContent='';
+    updatePromotionVisibility(row);
     const linked=Number(row.member_id||0)>0;
     setVisible(subjectDisable,!linked);
     if(subjectLinked){
@@ -266,7 +311,7 @@
     if(submit)submit.disabled=true;
     logStatus.textContent='保存しています…';
     try{
-      await post({
+      const result=await post({
         action:'save',
         id:Number(fd.get('id')||0),
         subject_id:Number(fd.get('subject_id')||0),
@@ -280,6 +325,7 @@
         note:String(fd.get('note')||''),
         linked_target:String(fd.get('linked_target')||'')
       });
+      if(result?.linked_completion&&result.linked_completion.ok===false&&result.linked_completion.message)alert(result.linked_completion.message);
       location.reload();
     }catch(err){
       logStatus.textContent=err?.message||String(err);
@@ -306,12 +352,14 @@
   subjectModal?.addEventListener('click',e=>{if(e.target===subjectModal)setOpen(subjectModal,false);});
 
   subjectField('subject_kind')?.addEventListener('change',()=>{
-    if(!subjectForm?.dataset.editing){
-      setSubjectTypes(presetTypes(subjectField('subject_kind')?.value));
-    }
+    const kind=subjectField('subject_kind')?.value;
+    if(!subjectForm?.dataset.editing)applySubjectPreset(kind);
+    else updateSubjectGuide(kind);
+    const row=subjectMap[String(subjectField('id')?.value||'')];
+    updatePromotionVisibility(row?{...row,subject_kind:kind}:null);
   });
   byId('familyLogPresetApply')?.addEventListener('click',()=>{
-    setSubjectTypes(presetTypes(subjectField('subject_kind')?.value));
+    applySubjectPreset(subjectField('subject_kind')?.value);
   });
 
   subjectForm?.addEventListener('submit',async e=>{
@@ -328,7 +376,8 @@
         name:String(fd.get('name')||''),
         subject_kind:String(fd.get('subject_kind')||'BABY'),
         birth_date:String(fd.get('birth_date')||''),
-        enabled_types:fd.getAll('enabled_types').map(String)
+        enabled_types:fd.getAll('enabled_types').map(String),
+        auto_complete_linked_task:Boolean(fd.get('auto_complete_linked_task'))
       });
       location.reload();
     }catch(err){
@@ -336,6 +385,42 @@
     }finally{
       if(submit)submit.disabled=false;
     }
+  });
+
+  subjectPromote?.addEventListener('click',async()=>{
+    const id=Number(subjectField('id')?.value||0);
+    if(!id)return;
+    if(!confirm('この記録対象を将来のLINE家族メンバーとして招待しますか？参加後もこれまでの家族ログは同じ対象に引き継がれます。'))return;
+    subjectPromote.disabled=true;
+    subjectStatus.textContent='本登録用の招待リンクを作成しています…';
+    try{
+      const r=await fetch('/api/family/invite',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'content-type':'application/json','accept':'application/json'},
+        body:JSON.stringify({action:'create',csrf,expires_days:7,subject_id:id})
+      });
+      const d=await r.json().catch(()=>null);
+      if(!r.ok||!d?.ok)throw new Error(d?.error||`招待リンクの作成に失敗しました（HTTP ${r.status}）。`);
+      subjectStatus.textContent='';
+      if(subjectPromoteOut){
+        subjectPromoteOut.innerHTML='';subjectPromoteOut.style.display='';
+        const strong=document.createElement('strong');strong.textContent=`${d.subject?.name||'対象'} のLINE本登録リンク`;
+        const input=document.createElement('input');input.readOnly=true;input.value=String(d.url||'');input.addEventListener('click',()=>input.select());
+        const meta=document.createElement('div');meta.className='meta';meta.textContent=`有効期限：${d.expires_at||''}`;
+        subjectPromoteOut.append(strong,input,meta);
+        const add=String(d.official_account?.add_friend_url||'');
+        if(add){const link=document.createElement('a');link.className='btn line-friend-btn';link.href=add;link.target='_blank';link.rel='noopener noreferrer';link.textContent='先に公式アカウントを友だち追加';subjectPromoteOut.append(link);}
+        const share=document.createElement('button');share.type='button';share.className='btn gray';share.textContent='LINE等で共有';
+        share.addEventListener('click',async()=>{
+          const nl=String.fromCharCode(10);
+          const text=`Family TODO LINE「${d.subject?.name||'家族'}」の本登録招待です。${nl}${nl}${add?`① 公式アカウントを友だち追加${nl}${add}${nl}${nl}`:''}② 本登録リンクを開く${nl}${d.url}`;
+          try{if(navigator.share)await navigator.share({title:'Family TODO LINE 本登録',text});else{await navigator.clipboard.writeText(text);alert('招待文をコピーしました。');}}catch(err){if(err?.name!=='AbortError')alert('共有できませんでした。');}
+        });
+        subjectPromoteOut.append(share);
+      }
+    }catch(err){
+      subjectStatus.textContent=err?.message||String(err);
+    }finally{subjectPromote.disabled=false;}
   });
 
   subjectDisable?.addEventListener('click',async()=>{

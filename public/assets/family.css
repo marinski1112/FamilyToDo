@@ -617,3 +617,18 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
   .family-log-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
   .family-log-type-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Wave78: Family Log templates, recorder audit and promotion UI */
+.family-log-recorder{margin-top:3px;color:#64748b}
+.family-log-auto-complete{margin-top:12px!important;border:1px solid #dbeafe;border-radius:12px;padding:10px;background:#eff6ff}
+#familyLogSubjectPromote{width:100%;margin-top:10px}
+#familyLogSubjectPromoteOut{margin-top:9px}
+#familyLogSubjectPromoteOut input{width:100%;margin:8px 0}
+#familyLogSubjectPromoteOut .btn{margin:4px 6px 0 0}
+.activity-family-log,.activity-family-log-subject{background:#fffdf8}
+.activity-source-badge{display:inline-flex;align-items:center;margin-left:5px;padding:2px 6px;border-radius:999px;background:#fff7ed;color:#c2410c;font-size:10px;font-weight:700}
+.invite-subject-link{color:#c2410c;font-weight:700;margin-top:2px}
+@media(max-width:560px){
+  .family-log-auto-complete{padding:9px}
+  #familyLogSubjectPromoteOut .btn{width:100%;margin-right:0}
+}

@@ -8,7 +8,7 @@
     errorBox.style.display='block';
   };
   async function submitForm(form){
-    const endpoint=String(form.dataset.endpoint||'');
+    const endpoint=String(form.dataset.familyEndpoint||form.dataset.endpoint||'');
     if(!endpoint) return;
     const button=form.querySelector('button[type="submit"],button:not([type])');
     const original=button?button.textContent:'';
