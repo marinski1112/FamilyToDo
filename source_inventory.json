@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.102.0-wave83",
+  "source": "FamilyTODO Cloudflare v12.103.0-wave84",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -60,7 +60,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave83",
+  "cloudflare_wave": "Wave84",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -92,9 +92,10 @@
     "Wave80 aligns cache versions, maps expected request errors to HTTP 400/403, enforces family-wide HOUSEWORK records, restores chores at the active-list tail, and migration 0021 links quick chore logs to their source item.",
     "Wave81 completes quick_chore_id health and lifecycle diagnostics, preserves source identity through HOUSEWORK-only edits, and adds seven-day/month quick-chore aggregation by item and recorder without a new migration.",
     "Wave82 adds reusable task Family Log templates and idempotent recurrence occurrence record-and-complete actions.",
-    "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index."
+    "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
+    "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.102.0-wave83",
+  "version": "12.103.0-wave84",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -109,5 +110,6 @@
   "wave80_note": "Stable request error statuses, subjectless HOUSEWORK enforcement, deterministic quick-chore restore order, and family_logs.quick_chore_id via migration 0021.",
   "wave81_note": "Complete quick_chore_id schema/runtime/lifecycle diagnostics, provenance-safe Family Log editing, and member-visible seven-day/month aggregation by stable chore identity and recorder; no migration added.",
   "wave82_note": "Reusable task Family Log templates, idempotent recurrence record-and-complete, and migration 0022.",
-  "wave83_note": "Server-enforced PRIVATE scope for ordinary tasks, inherited child privacy, common access predicates, recurrence template prevalidation, diagnostics, and migration 0023."
+  "wave83_note": "Server-enforced PRIVATE scope for ordinary tasks, inherited child privacy, common access predicates, recurrence template prevalidation, diagnostics, and migration 0023.",
+  "wave84_note": "PRIVATE task child reads, categories and counts inherit parent visibility; private child edits preserve the parent and owner-only assignment; SQLite privacy smoke; zero-shopping task UI is compact."
 }

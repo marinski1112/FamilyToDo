@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.102.0-wave83",
+  "version": "12.103.0-wave84",
   "private": true,
   "description": "Family TODO LINE - Cloudflare Workers migration foundation",
   "type": "module",
@@ -22,7 +22,7 @@
     "check:pwa-js": "node --check public/assets/pwa.js && node --check public/sw.js",
     "check:family-log-js": "node --check public/assets/family-log.js",
     "check:migrations": "bash scripts/migration-smoke.sh",
-    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh"
+    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh && bash scripts/wave84-smoke.sh"
   },
   "dependencies": {},
   "devDependencies": {
