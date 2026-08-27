@@ -51,6 +51,7 @@
     WATER:{label:'水分',icon:'💧',amountLabel:'量',unit:'ml'},
     TOILET:{label:'トイレ',icon:'🚻',details:[['WET','💧 おしっこ'],['DIRTY','💩 うんち'],['BOTH','💧💩 両方']]},
     WALK:{label:'散歩',icon:'🐕',durationLabel:'散歩時間',unit:'分'},
+    HOUSEWORK:{label:'ちょこっと家事',icon:'🧹',textLabel:'家事'},
     MEMO:{label:'メモ',icon:'📝',textLabel:'内容'}
   };
   const ALL_TYPES=Object.keys(TYPE_META);
@@ -471,6 +472,24 @@
       alert(err?.message||String(err));
       btn.disabled=false;
     }
+  }));
+
+  byId('familyQuickChoreAdd')?.addEventListener('click',async()=>{
+    const name=prompt('繰り返し記録する家事の名前を入力してください。\n例：玄関を掃く、タオル交換');
+    if(!String(name||'').trim())return;
+    try{await post({action:'quick_chore_add',name:String(name).trim(),icon:'✨'});location.reload();}
+    catch(err){alert(err?.message||String(err));}
+  });
+  document.querySelectorAll('.family-quick-chore-record').forEach(btn=>btn.addEventListener('click',async()=>{
+    btn.disabled=true;
+    try{await post({action:'quick_chore_record',id:Number(btn.dataset.id||0),occurred_at:nowLocal});location.reload();}
+    catch(err){alert(err?.message||String(err));btn.disabled=false;}
+  }));
+  document.querySelectorAll('.family-quick-chore-remove').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(!confirm('この家事ボタンを削除しますか？過去の記録は残ります。'))return;
+    btn.disabled=true;
+    try{await post({action:'quick_chore_remove',id:Number(btn.dataset.id||0)});location.reload();}
+    catch(err){alert(err?.message||String(err));btn.disabled=false;}
   }));
 
   document.addEventListener('keydown',e=>{

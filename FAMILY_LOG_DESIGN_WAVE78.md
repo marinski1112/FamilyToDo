@@ -55,9 +55,19 @@ Lifecycle diagnostics check referential family consistency and stale promotion i
 Ambiguous person/profile merges are never automatic.
 
 ## 6. Future extensions
-- explicit profile merge for a person who registered before promotion
-- medicine catalog + dose unit
-- growth and lifestyle charts
+- left/right independent breastfeeding timers
+- medicine name + dose + unit as structured fields
+- weekly/monthly growth and lifestyle charts
+- subject icons and configurable ordering
+- recurring task -> preconfigured one-tap log action
+- explicit profile merge UI for a person who registered before promotion
+- activity-log filtering
+- per-device Web Push diagnostics
 - custom log types per family
-- recurring task -> preconfigured log action
 - permissions for private adult logs if the family later needs per-person privacy
+
+## 7. Wave79: family-shared small chores (Cajico-style)
+Adults are expected to use Family Log mainly as a lightweight household-work record rather than a health tracker.
+Each family can therefore maintain reusable `family_quick_chores` buttons for work that is too small or optional to become a task.
+Tapping a button writes a normal `HOUSEWORK` row to `family_logs` with no subject, preserving the recorder and timestamp in the existing timeline and audit trail.
+Removing a button only disables the reusable definition; historical Family Log rows remain intact.
