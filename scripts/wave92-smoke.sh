@@ -8,7 +8,7 @@ const migration=fs.readFileSync('migrations/0029_wave92_family_log_settings.sql'
 const has=(text,token)=>{if(!text.includes(token))throw new Error(`missing ${token}`)};
 has(app,'data-dashboard-loaded');
 if(/<details class="card family-log-dashboard" open/.test(app))throw new Error('dashboard defaults open');
-const body=app.indexOf('const body=`<div class="page-head family-log-head"');
+const body=app.indexOf('const dailyBody=`<div class="page-head family-log-head"');
 const quick=app.indexOf('family-log-quick-card',body),dashboard=app.indexOf('${dashboardHtml}',body);
 if(body<0||quick<0||dashboard<0||quick>dashboard)throw new Error('quick record must precede dashboard');
 for(const token of ['show_adult_logs','family_log_settings','settings_update',"hidden_adult.subject_kind='ADULT'",'l.created_by=?','LIMIT 51 OFFSET ?','idx_family_logs_active_subject_type_occurred'])has(app+fs.readFileSync('migrations/0028_wave91_family_log_dashboard_index.sql','utf8'),token);

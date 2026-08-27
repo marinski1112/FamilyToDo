@@ -11,6 +11,7 @@
   catch(e){console.error('[Family TODO] family-log payload parse failed',e);return;}
 
   const csrf=String(payload.csrf||'');
+  const managementMode=Boolean(payload.managementMode);
   const logMap=payload.logs||{};
   const subjectMap=payload.subjects||{};
   const selectedDate=String(payload.selectedDate||'');
@@ -450,7 +451,7 @@
     subjectDisable.disabled=true;
     try{
       await post({action:'subject_disable',id});
-      location.href=`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;
+      location.href=managementMode?'/app/settings_family_log.php':`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;
     }catch(err){
       subjectStatus.textContent=err?.message||String(err);
       subjectDisable.disabled=false;
@@ -557,7 +558,7 @@
     event.preventDefault();const status=byId('familyLogSettingsStatus');
     const checkbox=settingsForm.elements.namedItem('show_adult_logs');
     if(status)status.textContent='保存しています…';
-    try{await post({action:'settings_update',show_adult_logs:checkbox instanceof HTMLInputElement&&checkbox.checked});location.href=`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;}
+    try{await post({action:'settings_update',show_adult_logs:checkbox instanceof HTMLInputElement&&checkbox.checked});location.href=managementMode?'/app/settings_family_log.php':`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;}
     catch(err){if(status)status.textContent=err?.message||String(err);}
   });
 
