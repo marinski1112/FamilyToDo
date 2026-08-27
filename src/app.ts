@@ -90,7 +90,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.99-wave80">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.100-wave81">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
 
@@ -1593,9 +1593,12 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       const now=nowJst();
       const activityBase={log_type:type,occurred_at:occurredAt,subject_id:subjectId,subject_name:String(subjectRow?.name||''),detail_code:detail,amount,unit,duration_minutes:duration,value_text:valueText||null,linked_task_id:linkedTaskId,linked_occurrence_id:linkedOccurrenceId};
       if(id){
-        const current=await ctx.env.DB.prepare('SELECT id,linked_task_id,linked_occurrence_id FROM family_logs WHERE id=? AND family_id=? AND deleted_at IS NULL').bind(id,m.family_id).first<Row>();if(!current)return json({ok:false,error:'記録が見つかりません。'},404);
-        await ctx.env.DB.prepare('UPDATE family_logs SET subject_id=?,log_type=?,occurred_at=?,detail_code=?,amount=?,unit=?,duration_minutes=?,value_text=?,note=?,linked_task_id=?,linked_occurrence_id=?,updated_at=? WHERE id=? AND family_id=? AND deleted_at IS NULL')
-          .bind(subjectId,type,occurredAt,detail,amount,unit,duration,valueText||null,note||null,linkedTaskId,linkedOccurrenceId,now,id,m.family_id).run();
+        const current=await ctx.env.DB.prepare('SELECT id,linked_task_id,linked_occurrence_id,quick_chore_id FROM family_logs WHERE id=? AND family_id=? AND deleted_at IS NULL').bind(id,m.family_id).first<Row>();if(!current)return json({ok:false,error:'記録が見つかりません。'},404);
+        // Source identity survives edits only while the record remains HOUSEWORK.
+        // Manual records have NULL here and are never inferred from value_text.
+        const quickChoreId=type==='HOUSEWORK'?(Number(current.quick_chore_id||0)||null):null;
+        await ctx.env.DB.prepare('UPDATE family_logs SET subject_id=?,log_type=?,occurred_at=?,detail_code=?,amount=?,unit=?,duration_minutes=?,value_text=?,note=?,linked_task_id=?,linked_occurrence_id=?,quick_chore_id=?,updated_at=? WHERE id=? AND family_id=? AND deleted_at IS NULL')
+          .bind(subjectId,type,occurredAt,detail,amount,unit,duration,valueText||null,note||null,linkedTaskId,linkedOccurrenceId,quickChoreId,now,id,m.family_id).run();
         const completion=subjectRow&&Number(subjectRow.auto_complete_linked_task||0)===1&&(linkedTaskId||linkedOccurrenceId)?await completeLinkedTargetFromFamilyLog(ctx,linkedTaskId,linkedOccurrenceId,id):null;
         await logActivity(ctx,'UPDATED','family_log',id,{...activityBase,linked_completion:completion});
         return json({ok:true,id,linked_completion:completion});
@@ -1681,6 +1684,37 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const physical=await ctx.env.DB.prepare(`SELECT id,title,task_kind FROM tasks WHERE family_id=? AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?))) ORDER BY sort_order,id`).bind(m.family_id,selectedDate,selectedDate,selectedDate).all<Row>();
   const recurring=await recurringForDate(ctx,selectedDate);
   const quickChores=await ctx.env.DB.prepare('SELECT id,name,icon,sort_order,active FROM family_quick_chores WHERE family_id=? ORDER BY active DESC,sort_order,id').bind(m.family_id).all<Row>();
+  const choreAggregateRows=await ctx.env.DB.prepare(`WITH periods(period,start_date) AS (
+      SELECT '7d',date('now','+9 hours','-6 days') UNION ALL
+      SELECT 'month',date('now','+9 hours','start of month')
+    )
+    SELECT p.period,l.quick_chore_id,q.name chore_name,q.icon chore_icon,q.active chore_active,
+      l.created_by,cm.name recorder_name,COUNT(*) count
+    FROM periods p
+    JOIN family_logs l ON l.family_id=? AND l.log_type='HOUSEWORK' AND l.deleted_at IS NULL
+      AND date(l.occurred_at)>=p.start_date AND date(l.occurred_at)<date('now','+9 hours','+1 day')
+    LEFT JOIN family_quick_chores q ON q.id=l.quick_chore_id AND q.family_id=l.family_id
+    LEFT JOIN members cm ON cm.id=l.created_by AND cm.family_id=l.family_id
+    GROUP BY p.period,l.quick_chore_id,q.name,q.icon,q.active,l.created_by,cm.name
+    ORDER BY p.period,count DESC,l.quick_chore_id,l.created_by`).bind(m.family_id).all<Row>();
+
+  const choreAggregate=(period:string)=>{
+    const rows=choreAggregateRows.results.filter(r=>String(r.period)===period);
+    const items=new Map<string,{id:number|null,name:string,icon:string,active:boolean|null,count:number}>();
+    const recorders=new Map<string,{id:number|null,name:string,count:number}>();
+    let total=0;
+    for(const row of rows){
+      const count=Number(row.count||0);total+=count;
+      const choreId=Number(row.quick_chore_id||0)||null,choreKey=choreId?String(choreId):'unlinked';
+      const item=items.get(choreKey)||{id:choreId,name:choreId?String(row.chore_name||'削除済みの家事項目'):'過去の未紐付け家事',icon:choreId?String(row.chore_icon||'🧹'):'🗂️',active:row.chore_active===null||row.chore_active===undefined?null:Number(row.chore_active)===1,count:0};
+      item.count+=count;items.set(choreKey,item);
+      const recorderId=Number(row.created_by||0)||null,recorderKey=recorderId?String(recorderId):'unknown';
+      const recorder=recorders.get(recorderKey)||{id:recorderId,name:String(row.recorder_name||'記録者不明'),count:0};
+      recorder.count+=count;recorders.set(recorderKey,recorder);
+    }
+    return {total,items:[...items.values()].sort((a,b)=>b.count-a.count),recorders:[...recorders.values()].sort((a,b)=>b.count-a.count)};
+  };
+  const choreAggregates={week:choreAggregate('7d'),month:choreAggregate('month')};
 
   const logMap=Object.fromEntries(logs.results.map(r=>[String(r.id),{
     id:Number(r.id),subject_id:Number(r.subject_id||0),log_type:String(r.log_type||''),occurred_at:String(r.occurred_at||''),
@@ -1780,6 +1814,8 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
     :'<p class="small">対象を選ぶと、その人の有効項目に応じて睡眠・母乳・運動・散歩タイマーを開始できます。</p>';
   const activeQuickChores=quickChores.results.filter(x=>Number(x.active)===1);
   const quickChoreHtml=activeQuickChores.map(x=>`<div class="family-quick-chore"><button type="button" class="family-quick-chore-record" data-id="${x.id}"><span>${esc(x.icon||'✨')}</span><strong>${esc(x.name)}</strong><small>タップで記録</small></button>${familyLogIsAdmin?`<button type="button" class="family-quick-chore-edit" data-id="${x.id}" aria-label="${esc(x.name)}を編集">⚙</button>`:''}</div>`).join('');
+  const choreAggregatePanel=(title:string,data:ReturnType<typeof choreAggregate>)=>`<section class="family-chore-period"><div class="family-chore-period-head"><strong>${esc(title)}</strong><span><b>${data.total}</b> 回</span></div>${data.total?`<div class="family-chore-breakdown"><div><h3>家事項目</h3>${data.items.map(x=>`<div class="family-chore-stat"><span>${esc(x.icon)} ${esc(x.name)}${x.active===false?' <small>非表示</small>':''}</span><b>${x.count}</b></div>`).join('')}</div><div><h3>記録者</h3>${data.recorders.map(x=>`<div class="family-chore-stat"><span>${esc(x.name)}</span><b>${x.count}</b></div>`).join('')}</div></div>`:'<p class="small">この期間の記録はありません。</p>'}</section>`;
+  const choreAggregateHtml=`<details class="card family-chore-history"><summary><span><strong>📊 家事の記録</strong><small>家族全体の回数・項目・記録者</small></span><span class="family-chore-summary-count">7日 ${choreAggregates.week.total}回</span></summary><div class="family-chore-history-body">${choreAggregatePanel('過去7日（今日を含む）',choreAggregates.week)}${choreAggregatePanel('今月',choreAggregates.month)}<p class="small family-chore-note">名前変更後も同じ家事項目として集計します。未紐付けの過去記録は推測せず別表示します。</p></div></details>`;
   const selectedSubjectLabel=selectedSubject?String(selectedSubjectRow?.name||'対象'):'家族全員';
   const selectedSubjectMode=selectedSubjectRow?FAMILY_LOG_SUBJECT_META[subjectKind]?.label||'対象':'全対象';
   const nowLocal=selectedDate===dateOnly()?nowJst().slice(0,16).replace(' ','T'):`${selectedDate}T12:00`;
@@ -1792,6 +1828,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   <div class="family-log-summary">${summaryHtml}</div>
   <div class="card family-log-quick-card"><div class="section-head"><h2>すぐ記録</h2><span class="meta">${selectedSubject?`${esc(selectedSubjectLabel)}の表示項目`:'全対象の有効項目'}</span></div><div class="family-log-quick-grid">${quickButtons||'<p class="small">表示中の記録項目はありません。対象設定からONにしてください。</p>'}</div></div>
   <div class="card family-quick-chore-card"><div class="section-head"><div><h2>🧹 ちょこっと家事</h2><p class="small">家族共通・対象なしのHOUSEWORKとして記録します。項目編集はOWNER / ADMINのみ行えます。</p></div>${familyLogIsAdmin?'<button type="button" class="btn gray small" id="familyQuickChoreAdd">＋ 項目</button>':''}</div><div class="family-quick-chore-grid">${quickChoreHtml||'<p class="empty">「玄関を掃く」「タオル交換」など、繰り返し使う家事を追加してください。</p>'}</div></div>
+  ${choreAggregateHtml}
   <div class="card family-log-timer-card"><div class="section-head"><h2>⏱ タイマー</h2><span class="meta">対象ごとに管理</span></div>${timerHtml}${timerStartHtml}</div>
   <div class="card family-log-timeline"><div class="section-head"><h2>タイムライン</h2><span class="meta">${logs.results.length}件</span></div>${rowHtml||'<p class="empty">この日の記録はありません。</p>'}</div>
 
@@ -1835,7 +1872,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     ctx.env.DB.prepare("SELECT COUNT(*) c FROM (SELECT entity_type,entity_id,COALESCE(member_id,-1) member_key,action,occurred_at,COALESCE(source_type,'') source_type,COALESCE(source_id,-1) source_id,COUNT(*) n FROM deleted_completion_history WHERE family_id=? GROUP BY entity_type,entity_id,member_key,action,occurred_at,source_type,source_id HAVING COUNT(*)>1)").bind(familyId).first<Row>(),
     ctx.env.DB.prepare("SELECT COUNT(*) c FROM deleted_completion_history h WHERE h.family_id=? AND h.member_id IS NOT NULL AND EXISTS(SELECT 1 FROM members mm WHERE mm.id=h.member_id AND mm.family_id<>h.family_id)").bind(familyId).first<Row>(),
     ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM task_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id)) + (SELECT COUNT(*) FROM item_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id)) + (SELECT COUNT(*) FROM shopping_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id)) c").bind(familyId,familyId,familyId).first<Row>(),
-    ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id)) + (SELECT COUNT(*) FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id)) c").bind(familyId,familyId,familyId).first<Row>(),
+    ctx.env.DB.prepare("SELECT (SELECT COUNT(*) FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id)) + (SELECT COUNT(*) FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id)) + (SELECT COUNT(*) FROM family_logs l WHERE l.family_id=? AND l.quick_chore_id IS NOT NULL AND (l.log_type<>'HOUSEWORK' OR NOT EXISTS(SELECT 1 FROM family_quick_chores q WHERE q.id=l.quick_chore_id AND q.family_id=l.family_id))) c").bind(familyId,familyId,familyId,familyId).first<Row>(),
     ctx.env.DB.prepare("SELECT COUNT(*) c FROM family_invitations i WHERE i.family_id=? AND i.family_log_subject_id IS NOT NULL AND i.used_at IS NULL AND i.expires_at>? AND (NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1) OR EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=i.family_log_subject_id AND s.family_id=i.family_id AND s.active=1 AND s.member_id IS NOT NULL))").bind(familyId,diagnosticNow).first<Row>()
   ]);
   const labels=[
@@ -1848,7 +1885,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     ['削除完了履歴の重複','deleted_completion_history内の同一履歴重複'],
     ['削除完了履歴の家族不一致','履歴memberとfamilyの不一致'],
     ['担当者リンクの孤児','元task/item/shoppingが存在しない担当者リンク'],
-    ['家族ログの対象リンク不整合','家族ログ対象・記録・タイマーが別家族/不存在の対象を参照'],
+    ['家族ログのリンク不整合','対象リンク、quick choreの不存在・家族不一致、またはHOUSEWORK以外からのquick chore参照'],
     ['LINE本登録招待の不整合','有効な本登録招待が無効対象または既に本登録済み対象を参照']
   ] as const;
   const counts=results.map(r=>Number(r?.c||0));
@@ -1863,7 +1900,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     ctx.env.DB.prepare("SELECT MIN(id) id,entity_type,entity_id,member_id,action,occurred_at,COUNT(*) n FROM deleted_completion_history WHERE family_id=? GROUP BY entity_type,entity_id,COALESCE(member_id,-1),action,occurred_at,COALESCE(source_type,''),COALESCE(source_id,-1) HAVING COUNT(*)>1 LIMIT 20").bind(familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT h.id,h.entity_type,h.entity_id,h.member_id FROM deleted_completion_history h WHERE h.family_id=? AND h.member_id IS NOT NULL AND EXISTS(SELECT 1 FROM members mm WHERE mm.id=h.member_id AND mm.family_id<>h.family_id) LIMIT 20").bind(familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT 'task' kind,a.task_id entity_id,a.member_id FROM task_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=a.task_id) UNION ALL SELECT 'item',a.item_id,a.member_id FROM item_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM items i WHERE i.id=a.item_id) UNION ALL SELECT 'shopping',a.shopping_item_id,a.member_id FROM shopping_assignees a WHERE EXISTS(SELECT 1 FROM members mm WHERE mm.id=a.member_id AND mm.family_id=?) AND NOT EXISTS(SELECT 1 FROM shopping_items s WHERE s.id=a.shopping_item_id) LIMIT 20").bind(familyId,familyId,familyId).all<Row>(),
-    ctx.env.DB.prepare("SELECT 'subject_member' kind,s.id entity_id,s.member_id linked_id FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id) UNION ALL SELECT 'log_subject',l.id,l.subject_id FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id) UNION ALL SELECT 'timer_subject',x.id,x.subject_id FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id) LIMIT 20").bind(familyId,familyId,familyId).all<Row>(),
+    ctx.env.DB.prepare("SELECT 'subject_member' kind,s.id entity_id,s.member_id linked_id FROM family_log_subjects s WHERE s.family_id=? AND s.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM members mm WHERE mm.id=s.member_id AND mm.family_id=s.family_id) UNION ALL SELECT 'log_subject',l.id,l.subject_id FROM family_logs l WHERE l.family_id=? AND l.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=l.subject_id AND s.family_id=l.family_id) UNION ALL SELECT 'timer_subject',x.id,x.subject_id FROM family_log_timers x WHERE x.family_id=? AND x.subject_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=x.subject_id AND s.family_id=x.family_id) UNION ALL SELECT CASE WHEN l.log_type<>'HOUSEWORK' THEN 'quick_chore_wrong_type' WHEN q.id IS NULL THEN 'quick_chore_missing' ELSE 'quick_chore_family_mismatch' END,l.id,l.quick_chore_id FROM family_logs l LEFT JOIN family_quick_chores q ON q.id=l.quick_chore_id WHERE l.family_id=? AND l.quick_chore_id IS NOT NULL AND (l.log_type<>'HOUSEWORK' OR q.id IS NULL OR q.family_id<>l.family_id) LIMIT 20").bind(familyId,familyId,familyId,familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT i.id,i.family_log_subject_id,i.expires_at,s.name subject_name,s.active subject_active,s.member_id FROM family_invitations i LEFT JOIN family_log_subjects s ON s.id=i.family_log_subject_id AND s.family_id=i.family_id WHERE i.family_id=? AND i.family_log_subject_id IS NOT NULL AND i.used_at IS NULL AND i.expires_at>? AND (s.id IS NULL OR s.active<>1 OR s.member_id IS NOT NULL) LIMIT 20").bind(familyId,diagnosticNow).all<Row>()
   ]);
   const cards=labels.map((v,i)=>{const sample=detailSamples[i]?.results||[];const detail=counts[i]?`<details class="diagnostic-detail"><summary>詳細を表示（最大20件）</summary>${sample.map(r=>`<div class="diagnostic-sample"><code>${esc(JSON.stringify(r))}</code></div>`).join('')||'<p class="small">詳細行を取得できませんでした。</p>'}</details>`:'';return `<div class="diagnostic-row ${counts[i]?'has-issue':'is-ok'}"><div><strong>${esc(v[0])}</strong><div class="small">${esc(v[1])}</div>${detail}</div><span class="diagnostic-count">${counts[i]}</span></div>`}).join('');
