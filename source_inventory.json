@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.100.0-wave81",
+  "source": "FamilyTODO Cloudflare v12.101.0-wave82",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -49,7 +49,8 @@
     "family_log_subjects",
     "family_logs",
     "family_log_timers",
-    "family_quick_chores"
+    "family_quick_chores",
+    "task_family_log_templates"
   ],
   "secrets_excluded": true,
   "legacy": {
@@ -59,7 +60,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave81",
+  "cloudflare_wave": "Wave82",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -89,7 +90,8 @@
     "Wave78 adds role-specific Family Log templates for baby/child/adult/pet, recorder-attributed linked-task completion for care profiles, admin activity-log rendering for family-log actions, future LINE promotion of child/adult profiles while preserving history, and migration 0019.",
     "Wave79 adds reusable family-shared quick chore buttons recorded as subjectless HOUSEWORK family logs; migration 0020 adds family_quick_chores.",
     "Wave80 aligns cache versions, maps expected request errors to HTTP 400/403, enforces family-wide HOUSEWORK records, restores chores at the active-list tail, and migration 0021 links quick chore logs to their source item.",
-    "Wave81 completes quick_chore_id health and lifecycle diagnostics, preserves source identity through HOUSEWORK-only edits, and adds seven-day/month quick-chore aggregation by item and recorder without a new migration."
+    "Wave81 completes quick_chore_id health and lifecycle diagnostics, preserves source identity through HOUSEWORK-only edits, and adds seven-day/month quick-chore aggregation by item and recorder without a new migration.",
+    "Wave82 adds reusable task Family Log templates and idempotent recurrence occurrence record-and-complete actions."
   ],
   "version": "12.100.0-wave81",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",

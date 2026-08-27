@@ -649,3 +649,4 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
   .family-log-auto-complete{padding:9px}
   #familyLogSubjectPromoteOut .btn{width:100%;margin-right:0}
 }
+.family-log-template{margin:16px 0}.family-log-template summary{cursor:pointer;font-weight:700}.occurrence-family-log{margin:8px 0;touch-action:manipulation}.occurrence-family-log.is-recorded{background:#ecfdf5;color:#047857}
