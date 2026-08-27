@@ -13,8 +13,9 @@ export type PushMessagePayload = {
 };
 
 const te = new TextEncoder();
+const bufferSource = (value: Uint8Array): ArrayBuffer => Uint8Array.from(value).buffer;
 
-function b64urlToBytes(value: string): Uint8Array {
+function b64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
   const binary = atob(padded);
@@ -30,7 +31,7 @@ function bytesToB64url(value: ArrayBuffer | Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function concat(...parts: Uint8Array[]): Uint8Array {
+function concat(...parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((sum, p) => sum + p.length, 0);
   const out = new Uint8Array(total);
   let offset = 0;
@@ -38,12 +39,12 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-async function hmac(keyBytes: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey('raw', keyBytes, {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
-  return new Uint8Array(await crypto.subtle.sign('HMAC', key, data));
+async function hmac(keyBytes: Uint8Array, data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
+  const key = await crypto.subtle.importKey('raw', bufferSource(keyBytes), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, bufferSource(data)));
 }
 
-async function hkdfExpand(prk: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array> {
+async function hkdfExpand(prk: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array<ArrayBuffer>> {
   let previous = new Uint8Array(0);
   const blocks: Uint8Array[] = [];
   let generated = 0;
@@ -97,7 +98,7 @@ async function buildVapidJwt(endpoint: string, publicKey: string, privateKey: st
   return `${signingInput}.${bytesToB64url(signature)}`;
 }
 
-async function encryptPayload(subscription: StoredPushSubscription, payload: string): Promise<Uint8Array> {
+async function encryptPayload(subscription: StoredPushSubscription, payload: string): Promise<Uint8Array<ArrayBuffer>> {
   const uaPublic = b64urlToBytes(subscription.p256dh);
   const authSecret = b64urlToBytes(subscription.auth);
   if (uaPublic.length !== 65 || uaPublic[0] !== 4) throw new Error('Push subscription p256dh is invalid.');
@@ -105,7 +106,7 @@ async function encryptPayload(subscription: StoredPushSubscription, payload: str
 
   const serverPair = await crypto.subtle.generateKey({name:'ECDH', namedCurve:'P-256'}, true, ['deriveBits']);
   const serverPublic = new Uint8Array(await crypto.subtle.exportKey('raw', serverPair.publicKey));
-  const uaKey = await crypto.subtle.importKey('raw', uaPublic, {name:'ECDH', namedCurve:'P-256'}, false, []);
+  const uaKey = await crypto.subtle.importKey('raw', bufferSource(uaPublic), {name:'ECDH', namedCurve:'P-256'}, false, []);
   const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits({name:'ECDH', public:uaKey}, serverPair.privateKey, 256));
 
   const prkKey = await hmac(authSecret, sharedSecret);
@@ -116,9 +117,9 @@ async function encryptPayload(subscription: StoredPushSubscription, payload: str
   const prk = await hmac(salt, ikm);
   const cek = await hkdfExpand(prk, te.encode('Content-Encoding: aes128gcm\0'), 16);
   const nonce = await hkdfExpand(prk, te.encode('Content-Encoding: nonce\0'), 12);
-  const aesKey = await crypto.subtle.importKey('raw', cek, {name:'AES-GCM'}, false, ['encrypt']);
+  const aesKey = await crypto.subtle.importKey('raw', bufferSource(cek), {name:'AES-GCM'}, false, ['encrypt']);
   const plaintext = concat(te.encode(payload), new Uint8Array([2]));
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv:nonce, tagLength:128}, aesKey, plaintext));
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv:bufferSource(nonce), tagLength:128}, aesKey, bufferSource(plaintext)));
 
   const recordSize = new Uint8Array(4);
   new DataView(recordSize.buffer).setUint32(0, 4096, false);
@@ -151,7 +152,7 @@ export async function sendWebPush(env: Env, subscription: StoredPushSubscription
         'Urgency':'normal',
         'Authorization':`vapid t=${jwt}, k=${cfg.publicKey}`
       },
-      body
+      body: bufferSource(body)
     });
     if (response.ok) return {ok:true,status:response.status,gone:false};
     const gone = response.status === 404 || response.status === 410;

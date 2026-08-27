@@ -418,7 +418,8 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 .family-quick-chore-record{width:100%;min-height:82px;padding:10px 22px 8px 8px;border:1px solid #dbeafe;border-radius:14px;background:#f8fbff;color:#334155;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:none}
 .family-quick-chore-record span{font-size:22px}.family-quick-chore-record strong{font-size:12px;line-height:1.25}.family-quick-chore-record small{font-size:9px;color:#64748b}
 .family-quick-chore-record:active{background:#eff6ff;border-color:#93c5fd}
-.family-quick-chore-remove{position:absolute;right:4px;top:4px;width:25px;height:25px;min-height:0;padding:0;border:0;border-radius:50%;background:transparent;color:#94a3b8;box-shadow:none;font-size:17px}
+.family-quick-chore-edit{position:absolute;right:4px;top:4px;width:28px;height:28px;min-height:0;padding:0;border:0;border-radius:50%;background:transparent;color:#64748b;box-shadow:none;font-size:14px}
+.family-quick-chore-manage{border-top:1px solid #e5e7eb;margin-top:16px;padding-top:12px}.family-quick-chore-manage-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #edf0f4}.family-quick-chore-manage-row .actions{display:flex;gap:5px}.family-quick-chore-manage-row button{min-height:34px;padding:6px 9px}.family-quick-chore-hidden-title{margin:16px 0 4px}
 @media(max-width:390px){.family-quick-chore-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* Wave62: proper message edit sheet; remove prompt-based editing. */
