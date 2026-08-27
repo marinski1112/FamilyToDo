@@ -98,6 +98,12 @@
     if(!logForm)return;
     const type=String(formField('log_type')?.value||'MEMO');
     const meta=TYPE_META[type]||TYPE_META.MEMO;
+    const subject=formField('subject_id');
+    if(subject instanceof HTMLSelectElement){
+      if(type==='HOUSEWORK')subject.value='0';
+      subject.disabled=type==='HOUSEWORK';
+      subject.title=type==='HOUSEWORK'?'ちょこっと家事は家族共通として記録されます。':'';
+    }
     const amountWrap=byId('familyLogAmountWrap');
     const durationWrap=byId('familyLogDurationWrap');
     const textWrap=byId('familyLogTextWrap');
