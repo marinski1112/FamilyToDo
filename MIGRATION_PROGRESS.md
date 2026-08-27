@@ -151,3 +151,11 @@ The original XREA/PHP implementation remains the reference implementation and is
 - No new D1 migration.
 - Fixed Family Log GET 500 caused by an ambiguous joined `family_id` predicate in the running-timer query.
 - Added an exact Family Log timer-JOIN regression check to DB runtime health.
+
+
+## Wave77
+- Added migration `0018_wave77_family_log_profiles.sql`.
+- Family Log now auto-exposes all active family members as switchable log subjects.
+- Added per-subject quick-entry ON/OFF settings and BABY/CHILD/ADULT/PET/OTHER UI profiles.
+- BABY view adds milk / pee / poop / sleep / temperature-oriented daily summary.
+- Diaper detail uses pee / poop / both quick choices; bath supports bath / shower.

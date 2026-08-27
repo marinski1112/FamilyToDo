@@ -130,7 +130,7 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     activity_logs:['family_id','member_id','action','occurred_at'],
     deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
     web_push_subscriptions:['id','family_id','member_id','endpoint','p256dh','auth','enabled','failure_count','updated_at'],
-    family_log_subjects:['id','family_id','name','subject_kind','active','created_at','updated_at'],
+    family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','active','created_at','updated_at'],
     family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','deleted_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
   };
@@ -170,7 +170,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['activity_logs','SELECT family_id,member_id,action,target_type,target_id,occurred_at FROM activity_logs LIMIT 1'],
     ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
     ['web_push_subscriptions','SELECT id,family_id,member_id,endpoint,p256dh,auth,enabled,failure_count,last_success_at,last_error,updated_at FROM web_push_subscriptions LIMIT 1'],
-    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
+    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
     ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],

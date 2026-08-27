@@ -58,7 +58,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave76",
+  "cloudflare_wave": "Wave77",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -86,7 +86,7 @@
     "Wave74 adds the PWA manifest/service-worker foundation, per-member LINE/Web Push channel selection, Web Push subscription storage and scheduled delivery, plus VAPID key generation/setup tooling. Migration 0016 adds members.notification_channel and web_push_subscriptions.",
     "Wave75 adds the Family Log MVP as the sixth primary page with subject profiles, quick chronological logs, sleep/breastfeeding timers, optional task/recurrence linkage, and migration 0017; LIFF/rich-menu device validation can begin after deployment."
   ],
-  "version": "12.95.0-wave76",
+  "version": "12.96.0-wave77",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -94,5 +94,6 @@
   "wave69_note": "Compact shopping URL popover, no-focus product-row addition, shopping/notification JS extraction, and read-only lifecycle diagnostics UI.",
   "wave73_note": "Unified Task/Event daily page and primary navigation; legacy today/tomorrow URLs remain compatible while new create/view/item flows return to /app/tasks.php.",
   "wave74_note": "PWA + Web Push foundation with standards-based service worker subscriptions, VAPID delivery, LINE/Web Push channel selection, and migration 0016.",
-  "wave75_note": "Family Log MVP with subjects, timeline, quick log types, sleep/breastfeeding timers, task/recurrence linkage, sixth navigation slot, and migration 0017."
+  "wave75_note": "Family Log MVP with subjects, timeline, quick log types, sleep/breastfeeding timers, task/recurrence linkage, sixth navigation slot, and migration 0017.",
+  "wave77_note": "Family Log per-subject profiles and quick-entry ON/OFF, automatic active-family-member subjects, baby-specific summary, diaper wet/dirty quick detail choices, and migration 0018."
 }

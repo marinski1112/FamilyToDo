@@ -88,8 +88,8 @@ export function layout(title: string, body: string, active = ''): string {
     ['/app/tasks.php','✅','タスク・イベント'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/family_log.php','🐣','家族ログ'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.94-wave75">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.94-wave75">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.94-wave75"></script></body></html>`;
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.96-wave77">':'';
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.96-wave77">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.96-wave77"></script></body></html>`;
 }
 
 
@@ -101,7 +101,7 @@ export function layout(title: string, body: string, active = ''): string {
 export function liffEntryPage(env: Env, nextPath = '/app/index.php'): Response {
   const safeNext = /^\/(?!\/)/.test(nextPath) ? nextPath : '/app/index.php';
   const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||''),next:safeNext}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.94-wave75"></script>`;
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.96-wave77"></script>`;
   return html(layout('LINE認証',body));
 }
 
@@ -120,7 +120,7 @@ export async function authHealth(ctx: AppContext): Promise<Response> {
 
 export function loginPage(env: Env): Response {
   const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||'')}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p>LINE認証を開始します。</p><p id="status" class="meta">認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.94-wave75"></script>`;
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p>LINE認証を開始します。</p><p id="status" class="meta">認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.96-wave77"></script>`;
   return html(layout('LINE認証',body));
 }
 
@@ -318,7 +318,7 @@ function renderDailyPage(ctx:AppContext,date:string,data:{tasks:Row[];items:Row[
   const summary=unified?`<div class="task-event-summary meta">タスク・定期 ${normalCount}件${eventCount?` ・ イベント ${eventCount}件`:''}</div>`:'';
   const taskAddHref=`/task/new.php?date=${encodeURIComponent(date)}${unified?'&return=tasks':''}`;
   const taskSectionTitle=unified?'📝 タスク・イベント':'📝 タスク';
-  return layout(pageTitle,`${unifiedTabs}<div class="daily-head"><div><div class="eyebrow">Family TODO LINE</div><h1>${heading}</h1><div class="date-title">${esc(date)}</div>${summary}<div class="meta">${esc(ctx.member?.name||'')}</div></div><div class="date-nav"><a class="btn gray" href="${basePath}?date=${prev}">‹</a><a class="btn gray" href="${basePath}?date=${next}">›</a></div></div><div class="card section-card task-section"><div class="section-head"><h2>${taskSectionTitle}</h2><a class="btn small" href="${taskAddHref}">＋ 追加</a></div>${rows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>${unorganizedHtml}${expiredHtml}<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2><a class="btn small" href="/item/new.php?date=${date}">＋ 追加</a></div>${items||'<p class="empty">対象日の持ち物はありません。</p>'}</div>${unlinkedShoppingHtml}<script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/daily.js?v=12.94-wave75"></script>`,unified?'/app/tasks.php':basePath);
+  return layout(pageTitle,`${unifiedTabs}<div class="daily-head"><div><div class="eyebrow">Family TODO LINE</div><h1>${heading}</h1><div class="date-title">${esc(date)}</div>${summary}<div class="meta">${esc(ctx.member?.name||'')}</div></div><div class="date-nav"><a class="btn gray" href="${basePath}?date=${prev}">‹</a><a class="btn gray" href="${basePath}?date=${next}">›</a></div></div><div class="card section-card task-section"><div class="section-head"><h2>${taskSectionTitle}</h2><a class="btn small" href="${taskAddHref}">＋ 追加</a></div>${rows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>${unorganizedHtml}${expiredHtml}<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2><a class="btn small" href="/item/new.php?date=${date}">＋ 追加</a></div>${items||'<p class="empty">対象日の持ち物はありません。</p>'}</div>${unlinkedShoppingHtml}<script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/daily.js?v=12.96-wave77"></script>`,unified?'/app/tasks.php':basePath);
 }
 
 async function logActivity(ctx: AppContext, action: string, targetType: string, targetId: number | null, metadata: Row = {}) {
@@ -597,7 +597,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7);
   const next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);
   const calendarPayload=JSON.stringify({detail,shoppingDetail,itemDetail,holidays,month,prev,next,from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),today:dateOnly(),csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const script='<script src="/assets/calendar.js?v=12.94-wave75"></script>';
+  const script='<script src="/assets/calendar.js?v=12.96-wave77"></script>';
   const body='<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><div class="meta" id="monthLabel">'+month.slice(0,4)+'年'+Number(month.slice(5))+'月</div></div><div class="calendar-month-actions"><a id="prevMonth" data-month="'+prev+'" class="btn gray" href="/app/calendar.php?month='+prev+'" aria-label="前の月">‹</a> <a id="nextMonth" data-month="'+next+'" class="btn gray" href="/app/calendar.php?month='+next+'" aria-label="次の月">›</a></div></div>'+
     '<div class="card calendar-card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
     '<a class="fab calendar-fab" id="calendarFab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a><div class="modal-backdrop" id="dayModal"><div class="day-modal"><div class="modal-top"><button id="modalPrev" class="modal-day-nav" type="button" aria-label="前の日">‹</button><h2 id="modalTitle"></h2><button id="modalNext" class="modal-day-nav" type="button" aria-label="次の日">›</button><button id="modalReorder" class="btn gray small modal-reorder" type="button">並べ替え</button><button id="modalClose" class="btn gray modal-close" type="button" aria-label="閉じる">×</button></div><div class="modal-swipe-hint">左右にスワイプして日付移動</div><div class="modal-scroll"><div id="modalBody" class="modal-body"></div></div><a id="modalAdd" class="modal-add-fab" href="#" aria-label="この日にタスクを追加">＋</a></div></div><script type="application/json" id="calendarPayload">'+calendarPayload+'</script>'+script;
@@ -725,7 +725,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
   <div class="message-task-backdrop" id="messageTaskModal" aria-hidden="true"><div class="message-task-dialog"><div class="section-head"><h2>📝 伝言をタスク・イベントに追加</h2><button type="button" class="btn gray small" id="messageTaskClose">×</button></div><form id="messageTaskForm"><input type="hidden" name="message_id"><label>追加方法</label><select name="mode" id="messageTaskMode"><option value="existing">既存タスク・イベントに追加</option><option value="new">新しいタスク・イベントを作成</option></select><div id="existingTaskFields"><label>追加先タスク・イベント</label><select name="task_id"><option value="0">選択してください</option>${tasks.results.map(t=>`<option value="${t.id}">${esc(t.title)}${t.start_at||t.due_at?' ・ '+esc(String(t.start_at||t.due_at).slice(0,10)):''}</option>`).join('')}</select><label class="checkrow"><input type="checkbox" name="append_message" checked><span>伝言本文を説明へ追記する</span></label></div><div id="newTaskFields" style="display:none"><label>タイトル</label><input name="title" maxlength="255"><label>説明</label><textarea name="description"></textarea><div class="date-option-row"><div><span class="small">開始日</span><input type="date" name="date" value="${today}"></div><div><span class="small">終了日</span><input type="date" name="end_date" value="${today}"></div><label class="checkrow"><input type="checkbox" name="no_date"><span>期限なし</span></label></div><label class="checkrow"><input id="messageTaskAllDay" type="checkbox" name="all_day" checked><span>終日</span></label><div id="messageTaskTimeFields" class="task-time-fields message-task-time" style="display:none"><div><label>開始時刻</label><input type="time" name="start_time"></div><div><label>終了時刻</label><input type="time" name="end_time"></div></div><label>場所</label><input name="location"><label>担当者</label><div class="assignee-list">${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="task_assignees" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div><label class="checkrow"><input type="checkbox" name="is_event"><span>イベントとして登録（チェック・期限切れ対象なし）</span></label><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select><label>通知日時（任意）</label><input type="datetime-local" name="task_reminder_at"><label class="checkrow"><input id="messageTaskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><div id="messageTaskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div></div><div id="messageTaskStatus" class="small" aria-live="polite"></div><button type="submit" id="messageTaskSubmit">追加する</button></form></div></div>
   <div class="message-edit-backdrop" id="messageEditModal" aria-hidden="true"><div class="message-edit-dialog"><div class="section-head"><h2>✏️ 伝言を編集</h2><button type="button" class="btn gray small" id="messageEditClose">×</button></div><form id="messageEditForm"><input type="hidden" name="message_id"><label>宛先</label><select name="target_member_id"><option value="0">家族全員</option>${members.results.map((r:Row)=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><label>伝言</label><textarea name="text" maxlength="5000" required></textarea><label>通知日時（任意）</label><input type="datetime-local" name="reminder_at"><p class="small">空欄で通知予約を解除します。</p><div id="messageEditStatus" class="small" aria-live="polite"></div><button type="submit" id="messageEditSubmit">保存する</button></form></div></div>
   <script type="application/json" id="messagesPayload">${JSON.stringify({csrf:ctx.session.csrfToken||'',today}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
-  <script src="/assets/messages.js?v=12.94-wave75"></script>`;
+  <script src="/assets/messages.js?v=12.96-wave77"></script>`;
   return html(layout('伝言',body,'/app/messages.php'));
 }
 
@@ -760,7 +760,7 @@ function shoppingBatchForm(ctx:AppContext, tasks:Row[], date='', members:Row[]=[
     </form>
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
-  <script src="/assets/shopping-new.js?v=12.94-wave75"></script>`;
+  <script src="/assets/shopping-new.js?v=12.96-wave77"></script>`;
 }
 
 export async function shopping(request:Request,ctx:AppContext):Promise<Response>{
@@ -860,7 +860,7 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
   ${expired.results.length?`<div class="card expired-card"><details><summary class="expired-trigger">期限切れ（${expired.results.length}件）</summary>${expired.results.map(r=>`<button type="button" class="expired-row shopping-detail-open" data-id="${r.id}"><strong>${esc(r.name)}${r.quantity&&r.quantity!=='1'?' × '+esc(r.quantity):''}</strong><span class="expired-meta">${r.task_title?'タスク：'+esc(r.task_title):'タスクなし'}${r.due_date?' ・ 期限：'+esc(r.due_date):''}</span></button>`).join('')}</details></div>`:''}
   <a class="fab shopping-fab" href="/app/shopping_new.php?date=${dateOnly()}" aria-label="買い物を追加">＋</a>
   <div class="shopping-detail-backdrop" id="shoppingDetailModal" aria-hidden="true"><div class="shopping-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="shoppingDetailTitle"><div class="shopping-detail-head"><h2 id="shoppingDetailTitle">買い物詳細</h2><button type="button" class="shopping-detail-close" id="shoppingDetailClose" aria-label="閉じる">×</button></div><div id="shoppingDetailBody" class="shopping-detail-body"></div><div class="shopping-detail-actions"><a class="btn gray" id="shoppingDetailEdit" href="#">編集</a><button type="button" class="btn gray" id="shoppingDetailToTask">タスク化</button></div></div></div>
-  <script type="application/json" id="shoppingPayload">${JSON.stringify({shoppingDetail,csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/shopping.js?v=12.94-wave75"></script>`;
+  <script type="application/json" id="shoppingPayload">${JSON.stringify({shoppingDetail,csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/shopping.js?v=12.96-wave77"></script>`;
   return html(layout('買い物',body,'/app/shopping.php'));
 }
 
@@ -884,7 +884,7 @@ export async function home(ctx:AppContext):Promise<Response>{
   return html(layout('Family TODO LINE',body,'/app/index.php'));
 }
 export async function createFamilyPage(ctx:AppContext):Promise<Response>{
-  const body=`<div class="card"><h1>家族を作成</h1><p class="meta">LINEアカウント：${esc(ctx.session.lineDisplayName||'')}</p><div id="familyActionError" class="error" style="display:none"></div><form id="familyCreate" data-family-endpoint="/api/family/create"><label>家族名</label><input name="family_name" maxlength="255" required placeholder="例：田中家"><label>あなたの名前</label><input name="member_name" maxlength="255" value="${esc(ctx.session.lineDisplayName||'')}" required><button type="submit">家族を作成する</button></form><hr><p>既存の家族に参加する場合は家族コードを入力してください。</p><form id="familyJoin" data-family-endpoint="/api/family/join"><label>家族コード</label><input name="family_code" maxlength="32" required><label>あなたの名前</label><input name="member_name" value="${esc(ctx.session.lineDisplayName||'')}" required><button type="submit">家族に参加する</button></form></div><script src="/assets/family-onboarding.js?v=12.94-wave75"></script>`;
+  const body=`<div class="card"><h1>家族を作成</h1><p class="meta">LINEアカウント：${esc(ctx.session.lineDisplayName||'')}</p><div id="familyActionError" class="error" style="display:none"></div><form id="familyCreate" data-family-endpoint="/api/family/create"><label>家族名</label><input name="family_name" maxlength="255" required placeholder="例：田中家"><label>あなたの名前</label><input name="member_name" maxlength="255" value="${esc(ctx.session.lineDisplayName||'')}" required><button type="submit">家族を作成する</button></form><hr><p>既存の家族に参加する場合は家族コードを入力してください。</p><form id="familyJoin" data-family-endpoint="/api/family/join"><label>家族コード</label><input name="family_code" maxlength="32" required><label>あなたの名前</label><input name="member_name" value="${esc(ctx.session.lineDisplayName||'')}" required><button type="submit">家族に参加する</button></form></div><script src="/assets/family-onboarding.js?v=12.96-wave77"></script>`;
   return html(layout('家族を作成',body));
 }
 
@@ -938,7 +938,7 @@ export async function taskView(ctx:AppContext, id:number):Promise<Response>{
   ${canEdit?`<p><a class="btn" href="/task/edit.php?id=${id}">編集</a> ${exceptionOrigin?`<button class="btn danger" id="exceptionDeleteOpen" type="button">削除</button>`:`<button class="btn danger" id="del" type="button">削除</button>`}</p>`:''}<p><a class="btn gray" href="/app/tasks.php?date=${encodeURIComponent(dateForChildren||'')}">戻る</a></p></div>${convertHtml}${childShoppingHtml}${childItemsHtml}${reminderHtml}
   ${isEvent?'':`<div class="card"><h2>完了履歴</h2>${history.results.map(h=>`<div class="row">${esc(h.action)} ・ ${esc(h.member_name||'')} ・ ${esc(h.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div>`}
   ${exceptionOrigin?`<div class="exception-delete-backdrop" id="exceptionDeleteModal" aria-hidden="true"><div class="exception-delete-sheet" role="dialog" aria-modal="true"><div class="section-head"><h2>この日の例外タスクを削除</h2><button class="btn gray small" id="exceptionDeleteClose" type="button">×</button></div><p><strong>${esc(exceptionOrigin.occurrence_date)}</strong> は「${esc(exceptionOrigin.recurrence_name||'定期タスク')}」から通常タスク化した日です。</p><p class="small">削除後の定期タスク側の扱いを選んでください。</p><button class="btn exception-delete-choice" id="exceptionDeleteRestore" type="button">元の定期日に戻す</button><button class="btn danger exception-delete-choice" id="exceptionDeleteExclude" type="button">この日だけ除外したまま削除</button></div></div>`:''}
-  <script type="application/json" id="taskViewPayload">${JSON.stringify({csrf:ctx.session.csrfToken||'',id,occurrenceId,toggleType:isVirtual?'recurrence':'task',returnUrl:'/app/tasks.php?date='+encodeURIComponent(dateForChildren||'')}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-view.js?v=12.94-wave75"></script>`;
+  <script type="application/json" id="taskViewPayload">${JSON.stringify({csrf:ctx.session.csrfToken||'',id,occurrenceId,toggleType:isVirtual?'recurrence':'task',returnUrl:'/app/tasks.php?date='+encodeURIComponent(dateForChildren||'')}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-view.js?v=12.96-wave77"></script>`;
   return html(layout(isEvent?'イベント詳細':'タスク詳細',body,''));
 }
 function allDayDateEnd(startDate:string,endDate:string):boolean{return startDate!==endDate;}
@@ -1079,7 +1079,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><label>カテゴリー（全商品共通）</label><input name="shopping_category" value="${safe(shops.results[0]?.category||'')}" list="taskShopCategories" placeholder="例：食品"><datalist id="taskShopCategories">${categories.results.map(c=>`<option value="${safe(c.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
     <div class="sub-card"><button type="button" class="section-button" id="itemToggle">🎒 持ち物を編集</button><div id="itemBox" ${items.results.length?'':'style="display:none"'}><div id="itemRows">${itemRows||`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="0"><input name="item_name[]" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
-    <script src="/assets/task-edit.js?v=12.94-wave75"></script>`;
+    <script src="/assets/task-edit.js?v=12.96-wave77"></script>`;
   return html(layout('タスク・イベント編集',body,''));
 }
 
@@ -1186,7 +1186,7 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
   const members=await ctx.env.DB.prepare('SELECT id,name,role,active,notification_enabled FROM members WHERE family_id=? AND deleted_at IS NULL ORDER BY id').bind(m.family_id).all<Row>();
   const ns=await ctx.env.DB.prepare('SELECT * FROM notification_settings WHERE family_id=? AND member_id=?').bind(m.family_id,m.id).first<Row>();
   const recurring=await ctx.env.DB.prepare('SELECT id,name AS title,recurrence_type,interval_value,weekday,monthday,start_date,end_date,active FROM recurrence_rules WHERE family_id=? ORDER BY active DESC,id DESC').bind(m.family_id).all<Row>();
-  const body=`<div class="card"><h1>⚙️ 管理</h1><h2>プロフィール</h2><form id="profile"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input name="name" value="${esc(m.name)}" required><button>保存</button></form></div><div class="card settings-links"><div class="section-link"><div><h2>👨‍👩‍👧 家族メンバー</h2><p class="small">家族メンバーの状態・招待リンクを管理します。</p></div><a class="btn" href="/app/settings_members.php">開く</a></div><div class="section-link"><div><h2>📋 投稿管理</h2><p class="small">タスク・持ち物・買い物・伝言を確認します。</p></div><a class="btn gray" href="/app/settings_content.php">開く</a></div><div class="section-link"><div><h2>🔔 通知設定</h2><p class="small">LINE / Web Pushの通知方法と対象メンバーを設定します。</p></div><a class="btn gray" href="/app/settings_notifications.php">開く</a></div><div class="section-link"><div><h2>🩺 データ診断</h2><p class="small">通知・定期タスク・削除履歴・紐付けの整合性を確認します。</p></div><a class="btn gray" href="/app/settings_diagnostics.php">開く</a></div><div class="section-link"><div><h2>🔁 定期タスク</h2><p class="small">毎日・毎週・毎月などの繰り返しを設定します。</p></div><a class="btn gray" href="/app/recurring.php">開く</a></div><div class="section-link"><div><h2>📊 家族の活動ログ</h2><p class="small">誰が・いつ・何を完了したかを確認します。</p></div><a class="btn gray" href="/app/logs.php">開く</a></div></div><div class="card"><h2>メンバー</h2>${members.results.map(x=>`<div class="row"><strong>${esc(x.name)}</strong> <span class="meta">${esc(x.role)} / ${Number(x.active)?'有効':'停止'}</span>${isAdmin&&Number(x.id)!==m.id&&String(x.role).toUpperCase()!=='OWNER'?` <button class="btn gray member-toggle" data-id="${x.id}">${Number(x.active)?'停止':'再開'}</button> <button class="btn danger member-del" data-id="${x.id}">削除</button>`:''}</div>`).join('')}</div><div class="card"><h2>家族招待</h2><div class="invite-guide"><strong>招待前の流れ</strong><ol><li>招待相手に Family TODO LINE 公式アカウントを友だち追加してもらう</li><li>ここで発行した招待リンクをLINEで送る</li><li>相手はLINE内でリンクを開き、名前を確認して参加する</li></ol><p class="small">招待リンク発行時に公式アカウント情報を自動取得し、友だち追加URLも一緒に共有できます。</p></div>${isAdmin?'<button id="inviteBtn" class="btn">招待リンクを発行</button><div id="inviteOut" class="meta"></div>':'<p class="meta">招待リンクの発行は管理者のみ可能です。</p>'}</div><div class="card"><h2>定期タスク</h2><p><a class="btn" href="/app/recurring.php">定期タスクを管理</a></p>${recurring.results.map(r=>`<div class="row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.interval_value)}</div></div>`).join('')||'<p>登録済みの定期タスクはありません。</p>'}</div><script type="application/json" id="settingsPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings.js?v=12.94-wave75"></script>`;
+  const body=`<div class="card"><h1>⚙️ 管理</h1><h2>プロフィール</h2><form id="profile"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input name="name" value="${esc(m.name)}" required><button>保存</button></form></div><div class="card settings-links"><div class="section-link"><div><h2>👨‍👩‍👧 家族メンバー</h2><p class="small">家族メンバーの状態・招待リンクを管理します。</p></div><a class="btn" href="/app/settings_members.php">開く</a></div><div class="section-link"><div><h2>📋 投稿管理</h2><p class="small">タスク・持ち物・買い物・伝言を確認します。</p></div><a class="btn gray" href="/app/settings_content.php">開く</a></div><div class="section-link"><div><h2>🔔 通知設定</h2><p class="small">LINE / Web Pushの通知方法と対象メンバーを設定します。</p></div><a class="btn gray" href="/app/settings_notifications.php">開く</a></div><div class="section-link"><div><h2>🩺 データ診断</h2><p class="small">通知・定期タスク・削除履歴・紐付けの整合性を確認します。</p></div><a class="btn gray" href="/app/settings_diagnostics.php">開く</a></div><div class="section-link"><div><h2>🔁 定期タスク</h2><p class="small">毎日・毎週・毎月などの繰り返しを設定します。</p></div><a class="btn gray" href="/app/recurring.php">開く</a></div><div class="section-link"><div><h2>📊 家族の活動ログ</h2><p class="small">誰が・いつ・何を完了したかを確認します。</p></div><a class="btn gray" href="/app/logs.php">開く</a></div></div><div class="card"><h2>メンバー</h2>${members.results.map(x=>`<div class="row"><strong>${esc(x.name)}</strong> <span class="meta">${esc(x.role)} / ${Number(x.active)?'有効':'停止'}</span>${isAdmin&&Number(x.id)!==m.id&&String(x.role).toUpperCase()!=='OWNER'?` <button class="btn gray member-toggle" data-id="${x.id}">${Number(x.active)?'停止':'再開'}</button> <button class="btn danger member-del" data-id="${x.id}">削除</button>`:''}</div>`).join('')}</div><div class="card"><h2>家族招待</h2><div class="invite-guide"><strong>招待前の流れ</strong><ol><li>招待相手に Family TODO LINE 公式アカウントを友だち追加してもらう</li><li>ここで発行した招待リンクをLINEで送る</li><li>相手はLINE内でリンクを開き、名前を確認して参加する</li></ol><p class="small">招待リンク発行時に公式アカウント情報を自動取得し、友だち追加URLも一緒に共有できます。</p></div>${isAdmin?'<button id="inviteBtn" class="btn">招待リンクを発行</button><div id="inviteOut" class="meta"></div>':'<p class="meta">招待リンクの発行は管理者のみ可能です。</p>'}</div><div class="card"><h2>定期タスク</h2><p><a class="btn" href="/app/recurring.php">定期タスクを管理</a></p>${recurring.results.map(r=>`<div class="row"><strong>${esc(r.title)}</strong><div class="meta">${esc(r.recurrence_type)} / ${esc(r.interval_value)}</div></div>`).join('')||'<p>登録済みの定期タスクはありません。</p>'}</div><script type="application/json" id="settingsPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings.js?v=12.96-wave77"></script>`;
   return html(layout('管理',body,'/app/settings.php'));
 }
 
@@ -1200,7 +1200,7 @@ export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):
 
 export async function messageNew(ctx:AppContext):Promise<Response>{
   const m=requireMember(ctx); const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
-  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>💬 伝言</h1></div><a class="btn gray" href="/app/messages.php">戻る</a></div><div class="card form-card"><form id="messageNew"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>宛先</label><select name="target_member_id"><option value="0">家族全員</option>${members.results.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><label>伝言</label><textarea name="text" maxlength="5000" required autofocus placeholder="家族への伝言を入力してください。"></textarea><label>通知日時（任意）</label><input type="datetime-local" name="reminder_at"><p class="small">指定すると宛先へその日時に伝言内容を設定した通知方法で通知します。</p><button>伝言する</button></form></div><script src="/assets/message-new.js?v=12.94-wave75"></script>`;
+  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>💬 伝言</h1></div><a class="btn gray" href="/app/messages.php">戻る</a></div><div class="card form-card"><form id="messageNew"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>宛先</label><select name="target_member_id"><option value="0">家族全員</option>${members.results.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><label>伝言</label><textarea name="text" maxlength="5000" required autofocus placeholder="家族への伝言を入力してください。"></textarea><label>通知日時（任意）</label><input type="datetime-local" name="reminder_at"><p class="small">指定すると宛先へその日時に伝言内容を設定した通知方法で通知します。</p><button>伝言する</button></form></div><script src="/assets/message-new.js?v=12.96-wave77"></script>`;
   return html(layout('伝言',body,'/app/messages.php'));
 }
 
@@ -1212,7 +1212,7 @@ export async function settingsMembers(request:Request,ctx:AppContext):Promise<Re
   ]);
   const now=nowJst();
   const invitationRows=invitations.results.map(i=>{const used=Boolean(i.used_at),active=!used&&String(i.expires_at||'')>now;const status=used?'使用済み':active?'有効':'期限切れ/取消済み';return `<div class="invite-history-row"><div><strong>${status}</strong><div class="meta">発行 ${esc(String(i.created_at||'').slice(0,16))}${i.created_by_name?' ・ '+esc(i.created_by_name):''}</div><div class="meta">期限 ${esc(String(i.expires_at||'').slice(0,16))}${used&&i.used_at?' ・ 使用 '+esc(String(i.used_at).slice(0,16)):''}${used&&i.used_by_name?' ・ '+esc(i.used_by_name):''}</div></div>${active?`<button type="button" class="btn danger small invite-revoke" data-id="${i.id}">取消</button>`:''}</div>`}).join('')||'<p class="empty">発行履歴はありません。</p>';
-  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>👨‍👩‍👧 家族メンバー</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card member-list">${members.results.map(x=>`<div class="member-row"><div><strong>${esc(x.name)}</strong><div class="meta">${esc(x.member_type||'ADULT')} / ${esc(x.role||'MEMBER')} / ${x.deleted_at?'削除済み':(Number(x.active)?'有効':'停止中')}</div></div>${Number(x.id)!==m.id&&String(x.role||'').toUpperCase()!=='OWNER'&&!x.deleted_at?`<div class="actions"><button class="btn gray small member-toggle" data-id="${x.id}">${Number(x.active)?'停止':'再開'}</button><button class="btn danger small member-del" data-id="${x.id}">削除</button></div>`:''}</div>`).join('')}</div><div class="card"><h2>招待</h2><div class="invite-guide"><strong>招待前の流れ</strong><ol><li>招待相手に Family TODO LINE 公式アカウントを友だち追加してもらう</li><li>7日間有効の招待リンクを発行してLINEで送る</li><li>相手はLINE内でリンクを開き、名前を確認して参加する</li></ol><p class="small">招待リンク発行時に公式アカウント情報を自動取得し、友だち追加URLも一緒に共有できます。</p></div><button id="invite" class="btn">招待リンクを発行</button><div id="inviteOut"></div><details class="invite-history" open><summary>発行済み招待リンク</summary>${invitationRows}</details></div><script type="application/json" id="settingsMembersPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings-members.js?v=12.94-wave75"></script>`;
+  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>👨‍👩‍👧 家族メンバー</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card member-list">${members.results.map(x=>`<div class="member-row"><div><strong>${esc(x.name)}</strong><div class="meta">${esc(x.member_type||'ADULT')} / ${esc(x.role||'MEMBER')} / ${x.deleted_at?'削除済み':(Number(x.active)?'有効':'停止中')}</div></div>${Number(x.id)!==m.id&&String(x.role||'').toUpperCase()!=='OWNER'&&!x.deleted_at?`<div class="actions"><button class="btn gray small member-toggle" data-id="${x.id}">${Number(x.active)?'停止':'再開'}</button><button class="btn danger small member-del" data-id="${x.id}">削除</button></div>`:''}</div>`).join('')}</div><div class="card"><h2>招待</h2><div class="invite-guide"><strong>招待前の流れ</strong><ol><li>招待相手に Family TODO LINE 公式アカウントを友だち追加してもらう</li><li>7日間有効の招待リンクを発行してLINEで送る</li><li>相手はLINE内でリンクを開き、名前を確認して参加する</li></ol><p class="small">招待リンク発行時に公式アカウント情報を自動取得し、友だち追加URLも一緒に共有できます。</p></div><button id="invite" class="btn">招待リンクを発行</button><div id="inviteOut"></div><details class="invite-history" open><summary>発行済み招待リンク</summary>${invitationRows}</details></div><script type="application/json" id="settingsMembersPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings-members.js?v=12.96-wave77"></script>`;
   return html(layout('家族メンバー',body,'/app/settings.php'));
 }
 
@@ -1288,7 +1288,7 @@ export async function settingsNotifications(request:Request,ctx:AppContext):Prom
   const pushCount=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1').bind(m.id,m.family_id).first<Row>();
   const pushConfigured=webPushConfigured(ctx.env),pushPublicKey=webPushPublicKey(ctx.env),channel=String(selfRow.notification_channel||'LINE');
   const payload=JSON.stringify({csrf:ctx.session.csrfToken||'',pushConfigured,pushPublicKey,pushCount:Number(pushCount?.c||0),channel}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>🔔 通知設定</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card form-card"><form id="notificationForm"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">${isAdmin?`<label>通知を有効にするメンバー</label><div class="choice-list">${members.results.map(x=>`<label class="checkrow"><input type="checkbox" name="enabled_members" value="${x.id}" ${Number(x.notification_enabled??1)?'checked':''}><span>${esc(x.name)}</span></label>`).join('')}</div>`:`<label class="checkrow"><input type="checkbox" name="enabled" ${Number(m.notification_enabled??1)?'checked':''}><span>通知を有効にする</span></label>`}<label>自分の通知方法</label><select name="notification_channel"><option value="LINE" ${channel==='LINE'?'selected':''}>LINE公式アカウント</option><option value="WEB_PUSH" ${channel==='WEB_PUSH'?'selected':''}>Web Push（PWA）</option></select><p class="small">Web Pushを選ぶとLINEのメッセージ通数を消費しません。通知日時はタスク・伝言ごとに指定します。</p><button>保存する</button></form></div><div class="card push-settings-card"><h2>📲 Web Push</h2><p class="small">iPhone/iPadではSafariから「ホーム画面に追加」したFamily TODOを開き、この画面のボタンを押して通知を許可してください。LINE内ブラウザのままではWeb Pushを有効化できない場合があります。</p><div id="pushStatus" class="notice" aria-live="polite">Web Pushの状態を確認しています…</div><div class="actions"><button type="button" class="btn" id="pushEnable" ${pushConfigured?'':'disabled'}>この端末で有効化</button><button type="button" class="btn gray" id="pushTest" ${pushConfigured?'':'disabled'}>テスト通知</button><button type="button" class="btn danger" id="pushDisable">この端末を解除</button></div>${pushConfigured?'':`<div class="error">VAPID鍵が未設定です。管理者がサーバー設定を完了すると利用できます。</div>`}</div><script type="application/json" id="notificationSettingsPayload">${payload}</script><script src="/assets/settings-notifications.js?v=12.94-wave75"></script>`;
+  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>🔔 通知設定</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card form-card"><form id="notificationForm"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">${isAdmin?`<label>通知を有効にするメンバー</label><div class="choice-list">${members.results.map(x=>`<label class="checkrow"><input type="checkbox" name="enabled_members" value="${x.id}" ${Number(x.notification_enabled??1)?'checked':''}><span>${esc(x.name)}</span></label>`).join('')}</div>`:`<label class="checkrow"><input type="checkbox" name="enabled" ${Number(m.notification_enabled??1)?'checked':''}><span>通知を有効にする</span></label>`}<label>自分の通知方法</label><select name="notification_channel"><option value="LINE" ${channel==='LINE'?'selected':''}>LINE公式アカウント</option><option value="WEB_PUSH" ${channel==='WEB_PUSH'?'selected':''}>Web Push（PWA）</option></select><p class="small">Web Pushを選ぶとLINEのメッセージ通数を消費しません。通知日時はタスク・伝言ごとに指定します。</p><button>保存する</button></form></div><div class="card push-settings-card"><h2>📲 Web Push</h2><p class="small">iPhone/iPadではSafariから「ホーム画面に追加」したFamily TODOを開き、この画面のボタンを押して通知を許可してください。LINE内ブラウザのままではWeb Pushを有効化できない場合があります。</p><div id="pushStatus" class="notice" aria-live="polite">Web Pushの状態を確認しています…</div><div class="actions"><button type="button" class="btn" id="pushEnable" ${pushConfigured?'':'disabled'}>この端末で有効化</button><button type="button" class="btn gray" id="pushTest" ${pushConfigured?'':'disabled'}>テスト通知</button><button type="button" class="btn danger" id="pushDisable">この端末を解除</button></div>${pushConfigured?'':`<div class="error">VAPID鍵が未設定です。管理者がサーバー設定を完了すると利用できます。</div>`}</div><script type="application/json" id="notificationSettingsPayload">${payload}</script><script src="/assets/settings-notifications.js?v=12.96-wave77"></script>`;
   return html(layout('通知設定',body,'/app/settings.php'));
 }
 
@@ -1296,7 +1296,60 @@ const FAMILY_LOG_TYPE_META:Record<string,{icon:string;label:string}>={
   MILK:{icon:'🍼',label:'ミルク'},BREASTFEED:{icon:'🤱',label:'母乳'},MEAL:{icon:'🍚',label:'食事'},DIAPER:{icon:'🧷',label:'おむつ'},SLEEP:{icon:'😴',label:'睡眠'},BATH:{icon:'🛁',label:'お風呂'},TEMPERATURE:{icon:'🌡️',label:'体温'},MEDICINE:{icon:'💊',label:'薬'},MEMO:{icon:'📝',label:'メモ'}
 };
 const FAMILY_LOG_TYPES=Object.keys(FAMILY_LOG_TYPE_META);
-const FAMILY_LOG_DETAILS:Record<string,string>={LEFT:'左',RIGHT:'右',BOTH:'両方',BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',WET:'おしっこ',DIRTY:'うんち'};
+const FAMILY_LOG_DETAILS:Record<string,string>={LEFT:'左',RIGHT:'右',BOTH:'両方',BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',WET:'おしっこ',DIRTY:'うんち',BATH:'お風呂',SHOWER:'シャワー'};
+const FAMILY_LOG_SUBJECT_META:Record<string,{icon:string;label:string}>={
+  BABY:{icon:'👶',label:'赤ちゃん'},CHILD:{icon:'🧒',label:'子ども'},ADULT:{icon:'👤',label:'大人'},PET:{icon:'🐾',label:'ペット'},OTHER:{icon:'⭐',label:'その他'}
+};
+const FAMILY_LOG_DEFAULT_TYPES:Record<string,string[]>={
+  BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','MEMO'],
+  CHILD:['MEAL','SLEEP','BATH','TEMPERATURE','MEDICINE','MEMO'],
+  ADULT:['SLEEP','TEMPERATURE','MEDICINE','MEAL','MEMO'],
+  PET:['MEAL','SLEEP','TEMPERATURE','MEDICINE','MEMO'],
+  OTHER:['MEMO','TEMPERATURE','MEDICINE','SLEEP']
+};
+
+function familyLogSubjectKind(value:unknown):string{
+  const kind=String(value||'ADULT').toUpperCase();
+  return Object.prototype.hasOwnProperty.call(FAMILY_LOG_SUBJECT_META,kind)?kind:'OTHER';
+}
+function familyLogDefaultTypes(kind:unknown):string[]{
+  return [...(FAMILY_LOG_DEFAULT_TYPES[familyLogSubjectKind(kind)]||FAMILY_LOG_DEFAULT_TYPES.OTHER)];
+}
+function familyLogEnabledTypes(subject:Row|undefined|null):string[]{
+  if(!subject)return [...FAMILY_LOG_TYPES];
+  const raw=String(subject.enabled_types_json||'').trim();
+  if(raw){
+    try{
+      const parsed=JSON.parse(raw);
+      if(Array.isArray(parsed)){
+        const out=[...new Set(parsed.map(x=>String(x||'').toUpperCase()).filter(x=>FAMILY_LOG_TYPES.includes(x)))];
+        if(out.length)return out;
+      }
+    }catch{}
+  }
+  return familyLogDefaultTypes(subject.subject_kind);
+}
+function familyLogSubjectIcon(subject:Row|undefined|null):string{
+  if(subject?.icon)return String(subject.icon);
+  return FAMILY_LOG_SUBJECT_META[familyLogSubjectKind(subject?.subject_kind)]?.icon||'👤';
+}
+async function ensureFamilyLogMemberSubjects(ctx:AppContext,familyId:number,createdBy:number):Promise<void>{
+  const now=nowJst();
+  await ctx.env.DB.prepare(`INSERT INTO family_log_subjects(family_id,member_id,name,subject_kind,birth_date,icon,active,created_by,created_at,updated_at,enabled_types_json)
+    SELECT mm.family_id,mm.id,mm.name,
+      CASE
+        WHEN upper(COALESCE(mm.member_type,'ADULT'))='BABY' THEN 'BABY'
+        WHEN upper(COALESCE(mm.member_type,'ADULT')) IN ('CHILD','KID') THEN 'CHILD'
+        ELSE 'ADULT'
+      END,
+      NULL,mm.icon,1,?,COALESCE(mm.created_at,?),?,NULL
+    FROM members mm
+    WHERE mm.family_id=? AND mm.active=1
+      AND NOT EXISTS(
+        SELECT 1 FROM family_log_subjects s
+        WHERE s.family_id=mm.family_id AND s.member_id=mm.id
+      )`).bind(createdBy,now,now,familyId).run();
+}
 
 function familyLogDateTime(value:unknown):string{
   const raw=String(value??'').trim().replace('T',' ');
@@ -1309,20 +1362,48 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   if(request.method==='POST'){
     const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);
     const action=String(b.action||'save');
-    if(action==='subject_create'){
+    if(action==='subject_create'||action==='subject_update'){
+      const id=action==='subject_update'?Number(b.id||0):0;
       const name=String(b.name||'').trim();
       if(!name||name.length>80)throw new BadRequest('対象の名前を80文字以内で入力してください。');
-      const kind=String(b.subject_kind||'CHILD').toUpperCase();
-      if(!['CHILD','ADULT','PET','OTHER'].includes(kind))throw new BadRequest('対象種別が不正です。');
+      const kind=familyLogSubjectKind(b.subject_kind||'BABY');
       const birth=String(b.birth_date||'').trim()||null;
       if(birth&&!/^\d{4}-\d{2}-\d{2}$/.test(birth))throw new BadRequest('生年月日が不正です。');
-      const memberId=Number(b.member_id||0)||null;
-      if(memberId){const member=await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(memberId,m.family_id).first<Row>();if(!member)throw new BadRequest('連携するメンバーが見つかりません。');}
+      const enabledInput=Array.isArray(b.enabled_types)?(b.enabled_types as unknown[]):familyLogDefaultTypes(kind);
+      const enabled=[...new Set(enabledInput.map(x=>String(x||'').toUpperCase()).filter(x=>FAMILY_LOG_TYPES.includes(x)))];
+      if(!enabled.length)throw new BadRequest('表示する記録項目を1つ以上選択してください。');
+      const enabledJson=JSON.stringify(enabled);
       const now=nowJst();
-      const r=await ctx.env.DB.prepare('INSERT INTO family_log_subjects(family_id,member_id,name,subject_kind,birth_date,icon,active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?)')
-        .bind(m.family_id,memberId,name,kind,birth,null,m.id,now,now).run();
-      await logActivity(ctx,'CREATED','family_log_subject',Number(r.meta.last_row_id),{name,subject_kind:kind});
+      if(id){
+        const current=await ctx.env.DB.prepare('SELECT id,member_id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
+        if(!current)return json({ok:false,error:'記録対象が見つかりません。'},404);
+        await ctx.env.DB.prepare('UPDATE family_log_subjects SET name=?,subject_kind=?,birth_date=?,enabled_types_json=?,updated_at=? WHERE id=? AND family_id=? AND active=1')
+          .bind(name,kind,birth,enabledJson,now,id,m.family_id).run();
+        await logActivity(ctx,'UPDATED','family_log_subject',id,{name,subject_kind:kind,enabled_types:enabled});
+        return json({ok:true,id});
+      }
+      const memberId=Number(b.member_id||0)||null;
+      if(memberId){
+        const member=await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(memberId,m.family_id).first<Row>();
+        if(!member)throw new BadRequest('連携するメンバーが見つかりません。');
+        const existing=await ctx.env.DB.prepare('SELECT id FROM family_log_subjects WHERE family_id=? AND member_id=? LIMIT 1').bind(m.family_id,memberId).first<Row>();
+        if(existing)throw new BadRequest('この家族メンバーはすでに家族ログ対象として表示されています。');
+      }
+      const r=await ctx.env.DB.prepare('INSERT INTO family_log_subjects(family_id,member_id,name,subject_kind,birth_date,icon,active,created_by,created_at,updated_at,enabled_types_json) VALUES(?,?,?,?,?,?,1,?,?,?,?)')
+        .bind(m.family_id,memberId,name,kind,birth,null,m.id,now,now,enabledJson).run();
+      await logActivity(ctx,'CREATED','family_log_subject',Number(r.meta.last_row_id),{name,subject_kind:kind,enabled_types:enabled});
       return json({ok:true,id:Number(r.meta.last_row_id)});
+    }
+    if(action==='subject_disable'){
+      const id=Number(b.id||0);if(!id)throw new BadRequest('記録対象が不正です。');
+      const current=await ctx.env.DB.prepare('SELECT id,member_id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
+      if(!current)return json({ok:false,error:'記録対象が見つかりません。'},404);
+      if(Number(current.member_id||0)>0)throw new BadRequest('家族メンバー連携の対象は非表示にできません。メンバー管理で停止してください。');
+      const now=nowJst();
+      await ctx.env.DB.prepare('UPDATE family_log_subjects SET active=0,updated_at=? WHERE id=? AND family_id=?').bind(now,id,m.family_id).run();
+      await ctx.env.DB.prepare("UPDATE family_log_timers SET status='cancelled',updated_at=? WHERE subject_id=? AND family_id=? AND status='running'").bind(now,id,m.family_id).run();
+      await logActivity(ctx,'DISABLED','family_log_subject',id,{});
+      return json({ok:true});
     }
     if(action==='save'){
       const id=Number(b.id||0)||0;
@@ -1390,45 +1471,135 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
     throw new BadRequest('操作が不正です。');
   }
 
-  const url=new URL(request.url);const selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date')||'')?String(url.searchParams.get('date')):dateOnly();
+  const url=new URL(request.url);
+  const selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date')||'')?String(url.searchParams.get('date')):dateOnly();
   const selectedSubject=Math.max(0,Number(url.searchParams.get('subject')||0)||0);
-  const subjects=await ctx.env.DB.prepare('SELECT s.*,m.name member_name FROM family_log_subjects s LEFT JOIN members m ON m.id=s.member_id WHERE s.family_id=? AND s.active=1 ORDER BY s.id').bind(m.family_id).all<Row>();
-  const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
+  const members=await ctx.env.DB.prepare('SELECT id,name,member_type,icon,active FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
+  await ensureFamilyLogMemberSubjects(ctx,m.family_id,m.id);
+  const subjects=await ctx.env.DB.prepare(`SELECT s.*,fm.name member_name,fm.active member_active
+    FROM family_log_subjects s
+    LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
+    WHERE s.family_id=? AND s.active=1
+      AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
+    ORDER BY CASE WHEN s.member_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(fm.id,s.id),s.id`).bind(m.family_id).all<Row>();
   if(selectedSubject&&!subjects.results.some(s=>Number(s.id)===selectedSubject))throw new BadRequest('記録対象が見つかりません。');
+  const selectedSubjectRow=selectedSubject?subjects.results.find(s=>Number(s.id)===selectedSubject):undefined;
+  const enabledTypes=selectedSubjectRow
+    ?familyLogEnabledTypes(selectedSubjectRow)
+    :FAMILY_LOG_TYPES.filter(type=>subjects.results.some(s=>familyLogEnabledTypes(s).includes(type)));
+  const quickTypes=(enabledTypes.length?enabledTypes:FAMILY_LOG_TYPES).filter(type=>FAMILY_LOG_TYPES.includes(type));
+
   const where=['l.family_id=?','l.deleted_at IS NULL','date(l.occurred_at)=date(?)'];const params:any[]=[m.family_id,selectedDate];
   if(selectedSubject){where.push('l.subject_id=?');params.push(selectedSubject);}
-  const logs=await ctx.env.DB.prepare(`SELECT l.*,s.name subject_name,cm.name creator_name,t.title linked_task_title,rr.name linked_recurrence_title,o.occurrence_date linked_occurrence_date FROM family_logs l LEFT JOIN family_log_subjects s ON s.id=l.subject_id LEFT JOIN members cm ON cm.id=l.created_by LEFT JOIN tasks t ON t.id=l.linked_task_id AND t.family_id=l.family_id LEFT JOIN recurrence_occurrences o ON o.id=l.linked_occurrence_id AND o.family_id=l.family_id LEFT JOIN recurrence_rules rr ON rr.id=o.recurrence_rule_id AND rr.family_id=o.family_id WHERE ${where.join(' AND ')} ORDER BY l.occurred_at DESC,l.id DESC LIMIT 200`).bind(...params).all<Row>();
-  const timerWhere=selectedSubject?"x.family_id=? AND x.status='running' AND x.subject_id=?":"x.family_id=? AND x.status='running'";const timerParams=selectedSubject?[m.family_id,selectedSubject]:[m.family_id];
+  const logs=await ctx.env.DB.prepare(`SELECT l.*,s.name subject_name,cm.name creator_name,t.title linked_task_title,rr.name linked_recurrence_title,o.occurrence_date linked_occurrence_date
+    FROM family_logs l
+    LEFT JOIN family_log_subjects s ON s.id=l.subject_id
+    LEFT JOIN members cm ON cm.id=l.created_by
+    LEFT JOIN tasks t ON t.id=l.linked_task_id AND t.family_id=l.family_id
+    LEFT JOIN recurrence_occurrences o ON o.id=l.linked_occurrence_id AND o.family_id=l.family_id
+    LEFT JOIN recurrence_rules rr ON rr.id=o.recurrence_rule_id AND rr.family_id=o.family_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY l.occurred_at DESC,l.id DESC LIMIT 200`).bind(...params).all<Row>();
+  const timerWhere=selectedSubject?"x.family_id=? AND x.status='running' AND x.subject_id=?":"x.family_id=? AND x.status='running'";
+  const timerParams=selectedSubject?[m.family_id,selectedSubject]:[m.family_id];
   const timers=await ctx.env.DB.prepare(`SELECT x.*,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE ${timerWhere} ORDER BY x.started_at_ms`).bind(...timerParams).all<Row>();
   const physical=await ctx.env.DB.prepare(`SELECT id,title,task_kind FROM tasks WHERE family_id=? AND status IN ('pending','completed') AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) AND ((start_at IS NOT NULL AND date(start_at)<=date(?) AND (end_at IS NULL OR date(end_at)>=date(?))) OR (start_at IS NULL AND due_at IS NOT NULL AND date(due_at)=date(?))) ORDER BY sort_order,id`).bind(m.family_id,selectedDate,selectedDate,selectedDate).all<Row>();
   const recurring=await recurringForDate(ctx,selectedDate);
-  const logMap=Object.fromEntries(logs.results.map(r=>[String(r.id),{id:Number(r.id),subject_id:Number(r.subject_id||0),log_type:String(r.log_type||''),occurred_at:String(r.occurred_at||''),detail_code:String(r.detail_code||''),amount:r.amount===null?null:Number(r.amount),unit:String(r.unit||''),duration_minutes:r.duration_minutes===null?null:Number(r.duration_minutes),value_text:String(r.value_text||''),note:String(r.note||''),linked_task_id:Number(r.linked_task_id||0),linked_occurrence_id:Number(r.linked_occurrence_id||0)}]));
+
+  const logMap=Object.fromEntries(logs.results.map(r=>[String(r.id),{
+    id:Number(r.id),subject_id:Number(r.subject_id||0),log_type:String(r.log_type||''),occurred_at:String(r.occurred_at||''),
+    detail_code:String(r.detail_code||''),amount:r.amount===null?null:Number(r.amount),unit:String(r.unit||''),
+    duration_minutes:r.duration_minutes===null?null:Number(r.duration_minutes),value_text:String(r.value_text||''),note:String(r.note||''),
+    linked_task_id:Number(r.linked_task_id||0),linked_occurrence_id:Number(r.linked_occurrence_id||0)
+  }]));
+  const subjectMap=Object.fromEntries(subjects.results.map(s=>[String(s.id),{
+    id:Number(s.id),member_id:Number(s.member_id||0),member_name:String(s.member_name||''),name:String(s.name||''),
+    subject_kind:familyLogSubjectKind(s.subject_kind),birth_date:String(s.birth_date||''),icon:familyLogSubjectIcon(s),
+    enabled_types:familyLogEnabledTypes(s)
+  }]));
+
   const milkTotal=logs.results.filter(r=>String(r.log_type)==='MILK').reduce((sum,r)=>sum+Number(r.amount||0),0);
+  const wetCount=logs.results.filter(r=>String(r.log_type)==='DIAPER'&&['WET','BOTH'].includes(String(r.detail_code||''))).length;
+  const dirtyCount=logs.results.filter(r=>String(r.log_type)==='DIAPER'&&['DIRTY','BOTH'].includes(String(r.detail_code||''))).length;
   const diaperCount=logs.results.filter(r=>String(r.log_type)==='DIAPER').length;
   const sleepMinutes=logs.results.filter(r=>String(r.log_type)==='SLEEP').reduce((sum,r)=>sum+Number(r.duration_minutes||0),0);
+  const mealCount=logs.results.filter(r=>String(r.log_type)==='MEAL').length;
+  const bathCount=logs.results.filter(r=>String(r.log_type)==='BATH').length;
+  const medicineCount=logs.results.filter(r=>String(r.log_type)==='MEDICINE').length;
+  const memoCount=logs.results.filter(r=>String(r.log_type)==='MEMO').length;
   const latestTemp=logs.results.find(r=>String(r.log_type)==='TEMPERATURE'&&r.amount!==null&&r.amount!==undefined);
+  const hasType=(type:string)=>quickTypes.includes(type);
+  const summaryItems:{value:string;label:string}[]=[{value:String(logs.results.length),label:'記録'}];
+  const pushSummary=(type:string,value:string,label:string)=>{if(hasType(type))summaryItems.push({value,label});};
+  const subjectKind=familyLogSubjectKind(selectedSubjectRow?.subject_kind);
+  if(!selectedSubjectRow){
+    summaryItems.push({value:String(subjects.results.length),label:'対象'});
+    if(milkTotal)summaryItems.push({value:`${milkTotal}ml`,label:'ミルク'});
+    if(diaperCount)summaryItems.push({value:String(diaperCount),label:'おむつ'});
+    if(sleepMinutes)summaryItems.push({value:`${sleepMinutes}分`,label:'睡眠'});
+    if(latestTemp)summaryItems.push({value:`${latestTemp.amount}℃`,label:'最新体温'});
+  }else if(subjectKind==='BABY'){
+    pushSummary('MILK',milkTotal?`${milkTotal}ml`:'—','ミルク');
+    pushSummary('DIAPER',wetCount?String(wetCount):'—','おしっこ');
+    pushSummary('DIAPER',dirtyCount?String(dirtyCount):'—','うんち');
+    pushSummary('SLEEP',sleepMinutes?`${sleepMinutes}分`:'—','睡眠');
+    pushSummary('TEMPERATURE',latestTemp?`${latestTemp.amount}℃`:'—','最新体温');
+  }else if(subjectKind==='CHILD'){
+    pushSummary('MEAL',mealCount?String(mealCount):'—','食事');
+    pushSummary('BATH',bathCount?String(bathCount):'—','お風呂');
+    pushSummary('SLEEP',sleepMinutes?`${sleepMinutes}分`:'—','睡眠');
+    pushSummary('MEDICINE',medicineCount?String(medicineCount):'—','薬');
+    pushSummary('TEMPERATURE',latestTemp?`${latestTemp.amount}℃`:'—','最新体温');
+  }else{
+    pushSummary('TEMPERATURE',latestTemp?`${latestTemp.amount}℃`:'—','最新体温');
+    pushSummary('MEDICINE',medicineCount?String(medicineCount):'—','薬');
+    pushSummary('SLEEP',sleepMinutes?`${sleepMinutes}分`:'—','睡眠');
+    pushSummary('MEAL',mealCount?String(mealCount):'—','食事');
+    pushSummary('MEMO',memoCount?String(memoCount):'—','メモ');
+  }
+  const summaryHtml=summaryItems.slice(0,6).map(x=>`<div><strong>${esc(x.value)}</strong><span>${esc(x.label)}</span></div>`).join('');
+
   const dt=new Date(`${selectedDate}T12:00:00Z`);dt.setUTCDate(dt.getUTCDate()-1);const prev=dt.toISOString().slice(0,10);dt.setUTCDate(dt.getUTCDate()+2);const next=dt.toISOString().slice(0,10);
   const subjectQuery=selectedSubject?`&subject=${selectedSubject}`:'';
-  const subjectChips=`<div class="family-log-subjects"><a class="${selectedSubject===0?'active':''}" href="/app/family_log.php?date=${selectedDate}">すべて</a>${subjects.results.map(s=>`<a class="${selectedSubject===Number(s.id)?'active':''}" href="/app/family_log.php?date=${selectedDate}&subject=${s.id}">${esc(s.icon||'👶')} ${esc(s.name)}</a>`).join('')}</div>`;
-  const quickButtons=FAMILY_LOG_TYPES.map(type=>`<button type="button" class="family-log-quick" data-log-type="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon}</span><strong>${FAMILY_LOG_TYPE_META[type].label}</strong></button>`).join('');
+  const subjectChips=`<div class="family-log-subjects"><a class="${selectedSubject===0?'active':''}" href="/app/family_log.php?date=${selectedDate}">すべて</a>${subjects.results.map(s=>`<a class="${selectedSubject===Number(s.id)?'active':''}" href="/app/family_log.php?date=${selectedDate}&subject=${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</a>`).join('')}</div>`;
+  const quickButtons=quickTypes.map(type=>`<button type="button" class="family-log-quick" data-log-type="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon}</span><strong>${FAMILY_LOG_TYPE_META[type].label}</strong></button>`).join('');
   const linkOptions=[...physical.results.map(t=>({value:`task:${t.id}`,label:`${String(t.task_kind||'').toLowerCase()==='event'?'📌':'📝'} ${String(t.title||'')}`})),...recurring.map(r=>({value:`occ:${r.recurrence_occurrence_id}`,label:`🔁 ${String(r.title||r.name||'定期タスク')}`}))];
-  const rowHtml=logs.results.map(r=>{const type=String(r.log_type||'MEMO'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.MEMO;const bits:string[]=[];if(r.detail_code)bits.push(FAMILY_LOG_DETAILS[String(r.detail_code)]||String(r.detail_code));if(r.amount!==null&&r.amount!==undefined)bits.push(`${r.amount}${esc(r.unit||'')}`);if(r.duration_minutes!==null&&r.duration_minutes!==undefined)bits.push(`${r.duration_minutes}分`);if(r.value_text)bits.push(String(r.value_text));const link=r.linked_task_title?`📝 ${r.linked_task_title}`:r.linked_recurrence_title?`🔁 ${r.linked_recurrence_title}`:'';return `<div class="family-log-row" data-id="${r.id}"><div class="family-log-time">${esc(String(r.occurred_at||'').slice(11,16))}</div><div class="family-log-icon">${meta.icon}</div><div class="family-log-main"><div><strong>${esc(meta.label)}</strong>${r.subject_name?` <span class="family-log-subject-badge">${esc(r.subject_name)}</span>`:''}</div>${bits.length?`<div class="family-log-value">${bits.map(esc).join(' ・ ')}</div>`:''}${r.note?`<div class="meta">${esc(r.note)}</div>`:''}${link?`<div class="meta family-log-link">${esc(link)}</div>`:''}</div><button type="button" class="btn gray small family-log-edit" data-id="${r.id}">編集</button></div>`;}).join('');
-  const timerHtml=timers.results.map(t=>{const type=String(t.log_type||'SLEEP'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.SLEEP;const elapsed=Math.max(0,Math.floor((Date.now()-Number(t.started_at_ms||Date.now()))/60000));return `<div class="family-log-timer-row"><div><strong>${meta.icon} ${esc(meta.label)}</strong>${t.subject_name?` <span class="family-log-subject-badge">${esc(t.subject_name)}</span>`:''}<div class="meta">${esc(String(t.started_at||'').slice(11,16))} 開始 ・ 約${elapsed}分</div></div><div class="actions"><button type="button" class="btn small family-log-timer-stop" data-id="${t.id}">停止して記録</button><button type="button" class="btn gray small family-log-timer-cancel" data-id="${t.id}">取消</button></div></div>`;}).join('');
-  const runningTimerTypes=new Set(timers.results.map(t=>String(t.log_type||'')));
-  const timerStartHtml=`<div class="family-log-timer-actions">${!runningTimerTypes.has('SLEEP')?`<button type="button" class="btn secondary family-log-timer-start" data-type="SLEEP" data-subject="${selectedSubject}">😴 睡眠開始</button>`:''}${!runningTimerTypes.has('BREASTFEED')?`<button type="button" class="btn secondary family-log-timer-start" data-type="BREASTFEED" data-subject="${selectedSubject}">🤱 母乳開始</button>`:''}</div>`;
-  const selectedSubjectLabel=selectedSubject?String(subjects.results.find(s=>Number(s.id)===selectedSubject)?.name||'対象'):'家族共通/すべて';
+  const rowHtml=logs.results.map(r=>{
+    const type=String(r.log_type||'MEMO'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.MEMO;const bits:string[]=[];
+    if(r.detail_code)bits.push(FAMILY_LOG_DETAILS[String(r.detail_code)]||String(r.detail_code));
+    if(r.amount!==null&&r.amount!==undefined)bits.push(`${r.amount}${String(r.unit||'')}`);
+    if(r.duration_minutes!==null&&r.duration_minutes!==undefined)bits.push(`${r.duration_minutes}分`);
+    if(r.value_text)bits.push(String(r.value_text));
+    const link=r.linked_task_title?`📝 ${r.linked_task_title}`:r.linked_recurrence_title?`🔁 ${r.linked_recurrence_title}`:'';
+    return `<div class="family-log-row" data-id="${r.id}"><div class="family-log-time">${esc(String(r.occurred_at||'').slice(11,16))}</div><div class="family-log-icon">${meta.icon}</div><div class="family-log-main"><div><strong>${esc(meta.label)}</strong>${r.subject_name?` <span class="family-log-subject-badge">${esc(r.subject_name)}</span>`:''}</div>${bits.length?`<div class="family-log-value">${bits.map(esc).join(' ・ ')}</div>`:''}${r.note?`<div class="meta">${esc(r.note)}</div>`:''}${link?`<div class="meta family-log-link">${esc(link)}</div>`:''}</div><button type="button" class="btn gray small family-log-edit" data-id="${r.id}">編集</button></div>`;
+  }).join('');
+  const timerHtml=timers.results.map(t=>{
+    const type=String(t.log_type||'SLEEP'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.SLEEP;
+    const elapsed=Math.max(0,Math.floor((Date.now()-Number(t.started_at_ms||Date.now()))/60000));
+    return `<div class="family-log-timer-row"><div><strong>${meta.icon} ${esc(meta.label)}</strong>${t.subject_name?` <span class="family-log-subject-badge">${esc(t.subject_name)}</span>`:''}<div class="meta">${esc(String(t.started_at||'').slice(11,16))} 開始 ・ 約${elapsed}分</div></div><div class="actions"><button type="button" class="btn small family-log-timer-stop" data-id="${t.id}">停止して記録</button><button type="button" class="btn gray small family-log-timer-cancel" data-id="${t.id}">取消</button></div></div>`;
+  }).join('');
+  const runningTimerTypes=new Set(timers.results.filter(t=>!selectedSubject||Number(t.subject_id||0)===selectedSubject).map(t=>String(t.log_type||'')));
+  const timerStartHtml=selectedSubject
+    ?`<div class="family-log-timer-actions">${hasType('SLEEP')&&!runningTimerTypes.has('SLEEP')?`<button type="button" class="btn secondary family-log-timer-start" data-type="SLEEP" data-subject="${selectedSubject}">😴 睡眠開始</button>`:''}${hasType('BREASTFEED')&&!runningTimerTypes.has('BREASTFEED')?`<button type="button" class="btn secondary family-log-timer-start" data-type="BREASTFEED" data-subject="${selectedSubject}">🤱 母乳開始</button>`:''}</div>`
+    :'<p class="small">対象を選ぶと、その人専用の睡眠・母乳タイマーを開始できます。</p>';
+  const selectedSubjectLabel=selectedSubject?String(selectedSubjectRow?.name||'対象'):'家族全員';
+  const selectedSubjectMode=selectedSubjectRow?FAMILY_LOG_SUBJECT_META[subjectKind]?.label||'対象':'全対象';
   const nowLocal=selectedDate===dateOnly()?nowJst().slice(0,16).replace(' ','T'):`${selectedDate}T12:00`;
-  const payload=JSON.stringify({csrf:ctx.session.csrfToken||'',selectedDate,selectedSubject,nowLocal,logs:logMap}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body=`<div class="page-head family-log-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🐣 家族ログ</h1><div class="meta">${esc(selectedSubjectLabel)}</div></div><button type="button" class="btn gray" id="familyLogSubjectOpen">対象を追加</button></div>
+  const payload=JSON.stringify({csrf:ctx.session.csrfToken||'',selectedDate,selectedSubject,nowLocal,logs:logMap,subjects:subjectMap}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const subjectTypeChoices=FAMILY_LOG_TYPES.map(type=>`<label class="checkrow family-log-type-choice"><input type="checkbox" name="enabled_types" value="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</span></label>`).join('');
+
+  const body=`<div class="page-head family-log-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🐣 家族ログ</h1><div class="meta">${esc(selectedSubjectLabel)} ・ ${esc(selectedSubjectMode)}</div></div><div class="family-log-head-actions">${selectedSubject?'<button type="button" class="btn gray" id="familyLogSubjectEdit">⚙️ 対象設定</button>':''}<button type="button" class="btn gray" id="familyLogSubjectOpen">＋ 対象追加</button></div></div>
   ${subjectChips}
   <div class="daily-head family-log-date-head"><div><div class="date-title">${esc(selectedDate)}</div></div><div class="date-nav"><a class="btn gray" href="/app/family_log.php?date=${prev}${subjectQuery}">‹</a><a class="btn gray" href="/app/family_log.php?date=${next}${subjectQuery}">›</a></div></div>
-  <div class="family-log-summary"><div><strong>${logs.results.length}</strong><span>記録</span></div><div><strong>${milkTotal?`${milkTotal}ml`:'—'}</strong><span>ミルク</span></div><div><strong>${diaperCount||'—'}</strong><span>おむつ</span></div><div><strong>${sleepMinutes?`${sleepMinutes}分`:'—'}</strong><span>睡眠</span></div><div><strong>${latestTemp?`${latestTemp.amount}℃`:'—'}</strong><span>最新体温</span></div></div>
-  <div class="card family-log-quick-card"><div class="section-head"><h2>すぐ記録</h2><span class="meta">タップして入力</span></div><div class="family-log-quick-grid">${quickButtons}</div></div>
-  <div class="card family-log-timer-card"><div class="section-head"><h2>⏱ タイマー</h2><span class="meta">睡眠・母乳</span></div>${timerHtml}${timerStartHtml}</div>
+  <div class="family-log-summary">${summaryHtml}</div>
+  <div class="card family-log-quick-card"><div class="section-head"><h2>すぐ記録</h2><span class="meta">${selectedSubject?`${esc(selectedSubjectLabel)}の表示項目`:'全対象の有効項目'}</span></div><div class="family-log-quick-grid">${quickButtons||'<p class="small">表示中の記録項目はありません。対象設定からONにしてください。</p>'}</div></div>
+  <div class="card family-log-timer-card"><div class="section-head"><h2>⏱ タイマー</h2><span class="meta">対象ごとに管理</span></div>${timerHtml}${timerStartHtml}</div>
   <div class="card family-log-timeline"><div class="section-head"><h2>タイムライン</h2><span class="meta">${logs.results.length}件</span></div>${rowHtml||'<p class="empty">この日の記録はありません。</p>'}</div>
-  <div class="family-log-backdrop" id="familyLogModal" aria-hidden="true"><div class="family-log-sheet"><div class="section-head"><h2 id="familyLogModalTitle">記録を追加</h2><button type="button" class="btn gray small" id="familyLogClose">×</button></div><form id="familyLogForm"><input type="hidden" name="id"><label>種類</label><select name="log_type">${FAMILY_LOG_TYPES.map(type=>`<option value="${type}">${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</option>`).join('')}</select><label>対象</label><select name="subject_id"><option value="0">家族共通</option>${subjects.results.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><label>日時</label><input type="datetime-local" name="occurred_at" required><div id="familyLogDetailWrap"><label>詳細</label><select name="detail_code"><option value="">指定なし</option></select></div><div id="familyLogAmountWrap"><label id="familyLogAmountLabel">値</label><div class="family-log-value-input"><input type="number" name="amount"><span id="familyLogAmountUnit"></span><input type="hidden" name="unit"></div></div><div id="familyLogDurationWrap"><label id="familyLogDurationLabel">時間</label><div class="family-log-value-input"><input type="number" name="duration_minutes" min="0" max="10080" step="1"><span>分</span></div></div><div id="familyLogTextWrap"><label id="familyLogTextLabel">内容</label><input name="value_text" maxlength="255"></div><label>関連タスク・イベント（任意）</label><select name="linked_target"><option value="">なし</option>${linkOptions.map(x=>`<option value="${esc(x.value)}">${esc(x.label)}</option>`).join('')}</select><label>メモ</label><textarea name="note" maxlength="2000"></textarea><div id="familyLogStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogDelete">削除</button></div></form></div></div>
-  <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2>記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>種類</label><select name="subject_kind"><option value="CHILD">子ども</option><option value="ADULT">大人</option><option value="PET">ペット</option><option value="OTHER">その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><label>家族メンバーと連携（任意）</label><select name="member_id"><option value="0">連携しない</option>${members.results.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><button type="submit">追加する</button></form></div></div>
-  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.94-wave75"></script>`;
+
+  <div class="family-log-backdrop" id="familyLogModal" aria-hidden="true"><div class="family-log-sheet"><div class="section-head"><h2 id="familyLogModalTitle">記録を追加</h2><button type="button" class="btn gray small" id="familyLogClose">×</button></div><form id="familyLogForm"><input type="hidden" name="id"><label>種類</label><select name="log_type">${FAMILY_LOG_TYPES.map(type=>`<option value="${type}">${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</option>`).join('')}</select><label>対象</label><select name="subject_id"><option value="0">家族共通</option>${subjects.results.map(s=>`<option value="${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</option>`).join('')}</select><label>日時</label><input type="datetime-local" name="occurred_at" required><div id="familyLogDetailWrap"><label>詳細</label><div id="familyLogDetailChoices" class="family-log-detail-choices"></div><select name="detail_code"><option value="">指定なし</option></select></div><div id="familyLogAmountWrap"><label id="familyLogAmountLabel">値</label><div class="family-log-value-input"><input type="number" name="amount"><span id="familyLogAmountUnit"></span><input type="hidden" name="unit"></div></div><div id="familyLogDurationWrap"><label id="familyLogDurationLabel">時間</label><div class="family-log-value-input"><input type="number" name="duration_minutes" min="0" max="10080" step="1"><span>分</span></div></div><div id="familyLogTextWrap"><label id="familyLogTextLabel">内容</label><input name="value_text" maxlength="255"></div><label>関連タスク・イベント（任意）</label><select name="linked_target"><option value="">なし</option>${linkOptions.map(x=>`<option value="${esc(x.value)}">${esc(x.label)}</option>`).join('')}</select><label>メモ</label><textarea name="note" maxlength="2000"></textarea><div id="familyLogStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogDelete">削除</button></div></form></div></div>
+
+  <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyLogSubjectTitle">記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><input type="hidden" name="id"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>画面タイプ</label><select name="subject_kind"><option value="BABY">👶 赤ちゃん</option><option value="CHILD">🧒 子ども</option><option value="ADULT">👤 大人</option><option value="PET">🐾 ペット</option><option value="OTHER">⭐ その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><div class="family-log-type-setting-head"><label>表示する記録項目</label><button type="button" class="btn gray small" id="familyLogPresetApply">おすすめに戻す</button></div><div class="choice-list family-log-type-choice-grid">${subjectTypeChoices}</div><p class="small" id="familyLogSubjectGuide">ミルク育児なら「母乳」をOFFにするなど、対象ごとに表示項目を変更できます。</p><div id="familyLogSubjectLinked" class="notice" style="display:none"></div><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogSubjectDisable">対象を非表示</button></div></form><p class="small">家族メンバーは自動的に対象として表示されます。赤ちゃん・ペットなど、Family TODOのアカウントを持たない対象は「対象追加」で登録できます。</p></div></div>
+  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.96-wave77"></script>`;
   return html(layout('家族ログ',body,'/app/family_log.php'));
 }
 
@@ -1529,7 +1700,7 @@ export async function invitePage(ctx: AppContext, token: string): Promise<Respon
   const friendHtml=official
     ? `<div class="invite-official"><div><strong>${esc(official.display_name)}</strong><div class="small">${esc(official.basic_id)}</div></div><a class="btn line-friend-btn" href="${esc(official.add_friend_url)}" target="_blank" rel="noopener noreferrer">LINE公式アカウントを友だち追加</a></div>`
     : `<p class="small">公式アカウント情報を自動取得できませんでした。管理者から共有された友だち追加リンクを利用してください。</p>`;
-  return html(layout('家族に参加',`<div class="card"><h1>家族に参加</h1><p>この招待リンクから家族に参加できます。</p><div class="invite-guide"><strong>参加前に確認</strong><ol><li>Family TODO LINE 公式アカウントを友だち追加</li><li>このページをLINE内で開く</li><li>名前を確認して参加</li></ol>${friendHtml}</div><div id="familyActionError" class="error" style="display:none"></div><form id="join" data-family-endpoint="/api/family/join"><input type="hidden" name="token" value="${esc(trimmed)}"><label>あなたの名前</label><input name="member_name" value="${esc(ctx.session.lineDisplayName||'')}" required><button>家族に参加する</button></form></div><script src="/assets/family-onboarding.js?v=12.94-wave75"></script>`));
+  return html(layout('家族に参加',`<div class="card"><h1>家族に参加</h1><p>この招待リンクから家族に参加できます。</p><div class="invite-guide"><strong>参加前に確認</strong><ol><li>Family TODO LINE 公式アカウントを友だち追加</li><li>このページをLINE内で開く</li><li>名前を確認して参加</li></ol>${friendHtml}</div><div id="familyActionError" class="error" style="display:none"></div><form id="join" data-family-endpoint="/api/family/join"><input type="hidden" name="token" value="${esc(trimmed)}"><label>あなたの名前</label><input name="member_name" value="${esc(ctx.session.lineDisplayName||'')}" required><button>家族に参加する</button></form></div><script src="/assets/family-onboarding.js?v=12.96-wave77"></script>`));
 }
 
 export async function recurring(request: Request, ctx: AppContext): Promise<Response> {
@@ -1826,7 +1997,7 @@ export async function recurring(request: Request, ctx: AppContext): Promise<Resp
   <div class="card"><h2>登録済み</h2>${rowsHtml||'<p>ありません。</p>'}</div>
   ${excludedHtml?`<div class="card"><h2>除外した発生日</h2><p class="small">「この日だけ除外」の日を後から定期予定へ戻せます。</p>${excludedHtml}</div>`:''}
   <script type="application/json" id="recurringConfig">${recurringConfig}</script>
-  <script src="/assets/recurring.js?v=12.94-wave75"></script>
+  <script src="/assets/recurring.js?v=12.96-wave77"></script>
 `;
   return html(layout('定期タスク', body, '/app/settings.php'));
 }
