@@ -94,7 +94,7 @@
 
   testBtn?.addEventListener('click',async()=>{
     setBusy(true);setStatus('テスト通知を送信しています…');
-    try{const d=await jsonPost('/api/push/test',{});setStatus(`テスト通知を送信しました（成功 ${d.sent||0} / 失敗 ${d.failed||0}）。`);}
+    try{const d=await jsonPost('/api/push/test',{});setStatus(`テスト送信: ${(d.sent||0)+(d.failed||0)}台中 ${d.sent||0}台成功 / ${d.failed||0}台失敗`);setTimeout(()=>location.reload(),1200);}
     catch(err){setStatus(err instanceof Error?err.message:'テスト通知に失敗しました。','error');}
     finally{setBusy(false);}
   });
@@ -110,6 +110,14 @@
     }catch(err){setStatus(err instanceof Error?err.message:'Web Pushを解除できませんでした。','error');}
     finally{setBusy(false);}
   });
+
+
+  document.querySelectorAll('.push-remove').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(!confirm('このWeb Push登録を解除しますか？'))return;
+    btn.disabled=true;
+    try{await jsonPost('/api/push/unsubscribe',{subscription_id:Number(btn.dataset.id)});btn.closest('[data-push-device]')?.remove();setStatus('登録を解除しました。');}
+    catch(err){setStatus(err instanceof Error?err.message:'解除できませんでした。','error');btn.disabled=false;}
+  }));
 
   updateLocalStatus().catch(()=>{});
   document.documentElement.dataset.pushSettingsJs='ready';

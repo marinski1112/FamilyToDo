@@ -1,5 +1,5 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden, taskVisibilitySql, taskChildVisibilitySql } from './app';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden, taskVisibilitySql, taskChildVisibilitySql, activityLogVisibilitySql } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
@@ -243,7 +243,8 @@ async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
     ctx.env.DB.prepare(`SELECT id,title,start_at,due_at,visibility_scope FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY coalesce(start_at,due_at),id LIMIT 200`).bind(ctx.member.family_id,selectedTaskId,ctx.member.id).all()
   ]);
-  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><div id="itemFormError" class="error" style="display:none"></div><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}" ${Number(t.id)===selectedTaskId?'selected':''}>${String(t.visibility_scope)==='PRIVATE'?'🔒 ':''}${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select><label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div><button type="submit">登録する</button></form></div><script src="/assets/item-new.js?v=12.93-wave74"></script>`;
+  const selectedTask=tasks.results.find((t:any)=>Number(t.id)===selectedTaskId),privateContext=String(selectedTask?.visibility_scope||'')==='PRIVATE';
+  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><div id="itemFormError" class="error" style="display:none"></div><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label>${privateContext?`<p class="notice">🔒 自分専用タスク: ${String(selectedTask.title).replace(/[&<>"]/g,'')}</p><input type="hidden" name="task_id" value="${selectedTaskId}">`:`<select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}" ${Number(t.id)===selectedTaskId?'selected':''}>${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select>`}<label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label>${privateContext?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':`<div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div>`}<button type="submit">登録する</button></form></div><script src="/assets/item-new.js?v=12.93-wave74"></script>`;
   return new Response(layout('持ち物追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
 }
 
@@ -417,6 +418,9 @@ async function webhook(request: Request, env: Env): Promise<Response> {
 
 async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   const now=nowJst();
+  // Operational activity audit is retained for 31 JST calendar days. Domain
+  // completion histories and Family Log are intentionally untouched.
+  await env.DB.prepare("DELETE FROM activity_logs WHERE occurred_at < datetime(?,'-31 days')").bind(now).run();
   // Disable pending work for members who opted out/deactivated, or whose family no longer matches the notification.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND (member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0) OR NOT EXISTS (SELECT 1 FROM members m WHERE m.id=notifications.member_id AND m.family_id=notifications.family_id))").bind(now).run();
   await env.DB.prepare("UPDATE web_push_subscriptions SET enabled=0,last_error='member inactive or deleted',updated_at=? WHERE enabled=1 AND (NOT EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND m.family_id=web_push_subscriptions.family_id) OR EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND (m.active=0 OR m.deleted_at IS NOT NULL)))").bind(now).run();
@@ -617,41 +621,25 @@ async function logsPage(ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return redirect('/login.php');
   const role=String(m.role||'').toUpperCase();
   if(role!=='OWNER'&&role!=='ADMIN') return html(layout('活動ログ','<div class="card"><h1>📊 家族の活動ログ</h1><p>活動ログを見るには管理者権限が必要です。</p><a class="btn" href="/app/settings.php">管理へ戻る</a></div>','/app/settings.php'));
-  const rows=await ctx.env.DB.prepare(`SELECT a.*,m.name member_name,
-    fl.log_type family_log_type,fl.occurred_at family_log_occurred_at,fl.detail_code family_log_detail_code,fl.amount family_log_amount,fl.unit family_log_unit,fl.duration_minutes family_log_duration_minutes,fl.value_text family_log_value_text,fl.note family_log_note,
-    fs.name family_log_subject_name,fss.name target_subject_name
-    FROM activity_logs a
-    LEFT JOIN members m ON m.id=a.member_id
-    LEFT JOIN family_logs fl ON a.target_type='family_log' AND fl.id=a.target_id AND fl.family_id=a.family_id
-    LEFT JOIN family_log_subjects fs ON fs.id=fl.subject_id AND fs.family_id=fl.family_id
-    LEFT JOIN family_log_subjects fss ON a.target_type='family_log_subject' AND fss.id=a.target_id AND fss.family_id=a.family_id
-    WHERE a.family_id=? AND (a.target_type<>'task' OR NOT EXISTS(SELECT 1 FROM tasks pt WHERE pt.id=a.target_id AND pt.family_id=a.family_id AND pt.visibility_scope='PRIVATE' AND pt.private_owner_id<>?)) ORDER BY a.occurred_at DESC,a.id DESC LIMIT 300`).bind(m.family_id,m.id).all();
-  const label=(action:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除',INVITED:'本登録招待',PROMOTED:'LINE本登録',DISABLED:'非表示',STARTED:'開始',STOPPED:'停止',CANCELLED:'取消',RESTORED:'復活',LINE_MESSAGE:'LINEメッセージ',LINE_POSTBACK:'LINE操作'} as Record<string,string>)[action]||action;
-  const logType=(type:string)=>({MILK:'ミルク',BREASTFEED:'母乳',MEAL:'食事',DIAPER:'おむつ',SLEEP:'睡眠',BATH:'お風呂',TEMPERATURE:'体温',MEDICINE:'薬',CONDITION:'体調',WEIGHT:'体重',HEIGHT:'身長',BLOOD_PRESSURE:'血圧',EXERCISE:'運動',WATER:'水分',TOILET:'トイレ',WALK:'散歩',HOUSEWORK:'ちょこっと家事',MEMO:'メモ'} as Record<string,string>)[type]||type||'記録';
-  const detailLabel=(code:string)=>({LEFT:'左',RIGHT:'右',BOTH:'両方',BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',WET:'おしっこ',DIRTY:'うんち',BATH:'お風呂',SHOWER:'シャワー',GOOD:'良好',NORMAL:'ふつう',TIRED:'疲れ気味',SICK:'不調',WALK:'歩く',RUN:'走る',STRENGTH:'筋トレ',STRETCH:'ストレッチ',PLAY:'遊び'} as Record<string,string>)[code]||code;
-  const parseMeta=(raw:any)=>{try{return raw?JSON.parse(String(raw)):{};}catch{return {};}};
-  const rowHtml=(rows.results as any[]).map((r:any)=>{
-    const meta=parseMeta(r.metadata);
-    const actor=String(r.member_name||'不明');
-    const action=label(String(r.action||''));
-    if(String(r.target_type||'')==='family_log'){
-      const type=String(r.family_log_type||meta.log_type||'MEMO');
-      const subject=String(r.family_log_subject_name||meta.subject_name||'家族共通');
-      const bits:string[]=[];
-      const detail=String(r.family_log_detail_code||meta.detail_code||'');if(detail)bits.push(detailLabel(detail));
-      const amount=r.family_log_amount??meta.amount;if(amount!==null&&amount!==undefined&&amount!=='')bits.push(`${amount}${String(r.family_log_unit||meta.unit||'')}`);
-      const duration=r.family_log_duration_minutes??meta.duration_minutes;if(duration!==null&&duration!==undefined&&duration!=='')bits.push(`${duration}分`);
-      const value=String(r.family_log_value_text||meta.value_text||'');if(value)bits.push(value);
-      const occurred=String(r.family_log_occurred_at||meta.occurred_at||r.occurred_at||'');
-      return `<div class="row activity-family-log"><strong>🐣 ${esc(action)}：${esc(logType(type))}</strong><div class="meta">${esc(subject)} ・ 記録者/操作：${esc(actor)} ・ ${esc(occurred)}</div>${bits.length?`<div class="meta">${bits.map(esc).join(' ・ ')}</div>`:''}</div>`;
-    }
-    if(String(r.target_type||'')==='family_log_subject'){
-      const subject=String(r.target_subject_name||meta.name||meta.subject_name||`#${r.target_id||''}`);
-      return `<div class="row activity-family-log-subject"><strong>🐣 ${esc(action)}：${esc(subject)}</strong><div class="meta">${esc(actor)} ・ ${esc(r.occurred_at||'')}</div></div>`;
-    }
-    const source=String(meta.source||'')==='family_log'?'<span class="activity-source-badge">家族ログから</span>':'';
-    return `<div class="row"><strong>${esc(action)} ${source}</strong><div class="meta">${esc(actor)} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`;
-  }).join('');
-  const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card history-card"><p class="small">最新300件を表示しています。家族ログは種類・対象・記録者まで表示します。</p>${rowHtml||'<p class="empty">ログはありません。</p>'}</div>`;
-  return html(layout('活動ログ',body,'/app/settings.php'));
+  const u=new URL(ctx.request.url), days=String(u.searchParams.get('days')||'7'), member=Number(u.searchParams.get('member')||0), type=String(u.searchParams.get('type')||''), action=String(u.searchParams.get('action')||''), page=Math.max(1,Number(u.searchParams.get('page')||1)||1);
+  const from=String(u.searchParams.get('from')||''),to=String(u.searchParams.get('to')||'');
+  const where:string[]=['a.family_id=?',activityLogVisibilitySql('a')], params:any[]=[m.family_id,m.id,m.id,m.id];
+  if(member>0){where.push('a.member_id=?');params.push(member);}
+  const groups:Record<string,string[]>= {task:['task'],item:['item'],shopping:['shopping'],message:['message'],family_log:['family_log','family_log_subject'],chore:['family_quick_chore'],recurring:['recurrence_rule','recurrence_occurrence'],admin:['member','family','invitation','settings']};
+  if(groups[type]){where.push(`a.target_type IN (${groups[type].map(()=>'?').join(',')})`);params.push(...groups[type]);}
+  const actions:Record<string,string[]>= {CREATED:['CREATED'],UPDATED:['UPDATED'],COMPLETED:['COMPLETED'],UNCOMPLETED:['UNCOMPLETED'],DELETED:['DELETED'],OTHER:['CREATED','UPDATED','COMPLETED','UNCOMPLETED','DELETED']};
+  if(action&&action!=='OTHER'){where.push('a.action=?');params.push(action);}else if(action==='OTHER'){where.push(`a.action NOT IN (${actions.OTHER.map(()=>'?').join(',')})`);params.push(...actions.OTHER);}
+  if(days==='custom'&&/^\d{4}-\d{2}-\d{2}$/.test(from)&&/^\d{4}-\d{2}-\d{2}$/.test(to)){where.push("date(a.occurred_at) BETWEEN date(?) AND date(?)");params.push(from,to);}
+  else {const n=days==='today'?0:([7,30].includes(Number(days))?Number(days)-1:6);where.push("date(a.occurred_at)>=date(?,'-'||?||' days')");params.push(nowJst(),n);}
+  const rows=await ctx.env.DB.prepare(`SELECT a.*,m.name member_name,fl.log_type family_log_type,fl.occurred_at family_log_occurred_at,fl.detail_code family_log_detail_code,fl.amount family_log_amount,fl.unit family_log_unit,fl.duration_minutes family_log_duration_minutes,fl.value_text family_log_value_text,fs.name family_log_subject_name,fss.name target_subject_name FROM activity_logs a LEFT JOIN members m ON m.id=a.member_id LEFT JOIN family_logs fl ON a.target_type='family_log' AND fl.id=a.target_id AND fl.family_id=a.family_id LEFT JOIN family_log_subjects fs ON fs.id=fl.subject_id AND fs.family_id=fl.family_id LEFT JOIN family_log_subjects fss ON a.target_type='family_log_subject' AND fss.id=a.target_id AND fss.family_id=a.family_id WHERE ${where.join(' AND ')} ORDER BY a.occurred_at DESC,a.id DESC LIMIT 51 OFFSET ?`).bind(...params,(page-1)*50).all();
+  const hasMore=rows.results.length>50;rows.results=rows.results.slice(0,50);
+  const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? ORDER BY id').bind(m.family_id).all();
+  const label=(x:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除'} as Record<string,string>)[x]||x;
+  const rowHtml=(rows.results as any[]).map(r=>`<div class="row"><strong>${esc(label(String(r.action||'')))}</strong><div class="meta">${esc(r.member_name||'不明')} ・ ${esc(r.occurred_at||'')}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`).join('');
+  const selected=(v:any,x:any)=>String(v)===String(x)?'selected':'';
+  const form=`<details class="card" open><summary><strong>絞り込み</strong></summary><form method="get"><label>期間</label><select name="days"><option value="today" ${selected(days,'today')}>今日</option><option value="7" ${selected(days,'7')}>7日</option><option value="30" ${selected(days,'30')}>30日</option><option value="custom" ${selected(days,'custom')}>期間指定</option></select><div class="date-grid"><input type="date" name="from" value="${esc(from)}"><input type="date" name="to" value="${esc(to)}"></div><label>メンバー</label><select name="member"><option value="0">全員</option>${members.results.map((x:any)=>`<option value="${x.id}" ${selected(member,x.id)}>${esc(x.name)}</option>`).join('')}</select><label>種類</label><select name="type"><option value="">全て</option>${[['task','タスク'],['item','持ち物'],['shopping','買い物'],['message','伝言'],['family_log','家族ログ'],['chore','ちょこっと家事'],['recurring','定期タスク'],['admin','メンバー/管理操作']].map(x=>`<option value="${x[0]}" ${selected(type,x[0])}>${x[1]}</option>`).join('')}</select><label>アクション</label><select name="action"><option value="">全て</option>${[['CREATED','作成'],['UPDATED','更新'],['COMPLETED','完了'],['UNCOMPLETED','未完了へ戻す'],['DELETED','削除'],['OTHER','その他']].map(x=>`<option value="${x[0]}" ${selected(action,x[0])}>${x[1]}</option>`).join('')}</select><button>適用</button></form></details>`;
+  const q=new URLSearchParams(u.searchParams);q.set('page',String(page+1));
+  const prev=new URLSearchParams(u.searchParams);prev.set('page',String(page-1));
+  const paging=`<div class="actions">${page>1?`<a class="btn gray" href="?${prev}">前へ</a>`:''}${hasMore?`<a class="btn" href="?${q}">さらに読み込む</a>`:''}</div>`;
+  return html(layout('活動ログ',`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div>${form}<div class="card history-card"><p class="small">1ページ50件・activity_logsは31日保持です。</p>${rowHtml||'<p class="empty">ログはありません。</p>'}${paging}</div>`,'/app/settings.php'));
 }
