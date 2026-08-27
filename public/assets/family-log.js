@@ -176,6 +176,7 @@
     const linked=formField('linked_target');
     if(linked)linked.value='';
     logStatus.textContent='';
+    const provenance=byId('familyLogProvenance');if(provenance){provenance.hidden=true;provenance.textContent='';}
     const deleteBtn=byId('familyLogDelete');
     if(deleteBtn)deleteBtn.style.display='none';
     logTitle.textContent=`${TYPE_META[type]?.icon||'📝'} ${TYPE_META[type]?.label||'記録'}を追加`;
@@ -199,6 +200,7 @@
     formField('note').value=String(row.note||'');
     formField('linked_target').value=row.linked_occurrence_id?`occ:${row.linked_occurrence_id}`:row.linked_task_id?`task:${row.linked_task_id}`:'';
     logStatus.textContent='';
+    const provenance=byId('familyLogProvenance');if(provenance){provenance.hidden=!row.imported;provenance.textContent=row.imported?(String(row.import_source).toLowerCase()==='piyolog'?'ぴよログからインポート':'外部データからインポート'):'';}
     const deleteBtn=byId('familyLogDelete');
     if(deleteBtn)deleteBtn.style.display='inline-flex';
     const type=String(row.log_type||'MEMO');
