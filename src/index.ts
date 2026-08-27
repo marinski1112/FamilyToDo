@@ -130,6 +130,9 @@ export default {
 
 async function dbSchemaHealth(env:Env):Promise<Response>{
   const required:Record<string,string[]>= {
+    families:['id','timezone'],
+    member_permissions:['family_id','member_id','permission_key','granted_by','created_at'],
+    family_log_time_repairs:['id','family_id','import_batch_id','repair_type','offset_minutes','affected_count','skipped_edited_count','performed_by','performed_at','rolled_back_at'],
     members:['id','family_id','active','notification_enabled','notification_channel','deleted_at'],
     tasks:['id','family_id','title','status','completion_mode','calendar_visible','calendar_color','task_kind','reminder_at','visibility_scope','private_owner_id'],
     task_assignees:['task_id','member_id'],
@@ -181,6 +184,9 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
 
 async function dbRuntimeHealth(env:Env):Promise<Response>{
   const checks:[string,string][]=[
+    ['families','SELECT id,timezone FROM families LIMIT 1'],
+    ['member_permissions','SELECT family_id,member_id,permission_key,granted_by,created_at FROM member_permissions LIMIT 1'],
+    ['family_log_time_repairs','SELECT id,family_id,import_batch_id,repair_type,offset_minutes,affected_count,skipped_edited_count,performed_by,performed_at,rolled_back_at FROM family_log_time_repairs LIMIT 1'],
     ['members',"SELECT id,name,role,active,notification_enabled,notification_channel,deleted_at FROM members LIMIT 1"],
     ['tasks','SELECT id,family_id,title,status,completion_mode,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,visibility_scope,private_owner_id FROM tasks LIMIT 1'],
     ['task_assignees','SELECT task_id,member_id FROM task_assignees LIMIT 1'],
