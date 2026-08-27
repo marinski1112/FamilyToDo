@@ -190,7 +190,13 @@
     logForm.reset();
     formField('id').value=String(row.id||'');
     formField('log_type').value=String(row.log_type||'MEMO');
-    formField('subject_id').value=String(row.subject_id||0);
+    const subjectSelect=formField('subject_id');
+    const subjectValue=String(row.subject_id||0);
+    if(subjectSelect instanceof HTMLSelectElement&&subjectValue!=='0'&&![...subjectSelect.options].some(option=>option.value===subjectValue)){
+      const preserved=subjectMap[subjectValue];
+      if(preserved){const option=document.createElement('option');option.value=subjectValue;option.textContent=`${preserved.icon||'👤'} ${preserved.name||'過去の対象'}`;subjectSelect.appendChild(option);}
+    }
+    if(subjectSelect)subjectSelect.value=subjectValue;
     formField('occurred_at').value=normalizeDateTime(row.occurred_at);
     formField('detail_code').value=String(row.detail_code||'');
     formField('amount').value=row.amount===null||row.amount===undefined?'':String(row.amount);
@@ -530,4 +536,29 @@
   });
 
   document.documentElement.dataset.familyLogJs='ready';
+
+  const dashboard= document.querySelector('.family-log-dashboard');
+  if(dashboard instanceof HTMLDetailsElement){
+    if(dashboard.dataset.dashboardLoaded==='1')dashboard.open=true;
+    dashboard.addEventListener('toggle',()=>{
+      if(dashboard.open&&dashboard.dataset.dashboardLoaded!=='1'){
+        const load=dashboard.querySelector('.family-log-dashboard-load');
+        if(load instanceof HTMLAnchorElement)location.href=load.href;
+      }
+    });
+  }
+
+  const settingsModal=byId('familyLogSettingsModal');
+  const settingsForm=byId('familyLogSettingsForm');
+  byId('familyLogSettingsOpen')?.addEventListener('click',()=>setOpen(settingsModal,true));
+  byId('familyLogSettingsClose')?.addEventListener('click',()=>setOpen(settingsModal,false));
+  settingsModal?.addEventListener('click',event=>{if(event.target===settingsModal)setOpen(settingsModal,false);});
+  settingsForm?.addEventListener('submit',async event=>{
+    event.preventDefault();const status=byId('familyLogSettingsStatus');
+    const checkbox=settingsForm.elements.namedItem('show_adult_logs');
+    if(status)status.textContent='保存しています…';
+    try{await post({action:'settings_update',show_adult_logs:checkbox instanceof HTMLInputElement&&checkbox.checked});location.href=`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;}
+    catch(err){if(status)status.textContent=err?.message||String(err);}
+  });
+
 })();

@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.110.0-wave91",
+  "source": "FamilyTODO Cloudflare v12.111.0-wave92",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -96,7 +96,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.110.0-wave91",
+  "version": "12.111.0-wave92",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -119,5 +119,6 @@
   "wave89_note": "Resumable 100-record D1 batch import, batched preview lookup, safe progress UI, VACCINE, and import-state diagnostics; migration 0026.",
   "wave88_note": "Preview-first normalized Family Log JSON import with record idempotency, batch provenance/history, edit-safe soft-delete rollback, and migration 0025.",
   "wave90_note": "Production stabilization for provenance-bound, offset-ordered, count-invariant, resumable Family Log imports; migration 0027.",
-  "wave91_note": "SQL-backed Family Log summaries and charts, vaccine history, type filters, and 50-row timeline pagination; migration 0028 adds one partial dashboard index."
+  "wave91_note": "SQL-backed Family Log summaries and charts, vaccine history, type filters, and 50-row timeline pagination; migration 0028 adds one partial dashboard index.",
+  "wave92_note": "Quick-record-first Family Log, lazy collapsed dashboard, family-level adult visibility, SQL-side adult exclusion, all-view recorder filtering, and migration 0029."
 }

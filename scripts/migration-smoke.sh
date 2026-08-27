@@ -20,3 +20,6 @@ test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHE
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name IN ('visibility_scope','private_owner_id')")" = 2
 sqlite3 "$db" "INSERT INTO families(family_code,name,created_at,updated_at) VALUES('W83','Wave83','2026-01-01','2026-01-01'); INSERT INTO members(family_id,line_user_id,name,role,active,created_at,updated_at) VALUES(1,'w83','A','OWNER',1,'2026-01-01','2026-01-01'); INSERT INTO tasks(family_id,title,status,created_at,updated_at) VALUES(1,'existing','pending','2026-01-01','2026-01-01');"
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM tasks WHERE visibility_scope='FAMILY' AND private_owner_id IS NULL")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='family_log_settings'")" = 1
+test "$(sqlite3 "$db" "SELECT dflt_value FROM pragma_table_info('family_log_settings') WHERE name='show_adult_logs'")" = 1
+echo 'wave92 settings migration smoke: ok'
