@@ -52,10 +52,11 @@
     WATER:{label:'水分',icon:'💧',amountLabel:'量',unit:'ml'},
     TOILET:{label:'トイレ',icon:'🚻',details:[['WET','💧 おしっこ'],['DIRTY','💩 うんち'],['BOTH','💧💩 両方']]},
     WALK:{label:'散歩',icon:'🐕',durationLabel:'散歩時間',unit:'分'},
+    TIMER:{label:'タイマー',icon:'⏱',durationLabel:'時間',unit:'分',textLabel:'タイマー名'},
     HOUSEWORK:{label:'ちょこっと家事',icon:'🧹',textLabel:'家事'},
     MEMO:{label:'メモ',icon:'📝',textLabel:'内容'}
   };
-  const ALL_TYPES=Object.keys(TYPE_META);
+  const ALL_TYPES=Object.keys(TYPE_META).filter(type=>type!=='HOUSEWORK'&&type!=='TIMER');
   const DEFAULT_TYPES={
     BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','MEMO'],
     CHILD:['MEAL','TOILET','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','EXERCISE','MEMO'],
@@ -63,6 +64,7 @@
     PET:['MEAL','WATER','TOILET','WALK','SLEEP','BATH','WEIGHT','MEDICINE','CONDITION','MEMO'],
     OTHER:['MEMO','CONDITION','TEMPERATURE','MEDICINE','SLEEP','WEIGHT']
   };
+  const PET_PRESETS={CAT:['MEAL','WATER','TOILET','WEIGHT','MEDICINE','CONDITION','MEMO'],DOG:['MEAL','WATER','TOILET','WALK','WEIGHT','MEDICINE','CONDITION','MEMO']};
   const DEFAULT_AUTO_COMPLETE={BABY:true,CHILD:true,ADULT:false,PET:true,OTHER:false};
   const SUBJECT_GUIDE={
     BABY:'赤ちゃん向け：授乳・おむつ・睡眠・お風呂・体温・成長を中心に記録します。',
@@ -356,6 +358,7 @@
 
   byId('familyLogSubjectOpen')?.addEventListener('click',openSubjectNew);
   byId('familyLogSubjectEdit')?.addEventListener('click',()=>openSubjectEdit(selectedSubject()));
+  document.querySelectorAll('.family-log-pet-preset').forEach(btn=>btn.addEventListener('click',()=>{subjectField('subject_kind').value='PET';setSubjectTypes(PET_PRESETS[String(btn.dataset.preset)]||DEFAULT_TYPES.PET);updateSubjectGuide('PET');}));
   subjectClose?.addEventListener('click',()=>setOpen(subjectModal,false));
   subjectModal?.addEventListener('click',e=>{if(e.target===subjectModal)setOpen(subjectModal,false);});
 
@@ -445,20 +448,13 @@
     }
   });
 
-  document.querySelectorAll('.family-log-timer-start').forEach(btn=>btn.addEventListener('click',async()=>{
-    btn.disabled=true;
-    try{
-      await post({
-        action:'timer_start',
-        log_type:String(btn.dataset.type||''),
-        subject_id:Number(btn.dataset.subject||selectedSubject()||0)
-      });
-      location.reload();
-    }catch(err){
-      alert(err?.message||String(err));
-      btn.disabled=false;
-    }
-  }));
+  byId('familyLogTimerForm')?.addEventListener('submit',async event=>{
+    event.preventDefault();const form=event.currentTarget,status=byId('familyLogTimerStatus');
+    const label=String(new FormData(form).get('timer_label')||'').trim();
+    if(!label||label.length>80){if(status)status.textContent='タイマー名を1〜80文字で入力してください。';return;}
+    try{await post({action:'timer_start',log_type:'TIMER',timer_label:label,subject_id:Number(new FormData(form).get('subject_id')||selectedSubject()||0)});location.reload();}
+    catch(err){if(status)status.textContent=err?.message||String(err);}
+  });
   document.querySelectorAll('.family-log-timer-stop').forEach(btn=>btn.addEventListener('click',async()=>{
     btn.disabled=true;
     try{
