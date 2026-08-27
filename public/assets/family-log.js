@@ -44,6 +44,7 @@
     BATH:{label:'お風呂',icon:'🛁',details:[['BATH','お風呂'],['SHOWER','シャワー']]},
     TEMPERATURE:{label:'体温',icon:'🌡️',amountLabel:'体温',unit:'℃'},
     MEDICINE:{label:'薬',icon:'💊',textLabel:'薬・内容'},
+    VACCINE:{label:'予防接種',icon:'💉',textLabel:'ワクチン名',placeholder:'例：五種混合 B型肝炎'},
     CONDITION:{label:'体調',icon:'🙂',details:[['GOOD','良好'],['NORMAL','ふつう'],['TIRED','疲れ気味'],['SICK','不調']],textLabel:'補足'},
     WEIGHT:{label:'体重',icon:'⚖️',amountLabel:'体重',unit:'kg'},
     HEIGHT:{label:'身長',icon:'📏',amountLabel:'身長',unit:'cm'},
