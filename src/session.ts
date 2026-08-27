@@ -35,9 +35,9 @@ export async function openSession(value: string | null, secret: string): Promise
     if (!ivPart || !dataPart) return { iat: Date.now() };
     const key = await keyFromSecret(secret);
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: b64ToBytes(ivPart) },
+      { name: 'AES-GCM', iv: Uint8Array.from(b64ToBytes(ivPart)).buffer },
       key,
-      b64ToBytes(dataPart),
+      Uint8Array.from(b64ToBytes(dataPart)).buffer,
     );
     const parsed = JSON.parse(new TextDecoder().decode(plaintext)) as SessionData;
     if (!parsed || typeof parsed !== 'object') return { iat: Date.now() };

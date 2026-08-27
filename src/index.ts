@@ -134,6 +134,7 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','auto_complete_linked_task','active','created_at','updated_at'],
     family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','deleted_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
+    family_quick_chores:['id','family_id','name','icon','sort_order','active','created_by','created_at','updated_at'],
   };
   const tables:any[]=[];
   let migrationRows:any[]=[];
@@ -175,6 +176,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,auto_complete_linked_task,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
     ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
+    ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
   ];
   const results:any[]=[];
@@ -618,7 +620,7 @@ async function logsPage(ctx:any):Promise<Response>{
     LEFT JOIN family_log_subjects fss ON a.target_type='family_log_subject' AND fss.id=a.target_id AND fss.family_id=a.family_id
     WHERE a.family_id=? ORDER BY a.occurred_at DESC,a.id DESC LIMIT 300`).bind(m.family_id).all();
   const label=(action:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除',INVITED:'本登録招待',PROMOTED:'LINE本登録',DISABLED:'非表示',STARTED:'開始',STOPPED:'停止',CANCELLED:'取消',RESTORED:'復活',LINE_MESSAGE:'LINEメッセージ',LINE_POSTBACK:'LINE操作'} as Record<string,string>)[action]||action;
-  const logType=(type:string)=>({MILK:'ミルク',BREASTFEED:'母乳',MEAL:'食事',DIAPER:'おむつ',SLEEP:'睡眠',BATH:'お風呂',TEMPERATURE:'体温',MEDICINE:'薬',CONDITION:'体調',WEIGHT:'体重',HEIGHT:'身長',BLOOD_PRESSURE:'血圧',EXERCISE:'運動',WATER:'水分',TOILET:'トイレ',WALK:'散歩',MEMO:'メモ'} as Record<string,string>)[type]||type||'記録';
+  const logType=(type:string)=>({MILK:'ミルク',BREASTFEED:'母乳',MEAL:'食事',DIAPER:'おむつ',SLEEP:'睡眠',BATH:'お風呂',TEMPERATURE:'体温',MEDICINE:'薬',CONDITION:'体調',WEIGHT:'体重',HEIGHT:'身長',BLOOD_PRESSURE:'血圧',EXERCISE:'運動',WATER:'水分',TOILET:'トイレ',WALK:'散歩',HOUSEWORK:'ちょこっと家事',MEMO:'メモ'} as Record<string,string>)[type]||type||'記録';
   const detailLabel=(code:string)=>({LEFT:'左',RIGHT:'右',BOTH:'両方',BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',WET:'おしっこ',DIRTY:'うんち',BATH:'お風呂',SHOWER:'シャワー',GOOD:'良好',NORMAL:'ふつう',TIRED:'疲れ気味',SICK:'不調',WALK:'歩く',RUN:'走る',STRENGTH:'筋トレ',STRETCH:'ストレッチ',PLAY:'遊び'} as Record<string,string>)[code]||code;
   const parseMeta=(raw:any)=>{try{return raw?JSON.parse(String(raw)):{};}catch{return {};}};
   const rowHtml=(rows.results as any[]).map((r:any)=>{
@@ -646,4 +648,3 @@ async function logsPage(ctx:any):Promise<Response>{
   const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>📊 家族の活動ログ</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card history-card"><p class="small">最新300件を表示しています。家族ログは種類・対象・記録者まで表示します。</p>${rowHtml||'<p class="empty">ログはありません。</p>'}</div>`;
   return html(layout('活動ログ',body,'/app/settings.php'));
 }
-

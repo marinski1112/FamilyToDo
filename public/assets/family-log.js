@@ -2,6 +2,7 @@
   'use strict';
 
   const byId=id=>document.getElementById(id);
+  const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const payloadEl=byId('familyLogPayload');
   if(!payloadEl)return;
 
@@ -474,21 +475,44 @@
     }
   }));
 
-  byId('familyQuickChoreAdd')?.addEventListener('click',async()=>{
-    const name=prompt('繰り返し記録する家事の名前を入力してください。\n例：玄関を掃く、タオル交換');
-    if(!String(name||'').trim())return;
-    try{await post({action:'quick_chore_add',name:String(name).trim(),icon:'✨'});location.reload();}
-    catch(err){alert(err?.message||String(err));}
+  const choreModal=byId('familyQuickChoreModal');
+  const choreForm=byId('familyQuickChoreForm');
+  const choreStatus=byId('familyQuickChoreStatus');
+  const choreDisable=byId('familyQuickChoreDisable');
+  let choreItems=Array.isArray(payload.quickChores)?payload.quickChores.map(x=>({...x})):[];
+  const choreField=name=>choreForm?.elements.namedItem(name)||null;
+  function renderChoreManager(){
+    const active=choreItems.filter(x=>x.active),hidden=choreItems.filter(x=>!x.active);
+    const order=byId('familyQuickChoreOrder'),hiddenWrap=byId('familyQuickChoreHidden');
+    if(order)order.innerHTML=active.map((x,i)=>`<div class="family-quick-chore-manage-row"><span>${escapeHtml(x.icon)} ${escapeHtml(x.name)}</span><div class="actions"><button type="button" class="btn gray chore-move" data-id="${x.id}" data-step="-1" ${i===0?'disabled':''}>↑</button><button type="button" class="btn gray chore-move" data-id="${x.id}" data-step="1" ${i===active.length-1?'disabled':''}>↓</button></div></div>`).join('')||'<p class="small">表示中の項目はありません。</p>';
+    if(hiddenWrap)hiddenWrap.innerHTML=hidden.length?`<h3 class="family-quick-chore-hidden-title">非表示</h3>${hidden.map(x=>`<div class="family-quick-chore-manage-row"><span>${escapeHtml(x.icon)} ${escapeHtml(x.name)}</span><button type="button" class="btn gray chore-restore" data-id="${x.id}">復活</button></div>`).join('')}`:'';
+  }
+  function openChore(item){
+    if(!choreForm)return;
+    choreForm.reset();choreField('id').value=item?.id||'';choreField('name').value=item?.name||'';choreField('icon').value=item?.icon||'✨';
+    byId('familyQuickChoreTitle').textContent=item?'家事項目を編集':'家事項目を追加';
+    choreDisable.style.display=item?'':'none';choreStatus.textContent='';renderChoreManager();setOpen(choreModal,true);
+  }
+  byId('familyQuickChoreAdd')?.addEventListener('click',()=>openChore(null));
+  byId('familyQuickChoreClose')?.addEventListener('click',()=>setOpen(choreModal,false));
+  document.querySelectorAll('.family-quick-chore-edit').forEach(btn=>btn.addEventListener('click',()=>openChore(choreItems.find(x=>x.id===Number(btn.dataset.id)))));
+  choreForm?.addEventListener('submit',async e=>{
+    e.preventDefault();const id=Number(choreField('id').value||0);choreStatus.textContent='保存中…';
+    try{await post({action:id?'quick_chore_update':'quick_chore_add',id,name:choreField('name').value,icon:choreField('icon').value});location.reload();}
+    catch(err){choreStatus.textContent=err?.message||String(err);}
+  });
+  choreDisable?.addEventListener('click',async()=>{
+    const id=Number(choreField('id').value||0);if(!id||!confirm('この項目を非表示にしますか？過去の記録は残ります。'))return;
+    try{await post({action:'quick_chore_remove',id});location.reload();}catch(err){choreStatus.textContent=err?.message||String(err);}
+  });
+  choreModal?.addEventListener('click',async e=>{
+    const move=e.target.closest('.chore-move'),restore=e.target.closest('.chore-restore');
+    if(move){const active=choreItems.filter(x=>x.active),index=active.findIndex(x=>x.id===Number(move.dataset.id)),next=index+Number(move.dataset.step);if(index<0||next<0||next>=active.length)return;[active[index],active[next]]=[active[next],active[index]];try{await post({action:'quick_chore_reorder',ids:active.map(x=>x.id)});location.reload();}catch(err){choreStatus.textContent=err?.message||String(err);}}
+    if(restore){try{await post({action:'quick_chore_restore',id:Number(restore.dataset.id)});location.reload();}catch(err){choreStatus.textContent=err?.message||String(err);}}
   });
   document.querySelectorAll('.family-quick-chore-record').forEach(btn=>btn.addEventListener('click',async()=>{
     btn.disabled=true;
     try{await post({action:'quick_chore_record',id:Number(btn.dataset.id||0),occurred_at:nowLocal});location.reload();}
-    catch(err){alert(err?.message||String(err));btn.disabled=false;}
-  }));
-  document.querySelectorAll('.family-quick-chore-remove').forEach(btn=>btn.addEventListener('click',async()=>{
-    if(!confirm('この家事ボタンを削除しますか？過去の記録は残ります。'))return;
-    btn.disabled=true;
-    try{await post({action:'quick_chore_remove',id:Number(btn.dataset.id||0)});location.reload();}
     catch(err){alert(err?.message||String(err));btn.disabled=false;}
   }));
 
@@ -496,6 +520,7 @@
     if(e.key==='Escape'){
       setOpen(logModal,false);
       setOpen(subjectModal,false);
+      setOpen(choreModal,false);
     }
   });
 
