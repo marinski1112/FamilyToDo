@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.115.0-wave96",
+  "version": "12.116.0-wave97",
   "private": true,
   "description": "Family TODO LINE - Cloudflare Workers migration foundation",
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check:calendar-js": "node --check public/assets/calendar.js",
     "check:recurring-js": "node --check public/assets/recurring.js",
-    "check:browser-js": "node --check public/assets/calendar.js && node --check public/assets/recurring.js && node --check public/assets/messages.js && node --check public/assets/message-new.js && node --check public/assets/settings.js && node --check public/assets/settings-members.js && node --check public/assets/settings-notifications.js && node --check public/assets/shopping-new.js && node --check public/assets/task-new.js && node --check public/assets/task-edit.js && node --check public/assets/task-view.js && node --check public/assets/liff-auth.js && node --check public/assets/family-onboarding.js && node --check public/assets/item-new.js && node --check public/assets/pwa.js && node --check public/sw.js && node --check public/assets/family-log.js && node --check public/assets/family-log-import.js && node --check public/assets/occurrence-family-log.js && node --check public/assets/task-events.js && node --check public/assets/shopping.js",
+    "check:browser-js": "node --check public/assets/calendar.js && node --check public/assets/recurring.js && node --check public/assets/messages.js && node --check public/assets/message-new.js && node --check public/assets/settings.js && node --check public/assets/settings-members.js && node --check public/assets/settings-notifications.js && node --check public/assets/shopping-new.js && node --check public/assets/task-new.js && node --check public/assets/task-edit.js && node --check public/assets/task-view.js && node --check public/assets/liff-auth.js && node --check public/assets/family-onboarding.js && node --check public/assets/item-new.js && node --check public/assets/pwa.js && node --check public/sw.js && node --check public/assets/family-log.js && node --check public/assets/family-ai.js && node --check public/assets/family-log-import.js && node --check public/assets/occurrence-family-log.js && node --check public/assets/task-events.js && node --check public/assets/shopping.js",
     "check:messages-js": "node --check public/assets/messages.js && node --check public/assets/message-new.js",
     "check:settings-js": "node --check public/assets/settings.js && node --check public/assets/settings-members.js",
     "check:notifications-js": "node --check public/assets/settings-notifications.js",
@@ -22,7 +22,7 @@
     "check:pwa-js": "node --check public/assets/pwa.js && node --check public/sw.js",
     "check:family-log-js": "node --check public/assets/family-log.js",
     "check:migrations": "bash scripts/migration-smoke.sh",
-    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh && bash scripts/wave84-smoke.sh && bash scripts/wave85-smoke.sh && bash scripts/wave86-smoke.sh && bash scripts/wave87-smoke.sh && bash scripts/wave88-smoke.sh && bash scripts/wave89-smoke.sh && bash scripts/wave91-smoke.sh && bash scripts/wave92-smoke.sh && bash scripts/wave93-smoke.sh && bash scripts/wave94-smoke.sh && bash scripts/wave95-smoke.sh && bash scripts/wave96-smoke.sh",
+    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh && bash scripts/wave84-smoke.sh && bash scripts/wave85-smoke.sh && bash scripts/wave86-smoke.sh && bash scripts/wave87-smoke.sh && bash scripts/wave88-smoke.sh && bash scripts/wave89-smoke.sh && bash scripts/wave91-smoke.sh && bash scripts/wave92-smoke.sh && bash scripts/wave93-smoke.sh && bash scripts/wave94-smoke.sh && bash scripts/wave95-smoke.sh && bash scripts/wave96-smoke.sh && bash scripts/wave97-smoke.sh",
     "check:static-assets": "node scripts/check-static-assets.mjs"
   },
   "dependencies": {},
