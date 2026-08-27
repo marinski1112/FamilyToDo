@@ -129,7 +129,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.112-wave93">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.113-wave94">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
 
@@ -1457,6 +1457,22 @@ function familyLogEnabledTypes(subject:Row|undefined|null):string[]{
   }
   return familyLogDefaultTypes(subject.subject_kind);
 }
+function familyLogOverviewQuickTypes(subject:Row|undefined|null):string[]{
+  if(!subject||Number(subject.show_on_family_overview)!==1)return [];
+  const raw=String(subject.overview_quick_types_json||'').trim();
+  if(!raw)return [];
+  try{
+    const parsed=JSON.parse(raw);
+    return Array.isArray(parsed)?[...new Set(parsed.map(x=>String(x||'').toUpperCase()).filter(x=>FAMILY_LOG_SUBJECT_TYPES.includes(x)))]:[];
+  }catch{return [];}
+}
+const SLEEP_TIMER_WARNING_MINUTES=12*60;
+const SLEEP_TIMER_CONFIRM_MINUTES=16*60;
+const SLEEP_TIMER_MAX_ADJUST_MINUTES=48*60;
+function familyLogJstMs(value:unknown):number{
+  const normalized=familyLogDateTime(value);
+  return Date.parse(`${normalized.replace(' ','T')}+09:00`);
+}
 function familyLogSubjectIcon(subject:Row|undefined|null):string{
   if(subject?.icon)return String(subject.icon);
   return FAMILY_LOG_SUBJECT_META[familyLogSubjectKind(subject?.subject_kind)]?.icon||'👤';
@@ -1652,19 +1668,23 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       const enabled=[...new Set(enabledInput.map(x=>String(x||'').toUpperCase()).filter(x=>FAMILY_LOG_SUBJECT_TYPES.includes(x)))];
       if(!enabled.length)throw new BadRequest('表示する記録項目を1つ以上選択してください。');
       const enabledJson=JSON.stringify(enabled);
+      const showOnOverview=familyLogTruthy(b.show_on_family_overview,false)?1:0;
+      const overviewInput=Array.isArray(b.overview_quick_types)?(b.overview_quick_types as unknown[]):[];
+      const overviewTypes=[...new Set(overviewInput.map(x=>String(x||'').toUpperCase()).filter(x=>enabled.includes(x)))];
+      const overviewJson=showOnOverview?JSON.stringify(overviewTypes):null;
       const autoComplete=familyLogTruthy(b.auto_complete_linked_task,familyLogDefaultAutoComplete(kind)===1)?1:0;
       const now=nowJst();
       if(id){
         const current=await ctx.env.DB.prepare('SELECT id,member_id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
         if(!current)return json({ok:false,error:'記録対象が見つかりません。'},404);
-        await ctx.env.DB.prepare('UPDATE family_log_subjects SET name=?,subject_kind=?,birth_date=?,enabled_types_json=?,auto_complete_linked_task=?,updated_at=? WHERE id=? AND family_id=? AND active=1')
-          .bind(name,kind,birth,enabledJson,autoComplete,now,id,m.family_id).run();
+        await ctx.env.DB.prepare('UPDATE family_log_subjects SET name=?,subject_kind=?,birth_date=?,enabled_types_json=?,auto_complete_linked_task=?,show_on_family_overview=?,overview_quick_types_json=?,updated_at=? WHERE id=? AND family_id=? AND active=1')
+          .bind(name,kind,birth,enabledJson,autoComplete,showOnOverview,overviewJson,now,id,m.family_id).run();
         const linkedMemberId=Number(current.member_id||0);
         if(linkedMemberId){
           const linkedMemberType=['BABY','CHILD'].includes(kind)?'CHILD':'ADULT';
           await ctx.env.DB.prepare('UPDATE members SET member_type=?,updated_at=? WHERE id=? AND family_id=? AND deleted_at IS NULL').bind(linkedMemberType,now,linkedMemberId,m.family_id).run();
         }
-        await logActivity(ctx,'UPDATED','family_log_subject',id,{name,subject_kind:kind,enabled_types:enabled,auto_complete_linked_task:autoComplete,linked_member_id:linkedMemberId||null});
+        await logActivity(ctx,'UPDATED','family_log_subject',id,{name,subject_kind:kind,enabled_types:enabled,show_on_family_overview:showOnOverview,overview_quick_types:overviewTypes,auto_complete_linked_task:autoComplete,linked_member_id:linkedMemberId||null});
         return json({ok:true,id});
       }
       const memberId=Number(b.member_id||0)||null;
@@ -1674,8 +1694,8 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
         const existing=await ctx.env.DB.prepare('SELECT id FROM family_log_subjects WHERE family_id=? AND member_id=? LIMIT 1').bind(m.family_id,memberId).first<Row>();
         if(existing)throw new BadRequest('この家族メンバーはすでに家族ログ対象として表示されています。');
       }
-      const r=await ctx.env.DB.prepare('INSERT INTO family_log_subjects(family_id,member_id,name,subject_kind,birth_date,icon,active,created_by,created_at,updated_at,enabled_types_json,auto_complete_linked_task) VALUES(?,?,?,?,?,?,1,?,?,?,?,?)')
-        .bind(m.family_id,memberId,name,kind,birth,null,m.id,now,now,enabledJson,autoComplete).run();
+      const r=await ctx.env.DB.prepare('INSERT INTO family_log_subjects(family_id,member_id,name,subject_kind,birth_date,icon,active,created_by,created_at,updated_at,enabled_types_json,auto_complete_linked_task,show_on_family_overview,overview_quick_types_json) VALUES(?,?,?,?,?,?,1,?,?,?,?,?,?,?)')
+        .bind(m.family_id,memberId,name,kind,birth,null,m.id,now,now,enabledJson,autoComplete,showOnOverview,overviewJson).run();
       await logActivity(ctx,'CREATED','family_log_subject',Number(r.meta.last_row_id),{name,subject_kind:kind,enabled_types:enabled,auto_complete_linked_task:autoComplete});
       return json({ok:true,id:Number(r.meta.last_row_id)});
     }
@@ -1753,6 +1773,38 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
         .bind(m.family_id,subjectId,type,now,Date.now(),m.id,now,now,timerLabel).run();
       await logActivity(ctx,'STARTED','family_log_timer',Number(r.meta.last_row_id),{log_type:type,timer_label:timerLabel});return json({ok:true,id:Number(r.meta.last_row_id)});
     }
+    if(action==='sleep_start'){
+      const subjectId=Number(b.subject_id||0);if(!subjectId)throw new BadRequest('睡眠対象を選択してください。');
+      const child=await ctx.env.DB.prepare("SELECT id,name FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind='CHILD'").bind(subjectId,m.family_id).first<Row>();
+      if(!child)throw new BadRequest('子どもの対象だけ睡眠タイマーを開始できます。');
+      const existing=await ctx.env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(m.family_id,subjectId).first<Row>();
+      if(existing)return json({ok:true,id:Number(existing.id),already:true});
+      const now=nowJst(),startedMs=Date.now();
+      const r=await ctx.env.DB.prepare("INSERT INTO family_log_timers(family_id,subject_id,log_type,started_at,started_at_ms,status,note,created_by,created_at,updated_at,timer_label) SELECT ?,?,'SLEEP',?,?,'running',NULL,?,?,?,'睡眠' WHERE NOT EXISTS(SELECT 1 FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running')")
+        .bind(m.family_id,subjectId,now,startedMs,m.id,now,now,m.family_id,subjectId).run();
+      const id=Number(r.meta.last_row_id||0);if(!id){const raced=await ctx.env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(m.family_id,subjectId).first<Row>();return json({ok:true,id:Number(raced?.id||0),already:true});}
+      await logActivity(ctx,'STARTED','family_log_timer',id,{log_type:'SLEEP',subject_id:subjectId});return json({ok:true,id});
+    }
+    if(action==='sleep_adjust'){
+      const timerId=Number(b.timer_id||0),startedAt=familyLogDateTime(b.started_at),startedMs=familyLogJstMs(startedAt),nowMs=Date.now();
+      if(!Number.isFinite(startedMs)||startedMs>nowMs)throw new BadRequest('開始時刻に未来は指定できません。');
+      if(nowMs-startedMs>SLEEP_TIMER_MAX_ADJUST_MINUTES*60000)throw new BadRequest('開始時刻は48時間以内で指定してください。');
+      const result=await ctx.env.DB.prepare("UPDATE family_log_timers SET started_at=?,started_at_ms=?,updated_at=? WHERE id=? AND family_id=? AND log_type='SLEEP' AND status='running' AND EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=family_log_timers.subject_id AND s.family_id=family_log_timers.family_id AND s.subject_kind='CHILD' AND s.active=1)").bind(startedAt,startedMs,nowJst(),timerId,m.family_id).run();
+      if(!result.meta.changes)return json({ok:false,error:'実行中の子ども睡眠タイマーが見つかりません。'},404);
+      return json({ok:true});
+    }
+    if(action==='sleep_stop'){
+      const timerId=Number(b.timer_id||0),wakeAt=familyLogDateTime(b.wake_at||nowJst()),wakeMs=familyLogJstMs(wakeAt);
+      const timer=await ctx.env.DB.prepare("SELECT x.*,s.name subject_name FROM family_log_timers x JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id AND s.active=1 AND s.subject_kind='CHILD' WHERE x.id=? AND x.family_id=? AND x.log_type='SLEEP' AND x.status='running' LIMIT 1").bind(timerId,m.family_id).first<Row>();
+      if(!timer)return json({ok:false,error:'実行中の子ども睡眠タイマーが見つかりません。'},404);
+      const startedMs=Number(timer.started_at_ms);if(!Number.isFinite(startedMs)||wakeMs<startedMs||wakeMs>Date.now()+60000)throw new BadRequest('起床時刻が不正です。');
+      const duration=Math.round((wakeMs-startedMs)/60000);if(duration>SLEEP_TIMER_MAX_ADJUST_MINUTES)throw new BadRequest('睡眠時間は48時間以内で指定してください。');
+      const now=nowJst();
+      const stopped=await ctx.env.DB.prepare("UPDATE family_log_timers SET status='stopped',updated_at=? WHERE id=? AND family_id=? AND log_type='SLEEP' AND status='running'").bind(now,timerId,m.family_id).run();
+      if(!stopped.meta.changes)return json({ok:false,error:'睡眠タイマーはすでに停止しています。'},409);
+      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,duration_minutes,created_by,created_at,updated_at) VALUES(?,?,'SLEEP',?,?,?,?,?)").bind(m.family_id,timer.subject_id,String(timer.started_at),duration,m.id,now,now).run();
+      const logId=Number(r.meta.last_row_id);await logActivity(ctx,'CREATED','family_log',logId,{log_type:'SLEEP',subject_id:Number(timer.subject_id),subject_name:String(timer.subject_name||''),occurred_at:String(timer.started_at),duration_minutes:duration,source:'sleep_timer'});return json({ok:true,log_id:logId,duration_minutes:duration});
+    }
     if(action==='timer_stop'){
       const timerId=Number(b.timer_id||0);if(!timerId)throw new BadRequest('タイマーが不正です。');
       const timer=await ctx.env.DB.prepare("SELECT * FROM family_log_timers WHERE id=? AND family_id=? AND status='running' LIMIT 1").bind(timerId,m.family_id).first<Row>();if(!timer)return json({ok:false,error:'実行中のタイマーが見つかりません。'},404);
@@ -1796,10 +1848,9 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const selectedSubjectRow=selectedSubject?subjects.results.find(s=>Number(s.id)===selectedSubject):undefined;
   const currentAdultSubject=adultSubjects.find(s=>Number(s.member_id||0)===m.id);
   if(recorderFilter&&!members.results.some(member=>Number(member.id)===recorderFilter))throw new BadRequest('記録者が見つかりません。');
-  const enabledTypes=selectedSubjectRow
-    ?familyLogEnabledTypes(selectedSubjectRow)
-    :FAMILY_LOG_TYPES.filter(type=>(adultAggregate?adultSubjects:subjects.results.filter(s=>showAdultLogs||familyLogSubjectKind(s.subject_kind)!=='ADULT')).some(s=>familyLogEnabledTypes(s).includes(type)));
-  const quickTypes=(enabledTypes.length?enabledTypes:FAMILY_LOG_TYPES).filter(type=>FAMILY_LOG_TYPES.includes(type));
+  // All-view intentionally does not union every subject's enabled types. Promotions are explicit.
+  const enabledTypes=selectedSubjectRow?familyLogEnabledTypes(selectedSubjectRow):[];
+  const quickTypes=selectedSubjectRow?enabledTypes.filter(type=>FAMILY_LOG_TYPES.includes(type)):FAMILY_LOG_TYPES;
 
   // Wave91 dashboard: aggregate in D1 and return only compact daily/type buckets, never raw history.
   const dashboardRange=String(url.searchParams.get('range')||'7');
@@ -1919,7 +1970,8 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const subjectMap=Object.fromEntries(subjects.results.map(s=>[String(s.id),{
     id:Number(s.id),member_id:Number(s.member_id||0),member_name:String(s.member_name||''),name:String(s.name||''),
     subject_kind:familyLogSubjectKind(s.subject_kind),birth_date:String(s.birth_date||''),icon:familyLogSubjectIcon(s),
-    enabled_types:familyLogEnabledTypes(s),auto_complete_linked_task:Number(s.auto_complete_linked_task||0)===1
+    enabled_types:familyLogEnabledTypes(s),show_on_family_overview:Number(s.show_on_family_overview||0)===1,
+    overview_quick_types:familyLogOverviewQuickTypes(s),auto_complete_linked_task:Number(s.auto_complete_linked_task||0)===1
   }]));
 
   const milkTotal=logs.results.filter(r=>String(r.log_type)==='MILK').reduce((sum,r)=>sum+Number(r.amount||0),0);
@@ -1986,7 +2038,11 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const dt=new Date(`${selectedDate}T12:00:00Z`);dt.setUTCDate(dt.getUTCDate()-1);const prev=dt.toISOString().slice(0,10);dt.setUTCDate(dt.getUTCDate()+2);const next=dt.toISOString().slice(0,10);
   const subjectQuery=adultAggregate?'&subject=adult':selectedSubject?`&subject=${selectedSubject}`:'';
   const subjectChips=`<div class="family-log-subjects"><a class="${selectedSubject===0&&!adultAggregate?'active':''}" href="/app/family_log.php?date=${selectedDate}${rangeQuery}">すべて</a>${showAdultLogs?(adultSubjects.length>1?`<a class="${adultAggregate?'active':''}" href="/app/family_log.php?date=${selectedDate}&subject=adult">👤 大人</a>`:adultSubjects.map(s=>`<a class="${selectedSubject===Number(s.id)?'active':''}" href="/app/family_log.php?date=${selectedDate}&subject=${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</a>`).join('')):''}${subjects.results.filter(s=>familyLogSubjectKind(s.subject_kind)!=='ADULT').map(s=>`<a class="${selectedSubject===Number(s.id)?'active':''}" href="/app/family_log.php?date=${selectedDate}&subject=${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</a>`).join('')}</div>`;
-  const quickButtons=quickTypes.map(type=>`<button type="button" class="family-log-quick" data-log-type="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon}</span><strong>${FAMILY_LOG_TYPE_META[type].label}</strong></button>`).join('');
+  const sleepTimerFor=(subjectId:number)=>timers.results.find(t=>Number(t.subject_id)===subjectId&&String(t.log_type)==='SLEEP');
+  const sleepAction=(subject:Row)=>{const running=sleepTimerFor(Number(subject.id));return running?`<button type="button" class="family-log-quick family-log-sleep-stop" data-id="${running.id}" data-started-ms="${Number(running.started_at_ms)}">☀️ <strong>起きた</strong></button>`:`<button type="button" class="family-log-quick family-log-sleep-start" data-subject-id="${subject.id}">😴 <strong>寝た</strong></button>`;};
+  const subjectQuickTypes=selectedSubjectRow?quickTypes.filter(type=>!(subjectKind==='CHILD'&&type==='SLEEP')):[];
+  const quickButtons=subjectQuickTypes.map(type=>`<button type="button" class="family-log-quick" data-log-type="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon}</span><strong>${FAMILY_LOG_TYPE_META[type].label}</strong></button>`).join('')+(selectedSubjectRow&&subjectKind==='CHILD'&&enabledTypes.includes('SLEEP')?sleepAction(selectedSubjectRow):'');
+  const overviewQuickHtml=!selectedSubject&&!adultAggregate?subjects.results.filter(s=>familyLogSubjectKind(s.subject_kind)!=='ADULT'&&familyLogOverviewQuickTypes(s).length).map(subject=>`<section class="family-log-overview-group"><h2>${esc(familyLogSubjectIcon(subject))} ${esc(subject.name)}</h2><div class="family-log-quick-grid">${familyLogOverviewQuickTypes(subject).map(type=>type==='SLEEP'&&familyLogSubjectKind(subject.subject_kind)==='CHILD'?sleepAction(subject):`<button type="button" class="family-log-quick" data-log-type="${type}" data-subject-id="${subject.id}"><span>${FAMILY_LOG_TYPE_META[type].icon}</span><strong>${FAMILY_LOG_TYPE_META[type].label}</strong></button>`).join('')}</div></section>`).join(''):'';
   const linkOptions=[...physical.results.map(t=>({value:`task:${t.id}`,label:`${String(t.task_kind||'').toLowerCase()==='event'?'📌':'📝'} ${String(t.title||'')}`})),...recurring.map(r=>({value:`occ:${r.recurrence_occurrence_id}`,label:`🔁 ${String(r.title||r.name||'定期タスク')}`}))];
   const rowHtml=logs.results.map(r=>{
     const type=String(r.log_type||'MEMO'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.MEMO;const bits:string[]=[];
@@ -1997,12 +2053,13 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
     const link=r.linked_task_title?`📝 ${r.linked_task_title}`:r.linked_recurrence_title?`🔁 ${r.linked_recurrence_title}`:'';
     return `<div class="family-log-row" data-id="${r.id}"><div class="family-log-time">${esc(String(r.occurred_at||'').slice(11,16))}</div><div class="family-log-icon">${meta.icon}</div><div class="family-log-main"><div><strong>${esc(meta.label)}</strong>${r.subject_name?` <span class="family-log-subject-badge">${esc(r.subject_name)}</span>`:''}</div>${bits.length?`<div class="family-log-value">${bits.map(esc).join(' ・ ')}</div>`:''}${r.note?`<div class="meta">${esc(r.note)}</div>`:''}${r.creator_name?`<div class="meta family-log-recorder">記録：${esc(r.creator_name)}</div>`:''}${link?`<div class="meta family-log-link">${esc(link)}</div>`:''}</div><button type="button" class="btn gray small family-log-edit" data-id="${r.id}">編集</button></div>`;
   }).join('');
-  const timerHtml=timers.results.map(t=>{
+  const timerHtml=timers.results.filter(t=>String(t.log_type)!=='SLEEP').map(t=>{
     const type=String(t.log_type||'SLEEP'),meta=FAMILY_LOG_TYPE_META[type]||FAMILY_LOG_TYPE_META.SLEEP;
     const timerName=String(t.timer_label||'').trim()||meta.label;
     const elapsed=Math.max(0,Math.floor((Date.now()-Number(t.started_at_ms||Date.now()))/60000));
     return `<div class="family-log-timer-row"><div><strong>${meta.icon} ${esc(timerName)}</strong>${t.subject_name?` <span class="family-log-subject-badge">${esc(t.subject_name)}</span>`:''}<span class="family-log-timer-elapsed" data-started-ms="${Number(t.started_at_ms||0)}">${elapsed}:00</span></div><div class="actions"><button type="button" class="btn small family-log-timer-stop" data-id="${t.id}">停止</button><button type="button" class="btn gray small family-log-timer-cancel" data-id="${t.id}">取消</button></div></div>`;
   }).join('');
+  const sleepRunningHtml=timers.results.filter(t=>String(t.log_type)==='SLEEP').map(t=>{const elapsed=Math.max(0,Math.floor((Date.now()-Number(t.started_at_ms))/60000));return `<section class="family-log-sleep-running"><div><strong>😴 ${esc(t.subject_name||'子ども')} 睡眠中 <span class="family-log-timer-elapsed" data-started-ms="${Number(t.started_at_ms)}">${elapsed}:00</span></strong>${elapsed>=SLEEP_TIMER_WARNING_MINUTES?'<p class="family-log-sleep-warning">⚠️ 睡眠タイマーが長時間継続しています</p>':''}</div><div class="actions"><button type="button" class="btn small family-log-sleep-stop" data-id="${t.id}" data-started-ms="${Number(t.started_at_ms)}">☀️ 起きた</button><button type="button" class="btn gray small family-log-sleep-adjust" data-id="${t.id}" data-started-at="${esc(String(t.started_at||'').replace(' ','T').slice(0,16))}">開始時刻を修正</button></div></section>`;}).join('');
   const timerStartHtml=`<form class="family-log-custom-timer" id="familyLogTimerForm"><input name="timer_label" maxlength="80" required placeholder="タイマー名（例：腹ばい、遊び、勉強、散歩）">${(!selectedSubject&&!adultAggregate)|| (adultAggregate&&!currentAdultSubject)?`<select name="subject_id" required><option value="">対象を選択</option>${subjects.results.filter(subject=>showAdultLogs||familyLogSubjectKind(subject.subject_kind)!=='ADULT').map(subject=>`<option value="${subject.id}">${esc(subject.name)}</option>`).join('')}</select>`:`<input type="hidden" name="subject_id" value="${adultAggregate?Number(currentAdultSubject?.id||0):selectedSubject||0}">`}<button type="submit" class="btn secondary">開始</button></form><div class="small" id="familyLogTimerStatus"></div>`;
   const activeQuickChores=quickChores.results.filter(x=>Number(x.active)===1);
   const quickChoreHtml=activeQuickChores.map(x=>`<div class="family-quick-chore"><button type="button" class="family-quick-chore-record" data-id="${x.id}"><span>${esc(x.icon||'✨')}</span><strong>${esc(x.name)}</strong></button></div>`).join('');
@@ -2011,7 +2068,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const selectedSubjectLabel=adultAggregate?'大人':selectedSubject?String(selectedSubjectRow?.name||'対象'):'家族全員';
   const selectedSubjectMode=adultAggregate?'一括':selectedSubjectRow?FAMILY_LOG_SUBJECT_META[subjectKind]?.label||'対象':'全対象';
   const nowLocal=selectedDate===dateOnly()?nowJst().slice(0,16).replace(' ','T'):`${selectedDate}T12:00`;
-  const payload=JSON.stringify({csrf:ctx.session.csrfToken||'',managementMode,selectedDate,selectedSubject:adultAggregate?Number(currentAdultSubject?.id||0):selectedSubject,adultAggregate,showAdultLogs,nowLocal,isAdmin:familyLogIsAdmin,logs:logMap,subjects:subjectMap,quickChores:quickChores.results.map(x=>({id:Number(x.id),name:String(x.name),icon:String(x.icon||'✨'),active:Number(x.active)===1}))}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const payload=JSON.stringify({csrf:ctx.session.csrfToken||'',managementMode,selectedDate,selectedSubject:adultAggregate?Number(currentAdultSubject?.id||0):selectedSubject,adultAggregate,showAdultLogs,nowLocal,isAdmin:familyLogIsAdmin,sleepWarningMinutes:SLEEP_TIMER_WARNING_MINUTES,sleepConfirmMinutes:SLEEP_TIMER_CONFIRM_MINUTES,sleepMaxAdjustMinutes:SLEEP_TIMER_MAX_ADJUST_MINUTES,logs:logMap,subjects:subjectMap,quickChores:quickChores.results.map(x=>({id:Number(x.id),name:String(x.name),icon:String(x.icon||'✨'),active:Number(x.active)===1}))}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
   const subjectTypeChoices=FAMILY_LOG_SUBJECT_TYPES.map(type=>`<label class="checkrow family-log-type-choice"><input type="checkbox" name="enabled_types" value="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</span></label>`).join('');
 
   const managementSubjects=subjects.results.map(subject=>`<div class="family-log-management-row"><span>${esc(familyLogSubjectIcon(subject))} <strong>${esc(subject.name)}</strong><small>${esc(FAMILY_LOG_SUBJECT_META[familyLogSubjectKind(subject.subject_kind)]?.label||'対象')}</small></span><a class="btn gray small" href="/app/settings_family_log.php?subject=${subject.id}">編集</a></div>`).join('');
@@ -2020,18 +2077,20 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
   const dailyBody=`<div class="page-head family-log-head"><h1>🐣 家族ログ</h1><a class="family-log-gear" href="/app/settings_family_log.php${selectedSubject?`?subject=${selectedSubject}`:''}" aria-label="家族ログ設定" title="家族ログ設定">⚙️</a></div>
   ${subjectChips}
   <div class="family-log-date-head"><a href="/app/family_log.php?date=${prev}${subjectQuery}" aria-label="前の日">‹</a><label><span>${esc(selectedDate.slice(5).replace('-','/'))}</span><input type="date" value="${selectedDate}" onchange="location.href='/app/family_log.php?date='+this.value+'${subjectQuery}'"></label><a href="/app/family_log.php?date=${next}${subjectQuery}" aria-label="次の日">›</a></div>
-  ${quickButtons?`<div class="family-log-quick-card"><div class="family-log-quick-grid">${quickButtons}</div></div>`:''}
   ${selectedSubject||adultAggregate||!quickChoreHtml?'':`<section class="family-quick-chore-card"><h2>🧹 ちょこっと家事</h2><div class="family-quick-chore-grid">${quickChoreHtml}</div></section>`}
+  ${overviewQuickHtml?`<div class="family-log-overview-quick">${overviewQuickHtml}</div>`:''}
+  ${quickButtons?`<div class="family-log-quick-card"><div class="family-log-quick-grid">${quickButtons}</div></div>`:''}
+  ${sleepRunningHtml}
+  <details class="card family-log-timer-card"${timerHtml?' open':''}><summary>▶ ⏱ その他のタイマー</summary>${timerHtml}${timerStartHtml}</details>
   ${selectedSubject||adultAggregate?'':choreAggregateHtml}
-  <details class="card family-log-timer-card"${timerHtml?' open':''}><summary>⏱ タイマー</summary>${timerHtml}${timerStartHtml}</details>
   ${dashboardHtml}
   <div class="card family-log-timeline"><div class="section-head"><h2>履歴</h2><form method="get" class="family-log-history-filters"><input type="hidden" name="date" value="${selectedDate}"><input type="hidden" name="subject" value="${adultAggregate?'adult':selectedSubject||''}"><select name="type" aria-label="種類" onchange="this.form.submit()"><option value="">すべて</option>${quickTypes.map(type=>`<option value="${type}" ${timelineType===type?'selected':''}>${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</option>`).join('')}<option value="MEMO" ${timelineType==='MEMO'?'selected':''}>📝 その他</option></select>${(adultAggregate||!selectedSubject)?`<select name="recorder" aria-label="記録者" onchange="this.form.submit()"><option value="0">記録者：すべて</option>${members.results.map(member=>`<option value="${member.id}" ${recorderFilter===Number(member.id)?'selected':''}>${esc(member.name)}</option>`).join('')}</select>`:`<input type="hidden" name="recorder" value="0">`}</form></div>${rowHtml||'<p class="empty">記録はありません。</p>'}<nav class="family-log-pagination">${timelinePage>1?`<a class="btn gray" href="?date=${selectedDate}${subjectQuery}&recorder=${recorderFilter}&type=${timelineType}&page=${timelinePage-1}${rangeQuery}">前へ</a>`:''}${timelineHasMore?`<a class="btn gray" href="?date=${selectedDate}${subjectQuery}&recorder=${recorderFilter}&type=${timelineType}&page=${timelinePage+1}${rangeQuery}">さらに読み込む</a>`:''}</nav></div>`;
   const sharedControls=`<div class="family-log-backdrop" id="familyLogModal" aria-hidden="true"><div class="family-log-sheet"><div class="section-head"><h2 id="familyLogModalTitle">記録を追加</h2><button type="button" class="btn gray small" id="familyLogClose">×</button></div><form id="familyLogForm"><input type="hidden" name="id"><label>種類</label><select name="log_type">${FAMILY_LOG_TYPES.map(type=>`<option value="${type}">${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</option>`).join('')}</select><label>対象</label><select name="subject_id"><option value="0">家族共通</option>${subjects.results.filter(s=>showAdultLogs||familyLogSubjectKind(s.subject_kind)!=='ADULT').map(s=>`<option value="${s.id}">${esc(familyLogSubjectIcon(s))} ${esc(s.name)}</option>`).join('')}</select><label>日時</label><input type="datetime-local" name="occurred_at" required><div id="familyLogDetailWrap"><label>詳細</label><div id="familyLogDetailChoices" class="family-log-detail-choices"></div><select name="detail_code"><option value="">指定なし</option></select></div><div id="familyLogAmountWrap"><label id="familyLogAmountLabel">値</label><div class="family-log-value-input"><input type="number" name="amount"><span id="familyLogAmountUnit"></span><input type="hidden" name="unit"></div></div><div id="familyLogDurationWrap"><label id="familyLogDurationLabel">時間</label><div class="family-log-value-input"><input type="number" name="duration_minutes" min="0" max="10080" step="1"><span>分</span></div></div><div id="familyLogTextWrap"><label id="familyLogTextLabel">内容</label><input name="value_text" maxlength="255"></div><label>関連タスク・イベント（任意）</label><select name="linked_target"><option value="">なし</option>${linkOptions.map(x=>`<option value="${esc(x.value)}">${esc(x.label)}</option>`).join('')}</select><label>メモ</label><textarea name="note" maxlength="2000"></textarea><div id="familyLogProvenance" class="meta family-log-provenance" hidden></div><div id="familyLogStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogDelete">削除</button></div></form></div></div>
 
-  <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyLogSubjectTitle">記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><input type="hidden" name="id"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>画面タイプ</label><select name="subject_kind"><option value="BABY">👶 赤ちゃん</option><option value="CHILD">🧒 子ども</option><option value="ADULT">👤 大人</option><option value="PET">🐾 ペット</option><option value="OTHER">⭐ その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><div class="family-log-type-setting-head"><label>表示する記録項目</label><div class="family-log-presets"><button type="button" class="btn gray small family-log-pet-preset" data-preset="CAT">🐱 猫向け</button><button type="button" class="btn gray small family-log-pet-preset" data-preset="DOG">🐶 犬向け</button><button type="button" class="btn gray small" id="familyLogPresetApply">おすすめ</button></div></div><div class="choice-list family-log-type-choice-grid">${subjectTypeChoices}</div><p class="small" id="familyLogSubjectGuide">対象タイプごとのおすすめ項目を使えます。</p><label class="checkrow family-log-auto-complete"><input type="checkbox" name="auto_complete_linked_task" id="familyLogAutoComplete"><span>この対象の記録時、関連タスクを記録した人の完了として反映する</span></label><p class="small">赤ちゃん・子ども・ペットではおすすめONです。担当者が未設定なら記録者を担当者として追加します。別の担当者が設定済みの場合は勝手に変更しません。</p><div id="familyLogSubjectLinked" class="notice" style="display:none"></div><button type="button" class="btn secondary" id="familyLogSubjectPromote" style="display:none">LINE本登録へ招待</button><div id="familyLogSubjectPromoteOut" class="notice" style="display:none"></div><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogSubjectDisable">対象を非表示</button></div></form><p class="small">家族メンバーは自動的に対象として表示されます。赤ちゃん・子どもは後から「LINE本登録へ招待」で同じ記録対象を家族メンバーへ引き継げます。</p></div></div>
+  <div class="family-log-backdrop" id="familyLogSubjectModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyLogSubjectTitle">記録対象を追加</h2><button type="button" class="btn gray small" id="familyLogSubjectClose">×</button></div><form id="familyLogSubjectForm"><input type="hidden" name="id"><label>名前</label><input name="name" maxlength="80" required placeholder="例：はる、赤ちゃん"><label>画面タイプ</label><select name="subject_kind"><option value="BABY">👶 赤ちゃん</option><option value="CHILD">🧒 子ども</option><option value="ADULT">👤 大人</option><option value="PET">🐾 ペット</option><option value="OTHER">⭐ その他</option></select><label>生年月日（任意）</label><input type="date" name="birth_date"><div class="family-log-type-setting-head"><label>表示する記録項目</label><div class="family-log-presets"><button type="button" class="btn gray small family-log-pet-preset" data-preset="CAT">🐱 猫向け</button><button type="button" class="btn gray small family-log-pet-preset" data-preset="DOG">🐶 犬向け</button><button type="button" class="btn gray small" id="familyLogPresetApply">おすすめ</button></div></div><div class="choice-list family-log-type-choice-grid">${subjectTypeChoices}</div><p class="small" id="familyLogSubjectGuide">対象タイプごとのおすすめ項目を使えます。</p><label class="checkrow family-log-overview-toggle"><input type="checkbox" name="show_on_family_overview" id="familyLogShowOverview"><span>「すべて」にこの対象の記録を表示する</span></label><div id="familyLogOverviewTypes" hidden><label>「すべて」に表示する項目</label><div class="choice-list family-log-type-choice-grid">${FAMILY_LOG_SUBJECT_TYPES.map(type=>`<label class="checkrow family-log-type-choice"><input type="checkbox" name="overview_quick_types" value="${type}"><span>${FAMILY_LOG_TYPE_META[type].icon} ${FAMILY_LOG_TYPE_META[type].label}</span></label>`).join('')}</div></div><label class="checkrow family-log-auto-complete"><input type="checkbox" name="auto_complete_linked_task" id="familyLogAutoComplete"><span>この対象の記録時、関連タスクを記録した人の完了として反映する</span></label><p class="small">赤ちゃん・子ども・ペットではおすすめONです。担当者が未設定なら記録者を担当者として追加します。別の担当者が設定済みの場合は勝手に変更しません。</p><div id="familyLogSubjectLinked" class="notice" style="display:none"></div><button type="button" class="btn secondary" id="familyLogSubjectPromote" style="display:none">LINE本登録へ招待</button><div id="familyLogSubjectPromoteOut" class="notice" style="display:none"></div><div id="familyLogSubjectStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyLogSubjectDisable">対象を非表示</button></div></form><p class="small">家族メンバーは自動的に対象として表示されます。赤ちゃん・子どもは後から「LINE本登録へ招待」で同じ記録対象を家族メンバーへ引き継げます。</p></div></div>
   ${familyLogIsAdmin?`<div class="family-log-backdrop" id="familyQuickChoreModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2 id="familyQuickChoreTitle">家事項目を追加</h2><button type="button" class="btn gray small" id="familyQuickChoreClose">×</button></div><form id="familyQuickChoreForm"><input type="hidden" name="id"><label>アイコン</label><input name="icon" maxlength="8" value="✨" placeholder="✨"><label>名前</label><input name="name" maxlength="80" required placeholder="例：玄関を掃く"><div id="familyQuickChoreStatus" class="small" aria-live="polite"></div><div class="family-log-form-actions"><button type="submit">保存する</button><button type="button" class="btn danger" id="familyQuickChoreDisable">非表示</button></div></form><div class="family-quick-chore-manage"><div class="section-head"><h3>表示順</h3><span class="small">矢印で移動</span></div><div id="familyQuickChoreOrder"></div><div id="familyQuickChoreHidden"></div></div></div></div>`:''}
   ${familyLogIsAdmin?`<div class="family-log-backdrop" id="familyLogSettingsModal" aria-hidden="true"><div class="family-log-sheet small-sheet"><div class="section-head"><h2>⚙️ 表示設定</h2><button type="button" class="btn gray small" id="familyLogSettingsClose">×</button></div><form id="familyLogSettingsForm"><label class="checkrow"><input type="checkbox" name="show_adult_logs" ${showAdultLogs?'checked':''}><span>大人の記録を表示する</span></label><p class="small">OFFでも大人の対象・過去ログ・メンバー連携は削除されません。</p><div id="familyLogSettingsStatus" class="small" aria-live="polite"></div><button type="submit">保存する</button></form></div></div>`:''}
-  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.112-wave93"></script>`;
+  <script type="application/json" id="familyLogPayload">${payload}</script><script src="/assets/family-log.js?v=12.113-wave94"></script>`;
   const body=(managementMode?managementBody:dailyBody)+sharedControls;
   return html(layout(managementMode?'家族ログ管理':'家族ログ',body,managementMode?'/app/settings.php':'/app/family_log.php'));
 }

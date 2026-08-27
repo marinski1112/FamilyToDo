@@ -33,6 +33,8 @@
   const subjectDisable=byId('familyLogSubjectDisable');
   const subjectGuide=byId('familyLogSubjectGuide');
   const subjectAutoComplete=byId('familyLogAutoComplete');
+  const subjectShowOverview=byId('familyLogShowOverview');
+  const subjectOverviewTypes=byId('familyLogOverviewTypes');
   const subjectPromote=byId('familyLogSubjectPromote');
   const subjectPromoteOut=byId('familyLogSubjectPromoteOut');
 
@@ -165,13 +167,13 @@
     }
   }
 
-  function openNew(type){
+  function openNew(type,subjectId=selectedSubject()){
     if(!logForm)return;
     logForm.reset();
     formField('id').value='';
     formField('log_type').value=type||'MEMO';
     const subject=formField('subject_id');
-    if(subject)subject.value=String(selectedSubject()||0);
+    if(subject)subject.value=String(subjectId||0);
     const occurred=formField('occurred_at');
     if(occurred)occurred.value=nowLocal||`${selectedDate}T12:00`;
     const linked=formField('linked_target');
@@ -263,6 +265,8 @@
     subjectField('id').value='';
     subjectField('subject_kind').value='BABY';
     applySubjectPreset('BABY');
+    if(subjectShowOverview instanceof HTMLInputElement)subjectShowOverview.checked=false;
+    if(subjectOverviewTypes)subjectOverviewTypes.hidden=true;
     subjectTitle.textContent='記録対象を追加';
     subjectStatus.textContent='';
     setVisible(subjectDisable,false);
@@ -285,6 +289,10 @@
     subjectField('birth_date').value=String(row.birth_date||'');
     setSubjectTypes(Array.isArray(row.enabled_types)?row.enabled_types:presetTypes(row.subject_kind));
     if(subjectAutoComplete instanceof HTMLInputElement)subjectAutoComplete.checked=Boolean(row.auto_complete_linked_task);
+    if(subjectShowOverview instanceof HTMLInputElement)subjectShowOverview.checked=Boolean(row.show_on_family_overview);
+    if(subjectOverviewTypes)subjectOverviewTypes.hidden=!Boolean(row.show_on_family_overview);
+    const overviewSelected=new Set(Array.isArray(row.overview_quick_types)?row.overview_quick_types:[]);
+    subjectForm.querySelectorAll('input[name="overview_quick_types"]').forEach(input=>{input.checked=overviewSelected.has(input.value);});
     updateSubjectGuide(row.subject_kind);
     subjectTitle.textContent=`${row.icon||'👤'} ${row.name||'対象'} の設定`;
     subjectStatus.textContent='';
@@ -304,7 +312,7 @@
   }
 
   document.querySelectorAll('[data-log-type]').forEach(btn=>
-    btn.addEventListener('click',()=>openNew(String(btn.dataset.logType||'MEMO')))
+    btn.addEventListener('click',()=>openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||selectedSubject())))
   );
   document.querySelectorAll('.family-log-row').forEach(row=>
     row.addEventListener('click',e=>{
@@ -382,6 +390,7 @@
   byId('familyLogPresetApply')?.addEventListener('click',()=>{
     applySubjectPreset(subjectField('subject_kind')?.value);
   });
+  subjectShowOverview?.addEventListener('change',()=>{if(subjectOverviewTypes)subjectOverviewTypes.hidden=!subjectShowOverview.checked;});
 
   subjectForm?.addEventListener('submit',async e=>{
     e.preventDefault();
@@ -398,6 +407,8 @@
         subject_kind:String(fd.get('subject_kind')||'BABY'),
         birth_date:String(fd.get('birth_date')||''),
         enabled_types:fd.getAll('enabled_types').map(String),
+        show_on_family_overview:Boolean(fd.get('show_on_family_overview')),
+        overview_quick_types:fd.getAll('overview_quick_types').map(String),
         auto_complete_linked_task:Boolean(fd.get('auto_complete_linked_task'))
       });
       location.reload();
@@ -465,6 +476,25 @@
     try{await post({action:'timer_start',log_type:'TIMER',timer_label:label,subject_id:Number(new FormData(form).get('subject_id')||selectedSubject()||0)});location.reload();}
     catch(err){if(status)status.textContent=err?.message||String(err);}
   });
+  document.querySelectorAll('.family-log-sleep-start').forEach(btn=>btn.addEventListener('click',async()=>{
+    btn.disabled=true;try{await post({action:'sleep_start',subject_id:Number(btn.dataset.subjectId||0)});location.reload();}catch(err){alert(err?.message||String(err));btn.disabled=false;}
+  }));
+  document.querySelectorAll('.family-log-sleep-stop').forEach(btn=>btn.addEventListener('click',async()=>{
+    const elapsed=Math.max(0,Math.floor((Date.now()-Number(btn.dataset.startedMs||Date.now()))/60000));
+    let wakeAt='';
+    if(elapsed>=Number(payload.sleepConfirmMinutes||960)){
+      const hours=Math.floor(elapsed/60),minutes=elapsed%60;
+      if(!confirm(`${hours}時間${minutes}分として記録しますか？\n「キャンセル」で起床時刻を修正できます。`)){
+        wakeAt=String(prompt('起床時刻を YYYY-MM-DDTHH:mm で入力してください',normalizeDateTime(new Date().toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'})))||'');
+        if(!wakeAt)return;
+      }
+    }
+    btn.disabled=true;try{await post({action:'sleep_stop',timer_id:Number(btn.dataset.id||0),wake_at:wakeAt});location.reload();}catch(err){alert(err?.message||String(err));btn.disabled=false;}
+  }));
+  document.querySelectorAll('.family-log-sleep-adjust').forEach(btn=>btn.addEventListener('click',async()=>{
+    const startedAt=String(prompt('開始時刻を YYYY-MM-DDTHH:mm で入力してください',String(btn.dataset.startedAt||''))||'');if(!startedAt)return;
+    btn.disabled=true;try{await post({action:'sleep_adjust',timer_id:Number(btn.dataset.id||0),started_at:startedAt});location.reload();}catch(err){alert(err?.message||String(err));btn.disabled=false;}
+  }));
   document.querySelectorAll('.family-log-timer-stop').forEach(btn=>btn.addEventListener('click',async()=>{
     btn.disabled=true;
     try{
