@@ -1,7 +1,8 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
+import { sendWebPush, webPushConfigured } from './webpush';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -16,7 +17,7 @@ export default {
     try{
       if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
       if(url.pathname==='/__cf/secrets-health') {
-        const names = ['APP_SECRET','LINE_ACCESS_TOKEN','LINE_CHANNEL_ID','LINE_CHANNEL_SECRET','LINE_LIFF_ID','NOTIFY_SECRET'] as const;
+        const names = ['APP_SECRET','LINE_ACCESS_TOKEN','LINE_CHANNEL_ID','LINE_CHANNEL_SECRET','LINE_LIFF_ID','NOTIFY_SECRET','VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT'] as const;
         const secrets = Object.fromEntries(names.map((name) => [name, { present: typeof env[name] === 'string' && env[name].length > 0, length: typeof env[name] === 'string' ? env[name].length : 0 }]));
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
@@ -52,7 +53,9 @@ export default {
       if(url.pathname==='/api/item') return itemApi(request,context);
       if(url.pathname==='/api/messages') return messages(request,context);
       if(url.pathname==='/api/shopping') return shopping(request,context);
+      if(url.pathname==='/api/family-log') return familyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
+      if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return webPushApi(request,context);
       if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return loginPage(env);
       if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return liffConfigDiagnose(env);
       if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return createFamilyPage(context);
@@ -66,6 +69,7 @@ export default {
       if(url.pathname==='/app/calendar.php') return calendar(request,context,url.searchParams.get('month')||asDateOffset(0).slice(0,7));
       if(url.pathname==='/app/messages.php') return messages(request,context);
       if(url.pathname==='/app/shopping.php') return shopping(request,context);
+      if(url.pathname==='/app/family_log.php') return familyLog(request,context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
@@ -107,7 +111,7 @@ export default {
 
 async function dbSchemaHealth(env:Env):Promise<Response>{
   const required:Record<string,string[]>= {
-    members:['id','family_id','active','notification_enabled','deleted_at'],
+    members:['id','family_id','active','notification_enabled','notification_channel','deleted_at'],
     tasks:['id','family_id','title','status','completion_mode','calendar_visible','calendar_color','task_kind','reminder_at'],
     task_assignees:['task_id','member_id'],
     task_completions:['task_id','member_id'],
@@ -125,6 +129,10 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     notification_settings:['family_id','member_id'],
     activity_logs:['family_id','member_id','action','occurred_at'],
     deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
+    web_push_subscriptions:['id','family_id','member_id','endpoint','p256dh','auth','enabled','failure_count','updated_at'],
+    family_log_subjects:['id','family_id','name','subject_kind','active','created_at','updated_at'],
+    family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','deleted_at'],
+    family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
   };
   const tables:any[]=[];
   let migrationRows:any[]=[];
@@ -143,7 +151,7 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
 
 async function dbRuntimeHealth(env:Env):Promise<Response>{
   const checks:[string,string][]=[
-    ['members','SELECT id,name,role,active,notification_enabled,deleted_at FROM members LIMIT 1'],
+    ['members',"SELECT id,name,role,active,notification_enabled,notification_channel,deleted_at FROM members LIMIT 1"],
     ['tasks','SELECT id,family_id,title,status,completion_mode,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at FROM tasks LIMIT 1'],
     ['task_assignees','SELECT task_id,member_id FROM task_assignees LIMIT 1'],
     ['task_completions','SELECT task_id,member_id,completed_at FROM task_completions LIMIT 1'],
@@ -161,6 +169,10 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['recurrence_occurrence_completions','SELECT occurrence_id,member_id,completed_at FROM recurrence_occurrence_completions LIMIT 1'],
     ['activity_logs','SELECT family_id,member_id,action,target_type,target_id,occurred_at FROM activity_logs LIMIT 1'],
     ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
+    ['web_push_subscriptions','SELECT id,family_id,member_id,endpoint,p256dh,auth,enabled,failure_count,last_success_at,last_error,updated_at FROM web_push_subscriptions LIMIT 1'],
+    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
+    ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
+    ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
   ];
   const results:any[]=[];
   for(const [name,sql] of checks){
@@ -212,7 +224,7 @@ async function taskNew(ctx: any,date:string,returnTo:string=''): Promise<Respons
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
     ctx.env.DB.prepare("SELECT DISTINCT category FROM shopping_items WHERE family_id=? AND category IS NOT NULL AND category<>'' ORDER BY category").bind(ctx.member.family_id).all()
   ]);
-  const body=`<div class="card form-card"><h1>📝 タスク・イベント追加</h1><form id="taskForm" autocomplete="off"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label class="checkrow"><input id="isEvent" type="checkbox" name="is_event"><span>イベントとして登録（誕生日・有給など）</span></label><p class="small event-help">イベントはチェックボックスと期限切れ判定の対象外です。日付・通知・場所・カレンダー色などは通常タスクと同じです。</p><label>説明</label><textarea name="description" maxlength="5000"></textarea><label>日付</label><div class="date-option-row task-date-row"><div><span class="small">開始日</span><input id="taskDate" type="date" name="dateOnly" value="${date}"></div><div id="endDateWrap"><span class="small">終了日</span><input id="taskEndDate" type="date" name="endDateOnly" value="${date}"></div><label class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div><label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="task-time-fields" style="display:none"><div class="field-block"><label>開始時刻</label><input type="time" name="startTime"></div><div class="field-block"><label>終了時刻</label><input type="time" name="endTime"></div></div><label>場所</label><input name="location"><label>カレンダー表示</label><label class="checkrow"><input id="taskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><div id="taskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div><div id="taskCompletionWrap"><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select></div><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}</div><label>LINE通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へタスク詳細をLINE通知します。通知設定はON/OFFのみです。</p><div class="sub-card"><button type="button" class="section-button" id="shoppingToggle">＋ このタスクに買い物を追加</button><div id="shoppingBox" style="display:none"><label>カテゴリー</label><select name="shopping_category"><option value="">カテゴリーなし</option>${categories.results.map((c:any)=>`<option value="${String(c.category).replace(/[&<>\"]/g,'')}">${String(c.category).replace(/[&<>\"]/g,'')}</option>`).join('')}<option value="__custom__">自由入力</option></select><input id="shoppingCustom" name="shopping_category_custom" placeholder="新しいカテゴリー" style="display:none"><div id="shoppingRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="addShoppingRow">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="itemsToggle">＋ このタスクに持ち物を追加</button><div id="itemsBox" style="display:none"><div id="itemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div><button>登録する</button></form></div><script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script><script src="/assets/task-new.js?v=12.92-wave73"></script>`;
+  const body=`<div class="card form-card"><h1>📝 タスク・イベント追加</h1><form id="taskForm" autocomplete="off"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label class="checkrow"><input id="isEvent" type="checkbox" name="is_event"><span>イベントとして登録（誕生日・有給など）</span></label><p class="small event-help">イベントはチェックボックスと期限切れ判定の対象外です。日付・通知・場所・カレンダー色などは通常タスクと同じです。</p><label>説明</label><textarea name="description" maxlength="5000"></textarea><label>日付</label><div class="date-option-row task-date-row"><div><span class="small">開始日</span><input id="taskDate" type="date" name="dateOnly" value="${date}"></div><div id="endDateWrap"><span class="small">終了日</span><input id="taskEndDate" type="date" name="endDateOnly" value="${date}"></div><label class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div><label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="task-time-fields" style="display:none"><div class="field-block"><label>開始時刻</label><input type="time" name="startTime"></div><div class="field-block"><label>終了時刻</label><input type="time" name="endTime"></div></div><label>場所</label><input name="location"><label>カレンダー表示</label><label class="checkrow"><input id="taskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><div id="taskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div><div id="taskCompletionWrap"><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select></div><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}</div><label>通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へタスク詳細を設定した通知方法で通知します。通知設定はON/OFFのみです。</p><div class="sub-card"><button type="button" class="section-button" id="shoppingToggle">＋ このタスクに買い物を追加</button><div id="shoppingBox" style="display:none"><label>カテゴリー</label><select name="shopping_category"><option value="">カテゴリーなし</option>${categories.results.map((c:any)=>`<option value="${String(c.category).replace(/[&<>\"]/g,'')}">${String(c.category).replace(/[&<>\"]/g,'')}</option>`).join('')}<option value="__custom__">自由入力</option></select><input id="shoppingCustom" name="shopping_category_custom" placeholder="新しいカテゴリー" style="display:none"><div id="shoppingRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="addShoppingRow">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="itemsToggle">＋ このタスクに持ち物を追加</button><div id="itemsBox" style="display:none"><div id="itemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div><button>登録する</button></form></div><script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script><script src="/assets/task-new.js?v=12.93-wave74"></script>`;
   return new Response(layout('タスク・イベント追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
 }
 async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
@@ -221,7 +233,7 @@ async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
     ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND status<>'completed' ORDER BY coalesce(start_at,due_at),id LIMIT 200").bind(ctx.member.family_id).all()
   ]);
-  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><div id="itemFormError" class="error" style="display:none"></div><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}" ${Number(t.id)===selectedTaskId?'selected':''}>${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select><label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div><button type="submit">登録する</button></form></div><script src="/assets/item-new.js?v=12.92-wave73"></script>`;
+  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><div id="itemFormError" class="error" style="display:none"></div><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label><select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}" ${Number(t.id)===selectedTaskId?'selected':''}>${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select><label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div><button type="submit">登録する</button></form></div><script src="/assets/item-new.js?v=12.93-wave74"></script>`;
   return new Response(layout('持ち物追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
 }
 
@@ -288,7 +300,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   if(start&&end&&end<start)return json({ok:false,error:'終了日時は開始日時以降にしてください。'},400);
   const reminderRaw=String(b.reminderAt??'').trim();
   const reminderAt=reminderRaw && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
-  if(reminderRaw && !reminderAt)return json({ok:false,error:'LINE通知日時が不正です。'},400);
+  if(reminderRaw && !reminderAt)return json({ok:false,error:'通知日時が不正です。'},400);
   const shoppingPre=Array.isArray(b.shopping)?(b.shopping as any[]).slice(0,50):[];
   for(const v of shoppingPre){const u=String(v?.url||'').trim();if(u){try{const parsed=new URL(u);if(!['http:','https:'].includes(parsed.protocol))throw new Error();}catch{return json({ok:false,error:'買い物URLが不正です。'},400);}}}
   const now=nowJst();const completionMode=String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY';
@@ -397,6 +409,7 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   const now=nowJst();
   // Disable pending work for members who opted out/deactivated, or whose family no longer matches the notification.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND (member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0) OR NOT EXISTS (SELECT 1 FROM members m WHERE m.id=notifications.member_id AND m.family_id=notifications.family_id))").bind(now).run();
+  await env.DB.prepare("UPDATE web_push_subscriptions SET enabled=0,last_error='member inactive or deleted',updated_at=? WHERE enabled=1 AND (NOT EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND m.family_id=web_push_subscriptions.family_id) OR EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND (m.active=0 OR m.deleted_at IS NOT NULL)))").bind(now).run();
   // Remove operational reminders whose task is gone/completed. Recurring-template reminders are also cancelled when the series is stopped/deleted.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='task' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id) OR EXISTS (SELECT 1 FROM tasks t WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND t.status='completed') OR EXISTS (SELECT 1 FROM tasks t LEFT JOIN recurrence_rules r ON r.task_id=t.id AND r.family_id=t.family_id WHERE t.id=notifications.target_id AND t.family_id=notifications.family_id AND lower(COALESCE(t.task_kind,'')) IN ('recurring','recurrence_template') AND (r.id IS NULL OR r.active=0 OR r.deleted_at IS NOT NULL)))").bind(now).run();
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND target_type='message' AND (target_id IS NULL OR NOT EXISTS (SELECT 1 FROM messages x WHERE x.id=notifications.target_id AND x.family_id=notifications.family_id))").bind(now).run();
@@ -429,14 +442,29 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
 
 async function processNotifications(env: Env): Promise<void> {
   await cleanupNotificationLifecycle(env);
-  const due = await env.DB.prepare(`SELECT n.id,n.member_id,n.type,n.target_type,n.target_id,n.message,m.line_user_id FROM notifications n JOIN members m ON m.id=n.member_id WHERE n.status IN ('pending','retry') AND n.sent_at IS NULL AND n.notify_at<=? AND m.active=1 AND m.notification_enabled=1 AND m.line_user_id IS NOT NULL ORDER BY n.notify_at,n.id LIMIT 50`).bind(nowJst()).all();
+  const due = await env.DB.prepare(`SELECT n.id,n.member_id,n.type,n.target_type,n.target_id,n.message,m.line_user_id,COALESCE(m.notification_channel,'LINE') notification_channel FROM notifications n JOIN members m ON m.id=n.member_id WHERE n.status IN ('pending','retry') AND n.sent_at IS NULL AND n.notify_at<=? AND m.active=1 AND m.notification_enabled=1 ORDER BY n.notify_at,n.id LIMIT 50`).bind(nowJst()).all();
   for(const n of due.results) {
     try {
-      const { pushLineMessage } = await import('./line');
-      await pushLineMessage(env.LINE_ACCESS_TOKEN,String(n.line_user_id),String(n.message||'Family TODO LINEからのお知らせです。'));
-      await env.DB.prepare('UPDATE notifications SET status=?,sent_at=? WHERE id=?').bind('sent',nowJst(),n.id).run();
+      const channel=String(n.notification_channel||'LINE').toUpperCase();
+      if(channel==='WEB_PUSH'){
+        if(!webPushConfigured(env))throw new Error('Web Push VAPID configuration is missing.');
+        const subs=await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND enabled=1 ORDER BY id DESC LIMIT 10').bind(Number(n.member_id)).all();
+        if(!subs.results.length)throw new Error('Web Push subscription is not registered.');
+        let sent=0;
+        for(const sub of subs.results){
+          const result=await sendWebPush(env,{id:Number(sub.id),endpoint:String(sub.endpoint),p256dh:String(sub.p256dh),auth:String(sub.auth)},{title:'Family TODO LINE',body:String(n.message||'Family TODO LINEからのお知らせです。'),url:n.target_type==='message'?'/app/messages.php':'/app/tasks.php',tag:`familytodo-${String(n.target_type||'notice')}-${String(n.target_id||n.id)}`});
+          if(result.ok){sent++;await env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?,last_error=NULL,failure_count=0,updated_at=? WHERE id=?').bind(nowJst(),nowJst(),Number(sub.id)).run();}
+          else if(result.gone){await env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=?').bind(Number(sub.id)).run();}
+          else{await env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),nowJst(),Number(sub.id)).run();}
+        }
+        if(sent===0)throw new Error('Web Push delivery failed for all subscriptions.');
+      }else{
+        if(!n.line_user_id)throw new Error('LINE user id is not linked.');
+        const { pushLineMessage } = await import('./line');
+        await pushLineMessage(env.LINE_ACCESS_TOKEN,String(n.line_user_id),String(n.message||'Family TODO LINEからのお知らせです。'));
+      }
+      await env.DB.prepare('UPDATE notifications SET status=?,sent_at=?,updated_at=? WHERE id=?').bind('sent',nowJst(),nowJst(),n.id).run();
     } catch(e) {
-      // 送信失敗は即座に捨てず、次回Cronで再試行する。一定回数を超えたものだけerrorへ移行。
       const current=await env.DB.prepare('SELECT COALESCE(attempt_count,0) attempt_count FROM notifications WHERE id=?').bind(n.id).first();
       const attempts=Number(current?.attempt_count||0)+1;
       const status=attempts>=5?'error':'retry';
@@ -445,7 +473,6 @@ async function processNotifications(env: Env): Promise<void> {
     }
   }
 }
-
 
 
 async function logout(request:Request,env:Env):Promise<Response>{

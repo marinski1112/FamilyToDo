@@ -44,7 +44,11 @@
     "recurrence_rules",
     "notification_settings",
     "recurrence_occurrence_completions",
-    "deleted_completion_history"
+    "deleted_completion_history",
+    "web_push_subscriptions",
+    "family_log_subjects",
+    "family_logs",
+    "family_log_timers"
   ],
   "secrets_excluded": true,
   "legacy": {
@@ -54,7 +58,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave73",
+  "cloudflare_wave": "Wave75",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -78,13 +82,17 @@
     "Wave70: shopping-new touch/UI repair, event task kind, recurring single-day top anchor, diagnostic safe details.",
     "Wave71: externalizes Today/Tomorrow and task-detail browser controllers for syntax checking, and continues lifecycle/archive commonization and diagnostics hardening.",
     "Wave72: externalizes LIFF/login, family onboarding, and item-new browser controllers; adds shared recurrence-occurrence archive helpers and continues EVENT semantics/lifecycle hardening.",
-    "Wave73 introduces the unified Task/Event page at /app/tasks.php, merges Today/Tomorrow navigation into one date-based view, changes the primary bottom/home navigation to Task/Event, preserves old today/tomorrow URLs as compatibility routes, and keeps EVENT semantics task-backed."
+    "Wave73 introduces the unified Task/Event page at /app/tasks.php, merges Today/Tomorrow navigation into one date-based view, changes the primary bottom/home navigation to Task/Event, preserves old today/tomorrow URLs as compatibility routes, and keeps EVENT semantics task-backed.",
+    "Wave74 adds the PWA manifest/service-worker foundation, per-member LINE/Web Push channel selection, Web Push subscription storage and scheduled delivery, plus VAPID key generation/setup tooling. Migration 0016 adds members.notification_channel and web_push_subscriptions.",
+    "Wave75 adds the Family Log MVP as the sixth primary page with subject profiles, quick chronological logs, sleep/breastfeeding timers, optional task/recurrence linkage, and migration 0017; LIFF/rich-menu device validation can begin after deployment."
   ],
-  "version": "12.92.0-wave73",
+  "version": "12.94.0-wave75",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
   "wave67_note": "Per-date calendar lane reservation, hidden recurring occurrences retained in day detail, excluded occurrence restore UI, split-series lineage labels, recurring.js extraction, and lifecycle audit cleanup.",
   "wave69_note": "Compact shopping URL popover, no-focus product-row addition, shopping/notification JS extraction, and read-only lifecycle diagnostics UI.",
-  "wave73_note": "Unified Task/Event daily page and primary navigation; legacy today/tomorrow URLs remain compatible while new create/view/item flows return to /app/tasks.php."
+  "wave73_note": "Unified Task/Event daily page and primary navigation; legacy today/tomorrow URLs remain compatible while new create/view/item flows return to /app/tasks.php.",
+  "wave74_note": "PWA + Web Push foundation with standards-based service worker subscriptions, VAPID delivery, LINE/Web Push channel selection, and migration 0016.",
+  "wave75_note": "Family Log MVP with subjects, timeline, quick log types, sleep/breastfeeding timers, task/recurrence linkage, sixth navigation slot, and migration 0017."
 }

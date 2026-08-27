@@ -131,3 +131,17 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Added unified `/app/tasks.php` Task/Event daily view and changed primary navigation from separate Today/Tomorrow to Task/Event.
 - Legacy `/today.php` and `/tomorrow.php` remain compatibility routes.
 - No new D1 migration; latest remains 0015.
+
+
+## Wave74
+- Added migration `0016_wave74_web_push.sql`.
+- Adds `members.notification_channel` and `web_push_subscriptions`.
+- Adds PWA manifest/service worker and Web Push subscription/test/scheduled-delivery foundation.
+- Existing members default to LINE delivery until they explicitly enable Web Push.
+
+
+## Wave75
+- Added Family Log MVP as the sixth primary page.
+- Added migration `0017_wave75_family_log.sql` for subjects, chronological logs, and timers.
+- Family logs can optionally link to physical tasks/events or recurring occurrence rows.
+- LIFF/rich-menu device validation is ready after deployment and migrations.

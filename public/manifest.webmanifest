@@ -1,0 +1,50 @@
+{
+  "id": "/",
+  "name": "Family TODO LINE",
+  "short_name": "Family TODO",
+  "description": "家族のタスク・イベント、買い物、持ち物、家族ログ、伝言を共有します。",
+  "lang": "ja",
+  "start_url": "/app/tasks.php",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fa",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/assets/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "タスク・イベント",
+      "short_name": "タスク",
+      "url": "/app/tasks.php",
+      "icons": [
+        {
+          "src": "/assets/pwa-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "家族ログ",
+      "short_name": "家族ログ",
+      "url": "/app/family_log.php",
+      "icons": [
+        {
+          "src": "/assets/pwa-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

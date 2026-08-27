@@ -1,0 +1,10 @@
+const pair = await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'}, true, ['sign','verify']);
+const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+const decode = (s) => Buffer.from(String(s).replace(/-/g,'+').replace(/_/g,'/') + '='.repeat((4-String(s).length%4)%4), 'base64');
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
+const x=decode(jwk.x), y=decode(jwk.y);
+const publicKey=b64url(Buffer.concat([Buffer.from([4]),x,y]));
+console.log('VAPID_PUBLIC_KEY='+publicKey);
+console.log('VAPID_PRIVATE_KEY='+jwk.d);
+console.log('VAPID_SUBJECT=mailto:replace-with-your-email@example.com');
+console.log('\nStore all three with `npx wrangler secret put <NAME>`. The public key is not secret, but storing all three the same way keeps deployment simple.');
