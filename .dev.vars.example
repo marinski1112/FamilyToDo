@@ -1,7 +1,0 @@
-# Copy to .dev.vars for local development. Never commit real values.
-LINE_CHANNEL_SECRET="replace-me"
-LINE_CHANNEL_ID="replace-me"
-LINE_LIFF_ID="replace-me"
-LINE_ACCESS_TOKEN="replace-me"
-APP_SECRET="replace-with-a-long-random-secret"
-NOTIFY_SECRET="replace-me"
