@@ -664,3 +664,18 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 @media(max-width:600px){
   .calendar-week-days>.calendar-cell .calendar-items{left:3px!important;right:3px!important}
 }
+
+
+/* Wave70: every single-day entry, including recurring occurrences, uses the same top anchor. */
+.calendar-week-days>.calendar-cell .calendar-items{
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:flex-start!important;
+  align-content:flex-start!important;
+  height:auto!important;
+  min-height:0!important;
+  bottom:auto!important;
+}
+.calendar-week-days>.calendar-cell[data-band-rows="0"] .calendar-items{top:var(--calendar-date-zone)!important}
+.calendar-week-days>.calendar-cell .calendar-items>.calendar-item:first-child{margin-top:0!important}
+.calendar-item.recurring-single{align-self:stretch!important;margin-top:0!important}

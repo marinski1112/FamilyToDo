@@ -108,3 +108,20 @@ The original XREA/PHP implementation remains the reference implementation and is
 ## Wave69
 - No new D1 migration.
 - Shopping URL popover/no-focus row addition, shopping/notification static JS extraction, and read-only lifecycle diagnostics page.
+
+## Wave70
+- No new D1 migration.
+- Added task-kind EVENT semantics without restoring legacy events tables.
+- Added shared lifecycle archive helpers and read-only diagnostic detail samples.
+- Externalized task create/edit browser JavaScript.
+
+
+## Wave71
+- No D1 migration.
+- Externalized Today/Tomorrow, task-detail, and shopping-list browser controllers; expanded delete/archive helper usage; aligned Event home counters.
+
+## Wave72
+- No new D1 migration.
+- LIFF/login, family onboarding and item-create browser controllers moved to static JS assets.
+- Shared recurrence occurrence archive/delete lifecycle helpers added and adopted by destructive paths.
+- Future sequence recorded: unified Tasks page -> six-menu switch -> Family Log MVP -> PWA/Web Push -> Google Tasks/Gemini ingress.

@@ -456,3 +456,108 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 .rec-excluded-row>div{min-width:0}
 .rec-excluded-row form{flex:0 0 auto}
 @media(max-width:520px){.rec-excluded-row{align-items:flex-start}.rec-lineage-badge{font-size:10px}}
+
+/* Wave69 - compact shopping URL popover and non-jumping batch row creation */
+.batch-shopping-card .batch-product{
+  position:relative;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 64px 58px 34px!important;
+  gap:7px!important;
+  align-items:center;
+  overflow:visible;
+}
+.batch-shopping-card .batch-product>.product-url-toggle{
+  min-height:38px;
+  padding:7px 6px;
+  border:1px solid #dbe2ea;
+  border-radius:10px;
+  background:#fff;
+  color:#475569;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.batch-shopping-card .batch-product>.product-url-toggle[aria-expanded="true"]{
+  background:#eef2ff;
+  border-color:#c7d2fe;
+  color:#4338ca;
+}
+.batch-shopping-card .batch-product>.product-row-spacer{display:block;width:34px;height:1px}
+.batch-shopping-card .batch-product>.remove-product{
+  width:34px;
+  height:34px;
+  min-height:34px;
+  padding:0;
+  border-radius:50%;
+}
+.batch-shopping-card .product-url-popover{
+  position:absolute;
+  z-index:40;
+  top:calc(100% + 5px);
+  right:34px;
+  width:min(320px,calc(100vw - 56px));
+  padding:11px;
+  background:#fff;
+  border:1px solid #dbe2ea;
+  border-radius:13px;
+  box-shadow:0 12px 30px rgba(15,23,42,.18);
+}
+.batch-shopping-card .product-url-popover[hidden]{display:none!important}
+.batch-shopping-card .product-url-popover-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.batch-shopping-card .product-url-popover-head strong{font-size:13px}
+.batch-shopping-card .product-url-popover .product-url-close{
+  width:30px;
+  height:30px;
+  min-height:30px;
+  padding:0;
+  border-radius:50%;
+  background:#f1f5f9;
+  color:#475569;
+}
+.batch-shopping-card .product-url-popover input[type="url"]{width:100%!important;margin:0}
+.batch-shopping-card .product-url-popover .small{margin:6px 0 0}
+@media(max-width:520px){
+  .batch-shopping-card .batch-product{grid-template-columns:minmax(0,1fr) 56px 54px 32px!important;gap:6px!important}
+  .batch-shopping-card .batch-product>.product-url-toggle{font-size:11px;padding:7px 4px}
+  .batch-shopping-card .product-url-popover{right:0;width:min(300px,calc(100vw - 44px))}
+}
+
+/* Wave69 - admin lifecycle diagnostics */
+.diagnostic-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf0f4}
+.diagnostic-row:last-child{border-bottom:0}
+.diagnostic-count{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:28px;padding:0 8px;border-radius:999px;font-weight:800;font-variant-numeric:tabular-nums}
+.diagnostic-row.is-ok .diagnostic-count{background:#ecfdf5;color:#047857}
+.diagnostic-row.has-issue .diagnostic-count{background:#fff1f2;color:#be123c}
+.diagnostic-summary-ok,.diagnostic-summary-warn{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}
+.diagnostic-summary-ok{background:#ecfdf5;color:#047857}
+.diagnostic-summary-warn{background:#fff1f2;color:#be123c}
+.batch-shopping-card .batch-product>.product-url-toggle{grid-column:3;grid-row:1}
+.batch-shopping-card .batch-product>.remove-product{grid-column:4!important;grid-row:1!important}
+.batch-shopping-card .batch-product>.product-row-spacer{grid-column:4;grid-row:1}
+
+
+/* Wave70: compact shopping URL control, reliable touch target, and event badges. */
+.batch-shopping-card .batch-product{
+  grid-template-columns:minmax(0,1fr) 58px 42px 32px!important;
+  gap:6px!important;
+}
+.batch-shopping-card .batch-product>.product-url-toggle{
+  grid-column:3!important;grid-row:1!important;
+  width:42px!important;min-width:42px!important;max-width:42px!important;
+  height:40px!important;min-height:40px!important;padding:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  font-size:18px!important;line-height:1!important;border-radius:10px!important;
+  overflow:hidden!important;box-sizing:border-box!important;
+  touch-action:manipulation;
+}
+.batch-shopping-card .batch-product>.remove-product,
+.batch-shopping-card .batch-product>.product-row-spacer{grid-column:4!important;grid-row:1!important}
+.batch-shopping-card .batch-product>.remove-product{width:32px!important;min-width:32px!important;height:32px!important}
+.batch-shopping-card .product-url-popover{left:0!important;right:0!important;width:auto!important;max-width:100%!important;box-sizing:border-box!important}
+.event-badge{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:800}
+.event-task-row .event-main{display:flex;align-items:center;min-height:28px}.event-task-row .task-main a{text-decoration:none}
+.diagnostic-detail{margin-top:7px}.diagnostic-detail summary{cursor:pointer;font-size:12px;color:#475569;font-weight:700}.diagnostic-sample{margin:5px 0;padding:6px 8px;border-radius:8px;background:#f8fafc;overflow:auto}.diagnostic-sample code{font-size:10px;white-space:pre-wrap;word-break:break-all}
+@media(max-width:420px){
+  .batch-shopping-card .batch-product{grid-template-columns:minmax(0,1fr) 54px 40px 30px!important;gap:5px!important}
+  .batch-shopping-card .batch-product>.product-url-toggle{width:40px!important;min-width:40px!important;max-width:40px!important;height:40px!important}
+}
