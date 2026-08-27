@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.114.0-wave95",
+  "source": "FamilyTODO Cloudflare v12.115.0-wave96",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -51,7 +51,10 @@
     "family_log_timers",
     "family_quick_chores",
     "task_family_log_templates",
-    "family_log_import_batches"
+    "family_log_import_batches",
+    "google_home_authorization_codes",
+    "google_home_tokens",
+    "external_command_receipts"
   ],
   "secrets_excluded": true,
   "legacy": {
@@ -61,7 +64,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave95",
+  "cloudflare_wave": "Wave96",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -96,7 +99,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.114.0-wave95",
+  "version": "12.115.0-wave96",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -123,5 +126,6 @@
   "wave92_note": "Quick-record-first Family Log, lazy collapsed dashboard, family-level adult visibility, SQL-side adult exclusion, all-view recorder filtering, and migration 0029.",
   "wave94_note": "Explicit per-subject all-view shortcuts, chore-first overview, compact controls, and persistent CHILD one-tap SLEEP timers via migration 0030.",
   "wave95_note": "BABY/CHILD dedicated sleep, weekday-aware three-column quick chores, direct management editing, compact safe management header, and future Google integration boundary via migration 0031.",
-  "wave93_note": "Family Log UX reduction: one-action daily header, compact quick recording/date/history, collapsed timer and dashboard, and centralized Family Log management without schema changes."
+  "wave93_note": "Family Log UX reduction: one-action daily header, compact quick recording/date/history, collapsed timer and dashboard, and centralized Family Log management without schema changes.",
+  "wave96_note": "Google Home Cloud-to-cloud Scene execution with hashed OAuth codes/tokens, family-bound SYNC/EXECUTE, retry receipts, DISCONNECT revocation, settings, diagnostics, and migration 0032."
 }

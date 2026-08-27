@@ -4,6 +4,7 @@ import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
+import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -26,6 +27,9 @@ export default {
       if(url.pathname==='/__cf/db-schema-health') return dbSchemaHealth(env);
       if(url.pathname==='/__cf/db-runtime-health') return dbRuntimeHealth(env);
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
+      if(url.pathname==='/__cf/google-home-health') return googleHomeHealth(env);
+      if(url.pathname==='/oauth/google/token') return googleToken(request,env);
+      if(url.pathname==='/api/google-home/fulfillment') return googleFulfillment(request,env);
       if(url.pathname==='/liff'||url.pathname==='/liff/') {
         const liffContext=await makeContext(request,env);
         // LIFF起動時に既存のWorkerセッションが有効なら、再度IDトークン検証を要求しない。
@@ -44,6 +48,7 @@ export default {
         return recurring(request,context);
       }
       const context=await makeContext(request,env);
+      if(url.pathname==='/oauth/google/authorize') return googleAuthorize(request,context);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return liffLogin(request,context);
       if(url.pathname==='/api/family/create') return createFamily(request,context);
       if(url.pathname==='/api/family/join') return joinFamily(request,context);
@@ -75,6 +80,7 @@ export default {
       if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return familyLog(request,context);
       if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
+      if(url.pathname==='/app/settings_google_home.php') return googleHomeSettings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
       if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return webhook(request,env);
@@ -143,6 +149,9 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     task_family_log_templates:['id','family_id','task_id','subject_id','log_type','active','created_by','created_at','updated_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
     family_quick_chores:['id','family_id','name','icon','sort_order','active','weekday_mask','created_by','created_at','updated_at'],
+    google_home_authorization_codes:['id','code_hash','family_id','member_id','client_id','redirect_uri','expires_at','used_at','created_at'],
+    google_home_tokens:['id','family_id','member_id','access_token_hash','refresh_token_hash','access_expires_at','revoked_at','created_at','updated_at'],
+    external_command_receipts:['id','provider','family_id','member_id','request_id','command_key','status','error_code','created_at','updated_at'],
   };
   const tables:any[]=[];
   let migrationRows:any[]=[];
@@ -188,6 +197,9 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['task_family_log_templates','SELECT id,family_id,task_id,subject_id,log_type,detail_code,amount,unit,duration_minutes,value_text,note,active,created_by,created_at,updated_at FROM task_family_log_templates LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
     ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,weekday_mask,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
+    ['google_home_authorization_codes','SELECT id,code_hash,family_id,member_id,client_id,redirect_uri,expires_at,used_at,created_at FROM google_home_authorization_codes LIMIT 1'],
+    ['google_home_tokens','SELECT id,family_id,member_id,access_token_hash,refresh_token_hash,access_expires_at,revoked_at,created_at,updated_at FROM google_home_tokens LIMIT 1'],
+    ['external_command_receipts','SELECT id,provider,family_id,member_id,request_id,command_key,status,error_code,created_at,updated_at FROM external_command_receipts LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
     ['family_log_sleep_timer_integrity',"SELECT (SELECT COUNT(*) FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id WHERE x.log_type='SLEEP' AND x.status='running' AND COALESCE(s.subject_kind,'') NOT IN ('BABY','CHILD')) + (SELECT COUNT(*) FROM (SELECT family_id,subject_id FROM family_log_timers WHERE log_type='SLEEP' AND status='running' GROUP BY family_id,subject_id HAVING COUNT(*)>1)) + (SELECT COUNT(*) FROM family_log_timers WHERE log_type='SLEEP' AND status='running' AND (started_at_ms IS NULL OR started_at_ms<=0 OR started_at_ms>unixepoch('now')*1000 OR started_at_ms<(unixepoch('now')-172800)*1000)) issues"],
   ];

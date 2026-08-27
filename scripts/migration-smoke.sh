@@ -23,3 +23,5 @@ test "$(sqlite3 "$db" "SELECT COUNT(*) FROM tasks WHERE visibility_scope='FAMILY
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='family_log_settings'")" = 1
 test "$(sqlite3 "$db" "SELECT dflt_value FROM pragma_table_info('family_log_settings') WHERE name='show_adult_logs'")" = 1
 echo 'wave92 settings migration smoke: ok'
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('google_home_authorization_codes','google_home_tokens','external_command_receipts')")" = 3
+echo 'wave96 google home migration smoke: ok'

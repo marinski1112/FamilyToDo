@@ -129,7 +129,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.114-wave95">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.115-wave96">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
 
@@ -1303,7 +1303,7 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
   const members=await ctx.env.DB.prepare('SELECT id,name,role,active,notification_enabled FROM members WHERE family_id=? AND deleted_at IS NULL ORDER BY id').bind(m.family_id).all<Row>();
   const ns=await ctx.env.DB.prepare('SELECT * FROM notification_settings WHERE family_id=? AND member_id=?').bind(m.family_id,m.id).first<Row>();
   const recurring=await ctx.env.DB.prepare('SELECT id,name AS title,recurrence_type,interval_value,weekday,monthday,start_date,end_date,active FROM recurrence_rules WHERE family_id=? ORDER BY active DESC,id DESC').bind(m.family_id).all<Row>();
-  const body=`<div class="card"><h1>⚙️ 管理</h1><h2>プロフィール</h2><form id="profile"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input name="name" value="${esc(m.name)}" required><button>保存</button></form></div><div class="card settings-links"><div class="section-link"><div><h2>👨‍👩‍👧 家族メンバー</h2><p class="small">家族メンバーと招待を管理します。</p></div><a class="btn" href="/app/settings_members.php">開く</a></div><div class="section-link"><div><h2>🐣 家族ログ管理</h2><p class="small">記録対象・表示項目・インポートを管理します。</p></div><a class="btn gray" href="/app/settings_family_log.php">開く</a></div><div class="section-link"><div><h2>📋 投稿管理</h2><p class="small">タスク・持ち物・買い物・伝言を確認します。</p></div><a class="btn gray" href="/app/settings_content.php">開く</a></div><div class="section-link"><div><h2>🔔 通知設定</h2><p class="small">LINE / Web Pushの通知方法と対象メンバーを設定します。</p></div><a class="btn gray" href="/app/settings_notifications.php">開く</a></div><div class="section-link"><div><h2>🩺 データ診断</h2><p class="small">通知・定期タスク・削除履歴・紐付けの整合性を確認します。</p></div><a class="btn gray" href="/app/settings_diagnostics.php">開く</a></div><div class="section-link"><div><h2>🔁 定期タスク</h2><p class="small">毎日・毎週・毎月などの繰り返しを設定します。</p></div><a class="btn gray" href="/app/recurring.php">開く</a></div><div class="section-link"><div><h2>📊 家族の活動ログ</h2><p class="small">タスク完了や家族ログの記録・編集を、誰がいつ行ったか確認します。</p></div><a class="btn gray" href="/app/logs.php">開く</a></div></div><script type="application/json" id="settingsPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings.js?v=12.97-wave78"></script>`;
+  const body=`<div class="card"><h1>⚙️ 管理</h1><h2>プロフィール</h2><form id="profile"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input name="name" value="${esc(m.name)}" required><button>保存</button></form></div><div class="card settings-links"><div class="section-link"><div><h2>🔗 外部連携</h2><p class="small">Google Homeとの音声操作連携を管理します。</p></div><a class="btn gray" href="/app/settings_google_home.php">開く</a></div><div class="section-link"><div><h2>👨‍👩‍👧 家族メンバー</h2><p class="small">家族メンバーと招待を管理します。</p></div><a class="btn" href="/app/settings_members.php">開く</a></div><div class="section-link"><div><h2>🐣 家族ログ管理</h2><p class="small">記録対象・表示項目・インポートを管理します。</p></div><a class="btn gray" href="/app/settings_family_log.php">開く</a></div><div class="section-link"><div><h2>📋 投稿管理</h2><p class="small">タスク・持ち物・買い物・伝言を確認します。</p></div><a class="btn gray" href="/app/settings_content.php">開く</a></div><div class="section-link"><div><h2>🔔 通知設定</h2><p class="small">LINE / Web Pushの通知方法と対象メンバーを設定します。</p></div><a class="btn gray" href="/app/settings_notifications.php">開く</a></div><div class="section-link"><div><h2>🩺 データ診断</h2><p class="small">通知・定期タスク・削除履歴・紐付けの整合性を確認します。</p></div><a class="btn gray" href="/app/settings_diagnostics.php">開く</a></div><div class="section-link"><div><h2>🔁 定期タスク</h2><p class="small">毎日・毎週・毎月などの繰り返しを設定します。</p></div><a class="btn gray" href="/app/recurring.php">開く</a></div><div class="section-link"><div><h2>📊 家族の活動ログ</h2><p class="small">タスク完了や家族ログの記録・編集を、誰がいつ行ったか確認します。</p></div><a class="btn gray" href="/app/logs.php">開く</a></div></div><script type="application/json" id="settingsPayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/settings.js?v=12.97-wave78"></script>`;
   return html(layout('管理',body,'/app/settings.php'));
 }
 
@@ -1505,8 +1505,29 @@ function familyLogDateTime(value:unknown):string{
 function familyLogDefaultAutoComplete(kind:unknown):number{
   return ['BABY','CHILD','PET'].includes(familyLogSubjectKind(kind))?1:0;
 }
-function supportsDedicatedSleep(kind:unknown):boolean{
+export function supportsDedicatedSleep(kind:unknown):boolean{
   return ['BABY','CHILD'].includes(familyLogSubjectKind(kind));
+}
+
+function externalActionContext(env:Env,member:CurrentMember):AppContext{return {env,member,request:new Request('https://internal.invalid/'),session:{iat:0}};}
+export async function recordQuickChoreDomain(env:Env,member:CurrentMember,id:number):Promise<{ok:boolean;id?:number}>{
+  const chore=await env.DB.prepare('SELECT id,name FROM family_quick_chores WHERE id=? AND family_id=? AND active=1').bind(id,member.family_id).first<Row>();
+  if(!chore)return {ok:false};const now=nowJst();
+  const r=await env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at,quick_chore_id) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL,?)").bind(member.family_id,now,null,null,null,null,String(chore.name),null,null,null,member.id,now,now,id).run();
+  const logId=Number(r.meta.last_row_id);await logActivity(externalActionContext(env,member),'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:now,value_text:String(chore.name),quick_chore_id:id});return {ok:true,id:logId};
+}
+export async function startDedicatedSleepDomain(env:Env,member:CurrentMember,subjectId:number):Promise<{ok:boolean;id?:number;already?:boolean}>{
+  const child=await env.DB.prepare("SELECT id,subject_kind FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();if(!child||!supportsDedicatedSleep(child.subject_kind))return {ok:false};
+  const existing=await env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(member.family_id,subjectId).first<Row>();if(existing)return {ok:true,id:Number(existing.id),already:true};
+  const now=nowJst(),startedMs=Date.now();const r=await env.DB.prepare("INSERT INTO family_log_timers(family_id,subject_id,log_type,started_at,started_at_ms,status,note,created_by,created_at,updated_at,timer_label) SELECT ?,?,'SLEEP',?,?,'running',NULL,?,?,?,'睡眠' WHERE NOT EXISTS(SELECT 1 FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running')").bind(member.family_id,subjectId,now,startedMs,member.id,now,now,member.family_id,subjectId).run();
+  let id=Number(r.meta.last_row_id||0);if(!id){const raced=await env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(member.family_id,subjectId).first<Row>();return {ok:true,id:Number(raced?.id||0),already:true};}await logActivity(externalActionContext(env,member),'STARTED','family_log_timer',id,{log_type:'SLEEP',subject_id:subjectId});return {ok:true,id};
+}
+export async function stopDedicatedSleepDomain(env:Env,member:CurrentMember,subjectId:number,timerId?:number,wakeAt=nowJst()):Promise<{ok:boolean;log_id?:number;duration_minutes?:number;already?:boolean}>{
+  const timer=await env.DB.prepare(`SELECT x.*,s.name subject_name FROM family_log_timers x JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id AND s.active=1 AND s.subject_kind IN ('BABY','CHILD') WHERE x.family_id=? AND x.subject_id=? AND x.log_type='SLEEP' AND x.status='running' ${timerId?'AND x.id=?':''} ORDER BY x.id DESC LIMIT 1`).bind(...(timerId?[member.family_id,subjectId,timerId]:[member.family_id,subjectId])).first<Row>();
+  if(!timer){const subject=await env.DB.prepare("SELECT id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();return {ok:Boolean(subject),already:Boolean(subject)};}
+  const wakeMs=familyLogJstMs(wakeAt),startedMs=Number(timer.started_at_ms);if(!Number.isFinite(startedMs)||wakeMs<startedMs||wakeMs>Date.now()+60000)throw new BadRequest('起床時刻が不正です。');const duration=Math.round((wakeMs-startedMs)/60000);if(duration>SLEEP_TIMER_MAX_ADJUST_MINUTES)throw new BadRequest('睡眠時間は48時間以内で指定してください。');const now=nowJst();
+  const stopped=await env.DB.prepare("UPDATE family_log_timers SET status='stopped',updated_at=? WHERE id=? AND family_id=? AND log_type='SLEEP' AND status='running'").bind(now,timer.id,member.family_id).run();if(!stopped.meta.changes)return {ok:true,already:true};
+  const r=await env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,duration_minutes,created_by,created_at,updated_at) VALUES(?,?,'SLEEP',?,?,?,?,?)").bind(member.family_id,timer.subject_id,String(timer.started_at),duration,member.id,now,now).run();const logId=Number(r.meta.last_row_id);await logActivity(externalActionContext(env,member),'CREATED','family_log',logId,{log_type:'SLEEP',subject_id:Number(timer.subject_id),subject_name:String(timer.subject_name||''),occurred_at:String(timer.started_at),duration_minutes:duration,source:'sleep_timer'});return {ok:true,log_id:logId,duration_minutes:duration};
 }
 function familyQuickChoreWeekdayMask(value:unknown):number{
   const mask=Number(value??127);
@@ -1661,13 +1682,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       await logActivity(ctx,'DISABLED','family_quick_chore',id,{name:String(row.name||'')});return json({ok:true});
     }
     if(action==='quick_chore_record'){
-      const id=Number(b.id||0);const chore=await ctx.env.DB.prepare('SELECT id,name,icon FROM family_quick_chores WHERE id=? AND family_id=? AND active=1').bind(id,m.family_id).first<Row>();
-      if(!chore)return json({ok:false,error:'家事項目が見つかりません。'},404);
-      const occurredAt=familyLogDateTime(b.occurred_at||nowJst());const now=nowJst();
-      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at,quick_chore_id) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL,?)")
-        .bind(m.family_id,occurredAt,null,null,null,null,String(chore.name),null,null,null,m.id,now,now,id).run();
-      const logId=Number(r.meta.last_row_id);await logActivity(ctx,'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:occurredAt,value_text:String(chore.name),quick_chore_id:id});
-      return json({ok:true,id:logId});
+      const result=await recordQuickChoreDomain(ctx.env,m,Number(b.id||0));return result.ok?json(result):json({ok:false,error:'家事項目が見つかりません。'},404);
     }
     if(action==='subject_create'||action==='subject_update'){
       const id=action==='subject_update'?Number(b.id||0):0;
@@ -1786,16 +1801,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       await logActivity(ctx,'STARTED','family_log_timer',Number(r.meta.last_row_id),{log_type:type,timer_label:timerLabel});return json({ok:true,id:Number(r.meta.last_row_id)});
     }
     if(action==='sleep_start'){
-      const subjectId=Number(b.subject_id||0);if(!subjectId)throw new BadRequest('睡眠対象を選択してください。');
-      const child=await ctx.env.DB.prepare("SELECT id,name,subject_kind FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,m.family_id).first<Row>();
-      if(!child||!supportsDedicatedSleep(child.subject_kind))throw new BadRequest('赤ちゃん・子どもの対象だけ睡眠タイマーを開始できます。');
-      const existing=await ctx.env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(m.family_id,subjectId).first<Row>();
-      if(existing)return json({ok:true,id:Number(existing.id),already:true});
-      const now=nowJst(),startedMs=Date.now();
-      const r=await ctx.env.DB.prepare("INSERT INTO family_log_timers(family_id,subject_id,log_type,started_at,started_at_ms,status,note,created_by,created_at,updated_at,timer_label) SELECT ?,?,'SLEEP',?,?,'running',NULL,?,?,?,'睡眠' WHERE NOT EXISTS(SELECT 1 FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running')")
-        .bind(m.family_id,subjectId,now,startedMs,m.id,now,now,m.family_id,subjectId).run();
-      const id=Number(r.meta.last_row_id||0);if(!id){const raced=await ctx.env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(m.family_id,subjectId).first<Row>();return json({ok:true,id:Number(raced?.id||0),already:true});}
-      await logActivity(ctx,'STARTED','family_log_timer',id,{log_type:'SLEEP',subject_id:subjectId});return json({ok:true,id});
+      const subjectId=Number(b.subject_id||0);if(!subjectId)throw new BadRequest('睡眠対象を選択してください。');const result=await startDedicatedSleepDomain(ctx.env,m,subjectId);if(!result.ok)throw new BadRequest('赤ちゃん・子どもの対象だけ睡眠タイマーを開始できます。');return json(result);
     }
     if(action==='sleep_adjust'){
       const timerId=Number(b.timer_id||0),startedAt=familyLogDateTime(b.started_at),startedMs=familyLogJstMs(startedAt),nowMs=Date.now();
@@ -1809,13 +1815,7 @@ export async function familyLog(request:Request,ctx:AppContext):Promise<Response
       const timerId=Number(b.timer_id||0),wakeAt=familyLogDateTime(b.wake_at||nowJst()),wakeMs=familyLogJstMs(wakeAt);
       const timer=await ctx.env.DB.prepare("SELECT x.*,s.name subject_name,s.subject_kind FROM family_log_timers x JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id AND s.active=1 AND s.subject_kind IN ('BABY','CHILD') WHERE x.id=? AND x.family_id=? AND x.log_type='SLEEP' AND x.status='running' LIMIT 1").bind(timerId,m.family_id).first<Row>();
       if(!timer)return json({ok:false,error:'実行中の子ども睡眠タイマーが見つかりません。'},404);
-      const startedMs=Number(timer.started_at_ms);if(!Number.isFinite(startedMs)||wakeMs<startedMs||wakeMs>Date.now()+60000)throw new BadRequest('起床時刻が不正です。');
-      const duration=Math.round((wakeMs-startedMs)/60000);if(duration>SLEEP_TIMER_MAX_ADJUST_MINUTES)throw new BadRequest('睡眠時間は48時間以内で指定してください。');
-      const now=nowJst();
-      const stopped=await ctx.env.DB.prepare("UPDATE family_log_timers SET status='stopped',updated_at=? WHERE id=? AND family_id=? AND log_type='SLEEP' AND status='running'").bind(now,timerId,m.family_id).run();
-      if(!stopped.meta.changes)return json({ok:false,error:'睡眠タイマーはすでに停止しています。'},409);
-      const r=await ctx.env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,duration_minutes,created_by,created_at,updated_at) VALUES(?,?,'SLEEP',?,?,?,?,?)").bind(m.family_id,timer.subject_id,String(timer.started_at),duration,m.id,now,now).run();
-      const logId=Number(r.meta.last_row_id);await logActivity(ctx,'CREATED','family_log',logId,{log_type:'SLEEP',subject_id:Number(timer.subject_id),subject_name:String(timer.subject_name||''),occurred_at:String(timer.started_at),duration_minutes:duration,source:'sleep_timer'});return json({ok:true,log_id:logId,duration_minutes:duration});
+      void wakeMs;return json(await stopDedicatedSleepDomain(ctx.env,m,Number(timer.subject_id),timerId,wakeAt));
     }
     if(action==='timer_stop'){
       const timerId=Number(b.timer_id||0);if(!timerId)throw new BadRequest('タイマーが不正です。');
