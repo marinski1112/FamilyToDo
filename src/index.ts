@@ -72,7 +72,7 @@ export default {
       if(url.pathname==='/app/calendar.php') return calendar(request,context,url.searchParams.get('month')||asDateOffset(0).slice(0,7));
       if(url.pathname==='/app/messages.php') return messages(request,context);
       if(url.pathname==='/app/shopping.php') return shopping(request,context);
-      if(url.pathname==='/app/family_log.php') return familyLog(request,context);
+      if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return familyLog(request,context);
       if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
