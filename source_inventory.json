@@ -52,9 +52,9 @@
       "events",
       "event_members"
     ],
-    "event_note": "イベント機能はアプリケーションおよび本番D1から廃止。Wave52 migration 0015で残存event_id列/FKも除去。"
+    "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave72",
+  "cloudflare_wave": "Wave73",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -77,12 +77,14 @@
     "Wave69: shopping batch add uses a compact URL popover and no-focus row addition; notification settings and shopping-new browser controllers are static JS; admin lifecycle diagnostics page added.",
     "Wave70: shopping-new touch/UI repair, event task kind, recurring single-day top anchor, diagnostic safe details.",
     "Wave71: externalizes Today/Tomorrow and task-detail browser controllers for syntax checking, and continues lifecycle/archive commonization and diagnostics hardening.",
-    "Wave72: externalizes LIFF/login, family onboarding, and item-new browser controllers; adds shared recurrence-occurrence archive helpers and continues EVENT semantics/lifecycle hardening."
+    "Wave72: externalizes LIFF/login, family onboarding, and item-new browser controllers; adds shared recurrence-occurrence archive helpers and continues EVENT semantics/lifecycle hardening.",
+    "Wave73 introduces the unified Task/Event page at /app/tasks.php, merges Today/Tomorrow navigation into one date-based view, changes the primary bottom/home navigation to Task/Event, preserves old today/tomorrow URLs as compatibility routes, and keeps EVENT semantics task-backed."
   ],
-  "version": "12.90.0-wave71",
+  "version": "12.92.0-wave73",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
   "wave67_note": "Per-date calendar lane reservation, hidden recurring occurrences retained in day detail, excluded occurrence restore UI, split-series lineage labels, recurring.js extraction, and lifecycle audit cleanup.",
-  "wave69_note": "Compact shopping URL popover, no-focus product-row addition, shopping/notification JS extraction, and read-only lifecycle diagnostics UI."
+  "wave69_note": "Compact shopping URL popover, no-focus product-row addition, shopping/notification JS extraction, and read-only lifecycle diagnostics UI.",
+  "wave73_note": "Unified Task/Event daily page and primary navigation; legacy today/tomorrow URLs remain compatible while new create/view/item flows return to /app/tasks.php."
 }

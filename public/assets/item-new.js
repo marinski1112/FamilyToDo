@@ -28,7 +28,7 @@
       const data=await response.json().catch(()=>null);
       if(!response.ok||!data?.ok) throw new Error(data?.error||('登録に失敗しました（HTTP '+response.status+'）。'));
       const date=String(data.date||body.date||'');
-      location.href='/today.php'+(date?'?date='+encodeURIComponent(date):'');
+      location.href='/app/tasks.php'+(date?'?date='+encodeURIComponent(date):'');
     }catch(err){
       setError(err&&err.message?err.message:String(err));
       if(button){button.disabled=false;button.textContent=original||'登録する';}

@@ -125,3 +125,9 @@ The original XREA/PHP implementation remains the reference implementation and is
 - LIFF/login, family onboarding and item-create browser controllers moved to static JS assets.
 - Shared recurrence occurrence archive/delete lifecycle helpers added and adopted by destructive paths.
 - Future sequence recorded: unified Tasks page -> six-menu switch -> Family Log MVP -> PWA/Web Push -> Google Tasks/Gemini ingress.
+
+
+## Wave73
+- Added unified `/app/tasks.php` Task/Event daily view and changed primary navigation from separate Today/Tomorrow to Task/Event.
+- Legacy `/today.php` and `/tomorrow.php` remain compatibility routes.
+- No new D1 migration; latest remains 0015.
