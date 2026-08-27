@@ -137,7 +137,7 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     family_invitations:['id','family_id','token_hash','expires_at','used_at','used_by','family_log_subject_id'],
     deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
     web_push_subscriptions:['id','family_id','member_id','endpoint','p256dh','auth','enabled','failure_count','updated_at'],
-    family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','auto_complete_linked_task','active','created_at','updated_at'],
+    family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','show_on_family_overview','overview_quick_types_json','auto_complete_linked_task','active','created_at','updated_at'],
     family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','quick_chore_id','task_family_log_template_id','import_batch_id','import_source_key','deleted_at'],
     family_log_import_batches:['id','family_id','subject_id','source','source_hash','record_count','imported_count','skipped_count','error_count','created_by','created_at','rolled_back_at','rolled_back_by','status','processed_count','failed_at','completed_at','chunk_manifest_json'],
     task_family_log_templates:['id','family_id','task_id','subject_id','log_type','active','created_by','created_at','updated_at'],
@@ -181,7 +181,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_invitations','SELECT id,family_id,token_hash,expires_at,used_at,used_by,family_log_subject_id FROM family_invitations LIMIT 1'],
     ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
     ['web_push_subscriptions','SELECT id,family_id,member_id,endpoint,p256dh,auth,enabled,failure_count,last_success_at,last_error,updated_at FROM web_push_subscriptions LIMIT 1'],
-    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,auto_complete_linked_task,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
+    ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,show_on_family_overview,overview_quick_types_json,auto_complete_linked_task,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
     ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,quick_chore_id,task_family_log_template_id,import_batch_id,import_source_key,import_source_text,import_source_page,import_external_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
     ['family_log_import_batches','SELECT id,family_id,subject_id,source,source_filename,source_hash,record_count,imported_count,skipped_count,error_count,created_by,created_at,rolled_back_at,rolled_back_by,status,processed_count,failed_at,completed_at,chunk_manifest_json FROM family_log_import_batches LIMIT 1'],
     ['family_log_import_integrity',"SELECT (SELECT COUNT(*) FROM family_log_import_batches b WHERE NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=b.subject_id AND s.family_id=b.family_id)) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.family_id<>l.family_id) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) issues"],
@@ -189,6 +189,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
     ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
     ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
+    ['family_log_sleep_timer_integrity',"SELECT (SELECT COUNT(*) FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id WHERE x.log_type='SLEEP' AND x.status='running' AND COALESCE(s.subject_kind,'')<>'CHILD') + (SELECT COUNT(*) FROM (SELECT family_id,subject_id FROM family_log_timers WHERE log_type='SLEEP' AND status='running' GROUP BY family_id,subject_id HAVING COUNT(*)>1)) + (SELECT COUNT(*) FROM family_log_timers WHERE log_type='SLEEP' AND status='running' AND (started_at_ms IS NULL OR started_at_ms<=0 OR started_at_ms>unixepoch('now')*1000 OR started_at_ms<(unixepoch('now')-172800)*1000)) issues"],
   ];
   const results:any[]=[];
   for(const [name,sql] of checks){
