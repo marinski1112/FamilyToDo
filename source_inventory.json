@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.107.0-wave88",
+  "source": "FamilyTODO Cloudflare v12.108.0-wave89",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -61,7 +61,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave88",
+  "cloudflare_wave": "Wave89",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -96,7 +96,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.107.0-wave88",
+  "version": "12.108.0-wave89",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -116,5 +116,6 @@
   "wave85_note": "Current-parent activity-log privacy, mobile filters and pagination, 31-day retention, PRIVATE child UI alignment, and per-device Web Push diagnostics; no migration.",
   "wave87_note": "Wave87 compacts task and quick-chore UI, adds overdue undo, non-destructive adult aggregation, pet presets, and generic labeled timers via migration 0024.",
   "wave86_note": "JST-based ordinary-task overdue completion, static task controller and asset-reference CI, compact shopping action, and PRIVATE-transition activity-log cleanup; no migration.",
+  "wave89_note": "Resumable 100-record D1 batch import, batched preview lookup, safe progress UI, VACCINE, and import-state diagnostics; migration 0026.",
   "wave88_note": "Preview-first normalized Family Log JSON import with record idempotency, batch provenance/history, edit-safe soft-delete rollback, and migration 0025."
 }
