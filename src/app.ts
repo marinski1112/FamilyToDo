@@ -129,7 +129,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.107-wave88">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.108-wave89">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
 
@@ -1415,7 +1415,7 @@ export async function settingsNotifications(request:Request,ctx:AppContext):Prom
 
 const FAMILY_LOG_TYPE_META:Record<string,{icon:string;label:string}>={
   MILK:{icon:'🍼',label:'ミルク'},BREASTFEED:{icon:'🤱',label:'母乳'},MEAL:{icon:'🍚',label:'食事'},DIAPER:{icon:'🧷',label:'おむつ'},
-  SLEEP:{icon:'😴',label:'睡眠'},BATH:{icon:'🛁',label:'お風呂'},TEMPERATURE:{icon:'🌡️',label:'体温'},MEDICINE:{icon:'💊',label:'薬'},
+  SLEEP:{icon:'😴',label:'睡眠'},BATH:{icon:'🛁',label:'お風呂'},TEMPERATURE:{icon:'🌡️',label:'体温'},MEDICINE:{icon:'💊',label:'薬'},VACCINE:{icon:'💉',label:'予防接種'},
   CONDITION:{icon:'🙂',label:'体調'},WEIGHT:{icon:'⚖️',label:'体重'},HEIGHT:{icon:'📏',label:'身長'},BLOOD_PRESSURE:{icon:'🫀',label:'血圧'},
   EXERCISE:{icon:'🏃',label:'運動'},WATER:{icon:'💧',label:'水分'},TOILET:{icon:'🚻',label:'トイレ'},WALK:{icon:'🐕',label:'散歩'},TIMER:{icon:'⏱',label:'タイマー'},HOUSEWORK:{icon:'🧹',label:'ちょこっと家事'},MEMO:{icon:'📝',label:'メモ'}
 };
@@ -1429,8 +1429,8 @@ const FAMILY_LOG_SUBJECT_META:Record<string,{icon:string;label:string}>={
   BABY:{icon:'👶',label:'赤ちゃん'},CHILD:{icon:'🧒',label:'子ども'},ADULT:{icon:'👤',label:'大人'},PET:{icon:'🐾',label:'ペット'},OTHER:{icon:'⭐',label:'その他'}
 };
 const FAMILY_LOG_DEFAULT_TYPES:Record<string,string[]>={
-  BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','MEMO'],
-  CHILD:['MEAL','TOILET','SLEEP','BATH','TEMPERATURE','MEDICINE','HEIGHT','WEIGHT','CONDITION','EXERCISE','MEMO'],
+  BABY:['MILK','BREASTFEED','MEAL','DIAPER','SLEEP','BATH','TEMPERATURE','MEDICINE','VACCINE','HEIGHT','WEIGHT','CONDITION','MEMO'],
+  CHILD:['MEAL','TOILET','SLEEP','BATH','TEMPERATURE','MEDICINE','VACCINE','HEIGHT','WEIGHT','CONDITION','EXERCISE','MEMO'],
   ADULT:['CONDITION','SLEEP','EXERCISE','WEIGHT','BLOOD_PRESSURE','TEMPERATURE','MEDICINE','MEAL','BATH','MEMO'],
   PET:['MEAL','WATER','TOILET','WALK','SLEEP','BATH','WEIGHT','MEDICINE','CONDITION','MEMO'],
   OTHER:['MEMO','CONDITION','TEMPERATURE','MEDICINE','SLEEP','WEIGHT']
@@ -2060,8 +2060,11 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
     (SELECT COUNT(*) FROM family_log_import_batches b JOIN family_log_subjects s ON s.id=b.subject_id WHERE b.family_id=? AND s.family_id<>b.family_id) batch_subject_family_mismatch,
     (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE l.family_id=? AND b.family_id<>l.family_id) batch_log_family_mismatch,
     (SELECT COUNT(*) FROM (SELECT import_source_key FROM family_logs WHERE family_id=? AND import_source_key IS NOT NULL AND deleted_at IS NULL GROUP BY subject_id,import_source_key HAVING COUNT(*)>1)) duplicate_import_keys,
-    (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE l.family_id=? AND b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) active_logs_after_rollback`).bind(familyId,familyId,familyId,familyId,familyId).first<Row>();
-  const importChecks=[['batch subject missing',importDiagnostics?.batch_subject_missing],['batch subject family mismatch',importDiagnostics?.batch_subject_family_mismatch],['family_log import_batch family mismatch',importDiagnostics?.batch_log_family_mismatch],['import_source_key duplicate anomaly',importDiagnostics?.duplicate_import_keys],['rolled back batch active imported logs',importDiagnostics?.active_logs_after_rollback]];
+    (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE l.family_id=? AND b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) active_logs_after_rollback,
+    (SELECT COUNT(*) FROM family_log_import_batches b WHERE b.family_id=? AND b.status='IMPORTING' AND b.created_at<datetime(?,'-1 hour')) stale_importing,
+    (SELECT COUNT(*) FROM family_log_import_batches b WHERE b.family_id=? AND b.status='FAILED') failed_batches,
+    (SELECT COUNT(*) FROM family_log_import_batches b WHERE b.family_id=? AND b.status='COMPLETED' AND (b.processed_count<>b.record_count OR b.imported_count<>(SELECT COUNT(*) FROM family_logs l WHERE l.import_batch_id=b.id AND l.deleted_at IS NULL))) completed_count_mismatch`).bind(familyId,familyId,familyId,familyId,familyId,familyId,diagnosticNow,familyId,familyId).first<Row>();
+  const importChecks=[['batch subject missing',importDiagnostics?.batch_subject_missing],['batch subject family mismatch',importDiagnostics?.batch_subject_family_mismatch],['family_log import_batch family mismatch',importDiagnostics?.batch_log_family_mismatch],['import_source_key duplicate anomaly',importDiagnostics?.duplicate_import_keys],['rolled back batch active imported logs',importDiagnostics?.active_logs_after_rollback],['stale IMPORTING batch (>1 hour)',importDiagnostics?.stale_importing],['FAILED batch',importDiagnostics?.failed_batches],['COMPLETED count mismatch',importDiagnostics?.completed_count_mismatch]];
   const importCard=`<div class="card"><h2>Family Log import診断</h2><p class="small">読み取り専用です。編集済みのためrollbackから除外されたログは異常に含めません。</p>${importChecks.map(([label,count])=>`<div class="diagnostic-row ${Number(count||0)?'has-issue':'is-ok'}"><span>${esc(label)}</span><strong>${Number(count||0)}</strong></div>`).join('')}</div>`;
   const body=`<div class="page-head"><div><div class="eyebrow">管理</div><h1>🩺 データ診断</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>ライフサイクル整合性</h2><span class="${total?'diagnostic-summary-warn':'diagnostic-summary-ok'}">${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">表示は現在の家族データに対する読み取り専用診断です。Cronのcleanupで安全に自動修復できる項目は通常0件になります。</p>${cards}</div>${importCard}${pushCard}<div class="card"><h2>診断の扱い</h2><p class="small">削除完了履歴は、本体削除後も履歴を保存する目的で外部キーを持ちません。そのため「元タスクが存在しない」だけでは異常扱いしません。自動判断できないデータはこの画面やCloudflareログで確認してから修復します。</p></div>`;
   return html(layout('データ診断',body,'/app/settings.php'));
