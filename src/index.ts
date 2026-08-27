@@ -173,6 +173,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
     ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
+    ['family_log_page_timer_join',"SELECT x.id,s.name subject_name FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id WHERE x.family_id=-1 AND x.status='running' ORDER BY x.started_at_ms LIMIT 1"],
   ];
   const results:any[]=[];
   for(const [name,sql] of checks){

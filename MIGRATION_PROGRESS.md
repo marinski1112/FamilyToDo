@@ -145,3 +145,9 @@ The original XREA/PHP implementation remains the reference implementation and is
 - Added migration `0017_wave75_family_log.sql` for subjects, chronological logs, and timers.
 - Family logs can optionally link to physical tasks/events or recurring occurrence rows.
 - LIFF/rich-menu device validation is ready after deployment and migrations.
+
+
+## Wave76
+- No new D1 migration.
+- Fixed Family Log GET 500 caused by an ambiguous joined `family_id` predicate in the running-timer query.
+- Added an exact Family Log timer-JOIN regression check to DB runtime health.
