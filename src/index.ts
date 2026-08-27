@@ -3,6 +3,7 @@ import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
+import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -54,6 +55,7 @@ export default {
       if(url.pathname==='/api/messages') return messages(request,context);
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/family-log') return familyLog(request,context);
+      if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
       if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return webPushApi(request,context);
@@ -71,6 +73,7 @@ export default {
       if(url.pathname==='/app/messages.php') return messages(request,context);
       if(url.pathname==='/app/shopping.php') return shopping(request,context);
       if(url.pathname==='/app/family_log.php') return familyLog(request,context);
+      if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
       if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
@@ -135,7 +138,8 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     deleted_completion_history:['family_id','entity_type','entity_id','member_id','action','occurred_at','archived_at'],
     web_push_subscriptions:['id','family_id','member_id','endpoint','p256dh','auth','enabled','failure_count','updated_at'],
     family_log_subjects:['id','family_id','name','subject_kind','enabled_types_json','auto_complete_linked_task','active','created_at','updated_at'],
-    family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','quick_chore_id','task_family_log_template_id','deleted_at'],
+    family_logs:['id','family_id','subject_id','log_type','occurred_at','duration_minutes','linked_task_id','linked_occurrence_id','quick_chore_id','task_family_log_template_id','import_batch_id','import_source_key','deleted_at'],
+    family_log_import_batches:['id','family_id','subject_id','source','source_hash','record_count','imported_count','skipped_count','error_count','created_by','created_at','rolled_back_at','rolled_back_by'],
     task_family_log_templates:['id','family_id','task_id','subject_id','log_type','active','created_by','created_at','updated_at'],
     family_log_timers:['id','family_id','subject_id','log_type','started_at','started_at_ms','status','updated_at'],
     family_quick_chores:['id','family_id','name','icon','sort_order','active','created_by','created_at','updated_at'],
@@ -178,7 +182,9 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['deleted_completion_history','SELECT family_id,entity_type,entity_id,member_id,action,occurred_at,archived_at FROM deleted_completion_history LIMIT 1'],
     ['web_push_subscriptions','SELECT id,family_id,member_id,endpoint,p256dh,auth,enabled,failure_count,last_success_at,last_error,updated_at FROM web_push_subscriptions LIMIT 1'],
     ['family_log_subjects','SELECT id,family_id,member_id,name,subject_kind,birth_date,enabled_types_json,auto_complete_linked_task,active,created_by,created_at,updated_at FROM family_log_subjects LIMIT 1'],
-    ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,quick_chore_id,task_family_log_template_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
+    ['family_logs','SELECT id,family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,quick_chore_id,task_family_log_template_id,import_batch_id,import_source_key,import_source_text,import_source_page,import_external_id,created_by,created_at,updated_at,deleted_at FROM family_logs LIMIT 1'],
+    ['family_log_import_batches','SELECT id,family_id,subject_id,source,source_filename,source_hash,record_count,imported_count,skipped_count,error_count,created_by,created_at,rolled_back_at,rolled_back_by FROM family_log_import_batches LIMIT 1'],
+    ['family_log_import_integrity',"SELECT (SELECT COUNT(*) FROM family_log_import_batches b WHERE NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=b.subject_id AND s.family_id=b.family_id)) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.family_id<>l.family_id) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) issues"],
     ['task_family_log_templates','SELECT id,family_id,task_id,subject_id,log_type,detail_code,amount,unit,duration_minutes,value_text,note,active,created_by,created_at,updated_at FROM task_family_log_templates LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
     ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],

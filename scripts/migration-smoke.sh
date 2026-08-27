@@ -9,6 +9,8 @@ test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND
 sqlite3 "$db" "SELECT id, family_id, name, icon, sort_order, active, created_by, created_at, updated_at FROM family_quick_chores LIMIT 1"
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHERE name='quick_chore_id'")" = 1
 sqlite3 "$db" "SELECT quick_chore_id FROM family_logs LIMIT 1"
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='family_log_import_batches'")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHERE name IN ('import_batch_id','import_source_key','import_source_text','import_source_page','import_external_id')")" = 5
 echo 'migration smoke: ok'
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_family_log_templates'")" = 1
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHERE name='task_family_log_template_id'")" = 1
