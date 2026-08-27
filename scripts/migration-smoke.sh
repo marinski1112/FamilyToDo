@@ -10,3 +10,5 @@ sqlite3 "$db" "SELECT id, family_id, name, icon, sort_order, active, created_by,
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHERE name='quick_chore_id'")" = 1
 sqlite3 "$db" "SELECT quick_chore_id FROM family_logs LIMIT 1"
 echo 'migration smoke: ok'
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_family_log_templates'")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('family_logs') WHERE name='task_family_log_template_id'")" = 1
