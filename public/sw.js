@@ -1,4 +1,4 @@
-const STATIC_CACHE='familytodo-static-v75';
+const STATIC_CACHE='familytodo-static-v88';
 const STATIC_ASSETS=['/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>{}));
