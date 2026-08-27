@@ -409,6 +409,10 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
   .task-date-row .checkrow{grid-column:1}
 }
 
+/* Wave81: compact quick-chore history aggregation */
+.family-chore-history{padding:0!important;overflow:hidden}.family-chore-history>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px}.family-chore-history>summary::-webkit-details-marker{display:none}.family-chore-history>summary>span:first-child{display:flex;flex-direction:column;gap:2px}.family-chore-history>summary small{color:#64748b;font-weight:500}.family-chore-history>summary:after{content:'⌄';color:#64748b;font-weight:800}.family-chore-history[open]>summary:after{content:'⌃'}.family-chore-summary-count{margin-left:auto;border-radius:999px;background:#fff7ed;color:#c2410c;padding:5px 9px;font-size:12px;font-weight:800;white-space:nowrap}.family-chore-history-body{border-top:1px solid #edf0f4;padding:12px 16px 15px}.family-chore-period+.family-chore-period{border-top:1px solid #edf0f4;margin-top:13px;padding-top:13px}.family-chore-period-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.family-chore-period-head span{color:#475569}.family-chore-period-head b{font-size:20px;color:#c2410c}.family-chore-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:14px}.family-chore-breakdown h3{font-size:12px;color:#64748b;margin:0 0 5px}.family-chore-stat{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed #e2e8f0;font-size:13px}.family-chore-stat span{min-width:0;overflow-wrap:anywhere}.family-chore-stat small{display:inline-block;border-radius:999px;background:#f1f5f9;color:#64748b;padding:1px 5px;font-size:9px}.family-chore-note{margin:12px 0 0}
+@media(max-width:440px){.family-chore-breakdown{grid-template-columns:1fr}.family-chore-history>summary{padding:13px}.family-chore-history-body{padding:11px 13px 14px}}
+
 /* Wave79: Cajico-style reusable family chore buttons */
 .family-quick-chore-card .section-head{align-items:flex-start}
 .family-quick-chore-card h2{margin-bottom:3px}
