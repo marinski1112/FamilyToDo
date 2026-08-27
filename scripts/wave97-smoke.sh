@@ -4,7 +4,8 @@ node --input-type=module <<'JS'
 import fs from 'node:fs';
 const ai=fs.readFileSync('src/family-ai.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),idx=fs.readFileSync('src/index.ts','utf8');
 const has=(s,x)=>{if(!s.includes(x))throw new Error('missing '+x)};
-for(const x of ['daily_family_log_aggregate','quick_chore_stats','task_stats','schedule_lookup','family_log_latest','functionDeclarations','GEMINI_API_KEY',"datetime(occurred_at,'+9 hours')",'deleted_at IS NULL','SQL is forbidden'])has(ai,x);
+for(const x of ['daily_family_log_aggregate','quick_chore_stats','task_stats','schedule_lookup','family_log_latest','functionDeclarations','GEMINI_API_KEY','deleted_at IS NULL','SQL is forbidden'])has(ai,x);
+if(!ai.includes('substr(occurred_at,1,10)'))throw Error('local date aggregation missing');
 for(const x of ['AES-GCM','GOOGLE_CALENDAR_TOKEN_KEY','Family TODO','calendar_sync_outbox',"visibility_scope||'FAMILY'",'calendar_visible','retry_count'])has(cal,x);
 has(fs.readFileSync('migrations/0033_wave97_family_ai_calendar.sql','utf8'),'sync_token');
 for(const x of ['/api/family-ai/query','/oauth/google-calendar/authorize','/oauth/google-calendar/callback','processCalendarOutbox'])has(idx,x);
