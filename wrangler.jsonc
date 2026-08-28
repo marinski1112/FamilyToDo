@@ -27,6 +27,9 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "ai": {
+    "binding": "AI"
+  },
   "vars": {
     "APP_NAME": "家族TODO LINE",
     "APP_URL": "https://familytodo.marinski1112.workers.dev",

@@ -5,7 +5,7 @@ import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, a
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
-import { familyAiQuery, familyAiConnectionTest, familyAiModelProbe } from './family-ai';
+import { familyAiQuery, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 
@@ -68,6 +68,7 @@ export default {
       if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
       if(url.pathname==='/api/family-ai/connection-test') return familyAiConnectionTest(request,context);
       if(url.pathname==='/api/family-ai/model-probe') return familyAiModelProbe(request,context);
+      if(url.pathname==='/api/family-ai/model-catalog') return familyAiModelCatalog(request,context);
       if(url.pathname==='/api/settings/diagnostics-detail') return settingsDiagnosticsDetail(request,context);
       if(url.pathname==='/api/google-calendar/sync') return calendarSyncNow(request,context);
       if(url.pathname==='/api/google-calendar/backfill') return calendarBackfill(request,context);

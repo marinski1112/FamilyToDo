@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
 const cal=fs.readFileSync('src/google-calendar.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
-assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105'].includes(pkg.version));
+assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105','12.125.0-wave106'].includes(pkg.version));
 assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.[15]-flash-lite'/);
 assert.ok(!ai.includes('gemini-2.0-flash'));
 assert.match(ai,/env\.GEMINI_MODEL\?\.trim\(\)\|\|GEMINI_MODEL_DEFAULT/);
