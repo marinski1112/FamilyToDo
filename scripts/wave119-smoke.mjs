@@ -1,0 +1,14 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),oauth=read('src/oauth-continuation.ts'),liff=read('public/assets/liff-auth.js'),css=read('public/assets/calendar.css'),log=read('public/assets/family-log.js'),pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
+assert.equal(pkg.version,'12.138.0-wave119');assert.equal(inventory.version,pkg.version);
+assert.ok(oauth.includes("stage:hasLiffState?'LIFF_PRIMARY_RECEIVED'"));assert.ok(!oauth.slice(oauth.indexOf('export async function normalLiff'),oauth.indexOf('export async function googleHomeLiff')).includes('ctx.member)return go'));
+assert.ok(liff.indexOf('await window.liff.init')<liff.indexOf('const current=runtime()'));assert.ok(liff.includes("url.searchParams.get('next')||String(payload.next"));
+for(const path of ['/app/tasks.php','/app/calendar.php','/app/shopping.php','/app/family_log.php','/app/messages.php','/app/settings.php'])assert.ok(app.includes(path));
+for(const unsafe of ['^(?!//)','\\r\\n','\\\\'])assert.ok(read('src/liff-target.ts').includes(unsafe)||read('src/liff-target.ts').includes('validateLiffNext'));
+assert.ok(liff.includes("fetch('/__cf/auth-health'"));assert.ok(liff.includes('Family TODOのセッションを確認できませんでした'));assert.ok(oauth.includes('MAX_ATTEMPTS=3'));
+assert.ok(css.includes('--calendar-no-band-content-top:29px'));assert.ok(css.includes('[data-band-rows="0"]'));assert.ok(css.includes('var(--calendar-day-band-rows) * var(--calendar-band-step)'));assert.ok(app.match(/>移動<\/button>/g)?.length===2);assert.ok(css.includes('min-height:34px'));assert.ok(css.includes('max-width:min(310px'));
+for(const marker of ["action==='quick_record'",'BABY_FOOD',"VOMIT",'family_log_milk_amount_presets',"subject_kind)!=='BABY'",'linked_task_id,linked_occurrence_id'])assert.ok(app.includes(marker));
+for(const marker of ['family-log-one-tap',"quick_key:String(btn.dataset.quickKey","action:'sleep_start'","action:'sleep_stop'",'family-log-other'])assert.ok(log.includes(marker)||app.includes(marker));
+for(const key of ['PEE','POOP','BABY_FOOD','BATH','VOMIT','MILK'])assert.ok(app.includes(key));assert.ok(app.includes("?milkAmountPresets:[]).map"));
+for(const asset of ['liff-auth.js?v=12.138.0-wave119','calendar.css?v=12.138.0-wave119','calendar.js?v=12.138.0-wave119','family-log.js?v=12.138.0-wave119','family.css?v=12.138.0-wave119'])assert.ok(app.includes(asset));
+console.log('wave119 smoke: ok');
