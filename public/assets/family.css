@@ -710,3 +710,5 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number]{
 @media(max-height:700px){.family-log-record-sheet{padding-top:9px}.family-log-record-sheet .family-log-detail-choices{margin-bottom:3px}.family-log-record-sheet .family-log-form-actions{padding-top:6px}}
 /* Wave119 BABY one-tap feedback. */
 .family-log-one-tap[aria-busy="true"]{opacity:.55;pointer-events:none}.family-log-toast{position:fixed;z-index:260;left:50%;bottom:calc(82px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:calc(100vw - 28px);padding:10px 14px;border-radius:999px;background:#065f46;color:#fff;font-size:13px;font-weight:800;box-shadow:0 8px 28px #0f172a33;white-space:nowrap}.family-log-toast.error{background:#b91c1c}
+/* Wave120: editable subject quick actions. */
+.family-log-quick-manage{margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb}.family-log-quick-manage-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eef2f7}.family-log-quick-manage-row .handle{color:#94a3b8}.family-log-quick-manage-row small{white-space:nowrap}

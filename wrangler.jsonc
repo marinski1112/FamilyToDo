@@ -44,7 +44,8 @@
     "GEMINI_MODEL": "gemini-3.1-flash-lite",
     "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "GOOGLE_CALENDAR_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/google-calendar/callback",
-    "GOOGLE_TASKS_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/google-tasks/callback"
+    "GOOGLE_TASKS_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/google-tasks/callback",
+    "LINE_LOGIN_GOOGLE_HOME_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback"
   },
   "triggers": {
     "crons": [

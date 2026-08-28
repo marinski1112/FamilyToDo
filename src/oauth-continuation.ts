@@ -1,69 +1,68 @@
 import { makeContext, liffEntryPage, layout } from './app';
+import { commitSession } from './session';
+import { verifyLineIdToken } from './line';
 import { html } from './response';
-import { googleContinuePath, validateLiffNext } from './liff-target';
+import { validateLiffNext } from './liff-target';
 
-const COOKIE='family_google_home_continue';
-const ATTEMPT_COOKIE='family_google_home_attempt';
-const MAX_ATTEMPTS=3;
+const CONTINUE_COOKIE='family_google_home_continue';
+const TXN_COOKIE='family_line_google_home_txn';
 export const GOOGLE_HOME_CONTINUATION_SECONDS=600;
-type Payload={path:string;exp:number};
+type ContinuePayload={path:string;exp:number};
+type LineTxn={state:string;nonce:string;pkce_verifier:string;google_home_resume:string;expires_at:number};
 const b64=(v:Uint8Array)=>{let s='';for(const n of v)s+=String.fromCharCode(n);return btoa(s).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');};
 const unb64=(v:string)=>Uint8Array.from(atob(v.replaceAll('-','+').replaceAll('_','/').padEnd(Math.ceil(v.length/4)*4,'=')),c=>c.charCodeAt(0));
 const safePath=(v:unknown)=>{const p=String(v??'');return p.length<=2048&&/^\/oauth\/google\/authorize(?:\?|$)/.test(p)&&/^\/(?!\/)[^\r\n\\]*$/.test(p)?p:null;};
-const key=async(s:string)=>crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`wave117-google-home:${s}`)),'AES-GCM',false,['encrypt','decrypt']);
-export async function sealGoogleHomeContinuation(path:string,secret:string){const valid=safePath(path);if(!valid||!secret)throw new Error('Invalid OAuth continuation');const iv=crypto.getRandomValues(new Uint8Array(12)),body=new TextEncoder().encode(JSON.stringify({path:valid,exp:Date.now()+600000} satisfies Payload));return `${b64(iv)}.${b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(secret),body)))}`;}
-export async function openGoogleHomeContinuation(token:string,secret:string):Promise<string|null>{try{if(!secret)return null;const[a,b]=String(token||'').split('.',2);if(!a||!b)return null;const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(a)},await key(secret),unb64(b));const p=JSON.parse(new TextDecoder().decode(raw)) as Payload;return p.exp>=Date.now()?safePath(p.path):null;}catch{return null;}}
-const cookies=(r:Request)=>Object.fromEntries((r.headers.get('cookie')||'').split(';').map(v=>v.trim().split('=')).filter(v=>v[0]).map(([k,...v])=>[k,v.join('=')]));
+const key=async(s:string,purpose:string)=>crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${purpose}:${s}`)),'AES-GCM',false,['encrypt','decrypt']);
+async function seal(value:unknown,secret:string,purpose:string){const iv=crypto.getRandomValues(new Uint8Array(12));const body=new TextEncoder().encode(JSON.stringify(value));return `${b64(iv)}.${b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(secret,purpose),body)))}`;}
+async function open<T>(token:string,secret:string,purpose:string):Promise<T|null>{try{const[a,b]=String(token||'').split('.',2);if(!a||!b)return null;const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(a)},await key(secret,purpose),unb64(b));return JSON.parse(new TextDecoder().decode(raw)) as T;}catch{return null;}}
+export async function sealGoogleHomeContinuation(path:string,secret:string){const valid=safePath(path);if(!valid||!secret)throw new Error('Invalid OAuth continuation');return seal({path:valid,exp:Date.now()+600000} satisfies ContinuePayload,secret,'wave120-google-home');}
+export async function openGoogleHomeContinuation(token:string,secret:string):Promise<string|null>{const p=await open<ContinuePayload>(token,secret,'wave120-google-home');return p&&p.exp>=Date.now()?safePath(p.path):null;}
+const cookie=(r:Request,name:string)=>{for(const part of (r.headers.get('cookie')||'').split(';')){const[k,...v]=part.trim().split('=');if(k===name)return v.join('=');}return '';};
 const setCookie=(name:string,value:string,age=600)=>`${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
-export const clearGoogleHomeCookies=()=>[setCookie(COOKIE,'',0),setCookie(ATTEMPT_COOKIE,'',0)];
-const appendCookies=(response:Response,values:string[])=>{const out=new Response(response.body,response);for(const value of values)out.headers.append('Set-Cookie',value);return out;};
-const go=(r:Request,p:string,cookiesToSet:string[]=[] )=>{const h=new Headers({'Location':new URL(p,r.url).toString(),'Cache-Control':'no-store'});for(const value of cookiesToSet)h.append('Set-Cookie',value);return new Response(null,{status:302,headers:h});};
-const errorPage=(message:string,cookiesToClear=true)=>appendCookies(html(layout('Google Home 連携',`<div class="card"><h1>Google Home連携を続行できません</h1><p>${message}</p><p>Google Homeアプリからもう一度連携してください。</p></div>`),400),cookiesToClear?clearGoogleHomeCookies():[]);
-const explicitToken=(r:Request)=>new URL(r.url).searchParams.get('resume')||'';
+const go=(r:Request,p:string,values:string[]=[] )=>{const h=new Headers({Location:new URL(p,r.url).toString(),'Cache-Control':'no-store'});for(const v of values)h.append('Set-Cookie',v);return new Response(null,{status:302,headers:h});};
+const errorPage=(code:string,message:string)=>{const r=html(layout('Google Home 連携',`<div class="card"><h1>Google Home連携を続行できません</h1><p>${message}</p><p class="meta">${code}</p><p>通常のLINEアプリからFamily TODOへ登録後、Google Homeアプリで再度連携してください。</p></div>`),400);r.headers.append('Set-Cookie',setCookie(TXN_COOKIE,'',0));return r;};
+const redirectUri=(e:Env)=>String(e.LINE_LOGIN_GOOGLE_HOME_REDIRECT_URI||'https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback');
+const random=()=>b64(crypto.getRandomValues(new Uint8Array(32)));
+const equal=(a:string,b:string)=>{const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);let d=x.length^y.length;for(let i=0;i<Math.max(x.length,y.length);i++)d|=(x[i%x.length]||0)^(y[i%y.length]||0);return d===0;};
 
 export async function preserveGoogleHomeLogin(r:Request,e:Env,response:Response){
   if(response.status!==302)return response;
-  const here=new URL(r.url),login=new URL(response.headers.get('location')||'/login.php',r.url);
-  if(login.origin!==here.origin||login.pathname!=='/login.php')return appendCookies(response,clearGoogleHomeCookies());
-  const path=safePath(login.searchParams.get('next'));if(!path)return appendCookies(response,clearGoogleHomeCookies());
+  const login=new URL(response.headers.get('location')||'/login.php',r.url),path=safePath(login.searchParams.get('next'));
+  if(login.pathname!=='/login.php'||!path)return response;
   const token=await sealGoogleHomeContinuation(path,e.APP_SECRET);
-  console.log(JSON.stringify({stage:'CONTINUATION_STORED',provider:'GOOGLE_HOME'}));
-  return go(r,`/liff?flow=google_home&resume=${encodeURIComponent(token)}`,[setCookie(COOKIE,token),setCookie(ATTEMPT_COOKIE,'0')]);
+  console.log(JSON.stringify({stage:'GOOGLE_HOME_CONTINUATION_STORED',provider:'GOOGLE_HOME'}));
+  return go(r,`/oauth/line/google-home/start?resume=${encodeURIComponent(token)}`,[setCookie(CONTINUE_COOKIE,token)]);
 }
-
-export async function normalLiff(r:Request,e:Env){
-  const url=new URL(r.url),next=validateLiffNext(url.searchParams.get('next'))||'/app/index.php';
-  const ctx=await makeContext(r,e),hasLiffState=url.searchParams.has('liff.state');
-  console.log(JSON.stringify({stage:hasLiffState?'LIFF_PRIMARY_RECEIVED':'LIFF_OPENED_NORMAL',provider:'LINE',has_liff_state:hasLiffState,has_next:url.searchParams.has('next'),flow:false,member_present:Boolean(ctx.member)}));
-  // Never bypass liff.init: the primary redirect keeps the deep link in
-  // liff.state until the SDK performs its secondary redirect.
-  return liffEntryPage(e,{next,loginRedirect:`/liff?next=${encodeURIComponent(next)}`});
+export async function lineGoogleHomeStart(r:Request,e:Env){
+  const resume=new URL(r.url).searchParams.get('resume')||'';
+  if(!await openGoogleHomeContinuation(resume,e.APP_SECRET))return errorPage('INVALID_CONTINUATION','Google Home連携情報が無効か、有効期限が切れました。');
+  if(!e.LINE_CHANNEL_ID||!e.LINE_CHANNEL_SECRET)return errorPage('LINE_LOGIN_NOT_CONFIGURED','LINE Login設定が不足しています。');
+  const state=random(),nonce=random(),verifier=random(),digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))),challenge=b64(digest);
+  const txn=await seal({state,nonce,pkce_verifier:verifier,google_home_resume:resume,expires_at:Date.now()+600000} satisfies LineTxn,e.APP_SECRET,'wave120-line-google-home');
+  const auth=new URL('https://access.line.me/oauth2/v2.1/authorize');
+  for(const[k,v]of Object.entries({response_type:'code',client_id:e.LINE_CHANNEL_ID,redirect_uri:redirectUri(e),state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'}))auth.searchParams.set(k,v);
+  console.log(JSON.stringify({stage:'LINE_WEB_AUTH_STARTED',provider:'LINE'}));
+  return go(r,auth.toString(),[setCookie(TXN_COOKIE,txn)]);
 }
-
-export async function googleHomeLiff(r:Request,e:Env){
-  console.log(JSON.stringify({stage:'LIFF_OPENED_GOOGLE_HOME',provider:'GOOGLE_HOME'}));
-  const token=explicitToken(r);if(!token)return errorPage('Google Home連携情報の有効期限が切れました。');
-  const path=await openGoogleHomeContinuation(token,e.APP_SECRET);if(!path)return errorPage('Google Home連携情報が無効か、有効期限が切れました。');
-  const next=googleContinuePath(token);if(!next)return errorPage('Google Home連携情報が無効です。');
-  const ctx=await makeContext(r,e);
-  const old=Number(cookies(r)[ATTEMPT_COOKIE]||0),attempt=Number.isInteger(old)?old+1:1;
-  if(attempt>MAX_ATTEMPTS)return errorPage('LINEログインを繰り返したため、安全のため処理を停止しました。');
-  return appendCookies(liffEntryPage(e,{next,loginRedirect:`/liff?flow=google_home&resume=${encodeURIComponent(token)}`}),[setCookie(ATTEMPT_COOKIE,String(attempt))]);
+export async function lineGoogleHomeCallback(r:Request,e:Env){
+  console.log(JSON.stringify({stage:'LINE_WEB_AUTH_CALLBACK',provider:'LINE'}));
+  const u=new URL(r.url),code=u.searchParams.get('code')||'',state=u.searchParams.get('state')||'';
+  const txn=await open<LineTxn>(cookie(r,TXN_COOKIE),e.APP_SECRET,'wave120-line-google-home');
+  if(!txn||txn.expires_at<Date.now())return errorPage('LINE_TXN_EXPIRED','LINEログインの有効期限が切れました。');
+  if(!code||!state||!equal(state,txn.state))return errorPage('LINE_STATE_MISMATCH','LINEログインの検証情報が一致しません。');
+  const tokenResponse=await fetch('https://api.line.me/oauth2/v2.1/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri(e),client_id:e.LINE_CHANNEL_ID,client_secret:e.LINE_CHANNEL_SECRET,code_verifier:txn.pkce_verifier})});
+  const tokens=await tokenResponse.json().catch(()=>null) as {id_token?:string}|null;
+  if(!tokenResponse.ok||!tokens?.id_token)return errorPage('LINE_TOKEN_EXCHANGE_FAILED','LINEログインを完了できませんでした。');
+  const verified=await verifyLineIdToken(tokens.id_token,e.LINE_CHANNEL_ID,txn.nonce).catch(()=>null);
+  if(!verified)return errorPage('LINE_ID_TOKEN_INVALID','LINE本人確認に失敗しました。');
+  console.log(JSON.stringify({stage:'LINE_WEB_AUTH_VERIFIED',provider:'LINE'}));
+  const member=await e.DB.prepare('SELECT id,family_id,name FROM members WHERE line_user_id=? AND active=1 LIMIT 1').bind(verified.sub).first<{id:number;family_id:number;name:string}>();
+  if(!member)return errorPage('LINE_MEMBER_NOT_FOUND','このLINEアカウントはFamily TODOメンバーとして登録されていません。');
+  const session={iat:Date.now(),lineUserId:verified.sub,lineDisplayName:verified.name||member.name,memberId:Number(member.id),familyId:Number(member.family_id),csrfToken:crypto.randomUUID()};
+  const response=go(r,`/oauth/google/continue?resume=${encodeURIComponent(txn.google_home_resume)}`,[setCookie(TXN_COOKIE,'',0)]);
+  console.log(JSON.stringify({stage:'LINE_WEB_SESSION_COMMITTED',provider:'LINE',member_present:true}));
+  return commitSession(response,session,e.APP_SECRET);
 }
-
-export async function liffDispatcher(r:Request,e:Env){
-  const url=new URL(r.url);
-  // A stale continuation cookie is deliberately irrelevant: only an explicit URL marker dispatches OAuth.
-  if(url.searchParams.get('flow')==='google_home'||url.searchParams.has('resume'))return googleHomeLiff(r,e);
-  return normalLiff(r,e);
-}
-
-export async function resumeGoogleHome(r:Request,e:Env){
-  const token=explicitToken(r),path=token?await openGoogleHomeContinuation(token,e.APP_SECRET):null;
-  if(!token||!path)return errorPage('Google Home連携情報が無効か、有効期限が切れました。');
-  const ctx=await makeContext(r,e);
-  if(!ctx.member)return go(r,`/liff?flow=google_home&resume=${encodeURIComponent(token)}`);
-  console.log(JSON.stringify({stage:'CONTINUATION_RESUMED',provider:'GOOGLE_HOME',family_id:ctx.member.family_id,member_id:ctx.member.id}));
-  console.log(JSON.stringify({stage:'AUTHORIZE_RESUMED',provider:'GOOGLE_HOME',member_present:true}));
-  return go(r,path,clearGoogleHomeCookies());
-}
+export async function normalLiff(r:Request,e:Env){const u=new URL(r.url),next=validateLiffNext(u.searchParams.get('next'))||'/app/index.php',ctx=await makeContext(r,e);console.log(JSON.stringify({stage:'LIFF_PRIMARY_RECEIVED',provider:'LINE',has_liff_state:u.searchParams.has('liff.state'),has_next:u.searchParams.has('next'),member_present:Boolean(ctx.member)}));return liffEntryPage(e,{next,loginRedirect:`/liff?next=${encodeURIComponent(next)}`});}
+export async function liffDispatcher(r:Request,e:Env){const u=new URL(r.url);if(u.searchParams.get('flow')==='google_home'||u.searchParams.has('resume')){const resume=u.searchParams.get('resume')||'';return await openGoogleHomeContinuation(resume,e.APP_SECRET)?go(r,`/oauth/line/google-home/start?resume=${encodeURIComponent(resume)}`):errorPage('INVALID_LEGACY_CONTINUATION','古いGoogle Home連携情報が無効です。');}return normalLiff(r,e);}
+export async function resumeGoogleHome(r:Request,e:Env){const token=new URL(r.url).searchParams.get('resume')||'',path=await openGoogleHomeContinuation(token,e.APP_SECRET);if(!path)return errorPage('INVALID_CONTINUATION','Google Home連携情報が無効か、有効期限が切れました。');const ctx=await makeContext(r,e);if(!ctx.member)return errorPage('SESSION_COMMIT_FAILED','LINE認証後のセッションを確認できませんでした。');console.log(JSON.stringify({stage:'GOOGLE_HOME_CONTINUATION_RESUMED',provider:'GOOGLE_HOME',member_present:true}));return go(r,path,[setCookie(CONTINUE_COOKIE,'',0)]);}
