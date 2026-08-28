@@ -147,11 +147,16 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
-    console.log(`[Family TODO LINE] scheduled ${controller.cron}; processing notifications`);
-    ctx.waitUntil(processNotifications(env));
-    ctx.waitUntil(processCalendarOutbox(env));
-    ctx.waitUntil(processCalendarInbound(env));
-    ctx.waitUntil(processGoogleTasksInbound(env));
+    console.log(`[Family TODO LINE] scheduled ${controller.cron}`);
+    if(controller.cron==='3,13,23,33,43,53 * * * *'){
+      ctx.waitUntil(processGoogleTasksInbound(env));
+      return;
+    }
+    if(controller.cron==='*/5 * * * *'){
+      ctx.waitUntil(processNotifications(env));
+      ctx.waitUntil(processCalendarOutbox(env));
+      ctx.waitUntil(processCalendarInbound(env));
+    }
   }
 } satisfies ExportedHandler<Env>;
 
@@ -191,8 +196,9 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     external_command_receipts:['id','provider','family_id','member_id','request_id','command_key','status','error_code','created_at','updated_at'],
     calendar_import_batches:['id','family_id','source_format','file_sha256','status','total_count','processed_count','created_by'],
     calendar_import_entries:['id','batch_id','family_id','source_uid','source_recurrence_key','source_hash','task_id','recurrence_rule_id','status'],
-    external_google_task_accounts:['id','family_id','member_id','refresh_token_ciphertext','tasklist_id','status','import_visibility','sync_started_at','updated_min'],
+    external_google_task_accounts:['id','family_id','member_id','refresh_token_ciphertext','tasklist_id','status','import_visibility','sync_started_at','updated_min','sync_window_updated_min','sync_page_token','sync_latest_seen_at','sync_cycle_started_at'],
     external_google_task_links:['id','family_id','member_id','account_id','task_id','external_tasklist_id','external_task_id','status'],
+    external_google_voice_commands:['id','family_id','member_id','account_id','external_tasklist_id','external_task_id','command_type','target_type','target_id','status'],
     external_calendar_accounts:['id','family_id','member_id','provider','refresh_token_ciphertext','token_key_version','calendar_id','status','last_synced_at','last_error'],
     external_calendar_links:['id','family_id','task_id','provider','calendar_id','external_event_id','external_etag','last_synced_at','deleted_at'],
     calendar_sync_outbox:['id','family_id','task_id','provider','operation','status','retry_count','next_retry_at','last_error'],

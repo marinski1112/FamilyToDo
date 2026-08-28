@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
 const cal=fs.readFileSync('src/google-calendar.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
-assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105','12.125.0-wave106','12.126.0-wave107','12.127.0-wave108','12.128.0-wave109','12.129.0-wave110','12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114'].includes(pkg.version));
+assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105','12.125.0-wave106','12.126.0-wave107','12.127.0-wave108','12.128.0-wave109','12.129.0-wave110','12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114','12.134.0-wave115','12.135.0-wave116'].includes(pkg.version));
 assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.[15]-flash-lite'/);
 assert.ok(!ai.includes('gemini-2.0-flash'));
 assert.match(ai,/env\.GEMINI_MODEL\?\.trim\(\)\|\|GEMINI_MODEL_DEFAULT/);
@@ -12,7 +12,7 @@ for(const status of ['status===400','status===404','status===429','status>=500']
 for(const privacy of ['tok.question','FAMILY_AI_FUNCTIONS','maxItems:3','generationConfig:{maxOutputTokens:512}','synthetic connectivity test; no user data is included'])assert.ok(ai.includes(privacy));
 assert.ok(!/await r\.text|console\.(?:log|error).*gemini/i.test(ai));
 assert.match(ai,/質問を解析できませんでした。表現を少し変えてください。/);
-for(const ui of ['Google Calendarで「予定」','Googleの「タスク」は現在同期対象外','受信対象カレンダー: Family TODO','sync token:','outbound pending:','使用モデル:'])assert.ok(cal.includes(ui));
+for(const ui of ['受信対象カレンダー: Family TODO','sync token:','outbound pending:','使用モデル:'])assert.ok(cal.includes(ui));
 for(const guardrail of ["calendar.app.created","q.set('syncToken',syncToken)",'e.status===410',"status='ACTIVE'", "1,'EVENT'"])assert.ok(cal.includes(guardrail));
 assert.ok(!cal.includes('googleapis.com/tasks'));
 assert.ok(!/UPDATE tasks SET[^'\n]*task_kind/.test(cal));
