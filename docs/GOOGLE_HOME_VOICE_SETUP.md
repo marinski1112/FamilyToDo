@@ -80,3 +80,28 @@ Do not change the existing LIFF endpoint URL (`https://familytodo.marinski1112.w
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ffamily_log.php`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fmessages.php`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fsettings.php`
+
+## Wave121: LINE Login Web OAuth credentials
+
+Google Home account linking uses a **LINE Login channel**, independently from the Messaging API channel.
+In LINE Developers, open **LINE Login channel → Basic settings** and configure:
+
+- Channel ID → Worker text variable `LINE_LOGIN_CHANNEL_ID`
+- Channel secret → Cloudflare Secret `LINE_LOGIN_CHANNEL_SECRET`
+- Callback URL → `https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback`
+
+**Never put the Messaging API channel secret (`LINE_CHANNEL_SECRET`) in `LINE_LOGIN_CHANNEL_SECRET`.**
+`LINE_CHANNEL_SECRET` remains dedicated to webhook signature verification and `LINE_ACCESS_TOKEN` remains dedicated to Messaging API delivery. `LINE_LOGIN_CHANNEL_ID` falls back temporarily to `LINE_CHANNEL_ID`, but the Login secret never falls back.
+
+### Recommended Rich Menu URLs
+
+Use LIFF additional paths for stable destinations:
+
+- `https://liff.line.me/{LIFF_ID}/tasks`
+- `https://liff.line.me/{LIFF_ID}/calendar`
+- `https://liff.line.me/{LIFF_ID}/shopping`
+- `https://liff.line.me/{LIFF_ID}/family-log`
+- `https://liff.line.me/{LIFF_ID}/messages`
+- `https://liff.line.me/{LIFF_ID}/settings`
+
+The legacy `?next=` URLs above remain supported.

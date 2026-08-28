@@ -95,3 +95,7 @@ Cloudflare の現行推奨方式に合わせ、`@cloudflare/workers-types` の�
 The endpoint `/__cf/secrets-health` checks whether the six required runtime Worker secrets are actually visible to the deployed Worker. It returns only `present` and `length`; it never returns secret values.
 
 Important: Workers Builds has a separate **Build variables and secrets** section. Those values are available only during the build and are **not** available to the Worker at runtime. Runtime secrets must be configured in the Worker itself under **Workers & Pages → familytodo → Settings → Variables and Secrets**, then deployed.
+
+### LINE Login channel (Google Home Web OAuth)
+
+Set `LINE_LOGIN_CHANNEL_ID` as a Worker text variable and `LINE_LOGIN_CHANNEL_SECRET` with `npx wrangler secret put LINE_LOGIN_CHANNEL_SECRET`. Obtain both from **LINE Developers → LINE Login channel → Basic settings**. These are separate from the Messaging API `LINE_CHANNEL_SECRET` and `LINE_ACCESS_TOKEN`; never reuse the Messaging API channel secret for Login.

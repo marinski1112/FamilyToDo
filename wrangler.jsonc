@@ -18,7 +18,8 @@
       "/__cf/*",
       "/login",
       "/login.php",
-      "/liff"
+      "/liff",
+      "/liff/*"
     ]
   },
   "d1_databases": [

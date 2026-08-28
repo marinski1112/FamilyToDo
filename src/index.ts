@@ -11,6 +11,7 @@ import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, 
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 import { integrationsHealthResponse } from './environment-health';
 import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
+import { validateLiffNext } from './liff-target';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
@@ -26,7 +27,7 @@ export default {
     try{
       if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
       if(url.pathname==='/__cf/secrets-health') {
-        const names = ['APP_SECRET','LINE_ACCESS_TOKEN','LINE_CHANNEL_ID','LINE_CHANNEL_SECRET','LINE_LIFF_ID','NOTIFY_SECRET','VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT'] as const;
+        const names = ['APP_SECRET','LINE_ACCESS_TOKEN','LINE_CHANNEL_ID','LINE_CHANNEL_SECRET','LINE_LOGIN_CHANNEL_ID','LINE_LOGIN_CHANNEL_SECRET','LINE_LIFF_ID','NOTIFY_SECRET','VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT'] as const;
         const secrets = Object.fromEntries(names.map((name) => [name, { present: typeof env[name] === 'string' && env[name].length > 0, length: typeof env[name] === 'string' ? env[name].length : 0 }]));
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
@@ -40,7 +41,7 @@ export default {
       if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
       if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
       if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);
-      if(url.pathname==='/liff'||url.pathname==='/liff/') return await liffDispatcher(request,env);
+      if(url.pathname==='/liff'||url.pathname.startsWith('/liff/')) return await liffDispatcher(request,env);
       if(url.pathname==='/oauth/line/google-home/start') return await lineGoogleHomeStart(request,env);
       if(url.pathname==='/oauth/line/google-home/callback') return await lineGoogleHomeCallback(request,env);
       if(url.pathname==='/oauth/google/continue') return await resumeGoogleHome(request,env);
@@ -50,7 +51,7 @@ export default {
       if(url.pathname==='/app/recurring.php') {
         if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
         const context=await makeContext(request,env);
-        if(!context.member) return new Response(null,{status:302,headers:{Location:new URL('/login.php',request.url).toString()}});
+        if(!context.member){const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
         return await recurring(request,context);
       }
       const context=await makeContext(request,env);
@@ -135,7 +136,7 @@ export default {
       if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
       return await env.ASSETS.fetch(request);
     }catch(e:any){
-      if(e instanceof AuthRequired) return redirect('/login.php');
+      if(e instanceof AuthRequired){if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/app/api/'))return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
       if(e instanceof BadRequest) return json({ok:false,error:e.message||'入力内容が不正です。',code:'BAD_REQUEST'},400);
       if(e instanceof Forbidden) return json({ok:false,error:e.message||'この操作は許可されていません。',code:'FORBIDDEN'},403);
       const message=String(e?.message||e||'内部エラーです。');
@@ -252,6 +253,7 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['family_log_import_integrity',"SELECT (SELECT COUNT(*) FROM family_log_import_batches b WHERE NOT EXISTS(SELECT 1 FROM family_log_subjects s WHERE s.id=b.subject_id AND s.family_id=b.family_id)) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.family_id<>l.family_id) + (SELECT COUNT(*) FROM family_logs l JOIN family_log_import_batches b ON b.id=l.import_batch_id WHERE b.rolled_back_at IS NOT NULL AND l.deleted_at IS NULL AND l.updated_at=l.created_at) issues"],
     ['task_family_log_templates','SELECT id,family_id,task_id,subject_id,log_type,detail_code,amount,unit,duration_minutes,value_text,note,active,created_by,created_at,updated_at FROM task_family_log_templates LIMIT 1'],
     ['family_log_timers','SELECT id,family_id,subject_id,log_type,started_at,started_at_ms,status,created_by,created_at,updated_at FROM family_log_timers LIMIT 1'],
+    ['family_log_quick_actions','SELECT id,family_id,subject_id,name,mode,log_type,sort_order FROM family_log_quick_actions LIMIT 1'],
     ['family_quick_chores','SELECT id,family_id,name,icon,sort_order,active,weekday_mask,created_by,created_at,updated_at FROM family_quick_chores LIMIT 1'],
     ['google_home_authorization_codes','SELECT id,code_hash,family_id,member_id,client_id,redirect_uri,expires_at,used_at,created_at FROM google_home_authorization_codes LIMIT 1'],
     ['google_home_tokens','SELECT id,family_id,member_id,access_token_hash,refresh_token_hash,access_expires_at,revoked_at,created_at,updated_at FROM google_home_tokens LIMIT 1'],
