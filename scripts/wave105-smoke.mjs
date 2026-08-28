@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const ai=fs.readFileSync('src/family-ai.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
+assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.1-flash-lite'/);assert.match(ai,/env\.GEMINI_MODEL\?\.trim\(\)\|\|GEMINI_MODEL_DEFAULT/);
+assert.match(ai,/'x-goog-api-key':key/);assert.ok(!ai.includes('generateContent?key='));
+for(const x of ['RATE_LIMIT_RPM','RATE_LIMIT_TPM','RATE_LIMIT_RPD','FREE_TIER_QUOTA_ZERO','RATE_LIMIT_TEMPORARY','RATE_LIMIT_UNKNOWN','quotaMetric','quotaId','quotaDimensions','quotaValue','retryDelay'])assert.ok(ai.includes(x),x);
+assert.ok(!ai.includes('error.message'));assert.match(ai,/if\(!res\.ok\)throw new GeminiUpstreamError/);assert.match(ai,/e\.status===429\?429:503/);
+assert.equal((ai.match(/for\(const model of GEMINI_FREE_CANDIDATES\)/g)||[]).length,1);assert.ok(ai.includes('autoSwitch:false'));assert.ok(ai.includes('No family data'));
+for(const model of ['gemini-3.1-flash-lite','gemini-3.5-flash-lite','gemini-2.5-flash-lite'])assert.ok(ai.includes(model));
+assert.equal((ai.match(/fetch\(`/g)||[]).length,1);assert.ok(ai.includes('functionCallingConfig'));assert.ok(ai.includes('maxItems:3'));assert.ok(ai.includes('tokenized question')||docs.includes('tokenized question'));
+assert.ok(index.includes('/api/family-ai/model-probe'));assert.ok(cal.includes('setTimeout(()=>button.disabled=false,5000)'));
+for(const x of ['calendar.app.created',"1,'EVENT'",'syncToken',"visibility_scope='FAMILY'",'calendar_sync_outbox'])assert.ok(cal.includes(x),x);
+for(const x of ['oauth-redirect.googleusercontent.com','oauth-redirect-sandbox.googleusercontent.com','GOOGLE_HOME_PROJECT_ID','action.devices.types.SCENE','action.devices.commands.ActivateScene','external_command_receipts'])assert.ok(home.includes(x),x);
+assert.ok(docs.includes('Paid Tier'));assert.ok(docs.includes('課金関連API'));
+console.log('wave105 smoke: ok');

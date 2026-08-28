@@ -1,4 +1,4 @@
-# 外部サービスの費用・プライバシー運用（Wave103）
+# 外部サービスの費用・プライバシー運用（Wave105）
 
 確認日: **2026-08-28**。料金、quota、データ利用条件は変更されるため、デプロイ前と定期運用時に各公式ドキュメントを再確認してください。
 
@@ -9,7 +9,7 @@
 | Cloudflare Workers Free | 100,000 requests/day | cronは5分間隔を維持し、新しいpollや利用集計を追加しない。 |
 | Cloudflare D1 Free | 5 million rows read/day、100,000 rows written/day、5 GB | outbox・期限到来通知・active Calendar accountだけをbounded queryする。 |
 | Google Calendar API | standard usageは追加料金なし。billing threshold 1 million requests/day、10,000/min/project、600/min/user/project | OAuthで作成した `Family TODO` calendarだけをevents APIで同期する。sync tokenがあれば変更分だけ、HTTP 410のときだけfull resyncする。primary calendarとcalendarListを定期取得しない。 |
-| Gemini API | `gemini-3.5-flash-lite` はFree Tierを利用可能。billingを明示的に有効化しない限りFree Tier。rate limit超過はHTTP 429。 | 1質問につきplanning requestは1回、D1 queryは最大3 step、結果をGeminiへ再送しない。大きな自然文を不要にするためoutputを512 tokensに制限する。 |
+| Gemini API | Free候補allowlistは `gemini-3.1-flash-lite` / `gemini-3.5-flash-lite` / `gemini-2.5-flash-lite`。既定はFunction Calling / Structured Outputs対応の軽量planner向け `gemini-3.1-flash-lite`。提供条件は必ず最新資料で確認する。 | 1質問につきplanning requestは1回、D1 queryは最大3 step、結果をGeminiへ再送しない。大きな自然文を不要にするためoutputを512 tokensに制限する。 |
 
 公式資料: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)、[D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)、[Google Calendar API usage limits](https://developers.google.com/calendar/api/guides/quota)、[Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)、[Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)。
 
@@ -24,3 +24,7 @@ Gemini Free TierではGoogleのpricing policy上、入力が製品改善に利�
 ## model lifecycle
 
 実行modelは `GEMINI_MODEL` 環境変数を最優先し、未設定時だけコード内の `GEMINI_MODEL_DEFAULT` を使います。管理者は「管理 → 外部連携 → Family AI」でmodel IDとoverride状態を確認できます。API keyは画面、response body、console/activity logへ出しません。model廃止時はCloudflareの `GEMINI_MODEL` を現行modelへ切り替えてから接続確認してください。
+
+## billing / model probe guardrail（Wave105）
+
+Family TODOはGoogle billingを有効化せず、課金関連APIも呼びません。Paid Tier移行はGoogle AI Studio側でユーザーが明示的に行う操作です。429時も有料・Pro modelへfallbackせず、自動retryやmodel自動切替をしません。管理画面のmodel probeはボタン押下時だけ上記3候補へ各1回の固定synthetic requestを送り、実family dataは送りません。実際のRPM/RPDは Google AI Studio → Rate Limitsで確認してください。quotaはAPI keyではなくProject単位です。
