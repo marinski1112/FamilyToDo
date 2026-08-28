@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(p,'utf8');
+const pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
+const app=read('src/app.ts'),css=read('public/assets/calendar.css'),calendar=read('public/assets/calendar.js'),log=read('public/assets/family-log.js'),familyCss=read('public/assets/family.css'),ci=read('.github/workflows/ci.yml');
+assert.equal(pkg.version,'12.137.0-wave118');assert.equal(inventory.version,pkg.version);
+for(const command of ['check:domain-smoke','check:wave117','check:wave118'])assert.ok(ci.includes(`npm run ${command}`));
+assert.ok(app.includes('--calendar-day-band-rows:'));assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'));
+assert.match(css,/top:calc\(var\(--calendar-date-zone\) \+ var\(--calendar-day-band-rows\) \* var\(--calendar-band-step\)\)!important/);
+assert.ok(!css.includes('margin-top:calc(var(--calendar-band-rows)'));
+const top=(dateZone,dayBands,step)=>dateZone+dayBands*step;assert.equal(top(34,0,17),34);assert.equal(top(34,2,17),68);
+for(const marker of ['calendarJumpPanel','calendarMonthJump','calendarDateJump','2000','2100','openDate'])assert.ok(app.includes(marker)||calendar.includes(marker));
+assert.ok(calendar.includes("get('open')"));assert.ok(calendar.includes("loadMonth(currentPrev,-1)"));assert.ok(calendar.includes("loadMonth(currentNext,1)"));assert.ok(calendar.includes("touchend"));
+for(const marker of ['lastMilkAmounts','milkAmountPresets','family_log_milk_amount_presets','normalizeMilkAmountPresets','familyLogAdvanced','family-log-record-sheet'])assert.ok(app.includes(marker)||log.includes(marker)||familyCss.includes(marker));
+assert.ok(app.includes("ORDER BY occurred_at DESC,id DESC"));assert.ok(log.includes("amount.value=lastMilkAmounts"));assert.ok(log.includes("advanced.open=Boolean(row.note"));
+assert.ok(app.includes('calendar.css?v=12.137.0-wave118'));assert.ok(app.includes('calendar.js?v=12.137.0-wave118'));assert.ok(app.includes('family-log.js?v=12.137.0-wave118'));assert.ok(app.includes('family.css?v=12.137.0-wave118'));
+assert.ok(!fs.existsSync('migrations/0040_wave118_family_log_quick_values.sql'));
+console.log('wave118 smoke: ok');

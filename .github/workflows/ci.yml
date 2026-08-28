@@ -19,3 +19,5 @@ jobs:
       - run: npm run check:static-assets
       - run: npm run check:migrations
       - run: npm run check:domain-smoke
+      - run: npm run check:wave117
+      - run: npm run check:wave118
