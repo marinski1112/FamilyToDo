@@ -14,7 +14,7 @@ assert.ok(continuation.includes('loginRedirect:u.pathname+u.search'));
 assert.ok(continuation.includes('Google Home連携情報が無効か、有効期限が切れました。'));
 assert.ok(continuation.includes('SESSION_COMMIT_FAILED'));
 assert.ok(read('src/index.ts').includes('return await liffDispatcher(request,env)'));
-const app=read('src/app.ts');assert.ok(app.includes('validateLiffNext(body.next)'));assert.match(app,/12\.(?:13(?:6\.1-wave117-hotfix|7\.0-wave118|8\.0-wave119|9\.0-wave120)|140\.0-wave121|141\.0-wave122)/);
+const app=read('src/app.ts');assert.ok(app.includes('validateLiffNext(body.next)'));assert.match(app,/12\.(?:13(?:6\.1-wave117-hotfix|7\.0-wave118|8\.0-wave119|9\.0-wave120)|140\.0-wave121|141\.0-wave122|142\.0-wave123)/);
 const client=read('public/assets/liff-auth.js');assert.ok(client.includes('await window.liff.init'));assert.ok(client.includes('next:current')); assert.ok(client.includes('const target=valid(data.redirect)'));assert.ok(!client.includes("data.redirect||'/app/index.php'"));
 assert.equal(JSON.parse(read('package.json')).version,JSON.parse(read('source_inventory.json')).version);
 console.log('Wave117 LIFF/OAuth hotfix smoke: PASS');
