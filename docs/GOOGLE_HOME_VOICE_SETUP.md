@@ -1,12 +1,12 @@
-# Google Home Cloud-to-cloud 個人テスト設定（Wave104）
+# Google Home Cloud-to-cloud 実機設定（Wave113）
 
-Family TODOは **Scene traitのみ** のCloud-to-cloud test integrationです。BABY/CHILDの「<name>寝た」「<name>起きた」とactiveなちょこっと家事の「<name>完了」だけをSYNCし、`ActivateScene`で記録します。SceneはReport State非対応のため実装せず、QUERYは空のdevices応答です。
+Family TODOは **Scene traitのみ** のCloud-to-cloud test integrationです。BABY/CHILDの「`<name>寝た`」「`<name>起きた`」とactiveなちょこっと家事の「`<name>完了`」だけをSYNCし、`ActivateScene`を既存のFamily Log domain helperで記録します。PET/ADULT、inactive項目、タスクや予定は公開しません。
 
-> Scene traitだけのintegrationは現在certification/release対象外です。当面は個人利用のtest integrationを目的とし、認証を通すための架空device type/traitは追加しません。certification submissionはWave104の範囲外です。
+> Googleの制約上、Scene traitだけのintegrationはcertification/release対象外です。当面はDeveloper ConsoleのTest integrationと個人家庭利用が目的です。認証のための架空device type/traitは追加しません（架空light/switchも追加しません）。
 
-## Worker設定
+## Cloudflare Worker設定
 
-Calendar OAuthとは完全に別のFamily TODO Home専用credentialを作り、次をsecret/environmentへ設定します。
+Google Calendar用の `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` とは完全に別のGoogle Home専用credentialです。
 
 ```sh
 npx wrangler secret put GOOGLE_HOME_CLIENT_ID
@@ -14,40 +14,48 @@ npx wrangler secret put GOOGLE_HOME_CLIENT_SECRET
 npx wrangler secret put GOOGLE_HOME_PROJECT_ID
 ```
 
-`GOOGLE_HOME_PROJECT_ID` はDeveloper Console project IDです。Workerは次の2つだけをproject IDから許可します。
+`GOOGLE_HOME_PROJECT_ID` はsecretではなく、この環境では `family-todo-home` です。Workerはproject IDから生成した次の2つだけを許可します。
 
-- production: `https://oauth-redirect.googleusercontent.com/r/<PROJECT_ID>`
-- test/sandbox: `https://oauth-redirect-sandbox.googleusercontent.com/r/<PROJECT_ID>`
+- 本番callback: `https://oauth-redirect.googleusercontent.com/r/family-todo-home`
+- テストcallback: `https://oauth-redirect-sandbox.googleusercontent.com/r/family-todo-home`
 
-従来の `GOOGLE_HOME_REDIRECT_URI` は移行互換用の完全一致値としてのみ利用できます。任意redirectや外部`next`は許可しません。
+従来の `GOOGLE_HOME_REDIRECT_URI` は移行互換用の完全一致値としてのみ利用できます。任意redirectは許可しません。
 
 ## Developer Console入力値
 
-- Authorization URL: `https://familytodo.marinski1112.workers.dev/oauth/google/authorize`
-- Token URL: `https://familytodo.marinski1112.workers.dev/oauth/google/token`
-- Fulfillment URL: `https://familytodo.marinski1112.workers.dev/api/google-home/fulfillment`
-- OAuth flow: Authorization Code
-- Client ID / Secret: Calendar OAuthとは別のFamily TODO Home専用値
-- Project ID: Developer Consoleのproject ID（Workerの `GOOGLE_HOME_PROJECT_ID` と一致）
+| 項目 | 入力値 |
+| --- | --- |
+| Authorization URL | `https://familytodo.marinski1112.workers.dev/oauth/google/authorize` |
+| Token URL | `https://familytodo.marinski1112.workers.dev/oauth/google/token` |
+| Fulfillment URL | `https://familytodo.marinski1112.workers.dev/api/google-home/fulfillment` |
+| OAuth flow | Authorization Code |
+| Client ID | Cloudflare `GOOGLE_HOME_CLIENT_ID` と同じ |
+| Client Secret | Cloudflare `GOOGLE_HOME_CLIENT_SECRET` と同じ |
+| Project ID | `family-todo-home` |
 
-同意画面は「Google」とFamily TODOを連携し、Googleによる睡眠・家事記録操作を許可することを明示します。未ログインならLINEログイン後、state/client_id/redirect_uri/response_typeを保った同一authorize URLへ戻ります。
+Token endpointは `client_secret_post` とHTTP Basicに対応します。authorization codeは5分・一回限り、access tokenは約1時間です。raw code/token/secretはDBへ保存せずSHA-256 hashだけを保存します。refresh tokenはrotateせず、並行refreshでも互いを無効化しない署名付きaccess tokenを返します。正常refreshは日常activity logを増やさずsafe console categoryだけを記録します。
 
-## Test integration手順
+未ログインなら、元の同一origin authorize URLを `next` としてLINEログインし、`state` / `client_id` / `redirect_uri` / `response_type` を保って同意画面へ戻ります。`scope`、`user_locale` などの追加parameterは許容しますが、権限昇格には使いません。client ID、callback完全一致、`response_type=code` は厳格に検証します。
 
-1. Developer ConsoleでCloud-to-cloud integrationを作り、上記endpointと専用credentialを入力します。
-2. projectのtest user/testerへ利用するGoogleアカウントを追加し、**Test integration** を有効化します。
-3. Google Homeアプリの「Works with Google Home」からintegrationを選び、Family TODOのLINEログインと同意を完了します。
-4. SYNC後、BABY/CHILDの睡眠Sceneとactiveな家事Sceneだけが表示されることを確認します。
-5. `ActivateScene`を実行しFamily Logを確認します。同じGoogle request IDの再送は `external_command_receipts` により重複記録されません。
-6. 管理 → Google Homeでlinked memberと安全な設定診断を確認します。
+## Test integration実機手順
 
-共有Google Homeでは話者とlinked memberが一致しない場合があり、記録者は連携memberです。task、予定、raw Family Log、PRIVATEデータはSYNCしません。
+1. Developer ConsoleでCloud-to-cloud integrationと上表のAccount linking設定を保存します。
+2. Fulfillment URLを保存します。
+3. test userを登録し、**Test integration** を開始します。
+4. Google Homeアプリの「Works with Google Home」からintegrationを選びます。
+5. Family TODOのLINEログインとOAuth consentを完了します。
+6. Googleからの初回SYNC後、Home Graph/Test SuiteでSceneが入ったことを確認します。
+7. まずHome appまたはTest SuiteからScene activationを実行します。
+8. Family TODOのFamily Logで睡眠開始・終了または家事記録を確認します。
+9. 管理 → 外部連携 → Google Homeで最終SYNC、Scene数、最終実行結果を確認します。
+10. DISCONNECTでlink tokenだけが失効し、Family TODO account/dataが残り、再linkできることを確認します。
 
-## Script Editor
+初期確認用Scene名の例は「ゆうま寝た」「ゆうま起きた」「ゴミ出し完了」です。どの自然文が確実に起動するかはGoogle側の音声認識に依存し、コードは特定phraseを保証しません。実機確認後にname/nicknameを調整し、Wave113では推測による大量aliasを追加しません。
 
-必要に応じて `assistant.event.OkGoogle` の発話starterから、SYNCされたSceneに `device.command.ActivateScene`（`activate: true`）を送ります。Worker URLを直接呼ぶ非公式Webhookは使用しません。
-`home.execution.Webhook` は公式schemaにないため追加しません。
+Scene IDは `ft:sleep:start:<id>` / `ft:sleep:stop:<id>` / `ft:chore:<id>` で、表示名を変えても不変です。同じGoogle `requestId` + commandの再送は `external_command_receipts` により二重記録されません。QUERYはSceneに架空stateを返さず空のdevices応答です。Scene一覧を変更した後はRequest Sync APIが未実装のため、現時点では再linkまたはGoogle側の再同期が必要になる場合があります。
 
-## 動的読み上げ
+共有スピーカーの話者identityはFamily TODOへ提供される前提にしません。すべてOAuthで連携したmemberの操作として記録します。
 
-Scene実行だけを対象とし、Worker応答を任意文として読み上げる機能はありません。予定の参照はGoogle Calendar連携を利用します。
+## Script Editor / 読み上げの範囲
+
+必要な実機検証では `assistant.event.OkGoogle` starterからSYNC済みSceneへ `device.command.ActivateScene` を送れます。Workerを直接呼ぶ非公式 `home.execution.Webhook` は使いません。SceneはReport State非対応です。Scene integrationに動的読み上げ機能はありません。

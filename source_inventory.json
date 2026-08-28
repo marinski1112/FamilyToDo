@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.131.0-wave112",
+  "source": "FamilyTODO Cloudflare v12.132.0-wave113",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -72,7 +72,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave108",
+  "cloudflare_wave": "Wave113",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -107,7 +107,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.131.0-wave112",
+  "version": "12.132.0-wave113",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -149,5 +149,6 @@
   "wave106_note": "Provider-neutral typed Family AI planning, quota-free Gemini model catalog, bounded all-violation diagnostics, explicit Workers AI binding/provider, and OWNER/ADMIN-only access; no migration added.",
   "wave109_note": "D1-safe fixed-query ICS preview, bounded apply and resumable rollback, re-importable provenance, awaited routes, and opt-in signed title-time normalization with ambiguous-only Family AI; no migration.",
   "wave110_note": "Dynamic 40-query D1 apply/rollback budgeting, start-only title normalization without inferred duration, expanded deterministic TimeTree parsing, and compact month-grid start times; no migration.",
-  "wave112_note": "Exact source-ordinal resume, explicit same-file UX, server apply lease/CAS, and active-batch uniqueness; migration 0037."
+  "wave112_note": "Exact source-ordinal resume, explicit same-file UX, server apply lease/CAS, and active-batch uniqueness; migration 0037.",
+  "wave113_note": "Google Home production/sandbox account-link readiness, bounded Scene catalog, race-safe refresh tokens, safe SYNC/EXECUTE diagnostics, and real-device setup guidance; no migration."
 }
