@@ -776,6 +776,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
         }
         await ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(taskId,now,id,m.family_id).run();
         await logActivity(ctx,'CONVERTED','message',id,{to:'existing_task',task_id:taskId});
+        try { await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,taskId); } catch { /* local mutation remains authoritative */ }
         return commitSession(json({ok:true,id:taskId,mode:'existing'}),ctx.session,ctx.env.APP_SECRET);
       }
 
@@ -811,6 +812,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       if(reminderAt&&assignees.length){const rs=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();if(rs.results.length)await ctx.env.DB.batch(rs.results.map(x=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(x.id),'task_reminder','task',tid,reminderAt,'pending',`【タスク】${title}\n${description||'詳細なし'}`,now)));}
       await ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(tid,now,id,m.family_id).run();
       await logActivity(ctx,'CONVERTED','message',id,{to:'new_task',task_id:tid});
+      try { await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,tid); } catch { /* local mutation remains authoritative */ }
       return commitSession(json({ok:true,id:tid,mode:'new'}),ctx.session,ctx.env.APP_SECRET);
     }
     const text=String(b.text??'').trim(); const target=Number(b.target_member_id??0)||null; if(!text)throw new BadRequest('伝言を入力してください。');
@@ -886,6 +888,7 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
       const r=await ctx.env.DB.prepare("INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,task_kind,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)").bind(m.family_id,String(item.name||''),'買い物から作成',due?`${due} 00:00:00`:null,'pending','ANY',m.id,now,now,due?`${due} 00:00:00`:null,null,null,due?1:0,1,'task').run();
       const taskId=Number(r.meta.last_row_id);
       await ctx.env.DB.batch([ctx.env.DB.prepare('UPDATE shopping_items SET task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(taskId,now,id,m.family_id),ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,member_id FROM shopping_assignees WHERE shopping_item_id=?').bind(taskId,id)]);
+      try { await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,taskId); } catch { /* local mutation remains authoritative */ }
       return commitSession(json({ok:true,id:taskId}),ctx.session,ctx.env.APP_SECRET);
     }
     if(action==='toggle'){
@@ -1171,7 +1174,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     }
     for(const r of items.results)if(!postedItemIds.has(Number(r.id)))await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(r.id)),...archiveItemCompletionStatements(ctx.env.DB,m.family_id,Number(r.id),now),ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND task_id=? AND family_id=?').bind(Number(r.id),id,m.family_id)]);
 
-    try { await (await import('./google-calendar')).enqueueCalendarSync(ctx.env.DB,m.family_id,id,'UPDATE'); } catch { /* task save succeeds independently of Google */ }
+    try { await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* task save succeeds independently of Google */ }
     return redirect(`/task/view.php?id=${id}`);
   }
 
@@ -1223,7 +1226,7 @@ export async function taskApiLegacy(request:Request,ctx:AppContext):Promise<Resp
     );
     for(const r of rules.results) stm.push(...archiveRecurrenceRuleOccurrenceStatements(ctx.env.DB,m.family_id,Number(r.id),nowJst()),ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id));
     stm.push(ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id));
-    await ctx.env.DB.batch(stm); return json({ok:true});
+    await ctx.env.DB.batch(stm); try { await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* deletion remains authoritative */ } return json({ok:true});
   }
   return json({ok:false,error:'Method Not Allowed'},405);
 }

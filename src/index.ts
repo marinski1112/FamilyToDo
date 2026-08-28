@@ -6,7 +6,7 @@ import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
 import { familyAiQuery, familyAiConnectionTest } from './family-ai';
-import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed } from './google-calendar';
+import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 
 const text = (r: Response) => r;
@@ -69,6 +69,7 @@ export default {
       if(url.pathname==='/api/family-ai/connection-test') return familyAiConnectionTest(request,context);
       if(url.pathname==='/api/settings/diagnostics-detail') return settingsDiagnosticsDetail(request,context);
       if(url.pathname==='/api/google-calendar/sync') return calendarSyncNow(request,context);
+      if(url.pathname==='/api/google-calendar/backfill') return calendarBackfill(request,context);
       if(url.pathname==='/api/google-calendar/disconnect') return calendarDisconnect(request,context);
       if(url.pathname==='/api/google-calendar/retry-failed') return calendarRetryFailed(request,context);
       if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
@@ -339,8 +340,8 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
       ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,now),
       ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
     );
-    try { await enqueueCalendarSync(ctx.env.DB,m.family_id,id,'DELETE'); } catch { /* deletion remains authoritative */ }
     await ctx.env.DB.batch(q);
+    try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* deletion remains authoritative */ }
     return json({ok:true});
   }
   if(request.method!=='POST') return json({ok:false,error:'POST only'},405);
@@ -406,6 +407,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
     throw e;
   }
 
+  try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* local task remains authoritative */ }
   if(!isPrivate)await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','task',id,JSON.stringify({title}),nowJst()).run().catch(()=>{});return json({ok:true,id},201);
 }
 
