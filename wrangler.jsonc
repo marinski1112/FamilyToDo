@@ -38,7 +38,7 @@
     "ENVIRONMENT": "staging"
   },
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/5 * * * *", "3,13,23,33,43,53 * * * *"]
   },
   "observability": {
     "enabled": true

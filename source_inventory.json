@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.134.0-wave115",
+  "source": "FamilyTODO Cloudflare v12.135.0-wave116",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -64,7 +64,8 @@
     "member_permissions",
     "family_log_time_repairs",
     "external_google_task_accounts",
-    "external_google_task_links"
+    "external_google_task_links",
+    "external_google_voice_commands"
   ],
   "secrets_excluded": true,
   "legacy": {
@@ -74,7 +75,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave114",
+  "cloudflare_wave": "Wave116",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -107,9 +108,10 @@
     "Wave81 completes quick_chore_id health and lifecycle diagnostics, preserves source identity through HOUSEWORK-only edits, and adds seven-day/month quick-chore aggregation by item and recorder without a new migration.",
     "Wave82 adds reusable task Family Log templates and idempotent recurrence occurrence record-and-complete actions.",
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
-    "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
+    "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details.",
+    "Wave116 bounds Google Tasks inbound to one account and eight tasks (<=40 D1 statements), persists page continuation, recovers expired leases/invalid tokens, isolates cron budgets, and adds deterministic marked shopping commands with zero Gemini calls."
   ],
-  "version": "12.133.0-wave114",
+  "version": "12.135.0-wave116",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
