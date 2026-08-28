@@ -3,7 +3,7 @@
 try{
   const config=JSON.parse(document.getElementById('recurringConfig')?.textContent||'{}'),f=document.getElementById('recForm'),csrf=String(config.csrf||''),today=String(config.today||''),heading=document.getElementById('recHeading'),submit=document.getElementById('recSubmit'),cancel=document.getElementById('recCancel'),status=document.getElementById('recStatus');
   if(status)status.textContent='';
-  const q=n=>f.querySelector('[name="'+n+'"]'),setVal=(name,v)=>{const e=q(name);if(e)e.value=v??''};
+  const q=n=>f.querySelector('[name="'+n+'"]'),setVal=(name,v)=>{const e=q(name);if(!e)return;if(name==='calendar_color'&&v&&![...e.options].some(o=>o.value===v)){const o=new Option('インポート色 '+v,v,true,true);e.add(o,0);}e.value=v??''};
   function refreshRecurringFields(){
     const type=String(q('recurrence_type')?.value||'DAILY');
     document.querySelectorAll('[data-rec-show]').forEach(el=>{const allowed=String(el.dataset.recShow||'').split(',');el.style.display=allowed.includes(type)?'block':'none';});

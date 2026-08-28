@@ -8,6 +8,7 @@ import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSetting
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
+import { calendarImportPage, calendarImportPreview, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -77,6 +78,9 @@ export default {
       if(url.pathname==='/api/google-calendar/disconnect') return calendarDisconnect(request,context);
       if(url.pathname==='/api/google-calendar/retry-failed') return calendarRetryFailed(request,context);
       if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
+      if(url.pathname==='/api/calendar-import/preview') return calendarImportPreview(request,context);
+      if(url.pathname==='/api/calendar-import/apply') return calendarImportApply(request,context);
+      if(url.pathname==='/api/calendar-import/rollback') return calendarImportRollback(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
       if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return webPushApi(request,context);
@@ -95,6 +99,7 @@ export default {
       if(url.pathname==='/app/shopping.php') return shopping(request,context);
       if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return familyLog(request,context);
       if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
+      if(url.pathname==='/app/calendar_import.php') return calendarImportPage(context);
       if(url.pathname==='/app/settings.php') return settings(request,context);
       if(url.pathname==='/app/settings_google_home.php') return googleHomeSettings(request,context);
       if(url.pathname==='/app/settings_integrations.php') return integrationsSettings(request,context);
@@ -174,6 +179,8 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     google_home_authorization_codes:['id','code_hash','family_id','member_id','client_id','redirect_uri','expires_at','used_at','created_at'],
     google_home_tokens:['id','family_id','member_id','access_token_hash','refresh_token_hash','access_expires_at','revoked_at','created_at','updated_at'],
     external_command_receipts:['id','provider','family_id','member_id','request_id','command_key','status','error_code','created_at','updated_at'],
+    calendar_import_batches:['id','family_id','source_format','file_sha256','status','total_count','processed_count','created_by'],
+    calendar_import_entries:['id','batch_id','family_id','source_uid','source_recurrence_key','source_hash','task_id','recurrence_rule_id','status'],
     external_calendar_accounts:['id','family_id','member_id','provider','refresh_token_ciphertext','token_key_version','calendar_id','status','last_synced_at','last_error'],
     external_calendar_links:['id','family_id','task_id','provider','calendar_id','external_event_id','external_etag','last_synced_at','deleted_at'],
     calendar_sync_outbox:['id','family_id','task_id','provider','operation','status','retry_count','next_retry_at','last_error'],
@@ -229,6 +236,14 @@ async function dbRuntimeHealth(env:Env):Promise<Response>{
     ['google_home_authorization_codes','SELECT id,code_hash,family_id,member_id,client_id,redirect_uri,expires_at,used_at,created_at FROM google_home_authorization_codes LIMIT 1'],
     ['google_home_tokens','SELECT id,family_id,member_id,access_token_hash,refresh_token_hash,access_expires_at,revoked_at,created_at,updated_at FROM google_home_tokens LIMIT 1'],
     ['external_command_receipts','SELECT id,provider,family_id,member_id,request_id,command_key,status,error_code,created_at,updated_at FROM external_command_receipts LIMIT 1'],
+    ['calendar_import_batches','SELECT id,family_id,source_format,source_name,file_sha256,timezone,status,total_count,created_count,updated_count,skipped_count,error_count,processed_count,created_by,created_at,applied_at,rolled_back_at FROM calendar_import_batches LIMIT 1'],
+    ['calendar_import_entries','SELECT id,batch_id,family_id,source_uid,source_recurrence_key,source_hash,task_id,recurrence_rule_id,related_to_uid,status FROM calendar_import_entries LIMIT 1'],
+    ['calendar_import_integrity',`SELECT
+      (SELECT COUNT(*) FROM calendar_import_entries e LEFT JOIN calendar_import_batches b ON b.id=e.batch_id AND b.family_id=e.family_id WHERE b.id IS NULL)
+      +(SELECT COUNT(*) FROM calendar_import_batches b WHERE b.processed_count>b.total_count OR (b.status='COMPLETED' AND b.processed_count<>b.total_count))
+      +(SELECT COUNT(*) FROM (SELECT family_id,source_format,source_uid,source_recurrence_key FROM calendar_import_entries GROUP BY family_id,source_format,source_uid,source_recurrence_key HAVING COUNT(*)>1))
+      +(SELECT COUNT(*) FROM calendar_import_entries e LEFT JOIN tasks t ON t.id=e.task_id AND t.family_id=e.family_id WHERE e.status='ACTIVE' AND t.id IS NULL)
+      +(SELECT COUNT(*) FROM calendar_import_entries e LEFT JOIN recurrence_rules r ON r.id=e.recurrence_rule_id AND r.family_id=e.family_id WHERE e.status='ACTIVE' AND e.recurrence_rule_id IS NOT NULL AND r.id IS NULL) issues`],
     ['external_calendar_accounts','SELECT id,family_id,member_id,provider,token_key_version,calendar_id,status,last_synced_at,last_error FROM external_calendar_accounts LIMIT 1'],
     ['external_calendar_links','SELECT id,family_id,task_id,provider,calendar_id,external_event_id,external_etag,last_synced_at,deleted_at FROM external_calendar_links LIMIT 1'],
     ['calendar_sync_outbox','SELECT id,family_id,task_id,provider,operation,status,retry_count,next_retry_at,last_error FROM calendar_sync_outbox LIMIT 1'],

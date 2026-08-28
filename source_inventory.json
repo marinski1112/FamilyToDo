@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.126.0-wave107",
+  "source": "FamilyTODO Cloudflare v12.127.0-wave108",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -59,6 +59,8 @@
     "external_calendar_links",
     "calendar_sync_outbox",
     "calendar_sync_state",
+    "calendar_import_batches",
+    "calendar_import_entries",
     "member_permissions",
     "family_log_time_repairs"
   ],
@@ -70,7 +72,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave101",
+  "cloudflare_wave": "Wave108",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -105,7 +107,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.126.0-wave107",
+  "version": "12.127.0-wave108",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -142,6 +144,7 @@
   "wave102_note": "Local task mutations centrally enqueue eligible Google Calendar CREATE/UPDATE/DELETE projections; safe existing-data backfill, compact sync diagnostics, and scoped Family Log repair UI are included without a migration.",
   "wave103_note": "Retired Gemini default replacement, safe connection categories, admin model visibility, dedicated Calendar inbound guidance and observability, and documented privacy/cost guardrails; no migration added.",
   "wave105_note": "Safe Gemini QuotaFailure classification, default 3.1 Flash-Lite, explicit allowlisted synthetic model probe, and shared real-query upstream handling; Calendar and Google Home remain regression-protected without a migration.",
+  "wave108_note": "Preview-first, provenance-safe ICS / TimeTree import with timezone conversion, recurrence and edit-safe rollback; migration 0036.",
   "wave107_note": "Signed PLAN/PREVIEW/EXECUTE Family AI writes use a seven-action allowlist, domain helpers, CSRF, expiring HMAC tokens, and nonce receipts; execution performs zero provider inference.",
   "wave106_note": "Provider-neutral typed Family AI planning, quota-free Gemini model catalog, bounded all-violation diagnostics, explicit Workers AI binding/provider, and OWNER/ADMIN-only access; no migration added."
 }
