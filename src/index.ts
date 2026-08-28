@@ -76,7 +76,7 @@ export default {
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
       if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return webPushApi(request,context);
-      if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return loginPage(env);
+      if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return loginPage(env,url.searchParams.get('next')||'/app/index.php');
       if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return liffConfigDiagnose(env);
       if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return createFamilyPage(context);
       if(url.pathname==='/app/join.php'||url.pathname==='/app/join') return url.searchParams.get('token') ? invitePage(context,url.searchParams.get('token')||'') : createFamilyPage(context);

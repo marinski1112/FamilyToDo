@@ -10,3 +10,8 @@ NOTIFY_SECRET="replace-me"
 VAPID_PUBLIC_KEY="replace-me"
 VAPID_PRIVATE_KEY="replace-me"
 VAPID_SUBJECT="mailto:you@example.com"
+
+# Google Home Cloud-to-cloud (Calendar OAuthとは別credential)
+GOOGLE_HOME_CLIENT_ID=
+GOOGLE_HOME_CLIENT_SECRET=
+GOOGLE_HOME_PROJECT_ID=
