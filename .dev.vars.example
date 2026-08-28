@@ -15,3 +15,9 @@ VAPID_SUBJECT="mailto:you@example.com"
 GOOGLE_HOME_CLIENT_ID=
 GOOGLE_HOME_CLIENT_SECRET=
 GOOGLE_HOME_PROJECT_ID=
+
+# Family AI (Workers AI needs no API secret; it uses the AI binding.)
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.1-flash-lite
+FAMILY_AI_PROVIDER=GEMINI
+WORKERS_AI_MODEL=@cf/meta/llama-3.1-8b-instruct-fast
