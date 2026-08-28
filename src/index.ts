@@ -10,7 +10,7 @@ import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleT
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 import { integrationsHealthResponse } from './environment-health';
-import { preserveGoogleHomeLogin, googleHomeLiff, resumeGoogleHome } from './oauth-continuation';
+import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome } from './oauth-continuation';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
@@ -40,7 +40,7 @@ export default {
       if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
       if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
       if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);
-      if(url.pathname==='/liff'||url.pathname==='/liff/') return await googleHomeLiff(request,env);
+      if(url.pathname==='/liff'||url.pathname==='/liff/') return await liffDispatcher(request,env);
       if(url.pathname==='/oauth/google/continue') return await resumeGoogleHome(request,env);
       // 認証が必要なページは、例外ベースのリダイレクトに依存せず
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの

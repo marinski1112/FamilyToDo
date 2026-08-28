@@ -1,4 +1,5 @@
 import { integrationsHealth, APP_VERSION } from './environment-health';
+import { validateLiffNext } from './liff-target';
 import { withDb } from './db';
 import { commitSession, getSessionCookie, openSession } from './session';
 import { verifyLineIdToken } from './line';
@@ -140,10 +141,11 @@ export function layout(title: string, body: string, active = ''): string {
  * LINEアプリ内から起動→ID Token検証→Workerセッション発行→アプリ画面
  * までを一つの導線で処理する。
  */
-export function liffEntryPage(env: Env, nextPath = '/app/index.php'): Response {
-  const safeNext = /^\/(?!\/)/.test(nextPath) ? nextPath : '/app/index.php';
-  const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||''),next:safeNext}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.123-wave104"></script>`;
+export function liffEntryPage(env: Env, options: {next?: string; loginRedirect?: string} = {}): Response {
+  const safeNext = validateLiffNext(options.next) || '/app/index.php';
+  const loginRedirect = /^\/liff(?:\?[^\r\n\\]*)?$/.test(options.loginRedirect || '') ? options.loginRedirect : '/liff';
+  const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||''),next:safeNext,loginRedirect}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p id="status" class="meta">LINE認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.136.1-wave117-hotfix"></script>`;
   return html(layout('LINE認証',body));
 }
 
@@ -161,9 +163,9 @@ export async function authHealth(ctx: AppContext): Promise<Response> {
 }
 
 export function loginPage(env: Env, nextPath = '/app/index.php'): Response {
-  const safeNext=/^\/(?!\/)[^\r\n\\]*$/.test(nextPath)?nextPath:'/app/index.php';
-  const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||''),next:safeNext}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p>LINE認証を開始します。</p><p id="status" class="meta">認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.123-wave104"></script>`;
+  const safeNext=validateLiffNext(nextPath)||'/app/index.php';
+  const payload=JSON.stringify({liffId:String(env.LINE_LIFF_ID||''),next:safeNext,loginRedirect:`/liff?next=${encodeURIComponent(safeNext)}`}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const body = `<div class="card liff-entry"><h1>Family TODO LINE</h1><p>LINE認証を開始します。</p><p id="status" class="meta">認証を準備しています…</p><div id="error" class="error" style="display:none"></div><button id="retry" style="display:none" class="btn" type="button">再試行</button></div><script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script type="application/json" id="liffAuthPayload">${payload}</script><script src="/assets/liff-auth.js?v=12.136.1-wave117-hotfix"></script>`;
   return html(layout('LINE認証',body));
 }
 
@@ -182,7 +184,8 @@ export async function liffLogin(request: Request, ctx: AppContext): Promise<Resp
   const member = await ctx.env.DB.prepare('SELECT id,family_id FROM members WHERE line_user_id=? AND active=1 LIMIT 1').bind(verified.sub).first<{id:number;family_id:number}>();
   if (member) { ctx.session.memberId=Number(member.id); ctx.session.familyId=Number(member.family_id); }
   else { delete ctx.session.memberId; delete ctx.session.familyId; }
-  const response = json({ok:true,redirect:member?'/app/index.php':'/family/create.php'});
+  const requestedNext = validateLiffNext(body.next);
+  const response = json({ok:true,redirect:member?(requestedNext || '/app/index.php'):'/family/create.php'});
   return commitSession(response,ctx.session,ctx.env.APP_SECRET);
 }
 

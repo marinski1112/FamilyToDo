@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.136.0-wave117",
+  "source": "FamilyTODO Cloudflare v12.136.1-wave117-hotfix",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -112,7 +112,7 @@
     "Wave116 bounds Google Tasks inbound to one account and eight tasks (<=40 D1 statements), persists page continuation, recovers expired leases/invalid tokens, isolates cron budgets, and adds deterministic marked shopping commands with zero Gemini calls.",
     "Wave117 preserves Dashboard variables, audits integration readiness, and canonically resumes Google Home OAuth through LINE/LIFF without a migration."
   ],
-  "version": "12.136.0-wave117",
+  "version": "12.136.1-wave117-hotfix",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
