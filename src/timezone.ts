@@ -14,6 +14,19 @@ export const familyDate=(timeZone:string)=>familyNow(timeZone).slice(0,10);
 /** Infrastructure timestamps are UTC-naive SQL values, not family wall-clock values. */
 export const utcNow=(date=new Date())=>date.toISOString().slice(0,19).replace('T',' ');
 
+/**
+ * Operational/infrastructure values (activity/sync/retry timestamps) are stored
+ * as UTC-naive SQL text. Domain wall-clock values (task dates and family-log
+ * occurred_at) must not be passed to this display-only converter.
+ */
+export function formatStoredUtcForFamily(value:string|null|undefined,timeZone:string){
+  if(value==null||String(value).trim()==='')return '—';
+  const raw=String(value).trim();
+  if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw))return raw.slice(0,80);
+  const date=new Date(raw.replace(' ','T')+'Z');
+  return Number.isFinite(date.getTime())?formatFamilyDateTime(date,timeZone):raw.slice(0,80);
+}
+
 /** Wave98 storage policy: naive values are already family-local wall-clock; offset values are instants. */
 export function parseImportDateTime(value:unknown,timeZone:string){
   const raw=String(value??'').trim();
