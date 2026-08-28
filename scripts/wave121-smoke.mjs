@@ -2,7 +2,7 @@ import fs from 'node:fs';import assert from 'node:assert/strict';
 import { resolveLiffDestination } from '../src/liff-target.ts';
 import { safeLineTokenErrorCategory } from '../src/line-oauth-diagnostics.ts';
 const read=p=>fs.readFileSync(p,'utf8'),oauth=read('src/oauth-continuation.ts'),index=read('src/index.ts'),target=read('src/liff-target.ts'),liff=read('public/assets/liff-auth.js'),app=read('src/app.ts'),family=read('public/assets/family-log.js'),config=read('wrangler.jsonc'),types=read('worker-configuration.d.ts'),docs=read('docs/GOOGLE_HOME_VOICE_SETUP.md'),pkg=JSON.parse(read('package.json'));
-assert.equal(pkg.version,'12.140.0-wave121');assert.ok(types.includes('LINE_LOGIN_CHANNEL_ID?:string')&&types.includes('LINE_LOGIN_CHANNEL_SECRET?:string'));
+assert.ok(['12.140.0-wave121','12.141.0-wave122'].includes(pkg.version));assert.ok(types.includes('LINE_LOGIN_CHANNEL_ID?:string')&&types.includes('LINE_LOGIN_CHANNEL_SECRET?:string'));
 assert.ok(oauth.includes('client_secret:e.LINE_LOGIN_CHANNEL_SECRET'));assert.ok(!oauth.includes('client_secret:e.LINE_CHANNEL_SECRET'));assert.ok(oauth.includes("e.LINE_LOGIN_CHANNEL_ID||e.LINE_CHANNEL_ID"));assert.ok(oauth.includes('LINE_LOGIN_NOT_CONFIGURED'));
 for(const x of ['invalid_request','invalid_grant','invalid_client','unsupported_grant_type','http_status','error_category'])assert.ok(read('src/line-oauth-diagnostics.ts') .includes(x)||oauth.includes(x));
 assert.ok(index.includes("verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)"));assert.ok(config.includes('"/liff/*"'));

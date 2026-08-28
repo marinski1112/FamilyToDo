@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8'),ui=fs.readFileSync('public/assets/calendar-import.js','utf8'),routes=fs.readFileSync('src/index.ts','utf8'),pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.ok(['12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114','12.134.0-wave115','12.135.0-wave116','12.136.0-wave117','12.136.1-wave117-hotfix','12.137.0-wave118','12.138.0-wave119','12.139.0-wave120','12.140.0-wave121'].includes(pkg.version));
+assert.ok(['12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114','12.134.0-wave115','12.135.0-wave116','12.136.0-wave117','12.136.1-wave117-hotfix','12.137.0-wave118','12.138.0-wave119','12.139.0-wave120','12.140.0-wave121','12.141.0-wave122'].includes(pkg.version));
 assert.match(source,/ICS_APPLY_CHUNK=15/);assert.match(source,/MAX_D1_QUERY_BUDGET=40/);
 assert.match(source,/parseIcs\(String\(b\.chunk_ics\|\|''\),zone,true\)/);assert.doesNotMatch(source,/calendarImportApply[\s\S]{0,500}requestState/);
 assert.match(source,/parsedCount>ICS_APPLY_CHUNK/);assert.match(source,/sha_count:parsedCount/);assert.match(source,/parsed_event_count:parsedCount/);

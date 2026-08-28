@@ -683,17 +683,11 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   margin-top:0!important;padding:0!important;
 }
 .calendar-month-label{appearance:none;border:0;background:transparent;color:#64748b;padding:4px 0;min-height:40px;font:inherit;font-weight:750;cursor:pointer}
-.calendar-jump-panel{position:absolute;z-index:30;width:min(340px,calc(100vw - 24px));padding:10px;background:#fff;border:1px solid #dbe2ea;border-radius:14px;box-shadow:0 14px 35px rgba(15,23,42,.16)}
-.calendar-jump-row{display:flex;align-items:end;gap:7px;margin:0 0 8px}.calendar-jump-row label{display:grid;gap:3px;color:#64748b;font-size:11px}.calendar-jump-row select,.calendar-jump-row input{min-height:42px;padding:7px;width:auto}.calendar-date-jump{border-top:1px solid #edf0f4;padding-top:8px}.calendar-date-jump label{flex:1}.calendar-date-jump input{width:100%}.calendar-jump-shortcuts{display:flex;gap:7px}
 
 /* Wave119: no-band days sit two pixels below the 23px date number. */
 .calendar-week{--calendar-no-band-content-top:30px}
 .calendar-week-days>.calendar-cell[data-band-rows="0"] .calendar-items{top:var(--calendar-no-band-content-top)!important}
-.calendar-jump-panel{width:max-content;max-width:min(310px,calc(100vw - 20px));box-sizing:border-box}
-.calendar-jump-row select,.calendar-jump-row input{font-size:12px;min-height:34px;padding:6px 7px;border-radius:8px}
-.calendar-jump-row button,.calendar-jump-shortcuts .btn{font-size:12px!important;min-height:34px!important;padding:6px 9px!important;border-radius:8px!important}
-@media(max-width:600px){.calendar-week{--calendar-no-band-content-top:29px}.calendar-jump-panel{max-width:min(310px,calc(100vw - 16px));padding:8px}.calendar-jump-row{gap:5px}}
-/* Wave120: bounded jump controls must shrink inside the panel. */
-.calendar-jump-panel{width:min(300px,calc(100vw - 24px));max-width:none;box-sizing:border-box}
-.calendar-jump-row{display:grid;align-items:end;gap:7px}.calendar-jump-row:not(.calendar-date-jump){grid-template-columns:minmax(0,1fr) minmax(0,.65fr) auto}.calendar-jump-row.calendar-date-jump{grid-template-columns:minmax(0,1fr) auto}
-.calendar-jump-row label{min-width:0}.calendar-jump-row select,.calendar-jump-row input{width:100%;min-width:0;box-sizing:border-box}.calendar-jump-row button{position:static;width:auto;min-width:50px;white-space:nowrap}
+/* Wave122: canonical compact, non-overlapping calendar jump. */
+.calendar-jump-panel{position:absolute;z-index:30;width:min(300px,calc(100vw - 24px));max-width:none;box-sizing:border-box;padding:12px;background:#fff;border:1px solid #dbe2ea;border-radius:14px;box-shadow:0 14px 35px rgba(15,23,42,.16)}
+.calendar-jump-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.65fr) auto;align-items:end;gap:7px;margin:0 0 8px}.calendar-jump-row.calendar-date-jump{grid-template-columns:minmax(0,1fr) auto;border-top:1px solid #edf0f4;padding-top:8px}.calendar-jump-row label{display:grid;gap:3px;min-width:0;color:#64748b;font-size:11px}.calendar-jump-row select,.calendar-jump-row input{width:100%;height:40px;min-height:40px;min-width:0;box-sizing:border-box;padding:5px 7px;font-size:16px;border-radius:8px}.calendar-jump-row button{position:static;width:auto;min-width:52px;height:40px;min-height:40px;padding:6px 9px;background:var(--primary);color:#fff;white-space:nowrap}.calendar-jump-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.calendar-jump-shortcuts .btn{min-height:40px}
+@media(max-width:600px){.calendar-week{--calendar-no-band-content-top:29px}}
