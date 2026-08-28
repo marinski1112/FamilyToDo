@@ -8,7 +8,7 @@ import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSetting
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
-import { calendarImportPage, calendarImportPreview, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
+import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -28,20 +28,20 @@ export default {
         return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
       }
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
-      if(url.pathname==='/__cf/db-schema-health') return dbSchemaHealth(env);
-      if(url.pathname==='/__cf/db-runtime-health') return dbRuntimeHealth(env);
-      if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return authHealth(context);}
-      if(url.pathname==='/__cf/google-home-health') return googleHomeHealth(env);
-      if(url.pathname==='/oauth/google/token') return googleToken(request,env);
-      if(url.pathname==='/oauth/google-calendar/callback') return googleCalendarCallback(request,env);
-      if(url.pathname==='/api/google-home/fulfillment') return googleFulfillment(request,env);
+      if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);
+      if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);
+      if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return await authHealth(context);}
+      if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);
+      if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
+      if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
+      if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);
       if(url.pathname==='/liff'||url.pathname==='/liff/') {
         const liffContext=await makeContext(request,env);
         // LIFF起動時に既存のWorkerセッションが有効なら、再度IDトークン検証を要求しない。
         // LINE内ブラウザで他ページが正常表示できるのにトップだけ認証画面へ戻るケースを防ぐ。
         const liffNext=url.searchParams.get('next')||'/app/index.php';
         if(liffContext.member && /^\/(?!\/)/.test(liffNext)) return redirect(liffNext);
-        return liffEntryPage(env,liffNext);
+        return await liffEntryPage(env,liffNext);
       }
       // 認証が必要なページは、例外ベースのリダイレクトに依存せず
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
@@ -50,80 +50,81 @@ export default {
         if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
         const context=await makeContext(request,env);
         if(!context.member) return new Response(null,{status:302,headers:{Location:new URL('/login.php',request.url).toString()}});
-        return recurring(request,context);
+        return await recurring(request,context);
       }
       const context=await makeContext(request,env);
-      if(url.pathname==='/oauth/google/authorize') return googleAuthorize(request,context);
-      if(url.pathname==='/oauth/google-calendar/authorize') return googleCalendarAuthorize(request,context);
-      if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return liffLogin(request,context);
-      if(url.pathname==='/api/family/create') return createFamily(request,context);
-      if(url.pathname==='/api/family/join') return joinFamily(request,context);
-      if(url.pathname==='/api/family/invite') return inviteCreate(request,context);
-      if(url.pathname==='/api/me') return apiMe(context);
-      if(url.pathname==='/api/toggle') return toggle(request,context);
-      if(url.pathname==='/api/task') return taskApi(request,context);
-      if(url.pathname==='/api/item') return itemApi(request,context);
-      if(url.pathname==='/api/messages') return messages(request,context);
-      if(url.pathname==='/api/shopping') return shopping(request,context);
-      if(url.pathname==='/api/family-log') return familyLog(request,context);
-      if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
-      if(url.pathname==='/api/family-ai/plan') return familyAiPlan(request,context);
-      if(url.pathname==='/api/family-ai/execute') return familyAiExecute(request,context);
-      if(url.pathname==='/api/family-ai/connection-test') return familyAiConnectionTest(request,context);
-      if(url.pathname==='/api/family-ai/model-probe') return familyAiModelProbe(request,context);
-      if(url.pathname==='/api/family-ai/model-catalog') return familyAiModelCatalog(request,context);
-      if(url.pathname==='/api/settings/diagnostics-detail') return settingsDiagnosticsDetail(request,context);
-      if(url.pathname==='/api/google-calendar/sync') return calendarSyncNow(request,context);
-      if(url.pathname==='/api/google-calendar/backfill') return calendarBackfill(request,context);
-      if(url.pathname==='/api/google-calendar/disconnect') return calendarDisconnect(request,context);
-      if(url.pathname==='/api/google-calendar/retry-failed') return calendarRetryFailed(request,context);
-      if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
-      if(url.pathname==='/api/calendar-import/preview') return calendarImportPreview(request,context);
-      if(url.pathname==='/api/calendar-import/apply') return calendarImportApply(request,context);
-      if(url.pathname==='/api/calendar-import/rollback') return calendarImportRollback(request,context);
-      if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
-      if(url.pathname==='/api/settings') return settings(request,context);
-      if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return webPushApi(request,context);
-      if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return loginPage(env,url.searchParams.get('next')||'/app/index.php');
-      if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return liffConfigDiagnose(env);
-      if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return createFamilyPage(context);
-      if(url.pathname==='/app/join.php'||url.pathname==='/app/join') return url.searchParams.get('token') ? invitePage(context,url.searchParams.get('token')||'') : createFamilyPage(context);
-      if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return createFamilyPage(context);
-      if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return invitePage(context,url.searchParams.get('token')||'');
-      if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return home(context);
-      if(url.pathname==='/today.php') return today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
-      if(url.pathname==='/tomorrow.php') return tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
-      if(url.pathname==='/app/tasks.php') return taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
-      if(url.pathname==='/app/calendar.php') return calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
-      if(url.pathname==='/app/messages.php') return messages(request,context);
-      if(url.pathname==='/app/shopping.php') return shopping(request,context);
-      if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return familyLog(request,context);
-      if(url.pathname==='/app/family_log_import.php') return familyLogImportPage(context);
-      if(url.pathname==='/app/calendar_import.php') return calendarImportPage(context);
-      if(url.pathname==='/app/settings.php') return settings(request,context);
-      if(url.pathname==='/app/settings_google_home.php') return googleHomeSettings(request,context);
-      if(url.pathname==='/app/settings_integrations.php') return integrationsSettings(request,context);
-      if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return toggle(request,context);
-      if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return reorderApi(request,context);
-      if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return webhook(request,env);
-      if(url.pathname==='/logout.php'||url.pathname==='/logout') return logout(request,env);
-      if(url.pathname==='/task/delete.php') return taskDelete(request,context);
-      if(url.pathname==='/task/convert_occurrence.php') return convertOccurrence(request,context);
-      if(url.pathname==='/app/message_new.php') return messageNew(context);
-      if(url.pathname==='/app/shopping_new.php') return shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
-      if(url.pathname==='/app/settings_content.php') return settingsContent(context);
-      if(url.pathname==='/app/settings_diagnostics.php') return settingsDiagnostics(context);
-      if(url.pathname==='/app/settings_members.php') return settingsMembers(request,context);
-      if(url.pathname==='/app/settings_notifications.php') return settingsNotifications(request,context);
-      if(url.pathname==='/app/settings_recurring.php') return recurring(request,context);
-      if(url.pathname==='/app/logs.php') return logsPage(context);
-      if(url.pathname==='/task/new.php') return taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');
-      if(url.pathname==='/task/view.php') return taskView(context,Number(url.searchParams.get('id')||0));
-      if(url.pathname==='/task/edit.php') return taskEdit(request,context,Number(url.searchParams.get('id')||0));
-      if(url.pathname==='/item/new.php') return itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));
-      if(url.pathname==='/item/edit.php') return itemEdit(request,context,Number(url.searchParams.get('id')||0));
-      if(url.pathname==='/app/shopping_edit.php') return shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
-      return env.ASSETS.fetch(request);
+      if(url.pathname==='/oauth/google/authorize') return await googleAuthorize(request,context);
+      if(url.pathname==='/oauth/google-calendar/authorize') return await googleCalendarAuthorize(request,context);
+      if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);
+      if(url.pathname==='/api/family/create') return await createFamily(request,context);
+      if(url.pathname==='/api/family/join') return await joinFamily(request,context);
+      if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
+      if(url.pathname==='/api/me') return await apiMe(context);
+      if(url.pathname==='/api/toggle') return await toggle(request,context);
+      if(url.pathname==='/api/task') return await taskApi(request,context);
+      if(url.pathname==='/api/item') return await itemApi(request,context);
+      if(url.pathname==='/api/messages') return await messages(request,context);
+      if(url.pathname==='/api/shopping') return await shopping(request,context);
+      if(url.pathname==='/api/family-log') return await familyLog(request,context);
+      if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);
+      if(url.pathname==='/api/family-ai/plan') return await familyAiPlan(request,context);
+      if(url.pathname==='/api/family-ai/execute') return await familyAiExecute(request,context);
+      if(url.pathname==='/api/family-ai/connection-test') return await familyAiConnectionTest(request,context);
+      if(url.pathname==='/api/family-ai/model-probe') return await familyAiModelProbe(request,context);
+      if(url.pathname==='/api/family-ai/model-catalog') return await familyAiModelCatalog(request,context);
+      if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);
+      if(url.pathname==='/api/google-calendar/sync') return await calendarSyncNow(request,context);
+      if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
+      if(url.pathname==='/api/google-calendar/disconnect') return await calendarDisconnect(request,context);
+      if(url.pathname==='/api/google-calendar/retry-failed') return await calendarRetryFailed(request,context);
+      if(url.pathname==='/api/family-log-import') return await familyLogImportApi(request,context);
+      if(url.pathname==='/api/calendar-import/preview') return await calendarImportPreview(request,context);
+      if(url.pathname==='/api/calendar-import/normalization-preview') return await calendarImportNormalizationPreview(request,context);
+      if(url.pathname==='/api/calendar-import/apply') return await calendarImportApply(request,context);
+      if(url.pathname==='/api/calendar-import/rollback') return await calendarImportRollback(request,context);
+      if(url.pathname==='/api/recurrence/family-log-complete') return await recordOccurrenceFamilyLog(request,context);
+      if(url.pathname==='/api/settings') return await settings(request,context);
+      if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return await webPushApi(request,context);
+      if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return await loginPage(env,url.searchParams.get('next')||'/app/index.php');
+      if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return await liffConfigDiagnose(env);
+      if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return await createFamilyPage(context);
+      if(url.pathname==='/app/join.php'||url.pathname==='/app/join') return await (url.searchParams.get('token') ? invitePage(context,url.searchParams.get('token')||'') : createFamilyPage(context));
+      if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return await createFamilyPage(context);
+      if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return await invitePage(context,url.searchParams.get('token')||'');
+      if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return await home(context);
+      if(url.pathname==='/today.php') return await today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/tomorrow.php') return await tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
+      if(url.pathname==='/app/messages.php') return await messages(request,context);
+      if(url.pathname==='/app/shopping.php') return await shopping(request,context);
+      if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
+      if(url.pathname==='/app/family_log_import.php') return await familyLogImportPage(context);
+      if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
+      if(url.pathname==='/app/settings.php') return await settings(request,context);
+      if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettings(request,context);
+      if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
+      if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);
+      if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return await reorderApi(request,context);
+      if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);
+      if(url.pathname==='/logout.php'||url.pathname==='/logout') return await logout(request,env);
+      if(url.pathname==='/task/delete.php') return await taskDelete(request,context);
+      if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);
+      if(url.pathname==='/app/message_new.php') return await messageNew(context);
+      if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
+      if(url.pathname==='/app/settings_content.php') return await settingsContent(context);
+      if(url.pathname==='/app/settings_diagnostics.php') return await settingsDiagnostics(context);
+      if(url.pathname==='/app/settings_members.php') return await settingsMembers(request,context);
+      if(url.pathname==='/app/settings_notifications.php') return await settingsNotifications(request,context);
+      if(url.pathname==='/app/settings_recurring.php') return await recurring(request,context);
+      if(url.pathname==='/app/logs.php') return await logsPage(context);
+      if(url.pathname==='/task/new.php') return await taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');
+      if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));
+      if(url.pathname==='/task/edit.php') return await taskEdit(request,context,Number(url.searchParams.get('id')||0));
+      if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));
+      if(url.pathname==='/item/edit.php') return await itemEdit(request,context,Number(url.searchParams.get('id')||0));
+      if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
+      return await env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired) return redirect('/login.php');
       if(e instanceof BadRequest) return json({ok:false,error:e.message||'入力内容が不正です。',code:'BAD_REQUEST'},400);
@@ -134,6 +135,7 @@ export default {
       if(/no such (table|column)|has no column named|no column named/i.test(message)) {
         return json({ok:false,error:'D1のデータベース構成または制約がWorkerの最新版と一致していません。/ __cf/db-schema-health と /__cf/db-runtime-health を確認してください。',code:'DB_SCHEMA_MIGRATION_REQUIRED',path:url.pathname,request_id:requestId},503);
       }
+      if(url.pathname.startsWith('/api/calendar-import/')) return json({ok:false,error:'カレンダーの確認処理に失敗しました。',code:'CALENDAR_IMPORT_INTERNAL_ERROR',request_id:requestId},500);
       return json({ok:false,error:'内部エラーです。',code:'INTERNAL_ERROR',path:url.pathname,request_id:requestId},500);
     }
   },
