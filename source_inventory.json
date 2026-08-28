@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.133.0-wave114",
+  "source": "FamilyTODO Cloudflare v12.134.0-wave115",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -62,7 +62,9 @@
     "calendar_import_batches",
     "calendar_import_entries",
     "member_permissions",
-    "family_log_time_repairs"
+    "family_log_time_repairs",
+    "external_google_task_accounts",
+    "external_google_task_links"
   ],
   "secrets_excluded": true,
   "legacy": {
