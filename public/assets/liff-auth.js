@@ -23,7 +23,8 @@
       await window.liff.init({liffId});
       if(!window.liff.isLoggedIn()){
         if(status) status.textContent='LINEログインを開始します…';
-        window.liff.login({redirectUri:location.origin+'/liff'});
+        const loginRedirect=String(payload.loginRedirect||'/liff');
+        window.liff.login({redirectUri:location.origin+(loginRedirect.startsWith('/liff')?loginRedirect:'/liff')});
         return;
       }
       if(status) status.textContent='認証情報を確認しています…';
@@ -33,11 +34,11 @@
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         credentials:'same-origin',
-        body:JSON.stringify({id_token:idToken})
+        body:JSON.stringify({id_token:idToken,next:payload.next})
       });
       const data=await response.json().catch(()=>null);
       if(!response.ok||!data?.ok) throw new Error(data?.error||('LINEログインに失敗しました（HTTP '+response.status+'）。'));
-      const target=String(payload.next||data.redirect||'/app/index.php');
+      const target=String(data.redirect||'/app/index.php');
       if(status) status.textContent='ログインしました。アプリを開いています…';
       root.dataset.liffAuthJs='ready';
       location.replace(target.startsWith('/')?target:'/app/index.php');
