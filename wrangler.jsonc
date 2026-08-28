@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "familytodo",
-  "main": "src/index.ts",
+  "main": "src/index-wave117.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": [
     "nodejs_compat"
@@ -10,6 +10,8 @@
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": [
+      "/",
+      "/index.php",
       "/api/*",
       "/oauth/*",
       "/app/api/*",
