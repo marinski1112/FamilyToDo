@@ -129,7 +129,7 @@ export function layout(title: string, body: string, active = ''): string {
     ['/app/tasks.php','✅','タスク・イベント'],['/app/calendar.php','📅','カレンダー'],['/app/shopping.php','🛒','買い物'],['/app/family_log.php','🐣','家族ログ'],['/app/messages.php','💬','伝言'],['/app/settings.php','⚙️','管理']
   ];
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
-  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.97-wave78">':'';
+  const extra=active==='/app/calendar.php'?'<link rel="stylesheet" href="/assets/calendar.css?v=12.129.0-wave110">':'';
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=12.115-wave96">${extra}</head><body><div class="wrap">${body}</div>${nav}<script src="/assets/pwa.js?v=12.97-wave78"></script></body></html>`;
 }
 
@@ -615,6 +615,16 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
   return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...recurRows]));
 }
 
+export function calendarDisplayLabel(task:Row,options:{includeTime?:boolean}={}){
+  const title=String(task.title||''),time=Number(task.all_day??0)!==1&&task.start_at?String(task.start_at).slice(11,16):'';
+  if(options.includeTime===false||!/^\d{2}:\d{2}$/.test(time))return {time:'',title,label:title};
+  const normalized=title.normalize('NFKC'),same=normalized.match(/^\s*(\d{1,2}):(\d{2})(?:\s*[-~～〜–—])?\s*/);
+  const displayTitle=same&&`${same[1].padStart(2,'0')}:${same[2]}`===time?normalized.slice(same[0].length):title;
+  return {time,title:displayTitle||title,label:`${time} ${displayTitle||title}`};
+}
+
+function calendarLabelHtml(task:Row,includeTime=true){const display=calendarDisplayLabel(task,{includeTime}),icon=String(task.task_kind||'').toLowerCase()==='event'?'📌 ':'';return {accessible:`${display.time?display.time+' ':''}${icon}${display.title}`,html:`${display.time?`<span class="calendar-item-time">${display.time}</span> `:''}${icon}${esc(display.title)}`};}
+
 function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks):string{
   const map:Record<string,Row[]>=Object.create(null);
   const detailMap:Record<string,Row[]>=Object.create(null);
@@ -675,7 +685,8 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
       maxBandLane=Math.max(maxBandLane,lane);
       const startCol=new Date(`${a}T12:00:00Z`).getUTCDay()+1,endCol=new Date(`${b}T12:00:00Z`).getUTCDay()+2,cc=String(r.task.calendar_color||'').trim(),color=allowedCalendarColors.includes(cc)?cc:'#7c3aed';
       const segClass=(a===r.start?'seg-start ':'')+(b===r.end?'seg-end':'seg-mid');
-      bars+=`<a class="calendar-band ${segClass.trim()}" style="grid-column:${startCol}/${endCol};grid-row:${lane+1};background:${color}" href="/task/view.php?id=${encodeURIComponent(String(r.task.id))}" data-task-id="${esc(r.task.id)}" title="${esc(r.task.title)}">${esc(r.task.title)}</a>`;
+      const display=calendarLabelHtml(r.task,a===r.start);
+      bars+=`<a class="calendar-band ${segClass.trim()}" style="grid-column:${startCol}/${endCol};grid-row:${lane+1};background:${color}" href="/task/view.php?id=${encodeURIComponent(String(r.task.id))}" data-task-id="${esc(r.task.id)}" title="${esc(display.accessible)}" aria-label="${esc(display.accessible)}">${display.html}</a>`;
       for(let dd=new Date(`${a}T12:00:00Z`),lastDd=new Date(`${b}T12:00:00Z`);dd<=lastDd;dd.setUTCDate(dd.getUTCDate()+1)){
         const dk=dd.toISOString().slice(0,10);dayBandRows[dk]=Math.max(dayBandRows[dk]||0,lane+1);
       }
@@ -684,7 +695,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     for(const info of weekDays){
       const cls=['calendar-cell',info.inMonth?'':'other',info.wd===0?'sun':'',info.wd===6?'sat':'',info.holiday?'holiday':''].filter(Boolean).join(' ');
       const shown=info.dayItems.slice(0,singleTaskCap);
-      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" data-band-rows="${dayBandRows[info.d]||0}" style="--calendar-day-band-rows:${dayBandRows[info.d]||0};--calendar-day-content-top:calc(var(--calendar-date-zone) + ${dayBandRows[info.d]||0} * var(--calendar-band-step))" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim();const style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'';return `<div class="calendar-item seg-single ${Number(t.id)<0?'recurring-single':''} ${String(t.task_kind||'').toLowerCase()==='event'?'event-single':''}" title="${esc(t.title)}"${style}>${String(t.task_kind||'').toLowerCase()==='event'?'📌 ':''}${esc(t.title)}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
+      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" data-band-rows="${dayBandRows[info.d]||0}" style="--calendar-day-band-rows:${dayBandRows[info.d]||0};--calendar-day-content-top:calc(var(--calendar-date-zone) + ${dayBandRows[info.d]||0} * var(--calendar-band-step))" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim(),style=allowedCalendarColors.includes(cc)?` style="background:${cc}"`:'',display=calendarLabelHtml(t);return `<div class="calendar-item seg-single ${Number(t.id)<0?'recurring-single':''} ${String(t.task_kind||'').toLowerCase()==='event'?'event-single':''}" title="${esc(display.accessible)}" aria-label="${esc(display.accessible)}"${style}>${display.html}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.slice(0,1).map(i=>`<div class="calendar-item item">🎒 ${esc(i.name)}</div>`).join('')||''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
     }
     for(let i=0;i<7;i++){const d=new Date(weekStart);d.setUTCDate(d.getUTCDate()+i);const k=d.toISOString().slice(0,10);more+=`<span>${overflow[k]?`+${overflow[k]}件`:''}</span>`;}
     const weekStyle=`--calendar-band-rows:${bandRows};--calendar-single-rows:${Math.max(1,maxSingleRows)};--calendar-accessory-rows:${maxAccessoryRows}`;

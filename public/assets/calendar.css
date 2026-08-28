@@ -679,3 +679,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 .calendar-week-days>.calendar-cell[data-band-rows="0"] .calendar-items{top:var(--calendar-date-zone)!important}
 .calendar-week-days>.calendar-cell .calendar-items>.calendar-item:first-child{margin-top:0!important}
 .calendar-item.recurring-single{align-self:stretch!important;margin-top:0!important}
+
+/* Wave110: compact wall-clock prefix remains on the single ellipsis line. */
+.calendar-item-time{font-size:.9em;font-variant-numeric:tabular-nums;font-weight:600}
