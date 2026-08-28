@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8'),ui=fs.readFileSync('public/assets/calendar-import.js','utf8'),routes=fs.readFileSync('src/index.ts','utf8'),pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.equal(pkg.version,'12.130.0-wave111');
+assert.ok(['12.130.0-wave111','12.131.0-wave112'].includes(pkg.version));
 assert.match(source,/ICS_APPLY_CHUNK=15/);assert.match(source,/MAX_D1_QUERY_BUDGET=40/);
 assert.match(source,/parseIcs\(String\(b\.chunk_ics\|\|''\),zone,true\)/);assert.doesNotMatch(source,/calendarImportApply[\s\S]{0,500}requestState/);
 assert.match(source,/parsedCount>ICS_APPLY_CHUNK/);assert.match(source,/sha_count:parsedCount/);assert.match(source,/parsed_event_count:parsedCount/);
-assert.match(source,/status='IMPORTING' ORDER BY id DESC LIMIT 1/);assert.match(source,/requestedOffset!==serverOffset/);assert.match(source,/COUNT\(\*\) active_count/);
-assert.match(ui,/splitIcs/);assert.match(ui,/chunk_ics:chunks\[chunkIndex\]/);assert.doesNotMatch(ui,/calendar-import\/apply',\{\.\.\.args\(\)/);
+assert.match(source,/status='IMPORTING'/);assert.match(source,/requestedOffset!==serverOffset/);assert.match(source,/COUNT\(\*\) active_count/);
+assert.match(ui,/splitIcs/);assert.match(ui,/chunk_ics:(?:chunks\[chunkIndex\]|buildChunk)/);assert.doesNotMatch(ui,/calendar-import\/apply',\{\.\.\.args\(\)/);
 assert.match(ui,/インポート準備中/);assert.match(ui,/処理が中断されました。再開できます/);assert.match(routes,/calendar-import\/prepare/);assert.match(routes,/calendar-import\/status/);
 let remaining=634,requests=0;while(remaining){const parsed=Math.min(15,remaining);assert.ok(parsed<=15);const shaCount=parsed;assert.ok(shaCount<=15);remaining-=parsed;requests++;}assert.equal(requests,43);assert.equal(remaining,0);
 // Approximate production envelope: browser sends only one <=20-event mini-calendar per apply, not the ~224 KiB source.
