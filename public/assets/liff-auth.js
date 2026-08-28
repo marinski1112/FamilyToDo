@@ -23,7 +23,7 @@
       await window.liff.init({liffId});
       if(!window.liff.isLoggedIn()){
         if(status) status.textContent='LINEログインを開始します…';
-        window.liff.login({redirectUri:location.href});
+        window.liff.login({redirectUri:location.origin+'/liff'});
         return;
       }
       if(status) status.textContent='認証情報を確認しています…';

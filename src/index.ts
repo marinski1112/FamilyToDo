@@ -9,6 +9,8 @@ import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, f
 import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
+import { integrationsHealthResponse } from './environment-health';
+import { preserveGoogleHomeLogin, googleHomeLiff, resumeGoogleHome } from './oauth-continuation';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
@@ -33,18 +35,13 @@ export default {
       if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return await authHealth(context);}
       if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);
+      if(url.pathname==='/__cf/integrations-health') return integrationsHealthResponse(env);
       if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
       if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
       if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
       if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);
-      if(url.pathname==='/liff'||url.pathname==='/liff/') {
-        const liffContext=await makeContext(request,env);
-        // LIFF起動時に既存のWorkerセッションが有効なら、再度IDトークン検証を要求しない。
-        // LINE内ブラウザで他ページが正常表示できるのにトップだけ認証画面へ戻るケースを防ぐ。
-        const liffNext=url.searchParams.get('next')||'/app/index.php';
-        if(liffContext.member && /^\/(?!\/)/.test(liffNext)) return redirect(liffNext);
-        return await liffEntryPage(env,liffNext);
-      }
+      if(url.pathname==='/liff'||url.pathname==='/liff/') return await googleHomeLiff(request,env);
+      if(url.pathname==='/oauth/google/continue') return await resumeGoogleHome(request,env);
       // 認証が必要なページは、例外ベースのリダイレクトに依存せず
       // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
       // 例外化/Response処理の差異による1101を避けるため。
@@ -55,7 +52,10 @@ export default {
         return await recurring(request,context);
       }
       const context=await makeContext(request,env);
-      if(url.pathname==='/oauth/google/authorize') return await googleAuthorize(request,context);
+      if(url.pathname==='/oauth/google/authorize') {
+        console.log(JSON.stringify({stage:'AUTHORIZE_RECEIVED',provider:'GOOGLE_HOME'}));
+        return await preserveGoogleHomeLogin(request,env,await googleAuthorize(request,context));
+      }
       if(url.pathname==='/oauth/google-tasks/authorize') return await googleTasksAuthorize(request,context);
       if(url.pathname==='/oauth/google-calendar/authorize') return await googleCalendarAuthorize(request,context);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);

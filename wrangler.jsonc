@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "familytodo",
-  "main": "src/index-wave117.ts",
+  "main": "src/index.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": [
     "nodejs_compat"
@@ -37,12 +37,23 @@
     "APP_URL": "https://familytodo.marinski1112.workers.dev",
     "APP_TIMEZONE": "Asia/Tokyo",
     "NOTIFY_MODE": "scheduled",
-    "ENVIRONMENT": "staging"
+    "ENVIRONMENT": "staging",
+    "GOOGLE_HOME_CLIENT_ID": "Family_ToDo",
+    "GOOGLE_HOME_PROJECT_ID": "family-todo-home",
+    "FAMILY_AI_PROVIDER": "GEMINI",
+    "GEMINI_MODEL": "gemini-3.1-flash-lite",
+    "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "GOOGLE_CALENDAR_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/google-calendar/callback",
+    "GOOGLE_TASKS_REDIRECT_URI": "https://familytodo.marinski1112.workers.dev/oauth/google-tasks/callback"
   },
   "triggers": {
-    "crons": ["*/5 * * * *", "3,13,23,33,43,53 * * * *"]
+    "crons": [
+      "*/5 * * * *",
+      "3,13,23,33,43,53 * * * *"
+    ]
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "keep_vars": true
 }
