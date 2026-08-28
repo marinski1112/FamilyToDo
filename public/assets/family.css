@@ -625,11 +625,10 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number],
 .native-control-shell>input::-webkit-date-and-time-value{min-height:0;height:auto;line-height:normal;margin:0;padding:0 6px;text-align:left}
 .date-range-grid>*,.time-range-grid>*,.date-option-row>div,.task-time-fields>*,.compact-time-fields>*{min-width:0;overflow:hidden}
 .family-log-date-head .native-control-shell{position:absolute;inset:0;max-width:none;height:44px;margin:0;border:0;opacity:0;overflow:visible}.family-log-date-head .native-control-shell>input{cursor:pointer}
-/* One canonical four-column quick-action grid and one-line five-character labels. */
+/* Legacy Wave123 grid dimensions; Wave128 owns the canonical shared label rule below. */
 .compact-action-grid,.family-log-quick-grid,.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
 .family-log-quick{box-sizing:border-box;width:100%;height:44px;min-height:44px;padding:4px;gap:3px;overflow:hidden}
 .family-log-quick span{flex:none;font-size:15px}
-.family-log-quick strong{display:block;min-width:0;font-size:11.5px;font-weight:700;letter-spacing:-.02em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:340px){.field-pair,.date-range-grid,.time-range-grid,.date-option-row{grid-template-columns:1fr}.compact-action-grid,.family-log-quick-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 /* Wave124 canonical quick-chore layout: keep independent from Family Log QUICK. */
@@ -637,5 +636,10 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number],
 .family-quick-chore-grid>*{min-width:0}
 .family-quick-chore-record{box-sizing:border-box;width:100%;min-height:44px;height:auto;padding:4px 3px;gap:3px;overflow:visible;white-space:normal;display:flex;align-items:center;justify-content:center}
 .family-quick-chore-record span{flex:none;font-size:14px}
-.family-quick-chore-record strong{display:block;min-width:0;font-size:11px;font-weight:700;letter-spacing:-.03em;line-height:1.12;white-space:normal;overflow:visible;overflow-wrap:normal;word-break:keep-all;text-align:center}
 @media(max-width:340px){.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+/* Wave128 canonical four-column quick labels: never truncate an eight-character label. */
+.family-log-quick-grid,.family-quick-chore-grid,.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.family-log-quick,.family-quick-chore-record{box-sizing:border-box;width:100%;min-width:0;min-height:52px;height:auto;padding:4px 2px;overflow:visible;white-space:normal}
+.family-log-quick span,.family-quick-chore-record span{flex:none;font-size:14px}
+.family-log-quick strong,.family-quick-chore-record strong{display:-webkit-box;min-width:0;margin:0;font-size:11px;font-weight:700;letter-spacing:-.03em;line-height:1.2;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:keep-all;text-align:center;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+@media(max-width:340px){.family-log-quick-grid,.family-quick-chore-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:2px}.family-log-quick strong,.family-quick-chore-record strong{font-size:10px}}

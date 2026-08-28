@@ -8,7 +8,7 @@ import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSetting
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill, calendarWatchWebhook, renewCalendarWatches, wakeCalendarOutbox } from './google-calendar';
-import { DEFAULT_FAMILY_TIMEZONE, familyDate, formatStoredUtcForFamily } from './timezone';
+import { DEFAULT_FAMILY_TIMEZONE, familyDate, formatStoredUtcForFamily, utcNow } from './timezone';
 import { integrationsHealthResponse } from './environment-health';
 import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
 import { validateLiffNext } from './liff-target';
@@ -161,6 +161,7 @@ export default {
     }
     if(controller.cron==='*/5 * * * *'){
       ctx.waitUntil(processNotifications(env));
+      ctx.waitUntil(processLineDailyDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
     }
     if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}
@@ -408,11 +409,11 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
   if(reminderRaw && !reminderAt)return json({ok:false,error:'通知日時が不正です。'},400);
   const shoppingPre=Array.isArray(b.shopping)?(b.shopping as any[]).slice(0,50):[];
   for(const v of shoppingPre){const u=String(v?.url||'').trim();if(u){try{const parsed=new URL(u);if(!['http:','https:'].includes(parsed.protocol))throw new Error();}catch{return json({ok:false,error:'買い物URLが不正です。'},400);}}}
-  const now=nowJst();const isPrivate=!isEvent&&(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
+  const now=nowJst();const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
   const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
   const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
-  const ids=isPrivate?[Number(m.id)]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
+  const ids=isPrivate?[]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
   if(ids.length){
     const valid=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
     const validIds=new Set(valid.results.map((x:any)=>Number(x.id)));
@@ -553,13 +554,31 @@ async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   if(Object.values(audit).some(v=>v>0)) console.warn('[Family TODO LINE] lifecycle audit',audit);
 }
 
+
+export async function processLineDailyDigests(env:Env):Promise<void>{
+  const settings=await env.DB.prepare("SELECT s.family_id,s.send_time,f.timezone FROM line_daily_digest_settings s JOIN families f ON f.id=s.family_id WHERE s.enabled=1").all();
+  for(const setting of settings.results){
+    const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
+    const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+9)continue;
+    const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all();
+    for(const member of recipients.results){
+      const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
+      const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
+      const rows=await env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?)) AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND status<>'completed' AND date(COALESCE(start_at,due_at))<?)) ORDER BY COALESCE(start_at,due_at),id LIMIT 12`).bind(setting.family_id,member.id,localDate,localDate).all();
+      if(!rows.results.length){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',sent_at=?,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();continue;}
+      const events=rows.results.filter(x=>String(x.task_kind).toUpperCase()==='EVENT'&&String(x.at).slice(0,10)===localDate),tasks=rows.results.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK'&&String(x.at).slice(0,10)===localDate),overdue=rows.results.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK'&&String(x.at).slice(0,10)<localDate);const lines=[`☀️ ${localDate} 朝まとめ`,...events.slice(0,4).map(x=>`📌 ${String(x.title)}`),...tasks.slice(0,5).map(x=>`□ ${String(x.title)}`)];if(overdue.length)lines.push(`⚠️ 期限切れ ${overdue.length}件`);
+      try{const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),lines.join('\n').slice(0,1000));await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();}catch(error){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),n,receipt.id).run();}
+    }
+  }
+}
+
 async function processNotifications(env: Env): Promise<void> {
   await cleanupNotificationLifecycle(env);
   const due = await env.DB.prepare(`SELECT n.id,n.member_id,n.type,n.target_type,n.target_id,n.message,m.line_user_id,COALESCE(m.notification_channel,'LINE') notification_channel FROM notifications n JOIN members m ON m.id=n.member_id WHERE n.status IN ('pending','retry') AND n.sent_at IS NULL AND n.notify_at<=? AND m.active=1 AND m.notification_enabled=1 ORDER BY n.notify_at,n.id LIMIT 50`).bind(nowJst()).all();
   for(const n of due.results) {
     try {
-      const channel=String(n.notification_channel||'LINE').toUpperCase();
-      if(channel==='WEB_PUSH'){
+      const channel='WEB_PUSH'; // Wave128: normal notifications never consume LINE quota.
+      {
         if(!webPushConfigured(env))throw new Error('Web Push VAPID configuration is missing.');
         const subs=await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND enabled=1 ORDER BY id DESC LIMIT 10').bind(Number(n.member_id)).all();
         if(!subs.results.length)throw new Error('Web Push subscription is not registered.');
@@ -571,10 +590,6 @@ async function processNotifications(env: Env): Promise<void> {
           else{await env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),nowJst(),Number(sub.id)).run();}
         }
         if(sent===0)throw new Error('Web Push delivery failed for all subscriptions.');
-      }else{
-        if(!n.line_user_id)throw new Error('LINE user id is not linked.');
-        const { pushLineMessage } = await import('./line');
-        await pushLineMessage(env.LINE_ACCESS_TOKEN,String(n.line_user_id),String(n.message||'Family TODO LINEからのお知らせです。'));
       }
       await env.DB.prepare('UPDATE notifications SET status=?,sent_at=?,updated_at=? WHERE id=?').bind('sent',nowJst(),nowJst(),n.id).run();
     } catch(e) {
@@ -652,7 +667,9 @@ async function taskDelete(request:Request,ctx:any):Promise<Response>{
     ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,deleteNow),
     ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
   );
+  await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id);
   await ctx.env.DB.batch(statements);
+  await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id);
   return json({ok:true,redirect:'/app/tasks.php'});
 }
 

@@ -57,7 +57,10 @@
         csrf,
         enabled:form.querySelector('[name="enabled"]')?.checked??false,
         enabled_members:[...form.querySelectorAll('[name="enabled_members"]:checked')].map(x=>Number(x.value)),
-        notification_channel:form.querySelector('[name="notification_channel"]')?.value||'LINE'
+        notification_channel:form.querySelector('[name="notification_channel"]')?.value||'WEB_PUSH',
+        digest_enabled:form.querySelector('[name="digest_enabled"]')?.checked??false,
+        digest_time:form.querySelector('[name="digest_time"]')?.value||'07:00',
+        digest_members:[...form.querySelectorAll('[name="digest_members"]:checked')].map(x=>Number(x.value))
       };
       const submit=form.querySelector('button[type="submit"],button:not([type])');
       if(submit)submit.disabled=true;

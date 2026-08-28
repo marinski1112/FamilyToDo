@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.146.0-wave127",
+  "source": "FamilyTODO Cloudflare v12.147.0-wave128",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -76,7 +76,7 @@
     ],
     "event_note": "Legacy DB events/event_members remain removed. Calendar memo/event behavior uses tasks.task_kind=EVENT and must not recreate the legacy event tables."
   },
-  "cloudflare_wave": "Wave127",
+  "cloudflare_wave": "Wave128",
   "notes": [
     "Legacy events/event_members are removed from application behavior and migrated production D1; Wave52 also removed stale event_id columns/FKs from affected live tables.",
     "Wave34 notification lifecycle cleanup cancels obsolete pending/retry work instead of hard-deleting it.",
@@ -113,7 +113,7 @@
     "Wave116 bounds Google Tasks inbound to one account and eight tasks (<=40 D1 statements), persists page continuation, recovers expired leases/invalid tokens, isolates cron budgets, and adds deterministic marked shopping commands with zero Gemini calls.",
     "Wave117 preserves Dashboard variables, audits integration readiness, and canonically resumes Google Home OAuth through LINE/LIFF without a migration."
   ],
-  "version": "12.146.0-wave127",
+  "version": "12.147.0-wave128",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -159,5 +159,6 @@
   "wave113_note": "Google Home production/sandbox account-link readiness, bounded Scene catalog, race-safe refresh tokens, safe SYNC/EXECUTE diagnostics, and real-device setup guidance; no migration.",
   "wave114_note": "Google Home BABY/CHILD Family Log Scene catalog with single-child natural naming, DIAPER/TOILET now and minus-60 presets, bounded nicknames, execution-time validation, and no migration.",
   "wave126_note": "Robust Service Account parsing, local PKCS8 validation, staged safe HomeGraph diagnostics, and UTC operational timestamp display in family timezone; no migration.",
-  "wave127_note": "Google Models API-driven Gemini selection, family-level model precedence, Calendar push/watch and immediate outbox wake, fallback polling, and unified release authority; migration 0041."
+  "wave127_note": "Google Models API-driven Gemini selection, family-level model precedence, Calendar push/watch and immediate outbox wake, fallback polling, and unified release authority; migration 0041.",
+  "wave128_note": "Calendar recurring links and visibility scopes, Google EVENT history/deletion semantics, PRIVATE EVENT, canonical Family Log labels, and opt-in recipient-specific LINE daily digest; migration 0042."
 }
