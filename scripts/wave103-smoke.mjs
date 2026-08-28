@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
 const cal=fs.readFileSync('src/google-calendar.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
-assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105','12.125.0-wave106','12.126.0-wave107','12.127.0-wave108','12.128.0-wave109','12.129.0-wave110','12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114','12.134.0-wave115','12.135.0-wave116'].includes(pkg.version));
+assert.ok(['12.122.0-wave103','12.123.0-wave104','12.124.0-wave105','12.125.0-wave106','12.126.0-wave107','12.127.0-wave108','12.128.0-wave109','12.129.0-wave110','12.130.0-wave111','12.131.0-wave112','12.132.0-wave113','12.133.0-wave114','12.134.0-wave115','12.135.0-wave116','12.136.0-wave117'].includes(pkg.version));
 assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.[15]-flash-lite'/);
 assert.ok(!ai.includes('gemini-2.0-flash'));
 assert.match(ai,/env\.GEMINI_MODEL\?\.trim\(\)\|\|GEMINI_MODEL_DEFAULT/);
