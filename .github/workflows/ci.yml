@@ -15,11 +15,32 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
+        if: always()
       - run: npm run check:browser-js
+        if: always()
       - run: npm run check:static-assets
+        if: always()
       - run: npm run check:migrations
+        if: always()
       - run: npm run check:domain-smoke
+        if: always()
       - run: npm run check:wave117
+        if: always()
       - run: npm run check:wave118
+        if: always()
       - run: npm run check:wave119
+        if: always()
       - run: npm run check:wave120
+        if: always()
+      - run: npm run check:wave121
+        if: always()
+      - run: npm run check:wave122
+        if: always()
+      - run: npm run check:wave123
+        if: always()
+      - run: npm run check:wave123-form-audit
+        if: always()
+      - run: npm run check:wave124
+        if: always()
+      - run: npm run check:wave125
+        if: always()
