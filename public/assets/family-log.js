@@ -19,6 +19,7 @@
   const isAdmin=Boolean(payload.isAdmin);
   const milkAmountPresets=Array.isArray(payload.milkAmountPresets)?payload.milkAmountPresets:[160,240];
   const lastMilkAmounts={...(payload.lastMilkAmounts||{})};
+  const quickActions=Array.isArray(payload.quickActions)?payload.quickActions:[];
   let amountDirty=false,isEditing=false;
 
   const logModal=byId('familyLogModal');
@@ -333,12 +334,18 @@
         subjectLinked.style.display='none';
       }
     }
+    renderQuickActions(Number(row.id));
     setOpen(subjectModal,true);
   }
+  function renderQuickActions(subjectId){const wrap=byId('familyLogQuickRows');if(!wrap)return;const rows=quickActions.filter(q=>Number(q.subject_id)===subjectId&&Number(q.active)!==0);wrap.innerHTML=rows.map((q,i)=>`<div class="family-log-quick-manage-row"><span class="handle">≡</span><span>${escapeHtml(q.icon||'＋')}</span><strong>${escapeHtml(q.name)}</strong><small>${q.mode==='QUICK'?'ワンタッチ':q.mode==='FORM'?'入力して記録':'睡眠開始/終了'}</small><button type="button" class="btn gray small" data-quick-edit="${q.id}">編集</button></div>`).join('')||'<p class="small">まだありません。</p>';wrap.querySelectorAll('[data-quick-edit]').forEach(button=>button.addEventListener('click',()=>editQuick(quickActions.find(q=>Number(q.id)===Number(button.dataset.quickEdit)))));}
+  async function editQuick(row){const subjectId=Number(row?.subject_id||subjectField('id')?.value||0);if(!subjectId)return;const name=prompt('表示名',String(row?.name||''));if(name===null||!name.trim())return;const icon=prompt('アイコン',String(row?.icon||'＋'));if(icon===null)return;const mode=prompt('動作: QUICK / FORM / SLEEP_TOGGLE',String(row?.mode||'QUICK'));if(mode===null)return;const logType=mode.toUpperCase()==='SLEEP_TOGGLE'?'SLEEP':prompt('記録種類（例: MILK / MEAL / DIAPER）',String(row?.log_type||'MEMO'));if(logType===null)return;const detail=prompt('詳細区分（選択肢にない値は保存時に拒否されます）',String(row?.detail_code||''));if(detail===null)return;const amount=prompt('値（不要なら空）',row?.amount??'');if(amount===null)return;const unit=prompt('単位（不要なら空）',String(row?.unit||''));if(unit===null)return;await post({action:'quick_action_save',id:Number(row?.id||0),subject_id:subjectId,name:name.trim(),icon,mode:mode.toUpperCase(),log_type:String(logType).toUpperCase(),detail_code:detail,amount,unit,active:true});location.reload();}
+  byId('familyLogQuickAdd')?.addEventListener('click',()=>editQuick(null));
 
   document.querySelectorAll('[data-log-type]').forEach(btn=>
     btn.addEventListener('click',()=>openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||selectedSubject())))
   );
+  document.querySelectorAll('.family-log-quick-action').forEach(btn=>btn.addEventListener('click',async()=>{if(btn.disabled)return;btn.disabled=true;try{const result=await post({action:'execute_quick_action',quick_action_id:Number(btn.dataset.quickActionId||0)});const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),900);}catch(err){alert(err?.message||String(err));btn.disabled=false;}}));
+  document.querySelectorAll('.family-log-form-action').forEach(btn=>btn.addEventListener('click',()=>{openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||0));formField('detail_code').value=String(btn.dataset.detail||'');formField('amount').value=String(btn.dataset.amount||'');formField('unit').value=String(btn.dataset.unit||'');formField('value_text').value=String(btn.dataset.valueText||'');refreshDynamicFields();}));
   document.querySelectorAll('.family-log-one-tap').forEach(btn=>btn.addEventListener('click',async()=>{
     if(btn.disabled)return;btn.disabled=true;btn.setAttribute('aria-busy','true');
     try{const result=await post({action:'quick_record',subject_id:Number(btn.dataset.subjectId||0),quick_key:String(btn.dataset.quickKey||''),milk_amount:btn.dataset.milkAmount?Number(btn.dataset.milkAmount):undefined});

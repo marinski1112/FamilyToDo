@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
 const app=read('src/app.ts'),css=read('public/assets/calendar.css'),calendar=read('public/assets/calendar.js'),log=read('public/assets/family-log.js'),familyCss=read('public/assets/family.css'),ci=read('.github/workflows/ci.yml');
-assert.ok(['12.138.0-wave119','12.138.0-wave119'].includes(pkg.version));assert.equal(inventory.version,pkg.version);
+assert.ok(['12.139.0-wave120','12.139.0-wave120'].includes(pkg.version));assert.equal(inventory.version,pkg.version);
 for(const command of ['check:domain-smoke','check:wave117','check:wave118'])assert.ok(ci.includes(`npm run ${command}`));
 assert.ok(app.includes('--calendar-day-band-rows:'));assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'));
 assert.match(css,/top:calc\(var\(--calendar-date-zone\) \+ var\(--calendar-day-band-rows\) \* var\(--calendar-band-step\)\)!important/);
@@ -13,6 +13,6 @@ for(const marker of ['calendarJumpPanel','calendarMonthJump','calendarDateJump',
 assert.ok(calendar.includes("get('open')"));assert.ok(calendar.includes("loadMonth(currentPrev,-1)"));assert.ok(calendar.includes("loadMonth(currentNext,1)"));assert.ok(calendar.includes("touchend"));
 for(const marker of ['lastMilkAmounts','milkAmountPresets','family_log_milk_amount_presets','normalizeMilkAmountPresets','familyLogAdvanced','family-log-record-sheet'])assert.ok(app.includes(marker)||log.includes(marker)||familyCss.includes(marker));
 assert.ok(app.includes("ORDER BY occurred_at DESC,id DESC"));assert.ok(log.includes("amount.value=lastMilkAmounts"));assert.ok(log.includes("advanced.open=Boolean(row.note"));
-assert.ok(app.includes('calendar.css?v=12.138.0-wave119'));assert.ok(app.includes('calendar.js?v=12.138.0-wave119'));assert.ok(app.includes('family-log.js?v=12.138.0-wave119'));assert.ok(app.includes('family.css?v=12.138.0-wave119'));
+assert.ok(app.includes('calendar.css?v=12.139.0-wave120'));assert.ok(app.includes('calendar.js?v=12.139.0-wave120'));assert.ok(app.includes('family-log.js?v=12.139.0-wave120'));assert.ok(app.includes('family.css?v=12.139.0-wave120'));
 assert.ok(!fs.existsSync('migrations/0040_wave118_family_log_quick_values.sql'));
 console.log('wave118 smoke: ok');

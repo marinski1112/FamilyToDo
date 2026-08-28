@@ -22,3 +22,4 @@ jobs:
       - run: npm run check:wave117
       - run: npm run check:wave118
       - run: npm run check:wave119
+      - run: npm run check:wave120

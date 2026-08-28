@@ -61,3 +61,22 @@ Google Home専用のcredentialはGoogle Calendar用の `GOOGLE_CALENDAR_CLIENT_I
 
 Family TODOには架空device type/traitは追加しません。
 SceneはReport State非対応です。
+
+## Wave120: LINE Login callback (required)
+
+Google Home account linking now uses the LINE Login OAuth v2.1 Authorization Code flow with PKCE, not LIFF. In **LINE Developers → the existing LINE Login channel → LINE Login settings → Callback URL**, add exactly:
+
+`https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback`
+
+Do not change the existing LIFF endpoint URL (`https://familytodo.marinski1112.workers.dev/liff`). No new LINE channel is required.
+
+## Rich Menu LIFF deep links
+
+**When a LIFF URL has additional query information, the slash after `{LIFF_ID}` is required.** Use `.../{LIFF_ID}/?next=...`, not `.../{LIFF_ID}?next=...`.
+
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fcalendar.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fshopping.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ffamily_log.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fmessages.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fsettings.php`
