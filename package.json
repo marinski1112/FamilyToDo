@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.142.0-wave123",
+  "version": "12.143.0-wave124",
   "private": true,
   "description": "Family TODO LINE - Cloudflare Workers migration foundation",
   "type": "module",
@@ -31,7 +31,8 @@
     "check:wave121": "node scripts/wave121-smoke.mjs",
     "check:wave122": "node scripts/wave122-smoke.mjs",
     "check:wave123": "node scripts/wave123-smoke.mjs",
-    "check:wave123-form-audit": "node scripts/wave123-form-audit.mjs"
+    "check:wave123-form-audit": "node scripts/wave123-form-audit.mjs",
+    "check:wave124": "node scripts/wave124-smoke.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

@@ -312,14 +312,14 @@ button,.btn{min-height:42px;border:0;border-radius:11px;padding:10px 14px;font-w
 .family-quick-chore-card .section-head{align-items:flex-start}
 .family-quick-chore-card h2{margin-bottom:3px}
 .family-quick-chore-card .small{margin:0}
-.family-quick-chore-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+
 .family-quick-chore{position:relative;min-width:0}
-.family-quick-chore-record{width:100%;min-height:46px;padding:7px 28px 7px 9px;border:1px solid #dbeafe;border-radius:12px;background:#f8fbff;color:#334155;display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:6px;box-shadow:none;white-space:nowrap;overflow:hidden}
-.family-quick-chore-record span{font-size:18px;flex:none}.family-quick-chore-record strong{font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis}
+
+
 .family-quick-chore-record:active{background:#eff6ff;border-color:#93c5fd}
 .family-quick-chore-edit{position:absolute;right:4px;top:4px;width:28px;height:28px;min-height:0;padding:0;border:0;border-radius:50%;background:transparent;color:#64748b;box-shadow:none;font-size:14px}
 .family-quick-chore-manage{border-top:1px solid #e5e7eb;margin-top:16px;padding-top:12px}.family-quick-chore-manage-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #edf0f4}.family-quick-chore-manage-row .actions{display:flex;gap:5px}.family-quick-chore-manage-row button{min-height:34px;padding:6px 9px}.family-quick-chore-hidden-title{margin:16px 0 4px}
-@media(max-width:390px){.family-quick-chore-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:390px){}
 
 /* Wave62: proper message edit sheet; remove prompt-based editing. */
 .message-edit-backdrop{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;background:rgba(15,23,42,.42);z-index:82;padding:12px}
@@ -579,16 +579,16 @@ button,.btn{min-height:42px;border:0;border-radius:11px;padding:10px 14px;font-w
 .family-log-quick{height:44px;min-height:44px;padding:6px 9px;gap:4px;white-space:nowrap}.family-log-quick span{font-size:17px}.family-log-quick strong{font-size:12px}.family-log-overview-quick{margin:4px 0 10px}.family-log-overview-group{padding:6px 0;border-top:1px solid #edf0f4}.family-log-overview-group h2{margin:0 0 5px;font-size:13px}.family-log-overview-group .family-log-quick-grid{display:flex;gap:5px;flex-wrap:wrap}.family-log-sleep-running{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;padding:9px 10px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff}.family-log-sleep-running .actions{display:flex;gap:5px;flex-wrap:wrap}.family-log-sleep-warning{margin:4px 0 0;color:#b45309;font-size:12px;font-weight:700}.family-log-overview-toggle{margin-top:12px!important;border-top:1px solid #e2e8f0;padding-top:12px}.family-quick-chore-card{padding:10px;border:1px solid #fed7aa;border-radius:12px;background:#fff7ed}
 
 /* Wave95: three-across weekday chores and artifact-free compact management. */
-.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-.family-quick-chore-record{box-sizing:border-box;height:44px;min-height:44px;padding:5px 7px;gap:5px;border-radius:10px}
-.family-quick-chore-record span{font-size:16px}.family-quick-chore-record strong{min-width:0;font-size:12px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+
 .family-log-management-head{align-items:center!important;min-width:0;padding-left:max(0px,env(safe-area-inset-left));padding-right:max(0px,env(safe-area-inset-right))}
 .family-log-management-head h1{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(19px,6vw,24px)!important}
 .family-log-back-icon{display:grid;place-items:center;box-sizing:border-box;width:44px;height:44px;min-width:44px;flex:0 0 44px;border:1px solid #dbe2ea;border-radius:12px;background:#fff;color:#475569;text-decoration:none;font-size:22px}
 .family-log-management-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.family-log-management-row .btn{box-sizing:border-box;min-width:44px;min-height:44px;padding:6px 9px;flex:0 0 auto}
 .family-log-settings-row{padding:0!important}.family-log-settings-row>button{width:100%;min-height:52px;padding:4px 12px;display:flex;align-items:center;justify-content:space-between;background:transparent;color:#334155;box-shadow:none}.family-log-settings-row>button span{color:#64748b}
 .family-log-management-actions{display:block}.family-chore-management-row small{display:block;margin:2px 0 0!important;font-size:11px}.family-chore-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin:4px 0 10px}.family-chore-weekdays label{min-width:0;text-align:center}.family-chore-weekdays input{position:absolute;opacity:0}.family-chore-weekdays span{display:grid;place-items:center;min-height:36px;border:1px solid #dbe2ea;border-radius:8px;font-size:12px}.family-chore-weekdays input:checked+span{background:#eef2ff;border-color:#818cf8;color:#4338ca;font-weight:800}
-@media(max-width:319px){.family-quick-chore-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:319px){}
 .family-ai-query{margin:10px 0;padding:8px 12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff}.family-ai-query summary{cursor:pointer;font-weight:700}.family-ai-query form{display:flex;gap:8px;margin-top:9px}.family-ai-query input{flex:1;margin:0}.family-ai-query button{width:auto}.family-ai-query #familyAiAnswer{white-space:pre-line;margin-top:7px}
 
 /* Wave118: compact quick-record sheet; global form controls remain unchanged. */
@@ -613,9 +613,9 @@ html,body{max-width:100%;overflow-x:hidden}
 .field-grid,.field-pair,.field-triple,.date-range-grid,.time-range-grid{display:grid;gap:8px;align-items:end;min-width:0}.field-grid>*,.field-pair>*,.field-triple>*,.date-range-grid>*,.time-range-grid>*{min-width:0;max-width:100%;box-sizing:border-box}.field-pair,.date-range-grid,.time-range-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.field-triple{grid-template-columns:repeat(3,minmax(0,1fr))}.inline-field{display:flex;align-items:end;gap:7px;min-width:0}.inline-field>*{min-width:0}.compact-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.compact-actions button,.compact-actions .btn{width:auto}
 input[type=date],input[type=datetime-local],input[type=time],input[type=number],select{box-sizing:border-box;min-width:0;max-width:100%;font-size:16px;height:40px;min-height:40px;padding:5px 8px}input[type=date]{width:min(100%,170px)}input[type=time]{width:min(100%,130px)}input[type=datetime-local]{width:min(100%,230px)}.field-grid input[type=date],.field-grid input[type=time],.field-grid input[type=datetime-local],.field-pair input[type=date],.field-pair input[type=time],.date-range-grid input[type=date],.time-range-grid input[type=time]{width:100%}
 .form-card{padding:14px}.form-card label,.card>form>label{font-size:12px;margin:8px 0 3px}.form-card input:not([type=checkbox]):not([type=radio]),.form-card select,.form-card textarea{margin:3px 0 8px}.form-card textarea{min-height:76px}.date-option-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end;min-width:0}.date-option-row>div{min-width:0}.date-option-row input[type=date]{width:100%;margin:3px 0 8px}.date-option-row>.checkrow{grid-column:1/-1;margin:0 0 6px}.task-time-fields,.compact-time-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end}.task-time-fields input[type=time]{width:100%}
-.compact-action-grid,.family-log-quick-grid,.family-quick-chore-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.compact-action-grid>*,.family-log-quick-grid>*,.family-quick-chore-grid>*{min-width:0}.family-log-quick,.family-quick-chore-record{width:100%;min-height:44px;height:auto;padding:5px;overflow:hidden}.family-log-quick strong,.family-quick-chore-record strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow:hidden;line-height:1.15;text-overflow:ellipsis}.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.compact-action-grid,.family-log-quick-grid,.compact-action-grid>*,.family-log-quick-grid>*>*{min-width:0}.family-log-quick,.family-log-quick strong,.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .status-list{display:grid;grid-template-columns:minmax(92px,.65fr) minmax(0,1fr);margin:0;gap:0}.status-list dt,.status-list dd{margin:0;padding:7px 0;border-bottom:1px solid #edf0f4}.status-list dt{color:#64748b;font-size:12px;font-weight:750}.status-list dd{min-width:0;font-weight:700;overflow-wrap:anywhere}.status-ok{color:#047857}.status-warn{color:#b45309}
-@media(max-width:340px){.field-pair,.date-range-grid,.time-range-grid,.date-option-row{grid-template-columns:1fr}.compact-action-grid,.family-log-quick-grid,.family-quick-chore-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:340px){.field-pair,.date-range-grid,.time-range-grid,.date-option-row{grid-template-columns:1fr}.compact-action-grid,.family-log-quick-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 /* Wave123 canonical native temporal control (WebKit 301648 safe). */
 .native-control-shell{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:40px;min-height:40px;margin:3px 0 8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;overflow:hidden}
@@ -626,7 +626,16 @@ input[type=date],input[type=datetime-local],input[type=time],input[type=number],
 .date-range-grid>*,.time-range-grid>*,.date-option-row>div,.task-time-fields>*,.compact-time-fields>*{min-width:0;overflow:hidden}
 .family-log-date-head .native-control-shell{position:absolute;inset:0;max-width:none;height:44px;margin:0;border:0;opacity:0;overflow:visible}.family-log-date-head .native-control-shell>input{cursor:pointer}
 /* One canonical four-column quick-action grid and one-line five-character labels. */
-.compact-action-grid,.family-log-quick-grid,.family-quick-chore-grid,.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
-.family-log-quick,.family-quick-chore-record{box-sizing:border-box;width:100%;height:44px;min-height:44px;padding:4px;gap:3px;overflow:hidden}
-.family-log-quick span,.family-quick-chore-record span{flex:none;font-size:15px}.family-log-quick strong,.family-quick-chore-record strong{display:block;min-width:0;font-size:11.5px;font-weight:700;letter-spacing:-.02em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media(max-width:340px){.field-pair,.date-range-grid,.time-range-grid,.date-option-row{grid-template-columns:1fr}.compact-action-grid,.family-log-quick-grid,.family-quick-chore-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.compact-action-grid,.family-log-quick-grid,.family-log-overview-group .family-log-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+.family-log-quick{box-sizing:border-box;width:100%;height:44px;min-height:44px;padding:4px;gap:3px;overflow:hidden}
+.family-log-quick span{flex:none;font-size:15px}
+.family-log-quick strong{display:block;min-width:0;font-size:11.5px;font-weight:700;letter-spacing:-.02em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:340px){.field-pair,.date-range-grid,.time-range-grid,.date-option-row{grid-template-columns:1fr}.compact-action-grid,.family-log-quick-grid,.family-log-overview-group .family-log-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Wave124 canonical quick-chore layout: keep independent from Family Log QUICK. */
+.family-quick-chore-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+.family-quick-chore-grid>*{min-width:0}
+.family-quick-chore-record{box-sizing:border-box;width:100%;min-height:44px;height:auto;padding:4px 3px;gap:3px;overflow:visible;white-space:normal;display:flex;align-items:center;justify-content:center}
+.family-quick-chore-record span{flex:none;font-size:14px}
+.family-quick-chore-record strong{display:block;min-width:0;font-size:11px;font-weight:700;letter-spacing:-.03em;line-height:1.12;white-space:normal;overflow:visible;overflow-wrap:normal;word-break:keep-all;text-align:center}
+@media(max-width:340px){.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
