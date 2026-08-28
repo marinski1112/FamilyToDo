@@ -3,7 +3,7 @@ set -euo pipefail
 node <<'JS'
 const fs=require('fs'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),ai=fs.readFileSync('src/family-ai.ts','utf8'),pkg=require('../FamilyToDo/package.json');
 const has=(s,x)=>{if(!s.includes(x))throw Error('missing '+x)};
-if(!['12.120.0-wave101','12.121.0-wave102'].includes(pkg.version))throw Error('version mismatch');
+if(!['12.120.0-wave101','12.121.0-wave102','12.122.0-wave103'].includes(pkg.version))throw Error('version mismatch');
 // Linked TASK/EVENT roundtrips update only the Calendar projection. Completion
 // mode/status/assignees/completion rows and task_kind are absent from UPDATE.
 const projection=cal.match(/UPDATE tasks SET title=\?,description=\?,start_at=\?,end_at=\?,due_at=\?,location=\?,all_day=\?,calendar_visible=1,updated_at=\?/);

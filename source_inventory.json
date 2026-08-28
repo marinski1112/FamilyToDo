@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.121.0-wave102",
+  "source": "FamilyTODO Cloudflare v12.122.0-wave103",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -105,7 +105,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.121.0-wave102",
+  "version": "12.122.0-wave103",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -139,5 +139,6 @@
   "wave99_note": "D1-safe isolated diagnostics and lazy detail, hardened Google Calendar OAuth, incremental inbound sync, and family-timezone event conversion.",
   "wave100_note": "UTC operational Calendar scheduling and bounded retry recovery, safe OAuth UX, family-timezone route defaults, isolate-level sync serialization, and provenance-bearing Family AI answers; no migration added.",
   "wave101_note": "Linked Calendar updates preserve TASK/EVENT and completion semantics with family-bound deduplication; privacy-first typed statistics plans add allowlisted grouping, HAVING, ranking, and deterministic comparison with at most three queries; no migration added.",
-  "wave102_note": "Local task mutations centrally enqueue eligible Google Calendar CREATE/UPDATE/DELETE projections; safe existing-data backfill, compact sync diagnostics, and scoped Family Log repair UI are included without a migration."
+  "wave102_note": "Local task mutations centrally enqueue eligible Google Calendar CREATE/UPDATE/DELETE projections; safe existing-data backfill, compact sync diagnostics, and scoped Family Log repair UI are included without a migration.",
+  "wave103_note": "Retired Gemini default replacement, safe connection categories, admin model visibility, dedicated Calendar inbound guidance and observability, and documented privacy/cost guardrails; no migration added."
 }
