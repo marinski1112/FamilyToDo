@@ -587,7 +587,7 @@
   byId('familyQuickChoreClose')?.addEventListener('click',()=>setOpen(choreModal,false));
   document.querySelectorAll('.family-quick-chore-edit').forEach(btn=>btn.addEventListener('click',()=>openChore(choreItems.find(x=>x.id===Number(btn.dataset.id)))));
   choreForm?.addEventListener('submit',async e=>{
-    e.preventDefault();const id=Number(choreField('id').value||0);choreStatus.textContent='保存中…';
+    e.preventDefault();const id=Number(choreField('id').value||0),name=choreField('name').value.trim();if(!name||Array.from(name).length>8){choreStatus.textContent='名前は1〜8文字がおすすめです。';return;}choreStatus.textContent='保存中…';
     const weekdayMask=[...choreForm.querySelectorAll('input[name="weekday"]:checked')].reduce((mask,input)=>mask|Number(input.value),0);
     try{await post({action:id?'quick_chore_update':'quick_chore_add',id,name:choreField('name').value,icon:choreField('icon').value,weekday_mask:weekdayMask});location.reload();}
     catch(err){choreStatus.textContent=err?.message||String(err);}

@@ -111,3 +111,12 @@ The legacy `?next=` URLs above remain supported.
 Family TODO fulfillment currently returns `action.devices.types.SCENE` with `action.devices.traits.Scene`. The Google Home Developer Console Device type must therefore be **SCENE** as well; remove configuration-only physical types that fulfillment does not return. Family TODO cannot change the Console setting automatically.
 
 A device tile in the Home app is not the acceptance criterion. Final acceptance is one successful end-to-end path: voice command → `action.devices.commands.ActivateScene` EXECUTE → Family TODO record → SUCCESS execution diagnostic with the linked recorder member. The settings page derives authentication, last successful SYNC/count, and last successful EXECUTE from existing local records without a Google API call. Request Sync/service-account infrastructure is intentionally not added while initial account-linking SYNC works.
+
+## Wave124: Home Graph Request Sync
+
+1. Google Cloud Consoleで **HomeGraph API** を有効にします。
+2. Service Accountを作成し、JSON keyを発行します。
+3. JSON全文をCloudflare Worker Secret **`GOOGLE_HOME_SERVICE_ACCOUNT_JSON`** に設定します。
+4. 管理 → Google Homeの「Google Homeへ操作一覧を再同期」で確認します。
+
+JSON credential、private key、access token、JWTをGitHubや通常の環境変数へ置かないでください。画面にはSecretの有無だけを表示します。Secretが未設定でもAccount Linking、OAuth、SYNC、EXECUTEは従来どおり動き、Request Syncだけが `NOT_CONFIGURED` になります。

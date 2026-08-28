@@ -1,6 +1,6 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';
 const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),oauth=read('src/oauth-continuation.ts'),liff=read('public/assets/liff-auth.js'),css=read('public/assets/calendar.css'),log=read('public/assets/family-log.js'),pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
-assert.ok(['12.139.0-wave120','12.140.0-wave121','12.141.0-wave122','12.142.0-wave123'].includes(pkg.version));assert.equal(inventory.version,pkg.version);
+assert.ok(['12.143.0-wave124','12.139.0-wave120','12.140.0-wave121','12.141.0-wave122','12.142.0-wave123'].includes(pkg.version));assert.equal(inventory.version,pkg.version);
 assert.ok(oauth.includes("stage:'LIFF_PRIMARY_RECEIVED'"));assert.ok(!oauth.slice(oauth.indexOf('export async function normalLiff'),oauth.indexOf('export async function liffDispatcher')).includes('ctx.member)return go'));
 assert.ok(liff.indexOf('await window.liff.init')<liff.indexOf('const current=resolve()'));assert.ok(liff.includes("url.searchParams.get('next')"));assert.ok(liff.includes('return valid(payload.next)'));
 for(const path of ['/app/tasks.php','/app/calendar.php','/app/shopping.php','/app/family_log.php','/app/messages.php','/app/settings.php'])assert.ok(app.includes(path));
