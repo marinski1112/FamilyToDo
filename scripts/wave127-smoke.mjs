@@ -6,5 +6,5 @@ for(const x of ["pageSize','1000'",'page<2','nextPageToken','supportedGeneration
 assert.ok(!ai.includes('GEMINI_FREE_CANDIDATES'));
 for(const x of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALLBACK','BUILT_IN_DEFAULT',"family_ai_gemini_model",'family_ai_test','FUNCTION_CALLING_UNAVAILABLE','MODEL_NOT_IN_CATALOG'])assert.ok(ai.includes(x),x);
 for(const x of ['external_calendar_watch_channels','token_hash','createCalendarWatch','calendarWatchWebhook','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((cal+migration).includes(x),x);
-assert.ok(index.includes("'/api/google-calendar/watch'"));assert.ok(index.includes("controller.cron==='7,37 * * * *'"));assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));assert.ok(version.includes("12.146.0-wave127")&&version.includes('Wave127'));
+assert.ok(index.includes("'/api/google-calendar/watch'"));assert.ok(index.includes("controller.cron==='7,37 * * * *'"));assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 console.log('Wave127 model catalog, compatibility, watch security and cadence smoke passed');
