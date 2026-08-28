@@ -105,3 +105,9 @@ Use LIFF additional paths for stable destinations:
 - `https://liff.line.me/{LIFF_ID}/settings`
 
 The legacy `?next=` URLs above remain supported.
+
+## Wave122 acceptance and Console alignment
+
+Family TODO fulfillment currently returns `action.devices.types.SCENE` with `action.devices.traits.Scene`. The Google Home Developer Console Device type must therefore be **SCENE** as well; remove configuration-only physical types that fulfillment does not return. Family TODO cannot change the Console setting automatically.
+
+A device tile in the Home app is not the acceptance criterion. Final acceptance is one successful end-to-end path: voice command → `action.devices.commands.ActivateScene` EXECUTE → Family TODO record → SUCCESS execution diagnostic with the linked recorder member. The settings page derives authentication, last successful SYNC/count, and last successful EXECUTE from existing local records without a Google API call. Request Sync/service-account infrastructure is intentionally not added while initial account-linking SYNC works.

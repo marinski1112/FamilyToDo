@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(p,'utf8');
+const css=read('public/assets/family.css'),calendar=read('public/assets/calendar.css'),index=read('src/index.ts'),app=read('src/app.ts'),home=read('src/google-home.ts'),docs=read('docs/GOOGLE_HOME_VOICE_SETUP.md');
+const ok=(condition,message)=>{if(!condition)throw new Error(message)};
+ok(css.includes('.field-pair')&&css.includes('.date-range-grid')&&css.includes('.compact-actions'),'shared compact form primitives missing');
+ok(css.includes('height:40px;min-height:40px')&&css.includes('font-size:16px'),'canonical date/time dimensions missing');
+ok(index.includes('date-option-row date-range-grid task-date-row')&&app.includes('date-option-row date-range-grid'),'task new/edit date pair missing');
+ok(css.includes('grid-template-columns:repeat(4,minmax(0,1fr))'),'four-column actions missing');
+ok(css.includes('@media(max-width:340px)')&&css.includes('repeat(3,minmax(0,1fr))'),'narrow fallback missing');
+ok(calendar.includes('position:static')&&calendar.includes('min-width:52px')&&calendar.includes('color:#fff'),'calendar jump non-overlap/contrast missing');
+ok(home.includes("r.status='SUCCESS'")&&home.includes('Google Home側は${syncCount}件同期済み / 現在${scenes.length}件'),'Google Home staged diagnostics missing');
+ok(docs.includes('action.devices.types.SCENE')&&docs.includes('ActivateScene'),'Scene acceptance docs missing');
+console.log('Wave122 smoke checks passed.');
