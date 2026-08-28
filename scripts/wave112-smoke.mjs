@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8'),ui=fs.readFileSync('public/assets/calendar-import.js','utf8'),migration=fs.readFileSync('migrations/0037_wave112_calendar_import_resume_lock.sql','utf8'),pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.ok(['12.131.0-wave112','12.132.0-wave113'].includes(pkg.version));
+assert.ok(['12.131.0-wave112','12.132.0-wave113','12.133.0-wave114'].includes(pkg.version));
 assert.match(ui,/file\.click\(\)/);assert.doesNotMatch(ui,/file\.focus\(/);assert.match(ui,/if\(applyRunning\)return/);assert.match(ui,/前回と同じICSファイルを選択してください/);
 assert.match(ui,/function buildChunk\(parts,start/);assert.match(ui,/parts\.events\.slice\(start,start\+max\)/);assert.doesNotMatch(ui,/Math\.floor\(offset/);
 const ids=Array.from({length:634},(_,i)=>i);for(const offset of [0,1,14,15,16,17,29,30,31,633,634]){const seen=new Set(ids.slice(0,offset));let cursor=offset;while(cursor<634){const part=ids.slice(cursor,cursor+15);assert.ok(part.length<=15);for(const id of part){assert.ok(!seen.has(id));seen.add(id);}cursor+=part.length;}assert.equal(cursor,634);assert.equal(seen.size,634);for(const id of ids)assert.ok(seen.has(id));}

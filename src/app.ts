@@ -5,7 +5,7 @@ import { json, html, redirect } from './response';
 import type { CurrentMember, SessionData } from './types';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveTaskChildCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured, webPushPublicKey } from './webpush';
-import { DEFAULT_FAMILY_TIMEZONE, FAMILY_TIMEZONE_OPTIONS, familyNow, validateTimezone } from './timezone';
+import { DEFAULT_FAMILY_TIMEZONE, FAMILY_TIMEZONE_OPTIONS, addWallClockMinutes, familyNow, validateTimezone } from './timezone';
 
 export interface AppContext { request: Request; env: Env; session: SessionData; member: CurrentMember | null; }
 
@@ -1537,13 +1537,31 @@ export async function recordQuickChoreDomain(env:Env,member:CurrentMember,id:num
   const r=await env.DB.prepare("INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at,quick_chore_id) VALUES(?,NULL,'HOUSEWORK',?,?,?,?,?,?,?,?,?,?,?, ?,NULL,?)").bind(member.family_id,now,null,null,null,null,String(chore.name),null,null,null,member.id,now,now,id).run();
   const logId=Number(r.meta.last_row_id);await logActivity(externalActionContext(env,member),'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:now,value_text:String(chore.name),quick_chore_id:id});return {ok:true,id:logId};
 }
+export type ExternalFamilyLogPreset='NOW'|'MINUS_60';
+export async function recordExternalFamilyLogDomain(env:Env,member:CurrentMember,subjectId:number,detailCode:'WET'|'DIRTY',preset:ExternalFamilyLogPreset):Promise<{ok:boolean;id?:number;operation?:string;occurred_at?:string}>{
+  if(!['NOW','MINUS_60'].includes(preset)||!['WET','DIRTY'].includes(detailCode))return {ok:false};
+  const subject=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD') LIMIT 1").bind(subjectId,member.family_id).first<Row>();
+  if(!subject)return {ok:false};
+  const kind=String(subject.subject_kind),logType=kind==='BABY'?'DIAPER':'TOILET';
+  if(!familyLogEnabledTypes(subject).includes(logType))return {ok:false};
+  const family=await env.DB.prepare('SELECT timezone FROM families WHERE id=? LIMIT 1').bind(member.family_id).first<Row>();
+  if(!family)return {ok:false};
+  const current=familyNow(String(family.timezone||DEFAULT_FAMILY_TIMEZONE));
+  const occurredAt=preset==='MINUS_60'?addWallClockMinutes(current,-60):current;
+  const r=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,NULL)').bind(member.family_id,subjectId,logType,occurredAt,detailCode,member.id,current,current).run();
+  const id=Number(r.meta.last_row_id||0);if(!id)return {ok:false};
+  const operation=`${logType}_${detailCode}`;
+  await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{log_type:logType,detail_code:detailCode,subject_id:subjectId,occurred_at:occurredAt,source:'google_home_scene',operation});
+  return {ok:true,id,operation,occurred_at:occurredAt};
+}
 export async function startDedicatedSleepDomain(env:Env,member:CurrentMember,subjectId:number):Promise<{ok:boolean;id?:number;already?:boolean}>{
-  const child=await env.DB.prepare("SELECT id,subject_kind FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();if(!child||!supportsDedicatedSleep(child.subject_kind))return {ok:false};
+  const child=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();if(!child||!supportsDedicatedSleep(child.subject_kind)||!familyLogEnabledTypes(child).includes('SLEEP'))return {ok:false};
   const existing=await env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(member.family_id,subjectId).first<Row>();if(existing)return {ok:true,id:Number(existing.id),already:true};
   const now=nowJst(),startedMs=Date.now();const r=await env.DB.prepare("INSERT INTO family_log_timers(family_id,subject_id,log_type,started_at,started_at_ms,status,note,created_by,created_at,updated_at,timer_label) SELECT ?,?,'SLEEP',?,?,'running',NULL,?,?,?,'睡眠' WHERE NOT EXISTS(SELECT 1 FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running')").bind(member.family_id,subjectId,now,startedMs,member.id,now,now,member.family_id,subjectId).run();
   let id=Number(r.meta.last_row_id||0);if(!id){const raced=await env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(member.family_id,subjectId).first<Row>();return {ok:true,id:Number(raced?.id||0),already:true};}await logActivity(externalActionContext(env,member),'STARTED','family_log_timer',id,{log_type:'SLEEP',subject_id:subjectId});return {ok:true,id};
 }
 export async function stopDedicatedSleepDomain(env:Env,member:CurrentMember,subjectId:number,timerId?:number,wakeAt=nowJst()):Promise<{ok:boolean;log_id?:number;duration_minutes?:number;already?:boolean}>{
+  const child=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();if(!child||!familyLogEnabledTypes(child).includes('SLEEP'))return {ok:false};
   const timer=await env.DB.prepare(`SELECT x.*,s.name subject_name FROM family_log_timers x JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id AND s.active=1 AND s.subject_kind IN ('BABY','CHILD') WHERE x.family_id=? AND x.subject_id=? AND x.log_type='SLEEP' AND x.status='running' ${timerId?'AND x.id=?':''} ORDER BY x.id DESC LIMIT 1`).bind(...(timerId?[member.family_id,subjectId,timerId]:[member.family_id,subjectId])).first<Row>();
   if(!timer){const subject=await env.DB.prepare("SELECT id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();return {ok:Boolean(subject),already:Boolean(subject)};}
   const wakeMs=familyLogJstMs(wakeAt),startedMs=Number(timer.started_at_ms);if(!Number.isFinite(startedMs)||wakeMs<startedMs||wakeMs>Date.now()+60000)throw new BadRequest('起床時刻が不正です。');const duration=Math.round((wakeMs-startedMs)/60000);if(duration>SLEEP_TIMER_MAX_ADJUST_MINUTES)throw new BadRequest('睡眠時間は48時間以内で指定してください。');const now=nowJst();
