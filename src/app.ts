@@ -38,7 +38,7 @@ export async function makeContext(request: Request, env: Env): Promise<AppContex
 }
 
 export async function memberById(env: Env, id: number): Promise<CurrentMember | null> {
-  return (await env.DB.prepare('SELECT * FROM members WHERE id=? AND active=1 LIMIT 1').bind(id).first<CurrentMember>()) ?? null;
+  return (await env.DB.prepare('SELECT m.*,COALESCE(f.timezone,?) family_timezone FROM members m JOIN families f ON f.id=m.family_id WHERE m.id=? AND m.active=1 LIMIT 1').bind(env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE,id).first<CurrentMember>()) ?? null;
 }
 
 function requireMember(ctx: AppContext): CurrentMember {

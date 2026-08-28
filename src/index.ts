@@ -5,15 +5,16 @@ import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, a
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
-import { familyAiQuery } from './family-ai';
-import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect } from './google-calendar';
+import { familyAiQuery, familyAiConnectionTest } from './family-ai';
+import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed } from './google-calendar';
+import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
 
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 
-function asDateOffset(days:number){const d=new Date();d.setUTCDate(d.getUTCDate()+days);return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(d);}
+function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -65,9 +66,11 @@ export default {
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/family-log') return familyLog(request,context);
       if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
+      if(url.pathname==='/api/family-ai/connection-test') return familyAiConnectionTest(request,context);
       if(url.pathname==='/api/settings/diagnostics-detail') return settingsDiagnosticsDetail(request,context);
       if(url.pathname==='/api/google-calendar/sync') return calendarSyncNow(request,context);
       if(url.pathname==='/api/google-calendar/disconnect') return calendarDisconnect(request,context);
+      if(url.pathname==='/api/google-calendar/retry-failed') return calendarRetryFailed(request,context);
       if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
@@ -79,10 +82,10 @@ export default {
       if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return createFamilyPage(context);
       if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return invitePage(context,url.searchParams.get('token')||'');
       if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return home(context);
-      if(url.pathname==='/today.php') return today(request,context,url.searchParams.get('date')||asDateOffset(0));
-      if(url.pathname==='/tomorrow.php') return tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1));
-      if(url.pathname==='/app/tasks.php') return taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0));
-      if(url.pathname==='/app/calendar.php') return calendar(request,context,url.searchParams.get('month')||asDateOffset(0).slice(0,7));
+      if(url.pathname==='/today.php') return today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/tomorrow.php') return tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/app/tasks.php') return taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+      if(url.pathname==='/app/calendar.php') return calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
       if(url.pathname==='/app/messages.php') return messages(request,context);
       if(url.pathname==='/app/shopping.php') return shopping(request,context);
       if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return familyLog(request,context);
@@ -104,10 +107,10 @@ export default {
       if(url.pathname==='/app/settings_notifications.php') return settingsNotifications(request,context);
       if(url.pathname==='/app/settings_recurring.php') return recurring(request,context);
       if(url.pathname==='/app/logs.php') return logsPage(context);
-      if(url.pathname==='/task/new.php') return taskNew(context,url.searchParams.get('date')||asDateOffset(0),url.searchParams.get('return')||'');
+      if(url.pathname==='/task/new.php') return taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');
       if(url.pathname==='/task/view.php') return taskView(context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/task/edit.php') return taskEdit(request,context,Number(url.searchParams.get('id')||0));
-      if(url.pathname==='/item/new.php') return itemNew(context,url.searchParams.get('date')||asDateOffset(0),Number(url.searchParams.get('task_id')||0));
+      if(url.pathname==='/item/new.php') return itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));
       if(url.pathname==='/item/edit.php') return itemEdit(request,context,Number(url.searchParams.get('id')||0));
       if(url.pathname==='/app/shopping_edit.php') return shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
       return env.ASSETS.fetch(request);
