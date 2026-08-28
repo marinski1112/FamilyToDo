@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';
+import {assertCurrentVersionContract,assertVersionContract,validateVersion} from './version-contract.mjs';
+assertCurrentVersionContract();
+for(const v of ['12.143.0-wave124','12.144.0-wave125','12.136.1-wave117-hotfix'])assert.ok(validateVersion(v));for(const v of ['12.144','wave125','latest','12.144.0'])assert.equal(validateVersion(v),false);
+assert.throws(()=>assertVersionContract({version:'12.144.0-wave125'},{version:'12.143.0-wave124',cloudflare_wave:'Wave125',source:'FamilyTODO Cloudflare v12.144.0-wave125'}));
+const request=fs.readFileSync('src/google-home-request-sync.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8'),tasks=fs.readFileSync('src/google-tasks.ts','utf8');
+for(const x of ['INVALID_SERVICE_ACCOUNT_JSON','JWT_SIGN_FAILED','TOKEN_HTTP_${response.status}','HOMEGRAPH_HTTP_${response.status}','async:false','agentUserId:`ft-member-${memberId}`'])assert.ok(request.includes(x),x);
+for(const x of ["category:'家族ログ'",'`${possessive}${q.name}`',"`${possessive}${q.name}を記録`"])assert.ok(home.includes(x),x);
+for(const x of ['hasGoogleVoiceMarker','voiceContexts=new Map','voiceContexts.set(familyId,pending)',"String(existing.status)==='EXECUTED'","String(existing.external_etag)===String(item.etag||'')","status<>'EXECUTED'"])assert.ok(tasks.includes(x),x);
+assert.match(tasks,/MAX_D1_QUERY_BUDGET=40/);assert.match(tasks,/MAX_TASKS_PER_INVOCATION=8/);
+console.log('wave125 production diagnostics, scene aliases, voice cache/retry smoke ok');

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
 const app=read('src/app.ts'),css=read('public/assets/calendar.css'),calendar=read('public/assets/calendar.js'),log=read('public/assets/family-log.js'),familyCss=read('public/assets/family.css'),ci=read('.github/workflows/ci.yml');
-assert.ok(['12.143.0-wave124','12.139.0-wave120','12.140.0-wave121','12.141.0-wave122','12.142.0-wave123'].includes(pkg.version));assert.equal(inventory.version,pkg.version);
+assert.equal(inventory.version,pkg.version);
 for(const command of ['check:domain-smoke','check:wave117','check:wave118'])assert.ok(ci.includes(`npm run ${command}`));
 assert.ok(app.includes('--calendar-day-band-rows:'));assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'));
 assert.match(css,/top:calc\(var\(--calendar-date-zone\) \+ var\(--calendar-day-band-rows\) \* var\(--calendar-band-step\)\)!important/);
