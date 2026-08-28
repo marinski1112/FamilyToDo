@@ -5,9 +5,9 @@ import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, a
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
-import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
+import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
-import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
+import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill, calendarWatchWebhook, renewCalendarWatches, wakeCalendarOutbox } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate, formatStoredUtcForFamily } from './timezone';
 import { integrationsHealthResponse } from './environment-health';
 import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
@@ -34,9 +34,10 @@ export default {
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
       if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);
       if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);
-      if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return await authHealth(context);}
+      if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env,ctx);return await authHealth(context);}
       if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);
       if(url.pathname==='/__cf/integrations-health') return integrationsHealthResponse(env);
+      if(url.pathname==='/api/google-calendar/watch') return await calendarWatchWebhook(request,env,ctx);
       if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
       if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
       if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
@@ -50,11 +51,11 @@ export default {
       // 例外化/Response処理の差異による1101を避けるため。
       if(url.pathname==='/app/recurring.php') {
         if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
-        const context=await makeContext(request,env);
+        const context=await makeContext(request,env,ctx);
         if(!context.member){const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
         return await recurring(request,context);
       }
-      const context=await makeContext(request,env);
+      const context=await makeContext(request,env,ctx);
       if(url.pathname==='/oauth/google/authorize') {
         console.log(JSON.stringify({stage:'AUTHORIZE_RECEIVED',provider:'GOOGLE_HOME'}));
         return await preserveGoogleHomeLogin(request,env,await googleAuthorize(request,context));
@@ -78,6 +79,9 @@ export default {
       if(url.pathname==='/api/family-ai/connection-test') return await familyAiConnectionTest(request,context);
       if(url.pathname==='/api/family-ai/model-probe') return await familyAiModelProbe(request,context);
       if(url.pathname==='/api/family-ai/model-catalog') return await familyAiModelCatalog(request,context);
+      if(url.pathname==='/api/family-ai/model-compatibility') return await familyAiModelCompatibility(request,context);
+      if(url.pathname==='/api/family-ai/model-select') return await familyAiModelSelect(request,context);
+      if(url.pathname==='/api/family-ai/model-reset') return await familyAiModelReset(request,context);
       if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);
       if(url.pathname==='/api/google-tasks/action') return await googleTasksAction(request,context);
       if(url.pathname==='/api/google-calendar/sync') return await calendarSyncNow(request,context);
@@ -151,15 +155,15 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
     console.log(`[Family TODO LINE] scheduled ${controller.cron}`);
-    if(controller.cron==='3,13,23,33,43,53 * * * *'){
+    if(controller.cron==='3,8,13,18,23,28,33,38,43,48,53,58 * * * *'){
       ctx.waitUntil(processGoogleTasksInbound(env));
       return;
     }
     if(controller.cron==='*/5 * * * *'){
       ctx.waitUntil(processNotifications(env));
       ctx.waitUntil(processCalendarOutbox(env));
-      ctx.waitUntil(processCalendarInbound(env));
     }
+    if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}
   }
 } satisfies ExportedHandler<Env>;
 
@@ -382,7 +386,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
       ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
     );
     await ctx.env.DB.batch(q);
-    try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* deletion remains authoritative */ }
+    try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); wakeCalendarOutbox(ctx,m.family_id); } catch { /* deletion remains authoritative */ }
     return json({ok:true});
   }
   if(request.method!=='POST') return json({ok:false,error:'POST only'},405);
@@ -448,7 +452,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
     throw e;
   }
 
-  try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); } catch { /* local task remains authoritative */ }
+  try { await queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id); wakeCalendarOutbox(ctx,m.family_id); } catch { /* local task remains authoritative */ }
   if(!isPrivate)await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','task',id,JSON.stringify({title}),nowJst()).run().catch(()=>{});return json({ok:true,id},201);
 }
 
