@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.130.0-wave111",
+  "source": "FamilyTODO Cloudflare v12.131.0-wave112",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -107,7 +107,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.130.0-wave111",
+  "version": "12.131.0-wave112",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -149,5 +149,5 @@
   "wave106_note": "Provider-neutral typed Family AI planning, quota-free Gemini model catalog, bounded all-violation diagnostics, explicit Workers AI binding/provider, and OWNER/ADMIN-only access; no migration added.",
   "wave109_note": "D1-safe fixed-query ICS preview, bounded apply and resumable rollback, re-importable provenance, awaited routes, and opt-in signed title-time normalization with ambiguous-only Family AI; no migration.",
   "wave110_note": "Dynamic 40-query D1 apply/rollback budgeting, start-only title normalization without inferred duration, expanded deterministic TimeTree parsing, and compact month-grid start times; no migration.",
-  "wave111_note": "CPU-safe raw VEVENT chunk apply (15/request), one-time browser file hash, IMPORTING resume/idempotency, reconciled counts, and recovery UI; no migration."
+  "wave112_note": "Exact source-ordinal resume, explicit same-file UX, server apply lease/CAS, and active-batch uniqueness; migration 0037."
 }
