@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const home=fs.readFileSync('src/google-home.ts','utf8');
 const docs=fs.readFileSync('docs/GOOGLE_HOME_VOICE_SETUP.md','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.ok(['12.133.0-wave114','12.134.0-wave115','12.135.0-wave116','12.136.0-wave117','12.136.1-wave117-hotfix'].includes(pkg.version));
+assert.ok(['12.133.0-wave114','12.134.0-wave115','12.135.0-wave116','12.136.0-wave117','12.136.1-wave117-hotfix','12.137.0-wave118'].includes(pkg.version));
 for(const value of ['oauth-redirect.googleusercontent.com/r/${project}','oauth-redirect-sandbox.googleusercontent.com/r/${project}','GOOGLE_HOME_REDIRECT_URI','safeEqual(clientId','responseType===\'code\'','CODE_SECONDS=300','ACCESS_SECONDS=3600'])assert.ok(home.includes(value),value);
 assert.match(home,/subject_kind IN \('BABY','CHILD'\)/);assert.match(home,/family_quick_chores WHERE family_id=\? AND active=1/);
 for(const value of ['ft:sleep:start:','ft:sleep:stop:','ft:chore:','action.devices.types.SCENE','action.devices.traits.Scene','sceneReversible:false','willReportState:false','agentUserId:`ft-member-${member.id}`'])assert.ok(home.includes(value),value);

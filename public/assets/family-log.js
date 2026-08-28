@@ -17,6 +17,9 @@
   const selectedDate=String(payload.selectedDate||'');
   const nowLocal=String(payload.nowLocal||'');
   const isAdmin=Boolean(payload.isAdmin);
+  const milkAmountPresets=Array.isArray(payload.milkAmountPresets)?payload.milkAmountPresets:[160,240];
+  const lastMilkAmounts={...(payload.lastMilkAmounts||{})};
+  let amountDirty=false,isEditing=false;
 
   const logModal=byId('familyLogModal');
   const logForm=byId('familyLogForm');
@@ -100,6 +103,21 @@
     });
   }
 
+  function syncMilkPresets(){
+    const wrap=byId('familyLogMilkPresets'),amount=formField('amount'),type=String(formField('log_type')?.value||'');
+    if(!wrap)return;wrap.hidden=type!=='MILK';if(type!=='MILK')return;
+    const current=String(amount?.value||'');
+    wrap.innerHTML=milkAmountPresets.map(value=>`<button type="button" data-milk-amount="${value}" class="${current===String(value)?'active':''}">${value} ml</button>`).join('')+`<button type="button" data-milk-other="1" class="${current&&!milkAmountPresets.some(value=>String(value)===current)?'active':''}">その他</button>`;
+  }
+  function configureCompactControls(subjectId,editing){
+    isEditing=editing;const typeControl=byId('familyLogTypeControl'),subjectControl=byId('familyLogSubjectControl'),chip=byId('familyLogSubjectChip');
+    if(typeControl)typeControl.hidden=!editing;
+    const compact=Boolean(subjectId)&&(Number(payload.eligibleSubjectCount||0)===1||Number(payload.selectedSubject||0)===Number(subjectId));
+    if(subjectControl)subjectControl.hidden=compact;
+    if(chip){const row=subjectMap[String(subjectId)];chip.hidden=!compact;chip.textContent=compact?`${row?.icon||'👤'} ${row?.name||'対象'}`:'';}
+    const advanced=byId('familyLogAdvanced');if(advanced instanceof HTMLDetailsElement)advanced.open=false;
+  }
+
   function refreshDynamicFields(){
     if(!logForm)return;
     const type=String(formField('log_type')?.value||'MEMO');
@@ -165,11 +183,13 @@
       amount.step=['TEMPERATURE','WEIGHT','HEIGHT'].includes(type)?'0.1':'1';
       amount.inputMode='decimal';
     }
+    syncMilkPresets();
   }
 
   function openNew(type,subjectId=selectedSubject()){
     if(!logForm)return;
     logForm.reset();
+    amountDirty=false;isEditing=false;
     formField('id').value='';
     formField('log_type').value=type||'MEMO';
     const subject=formField('subject_id');
@@ -182,8 +202,10 @@
     const provenance=byId('familyLogProvenance');if(provenance){provenance.hidden=true;provenance.textContent='';}
     const deleteBtn=byId('familyLogDelete');
     if(deleteBtn)deleteBtn.style.display='none';
-    logTitle.textContent=`${TYPE_META[type]?.icon||'📝'} ${TYPE_META[type]?.label||'記録'}を追加`;
+    logTitle.textContent=`${TYPE_META[type]?.icon||'📝'} ${TYPE_META[type]?.label||'記録'}`;
+    configureCompactControls(subjectId,false);
     refreshDynamicFields();
+    const amount=formField('amount');if(type==='MILK'&&amount)amount.value=lastMilkAmounts[String(subjectId)]??'';syncMilkPresets();
     setOpen(logModal,true);
   }
 
@@ -191,6 +213,7 @@
     const row=logMap[String(id)];
     if(!row||!logForm)return;
     logForm.reset();
+    amountDirty=false;isEditing=true;
     formField('id').value=String(row.id||'');
     formField('log_type').value=String(row.log_type||'MEMO');
     const subjectSelect=formField('subject_id');
@@ -214,7 +237,9 @@
     if(deleteBtn)deleteBtn.style.display='inline-flex';
     const type=String(row.log_type||'MEMO');
     logTitle.textContent=`${TYPE_META[type]?.icon||'📝'} ${TYPE_META[type]?.label||'記録'}を編集`;
+    configureCompactControls(Number(row.subject_id||0),true);
     refreshDynamicFields();
+    const advanced=byId('familyLogAdvanced');if(advanced instanceof HTMLDetailsElement)advanced.open=Boolean(row.note||row.linked_task_id||row.linked_occurrence_id||row.imported);
     const detail=formField('detail_code');
     if(detail)detail.value=String(row.detail_code||'');
     syncDetailChoiceState();
@@ -329,6 +354,9 @@
 
   formField('log_type')?.addEventListener('change',refreshDynamicFields);
   formField('detail_code')?.addEventListener('change',syncDetailChoiceState);
+  formField('amount')?.addEventListener('input',()=>{amountDirty=true;syncMilkPresets();});
+  byId('familyLogMilkPresets')?.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;const amount=formField('amount');if(button.dataset.milkAmount&&amount){amount.value=button.dataset.milkAmount;amountDirty=true;syncMilkPresets();}else amount?.focus();});
+  formField('subject_id')?.addEventListener('change',()=>{if(isEditing||amountDirty||String(formField('log_type')?.value)!=='MILK')return;const amount=formField('amount');if(amount)amount.value=lastMilkAmounts[String(formField('subject_id')?.value)]??'';syncMilkPresets();});
   logClose?.addEventListener('click',()=>setOpen(logModal,false));
   logModal?.addEventListener('click',e=>{if(e.target===logModal)setOpen(logModal,false);});
 
@@ -353,6 +381,7 @@
         note:String(fd.get('note')||''),
         linked_target:String(fd.get('linked_target')||'')
       });
+      if(String(fd.get('log_type'))==='MILK'&&Number(fd.get('subject_id'))&&String(fd.get('amount')))lastMilkAmounts[String(Number(fd.get('subject_id')))]=Number(fd.get('amount'));
       if(result?.linked_completion&&result.linked_completion.ok===false&&result.linked_completion.message)alert(result.linked_completion.message);
       location.reload();
     }catch(err){
@@ -591,9 +620,9 @@
   settingsModal?.addEventListener('click',event=>{if(event.target===settingsModal)setOpen(settingsModal,false);});
   settingsForm?.addEventListener('submit',async event=>{
     event.preventDefault();const status=byId('familyLogSettingsStatus');
-    const checkbox=settingsForm.elements.namedItem('show_adult_logs');
+    const checkbox=settingsForm.elements.namedItem('show_adult_logs'),presetInput=settingsForm.elements.namedItem('milk_amount_presets');
     if(status)status.textContent='保存しています…';
-    try{await post({action:'settings_update',show_adult_logs:checkbox instanceof HTMLInputElement&&checkbox.checked});location.href=managementMode?'/app/settings_family_log.php':`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;}
+    try{await post({action:'settings_update',show_adult_logs:checkbox instanceof HTMLInputElement&&checkbox.checked,milk_amount_presets:String(presetInput?.value||'').split(',').map(value=>Number(value.trim()))});location.href=managementMode?'/app/settings_family_log.php':`/app/family_log.php?date=${encodeURIComponent(selectedDate)}`;}
     catch(err){if(status)status.textContent=err?.message||String(err);}
   });
 

@@ -446,7 +446,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 }
 .calendar-week-more span{text-align:right;padding-right:3px;min-width:0}
 .calendar-week-days .calendar-items{
-  margin-top:48px!important;
   max-height:24px;
 }
 .calendar-week-days .calendar-item{
@@ -467,7 +466,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   .calendar-week-days>.calendar-cell{height:86px!important;min-height:86px!important}
   .calendar-week-bands{top:23px;grid-auto-rows:15px}
   .calendar-band{height:15px;line-height:15px;font-size:7px;padding:0 3px}
-  .calendar-week-days .calendar-items{margin-top:44px!important;max-height:21px}
 }
 @media(prefers-reduced-motion:reduce){
   .calendar-card .calendar-grid,.modal-body{transition:none!important}
@@ -526,7 +524,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   row-gap:2px!important;
 }
 .calendar-week-days .calendar-items{
-  margin-top:calc(var(--calendar-band-rows) * var(--calendar-band-step) + 3px)!important;
   max-height:none!important;
   overflow:visible!important;
   gap:2px!important;
@@ -569,7 +566,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   }
   .calendar-week-bands{top:29px!important;grid-auto-rows:15px!important}
   .calendar-week-days>.calendar-cell>.num{height:23px!important;min-height:23px!important;line-height:23px!important}
-  .calendar-week-days .calendar-items{margin-top:calc(var(--calendar-band-rows) * var(--calendar-band-step) + 2px)!important}
   .calendar-task-overflow{font-size:7px;height:12px;line-height:12px}
 }
 
@@ -612,7 +608,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   position:relative!important;
   width:100%!important;
   box-sizing:border-box!important;
-  margin-top:calc(var(--calendar-date-zone) + var(--calendar-band-rows) * var(--calendar-band-step))!important;
   padding:0!important;
 }
 .calendar-week-days>.calendar-cell>.num .today-num{
@@ -623,7 +618,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   .calendar-week-days>.calendar-cell{padding:0 3px 3px!important}
   .calendar-week-days>.calendar-cell>.num{top:4px!important;left:4px!important;right:4px!important;height:23px!important;min-height:23px!important;line-height:23px!important}
   .calendar-week-bands{top:34px!important}
-  .calendar-week-days .calendar-items{margin-top:calc(var(--calendar-date-zone) + var(--calendar-band-rows) * var(--calendar-band-step))!important}
 }
 
 /* Wave66: keep ordinary single-day plans at the first available row. */
@@ -631,7 +625,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   justify-content:flex-start!important;
 }
 .calendar-week[style*="--calendar-band-rows:0"] .calendar-week-days .calendar-items{
-  margin-top:var(--calendar-date-zone)!important;
 }
 
 /* Wave67: reserve multi-day lane space per date, not per whole week. */
@@ -639,7 +632,6 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
   --calendar-day-band-rows:0;
 }
 .calendar-week-days>.calendar-cell .calendar-items{
-  margin-top:calc(var(--calendar-date-zone) + var(--calendar-day-band-rows) * var(--calendar-band-step))!important;
 }
 
 /* Wave68: anchor each day's ordinary content independently of the week's band stack.
@@ -682,3 +674,14 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 
 /* Wave110: compact wall-clock prefix remains on the single ellipsis line. */
 .calendar-item-time{font-size:.9em;font-variant-numeric:tabular-nums;font-weight:600}
+
+/* Wave118: one canonical per-day anchor and compact bounded date jump. */
+.calendar-week-days>.calendar-cell .calendar-items{
+  position:absolute!important;
+  top:calc(var(--calendar-date-zone) + var(--calendar-day-band-rows) * var(--calendar-band-step))!important;
+  left:3px!important;right:3px!important;width:auto!important;
+  margin-top:0!important;padding:0!important;
+}
+.calendar-month-label{appearance:none;border:0;background:transparent;color:#64748b;padding:4px 0;min-height:40px;font:inherit;font-weight:750;cursor:pointer}
+.calendar-jump-panel{position:absolute;z-index:30;width:min(340px,calc(100vw - 24px));padding:10px;background:#fff;border:1px solid #dbe2ea;border-radius:14px;box-shadow:0 14px 35px rgba(15,23,42,.16)}
+.calendar-jump-row{display:flex;align-items:end;gap:7px;margin:0 0 8px}.calendar-jump-row label{display:grid;gap:3px;color:#64748b;font-size:11px}.calendar-jump-row select,.calendar-jump-row input{min-height:42px;padding:7px;width:auto}.calendar-date-jump{border-top:1px solid #edf0f4;padding-top:8px}.calendar-date-jump label{flex:1}.calendar-date-jump input{width:100%}.calendar-jump-shortcuts{display:flex;gap:7px}
