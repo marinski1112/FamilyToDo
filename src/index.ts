@@ -8,7 +8,7 @@ import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSetting
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
-import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
+import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -80,6 +80,8 @@ export default {
       if(url.pathname==='/api/family-log-import') return await familyLogImportApi(request,context);
       if(url.pathname==='/api/calendar-import/preview') return await calendarImportPreview(request,context);
       if(url.pathname==='/api/calendar-import/normalization-preview') return await calendarImportNormalizationPreview(request,context);
+      if(url.pathname==='/api/calendar-import/prepare') return await calendarImportPrepare(request,context);
+      if(url.pathname==='/api/calendar-import/status') return await calendarImportStatus(request,context);
       if(url.pathname==='/api/calendar-import/apply') return await calendarImportApply(request,context);
       if(url.pathname==='/api/calendar-import/rollback') return await calendarImportRollback(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return await recordOccurrenceFamilyLog(request,context);
