@@ -6,6 +6,7 @@ import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
+import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
@@ -33,6 +34,7 @@ export default {
       if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env);return await authHealth(context);}
       if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);
       if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
+      if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
       if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
       if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);
       if(url.pathname==='/liff'||url.pathname==='/liff/') {
@@ -54,6 +56,7 @@ export default {
       }
       const context=await makeContext(request,env);
       if(url.pathname==='/oauth/google/authorize') return await googleAuthorize(request,context);
+      if(url.pathname==='/oauth/google-tasks/authorize') return await googleTasksAuthorize(request,context);
       if(url.pathname==='/oauth/google-calendar/authorize') return await googleCalendarAuthorize(request,context);
       if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);
       if(url.pathname==='/api/family/create') return await createFamily(request,context);
@@ -73,6 +76,7 @@ export default {
       if(url.pathname==='/api/family-ai/model-probe') return await familyAiModelProbe(request,context);
       if(url.pathname==='/api/family-ai/model-catalog') return await familyAiModelCatalog(request,context);
       if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);
+      if(url.pathname==='/api/google-tasks/action') return await googleTasksAction(request,context);
       if(url.pathname==='/api/google-calendar/sync') return await calendarSyncNow(request,context);
       if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
       if(url.pathname==='/api/google-calendar/disconnect') return await calendarDisconnect(request,context);
@@ -104,6 +108,7 @@ export default {
       if(url.pathname==='/app/family_log_import.php') return await familyLogImportPage(context);
       if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
       if(url.pathname==='/app/settings.php') return await settings(request,context);
+      if(url.pathname==='/app/settings_google_tasks.php') return await googleTasksSettings(request,context);
       if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettings(request,context);
       if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
       if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);
@@ -146,6 +151,7 @@ export default {
     ctx.waitUntil(processNotifications(env));
     ctx.waitUntil(processCalendarOutbox(env));
     ctx.waitUntil(processCalendarInbound(env));
+    ctx.waitUntil(processGoogleTasksInbound(env));
   }
 } satisfies ExportedHandler<Env>;
 
@@ -185,6 +191,8 @@ async function dbSchemaHealth(env:Env):Promise<Response>{
     external_command_receipts:['id','provider','family_id','member_id','request_id','command_key','status','error_code','created_at','updated_at'],
     calendar_import_batches:['id','family_id','source_format','file_sha256','status','total_count','processed_count','created_by'],
     calendar_import_entries:['id','batch_id','family_id','source_uid','source_recurrence_key','source_hash','task_id','recurrence_rule_id','status'],
+    external_google_task_accounts:['id','family_id','member_id','refresh_token_ciphertext','tasklist_id','status','import_visibility','sync_started_at','updated_min'],
+    external_google_task_links:['id','family_id','member_id','account_id','task_id','external_tasklist_id','external_task_id','status'],
     external_calendar_accounts:['id','family_id','member_id','provider','refresh_token_ciphertext','token_key_version','calendar_id','status','last_synced_at','last_error'],
     external_calendar_links:['id','family_id','task_id','provider','calendar_id','external_event_id','external_etag','last_synced_at','deleted_at'],
     calendar_sync_outbox:['id','family_id','task_id','provider','operation','status','retry_count','next_retry_at','last_error'],

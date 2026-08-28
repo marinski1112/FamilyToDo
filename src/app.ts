@@ -1554,6 +1554,14 @@ export async function recordExternalFamilyLogDomain(env:Env,member:CurrentMember
   await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{log_type:logType,detail_code:detailCode,subject_id:subjectId,occurred_at:occurredAt,source:'google_home_scene',operation});
   return {ok:true,id,operation,occurred_at:occurredAt};
 }
+const EXTERNAL_VALUELESS_PET_TYPES=new Set(['MEAL','BATH','MEDICINE','WATER']);
+export async function recordExternalPetQuickLogDomain(env:Env,member:CurrentMember,subjectId:number,logType:string):Promise<{ok:boolean;id?:number;operation?:string}>{
+  const type=String(logType).toUpperCase();if(!EXTERNAL_VALUELESS_PET_TYPES.has(type))return {ok:false};
+  const subject=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json,overview_quick_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind='PET'").bind(subjectId,member.family_id).first<Row>();if(!subject||!familyLogEnabledTypes(subject).includes(type))return {ok:false};
+  let quick:string[]=[];try{const parsed=JSON.parse(String(subject.overview_quick_types_json||'[]'));if(Array.isArray(parsed))quick=parsed.map(String).map(x=>x.toUpperCase());}catch{}if(!quick.includes(type))return {ok:false};
+  const family=await env.DB.prepare('SELECT timezone FROM families WHERE id=?').bind(member.family_id).first<Row>();if(!family)return {ok:false};const n=familyNow(String(family.timezone||DEFAULT_FAMILY_TIMEZONE));
+  const r=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL)').bind(member.family_id,subjectId,type,n,member.id,n,n).run(),id=Number(r.meta.last_row_id||0);if(!id)return {ok:false};await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{log_type:type,subject_id:subjectId,occurred_at:n,source:'google_home_scene',operation:`PET_${type}`});return {ok:true,id,operation:`PET_${type}`};
+}
 export async function startDedicatedSleepDomain(env:Env,member:CurrentMember,subjectId:number):Promise<{ok:boolean;id?:number;already?:boolean}>{
   const child=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD')").bind(subjectId,member.family_id).first<Row>();if(!child||!supportsDedicatedSleep(child.subject_kind)||!familyLogEnabledTypes(child).includes('SLEEP'))return {ok:false};
   const existing=await env.DB.prepare("SELECT id FROM family_log_timers WHERE family_id=? AND subject_id=? AND log_type='SLEEP' AND status='running' LIMIT 1").bind(member.family_id,subjectId).first<Row>();if(existing)return {ok:true,id:Number(existing.id),already:true};
