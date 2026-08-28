@@ -5,7 +5,7 @@ import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, a
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
-import { familyAiQuery, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
+import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog } from './family-ai';
 import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill } from './google-calendar';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 
@@ -66,6 +66,8 @@ export default {
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/family-log') return familyLog(request,context);
       if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
+      if(url.pathname==='/api/family-ai/plan') return familyAiPlan(request,context);
+      if(url.pathname==='/api/family-ai/execute') return familyAiExecute(request,context);
       if(url.pathname==='/api/family-ai/connection-test') return familyAiConnectionTest(request,context);
       if(url.pathname==='/api/family-ai/model-probe') return familyAiModelProbe(request,context);
       if(url.pathname==='/api/family-ai/model-catalog') return familyAiModelCatalog(request,context);
