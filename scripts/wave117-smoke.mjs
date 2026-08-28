@@ -8,6 +8,6 @@ assert.ok(wrangler.assets.run_worker_first.includes('/')&&wrangler.assets.run_wo
 const types=read('worker-configuration.d.ts');for(const name of ['LINE_CHANNEL_ID','VAPID_PUBLIC_KEY','FAMILY_AI_PROVIDER','GOOGLE_CALENDAR_TOKEN_KEY','GOOGLE_TASKS_TOKEN_KEY','GOOGLE_HOME_PROJECT_ID'])assert.ok(types.includes(name));
 const health=read('src/environment-health.ts');assert.ok(health.includes('Object.values(calendar).every(Boolean)'));assert.ok(health.includes("env.GOOGLE_TASKS_CLIENT_ID||env.GOOGLE_CALENDAR_CLIENT_ID"));assert.ok(health.includes("env.FAMILY_AI_PROVIDER||'GEMINI'"));
 const continuation=read('src/oauth-continuation.ts');assert.ok(continuation.includes('AES-GCM'));assert.ok(continuation.includes('p.exp>=Date.now()'));assert.ok(continuation.includes("u.searchParams.get('flow')==='google_home'"));
-const liff=read('public/assets/liff-auth.js');assert.ok(liff.includes('await window.liff.init'));assert.ok(liff.includes('next:current')); assert.ok(liff.includes("data.redirect||'/app/index.php'"));assert.ok(!liff.includes('payload.next||data.redirect'));
+const liff=read('public/assets/liff-auth.js');assert.ok(liff.includes('await window.liff.init'));assert.ok(liff.includes('next:current')); assert.ok(liff.includes('const target=valid(data.redirect)'));assert.ok(!liff.includes("data.redirect||'/app/index.php'"));
 for(const secret of ['GOOGLE_HOME_CLIENT_SECRET','GEMINI_API_KEY','VAPID_PRIVATE_KEY'])assert.equal(Object.hasOwn(wrangler.vars,secret),false);
 console.log('Wave117 smoke: PASS');

@@ -10,11 +10,11 @@ assert.equal(validateLiffNext('/oauth/google/continue?resume=abc.DEF'),'/oauth/g
 const continuation=read('src/oauth-continuation.ts');
 assert.ok(continuation.includes('liffDispatcher'));assert.ok(continuation.includes('liffDispatcher'));
 assert.ok(continuation.includes('/oauth/line/google-home/start?resume='));assert.ok(continuation.includes('INVALID_LEGACY_CONTINUATION'));
-assert.ok(continuation.includes('loginRedirect:`/liff?next=${encodeURIComponent(next)}`'));
+assert.ok(continuation.includes('loginRedirect:u.pathname+u.search'));
 assert.ok(continuation.includes('Google Home連携情報が無効か、有効期限が切れました。'));
 assert.ok(continuation.includes('SESSION_COMMIT_FAILED'));
 assert.ok(read('src/index.ts').includes('return await liffDispatcher(request,env)'));
-const app=read('src/app.ts');assert.ok(app.includes('validateLiffNext(body.next)'));assert.match(app,/12\.13(?:6\.1-wave117-hotfix|7\.0-wave118|8\.0-wave119|9\.0-wave120)/);
-const client=read('public/assets/liff-auth.js');assert.ok(client.includes('await window.liff.init'));assert.ok(client.includes('next:current')); assert.ok(client.includes("data.redirect||'/app/index.php'"));
+const app=read('src/app.ts');assert.ok(app.includes('validateLiffNext(body.next)'));assert.match(app,/12\.(?:13(?:6\.1-wave117-hotfix|7\.0-wave118|8\.0-wave119|9\.0-wave120)|140\.0-wave121)/);
+const client=read('public/assets/liff-auth.js');assert.ok(client.includes('await window.liff.init'));assert.ok(client.includes('next:current')); assert.ok(client.includes('const target=valid(data.redirect)'));assert.ok(!client.includes("data.redirect||'/app/index.php'"));
 assert.equal(JSON.parse(read('package.json')).version,JSON.parse(read('source_inventory.json')).version);
 console.log('Wave117 LIFF/OAuth hotfix smoke: PASS');

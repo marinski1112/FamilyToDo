@@ -1,0 +1,20 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+import { resolveLiffDestination } from '../src/liff-target.ts';
+import { safeLineTokenErrorCategory } from '../src/line-oauth-diagnostics.ts';
+const read=p=>fs.readFileSync(p,'utf8'),oauth=read('src/oauth-continuation.ts'),index=read('src/index.ts'),target=read('src/liff-target.ts'),liff=read('public/assets/liff-auth.js'),app=read('src/app.ts'),family=read('public/assets/family-log.js'),config=read('wrangler.jsonc'),types=read('worker-configuration.d.ts'),docs=read('docs/GOOGLE_HOME_VOICE_SETUP.md'),pkg=JSON.parse(read('package.json'));
+assert.equal(pkg.version,'12.140.0-wave121');assert.ok(types.includes('LINE_LOGIN_CHANNEL_ID?:string')&&types.includes('LINE_LOGIN_CHANNEL_SECRET?:string'));
+assert.ok(oauth.includes('client_secret:e.LINE_LOGIN_CHANNEL_SECRET'));assert.ok(!oauth.includes('client_secret:e.LINE_CHANNEL_SECRET'));assert.ok(oauth.includes("e.LINE_LOGIN_CHANNEL_ID||e.LINE_CHANNEL_ID"));assert.ok(oauth.includes('LINE_LOGIN_NOT_CONFIGURED'));
+for(const x of ['invalid_request','invalid_grant','invalid_client','unsupported_grant_type','http_status','error_category'])assert.ok(read('src/line-oauth-diagnostics.ts') .includes(x)||oauth.includes(x));
+assert.ok(index.includes("verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)"));assert.ok(config.includes('"/liff/*"'));
+for(const x of ['tasks','calendar','shopping','family-log','messages','settings','resolveLiffDestination','liff.state'])assert.ok(target.includes(x));
+assert.ok(index.includes("url.pathname.startsWith('/liff/')"));assert.ok(index.includes("code:'AUTH_REQUIRED'"));assert.ok(index.includes('encodeURIComponent(next)'));
+assert.ok(liff.includes("fetch('/__cf/auth-health'"));assert.ok(liff.includes('セッションを確認できません'));assert.ok(!liff.includes("data.redirect||'/app/index.php'"));
+assert.ok(!family.includes("prompt('動作: QUICK"));for(const x of ['ワンタッチ','入力して記録','睡眠開始 / 終了','data-quick-move','quick_action_reorder'])assert.ok(family.includes(x)||app.includes(x));
+assert.ok(app.includes("['family_log_quick_actions'" )||index.includes("['family_log_quick_actions'"));assert.ok(docs.includes('LINE Login channel → Basic settings'));assert.ok(docs.includes('{LIFF_ID}/calendar'));
+console.log('wave121 smoke: ok');
+
+assert.equal(resolveLiffDestination(new URL('https://example.test/liff/calendar')),'/app/calendar.php');
+assert.equal(resolveLiffDestination(new URL('https://example.test/liff?next=%2Fapp%2Fcalendar.php')),'/app/calendar.php');
+assert.equal(resolveLiffDestination(new URL('https://example.test/liff?liff.state=%2Fcalendar')),'/app/calendar.php');
+assert.equal(resolveLiffDestination(new URL('https://example.test/liff?next=https%3A%2F%2Fevil.test')),'/app/index.php');
+assert.equal(safeLineTokenErrorCategory('invalid_client'),'invalid_client');assert.equal(safeLineTokenErrorCategory('invalid_grant'),'invalid_grant');assert.equal(safeLineTokenErrorCategory('credential-value'),'unknown');

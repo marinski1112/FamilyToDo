@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),ui=fs.readFileSync('public/assets/calendar-import.js','utf8'),pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.match(pkg.version,/^12\.(?:(?:128|129|130|131|132|133|134|135|136)\.0-wave(?:109|110|111|112|113|114|115|116|117)|136\.1-wave117-hotfix|137\.0-wave118|138\.0-wave119)$/);
+assert.match(pkg.version,/^12\.(?:(?:128|129|130|131|132|133|134|135|136)\.0-wave(?:109|110|111|112|113|114|115|116|117)|136\.1-wave117-hotfix|137\.0-wave118|138\.0-wave119|139\.0-wave120|140\.0-wave121)$/);
 assert.match(source,/ICS_APPLY_CHUNK=(?:10|15|20)/);assert.match(source,/ICS_ROLLBACK_CHUNK=(?:15|20)/);assert.match(source,/ICS_MAX_EXDATES=4/);
 assert.doesNotMatch(source,/source_uid=\? AND source_recurrence_key=\?/);assert.match(source,/WHERE family_id=\? AND source_format='ICS'/);
 // The 634-event preview uses one provenance SELECT with one bind. Apply lookup uses the same helper.

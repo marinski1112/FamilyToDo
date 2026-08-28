@@ -2,10 +2,12 @@ import { makeContext, liffEntryPage, layout } from './app';
 import { commitSession } from './session';
 import { verifyLineIdToken } from './line';
 import { html } from './response';
-import { validateLiffNext } from './liff-target';
+import { liffTargetKind, resolveLiffDestination } from './liff-target';
+import { recordLineTokenExchange, safeLineTokenErrorCategory } from './line-oauth-diagnostics';
 
 const CONTINUE_COOKIE='family_google_home_continue';
 const TXN_COOKIE='family_line_google_home_txn';
+const loginChannelId=(e:Env)=>String(e.LINE_LOGIN_CHANNEL_ID||e.LINE_CHANNEL_ID||'');
 export const GOOGLE_HOME_CONTINUATION_SECONDS=600;
 type ContinuePayload={path:string;exp:number};
 type LineTxn={state:string;nonce:string;pkce_verifier:string;google_home_resume:string;expires_at:number};
@@ -36,11 +38,12 @@ export async function preserveGoogleHomeLogin(r:Request,e:Env,response:Response)
 export async function lineGoogleHomeStart(r:Request,e:Env){
   const resume=new URL(r.url).searchParams.get('resume')||'';
   if(!await openGoogleHomeContinuation(resume,e.APP_SECRET))return errorPage('INVALID_CONTINUATION','Google Home連携情報が無効か、有効期限が切れました。');
-  if(!e.LINE_CHANNEL_ID||!e.LINE_CHANNEL_SECRET)return errorPage('LINE_LOGIN_NOT_CONFIGURED','LINE Login設定が不足しています。');
+  const clientId=loginChannelId(e);
+  if(!clientId||!e.LINE_LOGIN_CHANNEL_SECRET)return errorPage('LINE_LOGIN_NOT_CONFIGURED','LINE Login設定が不足しています。');
   const state=random(),nonce=random(),verifier=random(),digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))),challenge=b64(digest);
   const txn=await seal({state,nonce,pkce_verifier:verifier,google_home_resume:resume,expires_at:Date.now()+600000} satisfies LineTxn,e.APP_SECRET,'wave120-line-google-home');
   const auth=new URL('https://access.line.me/oauth2/v2.1/authorize');
-  for(const[k,v]of Object.entries({response_type:'code',client_id:e.LINE_CHANNEL_ID,redirect_uri:redirectUri(e),state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'}))auth.searchParams.set(k,v);
+  for(const[k,v]of Object.entries({response_type:'code',client_id:clientId,redirect_uri:redirectUri(e),state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'}))auth.searchParams.set(k,v);
   console.log(JSON.stringify({stage:'LINE_WEB_AUTH_STARTED',provider:'LINE'}));
   return go(r,auth.toString(),[setCookie(TXN_COOKIE,txn)]);
 }
@@ -50,10 +53,13 @@ export async function lineGoogleHomeCallback(r:Request,e:Env){
   const txn=await open<LineTxn>(cookie(r,TXN_COOKIE),e.APP_SECRET,'wave120-line-google-home');
   if(!txn||txn.expires_at<Date.now())return errorPage('LINE_TXN_EXPIRED','LINEログインの有効期限が切れました。');
   if(!code||!state||!equal(state,txn.state))return errorPage('LINE_STATE_MISMATCH','LINEログインの検証情報が一致しません。');
-  const tokenResponse=await fetch('https://api.line.me/oauth2/v2.1/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri(e),client_id:e.LINE_CHANNEL_ID,client_secret:e.LINE_CHANNEL_SECRET,code_verifier:txn.pkce_verifier})});
-  const tokens=await tokenResponse.json().catch(()=>null) as {id_token?:string}|null;
-  if(!tokenResponse.ok||!tokens?.id_token)return errorPage('LINE_TOKEN_EXCHANGE_FAILED','LINEログインを完了できませんでした。');
-  const verified=await verifyLineIdToken(tokens.id_token,e.LINE_CHANNEL_ID,txn.nonce).catch(()=>null);
+  const clientId=loginChannelId(e);
+  if(!clientId||!e.LINE_LOGIN_CHANNEL_SECRET)return errorPage('LINE_LOGIN_NOT_CONFIGURED','LINE Login設定が不足しています。');
+  const tokenResponse=await fetch('https://api.line.me/oauth2/v2.1/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri(e),client_id:clientId,client_secret:e.LINE_LOGIN_CHANNEL_SECRET,code_verifier:txn.pkce_verifier})});
+  const tokens=await tokenResponse.json().catch(()=>null) as {id_token?:string;error?:string}|null;
+  if(!tokenResponse.ok||!tokens?.id_token){const category=safeLineTokenErrorCategory(tokens?.error);recordLineTokenExchange(category);console.warn(JSON.stringify({stage:'LINE_TOKEN_EXCHANGE_FAILED',provider:'LINE',http_status:tokenResponse.status,error_category:category}));return errorPage('LINE_TOKEN_EXCHANGE_FAILED','LINEログインを完了できませんでした。');}
+  recordLineTokenExchange('success');console.log(JSON.stringify({stage:'LINE_TOKEN_EXCHANGE_SUCCESS',provider:'LINE',http_status:tokenResponse.status,error_category:'success'}));
+  const verified=await verifyLineIdToken(tokens.id_token,clientId,txn.nonce).catch(()=>null);
   if(!verified)return errorPage('LINE_ID_TOKEN_INVALID','LINE本人確認に失敗しました。');
   console.log(JSON.stringify({stage:'LINE_WEB_AUTH_VERIFIED',provider:'LINE'}));
   const member=await e.DB.prepare('SELECT id,family_id,name FROM members WHERE line_user_id=? AND active=1 LIMIT 1').bind(verified.sub).first<{id:number;family_id:number;name:string}>();
@@ -63,6 +69,6 @@ export async function lineGoogleHomeCallback(r:Request,e:Env){
   console.log(JSON.stringify({stage:'LINE_WEB_SESSION_COMMITTED',provider:'LINE',member_present:true}));
   return commitSession(response,session,e.APP_SECRET);
 }
-export async function normalLiff(r:Request,e:Env){const u=new URL(r.url),next=validateLiffNext(u.searchParams.get('next'))||'/app/index.php',ctx=await makeContext(r,e);console.log(JSON.stringify({stage:'LIFF_PRIMARY_RECEIVED',provider:'LINE',has_liff_state:u.searchParams.has('liff.state'),has_next:u.searchParams.has('next'),member_present:Boolean(ctx.member)}));return liffEntryPage(e,{next,loginRedirect:`/liff?next=${encodeURIComponent(next)}`});}
+export async function normalLiff(r:Request,e:Env){const u=new URL(r.url),next=resolveLiffDestination(u),ctx=await makeContext(r,e);console.log(JSON.stringify({stage:'LIFF_PRIMARY_RECEIVED',provider:'LINE',has_liff_state:u.searchParams.has('liff.state'),member_present:Boolean(ctx.member)}));console.log(JSON.stringify({stage:'LIFF_TARGET_RESOLVED',provider:'LINE',target_kind:liffTargetKind(next),has_liff_state:u.searchParams.has('liff.state'),member_present:Boolean(ctx.member)}));return liffEntryPage(e,{next,loginRedirect:u.pathname+u.search});}
 export async function liffDispatcher(r:Request,e:Env){const u=new URL(r.url);if(u.searchParams.get('flow')==='google_home'||u.searchParams.has('resume')){const resume=u.searchParams.get('resume')||'';return await openGoogleHomeContinuation(resume,e.APP_SECRET)?go(r,`/oauth/line/google-home/start?resume=${encodeURIComponent(resume)}`):errorPage('INVALID_LEGACY_CONTINUATION','古いGoogle Home連携情報が無効です。');}return normalLiff(r,e);}
 export async function resumeGoogleHome(r:Request,e:Env){const token=new URL(r.url).searchParams.get('resume')||'',path=await openGoogleHomeContinuation(token,e.APP_SECRET);if(!path)return errorPage('INVALID_CONTINUATION','Google Home連携情報が無効か、有効期限が切れました。');const ctx=await makeContext(r,e);if(!ctx.member)return errorPage('SESSION_COMMIT_FAILED','LINE認証後のセッションを確認できませんでした。');console.log(JSON.stringify({stage:'GOOGLE_HOME_CONTINUATION_RESUMED',provider:'GOOGLE_HOME',member_present:true}));return go(r,path,[setCookie(CONTINUE_COOKIE,'',0)]);}

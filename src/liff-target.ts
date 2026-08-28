@@ -7,6 +7,11 @@ export const RICH_MENU_DESTINATIONS = [
   '/app/settings.php',
 ] as const;
 
+export const LIFF_PATH_ALIASES: Readonly<Record<string, string>> = {
+  tasks: '/app/tasks.php', calendar: '/app/calendar.php', shopping: '/app/shopping.php',
+  'family-log': '/app/family_log.php', messages: '/app/messages.php', settings: '/app/settings.php',
+};
+
 const INTERNAL_PATH = /^\/(?!\/)[^\r\n\\]*$/;
 const GOOGLE_CONTINUE = /^\/oauth\/google\/continue\?resume=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
@@ -21,4 +26,27 @@ export function validateLiffNext(value: unknown): string | null {
 export function googleContinuePath(token: string): string | null {
   const path = `/oauth/google/continue?resume=${encodeURIComponent(token)}`;
   return validateLiffNext(path);
+}
+
+/** Resolve LINE additional-path and primary-redirect forms without recursive decoding. */
+export function resolveLiffDestination(url: URL): string {
+  const alias = url.pathname.match(/^\/liff\/([^/]+)\/?$/)?.[1];
+  if (alias && LIFF_PATH_ALIASES[alias]) return LIFF_PATH_ALIASES[alias];
+  const explicit = validateLiffNext(url.searchParams.get('next'));
+  if (explicit) return explicit;
+  const state = url.searchParams.get('liff.state');
+  if (state && state.length <= 2048) {
+    const stateAlias = state.match(/^\/([^/?#]+)\/?$/)?.[1];
+    if (stateAlias && LIFF_PATH_ALIASES[stateAlias]) return LIFF_PATH_ALIASES[stateAlias];
+    if (state.startsWith('?')) {
+      const fromState = validateLiffNext(new URLSearchParams(state.slice(1)).get('next'));
+      if (fromState) return fromState;
+    }
+  }
+  return '/app/index.php';
+}
+
+export function liffTargetKind(path: string): string {
+  return Object.entries(LIFF_PATH_ALIASES).find(([, value]) => value === path)?.[0].replace('-', '_')
+    || (path === '/app/index.php' ? 'home' : 'other');
 }
