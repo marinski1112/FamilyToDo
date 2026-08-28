@@ -1,12 +1,12 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden, taskVisibilitySql, taskChildVisibilitySql, activityLogVisibilitySql } from './app';
+import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden, taskVisibilitySql, taskChildVisibilitySql, activityLogVisibilitySql } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
 import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
 import { familyAiQuery } from './family-ai';
-import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox } from './google-calendar';
+import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, enqueueCalendarSync, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect } from './google-calendar';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -65,6 +65,9 @@ export default {
       if(url.pathname==='/api/shopping') return shopping(request,context);
       if(url.pathname==='/api/family-log') return familyLog(request,context);
       if(url.pathname==='/api/family-ai/query') return familyAiQuery(request,context);
+      if(url.pathname==='/api/settings/diagnostics-detail') return settingsDiagnosticsDetail(request,context);
+      if(url.pathname==='/api/google-calendar/sync') return calendarSyncNow(request,context);
+      if(url.pathname==='/api/google-calendar/disconnect') return calendarDisconnect(request,context);
       if(url.pathname==='/api/family-log-import') return familyLogImportApi(request,context);
       if(url.pathname==='/api/recurrence/family-log-complete') return recordOccurrenceFamilyLog(request,context);
       if(url.pathname==='/api/settings') return settings(request,context);
@@ -125,6 +128,7 @@ export default {
     console.log(`[Family TODO LINE] scheduled ${controller.cron}; processing notifications`);
     ctx.waitUntil(processNotifications(env));
     ctx.waitUntil(processCalendarOutbox(env));
+    ctx.waitUntil(processCalendarInbound(env));
   }
 } satisfies ExportedHandler<Env>;
 

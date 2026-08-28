@@ -1,5 +1,5 @@
 {
-  "source": "FamilyTODO Cloudflare v12.117.0-wave98",
+  "source": "FamilyTODO Cloudflare v12.118.0-wave99",
   "php_pages": [
     "today.php",
     "tomorrow.php",
@@ -105,7 +105,7 @@
     "Wave83 adds server-enforced PRIVATE ordinary tasks with owner-only assignment, children and notifications; migration 0023 adds task visibility columns and index.",
     "Wave84 closes PRIVATE child query/count/category/edit/activity/diagnostic residuals, adds executable SQLite privacy assertions, and removes empty linked-shopping details."
   ],
-  "version": "12.117.0-wave98",
+  "version": "12.118.0-wave99",
   "wave63_note": "Calendar interaction script moved from rendered inline JS to /public/assets/calendar.js; fixes Wave62 parse regression and enables direct node --check.",
   "wave64_note": "Calendar dense-week layout: dynamic per-week height, dedicated date-number zone, up to four single-day task rows and four multi-day lanes before overflow.",
   "wave65_note": "Calendar date numbers are hard-pinned to the top-left independently of dense week content; message-to-shopping conversion now uses a full mobile sheet with quantity/category/due/task/assignees/memo/url.",
@@ -135,5 +135,6 @@
   "wave93_note": "Family Log UX reduction: one-action daily header, compact quick recording/date/history, collapsed timer and dashboard, and centralized Family Log management without schema changes.",
   "wave96_note": "Google Home Cloud-to-cloud Scene execution with hashed OAuth codes/tokens, family-bound SYNC/EXECUTE, retry receipts, DISCONNECT revocation, settings, diagnostics, and migration 0032.",
   "wave97_note": "Privacy-first allowlisted Family AI queries and encrypted provider-neutral Google Calendar outbound projection with outbox retry; migration 0033.",
-  "wave98_note": "Family timezone wall-clock policy, timezone-safe imports and repair audit/rollback, timezone-aware AI/Calendar projection, and delegated quick-chore management; migration 0034."
+  "wave98_note": "Family timezone wall-clock policy, timezone-safe imports and repair audit/rollback, timezone-aware AI/Calendar projection, and delegated quick-chore management; migration 0034.",
+  "wave99_note": "D1-safe isolated diagnostics and lazy detail, hardened Google Calendar OAuth, incremental inbound sync, and family-timezone event conversion."
 }
