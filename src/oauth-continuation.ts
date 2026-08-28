@@ -33,8 +33,10 @@ export async function preserveGoogleHomeLogin(r:Request,e:Env,response:Response)
 
 export async function normalLiff(r:Request,e:Env){
   const url=new URL(r.url),next=validateLiffNext(url.searchParams.get('next'))||'/app/index.php';
-  console.log(JSON.stringify({stage:'LIFF_OPENED_NORMAL'}));console.log(JSON.stringify({stage:'LIFF_NEXT_RESOLVED'}));
-  const ctx=await makeContext(r,e);if(ctx.member)return go(r,next);
+  const ctx=await makeContext(r,e),hasLiffState=url.searchParams.has('liff.state');
+  console.log(JSON.stringify({stage:hasLiffState?'LIFF_PRIMARY_RECEIVED':'LIFF_OPENED_NORMAL',provider:'LINE',has_liff_state:hasLiffState,has_next:url.searchParams.has('next'),flow:false,member_present:Boolean(ctx.member)}));
+  // Never bypass liff.init: the primary redirect keeps the deep link in
+  // liff.state until the SDK performs its secondary redirect.
   return liffEntryPage(e,{next,loginRedirect:`/liff?next=${encodeURIComponent(next)}`});
 }
 
@@ -43,7 +45,7 @@ export async function googleHomeLiff(r:Request,e:Env){
   const token=explicitToken(r);if(!token)return errorPage('Google Home連携情報の有効期限が切れました。');
   const path=await openGoogleHomeContinuation(token,e.APP_SECRET);if(!path)return errorPage('Google Home連携情報が無効か、有効期限が切れました。');
   const next=googleContinuePath(token);if(!next)return errorPage('Google Home連携情報が無効です。');
-  const ctx=await makeContext(r,e);if(ctx.member)return go(r,next);
+  const ctx=await makeContext(r,e);
   const old=Number(cookies(r)[ATTEMPT_COOKIE]||0),attempt=Number.isInteger(old)?old+1:1;
   if(attempt>MAX_ATTEMPTS)return errorPage('LINEログインを繰り返したため、安全のため処理を停止しました。');
   return appendCookies(liffEntryPage(e,{next,loginRedirect:`/liff?flow=google_home&resume=${encodeURIComponent(token)}`}),[setCookie(ATTEMPT_COOKIE,String(attempt))]);
@@ -61,7 +63,7 @@ export async function resumeGoogleHome(r:Request,e:Env){
   if(!token||!path)return errorPage('Google Home連携情報が無効か、有効期限が切れました。');
   const ctx=await makeContext(r,e);
   if(!ctx.member)return go(r,`/liff?flow=google_home&resume=${encodeURIComponent(token)}`);
-  console.log(JSON.stringify({stage:'LINE_LOGIN_COMPLETED',provider:'GOOGLE_HOME'}));
   console.log(JSON.stringify({stage:'CONTINUATION_RESUMED',provider:'GOOGLE_HOME',family_id:ctx.member.family_id,member_id:ctx.member.id}));
+  console.log(JSON.stringify({stage:'AUTHORIZE_RESUMED',provider:'GOOGLE_HOME',member_present:true}));
   return go(r,path,clearGoogleHomeCookies());
 }

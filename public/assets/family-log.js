@@ -44,14 +44,14 @@
   const TYPE_META={
     MILK:{label:'ミルク',icon:'🍼',amountLabel:'量',unit:'ml'},
     BREASTFEED:{label:'母乳',icon:'🤱',durationLabel:'時間',unit:'分',details:[['LEFT','左'],['RIGHT','右'],['BOTH','両方']]},
-    MEAL:{label:'食事',icon:'🍚',details:[['BREAKFAST','朝食'],['LUNCH','昼食'],['DINNER','夕食'],['SNACK','おやつ'],['OTHER','その他']]},
+    MEAL:{label:'食事',icon:'🍚',details:[['BREAKFAST','朝食'],['LUNCH','昼食'],['DINNER','夕食'],['SNACK','おやつ'],['BABY_FOOD','離乳食'],['OTHER','その他']]},
     DIAPER:{label:'おむつ',icon:'🧷',details:[['WET','💧 おしっこ'],['DIRTY','💩 うんち'],['BOTH','💧💩 両方']]},
     SLEEP:{label:'睡眠',icon:'😴',durationLabel:'時間',unit:'分'},
     BATH:{label:'お風呂',icon:'🛁',details:[['BATH','お風呂'],['SHOWER','シャワー']]},
     TEMPERATURE:{label:'体温',icon:'🌡️',amountLabel:'体温',unit:'℃'},
     MEDICINE:{label:'薬',icon:'💊',textLabel:'薬・内容'},
     VACCINE:{label:'予防接種',icon:'💉',textLabel:'ワクチン名',placeholder:'例：五種混合 B型肝炎'},
-    CONDITION:{label:'体調',icon:'🙂',details:[['GOOD','良好'],['NORMAL','ふつう'],['TIRED','疲れ気味'],['SICK','不調']],textLabel:'補足'},
+    CONDITION:{label:'体調',icon:'🙂',details:[['GOOD','良好'],['NORMAL','ふつう'],['TIRED','疲れ気味'],['SICK','不調'],['VOMIT','吐いた']],textLabel:'補足'},
     WEIGHT:{label:'体重',icon:'⚖️',amountLabel:'体重',unit:'kg'},
     HEIGHT:{label:'身長',icon:'📏',amountLabel:'身長',unit:'cm'},
     BLOOD_PRESSURE:{label:'血圧',icon:'🫀',textLabel:'血圧',placeholder:'例：120/80'},
@@ -339,6 +339,12 @@
   document.querySelectorAll('[data-log-type]').forEach(btn=>
     btn.addEventListener('click',()=>openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||selectedSubject())))
   );
+  document.querySelectorAll('.family-log-one-tap').forEach(btn=>btn.addEventListener('click',async()=>{
+    if(btn.disabled)return;btn.disabled=true;btn.setAttribute('aria-busy','true');
+    try{const result=await post({action:'quick_record',subject_id:Number(btn.dataset.subjectId||0),quick_key:String(btn.dataset.quickKey||''),milk_amount:btn.dataset.milkAmount?Number(btn.dataset.milkAmount):undefined});
+      const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),1100);
+    }catch(err){const toast=document.createElement('div');toast.className='family-log-toast error';toast.textContent=err?.message||String(err);document.body.append(toast);setTimeout(()=>toast.remove(),2000);btn.disabled=false;btn.removeAttribute('aria-busy');}
+  }));
   document.querySelectorAll('.family-log-row').forEach(row=>
     row.addEventListener('click',e=>{
       if(e.target.closest('a,button,input'))return;
