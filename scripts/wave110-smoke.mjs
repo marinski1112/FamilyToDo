@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8'),app=fs.readFileSync('src/app.ts','utf8'),ui=fs.readFileSync('public/assets/calendar-import.js','utf8'),css=fs.readFileSync('public/assets/calendar.css','utf8'),pkg=JSON.parse(fs.readFileSync('package.json'));
-assert.equal(pkg.version,'12.129.0-wave110');
+assert.match(pkg.version,/^12\.(?:129\.0-wave110|130\.0-wave111)$/);
 assert.match(source,/MAX_D1_QUERY_BUDGET=40/);assert.doesNotMatch(source,/query_budget_max:(?:67|64)/);
 const applyCost=e=>2+(e.recurring?1+e.exdates:0),pack=(events,reserve=6)=>{let q=reserve,n=0;for(const e of events){const c=applyCost(e);if(n&&q+c>40)break;q+=c;n++;}return {q,n};};
 const worst=Array.from({length:10},()=>({recurring:true,exdates:4})),first=pack(worst);assert.ok(first.q<50);assert.equal(first.q,34);assert.equal(first.n,4);
