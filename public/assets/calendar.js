@@ -45,7 +45,7 @@ try {
     });
     root.querySelectorAll('.calendar-cell[data-date]').forEach(cell=>{
       const rows=Array.isArray(detail[String(cell.dataset.date||'')])?detail[String(cell.dataset.date||'')]:[];
-      const singles=rows.filter(row=>String(row?.segment||'single')==='single');
+      const singles=rows.filter(row=>Number(row?.spanDays||1)<=1);
       const elements=[...cell.querySelectorAll('.calendar-items > .calendar-item:not(.item)')];
       elements.forEach((element,index)=>{const color=safeHex(singles[index]?.calendar_color);if(color)element.style.background=color;});
     });
