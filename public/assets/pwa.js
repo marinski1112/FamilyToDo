@@ -6,7 +6,7 @@
     style.dataset.wave128Fix1='1';
     style.textContent=`
       .family-log-quick-grid,.family-quick-chore-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
-      .family-log-quick,.family-quick-chore-record{display:grid!important;grid-template-columns:18px minmax(0,1fr))!important;align-items:center!important;justify-items:center!important;column-gap:3px!important;min-width:0!important}
+      .family-log-quick,.family-quick-chore-record{display:grid!important;grid-template-columns:18px minmax(0,1fr)!important;align-items:center!important;justify-items:center!important;column-gap:3px!important;min-width:0!important}
       .family-log-quick strong,.family-quick-chore-record strong{grid-column:2!important;width:100%!important;min-width:0!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;display:block!important;-webkit-line-clamp:unset!important;line-clamp:unset!important;word-break:normal!important;overflow-wrap:normal!important;line-height:1.2!important;text-align:center!important;max-width:100%!important}
       .family-log-quick span,.family-quick-chore-record span{grid-column:1!important;flex:0 0 auto!important;min-width:18px!important;text-align:center!important}
       .message-actions .convert-shopping{color:#fff!important}
