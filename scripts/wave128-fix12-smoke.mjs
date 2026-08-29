@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
-const ci=fs.readFileSync('.github/workflows/ci.yml','utf8');
+const runner=fs.readFileSync('scripts/regression-suite.mjs','utf8');
 
 assert.match(calendar,/action==='diagnose_projection'/,'backfill endpoint must expose authenticated projection diagnostics');
 assert.match(calendar,/action==='rebind_projection'/,'backfill endpoint must expose explicit projection rebind');
@@ -23,6 +23,6 @@ assert.match(pwa,/calendarProjectionRebind/,'integration UI must provide the gua
 assert.match(pwa,/CREATE_NEW_CALENDAR/,'UI rebind must send the explicit confirmation token');
 assert.match(pwa,/familyCsrf/,'Family Log quick action CSRF must stay isolated from integration-page CSRF');
 assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must stay in the Wave128 safe-fix namespace');
-assert.match(ci,/node scripts\/wave128-fix12-smoke\.mjs/,'fix12 smoke must run in CI');
+assert.ok(runner.includes('wave128-fix${n}-smoke.mjs')&&/\b12\b/.test(runner),'fix12 smoke must run through the consolidated regression suite');
 
 console.log('wave128 fix12 smoke: Google Calendar missing-subcalendar diagnostics and safe projection rebind ok');
