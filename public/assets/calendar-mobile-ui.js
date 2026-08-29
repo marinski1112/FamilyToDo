@@ -120,15 +120,40 @@ try{
       }
     });
   };
+
+  const bandLane=band=>Number(String(band?.style?.gridRow||band?.style?.gridRowStart||'1').split('/')[0].trim())||1;
+  const bandsForCell=cell=>{
+    const week=cell?.closest?.('.calendar-week');if(!week)return [];
+    const cells=[...week.querySelectorAll('.calendar-week-days .calendar-cell')];
+    const col=cells.indexOf(cell)+1;if(col<=0)return [];
+    return [...week.querySelectorAll('.calendar-week-bands .calendar-band')].filter(band=>{
+      const parts=String(band.style.gridColumn||'').split('/').map(x=>Number(x.trim()));
+      return parts.length===2&&Number.isFinite(parts[0])&&Number.isFinite(parts[1])&&col>=parts[0]&&col<parts[1];
+    }).sort((a,b)=>bandLane(a)-bandLane(b));
+  };
+  const singlesForCell=cell=>[...cell.querySelectorAll('.calendar-items > .calendar-item')];
+  const schedulesForCell=cell=>[...bandsForCell(cell),...singlesForCell(cell)];
+  const cellAtPoint=point=>{
+    if(!point)return null;
+    const x=Number(point.clientX),y=Number(point.clientY);if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+    return [...document.querySelectorAll('.calendar-cell')].find(cell=>{const r=cell.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;})||null;
+  };
+
   const updateOverflowIndicators=root=>{
     if(!root?.querySelectorAll)return;
+    const scope=root.matches?.('.calendar-grid')?root:(root.querySelector?.('.calendar-grid')||root);
+    scope.querySelectorAll?.('.calendar-week-bands .calendar-band').forEach(band=>band.classList.toggle('calendar-overflow-hidden',bandLane(band)>2));
     const cells=[];
     if(root.matches?.('.calendar-cell'))cells.push(root);
     root.querySelectorAll('.calendar-cell').forEach(cell=>cells.push(cell));
     cells.forEach(cell=>{
-      const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
-      rows.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=2));
-      const hidden=Math.max(0,rows.length-2);
+      const bands=bandsForCell(cell);
+      const visibleBands=bands.filter(band=>bandLane(band)<=2).length;
+      const hiddenBands=Math.max(0,bands.length-visibleBands);
+      const singles=singlesForCell(cell);
+      const singleSlots=Math.max(0,2-Math.min(2,visibleBands));
+      singles.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=singleSlots));
+      const hidden=hiddenBands+Math.max(0,singles.length-singleSlots);
       const host=cell.querySelector('.calendar-items')||cell;
       let indicator=cell.querySelector('.calendar-overflow-indicator');
       if(!hidden){indicator?.remove();return;}
@@ -154,9 +179,9 @@ try{
   const scheduleTarget=target=>target?.closest?.('.calendar-item,.calendar-band');
   const clearPreview=()=>{preview?.remove();preview=null;};
   const showPreview=(schedule,point)=>{
-    const cell=schedule?.closest?.('.calendar-cell');
+    const cell=schedule?.closest?.('.calendar-cell')||cellAtPoint(point);
     if(!cell)return;
-    const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
+    const rows=schedulesForCell(cell);
     if(!rows.length)return;
     clearPreview();
     const box=document.createElement('div');box.className='calendar-press-popover'+(rows.length>6?' dense':'');
