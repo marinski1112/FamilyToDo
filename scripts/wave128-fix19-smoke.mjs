@@ -10,7 +10,7 @@ assert.ok(ui.includes('calendar-overflow-indicator'));
 assert.ok(ui.includes('Math.max(0,rows.length-2)'));
 assert.ok(ui.includes('… +${hidden}'));
 assert.ok(ui.includes(':nth-child(n+3):not(.calendar-overflow-indicator)'));
-assert.ok(ui.includes('aria-label',`ほか${1}件の予定`)||ui.includes('`ほか${hidden}件の予定`'));
+assert.ok(ui.includes('`ほか${hidden}件の予定`'));
 assert.ok(ui.includes('requestAnimationFrame'));
 assert.ok(sw.includes("familytodo-static-wave128-fix19"));
 console.log('wave128 fix19 smoke: two visible Calendar items plus hidden-count indicator ok');
