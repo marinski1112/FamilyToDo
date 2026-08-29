@@ -22,9 +22,7 @@ const groups={
     ['calendar-duplicate-prevention',['node','scripts/wave128-fix20-smoke.mjs']],
   ],
   'ui-product':[
-    ['family-log-management',['node','scripts/wave128-fix17-smoke.mjs']],
-    ['mobile-navigation',['node','scripts/wave128-fix8-smoke.mjs']],
-    ['interactive-contrast',['node','scripts/wave128-fix9-smoke.mjs']],
+    ['ui-product',['node','scripts/ui-product-contract.mjs']],
     ['version',['node','scripts/version-contract.mjs']],
   ],
 };
