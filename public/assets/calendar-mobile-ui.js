@@ -71,6 +71,42 @@ try{
     });
   }
 
+  const TIMETREE_COLORS=new Set(['#f35f8c','#2ecc87','#47b2f7','#b38bdc','#fdc02d','#fb7f77']);
+  const safeHex=color=>/^#[0-9a-f]{6}$/i.test(String(color||'').trim())?String(color).trim().toLowerCase():'';
+  const initialPayload=()=>{try{return JSON.parse(document.getElementById('calendarPayload')?.textContent||'{}')}catch{return {}}};
+  const colorCache=new Map();
+  const applyStoredCalendarColors=(root,detailData)=>{
+    if(!root?.querySelectorAll||!detailData)return;
+    const byId=new Map();
+    for(const rows of Object.values(detailData)){
+      if(!Array.isArray(rows))continue;
+      for(const row of rows){const id=Number(row?.id);if(Number.isFinite(id)&&!byId.has(id))byId.set(id,row);}
+    }
+    root.querySelectorAll('.calendar-band[data-task-id]').forEach(el=>{
+      const row=byId.get(Number(el.dataset.taskId||0));const color=safeHex(row?.calendar_color);if(color)el.style.background=color;
+    });
+    root.querySelectorAll('.calendar-cell[data-date]').forEach(cell=>{
+      const date=String(cell.dataset.date||''),rows=Array.isArray(detailData[date])?detailData[date]:[];
+      const singles=rows.filter(row=>String(row?.segment||'single')==='single');
+      const els=[...cell.querySelectorAll('.calendar-items > .calendar-item:not(.item)')];
+      els.forEach((el,index)=>{const color=safeHex(singles[index]?.calendar_color);if(color)el.style.background=color;});
+    });
+  };
+  const currentMonthKey=()=>new URL(location.href).searchParams.get('month')||String(initialPayload().month||'');
+  const refreshStoredColors=async(root=document)=>{
+    const first=initialPayload(),month=currentMonthKey();
+    if(first.month===month&&first.detail){colorCache.set(month,first.detail);applyStoredCalendarColors(root,first.detail);return;}
+    if(colorCache.has(month)){applyStoredCalendarColors(root,colorCache.get(month));return;}
+    try{
+      const url=new URL(location.href);if(month)url.searchParams.set('month',month);url.searchParams.delete('open');
+      const response=await fetch(url.pathname+url.search,{headers:{accept:'text/html'},credentials:'same-origin',cache:'no-store'});if(!response.ok)return;
+      const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+      const payloadEl=doc.getElementById('calendarPayload');if(!payloadEl)return;
+      const next=JSON.parse(payloadEl.textContent||'{}');if(next.detail){colorCache.set(String(next.month||month),next.detail);applyStoredCalendarColors(root,next.detail);}
+    }catch{}
+  };
+  void TIMETREE_COLORS;
+
   const compactScheduleLabels=root=>{
     if(!root?.querySelectorAll)return;
     root.querySelectorAll('.calendar-item,.calendar-band').forEach(el=>{
@@ -102,7 +138,7 @@ try{
       indicator.setAttribute('aria-label',`ほか${hidden}件の予定`);
     });
   };
-  const refreshGrid=root=>{compactScheduleLabels(root);updateOverflowIndicators(root);};
+  const refreshGrid=root=>{compactScheduleLabels(root);updateOverflowIndicators(root);void refreshStoredColors(root);};
   refreshGrid(document);
   const grid=document.querySelector('.calendar-grid');
   if(grid){
@@ -110,7 +146,7 @@ try{
     new MutationObserver(()=>{
       if(refreshPending)return;
       refreshPending=true;
-      requestAnimationFrame(()=>{refreshPending=false;refreshGrid(grid);});
+      requestAnimationFrame(()=>{refreshPending=false;refreshGrid(grid);setTimeout(()=>void refreshStoredColors(grid),260);});
     }).observe(grid,{childList:true,subtree:true});
   }
 
