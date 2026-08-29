@@ -12,7 +12,13 @@ for(const status of ['status===400','status===404','status===429','status>=500']
 for(const privacy of ['tok.question','FAMILY_AI_FUNCTIONS','maxItems:3','generationConfig:{maxOutputTokens:512}','synthetic connectivity test; no user data is included'])assert.ok(ai.includes(privacy));
 assert.ok(!/await r\.text|console\.(?:log|error).*gemini/i.test(ai));
 assert.match(ai,/質問を解析できませんでした。表現を少し変えてください。/);
-for(const ui of ['受信対象カレンダー: Family TODO','sync token:','outbound pending:','使用モデル:'])assert.ok(cal.includes(ui));
+for(const ui of ['受信対象カレンダー: Family TODO','sync token:','使用モデル:'])assert.ok(cal.includes(ui));
+// Historical Wave103 contract: diagnostics must expose the outbound pending state,
+// but the human-readable label is intentionally not part of this smoke contract.
+assert.match(cal,/pending_count/);
+assert.match(cal,/status IN \('PENDING','ERROR'\)/);
+assert.match(cal,/pending_before/);
+assert.match(cal,/pending_after/);
 for(const guardrail of ["calendar.app.created","q.set('syncToken',syncToken)",'e.status===410',"status='ACTIVE'", "1,'EVENT'"])assert.ok(cal.includes(guardrail));
 assert.ok(!cal.includes('googleapis.com/tasks'));
 assert.ok(!/UPDATE tasks SET[^'\n]*task_kind/.test(cal));

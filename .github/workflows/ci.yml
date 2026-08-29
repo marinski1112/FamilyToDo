@@ -44,3 +44,15 @@ jobs:
         if: always()
       - run: npm run check:wave125
         if: always()
+      - run: npm run check:wave126
+        if: always()
+      - run: npm run check:wave127
+        if: always()
+      - run: npm run check:wave128
+        if: always()
+      - run: node scripts/wave128-fix1-smoke.mjs
+        if: always()
+      - run: npm run check:version
+        if: always()
+      - run: git diff --check HEAD^
+        if: always()
