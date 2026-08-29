@@ -16,7 +16,7 @@ const groups=[
   ['wave127','npm run check:wave127'],
   ['wave128','npm run check:wave128'],
   ['wave128-fixes',[
-    1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19
+    1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20
   ].map(n=>`node scripts/wave128-fix${n}-smoke.mjs`).join(' && ')],
   ['version','npm run check:version'],
 ];
