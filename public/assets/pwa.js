@@ -11,6 +11,9 @@
       .family-log-quick span,.family-quick-chore-record span{grid-column:1!important;flex:0 0 auto!important;min-width:18px!important;text-align:center!important}
       .message-actions .convert-shopping{color:#fff!important}
       .message-actions .convert-shopping *{color:inherit!important}
+      .calendar-item.event-single:not([style*="background"]){background:#16a34a!important;color:#fff!important}
+      .calendar-projection-safety{margin:10px 0;padding:10px 12px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81;font-size:12px;line-height:1.5}
+      .calendar-projection-safety strong{display:block;margin-bottom:3px}
       @media(max-width:340px){.family-log-quick-grid,.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
       @media(max-width:600px){
         .day-modal .modal-top{display:grid!important;grid-template-columns:40px minmax(0,1fr) 40px 40px!important;grid-template-areas:'prev title next close' '. reorder reorder .'!important;gap:8px!important;align-items:center!important;width:100%!important;min-width:0!important}
@@ -67,6 +70,16 @@
         if(/^\d{4}-\d{2}-\d{2}$/.test(String(row.occurrence_date||'')))params.set('date',String(row.occurrence_date));
         link.href=`/app/recurring.php?${params.toString()}`;
       });
+    }
+
+    if(location.pathname==='/app/settings_integrations.php'){
+      const historyButton=document.getElementById('calendarHistoryBackfill');
+      if(historyButton&&!document.querySelector('.calendar-projection-safety')){
+        const note=document.createElement('div');
+        note.className='calendar-projection-safety';
+        note.innerHTML='<strong>Google Calendarを整理するときの安全手順</strong>現在Family TODOと連携中の「Family TODO」カレンダーは削除しないでください。先に「全履歴の予定をGoogleへ同期」でFamily TODO由来の予定を確認し、その後、旧ICSを直接取り込んだ別サブカレンダーだけを削除してください。';
+        historyButton.parentElement?.insertBefore(note,historyButton);
+      }
     }
   }
 
