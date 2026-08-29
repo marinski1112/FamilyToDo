@@ -25,7 +25,7 @@ for(const [color,name] of Object.entries(colors)){
 assert.ok(ui.includes('applyStoredCalendarColors'),'Calendar UI must reapply stored task calendar_color values');
 assert.ok(ui.includes('/^#[0-9a-f]{6}$/i'),'Calendar color application must accept only safe six-digit hex values');
 assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'Calendar cap must combine spanning bands with same-day rows');
-assert.ok(ui.includes("band.classList.toggle('calendar-overflow-hidden',bandLane(band)>2)"),'Calendar must hide multi-day band lanes beyond the two-row cap');
+assert.ok(ui.includes('setOverflowHidden(band,bandLane(band)>2)'),'Calendar must hide multi-day band lanes beyond the two-row cap');
 assert.ok(ui.includes("schedule?.closest?.('.calendar-cell')||cellAtPoint(point)"),'multi-day band preview must resolve the pressed date cell');
 assert.ok(ui.includes('schedulesForCell(cell)'),'press preview must include spanning bands on every covered date');
 assert.ok(ics.includes('calendar_color,task_kind'),'ICS import must persist calendar_color');
