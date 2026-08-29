@@ -28,5 +28,7 @@ assert.equal(timezone.formatStoredUtcForFamily('2026-08-28 18:03:42','America/Lo
 assert.equal(timezone.formatStoredUtcForFamily('2026-01-01 02:03:42','America/Los_Angeles'),'2025-12-31 18:03:42');
 assert.equal(timezone.formatStoredUtcForFamily(null,'Asia/Tokyo'),'—');
 assert.equal(timezone.formatStoredUtcForFamily('invalid','Asia/Tokyo'),'invalid');
-for(const file of ['src/google-home.ts','src/google-tasks.ts','src/google-calendar.ts','src/index.ts'])assert.ok(fs.readFileSync(file,'utf8').includes('formatStoredUtcForFamily'),file);
+for(const file of ['src/google-home.ts','src/google-tasks.ts','src/index.ts'])assert.ok(fs.readFileSync(file,'utf8').includes('formatStoredUtcForFamily'),file);
+const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
+assert.ok(calendar.includes('formatStoredUtcForFamily'),'src/google-calendar.ts/core');
 console.log('wave126 credential parser, PKCS8/JWT crypto, and UTC family display smoke ok');
