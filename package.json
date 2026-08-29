@@ -38,7 +38,10 @@
     "check:wave126": "node scripts/wave126-smoke.mjs",
     "check:wave127": "node scripts/wave127-smoke.mjs",
     "check:wave128": "node scripts/wave128-smoke.mjs",
-    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:wave117 && npm run check:wave118 && npm run check:wave119 && npm run check:wave120 && npm run check:wave121 && npm run check:wave122 && npm run check:wave123 && npm run check:wave124 && npm run check:wave125 && npm run check:wave126 && npm run check:wave127 && npm run check:wave128 && npm run check:version"
+    "check:regression": "node scripts/regression-suite.mjs",
+    "check:legacy-regression": "node scripts/regression-legacy.mjs",
+    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:regression",
+    "test:legacy": "npm run check:legacy-regression"
   },
   "devDependencies": {
     "typescript": "^5.9.2",
