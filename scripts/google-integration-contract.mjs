@@ -1,0 +1,101 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {generateKeyPairSync,webcrypto} from 'node:crypto';
+import ts from 'typescript';
+import {assertCurrentVersionContract,assertVersionContract,validateVersion} from './version-contract.mjs';
+
+if(!globalThis.crypto)globalThis.crypto=webcrypto;
+const read=p=>fs.readFileSync(p,'utf8');
+const requestSource=read('src/google-home-request-sync.ts');
+const home=read('src/google-home.ts');
+const tasks=read('src/google-tasks.ts');
+const ai=read('src/family-ai.ts');
+const calendarEntry=read('src/google-calendar.ts');
+const calendarCore=read('src/google-calendar-core.ts');
+const calendar=calendarEntry+calendarCore;
+const index=read('src/index.ts');
+const wrangler=read('wrangler.jsonc');
+const version=read('src/version.ts');
+const watchMigration=read('migrations/0041_wave127_calendar_watch_channels.sql');
+const retryMigration=read('migrations/0043_wave128_calendar_done_retry_normalization.sql');
+
+assertCurrentVersionContract();
+for(const v of ['12.143.0-wave124','12.144.0-wave125','12.136.1-wave117-hotfix'])assert.ok(validateVersion(v));
+for(const v of ['12.144','wave125','latest','12.144.0'])assert.equal(validateVersion(v),false);
+assert.throws(()=>assertVersionContract({version:'12.144.0-wave125'},{version:'12.143.0-wave124',cloudflare_wave:'Wave125',source:'FamilyTODO Cloudflare v12.144.0-wave125'}));
+for(const token of ['INVALID_SERVICE_ACCOUNT_JSON','JWT_SIGN_FAILED','TOKEN_HTTP_${response.status}','HOMEGRAPH_HTTP_${response.status}','async:false','agentUserId:`ft-member-${memberId}`'])assert.ok(requestSource.includes(token),token);
+for(const token of ["category:'家族ログ'",'`${possessive}${q.name}`',"`${possessive}${q.name}を記録`"])assert.ok(home.includes(token),token);
+for(const token of ['hasGoogleVoiceMarker','voiceContexts=new Map','voiceContexts.set(familyId,pending)',"String(existing.status)==='EXECUTED'","String(existing.external_etag)===String(item.etag||'')","status<>'EXECUTED'"])assert.ok(tasks.includes(token),token);
+assert.match(tasks,/MAX_D1_QUERY_BUDGET=40/);assert.match(tasks,/MAX_TASKS_PER_INVOCATION=8/);
+
+const js=p=>ts.transpileModule(read(p),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const data=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
+const timezone=await import(data(js('src/timezone.ts')));
+let requestJs=js('src/google-home-request-sync.ts').replace("from './timezone'",`from '${data(js('src/timezone.ts'))}'`);
+const sync=await import(data(requestJs));
+const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+const pem=privateKey.export({type:'pkcs8',format:'pem'}).toString();
+const credential={type:'service_account',client_email:'synthetic-contract@example.invalid',private_key:pem,token_uri:'https://oauth2.googleapis.com/token'};
+const parse=x=>sync.parseGoogleHomeServiceAccountSecret(x);
+assert.equal(parse(JSON.stringify(credential)).category,'VALID');
+assert.equal(parse(` \n ${JSON.stringify(credential)} \n `).ok,true);
+assert.equal(parse('\uFEFF'+JSON.stringify(credential)).ok,true);
+assert.equal(parse(JSON.stringify(JSON.stringify(credential))).category,'JSON_WRAPPED_STRING_ACCEPTED');
+assert.equal(parse(JSON.stringify({...credential,client_email:''})).category,'MISSING_CLIENT_EMAIL');
+assert.equal(parse(JSON.stringify({...credential,private_key:''})).category,'MISSING_PRIVATE_KEY');
+assert.equal(parse(JSON.stringify({...credential,private_key:'not a key'})).category,'INVALID_PRIVATE_KEY_PEM');
+assert.equal(parse(JSON.stringify({...credential,private_key:pem.replaceAll('\n','\\n')})).credential.private_key,pem);
+assert.equal((await sync.validateGoogleHomeServiceAccountSecret(JSON.stringify(credential))).ok,true);
+const jwt=await sync.createHomeGraphJwt({GOOGLE_HOME_SERVICE_ACCOUNT_JSON:JSON.stringify(credential)},1_777_000_000);
+assert.equal(jwt.split('.').length,3);assert.ok(jwt.length>200);
+assert.equal(timezone.formatStoredUtcForFamily('2026-08-28 18:03:42','Asia/Tokyo'),'2026-08-29 03:03:42');
+assert.equal(timezone.formatStoredUtcForFamily('2026-08-28 18:03:42','America/Los_Angeles'),'2026-08-28 11:03:42');
+assert.equal(timezone.formatStoredUtcForFamily('2026-01-01 02:03:42','America/Los_Angeles'),'2025-12-31 18:03:42');
+assert.equal(timezone.formatStoredUtcForFamily(null,'Asia/Tokyo'),'—');
+assert.equal(timezone.formatStoredUtcForFamily('invalid','Asia/Tokyo'),'invalid');
+for(const file of ['src/google-home.ts','src/google-tasks.ts','src/index.ts'])assert.ok(read(file).includes('formatStoredUtcForFamily'),file);
+assert.ok(calendar.includes('formatStoredUtcForFamily'),'Google Calendar must use family timezone formatting');
+
+for(const token of ["pageSize','1000'",'page<2','nextPageToken','supportedGenerationMethods',"includes('generateContent')",'unsuitableModel','freeTierAssumed:false','autoSwitch:false'])assert.ok(ai.includes(token),token);
+assert.ok(!ai.includes('GEMINI_FREE_CANDIDATES'));
+for(const token of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALLBACK','BUILT_IN_DEFAULT','family_ai_gemini_model','family_ai_test','FUNCTION_CALLING_UNAVAILABLE','MODEL_NOT_IN_CATALOG'])assert.ok(ai.includes(token),token);
+for(const token of ['external_calendar_watch_channels','token_hash','createCalendarWatch','calendarWatchWebhook','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((calendar+watchMigration).includes(token),token);
+assert.ok(index.includes("'/api/google-calendar/watch'"));
+assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
+assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
+assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
+
+assert.match(calendar,/String\(o\.operation\)===['"]DELETE['"]&&e instanceof GoogleError&&\(e\.status===404\|\|e\.status===410\)/,'only DELETE 404/410 should be treated as idempotent success');
+assert.match(calendar,/calendar_sync_outbox SET status='DONE',last_error=NULL/);
+assert.match(calendar,/external_calendar_links SET deleted_at=\?/);
+assert.match(calendar,/operation='DELETE' AND retry_count>=\?/);
+assert.match(calendar,/Google Calendar HTTP 404/);assert.match(calendar,/Google Calendar HTTP 410/);assert.match(calendar,/cleaned_gone_deletes/);
+
+assert.match(retryMigration,/UPDATE calendar_sync_outbox/);
+assert.match(retryMigration,/provider\s*=\s*'GOOGLE_CALENDAR'/);
+assert.match(retryMigration,/status\s*=\s*'DONE'/);
+assert.match(retryMigration,/retry_count\s*>=\s*8/);
+assert.match(retryMigration,/SET retry_count\s*=\s*0/);
+assert.doesNotMatch(retryMigration,/status\s*=\s*'ERROR'/);
+assert.doesNotMatch(retryMigration,/UPDATE\s+tasks|DELETE\s+FROM\s+tasks|external_calendar_links|external_calendar_accounts|calendar_sync_state|external_calendar_watch_channels/i);
+
+assert.match(calendarEntry,/export \* from '\.\/google-calendar-core'/);
+assert.match(calendarEntry,/INBOUND_PAGE_SIZE = 25/);
+assert.match(calendarEntry,/OUTBOX_LIMIT = 20/);
+assert.match(calendarEntry,/PAGE_PREFIX = 'PAGE:'/);
+assert.match(calendarEntry,/encodePageState\(syncToken, nextPageToken\)/);
+assert.match(calendarEntry,/pendingAfter > 0 \|\| incoming\.more/);
+assert.match(calendarEntry,/INSERT INTO calendar_sync_outbox/);
+assert.match(calendarEntry,/target_count: count/);
+assert.doesNotMatch(calendarEntry,/LIMIT 1000/);
+assert.match(calendarEntry,/calendar-backfill-limit\{display:none!important\}/);
+assert.match(calendarCore,/processCalendarOutbox/);
+assert.match(calendarCore,/String\(o\.operation\)==='DELETE'/);
+
+for(const token of ['reconcileHintedInbound','familyTodoTaskId','hintedInboundAlreadyProjected','dependency_count','sameInboundShape','applyInboundSafely'])assert.ok(calendarEntry.includes(token),token);
+assert.ok(!calendarEntry.includes('duplicateCandidates'));
+assert.ok(!calendarEntry.includes("action === 'diagnose_duplicates'"));
+assert.ok(!calendarEntry.includes("action === 'repair_duplicates'"));
+assert.ok(!calendarEntry.includes('calendarDuplicateDiagnose')&&!calendarEntry.includes('calendarDuplicateRepair'));
+
+console.log('google-integration-contract: Home, credentials, AI model, Calendar watch/sync/delete/retry/duplicate contracts ok');
