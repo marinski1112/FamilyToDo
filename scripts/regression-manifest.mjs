@@ -2,7 +2,7 @@ export const activeRegressionGroups=[
   {
     name:'core-domain',
     checks:[
-      ['domain-contracts','npm run check:domain-smoke'],
+      ['current-contracts','node scripts/core-contract-smoke.mjs'],
       ['form-audit','npm run check:wave123-form-audit'],
     ],
   },
@@ -47,6 +47,7 @@ export const activeRegressionGroups=[
 // string or CI layout changed. Keep this list until each contract has either
 // moved into an active feature group or has been intentionally retired.
 export const legacyRegressionChecks=[
+  ['domain-waves-81-116','npm run check:domain-smoke'],
   ['wave117','npm run check:wave117'],
   ['wave118','npm run check:wave118'],
   ['wave119','npm run check:wave119'],
