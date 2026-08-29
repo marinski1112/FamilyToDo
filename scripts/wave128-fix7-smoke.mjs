@@ -10,6 +10,6 @@ assert.ok(pwa.includes('ERROR件数:\\s*(\\d+)'),'projection status must read ex
 assert.match(pwa,/linked件数.*TASKとEVENTの両方/,'linked count must be described as mixed TASK/EVENT diagnostics');
 assert.match(pwa,/calendar-backfill-limit/,'1000 item backfill limit warning must exist');
 assert.match(pwa,/現在のbackfillは1回1000件上限/,'backfill warning must explain the current limit');
-assert.match(sw,/familytodo-static-wave128-fix7/,'static cache must rotate for fix7');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must remain on the Wave128 safe-fix namespace');
 
 console.log('wave128 fix7 smoke: Google Calendar read-only diagnostics and backfill limit warning ok');

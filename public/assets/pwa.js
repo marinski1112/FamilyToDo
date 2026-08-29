@@ -16,8 +16,10 @@
       .calendar-projection-safety strong,.calendar-projection-status strong,.calendar-backfill-limit strong{display:block;margin-bottom:3px}
       .calendar-projection-status.is-warning,.calendar-backfill-limit{border-color:#fbbf24;background:#fffbeb;color:#78350f}
       .calendar-projection-status.is-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+      .bottom-nav .nav-inner>a{white-space:nowrap!important;overflow-wrap:normal!important;word-break:keep-all!important;text-align:center!important}
       @media(max-width:340px){.family-log-quick-grid,.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
       @media(max-width:600px){
+        .bottom-nav .nav-inner>a[href="/app/tasks.php"]{font-size:8px!important;letter-spacing:-.06em!important}
         .day-modal .modal-top{display:grid!important;grid-template-columns:40px minmax(0,1fr) 40px 40px!important;grid-template-areas:'prev title next close' '. reorder reorder .'!important;gap:8px!important;align-items:center!important;width:100%!important;min-width:0!important}
         .day-modal .modal-top #modalPrev{grid-area:prev}.day-modal .modal-top #modalTitle{grid-area:title;min-width:0!important;text-align:center!important;overflow-wrap:anywhere}.day-modal .modal-top #modalNext{grid-area:next}.day-modal .modal-top #modalClose{grid-area:close}.day-modal .modal-top #modalReorder{grid-area:reorder;justify-self:end!important}
         .day-modal .modal-top button{min-width:40px!important;min-height:40px!important}
