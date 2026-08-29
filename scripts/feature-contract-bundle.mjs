@@ -6,10 +6,7 @@ const groups={
     ['calendar-current',['node','scripts/wave128-smoke.mjs']],
     ['calendar-presentation',['node','scripts/wave128-fix23-smoke.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
-    ['ics-budget',['node','scripts/wave109-smoke.mjs']],
-    ['ics-completion',['node','scripts/wave110-smoke.mjs']],
-    ['ics-resume',['node','scripts/wave111-smoke.mjs']],
-    ['ics-ordinals',['node','scripts/wave112-smoke.mjs']],
+    ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['event-reset-import',['node','scripts/wave128-fix21-smoke.mjs']],
   ],
   'google-integrations':[
