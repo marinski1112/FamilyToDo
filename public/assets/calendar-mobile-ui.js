@@ -71,6 +71,42 @@ try{
     });
   }
 
+  const TIMETREE_COLORS=new Set(['#f35f8c','#2ecc87','#47b2f7','#b38bdc','#fdc02d','#fb7f77']);
+  const safeHex=color=>/^#[0-9a-f]{6}$/i.test(String(color||'').trim())?String(color).trim().toLowerCase():'';
+  const initialPayload=()=>{try{return JSON.parse(document.getElementById('calendarPayload')?.textContent||'{}')}catch{return {}}};
+  const colorCache=new Map();
+  const applyStoredCalendarColors=(root,detailData)=>{
+    if(!root?.querySelectorAll||!detailData)return;
+    const byId=new Map();
+    for(const rows of Object.values(detailData)){
+      if(!Array.isArray(rows))continue;
+      for(const row of rows){const id=Number(row?.id);if(Number.isFinite(id)&&!byId.has(id))byId.set(id,row);}
+    }
+    root.querySelectorAll('.calendar-band[data-task-id]').forEach(el=>{
+      const row=byId.get(Number(el.dataset.taskId||0));const color=safeHex(row?.calendar_color);if(color)el.style.background=color;
+    });
+    root.querySelectorAll('.calendar-cell[data-date]').forEach(cell=>{
+      const date=String(cell.dataset.date||''),rows=Array.isArray(detailData[date])?detailData[date]:[];
+      const singles=rows.filter(row=>String(row?.segment||'single')==='single');
+      const els=[...cell.querySelectorAll('.calendar-items > .calendar-item:not(.item)')];
+      els.forEach((el,index)=>{const color=safeHex(singles[index]?.calendar_color);if(color)el.style.background=color;});
+    });
+  };
+  const currentMonthKey=()=>new URL(location.href).searchParams.get('month')||String(initialPayload().month||'');
+  const refreshStoredColors=async(root=document)=>{
+    const first=initialPayload(),month=currentMonthKey();
+    if(first.month===month&&first.detail){colorCache.set(month,first.detail);applyStoredCalendarColors(root,first.detail);return;}
+    if(colorCache.has(month)){applyStoredCalendarColors(root,colorCache.get(month));return;}
+    try{
+      const url=new URL(location.href);if(month)url.searchParams.set('month',month);url.searchParams.delete('open');
+      const response=await fetch(url.pathname+url.search,{headers:{accept:'text/html'},credentials:'same-origin',cache:'no-store'});if(!response.ok)return;
+      const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+      const payloadEl=doc.getElementById('calendarPayload');if(!payloadEl)return;
+      const next=JSON.parse(payloadEl.textContent||'{}');if(next.detail){colorCache.set(String(next.month||month),next.detail);applyStoredCalendarColors(root,next.detail);}
+    }catch{}
+  };
+  void TIMETREE_COLORS;
+
   const compactScheduleLabels=root=>{
     if(!root?.querySelectorAll)return;
     root.querySelectorAll('.calendar-item,.calendar-band').forEach(el=>{
@@ -84,15 +120,40 @@ try{
       }
     });
   };
+
+  const bandLane=band=>Number(String(band?.style?.gridRow||band?.style?.gridRowStart||'1').split('/')[0].trim())||1;
+  const bandsForCell=cell=>{
+    const week=cell?.closest?.('.calendar-week');if(!week)return [];
+    const cells=[...week.querySelectorAll('.calendar-week-days .calendar-cell')];
+    const col=cells.indexOf(cell)+1;if(col<=0)return [];
+    return [...week.querySelectorAll('.calendar-week-bands .calendar-band')].filter(band=>{
+      const parts=String(band.style.gridColumn||'').split('/').map(x=>Number(x.trim()));
+      return parts.length===2&&Number.isFinite(parts[0])&&Number.isFinite(parts[1])&&col>=parts[0]&&col<parts[1];
+    }).sort((a,b)=>bandLane(a)-bandLane(b));
+  };
+  const singlesForCell=cell=>[...cell.querySelectorAll('.calendar-items > .calendar-item')];
+  const schedulesForCell=cell=>[...bandsForCell(cell),...singlesForCell(cell)];
+  const cellAtPoint=point=>{
+    if(!point)return null;
+    const x=Number(point.clientX),y=Number(point.clientY);if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+    return [...document.querySelectorAll('.calendar-cell')].find(cell=>{const r=cell.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;})||null;
+  };
+
   const updateOverflowIndicators=root=>{
     if(!root?.querySelectorAll)return;
+    const scope=root.matches?.('.calendar-grid')?root:(root.querySelector?.('.calendar-grid')||root);
+    scope.querySelectorAll?.('.calendar-week-bands .calendar-band').forEach(band=>band.classList.toggle('calendar-overflow-hidden',bandLane(band)>2));
     const cells=[];
     if(root.matches?.('.calendar-cell'))cells.push(root);
     root.querySelectorAll('.calendar-cell').forEach(cell=>cells.push(cell));
     cells.forEach(cell=>{
-      const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
-      rows.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=2));
-      const hidden=Math.max(0,rows.length-2);
+      const bands=bandsForCell(cell);
+      const visibleBands=bands.filter(band=>bandLane(band)<=2).length;
+      const hiddenBands=Math.max(0,bands.length-visibleBands);
+      const singles=singlesForCell(cell);
+      const singleSlots=Math.max(0,2-Math.min(2,visibleBands));
+      singles.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=singleSlots));
+      const hidden=hiddenBands+Math.max(0,singles.length-singleSlots);
       const host=cell.querySelector('.calendar-items')||cell;
       let indicator=cell.querySelector('.calendar-overflow-indicator');
       if(!hidden){indicator?.remove();return;}
@@ -102,7 +163,7 @@ try{
       indicator.setAttribute('aria-label',`ほか${hidden}件の予定`);
     });
   };
-  const refreshGrid=root=>{compactScheduleLabels(root);updateOverflowIndicators(root);};
+  const refreshGrid=root=>{compactScheduleLabels(root);updateOverflowIndicators(root);void refreshStoredColors(root);};
   refreshGrid(document);
   const grid=document.querySelector('.calendar-grid');
   if(grid){
@@ -110,7 +171,7 @@ try{
     new MutationObserver(()=>{
       if(refreshPending)return;
       refreshPending=true;
-      requestAnimationFrame(()=>{refreshPending=false;refreshGrid(grid);});
+      requestAnimationFrame(()=>{refreshPending=false;refreshGrid(grid);setTimeout(()=>void refreshStoredColors(grid),260);});
     }).observe(grid,{childList:true,subtree:true});
   }
 
@@ -118,9 +179,9 @@ try{
   const scheduleTarget=target=>target?.closest?.('.calendar-item,.calendar-band');
   const clearPreview=()=>{preview?.remove();preview=null;};
   const showPreview=(schedule,point)=>{
-    const cell=schedule?.closest?.('.calendar-cell');
+    const cell=schedule?.closest?.('.calendar-cell')||cellAtPoint(point);
     if(!cell)return;
-    const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
+    const rows=schedulesForCell(cell);
     if(!rows.length)return;
     clearPreview();
     const box=document.createElement('div');box.className='calendar-press-popover'+(rows.length>6?' dense':'');
