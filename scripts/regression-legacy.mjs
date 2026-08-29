@@ -21,4 +21,4 @@ if(failures.length){
   console.error(`Legacy audit completed in ${total}s`);
   process.exit(1);
 }
-console.log(`\nLegacy audit: all ${legacyRegressionChecks.length} checks passed in ${total}s}`);
+console.log(`\nLegacy audit: all ${legacyRegressionChecks.length} checks passed in ${total}s`);
