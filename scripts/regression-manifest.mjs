@@ -3,6 +3,7 @@ export const activeRegressionGroups=[
     name:'core-domain',
     checks:[
       ['current-contracts','node scripts/core-contract-smoke.mjs'],
+      ['regression-structure','node scripts/regression-structure-smoke.mjs'],
       ['form-audit','npm run check:wave123-form-audit'],
     ],
   },
