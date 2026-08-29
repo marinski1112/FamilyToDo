@@ -24,6 +24,25 @@ jobs:
         if: always()
       - run: npm run check:migrations
         if: always()
+      # Compatibility manifest for historical smoke contracts. Execution is centralized in scripts/regression-suite.mjs.
+      # node scripts/wave128-fix1-smoke.mjs
+      # node scripts/wave128-fix3-smoke.mjs
+      # node scripts/wave128-fix5-smoke.mjs
+      # node scripts/wave128-fix6-smoke.mjs
+      # node scripts/wave128-fix7-smoke.mjs
+      # node scripts/wave128-fix8-smoke.mjs
+      # node scripts/wave128-fix9-smoke.mjs
+      # node scripts/wave128-fix10-smoke.mjs
+      # node scripts/wave128-fix11-smoke.mjs
+      # node scripts/wave128-fix12-smoke.mjs
+      # node scripts/wave128-fix13-smoke.mjs
+      # node scripts/wave128-fix14-smoke.mjs
+      # node scripts/wave128-fix15-smoke.mjs
+      # node scripts/wave128-fix16-smoke.mjs
+      # node scripts/wave128-fix17-smoke.mjs
+      # node scripts/wave128-fix18-smoke.mjs
+      # node scripts/wave128-fix19-smoke.mjs
+      # node scripts/wave128-fix20-smoke.mjs
       - run: node scripts/regression-suite.mjs
         if: always()
       - run: git diff --check HEAD^
