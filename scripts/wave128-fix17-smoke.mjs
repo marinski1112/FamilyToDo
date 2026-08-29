@@ -20,6 +20,6 @@ assert.match(familyUi,/legacyHeadAction\.remove\(\)/,'Family Log management must
 assert.match(familyUi,/＋ 対象・項目/,'Family Log subject management must use one consolidated entry point');
 assert.match(familyUi,/family-log-subject-manager-list/,'Family Log subject manager must expose existing rows inside the manager');
 assert.match(familyUi,/edit\?\.click\(\)/,'tapping an existing subject row must reuse the existing edit flow');
-assert.match(sw,/familytodo-static-wave128-fix17/,'static cache must rotate for fix17');
+assert.match(sw,/familytodo-static-wave128-fix(?:1[7-9]|[2-9]\d+)/,'static cache must be fix17 or a newer Wave128 cache generation');
 
 console.log('wave128 fix17 smoke: floating Calendar preview and consolidated Family Log management ok');
