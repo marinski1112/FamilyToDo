@@ -74,6 +74,8 @@ jobs:
         if: always()
       - run: node scripts/wave128-fix13-smoke.mjs
         if: always()
+      - run: node scripts/wave128-fix14-smoke.mjs
+        if: always()
       - run: npm run check:version
         if: always()
       - run: git diff --check HEAD^
