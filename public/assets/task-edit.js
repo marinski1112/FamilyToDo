@@ -3,6 +3,16 @@
 try{
   const f=document.getElementById('taskEditForm');if(!f)return;
   const editDate=document.getElementById('editTaskDate'),editEndDate=document.getElementById('editTaskEndDate'),editNoDate=document.getElementById('editNoDate'),editAllDay=document.getElementById('editAllDay'),editTimeFields=document.getElementById('editTimeFields'),editCalendarVisible=document.getElementById('editCalendarVisible'),editCalendarColorWrap=document.getElementById('editCalendarColorWrap'),editIsEvent=document.getElementById('editIsEvent'),editIsPrivate=document.getElementById('editIsPrivate'),assignees=[...f.querySelectorAll('[name=assignees]')];
+  const importedColorNames=new Map([
+    ['#f35f8c','ローズピンク（TimeTree）'],
+    ['#2ecc87','エメラルド（TimeTree）'],
+    ['#47b2f7','スカイブルー（TimeTree）'],
+    ['#b38bdc','ラベンダー（TimeTree）'],
+    ['#fdc02d','アンバー（TimeTree）'],
+    ['#fb7f77','コーラル（TimeTree）'],
+  ]);
+  const colorSelect=f.querySelector('[name=calendar_color]');
+  if(colorSelect){for(const option of colorSelect.options){const name=importedColorNames.get(String(option.value||'').toLowerCase());if(name)option.textContent=name;}}
   const syncEditDate=()=>{editDate.disabled=editNoDate.checked;if(editEndDate)editEndDate.disabled=editNoDate.checked;if(editNoDate.checked){editDate.value='';if(editEndDate)editEndDate.value='';f.querySelectorAll('[name=start_time],[name=end_time]').forEach(x=>x.value='');}if(editTimeFields)editTimeFields.style.display=(!editNoDate.checked&&!editAllDay.checked)?'grid':'none';};
   const syncKind=()=>{if(editIsEvent?.checked){editNoDate.checked=false;editNoDate.disabled=true;if(editIsPrivate){editIsPrivate.checked=false;editIsPrivate.disabled=true;}}else{editNoDate.disabled=false;if(editIsPrivate)editIsPrivate.disabled=false;}assignees.forEach(x=>x.disabled=Boolean(editIsPrivate?.checked));syncEditDate();};
   const syncEditCalendar=()=>{if(editCalendarColorWrap)editCalendarColorWrap.style.display=editCalendarVisible.checked?'block':'none'};
