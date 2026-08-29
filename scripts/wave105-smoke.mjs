@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const ai=fs.readFileSync('src/family-ai.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
+const ai=fs.readFileSync('src/family-ai.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
 assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.1-flash-lite'/);assert.ok(ai.includes('resolveFamilyGeminiModel'));
 assert.match(ai,/'x-goog-api-key':key/);assert.ok(!ai.includes('generateContent?key='));
 for(const x of ['RATE_LIMIT_RPM','RATE_LIMIT_TPM','RATE_LIMIT_RPD','FREE_TIER_QUOTA_ZERO','RATE_LIMIT_TEMPORARY','RATE_LIMIT_UNKNOWN','quotaMetric','quotaId','quotaDimensions','quotaValue','retryDelay'])assert.ok(ai.includes(x),x);
