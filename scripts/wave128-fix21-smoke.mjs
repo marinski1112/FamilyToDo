@@ -21,7 +21,7 @@ assert.ok(google.includes("if (await hintedInboundAlreadyProjected(env, account,
 assert.ok(google.includes("id=\"calendarEventReset\""),'integration settings must expose the EVENT reset control');
 assert.ok(ics.includes("calendar_visible,calendar_color,task_kind")&&ics.includes("e.allDay?1:0,e.color"),'ICS COLOR must continue to map into tasks.calendar_color');
 assert.ok(ics.includes("source_uid")&&ics.includes("eventKey"),'ICS UID identity tracking must remain enabled');
-assert.ok(ui.includes('calendar-overflow-hidden'),'Calendar row cap must have an explicit hidden-row class');
+assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'Calendar row cap must count spanning bands and ordinary rows together');
 assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must stay in the Wave128 fix namespace');
 
-console.log('wave128 fix21 smoke: EVENT reset, ICS color/UID preservation, Google duplicate guard, and Calendar cap baseline ok');
+console.log('wave128 fix21 smoke: EVENT reset, ICS color/UID preservation, Google duplicate guard, and mixed Calendar cap ok');
