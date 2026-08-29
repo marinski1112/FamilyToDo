@@ -11,6 +11,7 @@ const groups={
   'google-integrations':[
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
+    ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
   'ui-product':[
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
