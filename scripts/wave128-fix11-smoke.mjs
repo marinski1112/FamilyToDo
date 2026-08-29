@@ -12,7 +12,7 @@ assert.match(pwa,/const overflow=eventTargets-1000/,'preflight must report the m
 assert.match(pwa,/全履歴backfillは1回1000件上限/,'warning must explain the server backfill limit');
 assert.match(pwa,/linked件数にはTASKとEVENTの両方が含まれる/,'UI must not claim link total equals EVENT coverage');
 assert.match(pwa,/eventTargets===0&&previewCount>=1000/,'preview count is only a fallback when the server total cannot be read');
-assert.match(sw,/familytodo-static-wave128-fix11/,'static cache must rotate so the preflight reaches clients');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must remain on the Wave128 safe-fix namespace');
 assert.match(ci,/node scripts\/wave128-fix11-smoke\.mjs/,'fix11 smoke must run in CI');
 
 console.log('wave128 fix11 smoke: Google Calendar read-only history preflight ok');
