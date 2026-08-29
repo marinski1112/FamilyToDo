@@ -5,8 +5,8 @@ const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
 
 assert.match(pwa,/calendar-projection-status/,'Google Calendar projection status UI must exist');
-assert.match(pwa,/PENDING件数:\\s\*\\d\+/,'projection status must read existing pending diagnostics');
-assert.match(pwa,/ERROR件数:\\s\*\\d\+/,'projection status must read existing error diagnostics');
+assert.ok(pwa.includes('PENDING件数:\\s*(\\d+)'),'projection status must read existing pending diagnostics');
+assert.ok(pwa.includes('ERROR件数:\\s*(\\d+)'),'projection status must read existing error diagnostics');
 assert.match(pwa,/linked件数.*TASKとEVENTの両方/,'linked count must be described as mixed TASK/EVENT diagnostics');
 assert.match(pwa,/calendar-backfill-limit/,'1000 item backfill limit warning must exist');
 assert.match(pwa,/現在のbackfillは1回1000件上限/,'backfill warning must explain the current limit');
