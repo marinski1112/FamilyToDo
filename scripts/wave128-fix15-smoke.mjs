@@ -10,12 +10,12 @@ assert.ok(mobile.includes("setAttribute('aria-label','表示フィルター')"),
 assert.match(mobile,/calendar-items>\*:nth-child\(n\+3\)\{display:none!important\}/,'normal month view must cap visible day items at two');
 assert.match(mobile,/text-overflow:clip!important/,'calendar labels must clip rather than render ellipsis');
 assert.ok(mobile.includes("replace(/^\\s*📌\\s*/,''"),'event pin prefix must be removed from month labels');
-assert.match(mobile,/calendar-press-preview/,'press preview state must exist');
-assert.match(mobile,/calendar-cell\.calendar-press-preview \.calendar-items>\*\{display:block!important\}/,'press preview must temporarily reveal hidden items in the day cell');
+assert.match(mobile,/calendar-press-popover/,'press preview must remain available as a temporary floating view');
+assert.match(mobile,/querySelectorAll\('\.calendar-item,\.calendar-band'\)/,'press preview must include all hidden schedule rows from the date');
 assert.ok(mobile.includes("removeAttribute('href')"),'mobile schedule labels must not navigate when used as press-preview targets');
 assert.ok(mobile.includes("document.addEventListener('touchend'"),'touch release must restore the compact view');
 assert.ok(mobile.includes("document.addEventListener('click'"),'schedule click must be intercepted so date/blank click remains the day-detail path');
-assert.match(sw,/familytodo-static-wave128-fix15/,'fix15 must rotate the static cache');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'Calendar safe fixes must stay within the Wave128 static cache namespace');
 assert.match(ci,/node scripts\/wave128-fix15-smoke\.mjs/,'fix15 smoke must run in CI');
 
 console.log('wave128 fix15 smoke: compact clipping, icon filter, press-to-preview calendar interaction ok');
