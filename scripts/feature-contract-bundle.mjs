@@ -3,20 +3,14 @@ import {spawnSync} from 'node:child_process';
 const groups={
   'calendar-imports':[
     ['calendar-presentation',['node','scripts/calendar-presentation-contract.mjs']],
-    ['calendar-current',['node','scripts/wave128-smoke.mjs']],
+    ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
   ],
   'google-integrations':[
-    ['google-home',['node','scripts/wave125-smoke.mjs']],
+    ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
-    ['google-credentials',['node','scripts/wave126-smoke.mjs']],
-    ['ai-model-watch',['node','scripts/wave127-smoke.mjs']],
-    ['calendar-delete-idempotency',['node','scripts/wave128-fix13-smoke.mjs']],
-    ['calendar-retry-normalization',['node','scripts/wave128-fix16-smoke.mjs']],
-    ['calendar-bounded-sync',['node','scripts/wave128-fix18-smoke.mjs']],
-    ['calendar-duplicate-prevention',['node','scripts/wave128-fix20-smoke.mjs']],
   ],
   'ui-product':[
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
