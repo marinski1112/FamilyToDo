@@ -33,6 +33,10 @@ export const activeRegressionGroups=[
 // moved into an active feature group or has been intentionally retired.
 export const legacyRegressionChecks=[
   ['domain-waves-81-116','npm run check:domain-smoke'],
+  ['wave109','node scripts/wave109-smoke.mjs'],
+  ['wave110','node scripts/wave110-smoke.mjs'],
+  ['wave111','node scripts/wave111-smoke.mjs'],
+  ['wave112','node scripts/wave112-smoke.mjs'],
   ['wave117','npm run check:wave117'],
   ['wave118','npm run check:wave118'],
   ['wave119','npm run check:wave119'],
