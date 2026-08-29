@@ -17,6 +17,7 @@ assert.ok(mobile.includes("removeAttribute('href')"),'mobile schedule labels mus
 assert.ok(mobile.includes("document.addEventListener('touchend'"),'touch release must restore the compact view');
 assert.ok(mobile.includes("document.addEventListener('click'"),'schedule click must be intercepted so date/blank click remains the day-detail path');
 assert.match(sw,/familytodo-static-wave128-fix\d+/,'Calendar safe fixes must stay within the Wave128 static cache namespace');
-assert.ok(ci.includes('node scripts/regression-suite.mjs')&&runner.includes('wave128-fix15-smoke.mjs'),'fix15 smoke must run through the consolidated CI regression suite');
+assert.ok(ci.includes('node scripts/regression-suite.mjs'),'CI must invoke the consolidated regression suite');
+assert.ok(runner.includes('wave128-fix${n}-smoke.mjs')&&/\b15\b/.test(runner),'fix15 smoke must be included in the consolidated fix runner');
 
 console.log('wave128 fix15 smoke: compact clipping, overflow indicator, icon filter, press-to-preview calendar interaction ok');
