@@ -13,6 +13,7 @@ export const activeRegressionGroups=[
       ['calendar-foundation','npm run check:wave123'],
       ['calendar-current','npm run check:wave128'],
       ['calendar-ui-current','node scripts/wave128-fix23-smoke.mjs'],
+      ['calendar-colors','node scripts/calendar-color-contract.mjs'],
       ['ics-budget','node scripts/wave109-smoke.mjs'],
       ['ics-completion','node scripts/wave110-smoke.mjs'],
       ['ics-resume','node scripts/wave111-smoke.mjs'],
