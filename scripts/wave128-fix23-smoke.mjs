@@ -12,5 +12,6 @@ assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule c
 assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'third and later schedule rows must be hidden with inline important precedence');
 assert.ok(ui.includes("singles.forEach((row,index)=>setOverflowHidden(row,index>=singleSlots))"),'all one-day schedule rows, including recurring rows, must obey remaining two-row slots');
 assert.ok(ui.includes("setOverflowHidden(band,bandLane(band)>2)"),'multi-day bands must also obey the two-row cap');
-assert.match(sw,/familytodo-static-wave128-fix23/,'static cache must rotate for the hardened Calendar asset');
+assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO static namespace');
+assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 console.log('wave128 fix23 smoke: imported colors and recurring-aware hard two-row cap ok');
