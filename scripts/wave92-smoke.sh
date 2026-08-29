@@ -3,7 +3,7 @@ set -euo pipefail
 node <<'JS'
 const fs=require('fs');
 const app=fs.readFileSync('src/app.ts','utf8');
-const js=fs.readFileSync('public/assets/family-log.js','utf8');
+const js=fs.readFileSync('public/assets/family-log.js','utf8')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+fs.readFileSync('public/assets/family-log-core.js','utf8'):'');
 const migration=fs.readFileSync('migrations/0029_wave92_family_log_settings.sql','utf8');
 const has=(text,token)=>{if(!text.includes(token))throw new Error(`missing ${token}`)};
 has(app,'data-dashboard-loaded');
