@@ -11,7 +11,8 @@ assert.match(pwa,/classList\.contains\('gray'\)/,'gray buttons must be excluded'
 assert.match(pwa,/classList\.contains\('secondary'\)/,'secondary buttons must be excluded');
 assert.match(pwa,/classList\.contains\('danger'\)/,'danger buttons must be excluded');
 assert.match(pwa,/MutationObserver/,'dynamically inserted controls must also be checked');
-assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must remain on the current safe-fix namespace until cache naming is migrated');
+assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO static namespace');
+assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the old namespace');
 
 console.log('UI contract: computed interactive contrast guard ok');
