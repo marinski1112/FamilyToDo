@@ -12,9 +12,10 @@ assert.match(mobile,/calendar-page-head h1\{display:none/,'calendar heading must
 assert.match(mobile,/calendarFilterToggle/,'filter must use an explicit expandable control');
 assert.match(mobile,/filter\.hidden=!opening/,'filter panel must collapse and expand without changing the current view');
 assert.match(mobile,/\.wrap\{max-width:none!important;width:100%/,'calendar page must use the mobile viewport width');
-assert.match(mobile,/calendar-grid \.calendar-item,body\.calendar-compact-ui \.calendar-grid \.calendar-band/,'task/event labels must receive the larger compact calendar typography');
-assert.match(mobile,/font-size:10px!important/,'calendar task/event text must be materially larger than the previous 7px mobile rule');
-assert.match(sw,/familytodo-static-wave128-fix14/,'fix14 must rotate the static cache');
+assert.match(mobile,/calendar-grid \.calendar-item,body\.calendar-compact-ui \.calendar-grid \.calendar-band/,'task/event labels must receive the compact calendar typography');
+assert.match(mobile,/font-size:10px!important/,'calendar task/event text must remain materially larger than the old 7px mobile rule');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must remain in the Wave128 safe-fix namespace');
+assert.doesNotMatch(sw,/familytodo-static-v92/,'legacy cache namespace must not return');
 assert.match(ci,/node scripts\/wave128-fix14-smoke\.mjs/,'fix14 smoke must run in CI');
 
 console.log('wave128 fix14 smoke: full-width compact mobile calendar chrome and expandable filter ok');
