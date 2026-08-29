@@ -43,6 +43,7 @@ export const legacyRegressionChecks=[
   ['wave120','npm run check:wave120'],
   ['wave121','npm run check:wave121'],
   ['wave122','npm run check:wave122'],
+  ['wave123','node scripts/wave123-smoke.mjs'],
   ['wave124','npm run check:wave124'],
-  ...[1,3,5,6,7,8,9,10,11,12,14,15,17,19,22].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
+  ...[1,3,5,6,7,8,9,10,11,12,14,15,17,19,21,22,23].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
 ];
