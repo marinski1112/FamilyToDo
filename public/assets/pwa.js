@@ -72,6 +72,29 @@
       });
     }
 
+    const calendarCard=document.querySelector('.calendar-card');
+    if(calendarCard){
+      let interactiveTouch=null;
+      calendarCard.addEventListener('touchstart',event=>{
+        const touch=event.changedTouches&&event.changedTouches[0];
+        const link=event.target?.closest?.('.calendar-grid a[href]');
+        if(!touch||!link){interactiveTouch=null;return;}
+        interactiveTouch={link,x:touch.clientX,y:touch.clientY};
+      },{capture:true,passive:true});
+      calendarCard.addEventListener('touchend',event=>{
+        if(!interactiveTouch)return;
+        const touch=event.changedTouches&&event.changedTouches[0];
+        const link=event.target?.closest?.('.calendar-grid a[href]');
+        const start=interactiveTouch;interactiveTouch=null;
+        if(!touch||!link||link!==start.link)return;
+        const dx=touch.clientX-start.x,dy=touch.clientY-start.y;
+        if(Math.abs(dx)>=28||Math.abs(dy)>=28)return;
+        event.preventDefault();event.stopImmediatePropagation();
+        location.href=link.href;
+      },{capture:true,passive:false});
+      calendarCard.addEventListener('touchcancel',()=>{interactiveTouch=null;},{capture:true,passive:true});
+    }
+
     if(location.pathname==='/app/settings_integrations.php'){
       const historyButton=document.getElementById('calendarHistoryBackfill');
       if(historyButton&&!document.querySelector('.calendar-projection-safety')){
