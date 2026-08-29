@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
-const app=read('src/app.ts'),css=read('public/assets/calendar.css'),calendar=read('public/assets/calendar.js'),log=read('public/assets/family-log.js'),familyCss=read('public/assets/family.css'),ci=read('.github/workflows/ci.yml');
+const app=read('src/app.ts'),css=read('public/assets/calendar.css'),calendar=read('public/assets/calendar.js'),log=read('public/assets/family-log.js')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+read('public/assets/family-log-core.js'):''),familyCss=read('public/assets/family.css'),ci=read('.github/workflows/ci.yml');
 assert.equal(inventory.version,pkg.version);
 for(const command of ['check:domain-smoke','check:wave117','check:wave118'])assert.ok(ci.includes(`npm run ${command}`));
 assert.ok(app.includes('--calendar-day-band-rows:'));assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'));

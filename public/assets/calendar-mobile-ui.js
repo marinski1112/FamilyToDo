@@ -30,10 +30,13 @@ try{
     body.calendar-compact-ui .calendar-grid .calendar-items{gap:2px!important;padding:0!important;margin-top:1px!important;max-width:100%!important;overflow:hidden!important}
     body.calendar-compact-ui .calendar-grid .calendar-items>*:nth-child(n+3){display:none!important}
     body.calendar-compact-ui .calendar-grid .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-band{box-sizing:border-box!important;display:block!important;width:100%!important;max-width:100%!important;height:17px!important;min-height:17px!important;line-height:17px!important;padding:0 3px!important;font-size:10px!important;font-weight:750!important;letter-spacing:-.02em!important;border-radius:4px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important;overflow-wrap:normal!important}
-    body.calendar-compact-ui .calendar-grid .calendar-cell.calendar-press-preview .calendar-items>*{display:block!important}
-    body.calendar-compact-ui .calendar-grid .calendar-cell.calendar-press-preview .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-cell.calendar-press-preview .calendar-band{height:auto!important;min-height:17px!important;line-height:14px!important;padding-top:2px!important;padding-bottom:2px!important;white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;overflow-wrap:anywhere!important;word-break:break-word!important}
     body.calendar-compact-ui .calendar-grid .calendar-shopping,body.calendar-compact-ui .calendar-grid .meta{font-size:9px!important;line-height:13px!important}
     body.calendar-compact-ui .calendar-fab{right:14px!important;bottom:76px!important}
+    .calendar-press-popover{position:fixed!important;z-index:180!important;box-sizing:border-box!important;width:min(280px,calc(100vw - 16px))!important;max-height:min(52vh,360px)!important;overflow:hidden!important;padding:8px!important;border:1px solid rgba(148,163,184,.55)!important;border-radius:12px!important;background:rgba(255,255,255,.98)!important;box-shadow:0 10px 28px rgba(15,23,42,.24)!important;pointer-events:none!important;-webkit-user-select:none!important;user-select:none!important}
+    .calendar-press-popover-title{margin:0 2px 6px!important;color:#475569!important;font-size:11px!important;font-weight:800!important;line-height:1.2!important}
+    .calendar-press-popover-list{display:grid!important;gap:4px!important;max-height:calc(min(52vh,360px) - 31px)!important;overflow:hidden!important}
+    .calendar-press-popover-row{box-sizing:border-box!important;width:100%!important;min-width:0!important;padding:4px 6px!important;border-radius:6px!important;font-size:13px!important;font-weight:750!important;line-height:1.25!important;white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+    .calendar-press-popover.dense .calendar-press-popover-row{font-size:11px!important;line-height:1.18!important;padding:3px 5px!important}
     @media(max-width:360px){
       body.calendar-compact-ui .calendar-month-label{font-size:19px!important}
       body.calendar-compact-ui .calendar-month-actions .btn{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important}
@@ -41,6 +44,8 @@ try{
       body.calendar-compact-ui .calendar-view-filter a{font-size:9px!important;min-width:48px!important;padding:5px 6px!important}
       body.calendar-compact-ui .calendar-grid .calendar-cell{height:78px!important;min-height:78px!important}
       body.calendar-compact-ui .calendar-grid .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-band{font-size:9px!important;padding:0 2px!important}
+      .calendar-press-popover{width:min(260px,calc(100vw - 12px))!important}
+      .calendar-press-popover-row{font-size:12px!important}
     }
   `;
   document.head.append(style);
@@ -81,21 +86,50 @@ try{
   const grid=document.querySelector('.calendar-grid');
   if(grid)new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(node=>{if(node.nodeType===1)compactScheduleLabels(node);}))).observe(grid,{childList:true,subtree:true});
 
-  let pressedCell=null;
+  let preview=null;
   const scheduleTarget=target=>target?.closest?.('.calendar-item,.calendar-band');
-  const clearPress=()=>{pressedCell?.classList.remove('calendar-press-preview');pressedCell=null;};
+  const clearPreview=()=>{preview?.remove();preview=null;};
+  const showPreview=(schedule,point)=>{
+    const cell=schedule?.closest?.('.calendar-cell');
+    const items=cell?.querySelector?.('.calendar-items');
+    if(!cell||!items)return;
+    const rows=[...items.querySelectorAll('.calendar-item,.calendar-band')];
+    if(!rows.length)return;
+    clearPreview();
+    const box=document.createElement('div');box.className='calendar-press-popover'+(rows.length>6?' dense':'');
+    const dateText=String(cell.querySelector('.num')?.textContent||'').trim();
+    const title=document.createElement('div');title.className='calendar-press-popover-title';title.textContent=dateText?`${dateText}日の予定`:'この日の予定';box.appendChild(title);
+    const list=document.createElement('div');list.className='calendar-press-popover-list';
+    rows.forEach(source=>{
+      const row=document.createElement('div');row.className='calendar-press-popover-row';row.textContent=String(source.textContent||'').replace(/^\s*📌\s*/,'').trim();
+      const computed=getComputedStyle(source);row.style.backgroundColor=computed.backgroundColor;row.style.color=computed.color;list.appendChild(row);
+    });
+    box.appendChild(list);document.body.appendChild(box);preview=box;
+    const margin=8,gap=10,viewportW=window.innerWidth,viewportH=window.innerHeight;
+    const cellRect=cell.getBoundingClientRect(),rect=box.getBoundingClientRect();
+    const desiredX=(point?.clientX??cellRect.left+cellRect.width/2)-rect.width/2;
+    const left=Math.max(margin,Math.min(viewportW-rect.width-margin,desiredX));
+    let top=Math.min(cellRect.top-gap-rect.height,(point?.clientY??cellRect.top)-gap-rect.height);
+    if(top<margin){
+      const below=Math.max(cellRect.bottom+gap,(point?.clientY??cellRect.bottom)+gap);
+      top=Math.min(viewportH-rect.height-84,below);
+    }
+    top=Math.max(margin,Math.min(viewportH-rect.height-84,top));
+    box.style.left=`${Math.round(left)}px`;box.style.top=`${Math.round(top)}px`;
+  };
+
   document.addEventListener('touchstart',event=>{
     const schedule=scheduleTarget(event.target);if(!schedule)return;
-    const cell=schedule.closest('.calendar-cell');if(!cell)return;
-    clearPress();pressedCell=cell;cell.classList.add('calendar-press-preview');
+    const touch=event.changedTouches?.[0];
+    showPreview(schedule,touch||null);
     event.stopPropagation();
   },{capture:true,passive:true});
+  document.addEventListener('touchmove',event=>{if(preview)event.stopPropagation();},{capture:true,passive:true});
   document.addEventListener('touchend',event=>{
-    if(!scheduleTarget(event.target)&&!pressedCell)return;
-    event.preventDefault();event.stopPropagation();
-    clearPress();
+    if(!preview&&!scheduleTarget(event.target))return;
+    event.preventDefault();event.stopPropagation();clearPreview();
   },{capture:true,passive:false});
-  document.addEventListener('touchcancel',()=>clearPress(),{capture:true,passive:true});
+  document.addEventListener('touchcancel',()=>clearPreview(),{capture:true,passive:true});
   document.addEventListener('click',event=>{
     if(!scheduleTarget(event.target))return;
     event.preventDefault();event.stopPropagation();
@@ -103,11 +137,11 @@ try{
   document.addEventListener('pointerdown',event=>{
     if(event.pointerType==='touch')return;
     const schedule=scheduleTarget(event.target);if(!schedule)return;
-    const cell=schedule.closest('.calendar-cell');if(!cell)return;
-    clearPress();pressedCell=cell;cell.classList.add('calendar-press-preview');
+    showPreview(schedule,event);
   },{capture:true});
-  document.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')clearPress();},{capture:true});
-  document.addEventListener('pointercancel',()=>clearPress(),{capture:true});
+  document.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')clearPreview();},{capture:true});
+  document.addEventListener('pointercancel',()=>clearPreview(),{capture:true});
+  window.addEventListener('blur',clearPreview,{passive:true});
 
   document.documentElement.dataset.calendarMobileUi='ready';
 }catch(error){

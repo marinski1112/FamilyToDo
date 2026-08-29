@@ -1,5 +1,5 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';
-const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),oauth=read('src/oauth-continuation.ts'),liff=read('public/assets/liff-auth.js'),css=read('public/assets/calendar.css'),log=read('public/assets/family-log.js'),pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
+const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),oauth=read('src/oauth-continuation.ts'),liff=read('public/assets/liff-auth.js'),css=read('public/assets/calendar.css'),log=read('public/assets/family-log.js')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+read('public/assets/family-log-core.js'):''),pkg=JSON.parse(read('package.json')),inventory=JSON.parse(read('source_inventory.json'));
 assert.equal(inventory.version,pkg.version);
 assert.ok(oauth.includes("stage:'LIFF_PRIMARY_RECEIVED'"));assert.ok(!oauth.slice(oauth.indexOf('export async function normalLiff'),oauth.indexOf('export async function liffDispatcher')).includes('ctx.member)return go'));
 assert.ok(liff.indexOf('await window.liff.init')<liff.indexOf('const current=resolve()'));assert.ok(liff.includes("url.searchParams.get('next')"));assert.ok(liff.includes('return valid(payload.next)'));
