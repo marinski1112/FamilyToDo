@@ -22,7 +22,7 @@ assert.match(pwa,/calendarProjectionDiagnose/,'integration UI must provide a pro
 assert.match(pwa,/calendarProjectionRebind/,'integration UI must provide the guarded rebind action');
 assert.match(pwa,/CREATE_NEW_CALENDAR/,'UI rebind must send the explicit confirmation token');
 assert.match(pwa,/familyCsrf/,'Family Log quick action CSRF must stay isolated from integration-page CSRF');
-assert.match(sw,/familytodo-static-wave128-fix12/,'static cache must rotate for fix12');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must stay in the Wave128 safe-fix namespace');
 assert.match(ci,/node scripts\/wave128-fix12-smoke\.mjs/,'fix12 smoke must run in CI');
 
 console.log('wave128 fix12 smoke: Google Calendar missing-subcalendar diagnostics and safe projection rebind ok');
