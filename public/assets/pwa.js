@@ -143,29 +143,35 @@
         note.innerHTML='<strong>Google Calendarを整理するときの安全手順</strong>現在Family TODOと連携中の「Family TODO」カレンダーは削除しないでください。先に「全履歴の予定をGoogleへ同期」でFamily TODO由来の予定を確認し、その後、旧ICSを直接取り込んだ別サブカレンダーだけを削除してください。';
         historyButton.parentElement?.insertBefore(note,historyButton);
       }
+      const detailText=calendarCardEl?Array.from(calendarCardEl.querySelectorAll('details')).map(el=>el.textContent||'').join(' '):'';
+      const eventTargets=Number((detailText.match(/対象EVENT件数:\s*(\d+)/)||[])[1]||0);
+      const linkedTotal=Number((detailText.match(/linked件数:\s*(\d+)/)||[])[1]||0);
       if(calendarCardEl&&!document.querySelector('.calendar-projection-status')){
-        const detailText=Array.from(calendarCardEl.querySelectorAll('details')).map(el=>el.textContent||'').join(' ');
         const pending=Number((detailText.match(/PENDING件数:\s*(\d+)/)||[])[1]||0);
         const errors=Number((detailText.match(/ERROR件数:\s*(\d+)/)||[])[1]||0);
         const status=document.createElement('div');status.className='calendar-projection-status';
         if(errors>0){status.classList.add('is-error');status.innerHTML=`<strong>Google Calendar同期: 要確認</strong>ERRORが ${errors}件あります。カレンダー削除や再連携は行わず、先に「再試行」で解消してください。`;}
         else if(pending>0){status.classList.add('is-warning');status.innerHTML=`<strong>Google Calendar同期: 処理待ち</strong>PENDINGが ${pending}件あります。同期完了後にGoogle Calendar側を確認してください。`;}
-        else{status.innerHTML='<strong>Google Calendar同期キュー: 正常</strong>PENDING / ERROR は0件です。なお「linked件数」にはTASKとEVENTの両方が含まれるため、「対象EVENT件数」との単純一致だけではprojection完全性を判定しません。';}
+        else{status.innerHTML=`<strong>Google Calendar同期キュー: 正常</strong>PENDING / ERROR は0件です。全履歴FAMILY EVENTは ${eventTargets}件、active link総数は ${linkedTotal}件です。linked件数にはTASKとEVENTの両方が含まれるため、単純一致だけではprojection完全性を判定しません。`;}
         const safety=document.querySelector('.calendar-projection-safety');(safety||historyButton).insertAdjacentElement('afterend',status);
       }
       const result=document.getElementById('calendarResult');
-      if(result){
-        const updateLimitWarning=()=>{
-          const count=Number((result.textContent||'').match(/同期対象\s+(\d+)件/)?.[1]||0);
-          let warning=document.querySelector('.calendar-backfill-limit');
-          if(count>=1000){
-            if(!warning){warning=document.createElement('div');warning.className='calendar-backfill-limit';result.insertAdjacentElement('afterend',warning);}
-            warning.innerHTML='<strong>全履歴同期の件数上限を確認してください</strong>同期対象が1000件に達しています。現在のbackfillは1回1000件上限のため、1000件を超える履歴がある場合は全件を一度に保証できません。旧ICSカレンダーを削除する前に追加対応が必要です。';
-          }else warning?.remove();
-        };
-        new MutationObserver(updateLimitWarning).observe(result,{childList:true,characterData:true,subtree:true});
-        updateLimitWarning();
-      }
+      const updateLimitWarning=()=>{
+        let warning=document.querySelector('.calendar-backfill-limit');
+        if(eventTargets>1000){
+          if(!warning){warning=document.createElement('div');warning.className='calendar-backfill-limit';(result||historyButton).insertAdjacentElement('afterend',warning);}
+          const overflow=eventTargets-1000;
+          warning.innerHTML=`<strong>全履歴同期は1回では完了しません</strong>Family TODOの対象EVENTは ${eventTargets}件です。現在の全履歴backfillは1回1000件上限のため、少なくとも ${overflow}件は1回の実行対象外になります。旧ICSカレンダーを削除する前に、全件同期できるページング対応が必要です。`;
+          return;
+        }
+        const previewCount=Number((result?.textContent||'').match(/同期対象\s+(\d+)件/)?.[1]||0);
+        if(eventTargets===0&&previewCount>=1000){
+          if(!warning){warning=document.createElement('div');warning.className='calendar-backfill-limit';(result||historyButton).insertAdjacentElement('afterend',warning);}
+          warning.innerHTML='<strong>全履歴同期の件数上限を確認してください</strong>同期previewが1000件に達しています。server側の総件数を確認できない場合は、旧ICSカレンダーを削除する前に全件同期を保証できるページング対応が必要です。';
+        }else warning?.remove();
+      };
+      if(result)new MutationObserver(updateLimitWarning).observe(result,{childList:true,characterData:true,subtree:true});
+      updateLimitWarning();
     }
   }
 
