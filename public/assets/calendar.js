@@ -12,7 +12,7 @@ try {
   if(calendarFab) calendarFab.setAttribute('href','/task/new.php?date='+(payload.today||'')+'&return=calendar');
   calendarFab?.addEventListener('click',()=>{ const href='/task/new.php?date='+(selectedDate||payload.today||'')+'&return=calendar'; calendarFab.setAttribute('href',href); });
   function shiftDate(d,days){const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+days);return x.toISOString().slice(0,10);}
-  function escJs(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
+  function escJs(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function repairRecurringBandLinks(root){
     if(!root?.querySelectorAll)return;
     const recurringBySyntheticId=new Map();
