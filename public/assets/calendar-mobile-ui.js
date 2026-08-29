@@ -28,7 +28,8 @@ try{
     body.calendar-compact-ui .calendar-grid .num{height:22px!important;margin:0 0 2px!important;padding-top:1px!important;font-size:13px!important;line-height:20px!important;font-weight:750!important}
     body.calendar-compact-ui .calendar-grid .today-num{width:22px!important;height:22px!important;font-size:13px!important}
     body.calendar-compact-ui .calendar-grid .calendar-items{gap:2px!important;padding:0!important;margin-top:1px!important;max-width:100%!important;overflow:hidden!important}
-    body.calendar-compact-ui .calendar-grid .calendar-items>*:nth-child(n+3){display:none!important}
+    body.calendar-compact-ui .calendar-grid .calendar-items>*:nth-child(n+3):not(.calendar-overflow-indicator){display:none!important}
+    body.calendar-compact-ui .calendar-grid .calendar-overflow-indicator{display:block!important;box-sizing:border-box!important;width:100%!important;height:13px!important;min-height:13px!important;line-height:13px!important;margin-top:1px!important;padding:0 2px!important;color:#64748b!important;font-size:8px!important;font-weight:850!important;white-space:nowrap!important;overflow:hidden!important;text-align:left!important;letter-spacing:-.02em!important}
     body.calendar-compact-ui .calendar-grid .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-band{box-sizing:border-box!important;display:block!important;width:100%!important;max-width:100%!important;height:17px!important;min-height:17px!important;line-height:17px!important;padding:0 3px!important;font-size:10px!important;font-weight:750!important;letter-spacing:-.02em!important;border-radius:4px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important;overflow-wrap:normal!important}
     body.calendar-compact-ui .calendar-grid .calendar-shopping,body.calendar-compact-ui .calendar-grid .meta{font-size:9px!important;line-height:13px!important}
     body.calendar-compact-ui .calendar-fab{right:14px!important;bottom:76px!important}
@@ -44,6 +45,7 @@ try{
       body.calendar-compact-ui .calendar-view-filter a{font-size:9px!important;min-width:48px!important;padding:5px 6px!important}
       body.calendar-compact-ui .calendar-grid .calendar-cell{height:78px!important;min-height:78px!important}
       body.calendar-compact-ui .calendar-grid .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-band{font-size:9px!important;padding:0 2px!important}
+      body.calendar-compact-ui .calendar-grid .calendar-overflow-indicator{font-size:7px!important}
       .calendar-press-popover{width:min(260px,calc(100vw - 12px))!important}
       .calendar-press-popover-row{font-size:12px!important}
     }
@@ -82,9 +84,33 @@ try{
       }
     });
   };
-  compactScheduleLabels(document);
+  const updateOverflowIndicators=root=>{
+    if(!root?.querySelectorAll)return;
+    const groups=[];
+    if(root.matches?.('.calendar-items'))groups.push(root);
+    root.querySelectorAll('.calendar-items').forEach(items=>groups.push(items));
+    groups.forEach(items=>{
+      const rows=[...items.children].filter(el=>el.matches?.('.calendar-item,.calendar-band'));
+      const hidden=Math.max(0,rows.length-2);
+      let indicator=[...items.children].find(el=>el.classList?.contains('calendar-overflow-indicator'))||null;
+      if(!hidden){indicator?.remove();return;}
+      if(!indicator){indicator=document.createElement('div');indicator.className='calendar-overflow-indicator';items.appendChild(indicator);}
+      const label=`… +${hidden}`;
+      if(indicator.textContent!==label)indicator.textContent=label;
+      indicator.setAttribute('aria-label',`ほか${hidden}件の予定`);
+    });
+  };
+  const refreshGrid=root=>{compactScheduleLabels(root);updateOverflowIndicators(root);};
+  refreshGrid(document);
   const grid=document.querySelector('.calendar-grid');
-  if(grid)new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(node=>{if(node.nodeType===1)compactScheduleLabels(node);}))).observe(grid,{childList:true,subtree:true});
+  if(grid){
+    let refreshPending=false;
+    new MutationObserver(()=>{
+      if(refreshPending)return;
+      refreshPending=true;
+      requestAnimationFrame(()=>{refreshPending=false;refreshGrid(grid);});
+    }).observe(grid,{childList:true,subtree:true});
+  }
 
   let preview=null;
   const scheduleTarget=target=>target?.closest?.('.calendar-item,.calendar-band');
