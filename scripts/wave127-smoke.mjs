@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
-const ai=read('src/family-ai.ts'),cal=read('src/google-calendar.ts'),index=read('src/index.ts'),wrangler=read('wrangler.jsonc'),version=read('src/version.ts'),migration=read('migrations/0041_wave127_calendar_watch_channels.sql');
+const ai=read('src/family-ai.ts'),cal=read('src/google-calendar.ts')+read('src/google-calendar-core.ts'),index=read('src/index.ts'),wrangler=read('wrangler.jsonc'),version=read('src/version.ts'),migration=read('migrations/0041_wave127_calendar_watch_channels.sql');
 for(const x of ["pageSize','1000'",'page<2','nextPageToken','supportedGenerationMethods',"includes('generateContent')",'unsuitableModel','freeTierAssumed:false','autoSwitch:false'])assert.ok(ai.includes(x),x);
 assert.ok(!ai.includes('GEMINI_FREE_CANDIDATES'));
 for(const x of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALLBACK','BUILT_IN_DEFAULT',"family_ai_gemini_model",'family_ai_test','FUNCTION_CALLING_UNAVAILABLE','MODEL_NOT_IN_CATALOG'])assert.ok(ai.includes(x),x);

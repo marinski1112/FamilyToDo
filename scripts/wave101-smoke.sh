@@ -2,7 +2,7 @@
 set -euo pipefail
 node scripts/version-contract.mjs
 node <<'JS'
-const fs=require('fs'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),ai=fs.readFileSync('src/family-ai.ts','utf8'),pkg=require('../FamilyToDo/package.json');
+const fs=require('fs'),cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),ai=fs.readFileSync('src/family-ai.ts','utf8'),pkg=require('../FamilyToDo/package.json');
 const has=(s,x)=>{if(!s.includes(x))throw Error('missing '+x)};
 // Linked TASK/EVENT roundtrips update only the Calendar projection. Completion
 // mode/status/assignees/completion rows and task_kind are absent from UPDATE.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';
-const ai=fs.readFileSync('src/family-ai.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),app=fs.readFileSync('src/app.ts','utf8'),wrangler=fs.readFileSync('wrangler.jsonc','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8');
+const ai=fs.readFileSync('src/family-ai.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),app=fs.readFileSync('src/app.ts','utf8'),wrangler=fs.readFileSync('wrangler.jsonc','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),home=fs.readFileSync('src/google-home.ts','utf8');
 assert.ok(ai.includes("new URL('https://generativelanguage.googleapis.com/v1beta/models')"));assert.ok(ai.includes("'x-goog-api-key':env.GEMINI_API_KEY"));assert.ok(index.includes('/api/family-ai/model-catalog'));
 const catalog=ai.slice(ai.indexOf('export async function familyAiModelCatalog'));assert.ok(catalog.includes('listGeminiModels'));assert.ok(catalog.includes('autoSwitch:false'));assert.ok(ai.includes("methods.includes('generateContent')"));
 assert.ok(ai.includes('.slice(0,8)'));for(const x of ['quotaViolations','FREE_TIER_QUOTA_ZERO','RATE_LIMIT_RPD','RATE_LIMIT_RPM','RATE_LIMIT_TPM'])assert.ok(ai.includes(x));assert.ok(!ai.includes('error.message'));

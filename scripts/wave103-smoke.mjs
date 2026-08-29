@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
-const cal=fs.readFileSync('src/google-calendar.ts','utf8');
+const cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 
 assert.match(ai,/GEMINI_MODEL_DEFAULT='gemini-3\.[15]-flash-lite'/);

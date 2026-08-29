@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const calendar=fs.readFileSync('src/google-calendar.ts','utf8');
+const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
 const ci=fs.readFileSync('.github/workflows/ci.yml','utf8');

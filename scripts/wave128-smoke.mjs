@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';
-const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),index=read('src/index.ts'),cal=read('src/google-calendar.ts'),js=read('public/assets/calendar.js'),css=read('public/assets/family.css'),migration=read('migrations/0042_wave128_calendar_digest_private_event.sql');
+const read=p=>fs.readFileSync(p,'utf8'),app=read('src/app.ts'),index=read('src/index.ts'),cal=read('src/google-calendar.ts')+read('src/google-calendar-core.ts'),js=read('public/assets/calendar.js'),css=read('public/assets/family.css'),migration=read('migrations/0042_wave128_calendar_digest_private_event.sql');
 for(const x of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.ok(app.includes(x)&&js.includes(x),x);
 assert.ok(js.includes("new URLSearchParams({edit:")&&!js.includes("href=\"/task/view.php?id='+encodeURIComponent(t.id)+'\""));
 for(const x of ["view==='family'","view==='assigned'","view==='private'","taskVisibilitySql('t')"])assert.ok(app.includes(x),x);

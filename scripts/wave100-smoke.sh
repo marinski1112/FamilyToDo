@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 node <<'JS'
-const fs=require('fs'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),ai=fs.readFileSync('src/family-ai.ts','utf8'),idx=fs.readFileSync('src/index.ts','utf8');
+const fs=require('fs'),cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),ai=fs.readFileSync('src/family-ai.ts','utf8'),idx=fs.readFileSync('src/index.ts','utf8');
 const has=(s,x)=>{if(!s.includes(x))throw Error('missing '+x)};
 for(const x of ['utcNow()','calendarRetryAt','calendarRetryDue','CALENDAR_MAX_RETRIES','retry_count>=?','syncLeases','nextSyncToken','e.status===410','external_etag','calendar.app.created',"visibility_scope||'FAMILY'"])has(cal,x);
 for(const x of ['対象:','期間:','集計方法:','synthetic connectivity test','no user data is included'])has(ai,x);
