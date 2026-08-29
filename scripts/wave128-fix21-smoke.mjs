@@ -22,6 +22,7 @@ assert.ok(google.includes("id=\"calendarEventReset\""),'integration settings mus
 assert.ok(ics.includes("calendar_visible,calendar_color,task_kind")&&ics.includes("e.allDay?1:0,e.color"),'ICS COLOR must continue to map into tasks.calendar_color');
 assert.ok(ics.includes("source_uid")&&ics.includes("eventKey"),'ICS UID identity tracking must remain enabled');
 assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'Calendar row cap must count spanning bands and ordinary rows together');
-assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must stay in the Wave128 fix namespace');
+assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO static namespace');
+assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 
 console.log('wave128 fix21 smoke: EVENT reset, ICS color/UID preservation, Google duplicate guard, and mixed Calendar cap ok');
