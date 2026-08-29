@@ -15,7 +15,7 @@ const checks=[
   ['wave126','npm run check:wave126'],
   ['wave127','npm run check:wave127'],
   ['wave128','npm run check:wave128'],
-  ...[1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
+  ...[1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
   ['version','npm run check:version'],
 ];
 

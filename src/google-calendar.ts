@@ -147,7 +147,21 @@ async function reconcileHintedInbound(env: Env, account: Row, event: any) {
   return true;
 }
 
+async function hintedInboundAlreadyProjected(env: Env, account: Row, event: any) {
+  if (event?.status === 'cancelled') return false;
+  const eventId = String(event?.id || '');
+  const hinted = Number(event?.extendedProperties?.private?.familyTodoTaskId || 0);
+  if (!eventId || !Number.isSafeInteger(hinted) || hinted <= 0) return false;
+  const task = await env.DB.prepare("SELECT * FROM tasks WHERE id=? AND family_id=? AND COALESCE(visibility_scope,'FAMILY')='FAMILY' LIMIT 1")
+    .bind(hinted, account.family_id).first<Row>();
+  if (!task || !sameInboundShape(task, event, String(account.timezone || DEFAULT_FAMILY_TIMEZONE))) return false;
+  const live = await env.DB.prepare('SELECT external_event_id FROM external_calendar_links WHERE family_id=? AND provider=? AND task_id=? AND deleted_at IS NULL LIMIT 1')
+    .bind(account.family_id, PROVIDER, hinted).first<Row>();
+  return Boolean(live?.external_event_id) && String(live!.external_event_id) !== eventId;
+}
+
 async function applyInboundSafely(env: Env, account: Row, event: any) {
+  if (await hintedInboundAlreadyProjected(env, account, event)) return 0;
   await reconcileHintedInbound(env, account, event);
   return applyInbound(env, account, event);
 }
@@ -173,6 +187,19 @@ async function duplicateCandidates(db: D1Database, familyId: number, limit = 50)
         AND upper(COALESCE(d.task_kind,'TASK'))=upper(COALESCE(t.task_kind,'TASK'))
         AND COALESCE(d.visibility_scope,'FAMILY')='FAMILY' AND COALESCE(d.calendar_visible,1)=1 AND d.recurrence_rule IS NULL)
     ORDER BY COALESCE(t.start_at,t.due_at),t.id LIMIT ?`).bind(PROVIDER, familyId, limit).all<Row>();
+}
+
+async function eventResetStats(db: D1Database, familyId: number) {
+  const [events, rules, dependencies] = await Promise.all([
+    db.prepare("SELECT COUNT(*) c FROM tasks WHERE family_id=? AND upper(COALESCE(task_kind,'TASK'))='EVENT'").bind(familyId).first<Row>(),
+    db.prepare("SELECT COUNT(*) c FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT'").bind(familyId).first<Row>(),
+    db.prepare(`SELECT
+      (SELECT COUNT(*) FROM task_assignees x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
+      (SELECT COUNT(*) FROM task_completions x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
+      (SELECT COUNT(*) FROM items x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
+      (SELECT COUNT(*) FROM shopping_items x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT') c`).bind(familyId,familyId,familyId,familyId).first<Row>(),
+  ]);
+  return { event_count:Number(events?.c||0), recurring_rule_count:Number(rules?.c||0), dependency_count:Number(dependencies?.c||0) };
 }
 
 async function syncCalendarAccountPage(env: Env, account: Row) {
@@ -308,6 +335,30 @@ export async function calendarBackfill(request: Request, ctx: AppContext) {
   const action = String(body.action || 'preview');
   const familyId = ctx.member.family_id;
 
+  if (action === 'preview_event_reset') {
+    return json({ok:true,...await eventResetStats(ctx.env.DB,familyId)});
+  }
+
+  if (action === 'reset_event_data') {
+    if (String(body.confirm || '') !== 'RESET_ALL_EVENTS') return json({ok:false,error:'確認文字列が一致しません'},400);
+    const stats = await eventResetStats(ctx.env.DB,familyId);
+    if (stats.dependency_count > 0) return json({ok:false,error:`EVENTに担当・完了・買い物・持ち物の関連データが${stats.dependency_count}件あります。先に関連データを整理してください。`,...stats},409);
+    if (!stats.event_count) return json({ok:true,deleted_events:0,deleted_rules:0,reset_import_entries:0});
+    const eventIds = "SELECT id FROM tasks WHERE family_id=? AND upper(COALESCE(task_kind,'TASK'))='EVENT'";
+    const ruleIds = `SELECT r.id FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT'`;
+    const n = now();
+    const results = await ctx.env.DB.batch([
+      ctx.env.DB.prepare(`DELETE FROM recurrence_occurrences WHERE family_id=? AND recurrence_rule_id IN (${ruleIds})`).bind(familyId,familyId),
+      ctx.env.DB.prepare(`DELETE FROM recurrence_rules WHERE family_id=? AND task_id IN (${eventIds})`).bind(familyId,familyId),
+      ctx.env.DB.prepare(`DELETE FROM external_calendar_links WHERE family_id=? AND task_id IN (${eventIds})`).bind(familyId,familyId),
+      ctx.env.DB.prepare(`DELETE FROM calendar_sync_outbox WHERE family_id=? AND task_id IN (${eventIds})`).bind(familyId,familyId),
+      ctx.env.DB.prepare(`UPDATE calendar_import_entries SET status='ROLLED_BACK',task_id=NULL,recurrence_rule_id=NULL WHERE family_id=? AND source_format='ICS' AND task_id IN (${eventIds})`).bind(familyId,familyId),
+      ctx.env.DB.prepare("DELETE FROM tasks WHERE family_id=? AND upper(COALESCE(task_kind,'TASK'))='EVENT'").bind(familyId),
+      ctx.env.DB.prepare("INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,'CALENDAR_EVENT_RESET','calendar',NULL,?,?)").bind(familyId,ctx.member.id,JSON.stringify(stats),n),
+    ]);
+    return json({ok:true,deleted_events:stats.event_count,deleted_rules:stats.recurring_rule_count,reset_import_entries:Number(results[4]?.meta?.changes||0),next:'新しい同期用カレンダーを作成してからICSを再インポートしてください'});
+  }
+
   if (action === 'diagnose_duplicates') {
     const rows = (await duplicateCandidates(ctx.env.DB, familyId, 50)).results;
     const groups = new Set(rows.map(row => [String(row.title || ''),String(row.start_at || ''),String(row.end_at || ''),String(row.all_day || 0)].join('\u001f')));
@@ -326,13 +377,13 @@ export async function calendarBackfill(request: Request, ctx: AppContext) {
         const event = await googleApi(`/calendars/${encodeURIComponent(String(account.calendar_id))}/events/${encodeURIComponent(String(row.external_event_id))}`, token);
         checked++;
         if (await reconcileHintedInbound(ctx.env, account, event)) repaired++;
-        await applyInbound(ctx.env, account, event);
+        await applyInboundSafely(ctx.env, account, event);
       } catch (error) {
         if (!(error instanceof GoogleError && (error.status===404 || error.status===410))) throw error;
       }
     }
     const remaining = (await duplicateCandidates(ctx.env.DB, familyId, 50)).results.length;
-    return json({ok:true,checked,repaired,remaining_candidate_rows:remaining,more:remaining>0&&candidates.length===DUPLICATE_REPAIR_LIMIT});
+    return json({ok:true,checked,repaired,remaining_candidate_rows:remaining,more:repaired>0&&remaining>0&&candidates.length===DUPLICATE_REPAIR_LIMIT});
   }
 
   if (action === 'diagnose_projection' || action === 'rebind_projection' || String(body.scope || 'normal') !== 'event_history') {
@@ -362,7 +413,7 @@ export async function integrationsSettings(request: Request, ctx: AppContext) {
   const type = response.headers.get('content-type') || '';
   if (!type.includes('text/html')) return response;
   let source = await response.text();
-  const enhancement = `<style>.calendar-backfill-limit{display:none!important}.calendar-duplicate-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}</style><script>(()=>{const clean=()=>document.querySelectorAll('.calendar-backfill-limit').forEach(el=>el.remove());clean();new MutationObserver(clean).observe(document.body,{childList:true,subtree:true});const history=document.getElementById('calendarHistoryBackfill');if(history&&!document.getElementById('calendarBatchNote')){const note=document.createElement('div');note.id='calendarBatchNote';note.className='small';note.textContent='全履歴EVENTは全件キュー登録できます。Google APIへの送受信はWorker上限を避けるため小分けで処理します。';history.insertAdjacentElement('afterend',note);const tools=document.createElement('div');tools.className='calendar-duplicate-tools';tools.innerHTML='<button type="button" class="btn gray" id="calendarDuplicateDiagnose">重複を診断</button><button type="button" class="btn gray" id="calendarDuplicateRepair">安全な重複を修復</button>';note.insertAdjacentElement('afterend',tools);const result=document.getElementById('calendarResult');const call=async action=>{const r=await fetch('/api/google-calendar/backfill',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,action})});const d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));return d};tools.querySelector('#calendarDuplicateDiagnose').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const d=await call('diagnose_duplicates');result.textContent='重複候補 '+d.duplicate_groups+'組 / 候補行 '+d.candidate_rows+'件 / Googleリンク付き '+d.linked_rows+'件';}catch(error){result.textContent='重複診断失敗: '+(error instanceof Error?error.message:String(error));}finally{b.disabled=false}});tools.querySelector('#calendarDuplicateRepair').addEventListener('click',async e=>{if(!confirm('GoogleのfamilyTodoTaskIdで安全に特定できる重複だけ修復します。続行しますか？'))return;const b=e.currentTarget;b.disabled=true;try{const d=await call('repair_duplicates');result.textContent='重複修復: 確認 '+d.checked+'件 / 修復 '+d.repaired+'件 / 残候補 '+d.remaining_candidate_rows+'件'+(d.more?' / 続きあり':'' );}catch(error){result.textContent='重複修復失敗: '+(error instanceof Error?error.message:String(error));}finally{b.disabled=false}})}const old=document.getElementById('calendarSync');if(old){const button=old.cloneNode(true);old.replaceWith(button);button.addEventListener('click',async()=>{const out=document.getElementById('calendarResult');button.disabled=true;try{const r=await fetch('/api/google-calendar/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf})});const d=await r.json().catch(()=>({ok:false,error:'応答を解析できません'}));if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));out.textContent=d.unchanged?'変更はありません':('送信 '+d.sent+'件 / 受信 '+d.received+'件 / エラー '+d.errors+'件'+(d.more?' / 続きあり（もう一度押してください）':''));}catch(error){out.textContent='同期失敗: '+(error instanceof Error?error.message:String(error));}finally{button.disabled=false}})}})();</script>`;
+  const enhancement = `<style>.calendar-backfill-limit{display:none!important}.calendar-duplicate-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}</style><script>(()=>{const clean=()=>document.querySelectorAll('.calendar-backfill-limit').forEach(el=>el.remove());clean();new MutationObserver(clean).observe(document.body,{childList:true,subtree:true});const history=document.getElementById('calendarHistoryBackfill');if(history&&!document.getElementById('calendarBatchNote')){const note=document.createElement('div');note.id='calendarBatchNote';note.className='small';note.textContent='全履歴EVENTは全件キュー登録できます。Google APIへの送受信はWorker上限を避けるため小分けで処理します。';history.insertAdjacentElement('afterend',note);const tools=document.createElement('div');tools.className='calendar-duplicate-tools';tools.innerHTML='<button type="button" class="btn gray" id="calendarDuplicateDiagnose">重複を診断</button><button type="button" class="btn gray" id="calendarDuplicateRepair">安全な重複を修復</button><button type="button" class="btn danger" id="calendarEventReset">EVENTを全クリア</button>';note.insertAdjacentElement('afterend',tools);const result=document.getElementById('calendarResult');const call=async(action,extra={})=>{const r=await fetch('/api/google-calendar/backfill',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,action,...extra})});const d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));return d};tools.querySelector('#calendarDuplicateDiagnose').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const d=await call('diagnose_duplicates');result.textContent='重複候補 '+d.duplicate_groups+'組 / 候補行 '+d.candidate_rows+'件 / Googleリンク付き '+d.linked_rows+'件';}catch(error){result.textContent='重複診断失敗: '+(error instanceof Error?error.message:String(error));}finally{b.disabled=false}});tools.querySelector('#calendarDuplicateRepair').addEventListener('click',async e=>{if(!confirm('GoogleのfamilyTodoTaskIdで安全に特定できる重複だけ修復します。続行しますか？'))return;const b=e.currentTarget;b.disabled=true;try{const d=await call('repair_duplicates');result.textContent='重複修復: 確認 '+d.checked+'件 / 修復 '+d.repaired+'件 / 残候補 '+d.remaining_candidate_rows+'件'+(d.more?' / 続きあり':'' );}catch(error){result.textContent='重複修復失敗: '+(error instanceof Error?error.message:String(error));}finally{b.disabled=false}});tools.querySelector('#calendarEventReset').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;try{const p=await call('preview_event_reset');if(p.dependency_count){result.textContent='EVENT全クリア不可: 関連データ '+p.dependency_count+'件があります。';return}if(!confirm('Family TODOのEVENT '+p.event_count+'件'+(p.recurring_rule_count?'（定期rule '+p.recurring_rule_count+'件を含む）':'')+'を全削除します。TASKは削除しません。続行しますか？'))return;const d=await call('reset_event_data',{confirm:'RESET_ALL_EVENTS'});result.textContent='EVENT全クリア完了: '+d.deleted_events+'件 / 定期rule '+d.deleted_rules+'件。次に「新しい同期用カレンダーを作成」→ ICS再インポートの順で進めてください。';}catch(error){result.textContent='EVENT全クリア失敗: '+(error instanceof Error?error.message:String(error));}finally{b.disabled=false}})}const old=document.getElementById('calendarSync');if(old){const button=old.cloneNode(true);old.replaceWith(button);button.addEventListener('click',async()=>{const out=document.getElementById('calendarResult');button.disabled=true;try{const r=await fetch('/api/google-calendar/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf})});const d=await r.json().catch(()=>({ok:false,error:'応答を解析できません'}));if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));out.textContent=d.unchanged?'変更はありません':('送信 '+d.sent+'件 / 受信 '+d.received+'件 / エラー '+d.errors+'件'+(d.more?' / 続きあり（もう一度押してください）':''));}catch(error){out.textContent='同期失敗: '+(error instanceof Error?error.message:String(error));}finally{button.disabled=false}})}})();</script>`;
   source = source.replace('</body>', `${enhancement}</body>`);
   const headers = new Headers(response.headers);
   headers.delete('content-length');
