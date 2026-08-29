@@ -1,6 +1,6 @@
 import {spawnSync} from 'node:child_process';
 
-const groups=[
+const checks=[
   ['legacy-domain','npm run check:domain-smoke'],
   ['wave117','npm run check:wave117'],
   ['wave118','npm run check:wave118'],
@@ -15,20 +15,29 @@ const groups=[
   ['wave126','npm run check:wave126'],
   ['wave127','npm run check:wave127'],
   ['wave128','npm run check:wave128'],
-  ['wave128-fixes',[
-    1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20
-  ].map(n=>`node scripts/wave128-fix${n}-smoke.mjs`).join(' && ')],
+  ...[1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
   ['version','npm run check:version'],
 ];
 
 const failures=[];
-for(const [name,command] of groups){
+const started=Date.now();
+for(const [name,command] of checks){
+  const checkStarted=Date.now();
   console.log(`\n=== regression:${name} ===`);
   const result=spawnSync(command,{shell:true,stdio:'inherit'});
-  if(result.status!==0)failures.push(name);
+  const seconds=((Date.now()-checkStarted)/1000).toFixed(1);
+  if(result.status!==0){
+    failures.push(name);
+    console.error(`--- regression:${name} FAILED (${seconds}s) ---`);
+  }else{
+    console.log(`--- regression:${name} ok (${seconds}s) ---`);
+  }
 }
+
+const total=((Date.now()-started)/1000).toFixed(1);
 if(failures.length){
-  console.error(`\nRegression failures: ${failures.join(', ')}`);
+  console.error(`\nRegression failures (${failures.length}): ${failures.join(', ')}`);
+  console.error(`Regression suite completed in ${total}s`);
   process.exit(1);
 }
-console.log('\nRegression suite: all groups passed');
+console.log(`\nRegression suite: all ${checks.length} checks passed in ${total}s`);
