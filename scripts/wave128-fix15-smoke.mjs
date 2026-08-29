@@ -10,7 +10,7 @@ assert.match(mobile,/calendar-filter-toggle svg/,'filter control must be icon-si
 assert.ok(mobile.includes("setAttribute('aria-label','表示フィルター')"),'filter icon must retain an accessible label');
 assert.ok(mobile.includes('calendar-overflow-hidden'),'normal month view must support an explicit hidden-row marker');
 assert.ok(mobile.includes('bandsForCell')&&mobile.includes('singleSlots'),'month row cap must count spanning bands and ordinary rows together by date');
-assert.ok(mobile.includes("band.classList.toggle('calendar-overflow-hidden',bandLane(band)>2)"),'band lanes beyond the visible two-row budget must be hidden');
+assert.ok(mobile.includes('setOverflowHidden(band,bandLane(band)>2)'),'band lanes beyond the visible two-row budget must be hidden');
 assert.match(mobile,/text-overflow:clip!important/,'calendar labels must clip rather than render ellipsis');
 assert.ok(mobile.includes("replace(/^\\s*📌\\s*/,''"),'event pin prefix must be removed from month labels');
 assert.match(mobile,/calendar-press-popover/,'press preview must remain available as a temporary floating view');

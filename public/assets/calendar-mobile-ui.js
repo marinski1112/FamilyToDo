@@ -87,7 +87,7 @@ try{
     });
     root.querySelectorAll('.calendar-cell[data-date]').forEach(cell=>{
       const date=String(cell.dataset.date||''),rows=Array.isArray(detailData[date])?detailData[date]:[];
-      const singles=rows.filter(row=>String(row?.segment||'single')==='single');
+      const singles=rows.filter(row=>Number(row?.spanDays||1)<=1);
       const els=[...cell.querySelectorAll('.calendar-items > .calendar-item:not(.item)')];
       els.forEach((el,index)=>{const color=safeHex(singles[index]?.calendar_color);if(color)el.style.background=color;});
     });
@@ -131,18 +131,23 @@ try{
       return parts.length===2&&Number.isFinite(parts[0])&&Number.isFinite(parts[1])&&col>=parts[0]&&col<parts[1];
     }).sort((a,b)=>bandLane(a)-bandLane(b));
   };
-  const singlesForCell=cell=>[...cell.querySelectorAll('.calendar-items > .calendar-item')];
+  const singlesForCell=cell=>[...cell.querySelectorAll('.calendar-items > .calendar-item:not(.item)')];
   const schedulesForCell=cell=>[...bandsForCell(cell),...singlesForCell(cell)];
   const cellAtPoint=point=>{
     if(!point)return null;
     const x=Number(point.clientX),y=Number(point.clientY);if(!Number.isFinite(x)||!Number.isFinite(y))return null;
     return [...document.querySelectorAll('.calendar-cell')].find(cell=>{const r=cell.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;})||null;
   };
+  const setOverflowHidden=(row,hidden)=>{
+    row.classList.toggle('calendar-overflow-hidden',hidden);
+    if(hidden)row.style.setProperty('display','none','important');
+    else row.style.removeProperty('display');
+  };
 
   const updateOverflowIndicators=root=>{
     if(!root?.querySelectorAll)return;
     const scope=root.matches?.('.calendar-grid')?root:(root.querySelector?.('.calendar-grid')||root);
-    scope.querySelectorAll?.('.calendar-week-bands .calendar-band').forEach(band=>band.classList.toggle('calendar-overflow-hidden',bandLane(band)>2));
+    scope.querySelectorAll?.('.calendar-week-bands .calendar-band').forEach(band=>setOverflowHidden(band,bandLane(band)>2));
     const cells=[];
     if(root.matches?.('.calendar-cell'))cells.push(root);
     root.querySelectorAll('.calendar-cell').forEach(cell=>cells.push(cell));
@@ -152,7 +157,7 @@ try{
       const hiddenBands=Math.max(0,bands.length-visibleBands);
       const singles=singlesForCell(cell);
       const singleSlots=Math.max(0,2-Math.min(2,visibleBands));
-      singles.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=singleSlots));
+      singles.forEach((row,index)=>setOverflowHidden(row,index>=singleSlots));
       const hidden=hiddenBands+Math.max(0,singles.length-singleSlots);
       const host=cell.querySelector('.calendar-items')||cell;
       let indicator=cell.querySelector('.calendar-overflow-indicator');
