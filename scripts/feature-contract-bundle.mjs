@@ -2,15 +2,15 @@ import {spawnSync} from 'node:child_process';
 
 const groups={
   'calendar-imports':[
-    ['calendar-layout',['node','scripts/wave123-smoke.mjs']],
+    ['calendar-presentation',['node','scripts/calendar-presentation-contract.mjs']],
     ['calendar-current',['node','scripts/wave128-smoke.mjs']],
-    ['calendar-presentation',['node','scripts/wave128-fix23-smoke.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
-    ['event-reset-import',['node','scripts/wave128-fix21-smoke.mjs']],
+    ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
   ],
   'google-integrations':[
     ['google-home',['node','scripts/wave125-smoke.mjs']],
+    ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-credentials',['node','scripts/wave126-smoke.mjs']],
     ['ai-model-watch',['node','scripts/wave127-smoke.mjs']],
     ['calendar-delete-idempotency',['node','scripts/wave128-fix13-smoke.mjs']],
