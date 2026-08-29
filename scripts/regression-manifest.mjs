@@ -4,7 +4,7 @@ export const activeRegressionGroups=[
     checks:[
       ['current-contracts','node scripts/core-contract-smoke.mjs'],
       ['regression-structure','node scripts/regression-structure-smoke.mjs'],
-      ['form-audit','npm run check:wave123-form-audit'],
+      ['form-audit','node scripts/form-control-contract.mjs'],
     ],
   },
   {
