@@ -12,8 +12,10 @@
       .message-actions .convert-shopping{color:#fff!important}
       .message-actions .convert-shopping *{color:inherit!important}
       .calendar-item.event-single:not([style*="background"]){background:#16a34a!important;color:#fff!important}
-      .calendar-projection-safety{margin:10px 0;padding:10px 12px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81;font-size:12px;line-height:1.5}
-      .calendar-projection-safety strong{display:block;margin-bottom:3px}
+      .calendar-projection-safety,.calendar-projection-status,.calendar-backfill-limit{margin:10px 0;padding:10px 12px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81;font-size:12px;line-height:1.5}
+      .calendar-projection-safety strong,.calendar-projection-status strong,.calendar-backfill-limit strong{display:block;margin-bottom:3px}
+      .calendar-projection-status.is-warning,.calendar-backfill-limit{border-color:#fbbf24;background:#fffbeb;color:#78350f}
+      .calendar-projection-status.is-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
       @media(max-width:340px){.family-log-quick-grid,.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
       @media(max-width:600px){
         .day-modal .modal-top{display:grid!important;grid-template-columns:40px minmax(0,1fr) 40px 40px!important;grid-template-areas:'prev title next close' '. reorder reorder .'!important;gap:8px!important;align-items:center!important;width:100%!important;min-width:0!important}
@@ -97,11 +99,35 @@
 
     if(location.pathname==='/app/settings_integrations.php'){
       const historyButton=document.getElementById('calendarHistoryBackfill');
+      const calendarCardEl=historyButton?.closest('.card');
       if(historyButton&&!document.querySelector('.calendar-projection-safety')){
         const note=document.createElement('div');
         note.className='calendar-projection-safety';
         note.innerHTML='<strong>Google Calendarを整理するときの安全手順</strong>現在Family TODOと連携中の「Family TODO」カレンダーは削除しないでください。先に「全履歴の予定をGoogleへ同期」でFamily TODO由来の予定を確認し、その後、旧ICSを直接取り込んだ別サブカレンダーだけを削除してください。';
         historyButton.parentElement?.insertBefore(note,historyButton);
+      }
+      if(calendarCardEl&&!document.querySelector('.calendar-projection-status')){
+        const detailText=Array.from(calendarCardEl.querySelectorAll('details')).map(el=>el.textContent||'').join(' ');
+        const pending=Number((detailText.match(/PENDING件数:\s*(\d+)/)||[])[1]||0);
+        const errors=Number((detailText.match(/ERROR件数:\s*(\d+)/)||[])[1]||0);
+        const status=document.createElement('div');status.className='calendar-projection-status';
+        if(errors>0){status.classList.add('is-error');status.innerHTML=`<strong>Google Calendar同期: 要確認</strong>ERRORが ${errors}件あります。カレンダー削除や再連携は行わず、先に「再試行」で解消してください。`;}
+        else if(pending>0){status.classList.add('is-warning');status.innerHTML=`<strong>Google Calendar同期: 処理待ち</strong>PENDINGが ${pending}件あります。同期完了後にGoogle Calendar側を確認してください。`;}
+        else{status.innerHTML='<strong>Google Calendar同期キュー: 正常</strong>PENDING / ERROR は0件です。なお「linked件数」にはTASKとEVENTの両方が含まれるため、「対象EVENT件数」との単純一致だけではprojection完全性を判定しません。';}
+        const safety=document.querySelector('.calendar-projection-safety');(safety||historyButton).insertAdjacentElement('afterend',status);
+      }
+      const result=document.getElementById('calendarResult');
+      if(result){
+        const updateLimitWarning=()=>{
+          const count=Number((result.textContent||'').match(/同期対象\s+(\d+)件/)?.[1]||0);
+          let warning=document.querySelector('.calendar-backfill-limit');
+          if(count>=1000){
+            if(!warning){warning=document.createElement('div');warning.className='calendar-backfill-limit';result.insertAdjacentElement('afterend',warning);}
+            warning.innerHTML='<strong>全履歴同期の件数上限を確認してください</strong>同期対象が1000件に達しています。現在のbackfillは1回1000件上限のため、1000件を超える履歴がある場合は全件を一度に保証できません。旧ICSカレンダーを削除する前に追加対応が必要です。';
+          }else warning?.remove();
+        };
+        new MutationObserver(updateLimitWarning).observe(result,{childList:true,characterData:true,subtree:true});
+        updateLimitWarning();
       }
     }
   }
