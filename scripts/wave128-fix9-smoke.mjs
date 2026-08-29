@@ -12,7 +12,8 @@ assert.match(pwa,/classList\.contains\('gray'\)/,'gray buttons must be excluded'
 assert.match(pwa,/classList\.contains\('secondary'\)/,'secondary buttons must be excluded');
 assert.match(pwa,/classList\.contains\('danger'\)/,'danger buttons must be excluded');
 assert.match(pwa,/MutationObserver/,'dynamically inserted controls must also be checked');
-assert.match(sw,/familytodo-static-wave128-fix9/,'static cache must rotate for fix9');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'static cache must remain on the Wave128 safe-fix namespace');
+assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the pre-Wave128 namespace');
 assert.match(ci,/node scripts\/wave128-fix9-smoke\.mjs/,'fix9 smoke must run in CI');
 
 console.log('wave128 fix9 smoke: computed interactive contrast guard ok');
