@@ -12,10 +12,11 @@
       .message-actions .convert-shopping{color:#fff!important}
       .message-actions .convert-shopping *{color:inherit!important}
       .calendar-item.event-single:not([style*="background"]){background:#16a34a!important;color:#fff!important}
-      .calendar-projection-safety,.calendar-projection-status,.calendar-backfill-limit{margin:10px 0;padding:10px 12px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81;font-size:12px;line-height:1.5}
-      .calendar-projection-safety strong,.calendar-projection-status strong,.calendar-backfill-limit strong{display:block;margin-bottom:3px}
-      .calendar-projection-status.is-warning,.calendar-backfill-limit{border-color:#fbbf24;background:#fffbeb;color:#78350f}
-      .calendar-projection-status.is-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+      .calendar-projection-safety,.calendar-projection-status,.calendar-backfill-limit,.calendar-rebind-diagnostic{margin:10px 0;padding:10px 12px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81;font-size:12px;line-height:1.5}
+      .calendar-projection-safety strong,.calendar-projection-status strong,.calendar-backfill-limit strong,.calendar-rebind-diagnostic strong{display:block;margin-bottom:3px}
+      .calendar-projection-status.is-warning,.calendar-backfill-limit,.calendar-rebind-diagnostic.is-warning{border-color:#fbbf24;background:#fffbeb;color:#78350f}
+      .calendar-projection-status.is-error,.calendar-rebind-diagnostic.is-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+      .calendar-rebind-actions{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
       .bottom-nav .nav-inner>a{white-space:nowrap!important;overflow-wrap:normal!important;word-break:keep-all!important;text-align:center!important}
       .family-log-management-head{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;width:100%!important;min-width:0!important}
       .family-log-management-head>:last-child{position:static!important;inset:auto!important;transform:none!important;margin:0!important;justify-self:end!important;align-self:center!important;max-width:100%!important}
@@ -77,7 +78,7 @@
     const familyPayload=document.getElementById('familyLogPayload');
     let familyData={};
     try{familyData=familyPayload?JSON.parse(familyPayload.textContent||'{}'):{};}catch{}
-    const csrf=String(familyData.csrf||'');
+    const familyCsrf=String(familyData.csrf||'');
     document.querySelectorAll('.family-log-quick-action').forEach(original=>{
       if(original.dataset.wave128FlashFix==='1')return;
       const button=original.cloneNode(true);
@@ -88,7 +89,7 @@
         if(button.disabled)return;
         button.disabled=true;button.setAttribute('aria-busy','true');
         try{
-          const response=await fetch(location.pathname,{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},credentials:'same-origin',body:JSON.stringify({csrf,action:'execute_quick_action',quick_action_id:Number(button.dataset.quickActionId||0)})});
+          const response=await fetch(location.pathname,{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},credentials:'same-origin',body:JSON.stringify({csrf:familyCsrf,action:'execute_quick_action',quick_action_id:Number(button.dataset.quickActionId||0)})});
           const result=await response.json().catch(()=>({}));
           if(!response.ok||result.ok===false)throw new Error(result.error||`HTTP ${response.status}`);
           const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),900);
@@ -152,10 +153,30 @@
         const pending=Number((detailText.match(/PENDING件数:\s*(\d+)/)||[])[1]||0);
         const errors=Number((detailText.match(/ERROR件数:\s*(\d+)/)||[])[1]||0);
         const status=document.createElement('div');status.className='calendar-projection-status';
-        if(errors>0){status.classList.add('is-error');status.innerHTML=`<strong>Google Calendar同期: 要確認</strong>ERRORが ${errors}件あります。カレンダー削除や再連携は行わず、先に「再試行」で解消してください。`;}
+        if(errors>0){status.classList.add('is-error');status.innerHTML=`<strong>Google Calendar同期: 要確認</strong>ERRORが ${errors}件あります。まず「同期先を診断」でGoogle側サブカレンダーの状態を確認してください。`;}
         else if(pending>0){status.classList.add('is-warning');status.innerHTML=`<strong>Google Calendar同期: 処理待ち</strong>PENDINGが ${pending}件あります。同期完了後にGoogle Calendar側を確認してください。`;}
         else{status.innerHTML=`<strong>Google Calendar同期キュー: 正常</strong>PENDING / ERROR は0件です。全履歴FAMILY EVENTは ${eventTargets}件、active link総数は ${linkedTotal}件です。linked件数にはTASKとEVENTの両方が含まれるため、単純一致だけではprojection完全性を判定しません。`;}
         const safety=document.querySelector('.calendar-projection-safety');(safety||historyButton).insertAdjacentElement('afterend',status);
+      }
+      if(historyButton&&calendarCardEl&&!document.getElementById('calendarProjectionDiagnose')){
+        const actions=document.createElement('div');actions.className='calendar-rebind-actions';
+        const diagnose=document.createElement('button');diagnose.type='button';diagnose.className='btn gray';diagnose.id='calendarProjectionDiagnose';diagnose.textContent='同期先を診断';
+        const rebuild=document.createElement('button');rebuild.type='button';rebuild.className='btn danger';rebuild.id='calendarProjectionRebind';rebuild.textContent='新しい同期用カレンダーを作成';rebuild.hidden=true;
+        const diagnostic=document.createElement('div');diagnostic.className='calendar-rebind-diagnostic';diagnostic.id='calendarProjectionDiagnostic';diagnostic.hidden=true;
+        actions.append(diagnose,rebuild);historyButton.parentElement?.insertBefore(actions,historyButton);actions.insertAdjacentElement('afterend',diagnostic);
+        const integrationCsrf=typeof csrf==='string'?csrf:'';
+        const requestProjection=async body=>{const response=await fetch('/api/google-calendar/backfill',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:JSON.stringify({csrf:integrationCsrf,...body})});const data=await response.json().catch(()=>({ok:false,error:`HTTP ${response.status}`}));if(!response.ok||data.ok===false)throw new Error(data.error||`HTTP ${response.status}`);return data;};
+        const renderDiagnostic=data=>{
+          diagnostic.hidden=false;diagnostic.className='calendar-rebind-diagnostic';rebuild.hidden=true;
+          const reasons=(data.error_samples||[]).map(item=>`${item.operation||'SYNC'}: ${item.reason||'ERROR'} (retry ${item.retry_count||0})`).join(' / ');
+          if(data.calendar_status==='OK'&&Number(data.stale_link_count||0)===0){diagnostic.innerHTML=`<strong>同期先サブカレンダー: 正常</strong>Google側の同期用カレンダーへ到達できます。ERROR ${data.error_count||0}件${reasons?' / '+reasons:''}`;return;}
+          diagnostic.classList.add('is-error');
+          if(data.calendar_status==='MISSING_CALENDAR'){diagnostic.innerHTML=`<strong>同期先サブカレンダーが見つかりません</strong>現在保存されている同期先はGoogle側に存在しません。これは現在のERROR原因と整合します。古いevent IDを新しいカレンダーへ流用せず、projectionを安全に再bindできます。${reasons?' 失敗: '+reasons:''}`;rebuild.hidden=false;return;}
+          if(Number(data.stale_link_count||0)>0){diagnostic.innerHTML=`<strong>同期先と既存linkが不一致です</strong>${data.stale_link_count}件のactive linkが現在のサブカレンダーと一致しません。安全な再bindが必要です。${reasons?' 失敗: '+reasons:''}`;rebuild.hidden=false;return;}
+          diagnostic.classList.add('is-warning');diagnostic.innerHTML=`<strong>同期先診断: ${data.calendar_status||'要確認'}</strong>${reasons||'Google Calendarの認証または権限を確認してください。'}`;
+        };
+        diagnose.addEventListener('click',async()=>{diagnose.disabled=true;diagnostic.hidden=false;diagnostic.textContent='診断中…';try{renderDiagnostic(await requestProjection({action:'diagnose_projection'}));}catch(error){diagnostic.className='calendar-rebind-diagnostic is-error';diagnostic.textContent=error instanceof Error?error.message:String(error);}finally{diagnose.disabled=false;}});
+        rebuild.addEventListener('click',async()=>{if(!confirm('新しい「Family TODO」同期用サブカレンダーを作成し、古いprojection link / outboxを新しい同期先用に切り替えます。Family TODO本体のタスク・予定は削除しません。続行しますか？'))return;rebuild.disabled=true;try{const data=await requestProjection({action:'rebind_projection',confirm:'CREATE_NEW_CALENDAR'});diagnostic.className='calendar-rebind-diagnostic';diagnostic.hidden=false;diagnostic.innerHTML=`<strong>新しい同期先を作成しました</strong>旧link ${data.detached_links||0}件をdetachし、旧outbox ${data.cleared_outbox||0}件をクリアしました。次に「全履歴の予定をGoogleへ同期」を実行し、その後「既存の予定を同期」で現在のTASKも投影してください。`;rebuild.hidden=true;}catch(error){diagnostic.className='calendar-rebind-diagnostic is-error';diagnostic.hidden=false;diagnostic.textContent=error instanceof Error?error.message:String(error);}finally{rebuild.disabled=false;}});
       }
       const result=document.getElementById('calendarResult');
       const updateLimitWarning=()=>{
