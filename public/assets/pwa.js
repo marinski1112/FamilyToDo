@@ -17,6 +17,8 @@
       .calendar-projection-status.is-warning,.calendar-backfill-limit{border-color:#fbbf24;background:#fffbeb;color:#78350f}
       .calendar-projection-status.is-error{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
       .bottom-nav .nav-inner>a{white-space:nowrap!important;overflow-wrap:normal!important;word-break:keep-all!important;text-align:center!important}
+      .family-log-management-head{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;width:100%!important;min-width:0!important}
+      .family-log-management-head>:last-child{position:static!important;inset:auto!important;transform:none!important;margin:0!important;justify-self:end!important;align-self:center!important;max-width:100%!important}
       .wave128-auto-contrast{color:#fff!important}.wave128-auto-contrast *{color:inherit!important}
       @media(max-width:340px){.family-log-quick-grid,.family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
       @media(max-width:600px){
