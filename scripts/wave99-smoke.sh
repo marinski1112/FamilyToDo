@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 node <<'JS'
-const fs=require('fs'),app=fs.readFileSync('src/app.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8'),idx=fs.readFileSync('src/index.ts','utf8');
+const fs=require('fs'),app=fs.readFileSync('src/app.ts','utf8'),cal=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),idx=fs.readFileSync('src/index.ts','utf8');
 const has=(s,x)=>{if(!s.includes(x))throw Error('missing '+x)};
 has(app,'Promise.allSettled');has(app,'⚠️ この診断を実行できませんでした');has(app,'/api/settings/diagnostics-detail?issue=');has(app,'初期ロード ${DIAGNOSTIC_DEFINITIONS.length} query');
 const diagnostic=app.slice(app.indexOf('const DIAGNOSTIC_DEFINITIONS'),app.indexOf('export async function inviteCreate'));
