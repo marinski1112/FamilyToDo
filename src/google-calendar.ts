@@ -1,141 +1,256 @@
-import { html, json, redirect } from './response';
-import { layout, type AppContext } from './app';
-import { DEFAULT_FAMILY_TIMEZONE, formatStoredUtcForFamily, addWallClockMinutes, parseImportDateTime, utcNow } from './timezone';
-import { lineTokenExchangeDiagnostic } from './line-oauth-diagnostics';
-import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements } from './lifecycle';
-import { familyAiProvider, resolveFamilyGeminiModel, workersAiModel } from './family-ai';
-type Row=Record<string,unknown>; const PROVIDER='GOOGLE_CALENDAR';
-export const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.app.created';
-const now=()=>utcNow();
-export const CALENDAR_MAX_RETRIES=8;
-export function calendarRetryAt(retryCount:number,at=new Date()){return utcNow(new Date(at.getTime()+Math.min(86400000,60000*2**Math.max(1,retryCount))));}
-export function calendarRetryDue(status:unknown,retryCount:unknown,nextRetryAt:unknown,at=new Date()){const count=Number(retryCount||0);if(count>=CALENDAR_MAX_RETRIES)return false;if(String(status)==='PENDING'&&count===0)return true;return String(nextRetryAt||'')<=utcNow(at);}
-const syncLeases=new Map<number,Promise<number>>();
-const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-const b64=(b:ArrayBuffer|Uint8Array)=>btoa(String.fromCharCode(...new Uint8Array(b instanceof ArrayBuffer?b:b.buffer)));
-const unb64=(s:string)=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-async function key(secret:string){const raw=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(secret));return crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt','decrypt']);}
-export async function encryptRefreshToken(token:string,secret:string,version='v1'){const iv=crypto.getRandomValues(new Uint8Array(12)),cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(secret),new TextEncoder().encode(token));return `${version}.${b64(iv)}.${b64(cipher)}`;}
-export async function decryptRefreshToken(value:string,secret:string){const [version,iv,cipher]=value.split('.');if(!version||!iv||!cipher)throw new Error('invalid ciphertext');return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(iv)},await key(secret),unb64(cipher)));}
-async function signState(payload:string,secret:string){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return b64(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(payload))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
-async function state(familyId:number,memberId:number,secret:string){const p=btoa(JSON.stringify({familyId,memberId,exp:Date.now()+600000,nonce:crypto.randomUUID()})).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');return `${p}.${await signState(p,secret)}`;}
-async function verifyState(v:string,secret:string){const [p,s]=v.split('.');if(!p||!s||s!==await signState(p,secret))throw new Error('invalid state');const x=JSON.parse(atob(p.replaceAll('-','+').replaceAll('_','/'))) as {familyId:number;memberId:number;exp:number};if(!Number.isSafeInteger(x.familyId)||!Number.isSafeInteger(x.memberId)||x.exp<Date.now())throw new Error('expired state');return x;}
-export const googleCalendarConfiguration=(e:Env)=>({clientId:Boolean(e.GOOGLE_CALENDAR_CLIENT_ID),clientSecret:Boolean(e.GOOGLE_CALENDAR_CLIENT_SECRET),redirectUri:Boolean(e.GOOGLE_CALENDAR_REDIRECT_URI),tokenKey:Boolean(e.GOOGLE_CALENDAR_TOKEN_KEY)});
-const configured=(e:Env)=>Object.values(googleCalendarConfiguration(e)).every(Boolean);
-export async function googleCalendarAuthorize(_r:Request,ctx:AppContext){if(!ctx.member)return redirect('/login.php');const role=String(ctx.member.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return redirect('/app/settings_integrations.php?calendar=forbidden');if(!configured(ctx.env))return redirect('/app/settings_integrations.php?calendar=not-configured');const s=await state(ctx.member.family_id,ctx.member.id,ctx.env.APP_SECRET);const u=new URL('https://accounts.google.com/o/oauth2/v2/auth');u.searchParams.set('client_id',ctx.env.GOOGLE_CALENDAR_CLIENT_ID!);u.searchParams.set('redirect_uri',ctx.env.GOOGLE_CALENDAR_REDIRECT_URI!);u.searchParams.set('response_type','code');u.searchParams.set('scope',GOOGLE_CALENDAR_SCOPE);u.searchParams.set('access_type','offline');u.searchParams.set('prompt','consent');u.searchParams.set('include_granted_scopes','true');u.searchParams.set('state',s);return redirect(u.toString());}
-class GoogleError extends Error{constructor(public status:number){super(`Google Calendar HTTP ${status}`);}}
-async function api(path:string,access:string,init?:RequestInit){const r=await fetch(`https://www.googleapis.com/calendar/v3${path}`,{...init,headers:{authorization:`Bearer ${access}`,'content-type':'application/json',...(init?.headers||{})}});if(!r.ok)throw new GoogleError(r.status);return r.status===204?{}:r.json();}
-export async function googleCalendarCallback(request:Request,env:Env){try{if(!configured(env))throw new Error('not configured');const u=new URL(request.url),s=await verifyState(u.searchParams.get('state')||'',env.APP_SECRET),code=u.searchParams.get('code');if(!code||u.searchParams.get('error'))throw new Error('missing code');const member=await env.DB.prepare('SELECT m.id,m.family_id,m.active,m.deleted_at,f.timezone FROM members m JOIN families f ON f.id=m.family_id WHERE m.id=? AND m.family_id=?').bind(s.memberId,s.familyId).first<Row>();if(!member||Number(member.active)!==1||member.deleted_at)throw new Error('member changed');const tr=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({code,client_id:env.GOOGLE_CALENDAR_CLIENT_ID!,client_secret:env.GOOGLE_CALENDAR_CLIENT_SECRET!,redirect_uri:env.GOOGLE_CALENDAR_REDIRECT_URI!,grant_type:'authorization_code'})});if(!tr.ok)throw new Error('token exchange');const t=await tr.json() as any;if(!t.refresh_token)throw new Error('missing refresh token');const existing=await env.DB.prepare('SELECT * FROM external_calendar_accounts WHERE family_id=? AND provider=?').bind(s.familyId,PROVIDER).first<Row>();let calendarId=String(existing?.calendar_id||'');if(calendarId){try{await api(`/calendars/${encodeURIComponent(calendarId)}`,t.access_token);}catch{calendarId='';}}
-    if(!calendarId){const cal=await api('/calendars',t.access_token,{method:'POST',body:JSON.stringify({summary:'Family TODO',timeZone:String(member.timezone||DEFAULT_FAMILY_TIMEZONE)})}) as any;calendarId=String(cal.id);}
-    const cipher=await encryptRefreshToken(t.refresh_token,env.GOOGLE_CALENDAR_TOKEN_KEY!),n=now();await env.DB.prepare(`INSERT INTO external_calendar_accounts(family_id,member_id,provider,refresh_token_ciphertext,token_key_version,calendar_id,calendar_name,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'ACTIVE',?,?) ON CONFLICT(family_id,provider) DO UPDATE SET member_id=excluded.member_id,refresh_token_ciphertext=excluded.refresh_token_ciphertext,token_key_version=excluded.token_key_version,calendar_id=excluded.calendar_id,status='ACTIVE',last_error=NULL,updated_at=excluded.updated_at`).bind(s.familyId,s.memberId,PROVIDER,cipher,'v1',calendarId,'Family TODO',n,n).run();await env.DB.prepare(`INSERT INTO calendar_sync_state(family_id,provider,calendar_id,sync_token,updated_at) VALUES(?,?,?,NULL,?) ON CONFLICT(family_id,provider,calendar_id) DO UPDATE SET sync_token=NULL,updated_at=excluded.updated_at`).bind(s.familyId,PROVIDER,calendarId,n).run();try{await createCalendarWatch(env,s.familyId);}catch{/* polling remains available */}return redirect('/app/settings_integrations.php?calendar=linked');}catch(e){const category=e instanceof Error&&['missing code','token exchange','missing refresh token','member changed'].includes(e.message)?e.message.replaceAll(' ','-'):'calendar-create';console.error('google calendar callback failed:',category);return redirect('/app/settings_integrations.php?calendar=error&reason='+encodeURIComponent(category));}}
-export function eligibleTask(t:Row){return String(t.visibility_scope||'FAMILY')==='FAMILY'&&Number(t.calendar_visible)===1&&['TASK','EVENT'].includes(String(t.task_kind||'TASK').toUpperCase())&&Boolean(t.start_at||t.due_at)&&!t.recurrence_rule;}
-export async function enqueueCalendarSync(db:D1Database,familyId:number,taskId:number,operation:'CREATE'|'UPDATE'|'DELETE'){const n=now(),linked=await db.prepare("SELECT id FROM external_calendar_accounts WHERE family_id=? AND provider=? AND status='ACTIVE' AND calendar_id IS NOT NULL").bind(familyId,PROVIDER).first();if(!linked)return;await db.prepare(`INSERT INTO calendar_sync_outbox(family_id,task_id,provider,operation,status,next_retry_at,created_at,updated_at) VALUES(?,?,?,?,'PENDING',?,?,?) ON CONFLICT(provider,task_id) DO UPDATE SET operation=CASE WHEN excluded.operation='DELETE' THEN 'DELETE' WHEN calendar_sync_outbox.operation='CREATE' THEN 'CREATE' ELSE 'UPDATE' END,status='PENDING',next_retry_at=excluded.next_retry_at,last_error=NULL,updated_at=excluded.updated_at`).bind(familyId,taskId,PROVIDER,operation,n,n,n).run();}
-/** Central decision point for local task mutations. Google inbound deliberately does not call this. */
-export async function queueCalendarProjectionAfterMutation(db:D1Database,familyId:number,taskId:number){
- const [task,link]=await Promise.all([
-  db.prepare('SELECT * FROM tasks WHERE id=? AND family_id=?').bind(taskId,familyId).first<Row>(),
-  db.prepare('SELECT id FROM external_calendar_links WHERE family_id=? AND provider=? AND task_id=? AND deleted_at IS NULL').bind(familyId,PROVIDER,taskId).first<Row>()
- ]);
- if(task&&eligibleTask(task))return enqueueCalendarSync(db,familyId,taskId,link?'UPDATE':'CREATE');
- if(link)return enqueueCalendarSync(db,familyId,taskId,'DELETE');
+export * from './google-calendar-core';
+
+import { json } from './response';
+import type { AppContext } from './app';
+import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
+import {
+  CALENDAR_MAX_RETRIES,
+  applyInbound,
+  calendarBackfill as coreCalendarBackfill,
+  decryptRefreshToken,
+  integrationsSettings as coreIntegrationsSettings,
+  processCalendarOutbox as coreProcessCalendarOutbox,
+} from './google-calendar-core';
+
+type Row = Record<string, unknown>;
+const PROVIDER = 'GOOGLE_CALENDAR';
+const PAGE_PREFIX = 'PAGE:';
+const INBOUND_PAGE_SIZE = 25;
+const OUTBOX_LIMIT = 20;
+const now = () => utcNow();
+const syncLeases = new Map<number, Promise<number>>();
+
+class GoogleError extends Error {
+  constructor(public status: number) {
+    super(`Google Calendar HTTP ${status}`);
+  }
 }
 
-async function backfillCandidates(db:D1Database,familyId:number){
- const rows=await db.prepare(`SELECT * FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND calendar_visible=1 AND recurrence_rule IS NULL AND (start_at IS NOT NULL OR due_at IS NOT NULL) AND (upper(COALESCE(task_kind,'TASK'))='EVENT' OR status<>'completed' OR date(COALESCE(start_at,due_at))>=date('now')) ORDER BY COALESCE(start_at,due_at),id LIMIT 1000`).bind(familyId).all<Row>();
- return rows.results.filter(eligibleTask);
-}
-function calendarErrorReason(value:unknown){const text=String(value||'');const http=text.match(/Google Calendar HTTP\s+(\d{3})/);if(http)return `HTTP ${http[1]}`;if(text==='REAUTH_REQUIRED')return 'REAUTH_REQUIRED';if(text.includes('token refresh failed'))return 'TOKEN_REFRESH_FAILED';return text?'SYNC_ERROR':'UNKNOWN';}
-async function calendarProjectionDiagnostics(ctx:AppContext){
- const familyId=ctx.member!.family_id;
- const account=await ctx.env.DB.prepare("SELECT a.*,f.timezone FROM external_calendar_accounts a JOIN families f ON f.id=a.family_id WHERE a.family_id=? AND a.provider=? AND a.status='ACTIVE'").bind(familyId,PROVIDER).first<Row>();
- const failures=await ctx.env.DB.prepare("SELECT operation,retry_count,last_error FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status='ERROR' ORDER BY updated_at DESC,id DESC LIMIT 5").bind(familyId,PROVIDER).all<Row>();
- if(!account)return {ok:true,calendar_status:'NO_ACTIVE_ACCOUNT',calendar_id_present:false,error_count:failures.results.length,stale_link_count:0,error_samples:failures.results.map(r=>({operation:String(r.operation||''),retry_count:Number(r.retry_count||0),reason:calendarErrorReason(r.last_error)})),rebind_recommended:false};
- const calendarId=String(account.calendar_id||'');
- const [liveLinks,staleLinks,outboxCounts]=await Promise.all([
-  ctx.env.DB.prepare("SELECT COUNT(*) c FROM external_calendar_links WHERE family_id=? AND provider=? AND deleted_at IS NULL").bind(familyId,PROVIDER).first<Row>(),
-  calendarId?ctx.env.DB.prepare("SELECT COUNT(*) c FROM external_calendar_links WHERE family_id=? AND provider=? AND deleted_at IS NULL AND COALESCE(calendar_id,'')<>?").bind(familyId,PROVIDER,calendarId).first<Row>():Promise.resolve({c:0} as Row),
-  ctx.env.DB.prepare("SELECT SUM(CASE WHEN status='PENDING' AND retry_count<? THEN 1 ELSE 0 END) pending_count,SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) error_count FROM calendar_sync_outbox WHERE family_id=? AND provider=?").bind(CALENDAR_MAX_RETRIES,familyId,PROVIDER).first<Row>()
- ]);
- let calendarStatus='NO_CALENDAR_ID',summary='',reachable=false;
- if(calendarId)try{const token=await accessToken(ctx.env,account),calendar=await api(`/calendars/${encodeURIComponent(calendarId)}`,token) as any;calendarStatus='OK';reachable=true;summary=String(calendar.summary||'Family TODO');}catch(e){calendarStatus=e instanceof GoogleError&&e.status===404?'MISSING_CALENDAR':e instanceof GoogleError?`HTTP_${e.status}`:String(e instanceof Error?e.message:e)==='REAUTH_REQUIRED'?'REAUTH_REQUIRED':'CHECK_FAILED';}
- const stale=Number(staleLinks?.c||0);
- return {ok:true,calendar_status:calendarStatus,calendar_reachable:reachable,calendar_id_present:Boolean(calendarId),calendar_summary:summary,live_link_count:Number(liveLinks?.c||0),stale_link_count:stale,pending_count:Number(outboxCounts?.pending_count||0),error_count:Number(outboxCounts?.error_count||0),error_samples:failures.results.map(r=>({operation:String(r.operation||''),retry_count:Number(r.retry_count||0),reason:calendarErrorReason(r.last_error)})),rebind_recommended:calendarStatus==='MISSING_CALENDAR'||stale>0};
-}
-async function rebindCalendarProjection(ctx:AppContext,confirm:string){
- if(confirm!=='CREATE_NEW_CALENDAR')return json({ok:false,error:'確認文字列が一致しません'},400);
- const familyId=ctx.member!.family_id;
- const account=await ctx.env.DB.prepare("SELECT a.*,f.timezone FROM external_calendar_accounts a JOIN families f ON f.id=a.family_id WHERE a.family_id=? AND a.provider=? AND a.status='ACTIVE'").bind(familyId,PROVIDER).first<Row>();
- if(!account)return json({ok:false,error:'Google Calendarの有効な連携がありません'},409);
- const token=await accessToken(ctx.env,account),timeZone=String(account.timezone||ctx.member!.family_timezone||DEFAULT_FAMILY_TIMEZONE);
- await stopFamilyCalendarWatches(ctx.env,familyId);
- const created=await api('/calendars',token,{method:'POST',body:JSON.stringify({summary:'Family TODO',timeZone})}) as any,newCalendarId=String(created.id||'');
- if(!newCalendarId)return json({ok:false,error:'新しい同期用カレンダーを作成できませんでした'},502);
- const n=now();
- try{
-  const results=await ctx.env.DB.batch([
-   ctx.env.DB.prepare("UPDATE external_calendar_links SET deleted_at=? WHERE family_id=? AND provider=? AND deleted_at IS NULL").bind(n,familyId,PROVIDER),
-   ctx.env.DB.prepare("DELETE FROM calendar_sync_outbox WHERE family_id=? AND provider=?").bind(familyId,PROVIDER),
-   ctx.env.DB.prepare("UPDATE external_calendar_accounts SET calendar_id=?,calendar_name='Family TODO',status='ACTIVE',last_error=NULL,last_synced_at=NULL,updated_at=? WHERE family_id=? AND provider=?").bind(newCalendarId,n,familyId,PROVIDER),
-   ctx.env.DB.prepare(`INSERT INTO calendar_sync_state(family_id,provider,calendar_id,sync_token,last_synced_at,updated_at) VALUES(?,?,?,NULL,NULL,?) ON CONFLICT(family_id,provider,calendar_id) DO UPDATE SET sync_token=NULL,last_synced_at=NULL,updated_at=excluded.updated_at`).bind(familyId,PROVIDER,newCalendarId,n)
-  ]);
-  let watch='POLLING';try{await createCalendarWatch(ctx.env,familyId);watch='ACTIVE';}catch{/* polling remains available */}
-  return json({ok:true,created_calendar:true,detached_links:Number(results[0]?.meta?.changes||0),cleared_outbox:Number(results[1]?.meta?.changes||0),watch,next:'event_history_backfill'});
- }catch(e){try{await api(`/calendars/${encodeURIComponent(newCalendarId)}`,token,{method:'DELETE'});}catch{}throw e;}
-}
-export async function calendarBackfill(request:Request,ctx:AppContext){if(!ctx.member)return json({ok:false},401);const role=String(ctx.member.role||'').toUpperCase();if(!['OWNER','ADMIN'].includes(role))return json({ok:false},403);if(request.method!=='POST')return json({ok:false},405);const b=await request.json().catch(()=>({})) as any;if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false},403);const action=String(b.action||'preview');if(action==='diagnose_projection')return json(await calendarProjectionDiagnostics(ctx));if(action==='rebind_projection')return rebindCalendarProjection(ctx,String(b.confirm||''));const history=String(b.scope||'normal')==='event_history';const tasks=history?(await ctx.env.DB.prepare(`SELECT * FROM tasks WHERE family_id=? AND task_kind='EVENT' AND visibility_scope='FAMILY' AND calendar_visible=1 AND recurrence_rule IS NULL AND (start_at IS NOT NULL OR due_at IS NOT NULL) ORDER BY COALESCE(start_at,due_at),id LIMIT 1000`).bind(ctx.member.family_id).all<Row>()).results:await backfillCandidates(ctx.env.DB,ctx.member.family_id);let enqueued=0;if(action==='enqueue')for(const task of tasks){await queueCalendarProjectionAfterMutation(ctx.env.DB,ctx.member.family_id,Number(task.id));enqueued++;}return json({ok:true,target_count:tasks.length,enqueued,scope:history?'event_history':'normal',policy:history?'全履歴のFAMILY EVENT（PRIVATEは除外）':'未完了または今日以降のTASK、および全期間のFAMILY EVENT'});}
-async function accessToken(env:Env,a:Row){const refresh=await decryptRefreshToken(String(a.refresh_token_ciphertext),env.GOOGLE_CALENDAR_TOKEN_KEY!);const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CALENDAR_CLIENT_ID!,client_secret:env.GOOGLE_CALENDAR_CLIENT_SECRET!,refresh_token:refresh,grant_type:'refresh_token'})});if(!r.ok){const body=await r.text();if(r.status===400&&body.includes('invalid_grant'))throw new Error('REAUTH_REQUIRED');throw new Error('token refresh failed');}return String((await r.json() as any).access_token);}
-function plusDay(date:string){return addWallClockMinutes(`${date} 00:00:00`,1440).slice(0,10)}
-function minusDay(date:string){return addWallClockMinutes(`${date} 00:00:00`,-1440).slice(0,10)}
-export function outboundEvent(t:Row,timezone:string){const start=String(t.start_at||t.due_at),allDay=Number(t.all_day)===1;return {summary:String(t.title),description:String(t.description||''),location:String(t.location||''),extendedProperties:{private:{familyTodoTaskId:String(t.id)}},start:allDay?{date:start.slice(0,10)}:{dateTime:start.replace(' ','T'),timeZone:timezone},end:allDay?{date:plusDay(String(t.end_at||start).slice(0,10))}:{dateTime:String(t.end_at||start).replace(' ','T'),timeZone:timezone}};}
-export async function processCalendarOutbox(env:Env,limit=10,familyId?:number){const result={sent:0,errors:0};if(!configured(env))return result;const familyFilter=familyId?' AND o.family_id=?':'';const rows=await env.DB.prepare(`SELECT o.*,a.refresh_token_ciphertext,a.calendar_id,f.timezone FROM calendar_sync_outbox o JOIN families f ON f.id=o.family_id JOIN external_calendar_accounts a ON a.family_id=o.family_id AND a.provider=o.provider AND a.status='ACTIVE' WHERE o.status IN ('PENDING','ERROR') AND o.retry_count<${CALENDAR_MAX_RETRIES}${familyFilter} ORDER BY o.id LIMIT ?`).bind(...(familyId?[familyId,limit*4]:[limit*4])).all<Row>();for(const o of rows.results.filter(o=>calendarRetryDue(o.status,o.retry_count,o.next_retry_at)).slice(0,limit)){try{const task=await env.DB.prepare('SELECT * FROM tasks WHERE id=? AND family_id=?').bind(o.task_id,o.family_id).first<Row>(),link=await env.DB.prepare('SELECT * FROM external_calendar_links WHERE provider=? AND task_id=? AND family_id=? AND deleted_at IS NULL').bind(PROVIDER,o.task_id,o.family_id).first<Row>(),token=await accessToken(env,o),op=String(o.operation);if(op==='DELETE'||!task||!eligibleTask(task)){if(link)await api(`/calendars/${encodeURIComponent(String(o.calendar_id))}/events/${encodeURIComponent(String(link.external_event_id))}`,token,{method:'DELETE'});if(link)await env.DB.prepare('UPDATE external_calendar_links SET deleted_at=? WHERE id=?').bind(now(),link.id).run();}else{const ev=await api(`/calendars/${encodeURIComponent(String(o.calendar_id))}/events${link?'/'+encodeURIComponent(String(link.external_event_id)):''}`,token,{method:link?'PUT':'POST',body:JSON.stringify(outboundEvent(task,String(o.timezone||DEFAULT_FAMILY_TIMEZONE)))}) as any;await env.DB.prepare(`INSERT INTO external_calendar_links(family_id,task_id,provider,calendar_id,external_event_id,external_etag,last_synced_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(provider,task_id) DO UPDATE SET calendar_id=excluded.calendar_id,external_event_id=excluded.external_event_id,external_etag=excluded.external_etag,last_synced_at=excluded.last_synced_at,deleted_at=NULL`).bind(o.family_id,o.task_id,PROVIDER,o.calendar_id,String(ev.id),String(ev.etag||''),now()).run();}await env.DB.prepare("UPDATE calendar_sync_outbox SET status='DONE',last_error=NULL,updated_at=? WHERE id=?").bind(now(),o.id).run();result.sent++;}catch(e){if(String(o.operation)==='DELETE'&&e instanceof GoogleError&&(e.status===404||e.status===410)){const link=await env.DB.prepare('SELECT id FROM external_calendar_links WHERE provider=? AND task_id=? AND family_id=? AND deleted_at IS NULL').bind(PROVIDER,o.task_id,o.family_id).first<Row>();if(link)await env.DB.prepare('UPDATE external_calendar_links SET deleted_at=? WHERE id=?').bind(now(),link.id).run();await env.DB.prepare("UPDATE calendar_sync_outbox SET status='DONE',last_error=NULL,updated_at=? WHERE id=?").bind(now(),o.id).run();result.sent++;continue;}result.errors++;const message=String(e instanceof Error?e.message:e);if(message==='REAUTH_REQUIRED')await env.DB.prepare("UPDATE external_calendar_accounts SET status='REVOKED',last_error='REAUTH_REQUIRED',updated_at=? WHERE family_id=? AND provider=?").bind(now(),o.family_id,PROVIDER).run();const count=Number(o.retry_count)+1,next=calendarRetryAt(count);await env.DB.prepare("UPDATE calendar_sync_outbox SET status='ERROR',retry_count=?,next_retry_at=?,last_error=?,updated_at=? WHERE id=?").bind(count,next,message.slice(0,500),now(),o.id).run();}}return result;}
-export function inboundEventTimes(event:any,timezone:string){if(event.start?.date){return {allDay:1,start:`${event.start.date} 00:00:00`,end:`${minusDay(event.end?.date||plusDay(event.start.date))} 23:59:59`};}return {allDay:0,start:parseImportDateTime(event.start?.dateTime,timezone),end:parseImportDateTime(event.end?.dateTime||event.start?.dateTime,timezone)};}
-export async function applyInbound(env:Env,a:Row,event:any){let link=await env.DB.prepare('SELECT * FROM external_calendar_links WHERE family_id=? AND provider=? AND external_event_id=? AND deleted_at IS NULL').bind(a.family_id,PROVIDER,String(event.id)).first<Row>();
- // An event returned immediately after outbound may be observed before an event-id lookup wins.
- // The private extended property is only a hint: both the task and link must belong to this family.
- if(!link){const hinted=Number(event?.extendedProperties?.private?.familyTodoTaskId||0);if(Number.isSafeInteger(hinted)&&hinted>0)link=await env.DB.prepare(`SELECT l.* FROM external_calendar_links l JOIN tasks t ON t.id=l.task_id AND t.family_id=l.family_id WHERE l.family_id=? AND l.provider=? AND l.task_id=? AND l.deleted_at IS NULL AND t.family_id=?`).bind(a.family_id,PROVIDER,hinted,a.family_id).first<Row>();}
- if(event.status==='cancelled'){if(!link)return 0;const task=await env.DB.prepare('SELECT id,task_kind FROM tasks WHERE id=? AND family_id=?').bind(link.task_id,a.family_id).first<Row>();if(!task)return 0;const n=now();if(String(task.task_kind||'TASK').toUpperCase()==='EVENT'){const shops=await env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(link.task_id,a.family_id).all<Row>(),items=await env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(link.task_id,a.family_id).all<Row>();const statements:any[]=[env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE family_id=? AND target_type='task' AND target_id=? AND status IN ('pending','retry')").bind(n,a.family_id,link.task_id),env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(link.task_id),...archiveTaskCompletionStatements(env.DB,Number(a.family_id),Number(link.task_id),n)];for(const row of shops.results)statements.push(env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(row.id),...archiveShoppingCompletionStatements(env.DB,Number(a.family_id),Number(row.id),n),env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(row.id,a.family_id));for(const row of items.results)statements.push(env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(row.id),...archiveItemCompletionStatements(env.DB,Number(a.family_id),Number(row.id),n),env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(row.id,a.family_id));statements.push(env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(link.task_id,a.family_id),env.DB.prepare("INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,'DELETED','task',?,?,?)").bind(a.family_id,a.member_id,link.task_id,JSON.stringify({source:'GOOGLE_CALENDAR'}),n));await env.DB.batch(statements);}else await env.DB.prepare('UPDATE tasks SET calendar_visible=0,updated_at=? WHERE id=? AND family_id=?').bind(n,link.task_id,a.family_id).run();await env.DB.prepare('UPDATE external_calendar_links SET deleted_at=?,external_etag=?,last_synced_at=? WHERE id=? AND family_id=?').bind(n,String(event.etag||''),n,link.id,a.family_id).run();return 1;}
- if(link&&String(link.external_etag||'')===String(event.etag||''))return 0;const times=inboundEventTimes(event,String(a.timezone||DEFAULT_FAMILY_TIMEZONE)),n=now();let taskId=Number(link?.task_id||0);
- if(taskId){
-  // Calendar is authoritative only for its projection. In particular it must not
-  // rewrite TASK/EVENT, completion_mode/status, completions, or assignees.
-  const updated=await env.DB.prepare('UPDATE tasks SET title=?,description=?,start_at=?,end_at=?,due_at=?,location=?,all_day=?,calendar_visible=1,updated_at=? WHERE id=? AND family_id=?').bind(String(event.summary||'(無題)'),String(event.description||'')||null,times.start,times.end,times.start,String(event.location||'')||null,times.allDay,n,taskId,a.family_id).run();
-  if(!Number(updated.meta.changes||0))return 0;
- }else{// New Google events are equivalent to visibility_scope='FAMILY' EVENT records only.
-  const r=await env.DB.prepare("INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,calendar_visible,task_kind,all_day,visibility_scope,private_owner_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,1,'EVENT',?,'FAMILY',NULL)").bind(a.family_id,String(event.summary||'(無題)'),String(event.description||'')||null,times.start,a.member_id,n,n,times.start,times.end,String(event.location||'')||null,times.allDay).run();taskId=Number(r.meta.last_row_id);}
- await env.DB.prepare(`INSERT INTO external_calendar_links(family_id,task_id,provider,calendar_id,external_event_id,external_etag,last_synced_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL) ON CONFLICT(provider,task_id) DO UPDATE SET external_event_id=excluded.external_event_id,external_etag=excluded.external_etag,last_synced_at=excluded.last_synced_at,deleted_at=NULL`).bind(a.family_id,taskId,PROVIDER,a.calendar_id,String(event.id),String(event.etag||''),n).run();return 1;}
-async function syncCalendarAccountUnlocked(env:Env,a:Row){let received=0,token=await accessToken(env,a),sync=await env.DB.prepare('SELECT sync_token FROM calendar_sync_state WHERE family_id=? AND provider=? AND calendar_id=?').bind(a.family_id,PROVIDER,a.calendar_id).first<Row>(),syncToken=String(sync?.sync_token||''),pageToken='';for(let page=0;page<10;page++){const q=new URLSearchParams({singleEvents:'true',showDeleted:'true',maxResults:'250'});if(syncToken)q.set('syncToken',syncToken);if(pageToken)q.set('pageToken',pageToken);let data:any;try{data=await api(`/calendars/${encodeURIComponent(String(a.calendar_id))}/events?${q}`,token);}catch(e){if(e instanceof GoogleError&&e.status===410&&syncToken){syncToken='';pageToken='';await env.DB.prepare('UPDATE calendar_sync_state SET sync_token=NULL,updated_at=? WHERE family_id=? AND provider=? AND calendar_id=?').bind(now(),a.family_id,PROVIDER,a.calendar_id).run();continue;}throw e;}for(const event of data.items||[])received+=await applyInbound(env,a,event);pageToken=String(data.nextPageToken||'');if(!pageToken){if(!data.nextSyncToken)throw new Error('missing nextSyncToken');await env.DB.prepare(`INSERT INTO calendar_sync_state(family_id,provider,calendar_id,sync_token,last_synced_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(family_id,provider,calendar_id) DO UPDATE SET sync_token=excluded.sync_token,last_synced_at=excluded.last_synced_at,updated_at=excluded.updated_at`).bind(a.family_id,PROVIDER,a.calendar_id,String(data.nextSyncToken),now(),now()).run();await env.DB.prepare('UPDATE external_calendar_accounts SET last_synced_at=?,last_error=NULL,updated_at=? WHERE id=?').bind(now(),now(),a.id).run();return received;}}throw new Error('calendar pagination limit exceeded');}
-export async function syncCalendarAccount(env:Env,a:Row){const id=Number(a.family_id);const running=syncLeases.get(id);if(running)return running;const work=syncCalendarAccountUnlocked(env,a);syncLeases.set(id,work);try{return await work;}finally{if(syncLeases.get(id)===work)syncLeases.delete(id);}}
-export async function processCalendarInbound(env:Env,limit=10,familyId?:number){const result={received:0,errors:0};if(!configured(env))return result;const familyFilter=familyId?' AND a.family_id=?':'';const accounts=await env.DB.prepare(`SELECT a.*,f.timezone FROM external_calendar_accounts a JOIN families f ON f.id=a.family_id WHERE a.provider=? AND a.status='ACTIVE' AND a.calendar_id IS NOT NULL${familyFilter} ORDER BY COALESCE(a.last_synced_at,'') LIMIT ?`).bind(...(familyId?[PROVIDER,familyId,limit]:[PROVIDER,limit])).all<Row>();for(const a of accounts.results){try{result.received+=await syncCalendarAccount(env,a);}catch(e){result.errors++;const message=String(e instanceof Error?e.message:e);await env.DB.prepare("UPDATE external_calendar_accounts SET status=CASE WHEN ?='REAUTH_REQUIRED' THEN 'REVOKED' ELSE status END,last_error=?,updated_at=? WHERE id=?").bind(message,message.slice(0,500),now(),a.id).run().catch(()=>{});}}return result;}
-export async function calendarSyncNow(request:Request,ctx:AppContext){if(!ctx.member)return json({ok:false,error:'認証が必要です'},401);const familyId=ctx.member.family_id,role=String(ctx.member.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です'},403);if(request.method!=='POST')return json({ok:false,error:'POST only'},405);const b=await request.json().catch(()=>({})) as any;if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました'},403);const pendingCount=async()=>Number((await ctx.env.DB.prepare("SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?").bind(familyId,PROVIDER,CALENDAR_MAX_RETRIES).first<Row>())?.c||0),pending_before=await pendingCount(),outgoing=await processCalendarOutbox(ctx.env,20,familyId),a=await ctx.env.DB.prepare("SELECT a.*,f.timezone FROM external_calendar_accounts a JOIN families f ON f.id=a.family_id WHERE a.family_id=? AND a.provider=? AND a.status='ACTIVE'").bind(familyId,PROVIDER).first<Row>();let received=0,errors=outgoing.errors;if(a)try{received=await syncCalendarAccount(ctx.env,a);}catch(e){errors++;await ctx.env.DB.prepare('UPDATE external_calendar_accounts SET last_error=?,updated_at=? WHERE id=?').bind(String(e),now(),a.id).run();}const pending_after=await pendingCount(),unchanged=outgoing.sent===0&&received===0&&errors===0;return json({ok:errors===0,sent:outgoing.sent,received,unchanged,errors,pending_before,pending_after});}
-export async function calendarDisconnect(request:Request,ctx:AppContext){if(!ctx.member)return json({ok:false},401);const role=String(ctx.member.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false},403);if(request.method!=='POST')return json({ok:false},405);const b=await request.json().catch(()=>({})) as any;if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false},403);await stopFamilyCalendarWatches(ctx.env,ctx.member.family_id);await ctx.env.DB.prepare("UPDATE external_calendar_accounts SET status='REVOKED',last_error=NULL,updated_at=? WHERE family_id=? AND provider=?").bind(now(),ctx.member.family_id,PROVIDER).run();return json({ok:true});}
-export async function calendarRetryFailed(request:Request,ctx:AppContext){if(!ctx.member)return json({ok:false},401);const role=String(ctx.member.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false},403);if(request.method!=='POST')return json({ok:false},405);const b=await request.json().catch(()=>({})) as any;if(String(b.csrf||'')!==String(ctx.session.csrfToken||''))return json({ok:false},403);const familyId=ctx.member.family_id,n=now();const cleanupWhere="family_id=? AND provider=? AND operation='DELETE' AND retry_count>=? AND (last_error LIKE '%Google Calendar HTTP 404%' OR last_error LIKE '%Google Calendar HTTP 410%')";const gone=await ctx.env.DB.prepare(`SELECT task_id FROM calendar_sync_outbox WHERE ${cleanupWhere}`).bind(familyId,PROVIDER,CALENDAR_MAX_RETRIES).all<Row>();let detached=0;for(const row of gone.results){const r=await ctx.env.DB.prepare('UPDATE external_calendar_links SET deleted_at=? WHERE family_id=? AND provider=? AND task_id=? AND deleted_at IS NULL').bind(n,familyId,PROVIDER,row.task_id).run();detached+=Number(r.meta.changes||0);}const cleaned=await ctx.env.DB.prepare(`UPDATE calendar_sync_outbox SET status='DONE',last_error=NULL,updated_at=? WHERE ${cleanupWhere}`).bind(n,familyId,PROVIDER,CALENDAR_MAX_RETRIES).run();const r=await ctx.env.DB.prepare("UPDATE calendar_sync_outbox SET status='PENDING',retry_count=0,next_retry_at=?,last_error=NULL,updated_at=? WHERE family_id=? AND provider=? AND retry_count>=? AND status='ERROR'").bind(n,n,familyId,PROVIDER,CALENDAR_MAX_RETRIES).run();return json({ok:true,retried:Number(r.meta.changes||0),cleaned_gone_deletes:Number(cleaned.meta.changes||0),detached_links:detached});}
-export async function integrationsSettings(request:Request,ctx:AppContext){
- if(!ctx.member)return redirect('/login.php');
- const [a,p,f,syncState,links,eventTargets,watch]=await Promise.all([
-  ctx.env.DB.prepare('SELECT calendar_name,status,last_synced_at,last_error,calendar_id FROM external_calendar_accounts WHERE family_id=? AND provider=?').bind(ctx.member.family_id,PROVIDER).first<Row>(),
-  ctx.env.DB.prepare("SELECT SUM(CASE WHEN status='PENDING' AND retry_count<8 THEN 1 ELSE 0 END) pending_count,SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) error_count,SUM(CASE WHEN retry_count>=8 THEN 1 ELSE 0 END) failed_count,SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END) done_count FROM calendar_sync_outbox WHERE family_id=? AND provider=?").bind(ctx.member.family_id,PROVIDER).first<Row>(),
-  ctx.env.DB.prepare('SELECT timezone FROM families WHERE id=?').bind(ctx.member.family_id).first<Row>(),
-  ctx.env.DB.prepare('SELECT sync_token,last_synced_at FROM calendar_sync_state WHERE family_id=? AND provider=? ORDER BY updated_at DESC LIMIT 1').bind(ctx.member.family_id,PROVIDER).first<Row>(),
-  ctx.env.DB.prepare('SELECT COUNT(*) c,MAX(last_synced_at) last_outbound_sync FROM external_calendar_links WHERE family_id=? AND provider=? AND deleted_at IS NULL').bind(ctx.member.family_id,PROVIDER).first<Row>(),
-  ctx.env.DB.prepare("SELECT COUNT(*) c FROM tasks WHERE family_id=? AND task_kind='EVENT' AND visibility_scope='FAMILY' AND calendar_visible=1 AND recurrence_rule IS NULL AND (start_at IS NOT NULL OR due_at IS NOT NULL)").bind(ctx.member.family_id).first<Row>(),
-  ctx.env.DB.prepare("SELECT COUNT(*) active_count,MAX(expires_at) expires_at,MAX(last_notification_at) last_notification_at FROM external_calendar_watch_channels WHERE family_id=? AND provider=? AND status='ACTIVE'").bind(ctx.member.family_id,PROVIDER).first<Row>()
- ]);
- const timeZone=String(ctx.member.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),displayTime=(v:unknown)=>formatStoredUtcForFamily(v==null?null:String(v),timeZone);
- const c=googleCalendarConfiguration(ctx.env),active=a?.status==='ACTIVE',notice=new URL(request.url).searchParams,reason=String(notice.get('reason')||''),safeReasons:Record<string,string>={'missing-code':'認可をキャンセルしました。','token-exchange':'token exchangeに失敗しました。','missing-refresh-token':'refresh tokenを取得できませんでした。','member-changed':'メンバー状態が変更されました。','calendar-create':'カレンダー作成に失敗しました。'};
- const checks=[['Client ID',c.clientId],['Client Secret',c.clientSecret],['Redirect URI',c.redirectUri],['Token key',c.tokenKey],['OAuth scope: calendar.app.created',true],['Family timezone: '+String(f?.timezone||DEFAULT_FAMILY_TIMEZONE),true],['送信: 変更時即時 + 5分retry',true],['受信: Push + 30分保険',true]].map(([k,v])=>`<div class="diagnostic-row"><span>${k}</span><strong>${v?'✓':'missing'}</strong></div>`).join('');
- const failed=Number(p?.failed_count||0),aiProvider=familyAiProvider(ctx.env),geminiResolved=await resolveFamilyGeminiModel(ctx.env.DB,ctx.member.family_id,ctx.env),model=aiProvider==='GEMINI'?geminiResolved.model:workersAiModel(ctx.env),modelSource=aiProvider==='GEMINI'?({FAMILY_SETTING:'家族設定',CLOUDFLARE_FALLBACK:'Cloudflare fallback',BUILT_IN_DEFAULT:'built-in default'}[geminiResolved.source]):(ctx.env.WORKERS_AI_MODEL?.trim()?'環境変数で上書き':'標準設定');
- const action=active?`<button id="calendarSync">今すぐ同期</button> <button class="btn gray" id="calendarBackfill">既存の予定を同期</button> <button class="btn gray" id="calendarHistoryBackfill">全履歴の予定をGoogleへ同期</button> <button class="btn gray" id="calendarDisconnect">連携解除</button><div id="calendarResult" class="small" aria-live="polite"></div>`:`<a class="btn" href="/oauth/google-calendar/authorize">${a?.last_error==='REAUTH_REQUIRED'?'再連携':'Googleアカウントと連携'}</a>`;
- const script=`<script>const csrf=${JSON.stringify(String(ctx.session.csrfToken||''))};const aiMessages={NOT_CONFIGURED:'Family AIが設定されていません',API_KEY_INVALID:'APIキーを確認してください',PERMISSION_DENIED:'Gemini APIへの権限を確認してください',INVALID_REQUEST:'接続テストのリクエスト形式に問題があります',FAILED_PRECONDITION:'Google AIプロジェクトの利用条件を確認してください',MODEL_NOT_FOUND:'モデルを利用できません',RATE_LIMIT_RPM:'短時間のリクエスト上限です。1分ほど待って再試行してください。',RATE_LIMIT_TPM:'短時間のトークン上限です。',RATE_LIMIT_RPD:'このモデルの1日利用上限です。',FREE_TIER_QUOTA_ZERO:'このGoogleプロジェクトではこのモデルの無料枠を現在利用できません。',RATE_LIMIT_TEMPORARY:'Google AIが一時的に混雑しています。',RATE_LIMIT_UNKNOWN:'Gemini APIの利用上限に達しています。',UPSTREAM_UNAVAILABLE:'Google AIへ一時的に接続できません',UNKNOWN:'接続を確認できませんでした'};async function act(url,body={}){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,...body})}),d=await r.json(),isAi=url.includes('family-ai'),el=document.getElementById(isAi?'aiResult':'calendarResult');if(url.includes('model-catalog'))el.textContent=(d.results||[]).map(x=>x.model+' '+(x.available?(x.generateContentSupported?'✓':'生成非対応'):'このProjectでは利用不可')).join(' / ');else el.textContent=isAi?(d.ok?'✓ 接続できました':(aiMessages[d.category]||'接続を確認できませんでした')+(d.retryAfter?'（再試行目安: '+d.retryAfter+'）':'')):d.target_count!==undefined?'同期対象 '+d.target_count+'件':d.retried!==undefined?'再試行 '+d.retried+'件':d.sent===undefined?(d.ok?'完了':'失敗'):d.unchanged?'変更はありません':'送信 '+d.sent+'件 / 受信 '+d.received+'件 / エラー '+d.errors+'件';if(url.includes('disconnect')&&d.ok)location.reload();return d}document.getElementById('calendarSync')?.addEventListener('click',()=>act('/api/google-calendar/sync'));document.getElementById('calendarBackfill')?.addEventListener('click',async()=>{const d=await act('/api/google-calendar/backfill',{action:'preview'});if(d.ok&&d.target_count>0&&confirm('同期対象 '+d.target_count+'件です。既存の予定を同期しますか？'))await act('/api/google-calendar/backfill',{action:'enqueue'})});document.getElementById('calendarHistoryBackfill')?.addEventListener('click',async()=>{const d=await act('/api/google-calendar/backfill',{action:'preview',scope:'event_history'});if(d.ok&&confirm('全履歴のFAMILY EVENT '+d.target_count+'件が対象です。PRIVATE EVENTは送信しません。続行しますか？'))await act('/api/google-calendar/backfill',{action:'enqueue',scope:'event_history'})});document.getElementById('calendarDisconnect')?.addEventListener('click',()=>act('/api/google-calendar/disconnect'));document.getElementById('calendarRetry')?.addEventListener('click',()=>act('/api/google-calendar/retry-failed'));document.getElementById('aiProbe')?.addEventListener('click',async()=>{const d=await act('/api/family-ai/model-catalog');const select=document.getElementById('aiModel');select.innerHTML='';for(const x of d.results||[]){const option=document.createElement('option');option.value=x.model;option.textContent=x.displayName+' ('+x.model+')'+(x.preview?' — プレビュー':'');select.append(option)}document.getElementById('aiCompatible').disabled=!select.value});document.getElementById('aiModel')?.addEventListener('change',()=>{document.getElementById('aiCompatible').disabled=false;document.getElementById('aiSelect').disabled=true});document.getElementById('aiCompatible')?.addEventListener('click',async()=>{const d=await act('/api/family-ai/model-compatibility',{model:document.getElementById('aiModel').value});document.getElementById('aiSelect').disabled=!d.ok});document.getElementById('aiSelect')?.addEventListener('click',async()=>{const d=await act('/api/family-ai/model-select',{model:document.getElementById('aiModel').value});if(d.ok)location.reload()});document.getElementById('aiReset')?.addEventListener('click',async()=>{const d=await act('/api/family-ai/model-reset');if(d.ok)location.reload()});document.getElementById('aiTest')?.addEventListener('click',()=>act('/api/family-ai/connection-test'));</script>`;
- const callbackNotice=notice.get('calendar')==='linked'?'<div class="notice">Google Calendarと連携しました。</div>':notice.get('calendar')==='error'?`<div class="notice">${esc(safeReasons[reason]||'Google Calendar連携に失敗しました。')}</div>`:notice.get('calendar')==='not-configured'?'<div class="notice">Cloudflare Worker Secretsの設定が必要です。</div>':a?.last_error==='REAUTH_REQUIRED'?'<div class="notice">Googleの再認証が必要です。</div>':'';
- const calendarHelp='<p class="small">Google Home / Gemini for HomeでFamily TODOカレンダーを作成先にできる環境では、音声予定 → Google Calendar → Family TODO EVENTを既存のinboundで受信します。予定照会はGoogle Home自身に任せ、Push通知をsignalとしてincremental受信します。</p>';
- const diagnostics=a?`<p class="small">最終同期 ${esc(displayTime(a.last_synced_at))}</p><details><summary>同期の詳細</summary>${checks}<p class="small">受信対象カレンダー: Family TODO<br>最終受信同期: ${esc(displayTime(syncState?.last_synced_at))}<br>最終送信同期: ${esc(displayTime(links?.last_outbound_sync))}<br>sync token: ${syncState?.sync_token?'取得済み':'未取得'}<br>対象EVENT件数: ${Number(eventTargets?.c||0)} / linked件数: ${Number(links?.c||0)} / PENDING件数: ${Number(p?.pending_count||0)} / ERROR件数: ${Number(p?.error_count||0)} / DONE件数: ${Number((p as any)?.done_count||0)}<br>watch状態: ${Number(watch?.active_count||0)>0?'ACTIVE':'POLLING'} / active channel count: ${Number(watch?.active_count||0)} / expires_at: ${esc(displayTime(watch?.expires_at))} / 最終watch notification: ${esc(displayTime(watch?.last_notification_at))} / next renewal: ${Number(watch?.active_count||0)>0?'scheduled':'create pending'} / fallback polling active: yes</p></details>`:'';
- return html(layout('外部連携',`<div class="page-head"><h1>🔗 外部連携</h1><a class="btn gray" href="/app/settings.php">戻る</a></div>${callbackNotice}<div class="card"><h2>LINE Login Web OAuth</h2><p>Channel ID: ${ctx.env.LINE_LOGIN_CHANNEL_ID||ctx.env.LINE_CHANNEL_ID?'✓':'未設定'} / Channel Secret: ${ctx.env.LINE_LOGIN_CHANNEL_SECRET?'✓ Secret':'未設定'} / Callback: ✓</p><p>Mode: ${ctx.env.LINE_LOGIN_CHANNEL_ID?'Dedicated':'legacy fallback'} / 最終token exchange: ${lineTokenExchangeDiagnostic()}</p><p class="small">値、token、認可情報は表示しません。</p></div><div class="card"><h2>Google Calendar</h2><p class="small">表示時刻: ${esc(timeZone)}</p><p><strong>${active?'連携中':'未連携'}</strong></p>${calendarHelp}${diagnostics}${failed?`<p><strong>同期失敗 ${failed}件</strong> <button id="calendarRetry">再試行</button></p>`:''}${configured(ctx.env)?action:'<p>Cloudflare Worker Secretsの設定が必要です。</p>'}</div><div class="card"><h2>Google Tasks</h2><p>Google Home音声 → Google Tasks → Family TODO TASK</p><a class="btn gray" href="/app/settings_google_tasks.php">音声タスク受信を設定</a></div><div class="card"><h2>Google Home</h2><a class="btn gray" href="/app/settings_google_home.php">設定を開く</a></div><div class="card"><h2>Family AI</h2><p><strong>${aiProvider==='GEMINI'?(ctx.env.GEMINI_API_KEY?'設定済み':'未設定'):(ctx.env.AI?'設定済み':'未設定')}</strong></p><p>Provider: ${aiProvider==='GEMINI'?'Gemini':'Cloudflare Workers AI'}<br>Model: <code>${esc(model)}</code></p><details><summary>モデル情報</summary><p class="small">使用モデル: <code>${esc(model)}</code>（${modelSource}）<br>Geminiの実際のquotaは Google AI Studio → Rate Limitsで確認してください。quotaはAPIキーではなくProject単位です。</p></details><div style="display:grid;gap:8px;max-width:100%"><button class="btn gray" id="aiProbe">Googleからモデル一覧を更新</button><select id="aiModel" style="width:100%;max-width:100%" aria-label="Geminiモデル"><option value="">一覧を更新してください</option></select><button id="aiCompatible" disabled>互換性を確認</button><button id="aiSelect" disabled>このモデルを使用</button><button class="btn gray" id="aiReset">Cloudflare既定値へ戻す</button><button id="aiTest">現在モデルの接続確認</button></div> <div id="aiResult" class="small" aria-live="polite"></div><p class="small">ProviderはFAMILY_AI_PROVIDERで明示選択します。自動切替はしません。APIキー・質問・家族データは表示せず、接続確認には固定テスト文だけを送信します。</p></div>${script}`, '/app/settings.php'));
+async function googleApi(path: string, access: string, init?: RequestInit) {
+  const response = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${access}`,
+      'content-type': 'application/json',
+      ...(init?.headers || {}),
+    },
+  });
+  if (!response.ok) throw new GoogleError(response.status);
+  return response.status === 204 ? {} : response.json();
 }
 
-const watchHash=async(value:string)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(x=>x.toString(16).padStart(2,'0')).join('');
-export async function createCalendarWatch(env:Env,familyId:number){const account=await env.DB.prepare("SELECT * FROM external_calendar_accounts WHERE family_id=? AND provider=? AND status='ACTIVE' AND calendar_id IS NOT NULL").bind(familyId,PROVIDER).first<Row>();if(!account)return null;const token=crypto.randomUUID()+crypto.randomUUID(),channelId=crypto.randomUUID(),access=await accessToken(env,account),body={id:channelId,type:'web_hook',address:`${String(env.APP_URL||'').replace(/\/$/,'')}/api/google-calendar/watch`,token,params:{ttl:'604800'}};const response=await api(`/calendars/${encodeURIComponent(String(account.calendar_id))}/events/watch`,access,{method:'POST',body:JSON.stringify(body)}) as any;const expiresAt=new Date(Number(response.expiration||Date.now()+604800000)).toISOString(),n=now();await env.DB.prepare("INSERT INTO external_calendar_watch_channels(family_id,provider,calendar_id,channel_id,resource_id,token_hash,expires_at,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'ACTIVE',?,?)").bind(familyId,PROVIDER,account.calendar_id,channelId,String(response.resourceId||''),await watchHash(token),expiresAt,n,n).run();return {channelId,resourceId:String(response.resourceId||''),expiresAt};}
-async function stopWatch(env:Env,row:Row){try{const account=await env.DB.prepare("SELECT * FROM external_calendar_accounts WHERE family_id=? AND provider=?").bind(row.family_id,PROVIDER).first<Row>();if(account)await api('/channels/stop',await accessToken(env,account),{method:'POST',body:JSON.stringify({id:row.channel_id,resourceId:row.resource_id})});}catch{/* local state remains authoritative */}await env.DB.prepare("UPDATE external_calendar_watch_channels SET status='STOPPED',updated_at=? WHERE id=?").bind(now(),row.id).run();}
-export async function renewCalendarWatches(env:Env){const due=await env.DB.prepare("SELECT * FROM external_calendar_watch_channels WHERE status='ACTIVE' AND expires_at<datetime('now','+24 hours') ORDER BY expires_at LIMIT 20").all<Row>();let renewed=0;for(const old of due.results){try{await createCalendarWatch(env,Number(old.family_id));await stopWatch(env,old);renewed++;}catch{/* scheduled retry */}}return {renewed};}
-export async function stopFamilyCalendarWatches(env:Env,familyId:number){const rows=await env.DB.prepare("SELECT * FROM external_calendar_watch_channels WHERE family_id=? AND provider=? AND status='ACTIVE'").bind(familyId,PROVIDER).all<Row>();for(const row of rows.results)await stopWatch(env,row);}
-export async function calendarWatchWebhook(request:Request,env:Env,executionContext:ExecutionContext){if(request.method!=='POST')return new Response(null,{status:405});const channel=request.headers.get('X-Goog-Channel-ID')||'',resource=request.headers.get('X-Goog-Resource-ID')||'',token=request.headers.get('X-Goog-Channel-Token')||'';if(!channel||!resource||!token)return new Response(null,{status:400});const row=await env.DB.prepare("SELECT * FROM external_calendar_watch_channels WHERE channel_id=? AND resource_id=? AND status='ACTIVE'").bind(channel,resource).first<Row>();if(!row||String(row.token_hash)!==await watchHash(token))return new Response(null,{status:403});await env.DB.prepare('UPDATE external_calendar_watch_channels SET last_notification_at=?,updated_at=? WHERE id=?').bind(now(),now(),row.id).run();executionContext.waitUntil(processCalendarInbound(env,1,Number(row.family_id)));return new Response(null,{status:204});}
-export function wakeCalendarOutbox(ctx:AppContext,familyId:number){ctx.executionContext?.waitUntil(processCalendarOutbox(ctx.env,3,familyId));}
+async function accessToken(env: Env, account: Row) {
+  const refresh = await decryptRefreshToken(String(account.refresh_token_ciphertext), env.GOOGLE_CALENDAR_TOKEN_KEY!);
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_CALENDAR_CLIENT_ID!,
+      client_secret: env.GOOGLE_CALENDAR_CLIENT_SECRET!,
+      refresh_token: refresh,
+      grant_type: 'refresh_token',
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    if (response.status === 400 && body.includes('invalid_grant')) throw new Error('REAUTH_REQUIRED');
+    throw new Error('token refresh failed');
+  }
+  return String((await response.json() as { access_token?: string }).access_token || '');
+}
+
+function encodePageState(syncToken: string, pageToken: string) {
+  return PAGE_PREFIX + btoa(JSON.stringify({ syncToken, pageToken }));
+}
+
+function decodePageState(raw: string) {
+  if (!raw.startsWith(PAGE_PREFIX)) return { syncToken: raw, pageToken: '' };
+  try {
+    const parsed = JSON.parse(atob(raw.slice(PAGE_PREFIX.length))) as { syncToken?: string; pageToken?: string };
+    return { syncToken: String(parsed.syncToken || ''), pageToken: String(parsed.pageToken || '') };
+  } catch {
+    return { syncToken: '', pageToken: '' };
+  }
+}
+
+async function syncCalendarAccountPage(env: Env, account: Row) {
+  const state = await env.DB.prepare('SELECT sync_token FROM calendar_sync_state WHERE family_id=? AND provider=? AND calendar_id=?')
+    .bind(account.family_id, PROVIDER, account.calendar_id).first<Row>();
+  let { syncToken, pageToken } = decodePageState(String(state?.sync_token || ''));
+  const token = await accessToken(env, account);
+
+  let data: any;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const query = new URLSearchParams({ singleEvents: 'true', showDeleted: 'true', maxResults: String(INBOUND_PAGE_SIZE) });
+    if (syncToken) query.set('syncToken', syncToken);
+    if (pageToken) query.set('pageToken', pageToken);
+    try {
+      data = await googleApi(`/calendars/${encodeURIComponent(String(account.calendar_id))}/events?${query}`, token);
+      break;
+    } catch (error) {
+      if (attempt === 0 && error instanceof GoogleError && error.status === 410 && syncToken) {
+        syncToken = '';
+        pageToken = '';
+        await env.DB.prepare('UPDATE calendar_sync_state SET sync_token=NULL,updated_at=? WHERE family_id=? AND provider=? AND calendar_id=?')
+          .bind(now(), account.family_id, PROVIDER, account.calendar_id).run();
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (!data) throw new Error('calendar page unavailable');
+
+  let received = 0;
+  for (const event of data.items || []) received += await applyInbound(env, account, event);
+
+  const nextPageToken = String(data.nextPageToken || '');
+  const n = now();
+  if (nextPageToken) {
+    await env.DB.prepare(`INSERT INTO calendar_sync_state(family_id,provider,calendar_id,sync_token,last_synced_at,updated_at)
+      VALUES(?,?,?,?,NULL,?)
+      ON CONFLICT(family_id,provider,calendar_id) DO UPDATE SET sync_token=excluded.sync_token,updated_at=excluded.updated_at`)
+      .bind(account.family_id, PROVIDER, account.calendar_id, encodePageState(syncToken, nextPageToken), n).run();
+    await env.DB.prepare('UPDATE external_calendar_accounts SET last_error=NULL,updated_at=? WHERE id=?').bind(n, account.id).run();
+    return { received, more: true };
+  }
+
+  const nextSyncToken = String(data.nextSyncToken || '');
+  if (!nextSyncToken) throw new Error('missing nextSyncToken');
+  await env.DB.prepare(`INSERT INTO calendar_sync_state(family_id,provider,calendar_id,sync_token,last_synced_at,updated_at)
+    VALUES(?,?,?,?,?,?)
+    ON CONFLICT(family_id,provider,calendar_id) DO UPDATE SET sync_token=excluded.sync_token,last_synced_at=excluded.last_synced_at,updated_at=excluded.updated_at`)
+    .bind(account.family_id, PROVIDER, account.calendar_id, nextSyncToken, n, n).run();
+  await env.DB.prepare('UPDATE external_calendar_accounts SET last_synced_at=?,last_error=NULL,updated_at=? WHERE id=?').bind(n, n, account.id).run();
+  return { received, more: false };
+}
+
+export async function syncCalendarAccount(env: Env, account: Row) {
+  const id = Number(account.family_id);
+  const running = syncLeases.get(id);
+  if (running) return running;
+  const work = syncCalendarAccountPage(env, account).then(result => result.received);
+  syncLeases.set(id, work);
+  try {
+    return await work;
+  } finally {
+    if (syncLeases.get(id) === work) syncLeases.delete(id);
+  }
+}
+
+export async function processCalendarInbound(env: Env, limit = 10, familyId?: number) {
+  const result = { received: 0, errors: 0, more: false };
+  const familyFilter = familyId ? ' AND a.family_id=?' : '';
+  const accounts = await env.DB.prepare(`SELECT a.*,f.timezone FROM external_calendar_accounts a JOIN families f ON f.id=a.family_id
+    WHERE a.provider=? AND a.status='ACTIVE' AND a.calendar_id IS NOT NULL${familyFilter}
+    ORDER BY COALESCE(a.last_synced_at,'') LIMIT ?`)
+    .bind(...(familyId ? [PROVIDER, familyId, Math.min(limit, 1)] : [PROVIDER, Math.min(limit, 1)])).all<Row>();
+  for (const account of accounts.results) {
+    try {
+      const page = await syncCalendarAccountPage(env, account);
+      result.received += page.received;
+      result.more ||= page.more;
+    } catch (error) {
+      result.errors++;
+      const message = String(error instanceof Error ? error.message : error);
+      await env.DB.prepare("UPDATE external_calendar_accounts SET status=CASE WHEN ?='REAUTH_REQUIRED' THEN 'REVOKED' ELSE status END,last_error=?,updated_at=? WHERE id=?")
+        .bind(message, message.slice(0, 500), now(), account.id).run().catch(() => {});
+    }
+  }
+  return result;
+}
+
+export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
+  return coreProcessCalendarOutbox(env, Math.min(Math.max(1, limit), OUTBOX_LIMIT), familyId);
+}
+
+export async function calendarSyncNow(request: Request, ctx: AppContext) {
+  if (!ctx.member) return json({ ok: false, error: '認証が必要です' }, 401);
+  const role = String(ctx.member.role || '').toUpperCase();
+  if (role !== 'OWNER' && role !== 'ADMIN') return json({ ok: false, error: '管理者権限が必要です' }, 403);
+  if (request.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405);
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  if (String(body.csrf || '') !== String(ctx.session.csrfToken || '')) return json({ ok: false, error: 'CSRF検証に失敗しました' }, 403);
+
+  const familyId = ctx.member.family_id;
+  const pendingCount = async () => Number((await ctx.env.DB.prepare("SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?")
+    .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
+  const pendingBefore = await pendingCount();
+  const outgoing = await processCalendarOutbox(ctx.env, OUTBOX_LIMIT, familyId);
+  const incoming = await processCalendarInbound(ctx.env, 1, familyId);
+  const pendingAfter = await pendingCount();
+  const errors = outgoing.errors + incoming.errors;
+  const more = pendingAfter > 0 || incoming.more;
+  const unchanged = outgoing.sent === 0 && incoming.received === 0 && errors === 0 && !more;
+  return json({
+    ok: errors === 0,
+    sent: outgoing.sent,
+    received: incoming.received,
+    unchanged,
+    errors,
+    pending_before: pendingBefore,
+    pending_after: pendingAfter,
+    inbound_more: incoming.more,
+    more,
+    batch_size: { outbound: OUTBOX_LIMIT, inbound: INBOUND_PAGE_SIZE },
+  });
+}
+
+export async function calendarBackfill(request: Request, ctx: AppContext) {
+  const forwarded = request.clone();
+  if (!ctx.member) return json({ ok: false }, 401);
+  const role = String(ctx.member.role || '').toUpperCase();
+  if (!['OWNER', 'ADMIN'].includes(role)) return json({ ok: false }, 403);
+  if (request.method !== 'POST') return json({ ok: false }, 405);
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  if (String(body.csrf || '') !== String(ctx.session.csrfToken || '')) return json({ ok: false }, 403);
+  const action = String(body.action || 'preview');
+  if (action === 'diagnose_projection' || action === 'rebind_projection' || String(body.scope || 'normal') !== 'event_history') {
+    return coreCalendarBackfill(forwarded, ctx);
+  }
+
+  const familyId = ctx.member.family_id;
+  const count = Number((await ctx.env.DB.prepare("SELECT COUNT(*) c FROM tasks WHERE family_id=? AND task_kind='EVENT' AND visibility_scope='FAMILY' AND calendar_visible=1 AND recurrence_rule IS NULL AND (start_at IS NOT NULL OR due_at IS NOT NULL)")
+    .bind(familyId).first<Row>())?.c || 0);
+  if (action !== 'enqueue') return json({ ok: true, target_count: count, enqueued: 0, scope: 'event_history', paged: true, policy: '全履歴のFAMILY EVENT（PRIVATEは除外）' });
+
+  const n = now();
+  const result = await ctx.env.DB.prepare(`INSERT INTO calendar_sync_outbox(family_id,task_id,provider,operation,status,next_retry_at,created_at,updated_at)
+    SELECT t.family_id,t.id,?,
+      CASE WHEN EXISTS(SELECT 1 FROM external_calendar_links l WHERE l.family_id=t.family_id AND l.provider=? AND l.task_id=t.id AND l.deleted_at IS NULL) THEN 'UPDATE' ELSE 'CREATE' END,
+      'PENDING',?,?,?
+    FROM tasks t
+    WHERE t.family_id=? AND t.task_kind='EVENT' AND t.visibility_scope='FAMILY' AND t.calendar_visible=1 AND t.recurrence_rule IS NULL AND (t.start_at IS NOT NULL OR t.due_at IS NOT NULL)
+    ON CONFLICT(provider,task_id) DO UPDATE SET
+      operation=CASE WHEN calendar_sync_outbox.operation='CREATE' THEN 'CREATE' ELSE excluded.operation END,
+      status='PENDING',retry_count=0,next_retry_at=excluded.next_retry_at,last_error=NULL,updated_at=excluded.updated_at`)
+    .bind(PROVIDER, PROVIDER, n, n, n, familyId).run();
+  return json({ ok: true, target_count: count, enqueued: Number(result.meta.changes || 0), scope: 'event_history', paged: true, policy: '全履歴のFAMILY EVENT（PRIVATEは除外）' });
+}
+
+export async function integrationsSettings(request: Request, ctx: AppContext) {
+  const response = await coreIntegrationsSettings(request, ctx);
+  const type = response.headers.get('content-type') || '';
+  if (!type.includes('text/html')) return response;
+  let source = await response.text();
+  const enhancement = `<style>.calendar-backfill-limit{display:none!important}</style><script>(()=>{const clean=()=>document.querySelectorAll('.calendar-backfill-limit').forEach(el=>el.remove());clean();new MutationObserver(clean).observe(document.body,{childList:true,subtree:true});const history=document.getElementById('calendarHistoryBackfill');if(history&&!document.getElementById('calendarBatchNote')){const note=document.createElement('div');note.id='calendarBatchNote';note.className='small';note.textContent='全履歴EVENTは全件キュー登録できます。Google APIへの送受信はWorker上限を避けるため小分けで処理します。';history.insertAdjacentElement('afterend',note)}const old=document.getElementById('calendarSync');if(old){const button=old.cloneNode(true);old.replaceWith(button);button.addEventListener('click',async()=>{const out=document.getElementById('calendarResult');button.disabled=true;try{const r=await fetch('/api/google-calendar/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf})});const d=await r.json().catch(()=>({ok:false,error:'応答を解析できません'}));if(!r.ok||d.ok===false)throw new Error(d.error||('HTTP '+r.status));out.textContent=d.unchanged?'変更はありません':('送信 '+d.sent+'件 / 受信 '+d.received+'件 / エラー '+d.errors+'件'+(d.more?' / 続きあり（もう一度押してください）':''));}catch(error){out.textContent='同期失敗: '+(error instanceof Error?error.message:String(error));}finally{button.disabled=false}})}})();</script>`;
+  source = source.replace('</body>', `${enhancement}</body>`);
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(source, { status: response.status, statusText: response.statusText, headers });
+}
+
+export async function calendarWatchWebhook(request: Request, env: Env, executionContext: ExecutionContext) {
+  if (request.method !== 'POST') return new Response(null, { status: 405 });
+  const channel = request.headers.get('X-Goog-Channel-ID') || '';
+  const resource = request.headers.get('X-Goog-Resource-ID') || '';
+  const token = request.headers.get('X-Goog-Channel-Token') || '';
+  if (!channel || !resource || !token) return new Response(null, { status: 400 });
+  const row = await env.DB.prepare("SELECT * FROM external_calendar_watch_channels WHERE channel_id=? AND resource_id=? AND status='ACTIVE'").bind(channel, resource).first<Row>();
+  if (!row) return new Response(null, { status: 403 });
+  const expected = String(row.token_hash || '');
+  const actual = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map(x => x.toString(16).padStart(2, '0')).join('');
+  if (expected !== actual) return new Response(null, { status: 403 });
+  await env.DB.prepare('UPDATE external_calendar_watch_channels SET last_notification_at=?,updated_at=? WHERE id=?').bind(now(), now(), row.id).run();
+  executionContext.waitUntil(processCalendarInbound(env, 1, Number(row.family_id)));
+  return new Response(null, { status: 204 });
+}
