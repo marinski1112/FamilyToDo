@@ -4,6 +4,7 @@ export const activeRegressionGroups=[
     checks:[
       ['current-contracts','node scripts/core-contract-smoke.mjs'],
       ['regression-structure','node scripts/regression-structure-smoke.mjs'],
+      ['package-test-entrypoint','node scripts/package-test-entrypoint-contract.mjs'],
       ['form-audit','node scripts/form-control-contract.mjs'],
     ],
   },
