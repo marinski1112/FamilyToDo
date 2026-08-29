@@ -5,7 +5,7 @@ try {
   let detail=payload.detail||{},shoppingDetail=payload.shoppingDetail||{},itemDetail=payload.itemDetail||{},holidays=payload.holidays||{};
   let currentMonth=payload.month||'',currentPrev=payload.prev||'',currentNext=payload.next||'',currentView=payload.view||'all',calendarBusy=false;
   document.documentElement.dataset.calendarJs='ready';
-  const compactUiScript=document.createElement('script');compactUiScript.src='/assets/calendar-mobile-ui.js?v=wave128-fix14';compactUiScript.defer=true;document.head.append(compactUiScript);
+  const compactUiScript=document.createElement('script');compactUiScript.src='/assets/calendar-mobile-ui.js?v=wave128-fix22';compactUiScript.defer=true;document.head.append(compactUiScript);
   const modal=document.getElementById('dayModal'),modalBody=document.getElementById('modalBody'),modalTitle=document.getElementById('modalTitle'),modalAdd=document.getElementById('modalAdd'),modalPrev=document.getElementById('modalPrev'),modalNext=document.getElementById('modalNext'),modalReorder=document.getElementById('modalReorder'),monthLabel=document.getElementById('monthLabel'),prevMonth=document.getElementById('prevMonth'),nextMonth=document.getElementById('nextMonth');
   let selectedDate='',reorderMode=false;
   const calendarFab=document.getElementById('calendarFab');
@@ -32,20 +32,6 @@ try {
       link.href='/app/recurring.php?'+params.toString();
     });
   }
-  function repairEventBandFallbackColors(root){
-    if(!root?.querySelectorAll)return;
-    const allowedColors=new Set(['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b']);
-    const taskById=new Map();
-    for(const rows of Object.values(detail)){
-      if(!Array.isArray(rows))continue;
-      for(const row of rows){const id=Number(row?.id);if(id>0&&!taskById.has(id))taskById.set(id,row);}
-    }
-    root.querySelectorAll('a.calendar-band[data-task-id]').forEach(link=>{
-      const id=Number(link.dataset.taskId||0),row=taskById.get(id);if(!row)return;
-      const isEvent=String(row.task_kind||'').toLowerCase()==='event',color=String(row.calendar_color||'').trim();
-      if(isEvent&&!allowedColors.has(color))link.style.background='#16a34a';
-    });
-  }
   function detailHtml(d){
     const x=detail[d]||[],h=holidays[d];
     const rows=x.map(t=>{
@@ -65,12 +51,11 @@ try {
   function render(d,dir=0){
     selectedDate=d;modalTitle.textContent=dayLabel(d);if(modalBody){const update=()=>{modalBody.innerHTML=detailHtml(d);modalBody.style.transition='none';modalBody.style.transform='translateX('+(dir?(dir>0?'32px':'-32px'):'0')+')';modalBody.style.opacity=dir?'0.45':'1';void modalBody.offsetWidth;modalBody.style.transition='transform .22s cubic-bezier(.2,.8,.2,1),opacity .18s ease';modalBody.style.transform='translateX(0)';modalBody.style.opacity='1';};if(dir&&modal.classList.contains('open')){modalBody.style.transition='transform .12s ease,opacity .12s ease';modalBody.style.transform='translateX('+(dir>0?'-28px':'28px')+')';modalBody.style.opacity='0.35';setTimeout(update,115);}else update();}if(modalAdd)modalAdd.href='/task/new.php?date='+d+'&return=calendar';if(modalReorder){const normalCount=(detail[d]||[]).filter(t=>!t.recurring).length;modalReorder.style.display=normalCount>1?'inline-flex':'none';modalReorder.textContent=reorderMode?'並べ替え完了':'並べ替え';modal?.classList.toggle('calendar-reorder-mode',reorderMode&&normalCount>1);}if(modalPrev)modalPrev.setAttribute('aria-label',shiftDate(d,-1)+' の詳細');if(modalNext)modalNext.setAttribute('aria-label',shiftDate(d,1)+' の詳細');openModal();
   }
-  function applyCalendarDocument(text,targetMonth,dir,openDate){const doc=new DOMParser().parseFromString(text,'text/html');const nextGrid=doc.querySelector('.calendar-grid');const payloadEl=doc.getElementById('calendarPayload');if(!nextGrid||!payloadEl)throw new Error('カレンダー情報を取得できませんでした');const nextPayload=JSON.parse(payloadEl.textContent||'{}');const gridNow=document.querySelector('.calendar-grid');if(!gridNow)throw new Error('カレンダーが見つかりません');gridNow.classList.add('month-changing');gridNow.style.transition='transform .18s cubic-bezier(.2,.8,.2,1),opacity .16s ease';gridNow.style.transform='translateX('+(dir<0?'28px':'-28px')+')';gridNow.style.opacity='0';setTimeout(()=>{gridNow.innerHTML=nextGrid.innerHTML;payload=nextPayload;detail=payload.detail||{};shoppingDetail=payload.shoppingDetail||{};itemDetail=payload.itemDetail||{};holidays=payload.holidays||{};repairRecurringBandLinks(gridNow);repairEventBandFallbackColors(gridNow);currentMonth=payload.month||targetMonth;currentPrev=payload.prev||currentPrev;currentNext=payload.next||currentNext;if(monthLabel)monthLabel.textContent=currentMonth.slice(0,4)+'年'+Number(currentMonth.slice(5))+'月';if(prevMonth){prevMonth.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+currentPrev;prevMonth.dataset.month=currentPrev;}if(nextMonth){nextMonth.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+currentNext;nextMonth.dataset.month=currentNext;}gridNow.style.transition='none';gridNow.style.transform='translateX('+(dir<0?'-28px':'28px')+')';void gridNow.offsetWidth;gridNow.style.transition='transform .24s cubic-bezier(.2,.8,.2,1),opacity .20s ease';gridNow.style.opacity='1';gridNow.style.transform='translateX(0)';gridNow.classList.remove('month-changing');history.replaceState(null,'','/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+encodeURIComponent(currentMonth)+(openDate?'&open='+encodeURIComponent(openDate):''));if(openDate)render(openDate,dir);},170);}
+  function applyCalendarDocument(text,targetMonth,dir,openDate){const doc=new DOMParser().parseFromString(text,'text/html');const nextGrid=doc.querySelector('.calendar-grid');const payloadEl=doc.getElementById('calendarPayload');if(!nextGrid||!payloadEl)throw new Error('カレンダー情報を取得できませんでした');const nextPayload=JSON.parse(payloadEl.textContent||'{}');const gridNow=document.querySelector('.calendar-grid');if(!gridNow)throw new Error('カレンダーが見つかりません');gridNow.classList.add('month-changing');gridNow.style.transition='transform .18s cubic-bezier(.2,.8,.2,1),opacity .16s ease';gridNow.style.transform='translateX('+(dir<0?'28px':'-28px')+')';gridNow.style.opacity='0';setTimeout(()=>{gridNow.innerHTML=nextGrid.innerHTML;payload=nextPayload;detail=payload.detail||{};shoppingDetail=payload.shoppingDetail||{};itemDetail=payload.itemDetail||{};holidays=payload.holidays||{};repairRecurringBandLinks(gridNow);currentMonth=payload.month||targetMonth;currentPrev=payload.prev||currentPrev;currentNext=payload.next||currentNext;if(monthLabel)monthLabel.textContent=currentMonth.slice(0,4)+'年'+Number(currentMonth.slice(5))+'月';if(prevMonth){prevMonth.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+currentPrev;prevMonth.dataset.month=currentPrev;}if(nextMonth){nextMonth.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+currentNext;nextMonth.dataset.month=currentNext;}gridNow.style.transition='none';gridNow.style.transform='translateX('+(dir<0?'-28px':'28px')+')';void gridNow.offsetWidth;gridNow.style.transition='transform .24s cubic-bezier(.2,.8,.2,1),opacity .20s ease';gridNow.style.opacity='1';gridNow.style.transform='translateX(0)';gridNow.classList.remove('month-changing');history.replaceState(null,'','/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+encodeURIComponent(currentMonth)+(openDate?'&open='+encodeURIComponent(openDate):''));if(openDate)render(openDate,dir);},170);}
   async function loadMonth(targetMonth,dir,openDate=''){if(calendarBusy||!targetMonth||targetMonth===currentMonth){if(openDate)render(openDate,dir);return;}calendarBusy=true;try{const r=await fetch('/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+encodeURIComponent(targetMonth),{headers:{'accept':'text/html'},credentials:'same-origin',cache:'no-store'});if(!r.ok)throw new Error('月表示の取得に失敗しました');applyCalendarDocument(await r.text(),targetMonth,dir,openDate);}catch(e){location.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+encodeURIComponent(targetMonth)+(openDate?'&open='+encodeURIComponent(openDate):'');}finally{setTimeout(()=>{calendarBusy=false},280);}}
   function navigateDay(days){if(!selectedDate)return;const target=shiftDate(selectedDate,days),dir=days>0?1:-1;if(payload.from&&payload.to&&(target<payload.from||target>payload.to)){loadMonth(target.slice(0,7),dir,target);return;}render(target,dir);}
   const calendarCard=document.querySelector('.calendar-card');
   repairRecurringBandLinks(document.querySelector('.calendar-grid'));
-  repairEventBandFallbackColors(document.querySelector('.calendar-grid'));
   let swipeX=0,swipeY=0,swipeActive=false,suppressCalendarClickUntil=0;
   calendarCard?.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')return;if(!e.target.closest('.calendar-grid'))return;if(e.pointerType==='mouse'&&e.button!==0)return;swipeX=e.clientX;swipeY=e.clientY;swipeActive=true;});
   calendarCard?.addEventListener('pointerup',e=>{if(e.pointerType==='touch'||!swipeActive)return;swipeActive=false;const dx=e.clientX-swipeX,dy=e.clientY-swipeY;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)){suppressCalendarClickUntil=Date.now()+350;loadMonth(dx<0?currentNext:currentPrev,dx<0?1:-1);}});
@@ -83,7 +68,7 @@ try {
   calendarCard?.addEventListener('click',e=>{if(Date.now()<suppressCalendarClickUntil)return;const cell=e.target.closest('.calendar-cell');if(cell?.dataset.date)render(cell.dataset.date);});
   prevMonth?.addEventListener('click',e=>{e.preventDefault();loadMonth(currentPrev,-1);});
   nextMonth?.addEventListener('click',e=>{e.preventDefault();loadMonth(currentNext,1);});
-  function closeModal(){reorderMode=false;modal.classList.remove('open','calendar-reorder-mode');if(modalReorder)modalReorder.textContent='並べ替え';document.body.classList.remove('calendar-modal-open');}
+  function closeModal(){reorderMode=false;modal.classList.remove('open','calendar-reorder-mode');if(modalReorder)modalReorder.textContent='並べ替え完了';document.body.classList.remove('calendar-modal-open');}
   function openModal(){modal.classList.add('open');document.body.classList.add('calendar-modal-open');}
   document.getElementById('modalClose').onclick=closeModal;
   modalPrev?.addEventListener('click',()=>navigateDay(-1));
@@ -115,9 +100,7 @@ try {
   if(monthLabel)monthLabel.textContent=currentMonth.slice(0,4)+'年'+Number(currentMonth.slice(5))+'月';
   monthLabel?.addEventListener('click',()=>{const opening=Boolean(jumpPanel?.hidden);if(jumpPanel)jumpPanel.hidden=!opening;monthLabel.setAttribute('aria-expanded',opening?'true':'false');});
   monthJump?.addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(monthJump),year=Number(fd.get('year')),month=Number(fd.get('month'));if(year<2000||year>2100||month<1||month>12)return;location.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+year+'-'+String(month).padStart(2,'0');});
-  dateJump?.addEventListener('submit',e=>{e.preventDefault();const value=String(new FormData(dateJump).get('date')||'');if(!isDateKey(value)||value<'2000-01-01'||value>'2100-12-31')return;location.href='/app/calendar.php?view='+encodeURIComponent(currentView)+'&month='+value.slice(0,7)+'&open='+value;});
-  const initialOpenDate=String(payload.openDate||new URLSearchParams(location.search).get('open')||'');const isDateKey=v=>{if(typeof v!=='string'||!/^(?:20\d{2}|2100)-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(v))return false;const d=new Date(v+'T12:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;};if(initialOpenDate&&isDateKey(initialOpenDate))setTimeout(()=>render(initialOpenDate),0);
-
+  dateJump?.addEventListener('submit',e=>{e.preventDefault();const value=String(new FormData(dateJump).get('date')||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return;loadMonth(value.slice(0,7),value.slice(0,7)<currentMonth?-1:1,value);});
 } catch (error) {
   document.documentElement.dataset.calendarJs='error';
   console.error('[calendar] initialization failed', error);
