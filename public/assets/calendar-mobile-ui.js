@@ -28,7 +28,7 @@ try{
     body.calendar-compact-ui .calendar-grid .num{height:22px!important;margin:0 0 2px!important;padding-top:1px!important;font-size:13px!important;line-height:20px!important;font-weight:750!important}
     body.calendar-compact-ui .calendar-grid .today-num{width:22px!important;height:22px!important;font-size:13px!important}
     body.calendar-compact-ui .calendar-grid .calendar-items{gap:2px!important;padding:0!important;margin-top:1px!important;max-width:100%!important;overflow:hidden!important}
-    body.calendar-compact-ui .calendar-grid .calendar-items>*:nth-child(n+3):not(.calendar-overflow-indicator){display:none!important}
+    body.calendar-compact-ui .calendar-grid .calendar-overflow-hidden{display:none!important}
     body.calendar-compact-ui .calendar-grid .calendar-overflow-indicator{display:block!important;box-sizing:border-box!important;width:100%!important;height:13px!important;min-height:13px!important;line-height:13px!important;margin-top:1px!important;padding:0 2px!important;color:#64748b!important;font-size:8px!important;font-weight:850!important;white-space:nowrap!important;overflow:hidden!important;text-align:left!important;letter-spacing:-.02em!important}
     body.calendar-compact-ui .calendar-grid .calendar-item,body.calendar-compact-ui .calendar-grid .calendar-band{box-sizing:border-box!important;display:block!important;width:100%!important;max-width:100%!important;height:17px!important;min-height:17px!important;line-height:17px!important;padding:0 3px!important;font-size:10px!important;font-weight:750!important;letter-spacing:-.02em!important;border-radius:4px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important;overflow-wrap:normal!important}
     body.calendar-compact-ui .calendar-grid .calendar-shopping,body.calendar-compact-ui .calendar-grid .meta{font-size:9px!important;line-height:13px!important}
@@ -86,15 +86,17 @@ try{
   };
   const updateOverflowIndicators=root=>{
     if(!root?.querySelectorAll)return;
-    const groups=[];
-    if(root.matches?.('.calendar-items'))groups.push(root);
-    root.querySelectorAll('.calendar-items').forEach(items=>groups.push(items));
-    groups.forEach(items=>{
-      const rows=[...items.children].filter(el=>el.matches?.('.calendar-item,.calendar-band'));
+    const cells=[];
+    if(root.matches?.('.calendar-cell'))cells.push(root);
+    root.querySelectorAll('.calendar-cell').forEach(cell=>cells.push(cell));
+    cells.forEach(cell=>{
+      const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
+      rows.forEach((row,index)=>row.classList.toggle('calendar-overflow-hidden',index>=2));
       const hidden=Math.max(0,rows.length-2);
-      let indicator=[...items.children].find(el=>el.classList?.contains('calendar-overflow-indicator'))||null;
+      const host=cell.querySelector('.calendar-items')||cell;
+      let indicator=cell.querySelector('.calendar-overflow-indicator');
       if(!hidden){indicator?.remove();return;}
-      if(!indicator){indicator=document.createElement('div');indicator.className='calendar-overflow-indicator';items.appendChild(indicator);}
+      if(!indicator){indicator=document.createElement('div');indicator.className='calendar-overflow-indicator';host.appendChild(indicator);}
       const label=`… +${hidden}`;
       if(indicator.textContent!==label)indicator.textContent=label;
       indicator.setAttribute('aria-label',`ほか${hidden}件の予定`);
@@ -117,9 +119,8 @@ try{
   const clearPreview=()=>{preview?.remove();preview=null;};
   const showPreview=(schedule,point)=>{
     const cell=schedule?.closest?.('.calendar-cell');
-    const items=cell?.querySelector?.('.calendar-items');
-    if(!cell||!items)return;
-    const rows=[...items.querySelectorAll('.calendar-item,.calendar-band')];
+    if(!cell)return;
+    const rows=[...cell.querySelectorAll('.calendar-item,.calendar-band')];
     if(!rows.length)return;
     clearPreview();
     const box=document.createElement('div');box.className='calendar-press-popover'+(rows.length>6?' dense':'');
