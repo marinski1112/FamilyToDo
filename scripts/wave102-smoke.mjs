@@ -12,7 +12,7 @@ assert.equal(typeof repair.listeners.click,'function','repair click listener is 
 await repair.listeners.click();
 assert.equal(request.action,'repair_preview','click posts repair_preview through scoped call');
 assert.match(status.textContent,/対象はありません/);
-const calendar=fs.readFileSync('src/google-calendar.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),app=fs.readFileSync('src/app.ts','utf8'),page=fs.readFileSync('src/family-log-import.ts','utf8');
+const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),app=fs.readFileSync('src/app.ts','utf8'),page=fs.readFileSync('src/family-log-import.ts','utf8');
 for(const text of ['queueCalendarProjectionAfterMutation','link?\'UPDATE\':\'CREATE\'','if(link)return enqueueCalendarSync','calendarBackfill','pending_before','pending_after','変更はありません'])assert.ok(calendar.includes(text),text);
 assert.ok(index.includes("'/api/google-calendar/backfill'"));
 assert.ok((index.match(/queueCalendarProjectionAfterMutation/g)||[]).length>=3);
