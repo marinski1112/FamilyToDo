@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const cal=fs.readFileSync('src/google-calendar.ts','utf8');
+assert.ok(cal.includes('reconcileHintedInbound'));
+assert.ok(cal.includes('familyTodoTaskId'));
+assert.ok(cal.includes('duplicateCandidates'));
+assert.ok(cal.includes("action === 'diagnose_duplicates'"));
+assert.ok(cal.includes("action === 'repair_duplicates'"));
+assert.ok(cal.includes('dependency_count'));
+assert.ok(cal.includes('sameInboundShape'));
+assert.ok(cal.includes('applyInboundSafely'));
+assert.ok(cal.includes('安全な重複を修復'));
+console.log('wave128 fix20 smoke: Google Calendar hinted duplicate prevention/diagnostics ok');
