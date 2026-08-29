@@ -36,5 +36,6 @@ assert.ok(app.includes('convert-shopping'),'message shopping action contract sti
 for(const check of ['check:wave126','check:wave127','check:wave128','check:version'])assert.ok(ci.includes(check),`${check} must execute in CI`);
 assert.match(ci,/fetch-depth:\s*2/,'diff check needs the parent commit available');
 assert.ok((ci.match(/if: always\(\)/g)||[]).length>=18,'historical smoke failures must not hide latest smoke results');
-assert.match(sw,/familytodo-static-wave128-fix2/,'fix2 must invalidate the old static asset cache');
+assert.match(sw,/familytodo-static-wave128-fix\d+/,'Wave128 safe fixes must use a rotated static asset cache namespace');
+assert.doesNotMatch(sw,/familytodo-static-v92/,'the pre-Wave128 static cache namespace must not return');
 console.log('wave128 fix smoke: quick labels, message contrast, mobile modal, recurring band rewrite, one-tap isolation, latest CI checks ok');
