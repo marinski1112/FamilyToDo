@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
+
+const app=fs.readFileSync('src/app.ts','utf8');
+const family=fs.readFileSync('public/assets/family.css','utf8');
+const calendarCss=fs.readFileSync('public/assets/calendar.css','utf8');
+const ui=fs.readFileSync('public/assets/calendar-mobile-ui.js','utf8');
+const sw=fs.readFileSync('public/sw.js','utf8');
+
+execFileSync(process.execPath,['--check','public/assets/calendar-mobile-ui.js'],{stdio:'inherit'});
+
+// Compact month/date jump controls and mobile geometry.
+for(const token of ['calendar-month-jump','calendar-jump-go','class="compact-form"'])assert.ok(app.includes(token),`missing Calendar jump markup: ${token}`);
+for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-space:nowrap'])assert.ok(family.includes(token),`missing shared compact-control CSS: ${token}`);
+for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
+for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
+
+// Hard two-row schedule budget including recurring and multi-day rows.
+assert.ok(ui.includes("Number(row?.spanDays||1)<=1"),'one-day rows must be detected by spanDays, not legacy segment labels');
+assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule cap must include recurring/task/event rows while excluding carry-item rows');
+assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'third and later schedule rows must stay hidden despite important display rules');
+assert.ok(ui.includes("singles.forEach((row,index)=>setOverflowHidden(row,index>=singleSlots))"),'single-day schedules must obey remaining two-row slots');
+assert.ok(ui.includes("setOverflowHidden(band,bandLane(band)>2)"),'multi-day bands must share the same two-row budget');
+assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'row budgeting must account for spanning bands and ordinary rows together');
+
+// Service-worker cache lifecycle required for Calendar asset updates.
+assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
+assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
+
+console.log('calendar-presentation-contract: compact geometry and two-row schedule contracts ok');
