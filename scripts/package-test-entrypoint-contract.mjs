@@ -10,5 +10,6 @@ assert.equal(scripts['test:legacy'],'npm run check:legacy-regression','legacy au
 assert.ok(String(scripts.test||'').includes('npm run check:regression'),'npm test must execute the active regression suite');
 assert.ok(!/check:wave\d|domain-smoke/.test(String(scripts.test||'')),'npm test must not directly execute historical Wave/domain chains');
 assert.ok(!String(scripts.test||'').includes('check:legacy-regression'),'npm test must not execute the legacy audit implicitly');
+assert.ok(!Object.keys(scripts).some(name=>/^check:wave/i.test(name)),'package scripts must not expose historical Wave entrypoints');
 
 console.log('package test entrypoint contract: active and legacy regression paths are separated');
