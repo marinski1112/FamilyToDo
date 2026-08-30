@@ -49,6 +49,7 @@ const groups={
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
     ['family-log-import-protocol',['node','scripts/family-log-import-protocol-contract.mjs']],
     ['family-log-import-integrity',['node','scripts/family-log-import-integrity-contract.mjs']],
+    ['family-log-completion',['bash','scripts/family-log-completion-contract.sh']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
     ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
     ['family-ai-foundation',['node','scripts/family-ai-foundation-contract.mjs']],

@@ -31,4 +31,4 @@ test "$(sqlite3 "$db" 'SELECT COUNT(*) FROM family_log_subjects WHERE id=11 AND 
 test "$(sqlite3 "$db" 'SELECT COUNT(*) FROM family_log_subjects WHERE id=12 AND family_id<>1')" = 1
 # A legacy recurrence without a template remains untouched and has no action.
 test "$(sqlite3 "$db" 'SELECT COUNT(*) FROM task_family_log_templates WHERE task_id=24')" = 0
-echo 'wave82 smoke: ok'
+echo 'family-log-completion-contract: recurrence completion and linked family-log persistence ok'
