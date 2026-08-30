@@ -9,6 +9,7 @@ const groups={
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
     ['calendar-projection-lifecycle',['node','scripts/calendar-projection-lifecycle-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
+    ['ics-import-format',['node','scripts/ics-import-format-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
   ],
   'google-integrations':[
