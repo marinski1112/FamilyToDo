@@ -29,9 +29,21 @@ assert.match(calendar,/monthLabel\.textContent=currentMonth\.slice\(0,4\)\+'年'
 assert.match(ui,/calendar-page-head h1\{display:none/,'Calendar heading must remain hidden in compact mobile chrome');
 assert.match(ui,/calendarFilterToggle/,'Calendar filter must retain an explicit expandable control');
 assert.match(ui,/filter\.hidden=!opening/,'Calendar filter panel must collapse and expand without changing the current view');
+assert.match(ui,/calendar-filter-toggle svg/,'Calendar filter control must remain icon-sized');
+assert.ok(ui.includes("setAttribute('aria-label','表示フィルター')"),'Calendar filter icon must retain an accessible label');
 assert.match(ui,/\.wrap\{max-width:none!important;width:100%/,'Calendar page must use the mobile viewport width');
 assert.match(ui,/calendar-grid \.calendar-item,body\.calendar-compact-ui \.calendar-grid \.calendar-band/,'task/event labels must retain compact Calendar typography');
 assert.match(ui,/font-size:10px!important/,'Calendar task/event text must remain materially larger than the old 7px mobile rule');
+assert.match(ui,/text-overflow:clip!important/,'Calendar labels must clip rather than render ellipsis');
+assert.ok(ui.includes("replace(/^\\s*📌\\s*/,''"),'event pin prefix must be removed from month labels');
+
+// Press preview and compact schedule interaction.
+assert.ok(ui.includes('calendar-overflow-hidden'),'normal month view must support an explicit hidden-row marker');
+assert.match(ui,/calendar-press-popover/,'press preview must remain available as a temporary floating view');
+assert.ok(ui.includes('schedulesForCell(cell)'),'press preview must include spanning bands and hidden rows for the pressed date');
+assert.ok(ui.includes("removeAttribute('href')"),'mobile schedule labels must not navigate when used as press-preview targets');
+assert.ok(ui.includes("document.addEventListener('touchend'"),'touch release must restore the compact view');
+assert.ok(ui.includes("document.addEventListener('click'"),'schedule click must be intercepted so date/blank click remains the day-detail path');
 
 // Calendar date-content positioning must account for multi-day band rows.
 assert.ok(app.includes('--calendar-day-band-rows:'),'Calendar cells must publish their band-row count');
@@ -66,4 +78,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'obsolete pre-Wave128 static cache namespace must remain retired');
 
-console.log('calendar-presentation-contract: compact chrome, filtering, positioning, recurring band links and two-row schedule contracts ok');
+console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links and two-row schedule contracts ok');
