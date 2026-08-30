@@ -9,6 +9,7 @@ assert.match(messages,/const d=await r\.json\(\)\.catch\(\(\)=>null\)/,'message 
 assert.match(messages,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error\(d\?\.error\|\|'削除に失敗しました'\)/,'message delete must treat HTTP/API failures as failures');
 assert.match(messages,/catch\(err\)\{alert\(err instanceof Error&&err\.message\?err\.message:'削除に失敗しました'\);b\.disabled=false;/,'message delete failure must restore the action and surface a useful error');
 assert.match(messages,/location\.reload\(\);\}catch/,'message delete success must preserve the existing reload behavior');
-assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-message-delete-error-handling'/,'message delete asset changes must rotate the static cache so the fix is delivered on the first post-deploy visit');
+assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-[^']+'/,'message delete asset delivery must remain under the rotating Family TODO static-cache namespace');
+assert.match(serviceWorker,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire superseded Family TODO static caches so updated assets are delivered');
 
-console.log('message delete error contract: transport errors are contained, retry remains possible, and the updated asset is not hidden by the previous cache namespace');
+console.log('message delete error contract: transport errors are contained, retry remains possible, and static cache rotation remains active');

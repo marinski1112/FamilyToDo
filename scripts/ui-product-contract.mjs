@@ -45,6 +45,12 @@ assert.ok(app.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'
 assert.ok(app.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
 assert.ok(app.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
 
+// Task creation transport failure handling
+assert.match(taskNew,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'task creation must treat non-JSON, HTTP, and API failures as failures');
+assert.match(taskNew,/catch\(err\)\{alert\(err instanceof Error&&err\.message\?err\.message:'登録に失敗しました'\)/,'task creation network failures must reach the existing user-visible error path');
+assert.match(taskNew,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
+assert.match(sw,/const STATIC_CACHE='familytodo-static-task-new-transport-errors'/,'task creation asset changes must rotate the static cache for first-visit delivery');
+
 // Message composition failure handling
 assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
 assert.match(messageNew,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message submit must treat HTTP/API failures as failures');
@@ -100,4 +106,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: navigation, private event editing, message submission, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, private event editing, task/message transport handling, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
