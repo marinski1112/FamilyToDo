@@ -19,6 +19,7 @@ const groups={
   'google-integrations':[
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-calendar-inbound',['node','scripts/google-calendar-inbound-contract.mjs']],
+    ['calendar-sync-foundation',['node','scripts/calendar-sync-foundation-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
     ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
@@ -35,6 +36,7 @@ const groups={
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
     ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
+    ['family-ai-foundation',['node','scripts/family-ai-foundation-contract.mjs']],
     ['family-ai-statistics',['node','scripts/family-ai-statistics-contract.mjs']],
     ['version',['node','scripts/version-contract.mjs']],
   ],
