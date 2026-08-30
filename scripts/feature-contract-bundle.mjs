@@ -17,6 +17,7 @@ const groups={
   ],
   'google-integrations':[
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
+    ['google-calendar-inbound',['node','scripts/google-calendar-inbound-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
     ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
@@ -28,6 +29,7 @@ const groups={
   ],
   'ui-product':[
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
+    ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
