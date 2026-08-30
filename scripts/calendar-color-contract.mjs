@@ -25,7 +25,7 @@ for(const [color,name] of Object.entries(timeTreeColors)){
 
 assert.match(calendar,/function applyStoredCalendarColors\(root\)/,'calendar must apply stored colors in the primary calendar controller');
 assert.match(calendar,/\^#\[0-9a-f\]\{6\}\$/i,'calendar colors must be constrained to six-digit HEX values');
-assert.match(ui,/function applyStoredCalendarColors\(root\)/,'mobile Calendar must reapply stored task colors');
+assert.ok(ui.includes('const applyStoredCalendarColors=(root,detailData)=>'),'mobile Calendar must reapply stored task colors from Calendar detail data');
 assert.ok(ui.includes('/^#[0-9a-f]{6}$/i'),'mobile Calendar color application must accept only safe six-digit HEX values');
 assert.match(calendar,/\.calendar-band\[data-task-id\]/,'multi-day bands must receive stored calendar colors');
 assert.match(calendar,/\.calendar-items > \.calendar-item:not\(\.item\)/,'single-day schedule rows must receive stored calendar colors');
