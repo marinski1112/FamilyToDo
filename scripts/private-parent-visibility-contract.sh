@@ -39,4 +39,4 @@ assert_eq "$(sqlite3 "$db" "SELECT group_concat(member_id) FROM item_assignees W
 assert_eq "$(sqlite3 "$db" "SELECT count(*) FROM notifications WHERE target_type='task' AND target_id=841 AND member_id<>841 AND status IN ('pending','retry');")" 0 'private notifications'
 # Server edit invariant is deliberately explicit: a private parent overrides posted NULL.
 node -e "const fs=require('fs');const s=fs.readFileSync('src/app.ts','utf8');if(!s.includes('const taskId=privateParent?Number(item.task_id)'))process.exit(1)"
-echo 'wave84 smoke: ok'
+echo 'private-parent-visibility-contract: visibility, child projection, assignees, and notification isolation ok'

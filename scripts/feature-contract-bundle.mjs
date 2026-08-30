@@ -36,6 +36,7 @@ const groups={
     ['expired-task',['node','scripts/expired-task-contract.mjs']],
     ['task-deletion-integrity',['bash','scripts/task-deletion-integrity-contract.sh']],
     ['activity-log-push-diagnostics',['bash','scripts/activity-log-push-diagnostics-contract.sh']],
+    ['private-parent-visibility',['bash','scripts/private-parent-visibility-contract.sh']],
     ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
     ['family-log-subject-timer',['node','scripts/family-log-subject-timer-contract.mjs']],
