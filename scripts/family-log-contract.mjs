@@ -19,4 +19,9 @@ for(const marker of ['family-log-quick-action',"action:'execute_quick_action'","
 for(const key of ['WET','DIRTY','BABY_FOOD','BATH','VOMIT','MILK'])assert.ok(app.includes(key),`missing Family Log record kind: ${key}`);
 assert.ok(app.includes('milkAmountPresets.map'),'milk preset controls must remain rendered');
 
+// Configurable quick-action persistence introduced for the consolidated Family Log UI.
+const quickActionMigration=read('migrations/0040_wave120_family_log_quick_actions.sql');
+for(const marker of ['family_log_quick_actions',"'QUICK','FORM','SLEEP_TOGGLE'",'subject_id','sort_order'])assert.ok(quickActionMigration.includes(marker),`missing Family Log quick-action migration marker: ${marker}`);
+for(const marker of ["action==='execute_quick_action'","action==='quick_action_save'",'quick_action_id:quickActionId','selectedQuickActions'])assert.ok(app.includes(marker),`missing Family Log configurable quick-action marker: ${marker}`);
+
 console.log('family-log-contract: quick values, actions and advanced record presentation ok');

@@ -20,7 +20,7 @@ assert.ok(calendar.includes("loadMonth(currentNext,1)"),'next-month control must
 assert.ok(calendar.includes('touchend'),'Calendar month swipe handling must remain wired');
 assert.equal(app.match(/>移動<\/button>/g)?.length,2,'Calendar must retain both compact move controls');
 for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-space:nowrap'])assert.ok(family.includes(token),`missing shared compact-control CSS: ${token}`);
-for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','min-height:40px'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
+for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','width:min(300px,calc(100vw - 24px))','minmax(0,.65fr)','min-width:0','min-height:40px'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
 for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
 
 // Calendar date-content positioning must account for multi-day band rows.
