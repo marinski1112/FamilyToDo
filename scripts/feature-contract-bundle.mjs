@@ -14,6 +14,7 @@ const groups={
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['ics-import-format',['node','scripts/ics-import-format-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
+    ['timezone-import',['node','scripts/timezone-import-contract.mjs']],
   ],
   'google-integrations':[
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
