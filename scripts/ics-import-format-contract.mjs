@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const parser=fs.readFileSync('src/calendar-ics-import.ts','utf8');
+const app=fs.readFileSync('src/app.ts','utf8');
+const index=fs.readFileSync('src/index.ts','utf8');
+const migration=fs.readFileSync('migrations/0036_wave108_calendar_ics_import.sql','utf8');
+const ui=fs.readFileSync('public/assets/calendar-import.js','utf8');
+
+for(const feature of [
+  'BEGIN:VCALENDAR','VALARM','RECURRENCE-ID','RELATED-TO','EXDATE','COLOR','LAST-MODIFIED',
+  'ICS_MAX_EVENTS=5000','ICS_MAX_BYTES=2*1024*1024','sourceHash','source_recurrence_key',
+  'formatFamilyDateTime','23:59:59','INTERVAL_WEEKS','MONTHLY_DAY','YEARLY',
+]) assert.ok(parser.includes(feature),feature);
+
+for(const route of [
+  '/api/calendar-import/preview','/api/calendar-import/apply','/api/calendar-import/rollback','/app/calendar_import.php',
+]) assert.ok(index.includes(route),route);
+
+assert.match(migration,/UNIQUE\(family_id,source_format,source_uid,source_recurrence_key\)/);
+assert.ok(app.includes("lower(t.task_kind)='task'"),'historical EVENT overdue exclusion');
+assert.ok(app.includes("type==='YEARLY'"));
+assert.ok(ui.includes('今回は通知として取り込みません'));
+assert.ok(ui.includes('Google APIは呼びません'));
+
+// Preserve the historical format-mix fixture as a data-free parser contract.
+const events=[];
+for(let i=0;i<634;i++){
+  const allDay=i<479,rr=i<7,ex=i<2,related=i===2;
+  events.push([
+    'BEGIN:VEVENT',`UID:synthetic-${i}@example.invalid`,'SUMMARY:Synthetic',
+    allDay?'DTSTART;VALUE=DATE:20260905':'DTSTART;TZID=Asia/Tokyo:20260905T090000',
+    allDay?'DTEND;VALUE=DATE:20260906':'DTEND;TZID=Asia/Tokyo:20260905T100000',
+    rr?'RRULE:FREQ=YEARLY':'',ex?'EXDATE;VALUE=DATE:20270905':'',
+    related?'RELATED-TO:synthetic-series@example.invalid':'',
+    'BEGIN:VALARM','ACTION:DISPLAY','END:VALARM','END:VEVENT',
+  ].filter(Boolean).join('\r\n'));
+}
+const fixture=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${events.join('\r\n')}\r\nEND:VCALENDAR`;
+assert.equal((fixture.match(/BEGIN:VEVENT/g)||[]).length,634);
+assert.equal((fixture.match(/VALUE=DATE:20260905/g)||[]).length,479);
+assert.equal((fixture.match(/TZID=Asia\/Tokyo:20260905T090000/g)||[]).length,155);
+assert.equal((fixture.match(/RRULE:/g)||[]).length,7);
+assert.equal((fixture.match(/EXDATE/g)||[]).length,2);
+assert.equal((fixture.match(/RELATED-TO/g)||[]).length,1);
+assert.equal((fixture.match(/RECURRENCE-ID/g)||[]).length,0);
+
+console.log('ics-import-format-contract: parser formats, routes, provenance, UI guidance, and fixture mix ok');
