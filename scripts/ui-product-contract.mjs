@@ -9,6 +9,8 @@ const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
 const messages=fs.readFileSync('public/assets/messages.js','utf8');
+const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
+const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 
 // Mobile navigation
@@ -31,6 +33,12 @@ assert.match(pwa,/@media\(max-width:340px\).*repeat\(3/s,'narrow screens must us
 assert.match(pwa,/repeat\(4,minmax\(0,1fr\)\)/,'normal mobile quick-action grids must support four columns');
 assert.match(pwa,/grid-template-columns:18px minmax\(0,1fr\)!important/,'compact message rows must preserve icon/text geometry');
 assert.match(pwa,/\.message-actions \.convert-shopping\{color:#fff!important\}/,'shopping conversion action must retain readable contrast');
+
+// PRIVATE task/event creation and editing must preserve the same visibility controls.
+assert.match(taskNew,/if\(isEvent\?\.checked\)\{noDate\.checked=false;noDate\.disabled=true;if\(isPrivate\)isPrivate\.disabled=false/,'new EVENT flow must allow PRIVATE visibility');
+assert.match(taskEdit,/if\(editIsEvent\?\.checked\)\{editNoDate\.checked=false;editNoDate\.disabled=true;\}else\{editNoDate\.disabled=false;\}if\(editIsPrivate\)editIsPrivate\.disabled=false/,'editing an EVENT must keep PRIVATE visibility available');
+assert.doesNotMatch(taskEdit,/editIsPrivate\.checked=false/,'editing an EVENT must never silently reset PRIVATE to FAMILY');
+assert.match(taskEdit,/is_private:editIsPrivate\?\.checked\|\|false/,'edit submit payload must carry PRIVATE visibility explicitly');
 
 // Message composition failure handling
 assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
@@ -87,4 +95,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: navigation, message submission, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, private event editing, message submission, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
