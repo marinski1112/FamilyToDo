@@ -16,6 +16,7 @@ const groups={
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
     ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
+    ['google-home-voice',['node','scripts/google-home-voice-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
   'ui-product':[
