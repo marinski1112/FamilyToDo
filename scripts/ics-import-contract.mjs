@@ -43,6 +43,10 @@ assert.match(source,/cleaned\|\|title/,'normalization must retain a safe title f
 assert.ok(ui.includes('終了時刻なし（推奨）'));assert.ok(ui.includes('変更しない'));
 assert.ok(ui.includes('raw ICS'));assert.ok(ui.includes('ai_requests'));assert.ok(ui.includes('while(!done)'));
 
+// Imported calendar colors must survive parsing and task persistence.
+assert.ok(source.includes('calendar_color,task_kind'),'ICS import must persist calendar_color on imported tasks');
+assert.ok(source.includes('e.color'),'ICS COLOR values must be bound to calendar_color during apply');
+
 // Chunked browser/server resume protocol.
 assert.match(source,/parseIcs\(String\(b\.chunk_ics\|\|''\),zone,true\)/,'server must parse only the submitted chunk');
 assert.doesNotMatch(source,/calendarImportApply[\s\S]{0,500}requestState/,'apply must not retain request-global parsed state');
@@ -69,4 +73,4 @@ assert.match(migration,/UPDATE calendar_import_batches AS duplicate/);assert.mat
 for(const token of ['calendarDisplayLabel','calendar-item-time','a===r.start','aria-label'])assert.ok(app.includes(token)||css.includes(token),`missing Calendar display contract: ${token}`);
 assert.match(app,/display\.time\?display\.time\+' ':''}\$\{icon/);assert.match(app,/same&&.*===time/);
 
-console.log('ics-import-contract: budget, normalization, chunking, resume, provenance, and display contracts ok');
+console.log('ics-import-contract: budget, normalization, colors, chunking, resume, provenance, and display contracts ok');
