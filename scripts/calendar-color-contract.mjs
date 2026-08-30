@@ -34,7 +34,9 @@ assert.ok(!calendar.includes("String(row?.segment||'single')==='single'"),'segme
 assert.ok(!calendar.includes("if(isEvent&&!allowedColors.has(color))link.style.background='#16a34a'"),'calendar must not repaint unknown stored colors to the legacy green fallback');
 assert.ok(!calendar.includes('repairEventBandFallbackColors'),'legacy event fallback color repair must be removed');
 assert.ok((calendar.match(/applyStoredCalendarColors\(/g)||[]).length>=3,'stored colors must be applied on definition, initial grid, and month replacement');
-assert.match(sw,/familytodo-static-calendar-color-prepaint/,'Calendar color mapping changes must rotate the static asset cache');
+const staticCache=sw.match(/const STATIC_CACHE='([^']+)'/)?.[1]||'';
+assert.ok(staticCache.startsWith('familytodo-static-'),'service worker must keep a versioned Family TODO static cache namespace');
+assert.notEqual(staticCache,'familytodo-static-calendar-color-contract','Calendar color mapping changes must remain rotated beyond the pre-fix static asset cache');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire prior Family TODO static caches');
 
 console.log('calendar-color-contract: stored HEX and TimeTree palette are applied consistently');

@@ -7,6 +7,7 @@ const calendar=fs.readFileSync('public/assets/calendar-mobile-ui.js','utf8');
 const familyLoader=fs.readFileSync('public/assets/family-log.js','utf8');
 const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
+const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 
 // Mobile navigation
@@ -29,6 +30,12 @@ assert.match(pwa,/@media\(max-width:340px\).*repeat\(3/s,'narrow screens must us
 assert.match(pwa,/repeat\(4,minmax\(0,1fr\)\)/,'normal mobile quick-action grids must support four columns');
 assert.match(pwa,/grid-template-columns:18px minmax\(0,1fr\)!important/,'compact message rows must preserve icon/text geometry');
 assert.match(pwa,/\.message-actions \.convert-shopping\{color:#fff!important\}/,'shopping conversion action must retain readable contrast');
+
+// Message composition failure handling
+assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
+assert.match(messageNew,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message submit must treat HTTP/API failures as failures');
+assert.match(messageNew,/catch\(err\)\{alert\(/,'message submit transport failures must reach the existing user-visible error path');
+assert.match(messageNew,/location\.href='\/app\/messages\.php'/,'successful message submit must keep the existing redirect');
 
 // Compact modal controls and one-tap isolation
 assert.match(pwa,/grid-template-areas:'prev title next close' '\. reorder reorder \.'/,'mobile modal header controls must keep the compact grid');
@@ -71,4 +78,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: navigation, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, message submission, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
