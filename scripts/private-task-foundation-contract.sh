@@ -9,4 +9,4 @@ const checks=[
 ];
 for(const [file,text] of checks)if(!fs.readFileSync(file,'utf8').includes(text))throw new Error(`${file}: missing ${text}`);
 NODE
-echo 'wave83 smoke: ok'
+echo 'private-task-foundation-contract: visibility, ownership, create UI, and family-log validation markers ok'
