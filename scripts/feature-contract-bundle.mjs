@@ -5,6 +5,7 @@ const groups={
     ['calendar-presentation',['node','scripts/calendar-presentation-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
+    ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
   ],
