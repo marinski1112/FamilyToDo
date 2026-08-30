@@ -8,6 +8,7 @@ const familyLoader=fs.readFileSync('public/assets/family-log.js','utf8');
 const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
+const messages=fs.readFileSync('public/assets/messages.js','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 
 // Mobile navigation
@@ -36,6 +37,9 @@ assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit
 assert.match(messageNew,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message submit must treat HTTP/API failures as failures');
 assert.match(messageNew,/catch\(err\)\{alert\(/,'message submit transport failures must reach the existing user-visible error path');
 assert.match(messageNew,/location\.href='\/app\/messages\.php'/,'successful message submit must keep the existing redirect');
+assert.match(messages,/document\.getElementById\('msgForm'\)\.onsubmit=async e=>\{e\.preventDefault\(\);try\{/,'message list composer must contain transport failures');
+assert.match(messages,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message list composer must tolerate non-JSON and HTTP/API failures');
+assert.match(messages,/location\.reload\(\);\}catch\(err\)\{alert\(/,'message list composer must preserve successful reload and route failures to the existing alert path');
 
 // Compact modal controls and one-tap isolation
 assert.match(pwa,/grid-template-areas:'prev title next close' '\. reorder reorder \.'/,'mobile modal header controls must keep the compact grid');
