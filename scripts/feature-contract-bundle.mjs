@@ -19,6 +19,7 @@ const groups={
     ['google-home-voice',['node','scripts/google-home-voice-contract.mjs']],
     ['google-home-family-log',['node','scripts/google-home-family-log-contract.mjs']],
     ['google-tasks-voice',['node','scripts/google-tasks-voice-contract.mjs']],
+    ['google-tasks-sync',['node','scripts/google-tasks-sync-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
   'ui-product':[
