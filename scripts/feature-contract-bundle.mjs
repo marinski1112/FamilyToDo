@@ -17,6 +17,7 @@ const groups={
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
     ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
     ['google-home-voice',['node','scripts/google-home-voice-contract.mjs']],
+    ['google-home-family-log',['node','scripts/google-home-family-log-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
   'ui-product':[

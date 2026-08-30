@@ -11,4 +11,4 @@ assert.equal(isSingleChildCount([{subject_kind:'BABY'},{subject_kind:'PET'},{sub
 assert.equal(isSingleChildCount([{subject_kind:'BABY'},{subject_kind:'CHILD'},{subject_kind:'PET'}]),false);
 assert.ok(home.includes("single?'':String(s.name)"));assert.ok(home.includes("1時間前の${possessive}${word}記録"));
 assert.doesNotMatch(home,/m99999/);assert.match(docs,/自由な音声文/);assert.match(docs,/Computer \/ Speaker \/ Tablet \/ Window/);
-console.log('wave114 google home family log scene smoke: ok');
+console.log('google-home-family-log-contract: bounded family-log Scenes, subject selection, and relative record semantics ok');
