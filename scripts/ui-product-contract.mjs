@@ -48,6 +48,10 @@ assert.match(pwa,/overflow-x:hidden!important/,'mobile modal must not introduce 
 assert.match(pwa,/original\.cloneNode\(true\)/,'one-tap action rewriting must isolate the original control');
 assert.match(pwa,/event\.preventDefault\(\);event\.stopPropagation\(\)/,'one-tap actions must not leak navigation clicks');
 assert.match(pwa,/execute_quick_action/,'quick actions must retain their execution endpoint');
+assert.match(familyLoader,/family-log-quick-action\[data-log-type\]/,'Family Log loader must identify quick actions before the core generic form binding runs');
+assert.match(familyLoader,/removeAttribute\('data-log-type'\)/,'one-tap Family Log actions must not enter the generic detailed-record form route');
+assert.match(familyCore,/document\.querySelectorAll\('\.family-log-quick-action'\)/,'Family Log core must retain the dedicated one-tap execution handler');
+assert.match(familyCore,/action:'execute_quick_action'/,'Family Log core must retain the quick-action execution API contract');
 assert.match(pwa,/syntheticId>=0/,'synthetic recurring rows must stay distinguishable');
 for(const token of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.match(pwa,new RegExp(token),`${token} must remain available to recurring row actions`);
 assert.match(pwa,/\/app\/recurring\.php\?/,'recurring rows must preserve their editing destination');
