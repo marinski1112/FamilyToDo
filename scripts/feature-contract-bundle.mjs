@@ -9,6 +9,7 @@ const groups={
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
     ['calendar-projection-lifecycle',['node','scripts/calendar-projection-lifecycle-contract.mjs']],
     ['calendar-projection-queue',['node','scripts/calendar-projection-queue-contract.mjs']],
+    ['calendar-inbound-projection',['node','scripts/calendar-inbound-projection-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['ics-import-format',['node','scripts/ics-import-format-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
@@ -30,6 +31,7 @@ const groups={
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
     ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
+    ['family-ai-statistics',['node','scripts/family-ai-statistics-contract.mjs']],
     ['version',['node','scripts/version-contract.mjs']],
   ],
 };
