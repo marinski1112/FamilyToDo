@@ -12,7 +12,7 @@ assert.match(home,/SCENE_NAME_MAX=60/);
 assert.match(home,/normalize\('NFKC'\)/);
 assert.match(home,/Google Homeで同名の操作があります/);
 assert.match(home,/slice\(0,15\)/);
-for(const value of ['startDedicatedSleepDomain','stopDedicatedSleepDomain','recordQuickChoreDomain','external_command_receipts','GOOGLE_HOME_DISCONNECTED','GOOGLE_HOME_SYNCED','GOOGLE_HOME_TOKEN_ISSUED','GOOGLE_HOME_AUTHORIZE_STARTED'])assert.ok(home.includes(value),value);
+for(const value of ['startDedicatedSleepDomain','stopDedicatedSleepDomain','recordQuickChoreDomain','external_command_receipts','GOOGLE_HOME_DISCONNECTED','GOOGLE_HOME_SYNCED','GOOGLE_HOME_TOKEN_ISSUED','GOOGLE_HOME_AUTHORIZE_STARTED','GoogleとFamily TODO'])assert.ok(home.includes(value),value);
 assert.match(home,/requestId,key/);
 assert.match(home,/linked member|連携したメンバー/);
 assert.match(home,/payload:\{devices:\{\}\}/);
@@ -24,6 +24,6 @@ assert.match(home,/最終Google Home実行/);
 assert.match(home,/最終SYNC/);
 assert.match(home,/Scene count/);
 assert.doesNotMatch(home,/escapeHtml\(ctx\.env\.GOOGLE_HOME_CLIENT_SECRET/);
-for(const value of ['family-todo-home','Test integration','Home Graph/Test Suite','再linkまたはGoogle側の再同期','certification/release対象外','GOOGLE_CALENDAR_CLIENT_ID'])assert.ok(docs.includes(value),value);
+for(const value of ['family-todo-home','Test integration','Home Graph/Test Suite','再linkまたはGoogle側の再同期','certification/release対象外','GOOGLE_CALENDAR_CLIENT_ID','架空device type/traitは追加しません','Report State非対応'])assert.ok(docs.includes(value),value);
 
-console.log('google-home-voice-contract: OAuth lifecycle, bounded Scene SYNC, idempotent voice execution, diagnostics, and refresh-race guards ok');
+console.log('google-home-voice-contract: OAuth lifecycle, bounded Scene SYNC, idempotent voice execution, diagnostics, documented capability bounds, and refresh-race guards ok');
