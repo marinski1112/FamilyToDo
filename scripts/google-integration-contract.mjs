@@ -65,6 +65,15 @@ assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
 assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
 assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
+for(const ui of ['受信対象カレンダー: Family TODO','sync token:','使用モデル:'])assert.ok(calendar.includes(ui),ui);
+assert.match(calendar,/pending_count/);
+assert.match(calendar,/status IN \('PENDING','ERROR'\)/);
+assert.match(calendar,/pending_before/);
+assert.match(calendar,/pending_after/);
+for(const guardrail of ["calendar.app.created","q.set('syncToken',syncToken)",'e.status===410',"status='ACTIVE'", "1,'EVENT'"])assert.ok(calendar.includes(guardrail),guardrail);
+assert.ok(!calendar.includes('googleapis.com/tasks'));
+assert.ok(!/UPDATE tasks SET[^'\n]*task_kind/.test(calendar));
+
 assert.match(calendar,/String\(o\.operation\)===['"]DELETE['"]&&e instanceof GoogleError&&\(e\.status===404\|\|e\.status===410\)/,'only DELETE 404/410 should be treated as idempotent success');
 assert.match(calendar,/calendar_sync_outbox SET status='DONE',last_error=NULL/);
 assert.match(calendar,/external_calendar_links SET deleted_at=\?/);
@@ -98,4 +107,4 @@ assert.ok(!calendarEntry.includes("action === 'diagnose_duplicates'"));
 assert.ok(!calendarEntry.includes("action === 'repair_duplicates'"));
 assert.ok(!calendarEntry.includes('calendarDuplicateDiagnose')&&!calendarEntry.includes('calendarDuplicateRepair'));
 
-console.log('google-integration-contract: Home, credentials, AI model, Calendar watch/sync/delete/retry/duplicate contracts ok');
+console.log('google-integration-contract: Home, credentials, AI model, Calendar diagnostics/watch/sync/delete/retry/duplicate contracts ok');
