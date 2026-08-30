@@ -7,6 +7,7 @@ const groups={
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
+    ['calendar-projection-lifecycle',['node','scripts/calendar-projection-lifecycle-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
   ],
