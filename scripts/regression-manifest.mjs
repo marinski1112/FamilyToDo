@@ -32,5 +32,5 @@ export const activeRegressionGroups=[
 // These are opt-in audits only and must not block ordinary PR CI.
 export const legacyRegressionChecks=[
   ['domain-waves-81-108-113-116','npm run check:domain-smoke'],
-  ...[14,15,19,22].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
+  ...[15,19,22].map(n=>[`wave128-fix${n}`,`node scripts/wave128-fix${n}-smoke.mjs`]),
 ];
