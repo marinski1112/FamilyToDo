@@ -12,6 +12,7 @@ const groups={
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
+    ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
   'ui-product':[
