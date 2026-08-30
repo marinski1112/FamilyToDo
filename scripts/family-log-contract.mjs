@@ -13,4 +13,10 @@ assert.ok(log.includes('amount.value=lastMilkAmounts'),'milk quick values must r
 assert.ok(log.includes('advanced.open=Boolean(row.note'),'advanced Family Log details must reopen when note data exists');
 assert.ok(!fs.existsSync('migrations/0040_wave118_family_log_quick_values.sql'),'Family Log quick values must not depend on the abandoned Wave118 migration');
 
-console.log('family-log-contract: quick values and advanced record presentation ok');
+// Quick-record actions and record kinds must remain wired.
+for(const marker of ["action==='quick_record'",'BABY_FOOD','VOMIT',"subject_kind)!=='BABY'",'linked_task_id,linked_occurrence_id'])assert.ok(app.includes(marker),`missing Family Log server marker: ${marker}`);
+for(const marker of ['family-log-quick-action',"action:'execute_quick_action'","action:'sleep_start'","action:'sleep_stop'",'family-log-form-action'])assert.ok(log.includes(marker)||app.includes(marker),`missing Family Log action marker: ${marker}`);
+for(const key of ['WET','DIRTY','BABY_FOOD','BATH','VOMIT','MILK'])assert.ok(app.includes(key),`missing Family Log record kind: ${key}`);
+assert.ok(app.includes('milkAmountPresets.map'),'milk preset controls must remain rendered');
+
+console.log('family-log-contract: quick values, actions and advanced record presentation ok');
