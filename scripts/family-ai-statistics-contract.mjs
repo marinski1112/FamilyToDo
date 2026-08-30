@@ -17,6 +17,9 @@ for(const marker of [
   'statisticsAnswer',
   'synthetic connectivity test',
   'no user data is included',
+  '対象:',
+  '期間:',
+  '集計方法:',
 ]) assert.ok(ai.includes(marker),marker);
 
 for(const marker of [
@@ -27,4 +30,4 @@ for(const marker of [
 
 assert.doesNotMatch(ai,/contents:\s*\[[\s\S]{0,300}(rows|result)/,'raw query results must not be sent to Gemini');
 
-console.log('family-ai-statistics-contract: typed bounded statistics plans, aggregate filters, and Worker-side privacy boundary ok');
+console.log('family-ai-statistics-contract: typed bounded statistics plans, aggregate filters, result labels, and Worker-side privacy boundary ok');
