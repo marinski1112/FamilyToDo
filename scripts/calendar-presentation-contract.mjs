@@ -23,6 +23,16 @@ for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-spac
 for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','width:min(300px,calc(100vw - 24px))','minmax(0,.65fr)','min-width:0','min-height:40px','position:static','min-width:52px','color:#fff'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
 for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
 
+// Compact Calendar chrome and expandable filtering.
+assert.match(calendar,/calendar-mobile-ui\.js\?v=wave128-fix14/,'Calendar must load the compact UI module');
+assert.match(calendar,/monthLabel\.textContent=currentMonth\.slice\(0,4\)\+'年'\+Number\(currentMonth\.slice\(5\)\)\+'月'/,'month navigation must keep the compact year/month label');
+assert.match(ui,/calendar-page-head h1\{display:none/,'Calendar heading must remain hidden in compact mobile chrome');
+assert.match(ui,/calendarFilterToggle/,'Calendar filter must retain an explicit expandable control');
+assert.match(ui,/filter\.hidden=!opening/,'Calendar filter panel must collapse and expand without changing the current view');
+assert.match(ui,/\.wrap\{max-width:none!important;width:100%/,'Calendar page must use the mobile viewport width');
+assert.match(ui,/calendar-grid \.calendar-item,body\.calendar-compact-ui \.calendar-grid \.calendar-band/,'task/event labels must retain compact Calendar typography');
+assert.match(ui,/font-size:10px!important/,'Calendar task/event text must remain materially larger than the old 7px mobile rule');
+
 // Calendar date-content positioning must account for multi-day band rows.
 assert.ok(app.includes('--calendar-day-band-rows:'),'Calendar cells must publish their band-row count');
 assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'),'Calendar content must be positioned below date and band zones');
@@ -54,5 +64,6 @@ assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'row budgeting
 // Service-worker cache lifecycle required for Calendar asset updates.
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
+assert.doesNotMatch(sw,/familytodo-static-v92/,'obsolete pre-Wave128 static cache namespace must remain retired');
 
-console.log('calendar-presentation-contract: jump controls, positioning, recurring band links and two-row schedule contracts ok');
+console.log('calendar-presentation-contract: compact chrome, filtering, positioning, recurring band links and two-row schedule contracts ok');
