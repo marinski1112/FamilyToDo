@@ -72,10 +72,14 @@ assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'th
 assert.ok(ui.includes("singles.forEach((row,index)=>setOverflowHidden(row,index>=singleSlots))"),'single-day schedules must obey remaining two-row slots');
 assert.ok(ui.includes("setOverflowHidden(band,bandLane(band)>2)"),'multi-day bands must share the same two-row budget');
 assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'row budgeting must account for spanning bands and ordinary rows together');
+assert.ok(ui.includes('calendar-overflow-indicator'),'hidden schedules must expose a compact overflow indicator');
+assert.ok(ui.includes('… +${hidden}'),'overflow indicator must retain the visible hidden-count text');
+assert.ok(ui.includes('`ほか${hidden}件の予定`'),'overflow indicator must retain an accessible hidden-count label');
+assert.ok(ui.includes('requestAnimationFrame'),'Calendar row-budget recalculation must remain deferred until layout is ready');
 
 // Service-worker cache lifecycle required for Calendar asset updates.
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'obsolete pre-Wave128 static cache namespace must remain retired');
 
-console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links and two-row schedule contracts ok');
+console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links, two-row schedule and overflow contracts ok');
