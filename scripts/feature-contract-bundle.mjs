@@ -34,6 +34,7 @@ const groups={
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
     ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
+    ['family-log-scheduling',['node','scripts/family-log-scheduling-contract.mjs']],
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
     ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
