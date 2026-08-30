@@ -43,6 +43,7 @@ assert.match(app,/const makePrivate=privateTaskRequested\(b\);/,'server edit flo
 assert.doesNotMatch(app,/const makePrivate=!isEvent&&privateTaskRequested\(b\);/,'server edit flow must not force EVENT visibility back to FAMILY');
 assert.ok(app.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
 assert.ok(app.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
+assert.ok(app.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
 
 // Message composition failure handling
 assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
