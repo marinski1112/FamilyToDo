@@ -27,6 +27,7 @@ const groups={
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
+    ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
     ['version',['node','scripts/version-contract.mjs']],
   ],
 };
