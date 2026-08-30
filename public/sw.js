@@ -1,4 +1,4 @@
-const STATIC_CACHE='familytodo-static-family-log-one-tap-no-flash';
+const STATIC_CACHE='familytodo-static-message-delete-error-handling';
 const STATIC_ASSETS=['/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>{}));
