@@ -32,8 +32,10 @@ const groups={
   ],
   'ui-product':[
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
+    ['task-presentation',['node','scripts/task-presentation-contract.mjs']],
     ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
+    ['family-log-subject-timer',['node','scripts/family-log-subject-timer-contract.mjs']],
     ['family-log-dashboard',['node','scripts/family-log-dashboard-contract.mjs']],
     ['family-log-daily-ux',['node','scripts/family-log-daily-ux-contract.mjs']],
     ['family-log-visibility',['node','scripts/family-log-visibility-contract.mjs']],
