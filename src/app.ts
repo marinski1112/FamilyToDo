@@ -1108,7 +1108,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const b=await bodyJson(request); await ensureCsrf(ctx,b.csrf);
     const title=String(b.title||'').trim();
     const isEvent=Boolean(b.is_event);
-    const makePrivate=!isEvent&&privateTaskRequested(b);
+    const makePrivate=privateTaskRequested(b);
     if(makePrivate&&Number(task.created_by)!==m.id&&!(String(task.visibility_scope)==='PRIVATE'&&Number(task.private_owner_id)===m.id)) throw new Forbidden('他のメンバーが作成した共有タスクを自分専用にはできません。');
     const date=String(b.date||'').trim(); const noDate=!isEvent&&(Boolean(b.no_date)||date==='');
     if(!title) throw new BadRequest('タイトルを入力してください。');
