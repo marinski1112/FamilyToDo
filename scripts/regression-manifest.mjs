@@ -31,5 +31,5 @@ export const activeRegressionGroups=[
 // Historical checks that have not yet been migrated or intentionally retired.
 // These are opt-in audits only and must not block ordinary PR CI.
 export const legacyRegressionChecks=[
-  ['domain-waves-81-97','npm run check:domain-smoke'],
+  ['domain-waves-81-96','npm run check:domain-smoke'],
 ];
