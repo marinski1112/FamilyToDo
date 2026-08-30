@@ -7,11 +7,41 @@ const calendar=fs.readFileSync('public/assets/calendar-mobile-ui.js','utf8');
 const familyLoader=fs.readFileSync('public/assets/family-log.js','utf8');
 const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
+const app=fs.readFileSync('src/app.ts','utf8');
 
 // Mobile navigation
 assert.match(pwa,/\.bottom-nav \.nav-inner>a\{white-space:nowrap!important/,'bottom navigation labels must not wrap on mobile');
 assert.match(pwa,/word-break:keep-all!important/,'Japanese navigation labels must stay intact');
 assert.match(pwa,/a\[href="\/app\/tasks\.php"\]\{font-size:8px!important;letter-spacing:-\.06em!important\}/,'long task/event label must fit the six-column mobile nav');
+
+// Quick-action labels and compact action grids
+const splitLabel=value=>{const chars=Array.from(value);return chars.length>=5&&chars.length<=8?[chars.slice(0,4).join(''),chars.slice(4).join('')]:[value];};
+for(const value of ['ミ','ミルク','おむつ','おむつ交換','12345678','猫🐈ごはん']){
+  const lines=splitLabel(value);
+  assert.equal(lines.join(''),value,`${value}: label must not be truncated`);
+  if(Array.from(value).length<=4)assert.equal(lines.length,1,`${value}: 1-4 code points must stay one line`);
+  if(Array.from(value).length>=5&&Array.from(value).length<=8){assert.ok(lines.length<=2,`${value}: 5-8 code points max two lines`);assert.equal(Array.from(lines[0]).length,4);}
+}
+assert.match(pwa,/Array\.from\(label\.textContent/,'quick-action labels must split by code point');
+assert.match(pwa,/chars\.length>=5&&chars\.length<=8/,'5-8 code point labels must use the compact two-line rule');
+assert.match(pwa,/document\.createElement\('br'\)/,'label wrapping must insert a real line break rather than truncate text');
+assert.match(pwa,/@media\(max-width:340px\).*repeat\(3/s,'narrow screens must use a three-column quick-action grid');
+assert.match(pwa,/repeat\(4,minmax\(0,1fr\)\)/,'normal mobile quick-action grids must support four columns');
+assert.match(pwa,/grid-template-columns:18px minmax\(0,1fr\)!important/,'compact message rows must preserve icon/text geometry');
+assert.match(pwa,/\.message-actions \.convert-shopping\{color:#fff!important\}/,'shopping conversion action must retain readable contrast');
+
+// Compact modal controls and one-tap isolation
+assert.match(pwa,/grid-template-areas:'prev title next close' '\. reorder reorder \.'/,'mobile modal header controls must keep the compact grid');
+assert.match(pwa,/min-width:40px!important;min-height:40px!important/,'mobile modal controls must preserve touch targets');
+assert.match(pwa,/overflow-x:hidden!important/,'mobile modal must not introduce horizontal overflow');
+assert.match(pwa,/original\.cloneNode\(true\)/,'one-tap action rewriting must isolate the original control');
+assert.match(pwa,/event\.preventDefault\(\);event\.stopPropagation\(\)/,'one-tap actions must not leak navigation clicks');
+assert.match(pwa,/execute_quick_action/,'quick actions must retain their execution endpoint');
+assert.match(pwa,/syntheticId>=0/,'synthetic recurring rows must stay distinguishable');
+for(const token of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.match(pwa,new RegExp(token),`${token} must remain available to recurring row actions`);
+assert.match(pwa,/\/app\/recurring\.php\?/,'recurring rows must preserve their editing destination');
+assert.ok(app.includes('calendar-band '),'Calendar band rendering contract must remain present');
+assert.ok(app.includes('convert-shopping'),'message-to-shopping action contract must remain present');
 
 // Interactive contrast guard
 assert.match(pwa,/wave128-auto-contrast/,'contrast guard class must exist');
@@ -41,4 +71,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: mobile navigation, contrast, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
