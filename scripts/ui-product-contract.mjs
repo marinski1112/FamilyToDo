@@ -39,6 +39,10 @@ assert.match(taskNew,/if\(isEvent\?\.checked\)\{noDate\.checked=false;noDate\.di
 assert.match(taskEdit,/if\(editIsEvent\?\.checked\)\{editNoDate\.checked=false;editNoDate\.disabled=true;\}else\{editNoDate\.disabled=false;\}if\(editIsPrivate\)editIsPrivate\.disabled=false/,'editing an EVENT must keep PRIVATE visibility available');
 assert.doesNotMatch(taskEdit,/editIsPrivate\.checked=false/,'editing an EVENT must never silently reset PRIVATE to FAMILY');
 assert.match(taskEdit,/is_private:editIsPrivate\?\.checked\|\|false/,'edit submit payload must carry PRIVATE visibility explicitly');
+assert.match(app,/const makePrivate=privateTaskRequested\(b\);/,'server edit flow must honor PRIVATE for both TASK and EVENT');
+assert.doesNotMatch(app,/const makePrivate=!isEvent&&privateTaskRequested\(b\);/,'server edit flow must not force EVENT visibility back to FAMILY');
+assert.ok(app.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
+assert.ok(app.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
 
 // Message composition failure handling
 assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
