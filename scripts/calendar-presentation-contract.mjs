@@ -18,14 +18,18 @@ assert.ok(calendar.includes("get('open')"),'Calendar must preserve direct-date o
 assert.ok(calendar.includes("loadMonth(currentPrev,-1)"),'previous-month control must remain wired');
 assert.ok(calendar.includes("loadMonth(currentNext,1)"),'next-month control must remain wired');
 assert.ok(calendar.includes('touchend'),'Calendar month swipe handling must remain wired');
+assert.equal(app.match(/>移動<\/button>/g)?.length,2,'Calendar must retain both compact move controls');
 for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-space:nowrap'])assert.ok(family.includes(token),`missing shared compact-control CSS: ${token}`);
-for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
+for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','min-height:40px'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
 for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
 
 // Calendar date-content positioning must account for multi-day band rows.
 assert.ok(app.includes('--calendar-day-band-rows:'),'Calendar cells must publish their band-row count');
 assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'),'Calendar content must be positioned below date and band zones');
+assert.ok(calendarCss.includes('--calendar-no-band-content-top:29px'),'Calendar no-band cells must retain the compact content offset');
+assert.ok(calendarCss.includes('[data-band-rows="0"]'),'Calendar no-band positioning selector must remain present');
 assert.match(calendarCss,/top:calc\(var\(--calendar-date-zone\) \+ var\(--calendar-day-band-rows\) \* var\(--calendar-band-step\)\)!important/,'Calendar item positioning must include band rows');
+assert.ok(calendarCss.includes('var(--calendar-day-band-rows) * var(--calendar-band-step)'),'Calendar content positioning must use per-day band row count');
 assert.ok(!calendarCss.includes('margin-top:calc(var(--calendar-band-rows)'),'obsolete band-row margin positioning must remain retired');
 const contentTop=(dateZone,dayBands,step)=>dateZone+dayBands*step;
 assert.equal(contentTop(34,0,17),34);
