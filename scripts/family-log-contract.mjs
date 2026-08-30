@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const app=read('src/app.ts');
 const index=read('src/index.ts');
+const tasks=read('src/google-tasks.ts');
 const log=read('public/assets/family-log.js')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+read('public/assets/family-log-core.js'):'');
 const familyCss=read('public/assets/family.css');
 
@@ -28,4 +29,11 @@ assert.ok(!log.includes("prompt('動作: QUICK"),'Family Log quick actions must 
 for(const marker of ['ワンタッチ','入力して記録','睡眠開始 / 終了','data-quick-move','quick_action_reorder'])assert.ok(log.includes(marker)||app.includes(marker),`missing Family Log quick-action UI marker: ${marker}`);
 assert.ok(app.includes("['family_log_quick_actions'")||index.includes("['family_log_quick_actions'"),'Family Log schema/table checks must retain quick-action persistence');
 
-console.log('family-log-contract: quick values, actions and advanced record presentation ok');
+// Wave124 Family Log presentation and Google voice recording behavior.
+assert.match(familyCss,/family-quick-chore-grid\{display:grid;grid-template-columns:repeat\(4/,'quick chore grid must retain four-column presentation');
+assert.match(familyCss,/word-break:keep-all/,'quick chore labels must preserve Japanese word grouping');
+assert.doesNotMatch(familyCss,/family-quick-chore-record strong\{[^}]*ellipsis/,'Family Log record labels must not be ellipsized');
+assert.ok(app.includes('Array.from(name).length>8'),'Family Log quick-action names must retain the eight-character limit');
+for(const marker of ["type:'FAMILY_LOG_RECORD'",'occurredOffsetMinutes','AMBIGUOUS_SUBJECT','PET_SUBJECT_REQUIRED','recordConfiguredQuickActionDomain','recordGoogleVoiceFamilyLogDomain'])assert.ok(tasks.includes(marker),`missing Google voice Family Log marker: ${marker}`);
+
+console.log('family-log-contract: quick values, actions, Google voice records and advanced presentation ok');
