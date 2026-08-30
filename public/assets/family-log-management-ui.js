@@ -4,7 +4,7 @@ try{
   if(location.pathname!=='/app/settings_family_log.php')return;
   const head=document.querySelector('.family-log-management-head');
   const legacyHeadAction=head?.lastElementChild;
-  if(legacyHeadAction)legacyHeadAction.remove();
+  if(legacyHeadAction&&legacyHeadAction.tagName!=='H1')legacyHeadAction.remove();
 
   const originalOpen=document.getElementById('familyLogSubjectOpen');
   const subjectRows=[...document.querySelectorAll('.family-log-management-row:not(.family-chore-management-row)')];
@@ -37,7 +37,7 @@ try{
     .family-log-subject-manager-list .family-log-management-row::after{content:'›';justify-self:end;color:#64748b;font-size:24px;line-height:1}
     .family-log-subject-manager-list .family-log-management-row>span{min-width:0!important}
     .family-log-subject-manager-list .family-log-management-row small{display:inline!important;margin-left:7px!important}
-    .family-log-subject-manager-list .family-log-subject-edit{display:none!important}
+    .family-log-subject-manager-list .family-log-management-row .family-log-subject-edit{display:none!important}
     .family-log-subject-manager-actions{display:grid;gap:8px;margin-top:12px}
     .family-log-subject-manager-actions .btn{width:100%}
     @media(min-width:700px){.family-log-subject-manager{align-items:center}.family-log-subject-manager-panel{border-radius:18px}}
