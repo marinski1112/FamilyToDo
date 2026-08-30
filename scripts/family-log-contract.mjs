@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const read=p=>fs.readFileSync(p,'utf8');
 const app=read('src/app.ts');
+const index=read('src/index.ts');
 const log=read('public/assets/family-log.js')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+read('public/assets/family-log-core.js'):'');
 const familyCss=read('public/assets/family.css');
 
@@ -23,5 +24,8 @@ assert.ok(app.includes('milkAmountPresets.map'),'milk preset controls must remai
 const quickActionMigration=read('migrations/0040_wave120_family_log_quick_actions.sql');
 for(const marker of ['family_log_quick_actions',"'QUICK','FORM','SLEEP_TOGGLE'",'subject_id','sort_order'])assert.ok(quickActionMigration.includes(marker),`missing Family Log quick-action migration marker: ${marker}`);
 for(const marker of ["action==='execute_quick_action'","action==='quick_action_save'",'quick_action_id:quickActionId','selectedQuickActions'])assert.ok(app.includes(marker),`missing Family Log configurable quick-action marker: ${marker}`);
+assert.ok(!log.includes("prompt('動作: QUICK"),'Family Log quick actions must use the consolidated UI rather than prompt input');
+for(const marker of ['ワンタッチ','入力して記録','睡眠開始 / 終了','data-quick-move','quick_action_reorder'])assert.ok(log.includes(marker)||app.includes(marker),`missing Family Log quick-action UI marker: ${marker}`);
+assert.ok(app.includes("['family_log_quick_actions'")||index.includes("['family_log_quick_actions'"),'Family Log schema/table checks must retain quick-action persistence');
 
 console.log('family-log-contract: quick values, actions and advanced record presentation ok');
