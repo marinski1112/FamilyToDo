@@ -40,6 +40,7 @@ const groups={
     ['family-log-overview-sleep',['node','scripts/family-log-overview-sleep-contract.mjs']],
     ['family-log-scheduling',['node','scripts/family-log-scheduling-contract.mjs']],
     ['family-log-import-repair',['node','scripts/family-log-import-repair-contract.mjs']],
+    ['family-log-import-protocol',['node','scripts/family-log-import-protocol-contract.mjs']],
     ['family-ai-actions',['node','scripts/family-ai-actions-contract.mjs']],
     ['family-ai-provider',['node','scripts/family-ai-provider-contract.mjs']],
     ['family-ai-foundation',['node','scripts/family-ai-foundation-contract.mjs']],
