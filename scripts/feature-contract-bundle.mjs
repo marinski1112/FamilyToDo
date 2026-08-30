@@ -24,6 +24,7 @@ const groups={
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
     ['google-home-sync',['node','scripts/google-home-sync-contract.mjs']],
     ['google-home-voice',['node','scripts/google-home-voice-contract.mjs']],
+    ['google-home-foundation',['node','scripts/google-home-foundation-contract.mjs']],
     ['google-home-family-log',['node','scripts/google-home-family-log-contract.mjs']],
     ['google-tasks-voice',['node','scripts/google-tasks-voice-contract.mjs']],
     ['google-tasks-sync',['node','scripts/google-tasks-sync-contract.mjs']],

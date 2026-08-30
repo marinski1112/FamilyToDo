@@ -22,7 +22,7 @@
     "check:pwa-js": "node --check public/assets/pwa.js && node --check public/sw.js",
     "check:family-log-js": "node --check public/assets/family-log.js",
     "check:migrations": "bash scripts/migration-smoke.sh",
-    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh && bash scripts/wave84-smoke.sh && bash scripts/wave85-smoke.sh && bash scripts/wave86-smoke.sh && bash scripts/wave87-smoke.sh && bash scripts/wave88-smoke.sh && bash scripts/wave89-smoke.sh && bash scripts/wave91-smoke.sh && bash scripts/wave92-smoke.sh && bash scripts/wave93-smoke.sh && bash scripts/wave94-smoke.sh && bash scripts/wave95-smoke.sh && bash scripts/wave96-smoke.sh",
+    "check:domain-smoke": "bash scripts/wave81-smoke.sh && bash scripts/wave82-smoke.sh && bash scripts/wave83-smoke.sh && bash scripts/wave84-smoke.sh && bash scripts/wave85-smoke.sh && bash scripts/wave86-smoke.sh && bash scripts/wave87-smoke.sh && bash scripts/wave88-smoke.sh && bash scripts/wave89-smoke.sh && bash scripts/wave91-smoke.sh && bash scripts/wave92-smoke.sh && bash scripts/wave93-smoke.sh && bash scripts/wave94-smoke.sh && bash scripts/wave95-smoke.sh",
     "check:static-assets": "node scripts/check-static-assets.mjs",
     "check:version": "node scripts/version-contract.mjs",
     "check:regression": "node scripts/regression-suite.mjs",
