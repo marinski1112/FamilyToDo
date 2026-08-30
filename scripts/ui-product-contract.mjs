@@ -49,7 +49,7 @@ assert.ok(app.includes('if(reminderAt&&assignees.length){'),'scheduled reminders
 assert.match(taskNew,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'task creation must treat non-JSON, HTTP, and API failures as failures');
 assert.match(taskNew,/catch\(err\)\{alert\(err instanceof Error&&err\.message\?err\.message:'登録に失敗しました'\)/,'task creation network failures must reach the existing user-visible error path');
 assert.match(taskNew,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
-assert.match(sw,/const STATIC_CACHE='familytodo-static-task-new-transport-errors'/,'task creation asset changes must rotate the static cache for first-visit delivery');
+assert.doesNotMatch(sw,/const STATIC_CACHE='familytodo-static-message-delete-error-handling'/,'task creation asset changes must remain past the pre-fix static cache namespace so first-visit delivery is preserved');
 
 // Message composition failure handling
 assert.match(messageNew,/await r\.json\(\)\.catch\(\(\)=>null\)/,'message submit must tolerate non-JSON error responses');
