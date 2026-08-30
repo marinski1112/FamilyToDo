@@ -32,6 +32,7 @@ const groups={
   ],
   'ui-product':[
     ['ui-product',['node','scripts/ui-product-contract.mjs']],
+    ['message-delete-error',['node','scripts/message-delete-error-contract.mjs']],
     ['task-presentation',['node','scripts/task-presentation-contract.mjs']],
     ['expired-task',['node','scripts/expired-task-contract.mjs']],
     ['task-deletion-integrity',['bash','scripts/task-deletion-integrity-contract.sh']],
