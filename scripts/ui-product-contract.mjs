@@ -72,7 +72,8 @@ assert.doesNotMatch(calendar,/calendar-cell\.calendar-press-preview/,'press prev
 assert.match(familyLoader,/family-log-core\.js\?v=wave128-fix17/,'Family Log loader must preserve the existing core implementation');
 assert.match(familyLoader,/family-log-management-ui\.js\?v=wave128-fix17/,'Family Log loader must include the consolidated management UI');
 assert.match(familyCore,/familyLogSubjectOpen/,'Family Log core must retain subject creation/edit behavior');
-assert.match(familyUi,/legacyHeadAction\.remove\(\)/,'Family Log management must remove the legacy top-right action');
+assert.match(familyUi,/legacyHeadAction&&legacyHeadAction\.tagName!=='H1'/,'Family Log management must never remove the page heading when no legacy action is present');
+assert.match(familyUi,/legacyHeadAction\.remove\(\)/,'Family Log management must still remove the legacy top-right action when present');
 assert.match(familyUi,/＋ 対象・項目/,'Family Log subject management must use one consolidated entry point');
 assert.match(familyUi,/family-log-subject-manager-list/,'Family Log subject manager must expose existing rows inside the manager');
 assert.match(familyUi,/edit\?\.click\(\)/,'tapping an existing subject row must reuse the existing edit flow');
