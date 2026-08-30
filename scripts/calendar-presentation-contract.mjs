@@ -35,6 +35,14 @@ const contentTop=(dateZone,dayBands,step)=>dateZone+dayBands*step;
 assert.equal(contentTop(34,0,17),34);
 assert.equal(contentTop(34,2,17),68);
 
+// Recurring multi-day Calendar bands must retain links after initial and AJAX month renders.
+assert.match(calendar,/function repairRecurringBandLinks\(/,'Calendar must own recurring band link repair');
+for(const token of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.match(calendar,new RegExp(token),`${token} must remain available for recurring Calendar bands`);
+assert.match(calendar,/a\.calendar-band\[data-task-id\]/,'Calendar band repair must target task-backed bands');
+assert.match(calendar,/\/app\/recurring\.php\?/,'recurring Calendar bands must preserve their editing destination');
+assert.match(calendar,/gridNow\.innerHTML=nextGrid\.innerHTML;[\s\S]*?detail=payload\.detail\|\|\{\};[\s\S]*?repairRecurringBandLinks\(gridNow\)/,'AJAX month replacement must repair recurring band links using the replacement payload');
+assert.match(calendar,/repairRecurringBandLinks\(document\.querySelector\('\.calendar-grid'\)\)/,'initial Calendar grid must repair recurring band links');
+
 // Hard two-row schedule budget including recurring and multi-day rows.
 assert.ok(ui.includes("Number(row?.spanDays||1)<=1"),'one-day rows must be detected by spanDays, not legacy segment labels');
 assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule cap must include recurring/task/event rows while excluding carry-item rows');
@@ -47,4 +55,4 @@ assert.ok(ui.includes('bandsForCell')&&ui.includes('singleSlots'),'row budgeting
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
 
-console.log('calendar-presentation-contract: jump controls, positioning and two-row schedule contracts ok');
+console.log('calendar-presentation-contract: jump controls, positioning, recurring band links and two-row schedule contracts ok');
