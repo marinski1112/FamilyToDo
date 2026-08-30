@@ -32,4 +32,4 @@ sqlite3 "$db" "UPDATE family_logs SET log_type='MEMO',quick_chore_id=CASE WHEN '
 test "$(sqlite3 "$db" 'SELECT quick_chore_id IS NULL FROM family_logs WHERE id=1')" = 1
 test "$(sqlite3 "$db" 'SELECT quick_chore_id IS NULL FROM family_logs WHERE id=4')" = 1
 
-echo 'wave81 smoke: ok'
+echo 'family-log-quick-chore-provenance-contract: quick chore provenance lifecycle ok'

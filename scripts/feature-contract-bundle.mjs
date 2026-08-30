@@ -40,6 +40,7 @@ const groups={
     ['private-task-foundation',['bash','scripts/private-task-foundation-contract.sh']],
     ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
     ['family-log',['node','scripts/family-log-contract.mjs']],
+    ['family-log-quick-chore-provenance',['bash','scripts/family-log-quick-chore-provenance-contract.sh']],
     ['family-log-subject-timer',['node','scripts/family-log-subject-timer-contract.mjs']],
     ['family-log-dashboard',['node','scripts/family-log-dashboard-contract.mjs']],
     ['family-log-daily-ux',['node','scripts/family-log-daily-ux-contract.mjs']],
