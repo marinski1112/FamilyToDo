@@ -28,12 +28,18 @@ assert.equal(validateLiffNext('/app/calendar.php'),'/app/calendar.php');
 assert.equal(validateLiffNext('/oauth/google/continue?resume=abc.DEF'),'/oauth/google/continue?resume=abc.DEF');
 
 const continuation=read('src/oauth-continuation.ts');
-for(const token of ['AES-GCM','p.exp>=Date.now()',"u.searchParams.get('flow')==='google_home'",'liffDispatcher','/oauth/line/google-home/start?resume=','INVALID_LEGACY_CONTINUATION','loginRedirect:u.pathname+u.search','Google Home連携情報が無効か、有効期限が切れました。','SESSION_COMMIT_FAILED'])assert.ok(continuation.includes(token),token);
+for(const token of ['AES-GCM','p.exp>=Date.now()',"u.searchParams.get('flow')==='google_home'",'liffDispatcher','/oauth/line/google-home/start?resume=','INVALID_LEGACY_CONTINUATION','loginRedirect:u.pathname+u.search','Google Home連携情報が無効か、有効期限が切れました。','SESSION_COMMIT_FAILED','LINE_WEB_AUTH_STARTED',"stage:'LIFF_PRIMARY_RECEIVED'"])assert.ok(continuation.includes(token),token);
+const normalLiff=continuation.slice(continuation.indexOf('export async function normalLiff'),continuation.indexOf('export async function liffDispatcher'));
+assert.ok(!normalLiff.includes('ctx.member)return go'),'normal LIFF flow must not bypass continuation after member lookup');
 assert.ok(read('src/index.ts').includes('return await liffDispatcher(request,env)'));
 assert.ok(read('src/app.ts').includes('validateLiffNext(body.next)'));
 
 const client=read('public/assets/liff-auth.js');
 assert.ok(client.includes('await window.liff.init'));
+assert.ok(client.indexOf('await window.liff.init')<client.indexOf('const current=resolve()'),'LIFF must initialize before resolving the current target');
+assert.ok(client.includes("url.searchParams.get('next')"),'LIFF target resolution must honor next');
+assert.ok(client.includes('return valid(payload.next)'),'LIFF payload next must be validated');
+assert.ok(client.includes("fetch('/__cf/auth-health'"),'LIFF auth flow must retain auth-health diagnostics');
 assert.ok(client.includes('next:current'));
 assert.ok(client.includes('const target=valid(data.redirect)'));
 assert.ok(!client.includes("data.redirect||'/app/index.php'"));
