@@ -10,6 +10,7 @@ const groups={
     ['calendar-projection-lifecycle',['node','scripts/calendar-projection-lifecycle-contract.mjs']],
     ['calendar-projection-queue',['node','scripts/calendar-projection-queue-contract.mjs']],
     ['calendar-inbound-projection',['node','scripts/calendar-inbound-projection-contract.mjs']],
+    ['calendar-sync-retry',['node','scripts/calendar-sync-retry-contract.mjs']],
     ['ics-import',['node','scripts/ics-import-contract.mjs']],
     ['ics-import-format',['node','scripts/ics-import-format-contract.mjs']],
     ['import-recovery',['node','scripts/calendar-import-recovery-contract.mjs']],
