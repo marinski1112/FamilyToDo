@@ -6,6 +6,7 @@ type CountRow = { c?: number };
 type CalendarPerfStage = 'request_start' | 'snapshot_ready' | 'snapshot_error' | 'delegate_start' | 'response_ready' | 'response_body_complete';
 
 type CalendarPerfRecord = {
+  message: 'calendar_perf';
   event: 'calendar_perf';
   trace_id: string;
   stage: CalendarPerfStage;
@@ -27,13 +28,13 @@ type CalendarPerfRecord = {
 
 // Keep the logger deliberately allow-listed. Do not add content-bearing fields here.
 const CALENDAR_PERF_ALLOWED_KEYS = new Set<keyof CalendarPerfRecord>([
-  'event','trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','recurrence_rules',
+  'message','event','trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','recurrence_rules',
   'projected_occurrences','materialized_occurrences','shopping_items','items','multi_day_bands','multi_day_rows',
   'rendered_html_length','status','projection_count_source',
 ]);
 
-function calendarPerfLog(record: CalendarPerfRecord): void {
-  const safe: Record<string, unknown> = {};
+function calendarPerfLog(record: Omit<CalendarPerfRecord, 'message'>): void {
+  const safe: Record<string, unknown> = { message: 'calendar_perf' };
   for (const [key, value] of Object.entries(record)) {
     if (CALENDAR_PERF_ALLOWED_KEYS.has(key as keyof CalendarPerfRecord)) safe[key] = value;
   }
