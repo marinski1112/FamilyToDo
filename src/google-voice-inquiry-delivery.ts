@@ -32,7 +32,7 @@ export async function deliverGoogleVoiceInquiry(
   if (!Number.isSafeInteger(memberId) || memberId <= 0) throw new Error('invalid-member-id');
   if (inquiry.delivery !== 'MEMBER_WEB_PUSH') throw new Error('unsupported-inquiry-delivery');
 
-  let payload;
+  let payload: ReturnType<typeof buildGoogleVoiceInquiryPush>;
   try {
     const lines = await resolveLines(inquiry.kind);
     payload = buildGoogleVoiceInquiryPush({ kind: inquiry.kind, lines });
