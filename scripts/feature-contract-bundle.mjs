@@ -43,6 +43,7 @@ const groups={
     ['expired-task',['node','scripts/expired-task-contract.mjs']],
     ['task-deletion-integrity',['bash','scripts/task-deletion-integrity-contract.sh']],
     ['activity-log-push-diagnostics',['bash','scripts/activity-log-push-diagnostics-contract.sh']],
+    ['web-push-tenant-integrity',['node','scripts/web-push-tenant-integrity-contract.mjs']],
     ['private-parent-visibility',['bash','scripts/private-parent-visibility-contract.sh']],
     ['private-task-foundation',['bash','scripts/private-task-foundation-contract.sh']],
     ['settings-diagnostics',['node','scripts/settings-diagnostics-contract.mjs']],
