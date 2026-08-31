@@ -32,6 +32,7 @@ assert.match(source,/\.bind\(familyId,input\.stampDate,visibility,visibility==='
 assert.doesNotMatch(source,/SELECT id FROM calendar_stamp_assets WHERE id=\? AND family_id=\? AND active=1 LIMIT 1/,'placement creation must not split asset eligibility from insertion');
 assert.match(source,/Math\.max\(1,Math\.min\(MAX_ASSET_OPTIONS/,'asset picker limit must remain runtime bounded');
 assert.match(source,/lower\.startsWith\('data:'\)\|\|key\.includes\(':\/\/'\)/,'asset registry must reject embedded or remote URL storage keys');
+assert.match(source,/slashNormalized\.startsWith\('\/\/'\)/,'asset registry must reject protocol-relative and backslash-equivalent remote keys');
 assert.match(source,/segments\.some\(segment=>segment==='\.\.'\)/,'asset registry must reject parent traversal segments');
 assert.match(source,/assetKind==='ANIMATED'&&mimeType==='image\/png'/,'animated PNG metadata must be rejected until the supported mime set includes an animation-safe PNG format');
 assert.match(source,/\(width===null\)!==\(height===null\)/,'asset dimensions must be supplied as a pair');
