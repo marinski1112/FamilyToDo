@@ -74,7 +74,9 @@ for(const guardrail of ["calendar.app.created","q.set('syncToken',syncToken)",'e
 assert.ok(!calendar.includes('googleapis.com/tasks'));
 assert.ok(!/UPDATE tasks SET[^'\n]*task_kind/.test(calendar));
 
-assert.match(calendar,/String\(o\.operation\)===['"]DELETE['"]&&e instanceof GoogleError&&\(e\.status===404\|\|e\.status===410\)/,'only DELETE 404/410 should be treated as idempotent success');
+assert.match(calendar,/effectiveDelete&&e instanceof GoogleError&&\(e\.status===404\|\|e\.status===410\)/,'effective DELETE 404/410 should be treated as idempotent success');
+assert.match(calendar,/effectiveDelete=op==='DELETE'\|\|!task\|\|!eligibleTask\(task\)/,'missing or now-ineligible projections must take the delete lifecycle');
+assert.doesNotMatch(calendar,/String\(o\.operation\)===['"]DELETE['"]&&e instanceof GoogleError/,'idempotent not-found handling must follow the effective operation rather than only the queued label');
 assert.match(calendar,/calendar_sync_outbox SET status='DONE',last_error=NULL/);
 assert.match(calendar,/external_calendar_links SET deleted_at=\?/);
 assert.match(calendar,/operation='DELETE' AND retry_count>=\?/);
@@ -99,7 +101,7 @@ assert.match(calendarEntry,/target_count: count/);
 assert.doesNotMatch(calendarEntry,/LIMIT 1000/);
 assert.match(calendarEntry,/calendar-backfill-limit\{display:none!important\}/);
 assert.match(calendarCore,/processCalendarOutbox/);
-assert.match(calendarCore,/String\(o\.operation\)==='DELETE'/);
+assert.match(calendarCore,/effectiveDelete=op==='DELETE'\|\|!task\|\|!eligibleTask\(task\)/);
 
 for(const token of ['reconcileHintedInbound','familyTodoTaskId','hintedInboundAlreadyProjected','dependency_count','sameInboundShape','applyInboundSafely'])assert.ok(calendarEntry.includes(token),token);
 assert.ok(!calendarEntry.includes('duplicateCandidates'));
