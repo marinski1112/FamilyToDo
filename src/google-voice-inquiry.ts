@@ -1,7 +1,6 @@
 export type GoogleVoiceInquiryKind='TODAY_SCHEDULE'|'TOMORROW_SCHEDULE'|'OPEN_SHOPPING';
 export type GoogleVoiceInquiry={type:'INQUIRY';kind:GoogleVoiceInquiryKind;delivery:'MEMBER_WEB_PUSH'};
 export type MarkedGoogleVoiceInquiryCommand={marked:true}&GoogleVoiceInquiry;
-export type GoogleVoiceInquiryParseResult={marked:false}|MarkedGoogleVoiceInquiryCommand|{marked:true;type:'NEEDS_REVIEW';reason:'UNSUPPORTED_INQUIRY'};
 
 const normalize=(value:unknown)=>String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim().replace(/[?？。！!]+$/,'').trim();
 const marker=/^(?:FT|FAMILY TODO|ファミリーTODO)(?: |$)/i;
@@ -27,14 +26,15 @@ export function parseGoogleVoiceInquiryBody(value:unknown):GoogleVoiceInquiry|nu
 }
 
 /**
- * Small adapter for the existing Google Tasks voice-command pipeline.
- * It owns only marker stripping and typed INQUIRY classification; execution,
- * member data reads and Web Push delivery remain outside this parser module.
+ * Small composable adapter for the existing Google Tasks voice-command pipeline.
+ * It owns only marker stripping and typed INQUIRY classification. Non-inquiry
+ * commands return null so TASK/SHOPPING/FAMILY_LOG parsing can continue unchanged.
+ * Execution, member data reads and Web Push delivery remain outside this module.
  */
-export function parseMarkedGoogleVoiceInquiryCommand(value:unknown):GoogleVoiceInquiryParseResult{
+export function parseMarkedGoogleVoiceInquiryCommand(value:unknown):MarkedGoogleVoiceInquiryCommand|null{
   const normalized=String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim();
   const matched=marker.exec(normalized);
-  if(!matched)return {marked:false};
+  if(!matched)return null;
   const inquiry=parseGoogleVoiceInquiryBody(normalized.slice(matched[0].length));
-  return inquiry?{marked:true,...inquiry}:{marked:true,type:'NEEDS_REVIEW',reason:'UNSUPPORTED_INQUIRY'};
+  return inquiry?{marked:true,...inquiry}:null;
 }
