@@ -30,6 +30,12 @@ export type CalendarStampPlacementInput = {
   sortOrder?: number;
 };
 
+export type CalendarStampPlacementUpdateInput = {
+  stampDate: string;
+  visibilityScope?: 'FAMILY' | 'PRIVATE';
+  sortOrder?: number;
+};
+
 const DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const MAX_ASSET_OPTIONS=64;
 const MAX_ASSET_NAME_LENGTH=80;
@@ -185,6 +191,35 @@ export async function createCalendarStampPlacement(
     .bind(familyId,input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,memberId,now,now,input.assetId,familyId,memberId,familyId).run();
   if(Number(result.meta.changes||0)!==1)throw new Error('calendar stamp asset unavailable');
   return Number(result.meta.last_row_id);
+}
+
+/**
+ * Creator-only metadata update. Asset identity is immutable here; moving a stamp,
+ * changing its visibility, or reordering it cannot transfer ownership. PRIVATE
+ * ownership is always re-derived from the acting creator rather than caller input.
+ */
+export async function updateCalendarStampPlacement(
+  env:Env,
+  familyId:number,
+  memberId:number,
+  placementId:number,
+  input:CalendarStampPlacementUpdateInput,
+):Promise<boolean>{
+  assertPositiveId(familyId,'calendar stamp family');
+  assertPositiveId(memberId,'calendar stamp member');
+  assertPositiveId(placementId,'calendar stamp placement');
+  assertCalendarDate(input.stampDate);
+  const visibility=input.visibilityScope==='PRIVATE'?'PRIVATE':'FAMILY';
+  const sortOrder=Math.trunc(Number(input.sortOrder)||0);
+  if(sortOrder<MIN_SORT_ORDER||sortOrder>MAX_SORT_ORDER)throw new Error('invalid calendar stamp sort order');
+
+  await assertActiveMember(env,familyId,memberId);
+  const result=await env.DB.prepare(`UPDATE calendar_stamp_placements
+    SET stamp_date=?,visibility_scope=?,private_owner_id=?,sort_order=?,updated_at=?
+    WHERE id=? AND family_id=? AND created_by=?
+      AND EXISTS(SELECT 1 FROM members actor WHERE actor.id=? AND actor.family_id=? AND actor.active=1)`)
+    .bind(input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,utcNow(),placementId,familyId,memberId,memberId,familyId).run();
+  return Number(result.meta.changes||0)>0;
 }
 
 /** Creator-only removal is the conservative default until an explicit admin policy is wired. */
