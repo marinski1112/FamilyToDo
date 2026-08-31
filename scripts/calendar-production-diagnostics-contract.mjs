@@ -8,6 +8,7 @@ const must=(condition,message)=>{if(!condition)fail(message);};
 
 must(/"main"\s*:\s*"src\/calendar-perf-worker\.ts"/.test(wrangler),'temporary diagnostics wrapper must be the Worker entry');
 must(/"CALENDAR_PERF_DIAGNOSTICS"\s*:\s*"1"/.test(wrangler),'diagnostics flag must be explicit while the trace is being collected');
+must(/"run_worker_first"[\s\S]*?"\/app\/calendar\.php"/.test(wrangler),'GET /app/calendar.php must explicitly run the diagnostics Worker before static-asset routing');
 must(/request\.method === 'GET' && url\.pathname === '\/app\/calendar\.php'/.test(worker),'instrumentation must be scoped to GET /app/calendar.php');
 must(/const traceId = crypto\.randomUUID\(\)/.test(worker),'one opaque trace id must be created per instrumented request');
 must(/event: 'calendar_perf'/.test(worker),'structured calendar_perf logs are required');
