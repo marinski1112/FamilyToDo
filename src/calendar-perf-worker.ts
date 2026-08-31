@@ -3,7 +3,17 @@ import { makeContext, taskVisibilitySql } from './app';
 import { DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 type CountRow = { c?: number; task_span_days_max?: number; task_span_days_total?: number };
-type CalendarPerfStage = 'request_start' | 'snapshot_ready' | 'snapshot_error' | 'delegate_start' | 'response_ready' | 'response_body_complete';
+type CalendarPerfStage =
+  | 'request_start'
+  | 'snapshot_ready'
+  | 'snapshot_error'
+  | 'delegate_start'
+  | 'physical_query_ready'
+  | 'recurrence_projection_ready'
+  | 'row_inputs_ready'
+  | 'calendar_html_ready'
+  | 'response_ready'
+  | 'response_body_complete';
 
 type CalendarPerfRecord = {
   message: 'calendar_perf';
@@ -28,19 +38,32 @@ type CalendarPerfRecord = {
   projection_count_source?: 'post_materialized_active_occurrences';
 };
 
-// Keep the logger deliberately allow-listed. Do not add content-bearing fields here.
+type CalendarPerfInput = Omit<CalendarPerfRecord, 'message' | 'event'>;
+type CalendarPerfLogger = (record: CalendarPerfInput) => void;
+
+// Keep the logger deliberately allow-listed. Search keys are logger-owned, not caller-controlled.
 const CALENDAR_PERF_ALLOWED_KEYS = new Set<keyof CalendarPerfRecord>([
-  'message','event','trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','task_span_days_max','task_span_days_total','recurrence_rules',
+  'trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','task_span_days_max','task_span_days_total','recurrence_rules',
   'projected_occurrences','materialized_occurrences','shopping_items','items','multi_day_bands','multi_day_rows',
   'rendered_html_length','status','projection_count_source',
 ]);
+const MAX_CALENDAR_PERF_LOGS = 12;
 
-function calendarPerfLog(record: Omit<CalendarPerfRecord, 'message'>): void {
-  const safe: Record<string, unknown> = { message: 'calendar_perf' };
+function calendarPerfLog(record: CalendarPerfInput): void {
+  const safe: Record<string, unknown> = { message: 'calendar_perf', event: 'calendar_perf' };
   for (const [key, value] of Object.entries(record)) {
     if (CALENDAR_PERF_ALLOWED_KEYS.has(key as keyof CalendarPerfRecord)) safe[key] = value;
   }
   console.log(JSON.stringify(safe));
+}
+
+function boundedCalendarPerfLogger(): CalendarPerfLogger {
+  let count = 0;
+  return (record) => {
+    if (count >= MAX_CALENDAR_PERF_LOGS) return;
+    count++;
+    calendarPerfLog(record);
+  };
 }
 
 function diagnosticsEnabled(env: Env): boolean {
@@ -120,44 +143,129 @@ async function responseByteLength(stream: ReadableStream<Uint8Array>): Promise<n
   }
 }
 
+type ObservedCalendarQuery = 'physical' | 'shopping' | 'items' | null;
+function observedCalendarQuery(sql: string): ObservedCalendarQuery {
+  const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (normalized.includes('select t.*,group_concat(m.name') && normalized.includes('from tasks t') && normalized.includes('t.calendar_visible=1')) return 'physical';
+  if (normalized.includes('select s.*,t.title task_title') && normalized.includes('from shopping_items s') && normalized.includes('s.due_date between ? and ?')) return 'shopping';
+  if (normalized.includes('select i.*') && normalized.includes('from items i left join tasks pt') && normalized.includes('date(i.due_at) between date(?) and date(?)')) return 'items';
+  return null;
+}
+
+/**
+ * Observes only the three Calendar SELECT boundaries needed to locate the 1102 stage.
+ * SQL text and row contents never leave this function. Unrelated/native D1 statements are
+ * returned untouched so recurrence materialization batches keep their native statement identity.
+ */
+function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?: Partial<CalendarPerfInput>) => void): Env {
+  let recurrenceReady = false;
+  let shoppingRows: number | null = null;
+  let itemRows: number | null = null;
+  let rowInputsLogged = false;
+
+  const afterAll = (kind: Exclude<ObservedCalendarQuery, null>, result: { results?: unknown[] } | null | undefined) => {
+    const rows = Array.isArray(result?.results) ? result.results.length : 0;
+    if (kind === 'physical') {
+      emit('physical_query_ready', { physical_tasks: rows });
+      return;
+    }
+    if (kind === 'shopping') shoppingRows = rows;
+    if (kind === 'items') itemRows = rows;
+    if (!rowInputsLogged && shoppingRows !== null && itemRows !== null) {
+      rowInputsLogged = true;
+      emit('row_inputs_ready', { shopping_items: shoppingRows, items: itemRows });
+    }
+  };
+
+  const db = new Proxy(env.DB as unknown as Record<PropertyKey, unknown>, {
+    get(target, property) {
+      if (property !== 'prepare') {
+        const value = Reflect.get(target, property);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      return (sql: string) => {
+        const nativeStatement = (target.prepare as (query: string) => unknown).call(target, sql);
+        const kind = observedCalendarQuery(sql);
+        if (!kind) return nativeStatement;
+        if ((kind === 'shopping' || kind === 'items') && !recurrenceReady) {
+          recurrenceReady = true;
+          emit('recurrence_projection_ready');
+        }
+        const wrap = (statement: Record<PropertyKey, unknown>): unknown => new Proxy(statement, {
+          get(inner, statementProperty) {
+            if (statementProperty === 'bind') {
+              return (...args: unknown[]) => wrap((inner.bind as (...values: unknown[]) => Record<PropertyKey, unknown>).apply(inner, args));
+            }
+            if (statementProperty === 'all') {
+              return async (...args: unknown[]) => {
+                const result = await (inner.all as (...values: unknown[]) => Promise<{ results?: unknown[] }>).apply(inner, args);
+                afterAll(kind, result);
+                return result;
+              };
+            }
+            const value = Reflect.get(inner, statementProperty);
+            return typeof value === 'function' ? value.bind(inner) : value;
+          },
+        });
+        return wrap(nativeStatement as Record<PropertyKey, unknown>);
+      };
+    },
+  });
+
+  return new Proxy(env as unknown as Record<PropertyKey, unknown>, {
+    get(target, property) {
+      if (property === 'DB') return db;
+      const value = Reflect.get(target, property);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as unknown as Env;
+}
+
 async function instrumentedCalendarFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const started = Date.now();
   const traceId = crypto.randomUUID();
+  const log = boundedCalendarPerfLogger();
   const url = new URL(request.url);
   const fallbackTimeZone = String((env as unknown as { APP_TIMEZONE?: string }).APP_TIMEZONE || DEFAULT_FAMILY_TIMEZONE);
   const fallbackMonth = monthFor(url, fallbackTimeZone);
   const view = normalizedView(url);
-  calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'request_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
+  log({ trace_id: traceId, stage: 'request_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
 
   let context: Awaited<ReturnType<typeof makeContext>>;
   try {
     context = await makeContext(request, env, ctx);
   } catch {
-    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'snapshot_error', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
-    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'delegate_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
+    log({ trace_id: traceId, stage: 'snapshot_error', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
+    log({ trace_id: traceId, stage: 'delegate_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
     return baseWorker.fetch(request, env, ctx);
   }
 
   const timeZone = String(context.member?.family_timezone || fallbackTimeZone);
   const month = monthFor(url, timeZone);
   const { from, to } = renderedRange(month);
+  const stage = (name: CalendarPerfStage, aggregate: Partial<CalendarPerfInput> = {}) => log({
+    trace_id: traceId,
+    stage: name,
+    month,
+    view,
+    wall_checkpoint_ms: Date.now() - started,
+    ...aggregate,
+  });
 
   if (context.member) {
     try {
       const counts = await aggregateSnapshot(env, context.member.family_id, context.member.id, from, to, view);
-      calendarPerfLog({
-        event: 'calendar_perf', trace_id: traceId, stage: 'snapshot_ready', month, view,
-        wall_checkpoint_ms: Date.now() - started, ...counts, projected_occurrences: null,
-        multi_day_bands: null, multi_day_rows: null,
-      });
+      stage('snapshot_ready', { ...counts, projected_occurrences: null, multi_day_bands: null, multi_day_rows: null });
     } catch {
-      calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'snapshot_error', month, view, wall_checkpoint_ms: Date.now() - started });
+      stage('snapshot_error');
     }
   }
 
   // Cloudflare wall clocks are coarse checkpoints only; they are not CPU timings.
-  calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'delegate_start', month, view, wall_checkpoint_ms: Date.now() - started });
-  const response = await baseWorker.fetch(request, env, ctx);
+  stage('delegate_start');
+  const delegatedEnv = context.member ? calendarStageEnv(env, stage) : env;
+  const response = await baseWorker.fetch(request, delegatedEnv, ctx);
+  stage('calendar_html_ready', { status: response.status, rendered_html_length: null });
 
   let projectedOccurrences: number | null = null;
   if (context.member && response.ok) {
@@ -167,24 +275,23 @@ async function instrumentedCalendarFetch(request: Request, env: Env, ctx: Execut
       projectedOccurrences = null;
     }
   }
-  calendarPerfLog({
-    event: 'calendar_perf', trace_id: traceId, stage: 'response_ready', month, view,
-    wall_checkpoint_ms: Date.now() - started, status: response.status,
+  stage('response_ready', {
+    status: response.status,
     projected_occurrences: projectedOccurrences,
     projection_count_source: projectedOccurrences === null ? undefined : 'post_materialized_active_occurrences',
     rendered_html_length: null,
   });
 
   if (!response.body) {
-    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'response_body_complete', month, view, status: response.status, rendered_html_length: 0 });
+    stage('response_body_complete', { status: response.status, rendered_html_length: 0 });
     return response;
   }
 
   const [clientBody, measuredBody] = response.body.tee();
   ctx.waitUntil(responseByteLength(measuredBody).then((length) => {
-    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'response_body_complete', month, view, status: response.status, rendered_html_length: length });
+    stage('response_body_complete', { status: response.status, rendered_html_length: length });
   }).catch(() => {
-    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'response_body_complete', month, view, status: response.status, rendered_html_length: null });
+    stage('response_body_complete', { status: response.status, rendered_html_length: null });
   }));
   return new Response(clientBody, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
