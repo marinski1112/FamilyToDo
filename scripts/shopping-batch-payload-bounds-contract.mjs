@@ -42,8 +42,10 @@ assert.match(source,/quantities\.some\(quantity=>quantity\.length>MAX_PRODUCT_QU
 assert.match(source,/const safeUrls=urls\.map\(safeProductUrl\)/,'bounded batch submission must retain product URL validation');
 assert.match(source,/const taskId=.*safeEntityId/,'bounded batch submission must retain task reference validation');
 assert.match(source,/const assignees=assigneeValues\.map\(safeEntityId\)/,'bounded batch submission must retain assignee reference validation');
+assert.match(source,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('追加に失敗しました。'\)/,'Shopping batch API failures must fall back to a fixed client-safe message even when the response body is malformed');
+assert.doesNotMatch(source,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?\.error|alert\(d\.error/,'Shopping batch create must not surface arbitrary server error detail in the browser');
 
 assert.doesNotMatch(source,/calendar_perf|\/app\/calendar\.php|CALENDAR_PERF_DIAGNOSTICS/,'Shopping payload bounds must remain isolated from Calendar diagnostics');
 assert.doesNotMatch(source,/cookie|authorization|member_name|family_name|private_owner_id/i,'Shopping payload bounds must not add identity/session handling');
 
-console.log('shopping batch payload bounds contract: product count, per-product text, due date, category, and memo are validated before request assembly/network I/O while existing URL/entity safety remains intact');
+console.log('shopping batch payload bounds contract: input metadata remains bounded and Shopping batch API failures use a fixed browser-safe message without exposing arbitrary server detail');
