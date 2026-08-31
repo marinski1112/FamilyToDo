@@ -120,9 +120,12 @@ export async function registerCalendarStampAsset(
   if((width===null)!==(height===null))throw new Error('calendar stamp dimensions must be paired');
 
   const now=utcNow();
-  await env.DB.prepare(`INSERT INTO calendar_stamp_assets(
+  const result=await env.DB.prepare(`INSERT INTO calendar_stamp_assets(
       family_id,name,asset_kind,mime_type,storage_provider,storage_key,thumbnail_storage_key,width,height,active,created_by,created_at,updated_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?)
+    )
+    SELECT ?,?,?,?,?,?,?,?,?,1,?,?,?
+    FROM members actor
+    WHERE actor.id=? AND actor.family_id=? AND actor.active=1 AND actor.role IN ('OWNER','ADMIN')
     ON CONFLICT(family_id,storage_provider,storage_key) DO UPDATE SET
       name=excluded.name,
       asset_kind=excluded.asset_kind,
@@ -131,7 +134,8 @@ export async function registerCalendarStampAsset(
       width=excluded.width,
       height=excluded.height,
       active=1,
-      updated_at=excluded.updated_at`).bind(familyId,name,assetKind,mimeType,storageProvider,storageKey,thumbnailStorageKey,width,height,memberId,now,now).run();
+      updated_at=excluded.updated_at`).bind(familyId,name,assetKind,mimeType,storageProvider,storageKey,thumbnailStorageKey,width,height,memberId,now,now,memberId,familyId).run();
+  if(Number(result.meta.changes||0)!==1)throw new Error('calendar stamp admin required');
   const asset=await env.DB.prepare('SELECT id FROM calendar_stamp_assets WHERE family_id=? AND storage_provider=? AND storage_key=? LIMIT 1').bind(familyId,storageProvider,storageKey).first<{id:number}>();
   if(!asset)throw new Error('calendar stamp registration failed');
   return Number(asset.id);
@@ -143,7 +147,10 @@ export async function setCalendarStampAssetActive(env:Env,familyId:number,member
   assertPositiveId(memberId,'calendar stamp member');
   assertPositiveId(assetId,'calendar stamp asset');
   await assertActiveAdmin(env,familyId,memberId);
-  const result=await env.DB.prepare('UPDATE calendar_stamp_assets SET active=?,updated_at=? WHERE id=? AND family_id=?').bind(active?1:0,utcNow(),assetId,familyId).run();
+  const result=await env.DB.prepare(`UPDATE calendar_stamp_assets SET active=?,updated_at=?
+    WHERE id=? AND family_id=?
+      AND EXISTS(SELECT 1 FROM members actor WHERE actor.id=? AND actor.family_id=? AND actor.active=1 AND actor.role IN ('OWNER','ADMIN'))`)
+    .bind(active?1:0,utcNow(),assetId,familyId,memberId,familyId).run();
   return Number(result.meta.changes||0)>0;
 }
 
@@ -173,8 +180,9 @@ export async function createCalendarStampPlacement(
     )
     SELECT ?,asset.id,?,?,?,?,?,?,?
     FROM calendar_stamp_assets asset
-    WHERE asset.id=? AND asset.family_id=? AND asset.active=1`)
-    .bind(familyId,input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,memberId,now,now,input.assetId,familyId).run();
+    WHERE asset.id=? AND asset.family_id=? AND asset.active=1
+      AND EXISTS(SELECT 1 FROM members actor WHERE actor.id=? AND actor.family_id=? AND actor.active=1)`)
+    .bind(familyId,input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,memberId,now,now,input.assetId,familyId,memberId,familyId).run();
   if(Number(result.meta.changes||0)!==1)throw new Error('calendar stamp asset unavailable');
   return Number(result.meta.last_row_id);
 }
@@ -185,7 +193,10 @@ export async function deleteCalendarStampPlacement(env:Env,familyId:number,membe
   assertPositiveId(memberId,'calendar stamp member');
   assertPositiveId(placementId,'calendar stamp placement');
   await assertActiveMember(env,familyId,memberId);
-  const result=await env.DB.prepare('DELETE FROM calendar_stamp_placements WHERE id=? AND family_id=? AND created_by=?').bind(placementId,familyId,memberId).run();
+  const result=await env.DB.prepare(`DELETE FROM calendar_stamp_placements
+    WHERE id=? AND family_id=? AND created_by=?
+      AND EXISTS(SELECT 1 FROM members actor WHERE actor.id=? AND actor.family_id=? AND actor.active=1)`)
+    .bind(placementId,familyId,memberId,memberId,familyId).run();
   return Number(result.meta.changes||0)>0;
 }
 
