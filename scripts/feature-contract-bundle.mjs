@@ -8,6 +8,7 @@ const groups={
     ['calendar-recurrence-range-performance',['node','scripts/calendar-recurrence-range-performance-contract.mjs']],
     ['calendar-production-diagnostics',['node','scripts/calendar-production-diagnostics-contract.mjs']],
     ['calendar-animated-stamps-foundation',['node','scripts/calendar-animated-stamps-foundation-contract.mjs']],
+    ['calendar-animated-stamps-read-model',['node','scripts/calendar-animated-stamps-read-model-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
