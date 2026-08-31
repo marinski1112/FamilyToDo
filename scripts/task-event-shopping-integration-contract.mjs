@@ -11,6 +11,8 @@ for(const value of [
   'shopping_name[]',
   'shopping_quantity[]',
   'shopping_url[]',
+  'remove-shopping-row',
+  "b.closest('.task-child-row')?.remove()",
   'b.shopping=',
   'b.is_event=Boolean(isEvent?.checked)',
 ]) assert.ok(taskNew.includes(value),`task-new shopping/event integration missing: ${value}`);
@@ -55,4 +57,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskNewSubmit,eventShoppingDiscard,'task-new must not discard shopping just because the record is an EVENT');
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 
-console.log('task-event-shopping-integration-contract: task/event create, edit, linked child completion, and concrete server task/shopping linkage remain integrated');
+console.log('task-event-shopping-integration-contract: task/event create, edit, removable linked shopping rows, linked child completion, and concrete server task/shopping linkage remain integrated');
