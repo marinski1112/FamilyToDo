@@ -20,6 +20,17 @@ function cleanLine(value:string):string{
   return String(value??'').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim();
 }
 
+/** Preserve the existing UTF-16 code-unit bounds without ever returning a dangling surrogate. */
+function truncateUnicodeSafe(value:string,maxLength:number):string{
+  if(value.length<=maxLength)return value;
+  let end=Math.max(0,maxLength);
+  if(end>0&&end<value.length){
+    const last=value.charCodeAt(end-1),next=value.charCodeAt(end);
+    if(last>=0xD800&&last<=0xDBFF&&next>=0xDC00&&next<=0xDFFF)end--;
+  }
+  return value.slice(0,end);
+}
+
 /**
  * Formats already-authorized inquiry results for the existing member-scoped Web Push transport.
  * This module deliberately performs no DB/network/member lookup and never broadens delivery scope.
@@ -30,10 +41,10 @@ export function buildGoogleVoiceInquiryPush(input:GoogleVoiceInquiryPushInput):P
   const omitted=Math.max(0,input.lines.length-cleaned.length);
   let body=cleaned.length?cleaned.map((line,index)=>{
     const prefix=`${index+1}. `;
-    return prefix+line.slice(0,Math.max(0,MAX_LINE_LENGTH-prefix.length));
+    return prefix+truncateUnicodeSafe(line,Math.max(0,MAX_LINE_LENGTH-prefix.length));
   }).join('\n'):meta.empty;
   if(omitted>0)body+=`\nほか${omitted}件`;
-  if(body.length>MAX_BODY_LENGTH)body=body.slice(0,MAX_BODY_LENGTH-1).trimEnd()+'…';
+  if(body.length>MAX_BODY_LENGTH)body=truncateUnicodeSafe(body,MAX_BODY_LENGTH-1).trimEnd()+'…';
   return {title:meta.title,body,url:meta.url,tag:meta.tag};
 }
 
