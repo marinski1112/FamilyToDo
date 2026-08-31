@@ -36,6 +36,7 @@ const groups={
     ['google-voice-completion-privacy',['node','scripts/google-voice-completion-privacy-contract.mjs']],
     ['google-voice-inquiry-foundation',['node','scripts/google-voice-inquiry-foundation-contract.mjs']],
     ['google-voice-inquiry-push',['node','scripts/google-voice-inquiry-push-contract.mjs']],
+    ['google-voice-inquiry-delivery',['node','scripts/google-voice-inquiry-delivery-contract.mjs']],
     ['google-tasks-sync',['node','scripts/google-tasks-sync-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
