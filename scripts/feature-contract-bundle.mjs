@@ -32,6 +32,7 @@ const groups={
     ['google-home-family-log',['node','scripts/google-home-family-log-contract.mjs']],
     ['google-tasks-voice',['node','scripts/google-tasks-voice-contract.mjs']],
     ['google-voice-completion-privacy',['node','scripts/google-voice-completion-privacy-contract.mjs']],
+    ['google-voice-inquiry-foundation',['node','scripts/google-voice-inquiry-foundation-contract.mjs']],
     ['google-tasks-sync',['node','scripts/google-tasks-sync-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],
