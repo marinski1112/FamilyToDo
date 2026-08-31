@@ -50,6 +50,7 @@ const groups={
     ['message-delete-error',['node','scripts/message-delete-error-contract.mjs']],
     ['task-presentation',['node','scripts/task-presentation-contract.mjs']],
     ['task-event-shopping-integration',['node','scripts/task-event-shopping-integration-contract.mjs']],
+    ['shopping-product-url-safety',['node','scripts/shopping-product-url-safety-contract.mjs']],
     ['expired-task',['node','scripts/expired-task-contract.mjs']],
     ['task-deletion-integrity',['bash','scripts/task-deletion-integrity-contract.sh']],
     ['activity-log-push-diagnostics',['bash','scripts/activity-log-push-diagnostics-contract.sh']],
