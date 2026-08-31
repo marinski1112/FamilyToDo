@@ -10,6 +10,7 @@ const groups={
     ['calendar-inner-stage-diagnostics',['node','scripts/calendar-inner-stage-diagnostics-contract.mjs']],
     ['calendar-animated-stamps-foundation',['node','scripts/calendar-animated-stamps-foundation-contract.mjs']],
     ['calendar-animated-stamps-read-model',['node','scripts/calendar-animated-stamps-read-model-contract.mjs']],
+    ['calendar-stamp-readmodel-metadata-guard',['node','scripts/calendar-stamp-readmodel-metadata-guard-contract.mjs']],
     ['calendar-animated-stamps-actions',['node','scripts/calendar-animated-stamps-actions-contract.mjs']],
     ['calendar-animated-stamps-active-state',['node','scripts/calendar-animated-stamps-active-state-contract.mjs']],
     ['calendar-animated-stamps-layout',['node','scripts/calendar-animated-stamps-layout-contract.mjs']],

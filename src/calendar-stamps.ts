@@ -16,6 +16,11 @@ export type CalendarStampPlacement = {
 const DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS=62;
 const MAX_ROWS=256;
+const MAX_STORAGE_KEY_LENGTH=512;
+const MAX_DIMENSION=4096;
+const MIN_SORT_ORDER=-1000;
+const MAX_SORT_ORDER=1000;
+const SCHEME_RE=/^[A-Za-z][A-Za-z0-9+.-]*:/;
 
 function dayNumber(value:string):number{
   if(!DATE_RE.test(value))throw new Error('invalid calendar stamp date');
@@ -23,6 +28,40 @@ function dayNumber(value:string):number{
   if(!Number.isFinite(ms))throw new Error('invalid calendar stamp date');
   if(new Date(ms).toISOString().slice(0,10)!==value)throw new Error('invalid calendar stamp date');
   return Math.floor(ms/86400000);
+}
+
+function safeStorageKey(value:unknown):boolean{
+  if(typeof value!=='string')return false;
+  const key=value.trim();
+  if(!key||key!==value||key.length>MAX_STORAGE_KEY_LENGTH)return false;
+  const lower=key.toLowerCase();
+  if(lower.startsWith('data:')||SCHEME_RE.test(key)||key.includes('://')||/[\u0000-\u001f\u007f]/.test(key))return false;
+  const slashNormalized=key.replaceAll('\\','/');
+  if(slashNormalized.startsWith('//'))return false;
+  return !slashNormalized.split('/').some(segment=>segment==='..');
+}
+
+function safeDimension(value:unknown):boolean{
+  return value===null||(typeof value==='number'&&Number.isSafeInteger(value)&&value>=1&&value<=MAX_DIMENSION);
+}
+
+function safeCalendarStampPlacement(row:CalendarStampPlacement,fromDay:number,toDay:number):boolean{
+  if(!Number.isSafeInteger(row.placement_id)||row.placement_id<=0||!Number.isSafeInteger(row.asset_id)||row.asset_id<=0)return false;
+  if(!Number.isSafeInteger(row.sort_order)||row.sort_order<MIN_SORT_ORDER||row.sort_order>MAX_SORT_ORDER)return false;
+  if(row.visibility_scope!=='FAMILY'&&row.visibility_scope!=='PRIVATE')return false;
+  if(row.asset_kind!=='ANIMATED'&&row.asset_kind!=='STATIC')return false;
+  if(!['image/gif','image/webp','image/png'].includes(row.mime_type))return false;
+  if(row.asset_kind==='ANIMATED'&&row.mime_type==='image/png')return false;
+  if(row.storage_provider!=='ASSETS'&&row.storage_provider!=='UPLOAD')return false;
+  if(!safeStorageKey(row.storage_key))return false;
+  if(row.thumbnail_storage_key!==null&&!safeStorageKey(row.thumbnail_storage_key))return false;
+  if(!safeDimension(row.width)||!safeDimension(row.height)||(row.width===null)!==(row.height===null))return false;
+  try{
+    const stampDay=dayNumber(row.stamp_date);
+    return stampDay>=fromDay&&stampDay<=toDay;
+  }catch{
+    return false;
+  }
 }
 
 async function assertActiveMember(env:Env,familyId:number,memberId:number):Promise<void>{
@@ -35,6 +74,8 @@ async function assertActiveMember(env:Env,familyId:number,memberId:number):Promi
  * Privacy-scoped, bounded read model for Calendar stamp rendering.
  * This deliberately performs no writes/materialization and is not wired into the
  * production Calendar page yet; callers can adopt it after the 1102 profile is stable.
+ * Legacy or externally-mutated rows with unsafe renderer metadata fail closed here
+ * instead of being exposed to a future DOM/asset resolver.
  */
 export async function calendarStampPlacementsForRange(
   env:Env,
@@ -48,16 +89,37 @@ export async function calendarStampPlacementsForRange(
   if(toDay<fromDay||toDay-fromDay+1>MAX_RANGE_DAYS)throw new Error('calendar stamp range exceeds bound');
   await assertActiveMember(env,familyId,memberId);
 
-  const rows=await env.DB.prepare(`SELECT
-      p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
-      a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
-    FROM calendar_stamp_placements p
-    JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id
-    WHERE p.family_id=?
-      AND p.stamp_date BETWEEN ? AND ?
-      AND a.active=1
-      AND (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))
-    ORDER BY p.stamp_date,p.sort_order,p.id
-    LIMIT ?`).bind(familyId,from,to,memberId,MAX_ROWS).all<CalendarStampPlacement>();
-  return rows.results;
+  const placements:CalendarStampPlacement[]=[];
+  let cursorDate:string|null=null;
+  let cursorSort=0;
+  let cursorId=0;
+  while(placements.length<MAX_ROWS){
+    const cursorClause=cursorDate===null?'':`\n      AND (p.stamp_date>? OR (p.stamp_date=? AND p.sort_order>?) OR (p.stamp_date=? AND p.sort_order=? AND p.id>?))`;
+    const statement=env.DB.prepare(`SELECT
+        p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
+        a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
+      FROM calendar_stamp_placements p
+      JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id
+      WHERE p.family_id=?
+        AND p.stamp_date BETWEEN ? AND ?
+        AND a.active=1
+        AND (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))${cursorClause}
+      ORDER BY p.stamp_date,p.sort_order,p.id
+      LIMIT ?`);
+    const bound:D1PreparedStatement=cursorDate===null
+      ?statement.bind(familyId,from,to,memberId,MAX_ROWS)
+      :statement.bind(familyId,from,to,memberId,cursorDate,cursorDate,cursorSort,cursorDate,cursorSort,cursorId,MAX_ROWS);
+    const rows:{results:CalendarStampPlacement[];meta:any}=await bound.all<CalendarStampPlacement>();
+    if(rows.results.length===0)break;
+    for(const row of rows.results){
+      if(safeCalendarStampPlacement(row,fromDay,toDay))placements.push(row);
+      if(placements.length===MAX_ROWS)break;
+    }
+    if(placements.length===MAX_ROWS||rows.results.length<MAX_ROWS)break;
+    const last:CalendarStampPlacement=rows.results[rows.results.length-1]!;
+    cursorDate=last.stamp_date;
+    cursorSort=last.sort_order;
+    cursorId=last.placement_id;
+  }
+  return placements;
 }

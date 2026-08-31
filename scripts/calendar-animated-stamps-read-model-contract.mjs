@@ -29,7 +29,7 @@ assert.doesNotMatch(source,/SELECT\s+p\.\*/i,'read model must not expose placeme
 assert.doesNotMatch(source,/created_by|created_at|updated_at|member_name|family_name/,'renderer model must not expose creator/member metadata');
 assert.doesNotMatch(source,/console\.(?:log|warn|error)|request|cookie|authorization|token|line_user_id/i,'renderer read model must not log or handle sensitive session/identity data');
 
-const rangeProjection=source.match(/const rows=await env\.DB\.prepare\(`SELECT([\s\S]*?)FROM calendar_stamp_placements p/);
+const rangeProjection=source.match(/env\.DB\.prepare\(`SELECT([\s\S]*?)FROM calendar_stamp_placements p/);
 assert.ok(rangeProjection,'calendar stamp range SELECT projection must remain statically inspectable');
 assert.doesNotMatch(rangeProjection[1],/private_owner_id|created_by|member_id|family_id/,'renderer-facing stamp projection must not expose person/family identifiers; PRIVATE owner may only be used in the WHERE filter');
 assert.doesNotMatch(source,/private_owner_id:\s*number/,'renderer-facing CalendarStampPlacement type must not expose the PRIVATE owner member id');
