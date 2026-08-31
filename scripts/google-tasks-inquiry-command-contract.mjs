@@ -23,7 +23,12 @@ for(const token of [
 
 assert.match(source,/existing && String\(existing\.status\) === 'EXECUTED'/,'adapter must preserve exactly-once suppression after a successful execution');
 assert.match(source,/!canRetryUnchangedInquiry\(existing, item\)/,'adapter must suppress unchanged outcome-ambiguous inquiry failures');
-assert.match(source,/RETRYABLE_INQUIRY_ERRORS[\s\S]*PUSH_NOT_CONFIGURED[\s\S]*NO_PUSH_SUBSCRIPTION[\s\S]*PUSH_DELIVERY_FAILED[\s\S]*INQUIRY_PRE_DELIVERY_ERROR/,'only failures known safe to retry may redeliver an unchanged inquiry');
+const retryBlock=/const RETRYABLE_INQUIRY_ERRORS = new Set\(\[([\s\S]*?)\]\);/.exec(source)?.[1] || '';
+for(const code of ['PUSH_NOT_CONFIGURED','NO_PUSH_SUBSCRIPTION','INQUIRY_PRE_DELIVERY_ERROR']){
+  assert.ok(retryBlock.includes(`'${code}'`),`${code} must remain retryable because delivery is known not to have started`);
+}
+assert.ok(!retryBlock.includes("'PUSH_DELIVERY_FAILED'"),'generic push delivery failure is outcome-ambiguous and must not retry unchanged');
+assert.ok(!retryBlock.includes("'INQUIRY_AMBIGUOUS_RUNTIME_ERROR'"),'ambiguous runtime failure must not retry unchanged');
 assert.match(source,/String\(existing\.external_etag \|\| ''\) !== String\(item\.etag \|\| ''\)/,'an external task etag change must permit a fresh attempt');
 assert.match(source,/error instanceof GoogleVoiceInquiryDeliveryError && error\.phase === 'PRE_DELIVERY'/,'adapter must distinguish known pre-delivery failures from ambiguous transport/runtime failures');
 assert.match(delivery,/new GoogleVoiceInquiryDeliveryError\('PRE_DELIVERY'\)/,'resolver/payload failures must be classified before transport starts');
@@ -37,4 +42,4 @@ assert.ok(!/FROM\s+tasks\b|FROM\s+recurrence_rules\b|FROM\s+recurrence_occurrenc
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(source),'adapter must not log or handle unrelated sensitive/location data');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(delivery),'delivery adapter must not log or handle unrelated sensitive/location data');
 
-console.log('google-tasks-inquiry-command-contract: typed inquiry parsing, member-scoped runtime reuse, safe retry classification, ambiguous outcome suppression, successful exactly-once suppression, nullable target, and injected canonical domain resolution remain enforced');
+console.log('google-tasks-inquiry-command-contract: typed inquiry parsing, member-scoped runtime reuse, safe pre-delivery retries, ambiguous outcome suppression, successful exactly-once suppression, nullable target, and injected canonical domain resolution remain enforced');
