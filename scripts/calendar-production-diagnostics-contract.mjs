@@ -8,6 +8,9 @@ const must=(condition,message)=>{if(!condition)fail(message);};
 
 must(/"main"\s*:\s*"src\/calendar-perf-worker\.ts"/.test(wrangler),'temporary diagnostics wrapper must be the Worker entry');
 must(/"CALENDAR_PERF_DIAGNOSTICS"\s*:\s*"1"/.test(wrangler),'diagnostics flag must be explicit while the trace is being collected');
+const runWorkerFirstMatch=wrangler.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/);
+must(Boolean(runWorkerFirstMatch),'assets.run_worker_first must remain an explicit array while Calendar diagnostics are active');
+must(/"\/app\/calendar\.php"/.test(runWorkerFirstMatch[1]),'GET /app/calendar.php must explicitly run the diagnostics Worker before static-asset routing');
 must(/request\.method === 'GET' && url\.pathname === '\/app\/calendar\.php'/.test(worker),'instrumentation must be scoped to GET /app/calendar.php');
 must(/const traceId = crypto\.randomUUID\(\)/.test(worker),'one opaque trace id must be created per instrumented request');
 must(/event: 'calendar_perf'/.test(worker),'structured calendar_perf logs are required');
