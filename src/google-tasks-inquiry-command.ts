@@ -98,7 +98,7 @@ export async function executeGoogleTasksInquiryCommand(
     .bind(account.id, account.tasklistId, String(item.id))
     .first<LedgerRow>();
 
-  if (existing && (String(existing.status) === 'EXECUTED' || String(existing.external_etag || '') === String(item.etag || ''))) {
+  if (existing && String(existing.status) === 'EXECUTED') {
     return 'noop';
   }
 
