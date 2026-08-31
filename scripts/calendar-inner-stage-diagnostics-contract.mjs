@@ -23,7 +23,9 @@ must(/ownKeys\(target\)/.test(worker),'map-copy boundary must observe object spr
 must(/physicalCopyCount === expectedPhysicalCopies/.test(worker),'first map boundary must be tied to the expected physical spread count');
 must(/physicalCopyCount === expectedPhysicalCopies \+ 1/.test(worker),'detail-map start must be observed only after the recurring portion of the first map pass has returned');
 must(/physicalCopyCount === expectedPhysicalCopies \* 2/.test(worker),'physical detail-map boundary must be tied to the second physical spread pass');
-must(/physicalDetailReady && !rangeBuildStarted && property === 'start_at'/.test(worker),'range-build marker must occur only after physical detail copies complete');
+must(/let spreadKeys: Set<PropertyKey> \| null = null/.test(worker),'row proxy must track object-spread reads separately from later renderer reads');
+must(/spreadKeys = new Set\(keys\.filter/.test(worker),'spread tracking must derive only enumerable source keys');
+must(/if \(spreadRead\)[\s\S]*?spreadKeys = null;\s*\} else if \(physicalDetailReady && !rangeBuildStarted && property === 'start_at'\)/.test(worker),'range-build marker must ignore property reads performed by the final object spread');
 for(const stage of ['physical_map_copies_ready','detail_map_started','physical_detail_map_copies_ready','range_build_started']){
   must(new RegExp(`emit\\('${stage}', \\{ physical_tasks: physicalCount \\}\\)`).test(worker),`${stage} must expose only physical task count`);
 }
