@@ -28,7 +28,7 @@ function b64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
   const binary = atob(padded);
   const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(0);
   return out;
 }
 
@@ -171,13 +171,8 @@ export async function sendWebPush(env: Env, subscription: StoredPushSubscription
   }
 }
 
-function nowJstSql(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit',
-    hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
-  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')}`;
+function nowUtcSql(): string {
+  return new Date().toISOString().slice(0,19).replace('T',' ');
 }
 
 /**
@@ -192,7 +187,7 @@ export async function sendMemberWebPush(env: Env, familyId: number, memberId: nu
   const limit = Math.max(1, Math.min(10, Math.trunc(Number(maxSubscriptions) || 10)));
   const rows = await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT ?').bind(memberId,familyId,limit).all<Record<string,unknown>>();
   let sent=0,failed=0;
-  const timestamp=nowJstSql();
+  const timestamp=nowUtcSql();
   for(const row of rows.results){
     const id=Number(row.id);
     const result=await sendWebPush(env,{id,endpoint:String(row.endpoint),p256dh:String(row.p256dh),auth:String(row.auth)},message);
