@@ -12,6 +12,7 @@ const messages=fs.readFileSync('public/assets/messages.js','utf8');
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
+const worker=fs.readFileSync('src/index.ts','utf8');
 
 // Mobile navigation
 assert.match(pwa,/\.bottom-nav \.nav-inner>a\{white-space:nowrap!important/,'bottom navigation labels must not wrap on mobile');
@@ -63,6 +64,12 @@ assert.match(messages,/document\.getElementById\('msgForm'\)\.onsubmit=async e=>
 assert.match(messages,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message list composer must tolerate non-JSON and HTTP/API failures');
 assert.match(messages,/location\.reload\(\);\}catch\(err\)\{alert\(/,'message list composer must preserve successful reload and route failures to the existing alert path');
 
+// LINE morning digest priority and scheduler-jitter resilience.
+assert.match(worker,/current<target\|\|current>target\+29/,'daily digest must tolerate a full 30-minute scheduler/retry window');
+assert.match(worker,/ORDER BY CASE WHEN date\(COALESCE\(start_at,due_at\)\)=\? THEN 0 ELSE 1 END,COALESCE\(start_at,due_at\),id LIMIT 12/,'today rows must be selected before old overdue tasks can consume the digest row budget');
+assert.match(worker,/INSERT OR IGNORE INTO line_daily_digest_receipts/,'daily digest retry tolerance must retain per-day idempotency receipts');
+assert.match(worker,/String\(receipt\.status\)==='SENT'/,'daily digest must not resend after a successful receipt');
+
 // Compact modal controls and one-tap isolation
 assert.match(pwa,/grid-template-areas:'prev title next close' '\. reorder reorder \.'/,'mobile modal header controls must keep the compact grid');
 assert.match(pwa,/min-width:40px!important;min-height:40px!important/,'mobile modal controls must preserve touch targets');
@@ -109,4 +116,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: navigation, private event editing, Calendar filter return state, task/message transport handling, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, private event editing, Calendar filter return state, task/message transport handling, LINE digest priority, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
