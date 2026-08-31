@@ -7,7 +7,7 @@ const must=(condition,message)=>{if(!condition)fail(message);};
 for(const token of ["'TODAY_SCHEDULE'","'TOMORROW_SCHEDULE'","'OPEN_SHOPPING'","type:'INQUIRY'","delivery:'MEMBER_WEB_PUSH'"]){
   must(source.includes(token),`missing ${token}`);
 }
-for(const phrase of ['今日の予定','今日のタスク','今日の予定教えて','今日何する','明日の予定','明日の予定教えて','明日何する','買い物リスト','買うもの','買い物リスト教えて','買い物何がある']){
+for(const phrase of ['今日の予定','今日のタスク','今日の予定教えて','今日の予定を教えて','今日の予定は','今日何する','明日の予定','明日の予定教えて','明日の予定を教えて','明日の予定は','明日何する','買い物リスト','買うもの','買い物リスト教えて','買い物リストを教えて','買い物リストは','買うものは','買い物何がある']){
   must(source.includes(phrase),`missing deterministic phrase ${phrase}`);
 }
 must(source.includes("normalize('NFKC')"),'parser must normalize NFKC input');
