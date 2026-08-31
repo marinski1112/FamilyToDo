@@ -41,7 +41,7 @@ function safeStorageKey(value:unknown):boolean{
 }
 
 function safeDimension(value:unknown):boolean{
-  return value===null||(Number.isSafeInteger(value)&&Number(value)>=1&&Number(value)<=MAX_DIMENSION);
+  return value===null||(typeof value==='number'&&Number.isSafeInteger(value)&&value>=1&&value<=MAX_DIMENSION);
 }
 
 function safeCalendarStampPlacement(row:CalendarStampPlacement,fromDay:number,toDay:number):boolean{
