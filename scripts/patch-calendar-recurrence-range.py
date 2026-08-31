@@ -64,7 +64,7 @@ async function recurringForDate(ctx:AppContext,date:string):Promise<Row[]> {
 async function expiredTasksFor'''
 
 pattern=r"async function recurringForDate\(ctx:AppContext,date:string\):Promise<Row\[]> \{[\s\S]*?\n\}\n\nasync function expiredTasksFor"
-source,count=re.subn(pattern,new_block,source,count=1)
+source,count=re.subn(pattern,lambda _m:new_block,source,count=1)
 if count!=1: raise SystemExit(f'expected one recurringForDate block, replaced {count}')
 
 old_loop=r'''  const recurRows:Row[]=[];
