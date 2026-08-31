@@ -1,4 +1,5 @@
 import { parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
+import { GoogleVoiceInquiryDeliveryError } from './google-voice-inquiry-delivery';
 import { executeMarkedGoogleVoiceInquiry } from './google-voice-inquiry-runtime';
 import type { GoogleVoiceInquiryLineResolver } from './google-voice-inquiry-delivery';
 import { utcNow } from './timezone';
@@ -19,7 +20,14 @@ export type GoogleTasksInquiryItem = {
 
 export type GoogleTasksInquiryCommandResult = 'not-inquiry' | 'noop' | 'executed' | 'error';
 
-type LedgerRow = { id?: unknown; external_etag?: unknown; status?: unknown };
+type LedgerRow = { id?: unknown; external_etag?: unknown; status?: unknown; error_code?: unknown };
+
+const RETRYABLE_INQUIRY_ERRORS = new Set([
+  'PUSH_NOT_CONFIGURED',
+  'NO_PUSH_SUBSCRIPTION',
+  'PUSH_DELIVERY_FAILED',
+  'INQUIRY_PRE_DELIVERY_ERROR',
+]);
 
 function validateAccount(account: GoogleTasksInquiryAccount): void {
   if (!Number.isSafeInteger(account.id) || account.id <= 0) throw new Error('invalid-account-id');
@@ -33,6 +41,12 @@ function inquiryDeliveryError(delivered: boolean, push: { configured: boolean; s
   if (!push.configured) return 'PUSH_NOT_CONFIGURED';
   if (push.subscriptions === 0) return 'NO_PUSH_SUBSCRIPTION';
   return 'PUSH_DELIVERY_FAILED';
+}
+
+function canRetryUnchangedInquiry(existing: LedgerRow, item: GoogleTasksInquiryItem): boolean {
+  if (String(existing.status) !== 'ERROR') return true;
+  if (String(existing.external_etag || '') !== String(item.etag || '')) return true;
+  return RETRYABLE_INQUIRY_ERRORS.has(String(existing.error_code || ''));
 }
 
 async function persistInquiryLedger(
@@ -79,6 +93,11 @@ async function persistInquiryLedger(
  * Domain reads are deliberately injected via resolveLines. This adapter must not
  * duplicate task/recurrence/shopping queries; the eventual caller supplies the
  * same canonical visibility-aware projection used by the application views.
+ *
+ * Successful commands remain exactly-once. Failed commands are retried with an
+ * unchanged etag only when the failure is known to have happened before a push
+ * could be accepted. Outcome-ambiguous failures require an external task change
+ * before another delivery attempt, preventing duplicate notifications.
  */
 export async function executeGoogleTasksInquiryCommand(
   env: Env,
@@ -92,13 +111,16 @@ export async function executeGoogleTasksInquiryCommand(
   validateAccount(account);
   if (!String(item.id || '').trim()) throw new Error('invalid-external-task-id');
 
-  const existing = await env.DB.prepare(`SELECT id,external_etag,status
+  const existing = await env.DB.prepare(`SELECT id,external_etag,status,error_code
       FROM external_google_voice_commands
       WHERE account_id=? AND external_tasklist_id=? AND external_task_id=?`)
     .bind(account.id, account.tasklistId, String(item.id))
     .first<LedgerRow>();
 
   if (existing && String(existing.status) === 'EXECUTED') {
+    return 'noop';
+  }
+  if (existing && !canRetryUnchangedInquiry(existing, item)) {
     return 'noop';
   }
 
@@ -116,8 +138,11 @@ export async function executeGoogleTasksInquiryCommand(
     const status = errorCode ? 'ERROR' : 'EXECUTED';
     await persistInquiryLedger(env, account, item, status, errorCode);
     return errorCode ? 'error' : 'executed';
-  } catch {
-    await persistInquiryLedger(env, account, item, 'ERROR', 'INQUIRY_RUNTIME_ERROR');
+  } catch (error) {
+    const errorCode = error instanceof GoogleVoiceInquiryDeliveryError && error.phase === 'PRE_DELIVERY'
+      ? 'INQUIRY_PRE_DELIVERY_ERROR'
+      : 'INQUIRY_AMBIGUOUS_RUNTIME_ERROR';
+    await persistInquiryLedger(env, account, item, 'ERROR', errorCode);
     return 'error';
   }
 }
