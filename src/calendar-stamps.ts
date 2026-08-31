@@ -22,6 +22,7 @@ function dayNumber(value:string):number{
   if(!DATE_RE.test(value))throw new Error('invalid calendar stamp date');
   const ms=Date.parse(`${value}T00:00:00Z`);
   if(!Number.isFinite(ms))throw new Error('invalid calendar stamp date');
+  if(new Date(ms).toISOString().slice(0,10)!==value)throw new Error('invalid calendar stamp date');
   return Math.floor(ms/86400000);
 }
 
