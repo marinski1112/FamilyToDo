@@ -54,6 +54,7 @@ const groups={
     ['shopping-product-url-safety',['node','scripts/shopping-product-url-safety-contract.mjs']],
     ['shopping-batch-payload-bounds',['node','scripts/shopping-batch-payload-bounds-contract.mjs']],
     ['shopping-entity-id-safety',['node','scripts/shopping-entity-id-safety-contract.mjs']],
+    ['shopping-payload-bootstrap-safety',['node','scripts/shopping-payload-bootstrap-safety-contract.mjs']],
     ['expired-task',['node','scripts/expired-task-contract.mjs']],
     ['task-deletion-integrity',['bash','scripts/task-deletion-integrity-contract.sh']],
     ['activity-log-push-diagnostics',['bash','scripts/activity-log-push-diagnostics-contract.sh']],
