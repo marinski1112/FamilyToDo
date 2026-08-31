@@ -12,9 +12,13 @@ for(const phrase of ['今日の予定','今日のタスク','今日の予定教�
 }
 must(source.includes('const MAX_INQUIRY_INPUT_UNITS=256'),'parser must retain a small explicit input bound');
 must(source.includes("typeof value==='string'&&value.length<=MAX_INQUIRY_INPUT_UNITS"),'oversized or non-string inputs must be rejected before normalization');
-const firstNormalize=source.indexOf("normalize('NFKC')");
-const firstBound=source.indexOf('boundedInput(value)');
-must(firstBound>=0&&firstBound<firstNormalize,'input bound must be applied before the first NFKC normalization');
+const bodyBound=source.indexOf('const raw=boundedInput(value);');
+const bodyNormalize=source.indexOf('const body=normalize(raw);');
+must(bodyBound>=0&&bodyNormalize>bodyBound,'body parser must apply its input bound before normalization');
+const markedStart=source.indexOf('export function parseMarkedGoogleVoiceInquiryCommand');
+const markedBound=source.indexOf('const raw=boundedInput(value);',markedStart);
+const markedNormalize=source.indexOf("const normalized=raw.normalize('NFKC')",markedStart);
+must(markedStart>=0&&markedBound>markedStart&&markedNormalize>markedBound,'marked parser must apply its input bound before NFKC normalization');
 must(source.includes("normalize('NFKC')"),'parser must normalize NFKC input');
 must(source.includes("replace(/[?？。！!]+$/,''"),'parser should tolerate trailing speech punctuation without broad substring matching');
 must(/export function parseGoogleVoiceInquiryBody\(value:unknown\):GoogleVoiceInquiry\|null/.test(source),'typed side-effect-free body parser export is required');
