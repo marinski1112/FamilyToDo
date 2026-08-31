@@ -64,7 +64,7 @@ try {
     if(assignees.some(id=>!id)){alert('担当者の指定が不正です。');return;}
     const body={action:'add_batch',csrf:String(payload.csrf||''),products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,task_id:taskId,assignees,memo:memo};
     const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
-    try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||'追加に失敗しました。');location.href='/app/shopping.php';}
+    try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');location.href='/app/shopping.php';}
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
     finally{if(button)button.disabled=false;}
   };
