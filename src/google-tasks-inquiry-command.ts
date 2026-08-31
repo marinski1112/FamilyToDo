@@ -110,9 +110,9 @@ export async function executeGoogleTasksInquiryCommand(
       item.title,
       resolveLines,
     );
-    if (!result) return 'not-inquiry';
+    if (!result.handled) return 'not-inquiry';
 
-    const errorCode = inquiryDeliveryError(result.delivery.delivered, result.delivery.push);
+    const errorCode = inquiryDeliveryError(result.push.ok, result.push);
     const status = errorCode ? 'ERROR' : 'EXECUTED';
     await persistInquiryLedger(env, account, item, status, errorCode);
     return errorCode ? 'error' : 'executed';
