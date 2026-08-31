@@ -7,7 +7,7 @@ const must=(condition,message)=>{if(!condition)fail(message);};
 for(const token of ["'TODAY_SCHEDULE'","'TOMORROW_SCHEDULE'","'OPEN_SHOPPING'","type:'INQUIRY'","delivery:'MEMBER_WEB_PUSH'"]){
   must(source.includes(token),`missing ${token}`);
 }
-for(const phrase of ['今日の予定','今日のタスク','今日の予定教えて','今日の予定を教えて','今日の予定は','今日何する','明日の予定','明日の予定教えて','明日の予定を教えて','明日の予定は','明日何する','買い物リスト','買うもの','買い物リスト教えて','買い物リストを教えて','買い物リストは','買うものは','買い物何がある']){
+for(const phrase of ['今日の予定','今日のタスク','今日の予定教えて','今日の予定を教えて','今日の予定を教えてください','今日のタスクを教えてください','今日の予定は','今日何する','明日の予定','明日の予定教えて','明日の予定を教えて','明日の予定を教えてください','明日のタスクを教えてください','明日の予定は','明日何する','買い物リスト','買うもの','買い物を教えてください','買い物リスト教えて','買い物リストを教えて','買い物リストを教えてください','買うものを教えてください','買い物リストは','買うものは','買い物何がある']){
   must(source.includes(phrase),`missing deterministic phrase ${phrase}`);
 }
 must(source.includes("normalize('NFKC')"),'parser must normalize NFKC input');
@@ -21,4 +21,4 @@ must(!/body\.includes\(|body\.startsWith\(|new RegExp\(/.test(source),'inquiry p
 must(!/env\.DB|\.prepare\(|fetch\(|console\.|cookie|authorization|token|member_name|description/i.test(source),'parser foundation must remain side-effect free and must not handle sensitive request/member data');
 must(!/location|latitude|longitude|gps/i.test(source),'location lifecycle must not start in inquiry foundation');
 
-console.log('google voice inquiry foundation contract: marker boundary, exact matching, privacy boundary ok');
+console.log('google voice inquiry foundation contract: marker boundary, exact matching, polite phrases, privacy boundary ok');
