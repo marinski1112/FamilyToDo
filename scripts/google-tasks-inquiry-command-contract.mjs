@@ -28,8 +28,10 @@ assert.match(source,/String\(existing\.external_etag \|\| ''\) !== String\(item\
 assert.match(source,/error instanceof GoogleVoiceInquiryDeliveryError && error\.phase === 'PRE_DELIVERY'/,'adapter must distinguish known pre-delivery failures from ambiguous transport/runtime failures');
 assert.match(delivery,/new GoogleVoiceInquiryDeliveryError\('PRE_DELIVERY'\)/,'resolver/payload failures must be classified before transport starts');
 assert.match(delivery,/new GoogleVoiceInquiryDeliveryError\('AMBIGUOUS_DELIVERY'\)/,'transport exceptions must be treated as outcome-ambiguous');
-assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('PRE_DELIVERY')") < delivery.indexOf('sendMemberWebPush('),'pre-delivery classification must occur before Web Push transport');
-assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('AMBIGUOUS_DELIVERY')") > delivery.indexOf('sendMemberWebPush('),'ambiguous classification must cover transport/post-send failures');
+const pushCall=delivery.indexOf('return await sendMemberWebPush(');
+assert.ok(pushCall >= 0,'delivery adapter must use the existing member-scoped Web Push transport');
+assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('PRE_DELIVERY')") < pushCall,'pre-delivery classification must occur before Web Push transport');
+assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('AMBIGUOUS_DELIVERY')") > pushCall,'ambiguous classification must cover transport/post-send failures');
 assert.match(source,/validateAccount\(account\);/,'adapter must validate account tenant/member keys before ledger writes');
 assert.ok(!/FROM\s+tasks\b|FROM\s+recurrence_rules\b|FROM\s+recurrence_occurrences\b|FROM\s+shopping_items\b/i.test(source),'adapter must not duplicate canonical task/recurrence/shopping domain reads');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(source),'adapter must not log or handle unrelated sensitive/location data');
