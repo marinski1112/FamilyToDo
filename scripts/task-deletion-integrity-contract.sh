@@ -5,6 +5,15 @@ db="$(mktemp)"
 trap 'rm -f "$db"' EXIT
 for migration in migrations/*.sql; do sqlite3 "$db" < "$migration"; done
 
+# Legacy completion snapshots have no action column. Task-child archival must synthesize
+# COMPLETED just like the standalone shopping/item archive helpers rather than selecting c.action.
+grep -Fq "SELECT ?, 'shopping', c.shopping_item_id, c.member_id, 'COMPLETED', c.completed_at, 'shopping_legacy_completion'" src/lifecycle.ts
+grep -Fq "SELECT ?, 'item', c.item_id, c.member_id, 'COMPLETED', c.completed_at, 'item_legacy_completion'" src/lifecycle.ts
+if grep -Fq "c.member_id, c.action, c.completed_at" src/lifecycle.ts; then
+  echo 'task-deletion-integrity-contract: legacy child archival must not read a nonexistent action column' >&2
+  exit 1
+fi
+
 sqlite3 "$db" <<'SQL'
 PRAGMA foreign_keys=OFF;
 INSERT INTO families(id,family_code,name,created_at,updated_at) VALUES(86,'W86','Wave86','2026','2026');
