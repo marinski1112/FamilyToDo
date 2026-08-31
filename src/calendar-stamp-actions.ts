@@ -78,6 +78,12 @@ function normalizedVisibilityScope(value:unknown):'FAMILY'|'PRIVATE'{
   throw new Error('invalid calendar stamp visibility');
 }
 
+function normalizedActiveState(value:unknown):boolean{
+  if(value===true)return true;
+  if(value===false)return false;
+  throw new Error('invalid calendar stamp active state');
+}
+
 async function assertActiveMember(env:Env,familyId:number,memberId:number):Promise<void>{
   const row=await env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(memberId,familyId).first<{id:number}>();
   if(!row)throw new Error('calendar stamp member unavailable');
@@ -158,11 +164,12 @@ export async function setCalendarStampAssetActive(env:Env,familyId:number,member
   assertPositiveId(familyId,'calendar stamp family');
   assertPositiveId(memberId,'calendar stamp member');
   assertPositiveId(assetId,'calendar stamp asset');
+  const normalizedActive=normalizedActiveState(active);
   await assertActiveAdmin(env,familyId,memberId);
   const result=await env.DB.prepare(`UPDATE calendar_stamp_assets SET active=?,updated_at=?
     WHERE id=? AND family_id=?
       AND EXISTS(SELECT 1 FROM members actor WHERE actor.id=? AND actor.family_id=? AND actor.active=1 AND actor.role IN ('OWNER','ADMIN'))`)
-    .bind(active?1:0,utcNow(),assetId,familyId,memberId,familyId).run();
+    .bind(normalizedActive?1:0,utcNow(),assetId,familyId,memberId,familyId).run();
   return Number(result.meta.changes||0)>0;
 }
 
