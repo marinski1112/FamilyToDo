@@ -16,6 +16,7 @@ must(/not CPU timings/.test(worker),'source must explicitly document that wall c
 must(!/performance\.now\(/.test(worker),'performance.now must not be presented as Calendar CPU timing');
 must(/response\.body\.tee\(\)/.test(worker) && !/response\.clone\(\)\.text\(\)/.test(worker),'HTML length must be measured without decoding/cloning the rendered HTML string');
 must(/projection_count_source: projectedOccurrences === null \? undefined : 'post_materialized_active_occurrences'/.test(worker),'projected occurrence aggregate must disclose its materialized-post-render source');
+must(/try \{\s*context = await makeContext\(request, env, ctx\);\s*\} catch \{[\s\S]*?return baseWorker\.fetch\(request, env, ctx\);\s*\}/.test(worker),'diagnostic context lookup failures must fall back through the canonical Worker error boundary');
 
 const allowlistMatch=worker.match(/const CALENDAR_PERF_ALLOWED_KEYS[\s\S]*?\]\);/);
 must(Boolean(allowlistMatch),'calendar_perf logger must retain a removable explicit key allowlist');
