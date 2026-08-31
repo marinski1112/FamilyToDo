@@ -4,10 +4,22 @@ import { sendMemberWebPush, type MemberPushResult } from './webpush';
 
 export type GoogleVoiceInquiryLineResolver = (kind: GoogleVoiceInquiryKind) => Promise<readonly string[]>;
 
+export class GoogleVoiceInquiryDeliveryError extends Error {
+  constructor(readonly phase: 'PRE_DELIVERY' | 'AMBIGUOUS_DELIVERY') {
+    super(phase === 'PRE_DELIVERY' ? 'google-voice-inquiry-pre-delivery-failed' : 'google-voice-inquiry-delivery-outcome-ambiguous');
+    this.name = 'GoogleVoiceInquiryDeliveryError';
+  }
+}
+
 /**
  * Delivers already-authorized inquiry results through the existing member-scoped
  * Web Push transport. Domain reads stay outside this adapter so the runtime can
  * reuse the canonical task/recurrence/shopping visibility semantics.
+ *
+ * Failures before sendMemberWebPush() are explicitly distinguishable from
+ * failures during the transport call. The latter are outcome-ambiguous because
+ * remote delivery may already have succeeded before local subscription
+ * bookkeeping (or another later operation) throws.
  */
 export async function deliverGoogleVoiceInquiry(
   env: Env,
@@ -20,7 +32,17 @@ export async function deliverGoogleVoiceInquiry(
   if (!Number.isSafeInteger(memberId) || memberId <= 0) throw new Error('invalid-member-id');
   if (inquiry.delivery !== 'MEMBER_WEB_PUSH') throw new Error('unsupported-inquiry-delivery');
 
-  const lines = await resolveLines(inquiry.kind);
-  const payload = buildGoogleVoiceInquiryPush({ kind: inquiry.kind, lines });
-  return sendMemberWebPush(env, familyId, memberId, payload);
+  let payload: ReturnType<typeof buildGoogleVoiceInquiryPush>;
+  try {
+    const lines = await resolveLines(inquiry.kind);
+    payload = buildGoogleVoiceInquiryPush({ kind: inquiry.kind, lines });
+  } catch {
+    throw new GoogleVoiceInquiryDeliveryError('PRE_DELIVERY');
+  }
+
+  try {
+    return await sendMemberWebPush(env, familyId, memberId, payload);
+  } catch {
+    throw new GoogleVoiceInquiryDeliveryError('AMBIGUOUS_DELIVERY');
+  }
 }
