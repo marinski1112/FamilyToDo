@@ -2,7 +2,7 @@ import baseWorker from './index';
 import { makeContext, taskVisibilitySql } from './app';
 import { DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
-type CountRow = { c?: number };
+type CountRow = { c?: number; task_span_days_max?: number; task_span_days_total?: number };
 type CalendarPerfStage = 'request_start' | 'snapshot_ready' | 'snapshot_error' | 'delegate_start' | 'response_ready' | 'response_body_complete';
 
 type CalendarPerfRecord = {
@@ -14,6 +14,8 @@ type CalendarPerfRecord = {
   view: string;
   wall_checkpoint_ms?: number;
   physical_tasks?: number;
+  task_span_days_max?: number;
+  task_span_days_total?: number;
   recurrence_rules?: number;
   projected_occurrences?: number | null;
   materialized_occurrences?: number;
@@ -28,7 +30,7 @@ type CalendarPerfRecord = {
 
 // Keep the logger deliberately allow-listed. Do not add content-bearing fields here.
 const CALENDAR_PERF_ALLOWED_KEYS = new Set<keyof CalendarPerfRecord>([
-  'message','event','trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','recurrence_rules',
+  'message','event','trace_id','stage','month','view','wall_checkpoint_ms','physical_tasks','task_span_days_max','task_span_days_total','recurrence_rules',
   'projected_occurrences','materialized_occurrences','shopping_items','items','multi_day_bands','multi_day_rows',
   'rendered_html_length','status','projection_count_source',
 ]);
@@ -78,7 +80,10 @@ async function aggregateSnapshot(env: Env, familyId: number, memberId: number, f
   const viewBinds = view === 'assigned' || view === 'private' ? [memberId] : viewFilter.binds;
   const visibility = taskVisibilitySql('t');
   const statements = [
-    env.DB.prepare(`SELECT COUNT(*) c FROM tasks t WHERE t.family_id=? AND ${visibility} AND COALESCE(t.calendar_visible,1)=1 AND COALESCE(date(t.end_at),date(t.start_at),date(t.due_at))>=? AND COALESCE(date(t.start_at),date(t.due_at),date(t.end_at))<=?${viewFilter.sql}`).bind(familyId, memberId, from, to, ...viewBinds),
+    env.DB.prepare(`SELECT COUNT(*) c,
+      COALESCE(MAX(CAST(julianday(COALESCE(date(t.end_at),date(t.start_at),date(t.due_at))) - julianday(COALESCE(date(t.start_at),date(t.due_at),date(t.end_at))) AS INTEGER) + 1),0) task_span_days_max,
+      COALESCE(SUM(CAST(julianday(COALESCE(date(t.end_at),date(t.start_at),date(t.due_at))) - julianday(COALESCE(date(t.start_at),date(t.due_at),date(t.end_at))) AS INTEGER) + 1),0) task_span_days_total
+      FROM tasks t WHERE t.family_id=? AND ${visibility} AND COALESCE(t.calendar_visible,1)=1 AND COALESCE(date(t.end_at),date(t.start_at),date(t.due_at))>=? AND COALESCE(date(t.start_at),date(t.due_at),date(t.end_at))<=?${viewFilter.sql}`).bind(familyId, memberId, from, to, ...viewBinds),
     env.DB.prepare(`SELECT COUNT(*) c FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.family_id=? AND ${visibility} AND r.active=1 AND r.start_date<=? AND (r.end_date IS NULL OR r.end_date>=?)${viewFilter.sql}`).bind(familyId, memberId, to, from, ...viewBinds),
     env.DB.prepare(`SELECT COUNT(*) c FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE o.family_id=? AND ${visibility} AND o.occurrence_date BETWEEN ? AND ?${viewFilter.sql}`).bind(familyId, memberId, from, to, ...viewBinds),
     env.DB.prepare(`SELECT COUNT(*) c FROM shopping_items s WHERE s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${visibility}))`).bind(familyId, memberId),
@@ -86,7 +91,16 @@ async function aggregateSnapshot(env: Env, familyId: number, memberId: number, f
   ];
   const results = await env.DB.batch(statements);
   const count = (index: number) => Number((results[index]?.results?.[0] as CountRow | undefined)?.c || 0);
-  return { physical_tasks: count(0), recurrence_rules: count(1), materialized_occurrences: count(2), shopping_items: count(3), items: count(4) };
+  const taskAggregate = (results[0]?.results?.[0] as CountRow | undefined) || {};
+  return {
+    physical_tasks: count(0),
+    task_span_days_max: Number(taskAggregate.task_span_days_max || 0),
+    task_span_days_total: Number(taskAggregate.task_span_days_total || 0),
+    recurrence_rules: count(1),
+    materialized_occurrences: count(2),
+    shopping_items: count(3),
+    items: count(4),
+  };
 }
 
 async function projectedMaterializedCount(env: Env, familyId: number, memberId: number, from: string, to: string, view: 'all' | 'family' | 'assigned' | 'private'): Promise<number> {
