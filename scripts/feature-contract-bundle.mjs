@@ -21,7 +21,6 @@ const groups={
     ['timezone-import',['node','scripts/timezone-import-contract.mjs']],
   ],
   'google-integrations':[
-    ['feature-contracts','node scripts/feature-contract-bundle.mjs google-integrations'],
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-calendar-inbound',['node','scripts/google-calendar-inbound-contract.mjs']],
     ['calendar-sync-foundation',['node','scripts/calendar-sync-foundation-contract.mjs']],
