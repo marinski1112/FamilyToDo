@@ -89,16 +89,37 @@ export async function calendarStampPlacementsForRange(
   if(toDay<fromDay||toDay-fromDay+1>MAX_RANGE_DAYS)throw new Error('calendar stamp range exceeds bound');
   await assertActiveMember(env,familyId,memberId);
 
-  const rows=await env.DB.prepare(`SELECT
-      p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
-      a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
-    FROM calendar_stamp_placements p
-    JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id
-    WHERE p.family_id=?
-      AND p.stamp_date BETWEEN ? AND ?
-      AND a.active=1
-      AND (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))
-    ORDER BY p.stamp_date,p.sort_order,p.id
-    LIMIT ?`).bind(familyId,from,to,memberId,MAX_ROWS).all<CalendarStampPlacement>();
-  return rows.results.filter(row=>safeCalendarStampPlacement(row,fromDay,toDay));
+  const placements:CalendarStampPlacement[]=[];
+  let cursorDate:string|null=null;
+  let cursorSort=0;
+  let cursorId=0;
+  while(placements.length<MAX_ROWS){
+    const cursorClause=cursorDate===null?'':`\n      AND (p.stamp_date>? OR (p.stamp_date=? AND p.sort_order>?) OR (p.stamp_date=? AND p.sort_order=? AND p.id>?))`;
+    const statement=env.DB.prepare(`SELECT
+        p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
+        a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
+      FROM calendar_stamp_placements p
+      JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id
+      WHERE p.family_id=?
+        AND p.stamp_date BETWEEN ? AND ?
+        AND a.active=1
+        AND (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))${cursorClause}
+      ORDER BY p.stamp_date,p.sort_order,p.id
+      LIMIT ?`);
+    const bound=cursorDate===null
+      ?statement.bind(familyId,from,to,memberId,MAX_ROWS)
+      :statement.bind(familyId,from,to,memberId,cursorDate,cursorDate,cursorSort,cursorDate,cursorSort,cursorId,MAX_ROWS);
+    const rows=await bound.all<CalendarStampPlacement>();
+    if(rows.results.length===0)break;
+    for(const row of rows.results){
+      if(safeCalendarStampPlacement(row,fromDay,toDay))placements.push(row);
+      if(placements.length===MAX_ROWS)break;
+    }
+    if(placements.length===MAX_ROWS||rows.results.length<MAX_ROWS)break;
+    const last=rows.results.at(-1)!;
+    cursorDate=last.stamp_date;
+    cursorSort=last.sort_order;
+    cursorId=last.placement_id;
+  }
+  return placements;
 }
