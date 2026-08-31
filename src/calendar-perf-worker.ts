@@ -109,13 +109,23 @@ async function instrumentedCalendarFetch(request: Request, env: Env, ctx: Execut
   const started = Date.now();
   const traceId = crypto.randomUUID();
   const url = new URL(request.url);
-  const context = await makeContext(request, env, ctx);
-  const timeZone = String(context.member?.family_timezone || (env as unknown as { APP_TIMEZONE?: string }).APP_TIMEZONE || DEFAULT_FAMILY_TIMEZONE);
-  const month = monthFor(url, timeZone);
+  const fallbackTimeZone = String((env as unknown as { APP_TIMEZONE?: string }).APP_TIMEZONE || DEFAULT_FAMILY_TIMEZONE);
+  const fallbackMonth = monthFor(url, fallbackTimeZone);
   const view = normalizedView(url);
-  const { from, to } = renderedRange(month);
+  calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'request_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
 
-  calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'request_start', month, view, wall_checkpoint_ms: Date.now() - started });
+  let context: Awaited<ReturnType<typeof makeContext>>;
+  try {
+    context = await makeContext(request, env, ctx);
+  } catch {
+    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'snapshot_error', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
+    calendarPerfLog({ event: 'calendar_perf', trace_id: traceId, stage: 'delegate_start', month: fallbackMonth, view, wall_checkpoint_ms: Date.now() - started });
+    return baseWorker.fetch(request, env, ctx);
+  }
+
+  const timeZone = String(context.member?.family_timezone || fallbackTimeZone);
+  const month = monthFor(url, timeZone);
+  const { from, to } = renderedRange(month);
 
   if (context.member) {
     try {
