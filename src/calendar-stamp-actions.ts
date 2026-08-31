@@ -72,6 +72,12 @@ function normalizedDimension(value:unknown):number|null{
   return n;
 }
 
+function normalizedVisibilityScope(value:unknown):'FAMILY'|'PRIVATE'{
+  if(value===undefined||value===null||value==='')return 'FAMILY';
+  if(value==='FAMILY'||value==='PRIVATE')return value;
+  throw new Error('invalid calendar stamp visibility');
+}
+
 async function assertActiveMember(env:Env,familyId:number,memberId:number):Promise<void>{
   const row=await env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(memberId,familyId).first<{id:number}>();
   if(!row)throw new Error('calendar stamp member unavailable');
@@ -175,7 +181,7 @@ export async function createCalendarStampPlacement(
   assertPositiveId(memberId,'calendar stamp member');
   assertPositiveId(input.assetId,'calendar stamp asset');
   assertCalendarDate(input.stampDate);
-  const visibility=input.visibilityScope==='PRIVATE'?'PRIVATE':'FAMILY';
+  const visibility=normalizedVisibilityScope(input.visibilityScope);
   const sortOrder=Math.trunc(Number(input.sortOrder)||0);
   if(sortOrder<MIN_SORT_ORDER||sortOrder>MAX_SORT_ORDER)throw new Error('invalid calendar stamp sort order');
 
@@ -209,7 +215,7 @@ export async function updateCalendarStampPlacement(
   assertPositiveId(memberId,'calendar stamp member');
   assertPositiveId(placementId,'calendar stamp placement');
   assertCalendarDate(input.stampDate);
-  const visibility=input.visibilityScope==='PRIVATE'?'PRIVATE':'FAMILY';
+  const visibility=normalizedVisibilityScope(input.visibilityScope);
   const sortOrder=Math.trunc(Number(input.sortOrder)||0);
   if(sortOrder<MIN_SORT_ORDER||sortOrder>MAX_SORT_ORDER)throw new Error('invalid calendar stamp sort order');
 
