@@ -171,6 +171,15 @@ export async function sendWebPush(env: Env, subscription: StoredPushSubscription
   }
 }
 
+function nowJstSql(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')}`;
+}
+
 /**
  * Privacy-scoped member delivery used by server-side command pipelines.
  * The caller must already have resolved the intended member; this helper never
@@ -183,7 +192,7 @@ export async function sendMemberWebPush(env: Env, familyId: number, memberId: nu
   const limit = Math.max(1, Math.min(10, Math.trunc(Number(maxSubscriptions) || 10)));
   const rows = await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT ?').bind(memberId,familyId,limit).all<Record<string,unknown>>();
   let sent=0,failed=0;
-  const timestamp=new Date().toISOString().replace('T',' ').replace('Z','');
+  const timestamp=nowJstSql();
   for(const row of rows.results){
     const id=Number(row.id);
     const result=await sendWebPush(env,{id,endpoint:String(row.endpoint),p256dh:String(row.p256dh),auth:String(row.auth)},message);
