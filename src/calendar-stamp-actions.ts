@@ -70,14 +70,15 @@ export async function createCalendarStampPlacement(
   if(sortOrder<MIN_SORT_ORDER||sortOrder>MAX_SORT_ORDER)throw new Error('invalid calendar stamp sort order');
 
   await assertActiveMember(env,familyId,memberId);
-  const asset=await env.DB.prepare('SELECT id FROM calendar_stamp_assets WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(input.assetId,familyId).first<{id:number}>();
-  if(!asset)throw new Error('calendar stamp asset unavailable');
-
   const now=utcNow();
   const result=await env.DB.prepare(`INSERT INTO calendar_stamp_placements(
       family_id,asset_id,stamp_date,visibility_scope,private_owner_id,sort_order,created_by,created_at,updated_at
-    ) VALUES(?,?,?,?,?,?,?,?,?)`)
-    .bind(familyId,input.assetId,input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,memberId,now,now).run();
+    )
+    SELECT ?,asset.id,?,?,?,?,?,?,?
+    FROM calendar_stamp_assets asset
+    WHERE asset.id=? AND asset.family_id=? AND asset.active=1`)
+    .bind(familyId,input.stampDate,visibility,visibility==='PRIVATE'?memberId:null,sortOrder,memberId,now,now,input.assetId,familyId).run();
+  if(Number(result.meta.changes||0)!==1)throw new Error('calendar stamp asset unavailable');
   return Number(result.meta.last_row_id);
 }
 
