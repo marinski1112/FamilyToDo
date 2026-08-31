@@ -33,8 +33,14 @@ for(const key of ['physical_tasks','recurrence_rules','projected_occurrences','m
   must(allowlist.includes(`'${key}'`),`aggregate key ${key} must remain represented`);
 }
 
+// Static call sites include mutually-exclusive success/error branches. A normal request emits
+// request_start + one snapshot result + delegate_start + response_ready + body_complete (5 lines);
+// a context-lookup failure emits only request_start + snapshot_error + delegate_start (3 lines).
 const logCalls=(worker.match(/calendarPerfLog\(/g)||[]).length;
-must(logCalls<=10,`Calendar diagnostics must stay bounded to low-double-digit log sites (found ${logCalls})`);
+must(logCalls<=12,`Calendar diagnostics source must stay low-double-digit and runtime-bounded (found ${logCalls} static sites)`);
+for(const stage of ['request_start','snapshot_ready','snapshot_error','delegate_start','response_ready','response_body_complete']){
+  must(worker.includes(`stage: '${stage}'`),`named stage ${stage} must remain explicit`);
+}
 must(/return baseWorker\.fetch\(request, env, ctx\)/.test(worker),'all non-instrumented routes must delegate unchanged');
 must(/return baseWorker\.scheduled\(controller, env, ctx\)/.test(worker),'scheduled handler must delegate unchanged');
 
