@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const source=fs.readFileSync('src/calendar-stamps.ts','utf8');
+
+for(const token of [
+  'safeStorageKey',
+  'safeDimension',
+  'safeCalendarStampPlacement',
+  "lower.startsWith('data:')",
+  "key.includes('://')",
+  "slashNormalized.startsWith('//')",
+  "segment==='..'",
+  "row.asset_kind==='ANIMATED'&&row.mime_type==='image/png'",
+  "row.storage_provider!=='ASSETS'&&row.storage_provider!=='UPLOAD'",
+  'row.thumbnail_storage_key!==null&&!safeStorageKey(row.thumbnail_storage_key)',
+  '(row.width===null)!==(row.height===null)',
+  'stampDay>=fromDay&&stampDay<=toDay',
+  'rows.results.filter(row=>safeCalendarStampPlacement(row,fromDay,toDay))',
+]) assert.ok(source.includes(token),`Calendar stamp read-model metadata guard missing: ${token}`);
+
+assert.match(source,/const MAX_STORAGE_KEY_LENGTH=512/,'storage keys must remain bounded');
+assert.match(source,/const MAX_DIMENSION=4096/,'renderer dimensions must remain bounded');
+assert.match(source,/const MIN_SORT_ORDER=-1000[\s\S]*const MAX_SORT_ORDER=1000/,'sort order must remain bounded');
+assert.match(source,/safeCalendarStampPlacement[\s\S]*?visibility_scope!=='FAMILY'[\s\S]*?visibility_scope!=='PRIVATE'/,'visibility scope must fail closed');
+assert.match(source,/safeCalendarStampPlacement[\s\S]*?dayNumber\(row\.stamp_date\)[\s\S]*?stampDay>=fromDay&&stampDay<=toDay/,'returned stamp dates must be strict and stay inside the requested range');
+assert.doesNotMatch(source,/console\.(?:log|warn|error)/,'metadata guard must not log potentially sensitive or malformed row contents');
+assert.doesNotMatch(source,/created_by|private_owner_id:\s*number|member_name|family_name/,'renderer-facing stamp type must not gain identity metadata');
+
+console.log('calendar stamp read-model metadata guard contract: unsafe legacy renderer metadata fails closed without identity/log exposure');
