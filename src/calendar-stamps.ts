@@ -26,6 +26,12 @@ function dayNumber(value:string):number{
   return Math.floor(ms/86400000);
 }
 
+async function assertActiveMember(env:Env,familyId:number,memberId:number):Promise<void>{
+  const row=await env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1')
+    .bind(memberId,familyId).first<{id:number}>();
+  if(!row)throw new Error('calendar stamp member unavailable');
+}
+
 /**
  * Privacy-scoped, bounded read model for Calendar stamp rendering.
  * This deliberately performs no writes/materialization and is not wired into the
@@ -41,6 +47,7 @@ export async function calendarStampPlacementsForRange(
   if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid calendar stamp scope');
   const fromDay=dayNumber(from),toDay=dayNumber(to);
   if(toDay<fromDay||toDay-fromDay+1>MAX_RANGE_DAYS)throw new Error('calendar stamp range exceeds bound');
+  await assertActiveMember(env,familyId,memberId);
 
   const rows=await env.DB.prepare(`SELECT
       p.id placement_id,p.stamp_date,p.visibility_scope,p.private_owner_id,p.sort_order,
