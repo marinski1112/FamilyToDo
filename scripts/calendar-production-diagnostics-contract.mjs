@@ -11,6 +11,8 @@ must(/"CALENDAR_PERF_DIAGNOSTICS"\s*:\s*"1"/.test(wrangler),'diagnostics flag mu
 must(/request\.method === 'GET' && url\.pathname === '\/app\/calendar\.php'/.test(worker),'instrumentation must be scoped to GET /app/calendar.php');
 must(/const traceId = crypto\.randomUUID\(\)/.test(worker),'one opaque trace id must be created per instrumented request');
 must(/event: 'calendar_perf'/.test(worker),'structured calendar_perf logs are required');
+must(/message: 'calendar_perf'/.test(worker),'calendar_perf logs must expose a fixed searchable Observability message');
+must(/const safe: Record<string, unknown> = \{ message: 'calendar_perf' \}/.test(worker),'searchable message must be logger-owned rather than request/content-derived');
 must(/wall_checkpoint_ms/.test(worker),'coarse wall checkpoint field is required');
 must(/not CPU timings/.test(worker),'source must explicitly document that wall checkpoints are not CPU timings');
 must(!/performance\.now\(/.test(worker),'performance.now must not be presented as Calendar CPU timing');
@@ -25,6 +27,7 @@ for(const forbidden of ['title','description','member_name','member_id','family_
   must(!new RegExp(`['\"]${forbidden}['\"]`,'i').test(allowlist),`sensitive/content field ${forbidden} must never be log-allowlisted`);
 }
 
+must(allowlist.includes("'message'"),'fixed searchable message must remain allow-listed');
 must(!/request\.headers/.test(worker),'Calendar diagnostics must not inspect or log request headers');
 must(!/getSessionCookie|cookie/i.test(allowlist),'cookies must not enter the log allowlist');
 must(!/console\.(?:log|warn|error)\([^\n]*(?:title|description|member_name|cookie|authorization|token|note|location|email)/i.test(worker),'direct sensitive/content logging is forbidden');
@@ -44,4 +47,4 @@ for(const stage of ['request_start','snapshot_ready','snapshot_error','delegate_
 must(/return baseWorker\.fetch\(request, env, ctx\)/.test(worker),'all non-instrumented routes must delegate unchanged');
 must(/return baseWorker\.scheduled\(controller, env, ctx\)/.test(worker),'scheduled handler must delegate unchanged');
 
-console.log('calendar production diagnostics contract: ok');
+console.log('calendar production diagnostics contract: searchable privacy-safe bounded diagnostics ok');
