@@ -8,15 +8,24 @@ for(const token of [
   "asset_kind IN ('ANIMATED','STATIC')",
   "mime_type IN ('image/gif','image/webp','image/png')",
   "storage_provider IN ('ASSETS','UPLOAD')",
+  "instr(lower(storage_key),'://')=0",
+  "lower(storage_key) NOT LIKE 'data:%'",
+  "instr(lower(thumbnail_storage_key),'://')=0",
   'UNIQUE(family_id,storage_provider,storage_key)',
+  'CREATE TRIGGER calendar_stamp_assets_family_insert',
+  'CREATE TRIGGER calendar_stamp_assets_family_update',
+  'SELECT 1 FROM members WHERE id=NEW.created_by AND family_id=NEW.family_id',
   'CREATE TABLE calendar_stamp_placements',
   "visibility_scope IN ('FAMILY','PRIVATE')",
   "visibility_scope='PRIVATE' AND private_owner_id IS NOT NULL",
   'FOREIGN KEY(asset_id) REFERENCES calendar_stamp_assets(id)',
+  'CREATE TRIGGER calendar_stamp_placements_family_insert',
+  'CREATE TRIGGER calendar_stamp_placements_family_update',
+  'SELECT 1 FROM calendar_stamp_assets WHERE id=NEW.asset_id AND family_id=NEW.family_id',
+  'SELECT 1 FROM members WHERE id=NEW.private_owner_id AND family_id=NEW.family_id',
   'idx_calendar_stamp_placements_family_date',
 ]) assert.ok(migration.includes(token),`calendar stamp foundation missing: ${token}`);
 
-assert.doesNotMatch(migration,/https?:\/\//i,'stamp persistence must store opaque storage keys rather than arbitrary remote URLs');
 assert.doesNotMatch(migration,/calendar_id/i,'calendar stamps must not couple to Google Calendar schedule identifiers');
 
-console.log('calendar animated stamps foundation contract: family-scoped assets, animation-capable formats, privacy-safe placements, and storage-provider extensibility ok');
+console.log('calendar animated stamps foundation contract: tenant-safe assets/placements, opaque storage keys, animation-capable formats, privacy-safe placements, and storage-provider extensibility ok');
