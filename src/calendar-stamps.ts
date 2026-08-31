@@ -106,17 +106,17 @@ export async function calendarStampPlacementsForRange(
         AND (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))${cursorClause}
       ORDER BY p.stamp_date,p.sort_order,p.id
       LIMIT ?`);
-    const bound=cursorDate===null
+    const bound:D1PreparedStatement=cursorDate===null
       ?statement.bind(familyId,from,to,memberId,MAX_ROWS)
       :statement.bind(familyId,from,to,memberId,cursorDate,cursorDate,cursorSort,cursorDate,cursorSort,cursorId,MAX_ROWS);
-    const rows=await bound.all<CalendarStampPlacement>();
+    const rows:{results:CalendarStampPlacement[];meta:any}=await bound.all<CalendarStampPlacement>();
     if(rows.results.length===0)break;
     for(const row of rows.results){
       if(safeCalendarStampPlacement(row,fromDay,toDay))placements.push(row);
       if(placements.length===MAX_ROWS)break;
     }
     if(placements.length===MAX_ROWS||rows.results.length<MAX_ROWS)break;
-    const last=rows.results.at(-1)!;
+    const last:CalendarStampPlacement=rows.results[rows.results.length-1]!;
     cursorDate=last.stamp_date;
     cursorSort=last.sort_order;
     cursorId=last.placement_id;
