@@ -20,6 +20,7 @@ const MAX_STORAGE_KEY_LENGTH=512;
 const MAX_DIMENSION=4096;
 const MIN_SORT_ORDER=-1000;
 const MAX_SORT_ORDER=1000;
+const SCHEME_RE=/^[A-Za-z][A-Za-z0-9+.-]*:/;
 
 function dayNumber(value:string):number{
   if(!DATE_RE.test(value))throw new Error('invalid calendar stamp date');
@@ -34,7 +35,7 @@ function safeStorageKey(value:unknown):boolean{
   const key=value.trim();
   if(!key||key!==value||key.length>MAX_STORAGE_KEY_LENGTH)return false;
   const lower=key.toLowerCase();
-  if(lower.startsWith('data:')||key.includes('://')||/[\u0000-\u001f\u007f]/.test(key))return false;
+  if(lower.startsWith('data:')||SCHEME_RE.test(key)||key.includes('://')||/[\u0000-\u001f\u007f]/.test(key))return false;
   const slashNormalized=key.replaceAll('\\','/');
   if(slashNormalized.startsWith('//'))return false;
   return !slashNormalized.split('/').some(segment=>segment==='..');
