@@ -18,7 +18,7 @@ export class GoogleVoiceInquiryDeliveryError extends Error {
  *
  * Failures before sendMemberWebPush() are explicitly distinguishable from
  * failures during the transport call. The latter are outcome-ambiguous because
- * a push endpoint may already have accepted a notification before subscription
+ * remote delivery may already have succeeded before local subscription
  * bookkeeping (or another later operation) throws.
  */
 export async function deliverGoogleVoiceInquiry(
