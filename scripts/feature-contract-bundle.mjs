@@ -12,6 +12,7 @@ const groups={
     ['calendar-animated-stamps-read-model',['node','scripts/calendar-animated-stamps-read-model-contract.mjs']],
     ['calendar-animated-stamps-actions',['node','scripts/calendar-animated-stamps-actions-contract.mjs']],
     ['calendar-animated-stamps-active-state',['node','scripts/calendar-animated-stamps-active-state-contract.mjs']],
+    ['calendar-animated-stamps-layout',['node','scripts/calendar-animated-stamps-layout-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
