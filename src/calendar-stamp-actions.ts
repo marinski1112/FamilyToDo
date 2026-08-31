@@ -76,8 +76,10 @@ async function assertActiveAdmin(env:Env,familyId:number,memberId:number):Promis
   if(!row)throw new Error('calendar stamp admin required');
 }
 
-export async function calendarStampAssetsForPicker(env:Env,familyId:number,limit=MAX_ASSET_OPTIONS):Promise<CalendarStampAssetOption[]>{
+export async function calendarStampAssetsForPicker(env:Env,familyId:number,memberId:number,limit=MAX_ASSET_OPTIONS):Promise<CalendarStampAssetOption[]>{
   assertPositiveId(familyId,'calendar stamp family');
+  assertPositiveId(memberId,'calendar stamp member');
+  await assertActiveMember(env,familyId,memberId);
   const boundedLimit=Math.max(1,Math.min(MAX_ASSET_OPTIONS,Math.trunc(Number(limit)||MAX_ASSET_OPTIONS)));
   const rows=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,storage_key,thumbnail_storage_key,width,height
     FROM calendar_stamp_assets

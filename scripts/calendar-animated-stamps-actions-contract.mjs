@@ -26,7 +26,8 @@ for(const token of [
   "new Date(ms).toISOString().slice(0,10)!==value",
 ]) assert.ok(source.includes(token),`calendar stamp action scaffolding missing: ${token}`);
 
-assert.match(source,/SELECT id FROM members WHERE id=\? AND family_id=\? AND active=1 LIMIT 1/,'placement actions must require an active member in the same family');
+assert.match(source,/SELECT id FROM members WHERE id=\? AND family_id=\? AND active=1 LIMIT 1/,'stamp reads and placement actions must require an active member in the same family');
+assert.match(source,/calendarStampAssetsForPicker\(env:Env,familyId:number,memberId:number,limit=MAX_ASSET_OPTIONS\)[\s\S]*?assertPositiveId\(memberId,'calendar stamp member'\);[\s\S]*?await assertActiveMember\(env,familyId,memberId\);[\s\S]*?FROM calendar_stamp_assets[\s\S]*?WHERE family_id=\? AND active=1/,'asset picker must authorize the active acting member before same-family asset metadata is read');
 assert.match(source,/SELECT id FROM members WHERE id=\? AND family_id=\? AND active=1 AND role IN \('OWNER','ADMIN'\) LIMIT 1/,'asset registry mutations must require an active same-family admin');
 assert.match(source,/SELECT \?,asset\.id,\?,\?,\?,\?,\?,\?,\?[\s\S]*WHERE asset\.id=\? AND asset\.family_id=\? AND asset\.active=1/,'placement insert must atomically gate insertion on an active same-family asset');
 assert.match(source,/\.bind\(familyId,input\.stampDate,visibility,visibility==='PRIVATE'\?memberId:null,sortOrder,memberId,now,now,input\.assetId,familyId\)/,'placement insert must derive private ownership and creator from the acting member');
@@ -66,4 +67,4 @@ assert.doesNotMatch(adminInventory,/SELECT\s+\*/i,'admin inventory must not use 
 assert.doesNotMatch(adminInventory,/console\.(?:log|warn|error)|request|cookie|authorization|token|line_user_id|member_name|family_name/i,'admin inventory must not handle or log sensitive identity/session content');
 assert.doesNotMatch(adminInventory,/calendar\(|renderCalendarPage|calendar_perf/,'admin inventory must remain disconnected from the Calendar renderer while 1102 is being re-profiled');
 
-console.log('calendar animated stamps actions contract: bounded tenant-safe asset registry, picker, paginated admin inventory and placement mutations ok');
+console.log('calendar animated stamps actions contract: bounded tenant-safe member-authorized picker, asset registry, paginated admin inventory and placement mutations ok');
