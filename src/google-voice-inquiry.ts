@@ -2,7 +2,9 @@ export type GoogleVoiceInquiryKind='TODAY_SCHEDULE'|'TOMORROW_SCHEDULE'|'OPEN_SH
 export type GoogleVoiceInquiry={type:'INQUIRY';kind:GoogleVoiceInquiryKind;delivery:'MEMBER_WEB_PUSH'};
 export type MarkedGoogleVoiceInquiryCommand={marked:true}&GoogleVoiceInquiry;
 
-const normalize=(value:unknown)=>String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim().replace(/[?？。！!]+$/,'').trim();
+const MAX_INQUIRY_INPUT_UNITS=256;
+const boundedInput=(value:unknown):string|null=>typeof value==='string'&&value.length<=MAX_INQUIRY_INPUT_UNITS?value:null;
+const normalize=(value:string)=>value.normalize('NFKC').replace(/[\s　]+/g,' ').trim().replace(/[?？。！!]+$/,'').trim();
 const marker=/^(?:FT|FAMILY ?TODO|ファミリーTODO)(?: *: *| |$)/i;
 
 const EXACT_INQUIRIES:ReadonlyArray<readonly [GoogleVoiceInquiryKind,ReadonlySet<string>]>= [
@@ -13,11 +15,15 @@ const EXACT_INQUIRIES:ReadonlyArray<readonly [GoogleVoiceInquiryKind,ReadonlySet
 
 /**
  * Deterministic, side-effect-free parser for Google voice inquiry bodies.
+ * Oversized inputs are rejected before NFKC/whitespace normalization so the
+ * exact-match parser cannot perform unbounded preprocessing work.
  * Marker stripping remains the caller's responsibility so this helper can also
  * be reused by a future Gemini fallback after typed parsing fails.
  */
 export function parseGoogleVoiceInquiryBody(value:unknown):GoogleVoiceInquiry|null{
-  const body=normalize(value);
+  const raw=boundedInput(value);
+  if(raw===null)return null;
+  const body=normalize(raw);
   if(!body)return null;
   for(const [kind,phrases] of EXACT_INQUIRIES){
     if(phrases.has(body))return {type:'INQUIRY',kind,delivery:'MEMBER_WEB_PUSH'};
@@ -32,7 +38,9 @@ export function parseGoogleVoiceInquiryBody(value:unknown):GoogleVoiceInquiry|nu
  * Execution, member data reads and Web Push delivery remain outside this module.
  */
 export function parseMarkedGoogleVoiceInquiryCommand(value:unknown):MarkedGoogleVoiceInquiryCommand|null{
-  const normalized=String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim();
+  const raw=boundedInput(value);
+  if(raw===null)return null;
+  const normalized=raw.normalize('NFKC').replace(/[\s　]+/g,' ').trim();
   const matched=marker.exec(normalized);
   if(!matched)return null;
   const inquiry=parseGoogleVoiceInquiryBody(normalized.slice(matched[0].length));
