@@ -12,6 +12,14 @@ export type PushMessagePayload = {
   tag?: string;
 };
 
+export type MemberPushResult = {
+  ok: boolean;
+  sent: number;
+  failed: number;
+  configured: boolean;
+  subscriptions: number;
+};
+
 const te = new TextEncoder();
 const bufferSource = (value: Uint8Array): ArrayBuffer => Uint8Array.from(value).buffer;
 
@@ -161,4 +169,41 @@ export async function sendWebPush(env: Env, subscription: StoredPushSubscription
   } catch (e) {
     return {ok:false,status:0,gone:false,error:String(e instanceof Error ? e.message : e).slice(0,500)};
   }
+}
+
+function nowJstSql(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23'
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')}`;
+}
+
+/**
+ * Privacy-scoped member delivery used by server-side command pipelines.
+ * The caller must already have resolved the intended member; this helper never
+ * broadens delivery to other members or a whole family. Subscription fan-out is
+ * deliberately capped to keep Worker CPU/network work bounded.
+ */
+export async function sendMemberWebPush(env: Env, familyId: number, memberId: number, message: PushMessagePayload, maxSubscriptions = 10): Promise<MemberPushResult> {
+  if (!webPushConfigured(env)) return {ok:false,sent:0,failed:0,configured:false,subscriptions:0};
+  if (!Number.isSafeInteger(familyId) || familyId <= 0 || !Number.isSafeInteger(memberId) || memberId <= 0) return {ok:false,sent:0,failed:0,configured:true,subscriptions:0};
+  const limit = Math.max(1, Math.min(10, Math.trunc(Number(maxSubscriptions) || 10)));
+  const rows = await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT ?').bind(memberId,familyId,limit).all<Record<string,unknown>>();
+  let sent=0,failed=0;
+  const timestamp=nowJstSql();
+  for(const row of rows.results){
+    const id=Number(row.id);
+    const result=await sendWebPush(env,{id,endpoint:String(row.endpoint),p256dh:String(row.p256dh),auth:String(row.auth)},message);
+    if(result.ok){
+      sent++;
+      await env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?,last_error=NULL,failure_count=0,updated_at=? WHERE id=? AND member_id=? AND family_id=?').bind(timestamp,timestamp,id,memberId,familyId).run();
+    }else{
+      failed++;
+      if(result.gone)await env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=? AND member_id=? AND family_id=?').bind(id,memberId,familyId).run();
+      else await env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=? AND member_id=? AND family_id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),timestamp,id,memberId,familyId).run();
+    }
+  }
+  return {ok:sent>0,sent,failed,configured:true,subscriptions:rows.results.length};
 }
