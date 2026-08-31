@@ -7,6 +7,7 @@ export type GoogleVoiceInquiryPushInput = {
 };
 
 const MAX_LINES = 8;
+const MAX_SOURCE_LINES = 32;
 const MAX_LINE_LENGTH = 120;
 const MAX_BODY_LENGTH = 500;
 
@@ -32,13 +33,26 @@ function truncateUnicodeSafe(value:string,maxLength:number):string{
 }
 
 /**
+ * Normalize only a small prefix of resolver output. The canonical resolver is
+ * expected to be bounded too, but this formatter remains independently safe if a
+ * future resolver accidentally returns an unexpectedly large array.
+ */
+function boundedCleanLines(lines:readonly string[]):{cleaned:string[];omitted:number}{
+  const inspected=lines.slice(0,MAX_SOURCE_LINES);
+  const normalized=inspected.map(cleanLine).filter(Boolean);
+  const cleaned=normalized.slice(0,MAX_LINES);
+  const omittedWithinWindow=Math.max(0,normalized.length-cleaned.length);
+  const omittedBeyondWindow=Math.max(0,lines.length-inspected.length);
+  return {cleaned,omitted:omittedWithinWindow+omittedBeyondWindow};
+}
+
+/**
  * Formats already-authorized inquiry results for the existing member-scoped Web Push transport.
  * This module deliberately performs no DB/network/member lookup and never broadens delivery scope.
  */
 export function buildGoogleVoiceInquiryPush(input:GoogleVoiceInquiryPushInput):PushMessagePayload{
   const meta=META[input.kind];
-  const cleaned=input.lines.map(cleanLine).filter(Boolean).slice(0,MAX_LINES);
-  const omitted=Math.max(0,input.lines.length-cleaned.length);
+  const {cleaned,omitted}=boundedCleanLines(input.lines);
   let body=cleaned.length?cleaned.map((line,index)=>{
     const prefix=`${index+1}. `;
     return prefix+truncateUnicodeSafe(line,Math.max(0,MAX_LINE_LENGTH-prefix.length));
@@ -48,4 +62,4 @@ export function buildGoogleVoiceInquiryPush(input:GoogleVoiceInquiryPushInput):P
   return {title:meta.title,body,url:meta.url,tag:meta.tag};
 }
 
-export const GOOGLE_VOICE_INQUIRY_PUSH_LIMITS={maxLines:MAX_LINES,maxLineLength:MAX_LINE_LENGTH,maxBodyLength:MAX_BODY_LENGTH} as const;
+export const GOOGLE_VOICE_INQUIRY_PUSH_LIMITS={maxLines:MAX_LINES,maxSourceLines:MAX_SOURCE_LINES,maxLineLength:MAX_LINE_LENGTH,maxBodyLength:MAX_BODY_LENGTH} as const;
