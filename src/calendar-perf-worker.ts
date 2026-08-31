@@ -11,6 +11,9 @@ type CalendarPerfStage =
   | 'physical_query_ready'
   | 'recurrence_projection_ready'
   | 'row_inputs_ready'
+  | 'row_maps_ready'
+  | 'week_layout_started'
+  | 'detail_projection_started'
   | 'calendar_html_ready'
   | 'response_ready'
   | 'response_body_complete';
@@ -156,12 +159,49 @@ function observedCalendarQuery(sql: string): ObservedCalendarQuery {
  * Observes only the three Calendar SELECT boundaries needed to locate the 1102 stage.
  * SQL text and row contents never leave this function. Unrelated/native D1 statements are
  * returned untouched so recurrence materialization batches keep their native statement identity.
+ * Physical Calendar rows are wrapped only to observe renderer phase transitions; no property
+ * values leave the proxy and the long-lived Calendar renderer remains unmodified/removable.
  */
 function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?: Partial<CalendarPerfInput>) => void): Env {
   let recurrenceReady = false;
   let shoppingRows: number | null = null;
   let itemRows: number | null = null;
   let rowInputsLogged = false;
+  let rowMapsReady = false;
+  let weekLayoutStarted = false;
+  let detailProjectionStarted = false;
+
+  const wrapPhysicalRows = (result: { results?: unknown[] } | null | undefined) => {
+    if (!Array.isArray(result?.results) || result.results.length === 0) return result;
+    const physicalCount = result.results.length;
+    result.results = result.results.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      let startAtReads = 0;
+      return new Proxy(row as Record<PropertyKey, unknown>, {
+        get(target, property, receiver) {
+          if (property === 'start_at') {
+            startAtReads++;
+            // renderCalendarPage maps tasks and detailTasks before its range/lane pass.
+            // The third start_at read on a retained physical row therefore proves both maps finished.
+            if (!rowMapsReady && startAtReads >= 3) {
+              rowMapsReady = true;
+              emit('row_maps_ready', { physical_tasks: physicalCount });
+            }
+          }
+          if (rowMapsReady && !weekLayoutStarted && (property === 'sort_order' || property === 'calendar_color')) {
+            weekLayoutStarted = true;
+            emit('week_layout_started', { physical_tasks: physicalCount });
+          }
+          if (weekLayoutStarted && !detailProjectionStarted && property === 'description') {
+            detailProjectionStarted = true;
+            emit('detail_projection_started', { physical_tasks: physicalCount });
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+    });
+    return result;
+  };
 
   const afterAll = (kind: Exclude<ObservedCalendarQuery, null>, result: { results?: unknown[] } | null | undefined) => {
     const rows = Array.isArray(result?.results) ? result.results.length : 0;
@@ -199,6 +239,7 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
             if (statementProperty === 'all') {
               return async (...args: unknown[]) => {
                 const result = await (inner.all as (...values: unknown[]) => Promise<{ results?: unknown[] }>).apply(inner, args);
+                if (kind === 'physical') wrapPhysicalRows(result);
                 afterAll(kind, result);
                 return result;
               };
