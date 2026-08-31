@@ -5,8 +5,8 @@ CREATE TABLE calendar_stamp_assets (
   asset_kind TEXT NOT NULL CHECK(asset_kind IN ('ANIMATED','STATIC')),
   mime_type TEXT NOT NULL CHECK(mime_type IN ('image/gif','image/webp','image/png')),
   storage_provider TEXT NOT NULL DEFAULT 'ASSETS' CHECK(storage_provider IN ('ASSETS','UPLOAD')),
-  storage_key TEXT NOT NULL,
-  thumbnail_storage_key TEXT,
+  storage_key TEXT NOT NULL CHECK(instr(lower(storage_key),'://')=0 AND lower(storage_key) NOT LIKE 'data:%'),
+  thumbnail_storage_key TEXT CHECK(thumbnail_storage_key IS NULL OR (instr(lower(thumbnail_storage_key),'://')=0 AND lower(thumbnail_storage_key) NOT LIKE 'data:%')),
   width INTEGER CHECK(width IS NULL OR width BETWEEN 1 AND 4096),
   height INTEGER CHECK(height IS NULL OR height BETWEEN 1 AND 4096),
   active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
@@ -20,6 +20,22 @@ CREATE TABLE calendar_stamp_assets (
 
 CREATE INDEX idx_calendar_stamp_assets_family_active
   ON calendar_stamp_assets(family_id,active,id);
+
+CREATE TRIGGER calendar_stamp_assets_family_insert
+BEFORE INSERT ON calendar_stamp_assets
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.created_by AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp creator family mismatch') END;
+END;
+
+CREATE TRIGGER calendar_stamp_assets_family_update
+BEFORE UPDATE OF family_id,created_by ON calendar_stamp_assets
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.created_by AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp creator family mismatch') END;
+END;
 
 CREATE TABLE calendar_stamp_placements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,3 +63,31 @@ CREATE INDEX idx_calendar_stamp_placements_family_date
   ON calendar_stamp_placements(family_id,stamp_date,sort_order,id);
 CREATE INDEX idx_calendar_stamp_placements_private_owner
   ON calendar_stamp_placements(family_id,private_owner_id,stamp_date);
+
+CREATE TRIGGER calendar_stamp_placements_family_insert
+BEFORE INSERT ON calendar_stamp_placements
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM calendar_stamp_assets WHERE id=NEW.asset_id AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp asset family mismatch') END;
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.created_by AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp creator family mismatch') END;
+  SELECT CASE WHEN NEW.private_owner_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.private_owner_id AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp owner family mismatch') END;
+END;
+
+CREATE TRIGGER calendar_stamp_placements_family_update
+BEFORE UPDATE OF family_id,asset_id,private_owner_id,created_by ON calendar_stamp_placements
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM calendar_stamp_assets WHERE id=NEW.asset_id AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp asset family mismatch') END;
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.created_by AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp creator family mismatch') END;
+  SELECT CASE WHEN NEW.private_owner_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM members WHERE id=NEW.private_owner_id AND family_id=NEW.family_id
+  ) THEN RAISE(ABORT,'calendar stamp owner family mismatch') END;
+END;
