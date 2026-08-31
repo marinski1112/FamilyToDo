@@ -207,8 +207,11 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
     expectedPhysicalCopies = result.results.reduce((total, row) => total + (row && typeof row === 'object' ? inclusiveSpanDays(row as Record<PropertyKey, unknown>) : 0), 0);
     result.results = result.results.map((row) => {
       if (!row || typeof row !== 'object') return row;
+      let spreadKeys: Set<PropertyKey> | null = null;
       return new Proxy(row as Record<PropertyKey, unknown>, {
         ownKeys(target) {
+          const keys = Reflect.ownKeys(target);
+          spreadKeys = new Set(keys.filter((key) => Object.prototype.propertyIsEnumerable.call(target, key)));
           physicalCopyCount++;
           if (!physicalMapReady && expectedPhysicalCopies > 0 && physicalCopyCount === expectedPhysicalCopies) {
             physicalMapReady = true;
@@ -220,10 +223,14 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
             physicalDetailReady = true;
             emit('physical_detail_map_copies_ready', { physical_tasks: physicalCount });
           }
-          return Reflect.ownKeys(target);
+          return keys;
         },
         get(target, property, receiver) {
-          if (physicalDetailReady && !rangeBuildStarted && property === 'start_at') {
+          const spreadRead = Boolean(spreadKeys?.has(property));
+          if (spreadRead) {
+            spreadKeys!.delete(property);
+            if (spreadKeys!.size === 0) spreadKeys = null;
+          } else if (physicalDetailReady && !rangeBuildStarted && property === 'start_at') {
             rangeBuildStarted = true;
             emit('range_build_started', { physical_tasks: physicalCount });
           }
