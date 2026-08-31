@@ -52,7 +52,9 @@ function normalizedStorageKey(value:unknown,label:string):string{
   if(!key||key.length>MAX_STORAGE_KEY_LENGTH)throw new Error(`invalid ${label}`);
   const lower=key.toLowerCase();
   if(lower.startsWith('data:')||key.includes('://')||/[\u0000-\u001f\u007f]/.test(key))throw new Error(`invalid ${label}`);
-  const segments=key.replaceAll('\\','/').split('/');
+  const slashNormalized=key.replaceAll('\\','/');
+  if(slashNormalized.startsWith('//'))throw new Error(`invalid ${label}`);
+  const segments=slashNormalized.split('/');
   if(segments.some(segment=>segment==='..'))throw new Error(`invalid ${label}`);
   return key;
 }
