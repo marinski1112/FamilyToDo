@@ -35,7 +35,7 @@ assert.ok(memoGuard>categoryGuard&&memoGuard<bodyAssembly,'memo length validatio
 assert.ok(bodyAssembly>memoGuard&&network>bodyAssembly,'validated free-form metadata must be assembled only after its bounds and before network I/O');
 assert.match(source,/dueDate===null/,'malformed or impossible due dates must fail closed');
 assert.match(source,/due_date:dueDate/,'validated due date must be used in the existing add_batch payload');
-assert.match(source,/category,due_date:dueDate,task_id:taskId,assignees,memo/,'validated category and memo variables must be used in the existing add_batch payload');
+assert.match(source,/category,due_date:dueDate,task_id:taskId,assignees,memo:memo/,'validated category and memo variables must be used in the existing add_batch payload while retaining the entity-ID contract shape');
 assert.match(source,/names\.length!==rows\.length\|\|quantities\.length!==rows\.length\|\|urls\.length!==rows\.length/,'parallel product arrays must stay aligned with bounded visible rows');
 assert.match(source,/names\.some\(name=>name\.length>MAX_PRODUCT_NAME_UNITS\)/,'programmatic bypass of product-name maxlength must fail closed');
 assert.match(source,/quantities\.some\(quantity=>quantity\.length>MAX_PRODUCT_QUANTITY_UNITS\)/,'programmatic bypass of quantity maxlength must fail closed');
