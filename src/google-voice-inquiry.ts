@@ -3,7 +3,7 @@ export type GoogleVoiceInquiry={type:'INQUIRY';kind:GoogleVoiceInquiryKind;deliv
 export type MarkedGoogleVoiceInquiryCommand={marked:true}&GoogleVoiceInquiry;
 
 const normalize=(value:unknown)=>String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim().replace(/[?？。！!]+$/,'').trim();
-const marker=/^(?:FT|FAMILY TODO|ファミリーTODO)(?: *: *| |$)/i;
+const marker=/^(?:FT|FAMILY ?TODO|ファミリーTODO)(?: *: *| |$)/i;
 
 const EXACT_INQUIRIES:ReadonlyArray<readonly [GoogleVoiceInquiryKind,ReadonlySet<string>]>= [
   ['TODAY_SCHEDULE',new Set(['今日の予定','今日のタスク','今日のTODO','今日予定','今日タスク','今日の予定教えて','今日の予定を教えて','今日の予定は','今日のタスク教えて','今日のタスクを教えて','今日のタスクは','今日何する'])],
