@@ -46,18 +46,24 @@ assert.doesNotMatch(source,/calendar\(|renderCalendarPage|calendar_perf/,'stamp 
 
 for(const token of [
   'calendarStampAssetsForAdmin',
+  'CalendarStampAdminCursor',
   'CALENDAR_STAMP_ACTION_LIMITS.maxAssetOptions',
   "role IN ('OWNER','ADMIN')",
   'FROM calendar_stamp_assets',
   'WHERE family_id=?',
+  '? IS NULL OR active<? OR (active=? AND id>?)',
   'ORDER BY active DESC,id',
   'LIMIT ?',
 ]) assert.ok(adminInventory.includes(token),`calendar stamp admin inventory missing: ${token}`);
 assert.match(adminInventory,/SELECT id,name,asset_kind,mime_type,storage_provider,storage_key,thumbnail_storage_key,width,height,active/,'admin inventory must select only bounded asset metadata');
 assert.match(adminInventory,/Math\.max\(1,Math\.min\(max,/,'admin inventory limit must remain runtime bounded');
+assert.match(adminInventory,/cursor\.active!==0&&cursor\.active!==1/,'admin inventory cursor must validate the active ordering component');
+assert.match(adminInventory,/Number\.isSafeInteger\(cursor\.id\).*cursor\.id<=0/,'admin inventory cursor must validate the id ordering component');
+assert.match(adminInventory,/\.bind\(familyId,cursorActive,cursorActive\?\?0,cursorActive\?\?0,cursor\?\.id\?\?0,boundedLimit\)/,'admin inventory must bind a stable keyset cursor and bounded page size');
+assert.doesNotMatch(adminInventory,/\bOFFSET\b/i,'admin inventory must use keyset pagination rather than unbounded offset scans');
 assert.doesNotMatch(adminInventory,/created_by|private_owner_id|visibility_scope|calendar_stamp_placements/,'admin inventory must not expose creator/private placement data');
 assert.doesNotMatch(adminInventory,/SELECT\s+\*/i,'admin inventory must not use wildcard selects');
 assert.doesNotMatch(adminInventory,/console\.(?:log|warn|error)|request|cookie|authorization|token|line_user_id|member_name|family_name/i,'admin inventory must not handle or log sensitive identity/session content');
 assert.doesNotMatch(adminInventory,/calendar\(|renderCalendarPage|calendar_perf/,'admin inventory must remain disconnected from the Calendar renderer while 1102 is being re-profiled');
 
-console.log('calendar animated stamps actions contract: bounded tenant-safe asset registry, picker, admin inventory and placement mutations ok');
+console.log('calendar animated stamps actions contract: bounded tenant-safe asset registry, picker, paginated admin inventory and placement mutations ok');
