@@ -1,5 +1,3 @@
-PRAGMA foreign_keys=OFF;
-
 CREATE TABLE external_google_voice_commands_next (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   family_id INTEGER NOT NULL,
@@ -43,5 +41,3 @@ FROM external_google_voice_commands;
 DROP TABLE external_google_voice_commands;
 ALTER TABLE external_google_voice_commands_next RENAME TO external_google_voice_commands;
 CREATE INDEX idx_google_voice_commands_account_status ON external_google_voice_commands(account_id,status);
-
-PRAGMA foreign_keys=ON;
