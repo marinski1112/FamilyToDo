@@ -25,7 +25,6 @@ type LedgerRow = { id?: unknown; external_etag?: unknown; status?: unknown; erro
 const RETRYABLE_INQUIRY_ERRORS = new Set([
   'PUSH_NOT_CONFIGURED',
   'NO_PUSH_SUBSCRIPTION',
-  'PUSH_DELIVERY_FAILED',
   'INQUIRY_PRE_DELIVERY_ERROR',
 ]);
 
