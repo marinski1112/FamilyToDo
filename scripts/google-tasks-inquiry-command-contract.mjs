@@ -9,6 +9,7 @@ for(const token of [
   'executeMarkedGoogleVoiceInquiry',
   'GoogleVoiceInquiryLineResolver',
   'GoogleVoiceInquiryDeliveryError',
+  'assertAccountTenantIntegrity',
   "command_type='INQUIRY'",
   'target_type=NULL',
   'target_id=NULL',
@@ -38,8 +39,13 @@ assert.ok(pushCall >= 0,'delivery adapter must use the existing member-scoped We
 assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('PRE_DELIVERY')") < pushCall,'pre-delivery classification must occur before Web Push transport');
 assert.ok(delivery.indexOf("GoogleVoiceInquiryDeliveryError('AMBIGUOUS_DELIVERY')") > pushCall,'ambiguous classification must cover transport/post-send failures');
 assert.match(source,/validateAccount\(account\);/,'adapter must validate account tenant/member keys before ledger writes');
+assert.match(source,/FROM external_google_task_accounts a[\s\S]*?JOIN members m ON m\.id=a\.member_id AND m\.family_id=a\.family_id[\s\S]*?a\.id=\? AND a\.family_id=\? AND a\.member_id=\? AND a\.tasklist_id=\?[\s\S]*?a\.status IN \('ACTIVE','SYNCING'\)[\s\S]*?m\.active=1 AND m\.deleted_at IS NULL/,'adapter must revalidate the persisted active account, tenant, member and tasklist before processing');
+const tenantCheck=source.indexOf('await assertAccountTenantIntegrity(env, account);');
+const ledgerRead=source.indexOf('SELECT id,external_etag,status,error_code');
+const runtimeCall=source.indexOf('const result = await executeMarkedGoogleVoiceInquiry(');
+assert.ok(tenantCheck >= 0 && ledgerRead > tenantCheck && runtimeCall > tenantCheck,'tenant integrity validation must run before ledger reads and Web Push runtime execution');
 assert.ok(!/FROM\s+tasks\b|FROM\s+recurrence_rules\b|FROM\s+recurrence_occurrences\b|FROM\s+shopping_items\b/i.test(source),'adapter must not duplicate canonical task/recurrence/shopping domain reads');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(source),'adapter must not log or handle unrelated sensitive/location data');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(delivery),'delivery adapter must not log or handle unrelated sensitive/location data');
 
-console.log('google-tasks-inquiry-command-contract: typed inquiry parsing, member-scoped runtime reuse, safe pre-delivery retries, ambiguous outcome suppression, successful exactly-once suppression, nullable target, and injected canonical domain resolution remain enforced');
+console.log('google-tasks-inquiry-command-contract: persisted account tenant integrity, typed inquiry parsing, member-scoped runtime reuse, safe pre-delivery retries, ambiguous outcome suppression, successful exactly-once suppression, nullable target, and injected canonical domain resolution remain enforced');
