@@ -35,6 +35,18 @@ function validateAccount(account: GoogleTasksInquiryAccount): void {
   if (!String(account.tasklistId || '').trim()) throw new Error('invalid-tasklist-id');
 }
 
+async function assertAccountTenantIntegrity(env: Env, account: GoogleTasksInquiryAccount): Promise<void> {
+  const persisted = await env.DB.prepare(`SELECT a.id
+      FROM external_google_task_accounts a
+      JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id
+      WHERE a.id=? AND a.family_id=? AND a.member_id=? AND a.tasklist_id=?
+        AND a.status IN ('ACTIVE','SYNCING')
+        AND m.active=1 AND m.deleted_at IS NULL`)
+    .bind(account.id, account.familyId, account.memberId, account.tasklistId)
+    .first<{ id?: unknown }>();
+  if (!persisted) throw new Error('google-tasks-account-tenant-mismatch');
+}
+
 function inquiryDeliveryError(delivered: boolean, push: { configured: boolean; subscriptions: number }): string | null {
   if (delivered) return null;
   if (!push.configured) return 'PUSH_NOT_CONFIGURED';
@@ -93,6 +105,10 @@ async function persistInquiryLedger(
  * duplicate task/recurrence/shopping queries; the eventual caller supplies the
  * same canonical visibility-aware projection used by the application views.
  *
+ * The externally supplied account envelope is revalidated against the persisted
+ * active account and active member before any ledger read, push delivery or write.
+ * This keeps a future caller bug from crossing account/family/member boundaries.
+ *
  * Successful commands remain exactly-once. Failed commands are retried with an
  * unchanged etag only when the failure is known to have happened before a push
  * could be accepted. Outcome-ambiguous failures require an external task change
@@ -109,6 +125,7 @@ export async function executeGoogleTasksInquiryCommand(
 
   validateAccount(account);
   if (!String(item.id || '').trim()) throw new Error('invalid-external-task-id');
+  await assertAccountTenantIntegrity(env, account);
 
   const existing = await env.DB.prepare(`SELECT id,external_etag,status,error_code
       FROM external_google_voice_commands
