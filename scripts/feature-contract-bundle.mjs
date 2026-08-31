@@ -6,6 +6,7 @@ const groups={
     ['calendar-touch',['node','scripts/calendar-touch-contract.mjs']],
     ['recurring-calendar-navigation',['node','scripts/recurring-calendar-navigation-contract.mjs']],
     ['calendar-recurrence-range-performance',['node','scripts/calendar-recurrence-range-performance-contract.mjs']],
+    ['calendar-animated-stamps-foundation',['node','scripts/calendar-animated-stamps-foundation-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
     ['calendar-colors',['node','scripts/calendar-color-contract.mjs']],
     ['calendar-projection-ui',['node','scripts/calendar-projection-ui-contract.mjs']],
