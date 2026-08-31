@@ -5,6 +5,10 @@ const calendarStart=source.indexOf('export async function calendar(');
 const calendarEnd=source.indexOf('\nexport function calendarDisplayLabel',calendarStart);
 if(calendarStart<0||calendarEnd<0)throw new Error('calendar() source not found');
 const calendar=source.slice(calendarStart,calendarEnd);
+const rangeStart=source.indexOf('async function recurringForRange(');
+const rangeEnd=source.indexOf('\nasync function recurringForDate',rangeStart);
+if(rangeStart<0||rangeEnd<0)throw new Error('recurringForRange() source not found');
+const range=source.slice(rangeStart,rangeEnd);
 
 const required=[
   'async function recurringForRange(ctx:AppContext,from:string,to:string):Promise<Row[]>',
@@ -24,7 +28,10 @@ if(/for\s*\([^)]*from[^)]*to[^)]*\)[\s\S]{0,400}recurringForDate\s*\(/.test(cale
 if((calendar.match(/recurringForDate\s*\(/g)||[]).length>0){
   throw new Error('calendar() must project recurrence through recurringForRange only');
 }
-if((source.match(/SELECT r\.\*,t\.title[\s\S]{0,800}FROM recurrence_rules/g)||[]).length!==1){
-  throw new Error('recurrence rule projection should have one range loader');
+if((range.match(/SELECT r\.\*,t\.title/g)||[]).length!==1){
+  throw new Error('recurringForRange() must load recurrence rules exactly once');
+}
+if(range.includes('recurrence_rule_id=? AND occurrence_date=? LIMIT 1')){
+  throw new Error('recurringForRange() must not restore per-occurrence lookup queries');
 }
 console.log('calendar recurrence range performance contract ok');
