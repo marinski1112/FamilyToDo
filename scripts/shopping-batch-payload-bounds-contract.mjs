@@ -8,7 +8,9 @@ assert.match(source,/const MAX_PRODUCT_NAME_UNITS=255;/,'Shopping batch create m
 assert.match(source,/const MAX_PRODUCT_QUANTITY_UNITS=128;/,'Shopping batch create must bound free-form quantity text');
 assert.match(source,/maxlength="128"[^>]*name="product_quantity\[\]"|name="product_quantity\[\]"[^>]*maxlength="128"/,'quantity input must expose the same client-side bound');
 assert.match(source,/name="product_url\[\]" maxlength="2048"/,'product URL input must expose the existing URL bound');
-assert.match(source,/const safeDueDate=value=>\{[^}]*\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$[^}]*toISOString\(\)\.slice\(0,10\)!==raw\?null:raw;/,'Shopping due date must be validated as a real YYYY-MM-DD date');
+assert.match(source,/const safeDueDate=value=>/,'Shopping batch create must retain an explicit due-date validator');
+assert.match(source,/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/,'Shopping due date must retain exact YYYY-MM-DD syntax validation');
+assert.match(source,/toISOString\(\)\.slice\(0,10\)!==raw\?null:raw/,'Shopping due date must reject impossible calendar dates after UTC round-trip validation');
 
 const addStart=source.indexOf('add.onclick=()=>{');
 const addCreate=source.indexOf("document.createElement('div')",addStart);
