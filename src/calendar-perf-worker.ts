@@ -183,10 +183,11 @@ function inclusiveSpanDays(row: Record<PropertyKey, unknown>): number {
  * D1 statements retain their identity so recurrence materialization batches are not disturbed.
  *
  * Important: object spread happens once per rendered day while addToMap() copies a physical row.
- * Counting ownKeys therefore brackets the physical portion of the first map pass, the start of the
- * second/detail map pass, and completion of the physical portion of that second pass without logging
- * row values. Recurrence rows are intentionally not proxied; absence of detail_map_started after
- * physical_map_copies_ready points at the recurring-row portion of the first map pass.
+ * A copy is counted only after its final enumerable property has been read. This brackets the
+ * physical portion of the first map pass, the start of the second/detail map pass, and completion
+ * of the physical portion of that second pass without logging row values. Recurrence rows are not
+ * proxied; absence of detail_map_started after physical_map_copies_ready points at the recurring-row
+ * portion of the first map pass.
  */
 function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?: Partial<CalendarPerfInput>) => void): Env {
   let recurrenceReady = false;
@@ -200,6 +201,19 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
   let physicalDetailReady = false;
   let rangeBuildStarted = false;
 
+  const noteCompletedPhysicalCopy = (physicalCount: number) => {
+    physicalCopyCount++;
+    if (!physicalMapReady && expectedPhysicalCopies > 0 && physicalCopyCount === expectedPhysicalCopies) {
+      physicalMapReady = true;
+      emit('physical_map_copies_ready', { physical_tasks: physicalCount });
+    } else if (physicalMapReady && !detailMapStarted && physicalCopyCount === expectedPhysicalCopies + 1) {
+      detailMapStarted = true;
+      emit('detail_map_started', { physical_tasks: physicalCount });
+    } else if (detailMapStarted && !physicalDetailReady && physicalCopyCount === expectedPhysicalCopies * 2) {
+      physicalDetailReady = true;
+    }
+  };
+
   const wrapPhysicalRows = (result: { results?: unknown[] } | null | undefined) => {
     if (!Array.isArray(result?.results) || result.results.length === 0) return result;
     const physicalCount = result.results.length;
@@ -211,15 +225,9 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
         ownKeys(target) {
           const keys = Reflect.ownKeys(target);
           spreadKeys = new Set(keys.filter((key) => Object.prototype.propertyIsEnumerable.call(target, key)));
-          physicalCopyCount++;
-          if (!physicalMapReady && expectedPhysicalCopies > 0 && physicalCopyCount === expectedPhysicalCopies) {
-            physicalMapReady = true;
-            emit('physical_map_copies_ready', { physical_tasks: physicalCount });
-          } else if (physicalMapReady && !detailMapStarted && physicalCopyCount === expectedPhysicalCopies + 1) {
-            detailMapStarted = true;
-            emit('detail_map_started', { physical_tasks: physicalCount });
-          } else if (detailMapStarted && !physicalDetailReady && physicalCopyCount === expectedPhysicalCopies * 2) {
-            physicalDetailReady = true;
+          if (spreadKeys.size === 0) {
+            spreadKeys = null;
+            noteCompletedPhysicalCopy(physicalCount);
           }
           return keys;
         },
@@ -227,7 +235,10 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
           const spreadRead = Boolean(spreadKeys?.has(property));
           if (spreadRead) {
             spreadKeys!.delete(property);
-            if (spreadKeys!.size === 0) spreadKeys = null;
+            if (spreadKeys!.size === 0) {
+              spreadKeys = null;
+              noteCompletedPhysicalCopy(physicalCount);
+            }
           } else if (physicalDetailReady && !rangeBuildStarted && property === 'start_at') {
             rangeBuildStarted = true;
             emit('range_build_started', { physical_tasks: physicalCount });
