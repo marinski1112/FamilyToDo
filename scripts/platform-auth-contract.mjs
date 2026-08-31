@@ -7,7 +7,13 @@ const read=p=>fs.readFileSync(p,'utf8');
 const wrangler=JSON.parse(read('wrangler.jsonc'));
 
 assert.equal(wrangler.keep_vars,true);
-assert.equal(wrangler.main,'src/index.ts');
+assert.ok(['src/index.ts','src/calendar-perf-worker.ts'].includes(wrangler.main),'Worker entry must remain the canonical app or the temporary Calendar diagnostics wrapper');
+if(wrangler.main==='src/calendar-perf-worker.ts'){
+  const perf=read('src/calendar-perf-worker.ts');
+  assert.ok(perf.includes("import baseWorker from './index'"),'diagnostic Worker entry must delegate to canonical src/index.ts');
+  assert.ok(perf.includes("return baseWorker.fetch(request, env, ctx)"),'diagnostic Worker entry must preserve non-Calendar fetch routing');
+  assert.ok(perf.includes("return baseWorker.scheduled(controller, env, ctx)"),'diagnostic Worker entry must preserve scheduled routing');
+}
 assert.equal(fs.existsSync('src/index-wave117.ts'),false);
 assert.equal(wrangler.vars.GOOGLE_HOME_CLIENT_ID,'Family_ToDo');
 assert.equal(wrangler.vars.GOOGLE_HOME_PROJECT_ID,'family-todo-home');
