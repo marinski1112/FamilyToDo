@@ -19,13 +19,15 @@ must(/emit\('row_inputs_ready', \{ shopping_items: shoppingRows, items: itemRows
 
 must(/function inclusiveSpanDays\(row: Record<PropertyKey, unknown>\): number/.test(worker),'physical clone boundary must use an internal bounded span count');
 must(/result\.results\.reduce<number>/.test(worker),'physical clone count must retain an explicit numeric accumulator type');
-must(/ownKeys\(target\)/.test(worker),'map-copy boundary must observe object spread rather than ambiguous property-read order');
-must(/physicalCopyCount === expectedPhysicalCopies/.test(worker),'first map boundary must be tied to the expected physical spread count');
+must(/const noteCompletedPhysicalCopy = \(physicalCount: number\)/.test(worker),'copy completion must be centralized after enumerable reads finish');
+must(/ownKeys\(target\)[\s\S]*?spreadKeys = new Set\(keys\.filter/.test(worker),'object spread must begin by tracking only enumerable source keys');
+must(!/ownKeys\(target\)[\s\S]{0,500}?physicalCopyCount\+\+/.test(worker),'ownKeys start must not itself count a physical copy as complete');
+must(/spreadKeys!\.delete\(property\);[\s\S]*?spreadKeys = null;\s*noteCompletedPhysicalCopy\(physicalCount\)/.test(worker),'non-empty object spread must count complete only after its final enumerable get');
+must(/if \(spreadKeys\.size === 0\) \{\s*spreadKeys = null;\s*noteCompletedPhysicalCopy\(physicalCount\);\s*\}/.test(worker),'empty enumerable spread must still complete exactly once');
+must(/physicalCopyCount === expectedPhysicalCopies/.test(worker),'first map boundary must be tied to the expected completed physical spread count');
 must(/physicalCopyCount === expectedPhysicalCopies \+ 1/.test(worker),'detail-map start must be observed only after the recurring portion of the first map pass has returned');
 must(/physicalCopyCount === expectedPhysicalCopies \* 2\) \{\s*physicalDetailReady = true;\s*\}/.test(worker),'physical detail completion must be tracked internally without consuming another runtime log');
-must(/let spreadKeys: Set<PropertyKey> \| null = null/.test(worker),'row proxy must track object-spread reads separately from later renderer reads');
-must(/spreadKeys = new Set\(keys\.filter/.test(worker),'spread tracking must derive only enumerable source keys');
-must(/if \(spreadRead\)[\s\S]*?spreadKeys = null;\s*\} else if \(physicalDetailReady && !rangeBuildStarted && property === 'start_at'\)/.test(worker),'range-build marker must ignore property reads performed by the final object spread');
+must(/else if \(physicalDetailReady && !rangeBuildStarted && property === 'start_at'\)/.test(worker),'range-build marker must occur only after second-pass physical copies complete and outside spread reads');
 for(const stage of ['physical_map_copies_ready','detail_map_started','range_build_started']){
   must(new RegExp(`emit\\('${stage}', \\{ physical_tasks: physicalCount \\}\\)`).test(worker),`${stage} must expose only physical task count`);
 }
@@ -50,9 +52,9 @@ for(const forbidden of ['message','event','title','description','name','member_n
 }
 must(!/console\.(?:log|warn|error)\([^\n]*(?:sql|query|title|description|name|cookie|authorization|token|note|memo|location|email)/i.test(worker),'query text and content-bearing values must never be directly logged');
 must(/SQL text and row contents never leave this function/.test(worker),'source must document the privacy boundary around query classification');
-must(/without logging\s*\n \* row values/.test(worker),'source must document that renderer row values are not logged');
+must(/without logging row values/.test(worker),'source must document that renderer row values are not logged');
 
 // Removal stays isolated to the temporary Worker diagnostics layer: app/calendar rendering remains untouched.
 must(!/calendarStageEnv|observedCalendarQuery|physical_query_ready|recurrence_projection_ready|row_inputs_ready|physical_map_copies_ready|detail_map_started|range_build_started|calendar_html_ready/.test(app),'temporary inner diagnostics must not leak into the long-lived app/calendar source');
 
-console.log('calendar inner-stage diagnostics contract: bounded aggregate-only removable map-boundary tracing ok');
+console.log('calendar inner-stage diagnostics contract: bounded aggregate-only removable completed-copy tracing ok');
