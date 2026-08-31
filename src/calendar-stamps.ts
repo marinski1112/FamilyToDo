@@ -2,7 +2,6 @@ export type CalendarStampPlacement = {
   placement_id: number;
   stamp_date: string;
   visibility_scope: 'FAMILY' | 'PRIVATE';
-  private_owner_id: number | null;
   sort_order: number;
   asset_id: number;
   asset_kind: 'ANIMATED' | 'STATIC';
@@ -50,7 +49,7 @@ export async function calendarStampPlacementsForRange(
   await assertActiveMember(env,familyId,memberId);
 
   const rows=await env.DB.prepare(`SELECT
-      p.id placement_id,p.stamp_date,p.visibility_scope,p.private_owner_id,p.sort_order,
+      p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
       a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
     FROM calendar_stamp_placements p
     JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id
