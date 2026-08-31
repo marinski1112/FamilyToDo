@@ -11,12 +11,16 @@ try {
   try{payload=JSON.parse(payloadNode?.textContent||'{}');}catch{payload={};}
   root.dataset.shoppingNewJs='ready';
   let sequence=list.querySelectorAll('[data-product-row]').length;
+  const MAX_BATCH_PRODUCTS=64;
+  const MAX_PRODUCT_NAME_UNITS=255;
+  const MAX_PRODUCT_QUANTITY_UNITS=128;
   const safeEntityId=value=>{const id=Number(value);return Number.isSafeInteger(id)&&id>0?id:0};
   const safeProductUrl=value=>{const raw=String(value??'').trim();if(!raw)return '';if(raw.length>2048)return null;try{const parsed=new URL(raw);if(parsed.username||parsed.password)return null;return parsed.protocol==='http:'||parsed.protocol==='https:'?raw:null;}catch{return null;}};
-  const rowHtml=()=>'<input type="text" name="product_name[]" maxlength="255" placeholder="商品名" required><input type="text" name="product_quantity[]" value="1" inputmode="text" placeholder="数量" aria-label="数量"><button type="button" class="product-url-toggle" aria-expanded="false" aria-label="商品URLを入力" title="商品URL">🔗</button><button type="button" class="remove-product" aria-label="商品欄を削除">×</button><div class="product-url-popover" hidden><div class="product-url-popover-head"><strong>商品URL</strong><button type="button" class="product-url-close" aria-label="URL入力を閉じる">×</button></div><input type="url" name="product_url[]" placeholder="https://..." aria-label="商品URL"><p class="small">商品ページのURLがある場合だけ入力してください。</p></div>';
+  const rowHtml=()=>'<input type="text" name="product_name[]" maxlength="255" placeholder="商品名" required><input type="text" name="product_quantity[]" value="1" maxlength="128" inputmode="text" placeholder="数量" aria-label="数量"><button type="button" class="product-url-toggle" aria-expanded="false" aria-label="商品URLを入力" title="商品URL">🔗</button><button type="button" class="remove-product" aria-label="商品欄を削除">×</button><div class="product-url-popover" hidden><div class="product-url-popover-head"><strong>商品URL</strong><button type="button" class="product-url-close" aria-label="URL入力を閉じる">×</button></div><input type="url" name="product_url[]" maxlength="2048" placeholder="https://..." aria-label="商品URL"><p class="small">商品ページのURLがある場合だけ入力してください。</p></div>';
   function closeUrl(row){const pop=row?.querySelector('.product-url-popover');const toggle=row?.querySelector('.product-url-toggle');if(pop)pop.hidden=true;if(toggle)toggle.setAttribute('aria-expanded','false');}
   function closeAll(except=null){list.querySelectorAll('[data-product-row]').forEach(row=>{if(row!==except)closeUrl(row);});}
   add.onclick=()=>{
+    if(list.querySelectorAll('[data-product-row]').length>=MAX_BATCH_PRODUCTS){alert(`商品は一度に${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
     sequence++;
     const row=document.createElement('div');row.className='product-row batch-product';row.dataset.productRow='';row.dataset.rowNumber=String(sequence);row.innerHTML=rowHtml();list.appendChild(row);
     // Intentionally no focus and no scroll. Users may add the desired number of rows first.
@@ -31,10 +35,15 @@ try {
   document.addEventListener('click',e=>{const target=e.target instanceof Element?e.target:null;if(!target||target.closest('#shoppingProducts'))return;closeAll();});
   form.onsubmit=async e=>{
     e.preventDefault();
+    const rows=[...list.querySelectorAll('[data-product-row]')];
+    if(!rows.length||rows.length>MAX_BATCH_PRODUCTS){alert(`商品は一度に1〜${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
     const names=[...form.querySelectorAll('[name="product_name[]"]')].map(x=>String(x.value||'').trim());
     const quantities=[...form.querySelectorAll('[name="product_quantity[]"]')].map(x=>String(x.value||'').trim()||'1');
     const urls=[...form.querySelectorAll('[name="product_url[]"]')].map(x=>String(x.value||'').trim());
     if(!names.length||names.some(x=>!x)){alert('商品名を入力してください。');return;}
+    if(names.length!==rows.length||quantities.length!==rows.length||urls.length!==rows.length){alert('商品入力の状態が不正です。ページを再読み込みしてください。');return;}
+    if(names.some(name=>name.length>MAX_PRODUCT_NAME_UNITS)){alert(`商品名は${MAX_PRODUCT_NAME_UNITS}文字以内で入力してください。`);return;}
+    if(quantities.some(quantity=>quantity.length>MAX_PRODUCT_QUANTITY_UNITS)){alert(`数量は${MAX_PRODUCT_QUANTITY_UNITS}文字以内で入力してください。`);return;}
     const safeUrls=urls.map(safeProductUrl);
     if(safeUrls.some(url=>url===null)){alert('商品URLは認証情報を含まない http または https のURLを入力してください。');return;}
     const fd=new FormData(form);
