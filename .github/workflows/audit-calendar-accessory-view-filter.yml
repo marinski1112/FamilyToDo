@@ -1,0 +1,34 @@
+name: audit-calendar-accessory-view-filter
+
+on:
+  push:
+    branches:
+      - audit/calendar-accessory-view-filter
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/calendar-accessory-view-filter
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: python scripts/.audit-calendar-accessory-view-filter.py
+      - run: npm test
+      - name: Commit tested Calendar filter fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/audit-calendar-accessory-view-filter.yml scripts/.audit-calendar-accessory-view-filter.py
+          git add src/app.ts scripts/calendar-accessory-view-filter-contract.mjs scripts/feature-contract-bundle.mjs
+          git commit -m "Filter Calendar shopping and belongings by active view"
+          git push origin HEAD:audit/calendar-accessory-view-filter
