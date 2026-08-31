@@ -18,8 +18,10 @@ assert.ok(shoppingAddIdempotency.indexOf('UPDATE external_google_voice_commands'
 for(const value of ["subject_kind IN ('BABY','CHILD','PET')",'overview_quick_types_json',"['MEAL','BATH','MEDICINE','WATER']",'recordExternalPetQuickLogDomain','recorder_name','Linked members'])assert.ok(home.includes(value),value);
 for(const value of ['UNIQUE(family_id,member_id)','UNIQUE(account_id,external_tasklist_id,external_task_id)','refresh_token_ciphertext','import_visibility'])assert.ok(migration.includes(value),value);
 for(const value of ["'INQUIRY'","target_type TEXT CHECK(target_type IN ('shopping','family_log','task'))"])assert.ok(commandTypes.includes(value),value);
-for(const value of ['export async function sendMemberWebPush','member_id=? AND family_id=? AND enabled=1','LIMIT ?','Math.min(10','DELETE FROM web_push_subscriptions WHERE id=? AND member_id=? AND family_id=?','failure_count=failure_count+1','last_success_at=?'])assert.ok(webpush.includes(value),value);
+for(const value of ['export async function sendMemberWebPush','member_id=? AND family_id=? AND enabled=1','LIMIT ?','Math.min(10','DELETE FROM web_push_subscriptions WHERE id=? AND member_id=? AND family_id=?','failure_count=failure_count+1','last_success_at=?','function nowUtcSql()',"toISOString().slice(0,19).replace('T',' ')"])assert.ok(webpush.includes(value),value);
 assert.ok(!webpush.includes('WHERE family_id=? AND enabled=1 ORDER BY id DESC LIMIT ?'),'member push helper must never fan out across a whole family');
+assert.ok(!webpush.includes("timeZone:'Asia/Tokyo'"),'Web Push transport metadata must not use family-local/JST wall clock');
+assert.ok(!webpush.includes('nowJstSql'),'legacy JST transport timestamp helper must stay removed');
 for(const value of ['voice print','time is not preserved or invented','zero Gemini','does not promise a particular list'])assert.ok(docs.includes(value),value);
 
-console.log('google-tasks-voice-contract: bounded Google Tasks sync, private projection guards, typed task/shopping creation and completion, corrected SHOPPING_ADD idempotency, family-log voice bridge, inquiry-safe member Web Push foundation, schema uniqueness, and voice-import semantics ok');
+console.log('google-tasks-voice-contract: bounded Google Tasks sync, private projection guards, typed task/shopping creation and completion, corrected SHOPPING_ADD idempotency, family-log voice bridge, inquiry-safe member Web Push foundation with UTC transport metadata, schema uniqueness, and voice-import semantics ok');
