@@ -14,7 +14,7 @@ must(source.includes("normalize('NFKC')"),'parser must normalize NFKC input');
 must(source.includes("replace(/[?？。！!]+$/,''"),'parser should tolerate trailing speech punctuation without broad substring matching');
 must(/export function parseGoogleVoiceInquiryBody\(value:unknown\):GoogleVoiceInquiry\|null/.test(source),'typed side-effect-free body parser export is required');
 must(/export function parseMarkedGoogleVoiceInquiryCommand\(value:unknown\):MarkedGoogleVoiceInquiryCommand\|null/.test(source),'typed marked-command adapter export is required');
-must(source.includes("const marker=/^(?:FT|FAMILY TODO|ファミリーTODO)(?: *: *| |$)/i"),'marked adapter must accept only the retained explicit marker boundary plus an optional normalized colon delimiter');
+must(source.includes("const marker=/^(?:FT|FAMILY ?TODO|ファミリーTODO)(?: *: *| |$)/i"),'marked adapter must accept only FT, FamilyToDo/Family TODO, or Japanese retained explicit markers plus an optional normalized colon delimiter');
 must(source.includes("return inquiry?{marked:true,...inquiry}:null"),'non-inquiry marked commands must fall through instead of shadowing existing command families');
 must(source.includes('phrases.has(body)'),'inquiry matching must remain exact after normalization');
 must(!/body\.includes\(|body\.startsWith\(|new RegExp\(/.test(source),'inquiry parser must not broaden into substring or dynamic-regex matching');
