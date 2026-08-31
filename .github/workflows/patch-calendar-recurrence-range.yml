@@ -1,4 +1,5 @@
 name: Patch calendar recurrence range
+# retrigger after literal-safe patch helper fix
 
 on:
   push:
