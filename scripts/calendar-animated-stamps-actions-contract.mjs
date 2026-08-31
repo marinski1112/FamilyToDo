@@ -26,6 +26,8 @@ for(const token of [
   'UPDATE calendar_stamp_placements',
   'DELETE FROM calendar_stamp_placements',
   "new Date(ms).toISOString().slice(0,10)!==value",
+  'normalizedVisibilityScope(input.visibilityScope)',
+  "throw new Error('invalid calendar stamp visibility')",
 ]) assert.ok(source.includes(token),`calendar stamp action scaffolding missing: ${token}`);
 
 assert.match(source,/SELECT id FROM members WHERE id=\? AND family_id=\? AND active=1 LIMIT 1/,'stamp reads and placement actions must require an active member in the same family');
@@ -35,6 +37,10 @@ assert.match(source,/registerCalendarStampAsset[\s\S]*?INSERT INTO calendar_stam
 assert.match(source,/setCalendarStampAssetActive[\s\S]*?UPDATE calendar_stamp_assets SET active=\?,updated_at=\?[\s\S]*?EXISTS\(SELECT 1 FROM members actor WHERE actor\.id=\? AND actor\.family_id=\? AND actor\.active=1 AND actor\.role IN \('OWNER','ADMIN'\)\)/,'asset activation mutation must atomically re-check active same-family admin authorization');
 assert.match(source,/SELECT \?,asset\.id,\?,\?,\?,\?,\?,\?,\?[\s\S]*WHERE asset\.id=\? AND asset\.family_id=\? AND asset\.active=1[\s\S]*?EXISTS\(SELECT 1 FROM members actor WHERE actor\.id=\? AND actor\.family_id=\? AND actor\.active=1\)/,'placement insert must atomically gate both active same-family asset and acting-member eligibility');
 assert.match(source,/\.bind\(familyId,input\.stampDate,visibility,visibility==='PRIVATE'\?memberId:null,sortOrder,memberId,now,now,input\.assetId,familyId,memberId,familyId\)/,'placement insert must derive private ownership/creator from the acting member and bind its atomic membership guard');
+assert.match(source,/function normalizedVisibilityScope\(value:unknown\):'FAMILY'\|'PRIVATE'\{[\s\S]*?value==='FAMILY'\|\|value==='PRIVATE'[\s\S]*?throw new Error\('invalid calendar stamp visibility'\)/,'runtime placement visibility must reject unknown values instead of falling back to FAMILY');
+assert.match(source,/createCalendarStampPlacement[\s\S]*?const visibility=normalizedVisibilityScope\(input\.visibilityScope\)/,'placement creation must use strict runtime visibility validation');
+assert.match(source,/updateCalendarStampPlacement[\s\S]*?const visibility=normalizedVisibilityScope\(input\.visibilityScope\)/,'placement updates must use strict runtime visibility validation');
+assert.doesNotMatch(source,/input\.visibilityScope==='PRIVATE'\?'PRIVATE':'FAMILY'/,'placement actions must not silently publish malformed visibility values as FAMILY');
 assert.match(source,/updateCalendarStampPlacement[\s\S]*?UPDATE calendar_stamp_placements[\s\S]*?SET stamp_date=\?,visibility_scope=\?,private_owner_id=\?,sort_order=\?,updated_at=\?[\s\S]*?WHERE id=\? AND family_id=\? AND created_by=\?[\s\S]*?EXISTS\(SELECT 1 FROM members actor WHERE actor\.id=\? AND actor\.family_id=\? AND actor\.active=1\)/,'placement update must remain creator-only and atomically re-check active same-family membership');
 assert.match(source,/updateCalendarStampPlacement[\s\S]*?\.bind\(input\.stampDate,visibility,visibility==='PRIVATE'\?memberId:null,sortOrder,utcNow\(\),placementId,familyId,memberId,memberId,familyId\)/,'placement update must derive PRIVATE ownership from the acting creator and clear it for FAMILY visibility');
 assert.doesNotMatch(source,/export type CalendarStampPlacementUpdateInput\s*=\s*\{[^}]*\bassetId\s*:/,'placement metadata updates must not permit asset identity replacement');
