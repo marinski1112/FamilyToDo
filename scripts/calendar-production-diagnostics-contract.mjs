@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const worker=fs.readFileSync('src/calendar-perf-worker.ts','utf8');
+const app=fs.readFileSync('src/app.ts','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 
 const fail=(message)=>{console.error(`calendar production diagnostics contract: ${message}`);process.exit(1);};
@@ -35,9 +36,17 @@ must(!/request\.headers/.test(worker),'Calendar diagnostics must not inspect or 
 must(!/getSessionCookie|cookie/i.test(allowlist),'cookies must not enter the log allowlist');
 must(!/console\.(?:log|warn|error)\([^\n]*(?:title|description|member_name|cookie|authorization|token|note|location|email)/i.test(worker),'direct sensitive/content logging is forbidden');
 
-for(const key of ['physical_tasks','recurrence_rules','projected_occurrences','materialized_occurrences','shopping_items','items','multi_day_bands','multi_day_rows','rendered_html_length']){
+for(const key of ['physical_tasks','task_span_days_max','task_span_days_total','recurrence_rules','projected_occurrences','materialized_occurrences','shopping_items','items','multi_day_bands','multi_day_rows','rendered_html_length']){
   must(allowlist.includes(`'${key}'`),`aggregate key ${key} must remain represented`);
 }
+must(/task_span_days_max/.test(worker)&&/task_span_days_total/.test(worker),'Calendar snapshot must expose bounded aggregate task-span diagnostics');
+must(/julianday\(COALESCE\(date\(t\.end_at\),date\(t\.start_at\),date\(t\.due_at\)\)\)/.test(worker),'task-span diagnostics must be calculated in the existing aggregate snapshot query');
+
+// The current renderer expands every physical task across its raw stored span before laying out the visible month.
+// Keep this check while 1102 is under investigation so a long-span task cannot silently remain invisible to diagnostics.
+const addToMapMatch=app.match(/const addToMap=\([\s\S]*?\n  \};/);
+must(Boolean(addToMapMatch),'Calendar renderer addToMap implementation must remain detectable during the 1102 investigation');
+must(/for\(;d<=last;d\.setUTCDate\(d\.getUTCDate\(\)\+1\)\)/.test(addToMapMatch[0]),'task-span diagnostics are temporary evidence for the current raw-span renderer and should be revisited when that loop is fixed');
 
 // Static call sites include mutually-exclusive success/error branches. A normal request emits
 // request_start + one snapshot result + delegate_start + response_ready + body_complete (5 lines);
