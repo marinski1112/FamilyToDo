@@ -9,8 +9,13 @@ must(source.includes('MAX_LINE_LENGTH = 120'),'individual inquiry lines must rem
 must(source.includes('MAX_BODY_LENGTH = 500'),'inquiry push body must remain bounded');
 must(/export function buildGoogleVoiceInquiryPush\(/.test(source),'typed inquiry push formatter export is required');
 must(source.includes("url:'/today.php'")&&source.includes("url:'/tomorrow.php'")&&source.includes("url:'/app/shopping.php'"),'inquiry kinds must target registered safe in-app destinations');
-must(/const prefix=`\$\{index\+1\}\. `;[\s\S]*?MAX_LINE_LENGTH-prefix\.length/.test(source),'numbered inquiry lines must reserve prefix space inside the per-line limit');
+must(/const prefix=`\$\{index\+1\}\. `;[\s\S]*?truncateUnicodeSafe\(line,Math\.max\(0,MAX_LINE_LENGTH-prefix\.length\)\)/.test(source),'numbered inquiry lines must reserve prefix space inside the per-line limit and truncate safely');
+must(/function truncateUnicodeSafe\(value:string,maxLength:number\):string/.test(source),'Unicode-safe bounded truncation helper is required');
+must(/last>=0xD800&&last<=0xDBFF&&next>=0xDC00&&next<=0xDFFF/.test(source),'truncation must detect and avoid splitting a UTF-16 surrogate pair');
+must(/truncateUnicodeSafe\(body,MAX_BODY_LENGTH-1\)\.trimEnd\(\)\+'…'/.test(source),'whole-body truncation must also use the Unicode-safe helper');
+must(!/line\.slice\(0,Math\.max\(0,MAX_LINE_LENGTH-prefix\.length\)\)/.test(source),'per-line truncation must not regress to raw UTF-16 slicing');
+must(!/body\.slice\(0,MAX_BODY_LENGTH-1\)/.test(source),'whole-body truncation must not regress to raw UTF-16 slicing');
 must(!/env\.DB|\.prepare\(|fetch\(|sendMemberWebPush\(|console\.|cookie|authorization|token|member_name|family_id|member_id/i.test(source),'formatter must remain side-effect free and must not read delivery scope or sensitive request/member data');
 must(!/title\s*:\s*String\(|\bdescription\b|\bmemo\b|\bendpoint\b|\bp256dh\b|\bauth\b/i.test(source),'formatter must not manufacture or inspect sensitive transport/domain fields');
 
-console.log('Google voice inquiry push contract: registered routes, bounded lines, privacy boundary ok');
+console.log('Google voice inquiry push contract: registered routes, bounded Unicode-safe lines, privacy boundary ok');
