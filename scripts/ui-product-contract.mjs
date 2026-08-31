@@ -49,6 +49,9 @@ assert.ok(app.includes('if(reminderAt&&assignees.length){'),'scheduled reminders
 assert.match(taskNew,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'task creation must treat non-JSON, HTTP, and API failures as failures');
 assert.match(taskNew,/catch\(err\)\{alert\(err instanceof Error&&err\.message\?err\.message:'登録に失敗しました'\)/,'task creation network failures must reach the existing user-visible error path');
 assert.match(taskNew,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
+assert.match(taskNew,/document\.referrer/,'Calendar task creation must recover the originating Calendar navigation state');
+assert.match(taskNew,/\['all','family','assigned','private'\]\.includes\(v\)/,'Calendar return view must be constrained to the supported filter allowlist');
+assert.match(taskNew,/\/app\/calendar\.php\?view='\+encodeURIComponent\(calendarReturnView\)\+'&month='/,'successful Calendar task creation must retain the active filter when returning');
 assert.doesNotMatch(sw,/const STATIC_CACHE='familytodo-static-message-delete-error-handling'/,'task creation asset changes must remain past the pre-fix static cache namespace so first-visit delivery is preserved');
 
 // Message composition failure handling
@@ -106,4 +109,4 @@ assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache mus
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'service worker must retire older Family TODO static caches');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'static cache must not regress to the obsolete v92 namespace');
 
-console.log('ui-product contract: navigation, private event editing, task/message transport handling, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
+console.log('ui-product contract: navigation, private event editing, Calendar filter return state, task/message transport handling, quick actions, compact controls, Calendar preview, Family Log management, and cache lifecycle ok');
