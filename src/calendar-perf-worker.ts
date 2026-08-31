@@ -19,7 +19,6 @@ type CalendarPerfStage =
   | 'row_inputs_ready'
   | 'physical_map_copies_ready'
   | 'detail_map_started'
-  | 'physical_detail_map_copies_ready'
   | 'range_build_started'
   | 'calendar_html_ready'
   | 'response_ready'
@@ -59,7 +58,7 @@ const CALENDAR_PERF_ALLOWED_KEYS = new Set<keyof CalendarPerfRecord>([
   'recurrence_span_days_max','recurrence_span_days_total','projected_occurrences','materialized_occurrences','shopping_items','items',
   'multi_day_bands','multi_day_rows','rendered_html_length','status','projection_count_source',
 ]);
-const MAX_CALENDAR_PERF_LOGS = 14;
+const MAX_CALENDAR_PERF_LOGS = 12;
 
 function calendarPerfLog(record: CalendarPerfInput): void {
   const safe: Record<string, unknown> = { message: 'calendar_perf', event: 'calendar_perf' };
@@ -185,8 +184,8 @@ function inclusiveSpanDays(row: Record<PropertyKey, unknown>): number {
  *
  * Important: object spread happens once per rendered day while addToMap() copies a physical row.
  * Counting ownKeys therefore brackets the physical portion of the first map pass, the start of the
- * second/detail map pass, and the physical portion of that second pass without logging row values.
- * Recurrence rows are intentionally not proxied; absence of detail_map_started after
+ * second/detail map pass, and completion of the physical portion of that second pass without logging
+ * row values. Recurrence rows are intentionally not proxied; absence of detail_map_started after
  * physical_map_copies_ready points at the recurring-row portion of the first map pass.
  */
 function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?: Partial<CalendarPerfInput>) => void): Env {
@@ -204,7 +203,7 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
   const wrapPhysicalRows = (result: { results?: unknown[] } | null | undefined) => {
     if (!Array.isArray(result?.results) || result.results.length === 0) return result;
     const physicalCount = result.results.length;
-    expectedPhysicalCopies = result.results.reduce((total, row) => total + (row && typeof row === 'object' ? inclusiveSpanDays(row as Record<PropertyKey, unknown>) : 0), 0);
+    expectedPhysicalCopies = result.results.reduce<number>((total, row) => total + (row && typeof row === 'object' ? inclusiveSpanDays(row as Record<PropertyKey, unknown>) : 0), 0);
     result.results = result.results.map((row) => {
       if (!row || typeof row !== 'object') return row;
       let spreadKeys: Set<PropertyKey> | null = null;
@@ -221,7 +220,6 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
             emit('detail_map_started', { physical_tasks: physicalCount });
           } else if (detailMapStarted && !physicalDetailReady && physicalCopyCount === expectedPhysicalCopies * 2) {
             physicalDetailReady = true;
-            emit('physical_detail_map_copies_ready', { physical_tasks: physicalCount });
           }
           return keys;
         },
