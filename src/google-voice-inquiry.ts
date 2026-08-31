@@ -1,7 +1,9 @@
 export type GoogleVoiceInquiryKind='TODAY_SCHEDULE'|'TOMORROW_SCHEDULE'|'OPEN_SHOPPING';
 export type GoogleVoiceInquiry={type:'INQUIRY';kind:GoogleVoiceInquiryKind;delivery:'MEMBER_WEB_PUSH'};
+export type MarkedGoogleVoiceInquiryCommand={marked:true}&GoogleVoiceInquiry;
 
 const normalize=(value:unknown)=>String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim().replace(/[?？。！!]+$/,'').trim();
+const marker=/^(?:FT|FAMILY TODO|ファミリーTODO)(?: |$)/i;
 
 const EXACT_INQUIRIES:ReadonlyArray<readonly [GoogleVoiceInquiryKind,ReadonlySet<string>]>= [
   ['TODAY_SCHEDULE',new Set(['今日の予定','今日のタスク','今日のTODO','今日予定','今日タスク','今日の予定教えて','今日のタスク教えて','今日何する'])],
@@ -21,4 +23,18 @@ export function parseGoogleVoiceInquiryBody(value:unknown):GoogleVoiceInquiry|nu
     if(phrases.has(body))return {type:'INQUIRY',kind,delivery:'MEMBER_WEB_PUSH'};
   }
   return null;
+}
+
+/**
+ * Small composable adapter for the existing Google Tasks voice-command pipeline.
+ * It owns only marker stripping and typed INQUIRY classification. Non-inquiry
+ * commands return null so TASK/SHOPPING/FAMILY_LOG parsing can continue unchanged.
+ * Execution, member data reads and Web Push delivery remain outside this module.
+ */
+export function parseMarkedGoogleVoiceInquiryCommand(value:unknown):MarkedGoogleVoiceInquiryCommand|null{
+  const normalized=String(value??'').normalize('NFKC').replace(/[\s　]+/g,' ').trim();
+  const matched=marker.exec(normalized);
+  if(!matched)return null;
+  const inquiry=parseGoogleVoiceInquiryBody(normalized.slice(matched[0].length));
+  return inquiry?{marked:true,...inquiry}:null;
 }
