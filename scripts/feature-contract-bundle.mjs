@@ -3,6 +3,7 @@ import {spawnSync} from 'node:child_process';
 const groups={
   'calendar-imports':[
     ['calendar-presentation',['node','scripts/calendar-presentation-contract.mjs']],
+    ['calendar-accessory-view-filter',['node','scripts/calendar-accessory-view-filter-contract.mjs']],
     ['calendar-touch',['node','scripts/calendar-touch-contract.mjs']],
     ['recurring-calendar-navigation',['node','scripts/recurring-calendar-navigation-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
