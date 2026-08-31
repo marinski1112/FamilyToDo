@@ -7,6 +7,7 @@ const groups={
     ['recurring-calendar-navigation',['node','scripts/recurring-calendar-navigation-contract.mjs']],
     ['calendar-recurrence-range-performance',['node','scripts/calendar-recurrence-range-performance-contract.mjs']],
     ['calendar-production-diagnostics',['node','scripts/calendar-production-diagnostics-contract.mjs']],
+    ['calendar-inner-stage-diagnostics',['node','scripts/calendar-inner-stage-diagnostics-contract.mjs']],
     ['calendar-animated-stamps-foundation',['node','scripts/calendar-animated-stamps-foundation-contract.mjs']],
     ['calendar-animated-stamps-read-model',['node','scripts/calendar-animated-stamps-read-model-contract.mjs']],
     ['platform-integration',['node','scripts/platform-integration-contract.mjs']],
