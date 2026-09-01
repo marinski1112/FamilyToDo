@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+const tasks=fs.readFileSync('src/google-tasks.ts','utf8'); const app=fs.readFileSync('src/app.ts','utf8');
+const fail=m=>{console.error(`google tasks inquiry runtime wiring contract: ${m}`);process.exit(1)}; const must=(c,m)=>{if(!c)fail(m)};
+must(tasks.includes("import { executeGoogleTasksInquiryCommand } from './google-tasks-inquiry-command';"),'runtime must import retained inquiry ledger adapter');
+const call=tasks.indexOf('executeGoogleTasksInquiryCommand(env,'); const legacy=tasks.indexOf('if(hasGoogleVoiceMarker(item.title))');
+must(call>=0&&legacy>call,'typed inquiry adapter must run before legacy marked-command parsing');
+must(tasks.includes('kind=>resolveGoogleVoiceInquiryLines(env,Number(a.family_id),Number(a.member_id),kind)'),'runtime must inject canonical app resolver');
+must(tasks.includes("if(inquiry!=='not-inquiry')"),'non-inquiry commands must fall through');
+must(app.includes('export async function resolveGoogleVoiceInquiryLines'),'canonical inquiry resolver must be retained in app domain');
+const start=app.indexOf('export async function resolveGoogleVoiceInquiryLines'); const end=app.indexOf('export async function today',start); const helper=app.slice(start,end);
+must(helper.includes('makeViewData({env,member} as AppContext,date)'),'schedule inquiry must reuse recurrence-aware daily projection');
+must(helper.includes("taskChildVisibilitySql('s')")&&helper.includes("s.status='pending'"),'shopping inquiry must reuse child privacy predicate and only open rows');
+must(helper.includes('LIMIT 32')&&helper.includes('.slice(0,32)'),'inquiry line sources must stay bounded');
+must(helper.includes('member.family_id!==familyId'),'resolver must fail closed across tenant mismatch'); must(!helper.includes('console.'),'resolver must not log private result contents');
+console.log('google tasks inquiry runtime wiring contract: canonical bounded tenant-scoped runtime connection ok');
