@@ -36,4 +36,20 @@ let manifest=fs.readFileSync(manifestPath,'utf8');
 manifest=replaceOnce(manifest,"      ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],","      ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],\n      ['notification-delivery-modularity','node scripts/notification-delivery-modularity-contract.mjs'],",'regression manifest anchor');
 fs.writeFileSync(manifestPath,manifest);
 
+const workerPrivacyPath='scripts/worker-error-log-privacy-contract.mjs';
+let workerPrivacy=fs.readFileSync(workerPrivacyPath,'utf8');
+workerPrivacy=replaceOnce(workerPrivacy,"const taskApi=fs.readFileSync(new URL('../src/task-api.ts',import.meta.url),'utf8');\nconst workerOperational=index+lineWebhook+taskApi;","const taskApi=fs.readFileSync(new URL('../src/task-api.ts',import.meta.url),'utf8');\nconst notificationDelivery=fs.readFileSync(new URL('../src/notification-delivery.ts',import.meta.url),'utf8');\nconst workerOperational=index+lineWebhook+taskApi+notificationDelivery;",'notification delivery privacy scope');
+fs.writeFileSync(workerPrivacyPath,workerPrivacy);
+
+const lifecycleContractPath='scripts/notification-lifecycle-modularity-contract.mjs';
+let lifecycleContract=fs.readFileSync(lifecycleContractPath,'utf8');
+lifecycleContract=replaceOnce(lifecycleContract,"const index=fs.readFileSync('src/index.ts','utf8');\nconst lifecycle=fs.readFileSync('src/notification-lifecycle.ts','utf8');\n\nif(!index.includes(\"import { cleanupNotificationLifecycle } from './notification-lifecycle';\")) throw new Error('index.ts must import notification lifecycle cleanup');\nif(index.includes('async function cleanupNotificationLifecycle(')) throw new Error('notification lifecycle cleanup must not remain defined in index.ts');\nif(!index.includes('async function processNotifications(env: Env): Promise<void> {\\n  await cleanupNotificationLifecycle(env);')) throw new Error('notification delivery must run lifecycle cleanup before loading due notifications');","const index=fs.readFileSync('src/index.ts','utf8');\nconst delivery=fs.readFileSync('src/notification-delivery.ts','utf8');\nconst lifecycle=fs.readFileSync('src/notification-lifecycle.ts','utf8');\n\nif(!delivery.includes(\"import { cleanupNotificationLifecycle } from './notification-lifecycle';\")) throw new Error('notification delivery must import notification lifecycle cleanup');\nif(index.includes('async function cleanupNotificationLifecycle(')||delivery.includes('async function cleanupNotificationLifecycle(')) throw new Error('notification lifecycle cleanup must remain isolated from index and delivery modules');\nif(!delivery.includes('export async function processNotifications(env: Env): Promise<void> {\\n  await cleanupNotificationLifecycle(env);')) throw new Error('notification delivery must run lifecycle cleanup before loading due notifications');",'notification lifecycle responsibility');
+fs.writeFileSync(lifecycleContractPath,lifecycleContract);
+
+const platformPath='scripts/platform-integration-contract.mjs';
+let platform=fs.readFileSync(platformPath,'utf8');
+platform=replaceOnce(platform,"const index=read('src/index.ts');\nconst digest=read('src/line-daily-digest.ts');","const index=read('src/index.ts');\nconst notificationDelivery=read('src/notification-delivery.ts');\nconst digest=read('src/line-daily-digest.ts');",'platform notification delivery source');
+platform=replaceOnce(platform,"assert.ok(index.includes(\"const channel='WEB_PUSH'\")&&!index.slice(index.indexOf('async function processNotifications'),index.indexOf('async function taskDelete')).includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');","assert.ok(notificationDelivery.includes(\"const channel='WEB_PUSH'\")&&!notificationDelivery.includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');",'platform notification channel contract');
+fs.writeFileSync(platformPath,platform);
+
 console.log('notification delivery extraction applied');
