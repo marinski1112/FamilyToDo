@@ -1,5 +1,6 @@
 import { CALENDAR_MAX_RETRIES, calendarRetryAt, calendarRetryDue, decryptRefreshToken } from './google-calendar-core';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
+import { childJournalCalendarReady } from './child-journal-schema';
 
 type Row = Record<string, unknown>;
 const PROVIDER='GOOGLE_CALENDAR';
@@ -90,6 +91,7 @@ async function markDone(env:Env,outboxId:number,familyId:number){
 
 export async function processChildJournalCalendarOutbox(env:Env,limit=10,familyId?:number){
   const result={sent:0,errors:0};
+  if(!(await childJournalCalendarReady(env.DB)))return result;
   if(!env.GOOGLE_CALENDAR_CLIENT_ID||!env.GOOGLE_CALENDAR_CLIENT_SECRET||!env.GOOGLE_CALENDAR_TOKEN_KEY)return result;
   const familyFilter=familyId?' AND o.family_id=?':'';
   const rows=await env.DB.prepare(`SELECT o.*,a.refresh_token_ciphertext,f.timezone
@@ -158,12 +160,14 @@ export async function processChildJournalCalendarOutbox(env:Env,limit=10,familyI
 }
 
 export async function childJournalCalendarStatus(db:D1Database,familyId:number){
+  if(!(await childJournalCalendarReady(db)))return {schemaReady:false,oauthLinked:false,calendarCreated:false,calendarName:JOURNAL_CALENDAR_NAME,status:'',pending:0,errors:0,lastSyncedAt:''};
   const [oauth,binding,pending]=await Promise.all([
     db.prepare("SELECT status FROM external_calendar_accounts WHERE family_id=? AND provider=? LIMIT 1").bind(familyId,PROVIDER).first<Row>(),
     db.prepare('SELECT calendar_name,status,last_error,last_synced_at FROM child_journal_calendar_accounts WHERE family_id=? LIMIT 1').bind(familyId).first<Row>(),
     db.prepare("SELECT SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END) pending_count,SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) error_count FROM child_journal_calendar_outbox WHERE family_id=?").bind(familyId).first<Row>(),
   ]);
   return {
+    schemaReady:true,
     oauthLinked:String(oauth?.status||'')==='ACTIVE',
     calendarCreated:Boolean(binding),
     calendarName:String(binding?.calendar_name||JOURNAL_CALENDAR_NAME),
