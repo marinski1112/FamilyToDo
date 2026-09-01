@@ -45,7 +45,7 @@ jobs:
         run: |
           rm scripts/tmp_index_entrypoint_final_cleanup_patch.mjs
           rm .github/workflows/index-entrypoint-final-cleanup.yml
-          git add src/index.ts src/exception-routes.ts scripts/index-entrypoint-final-contract.mjs scripts/index-entrypoint-modularity-contract.mjs scripts/regression-manifest.mjs scripts/tmp_index_entrypoint_final_cleanup_patch.mjs .github/workflows/index-entrypoint-final-cleanup.yml
+          git add src/index.ts src/exception-routes.ts scripts/index-entrypoint-final-contract.mjs scripts/index-entrypoint-modularity-contract.mjs scripts/page-route-dispatcher-contract.mjs scripts/public-route-dispatcher-contract.mjs scripts/exception-route-dispatchers-contract.mjs scripts/child-growth-journal-contract.mjs scripts/google-integration-contract.mjs scripts/regression-manifest.mjs scripts/tmp_index_entrypoint_final_cleanup_patch.mjs .github/workflows/index-entrypoint-final-cleanup.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Finish index entrypoint cleanup"
