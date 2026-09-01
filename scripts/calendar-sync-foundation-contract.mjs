@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const migration=fs.readFileSync('migrations/0033_wave97_family_ai_calendar.sql','utf8');
 
 for(const marker of [
@@ -20,9 +21,9 @@ for(const marker of [
 assert.ok(migration.includes('sync_token'),'Wave97 Calendar migration must retain sync_token');
 for(const marker of [
   '/oauth/google-calendar/authorize',
-  '/oauth/google-calendar/callback',
   'processCalendarOutbox',
 ]) assert.ok(index.includes(marker),marker);
+assert.ok(publicRoutes.includes('/oauth/google-calendar/callback'),'/oauth/google-calendar/callback');
 
 const db=path.join(os.tmpdir(),`familytodo-calendar-foundation-${process.pid}-${Date.now()}.sqlite`);
 try {

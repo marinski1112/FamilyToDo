@@ -8,6 +8,7 @@ const home=fs.readFileSync('src/google-home.ts','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 const docs=fs.readFileSync('docs/GOOGLE_HOME_VOICE_SETUP.md','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 
 for(const marker of [
   'action.devices.SYNC','action.devices.EXECUTE','action.devices.DISCONNECT','action.devices.QUERY',
@@ -16,7 +17,8 @@ for(const marker of [
   'GOOGLE_HOME_REDIRECT_URI','external_command_receipts',"subject_kind IN ('BABY','CHILD')",'family_id=? AND active=1',
 ]) assert.ok(home.includes(marker),marker);
 for(const marker of ['recordQuickChoreDomain','startDedicatedSleepDomain','stopDedicatedSleepDomain','supportsDedicatedSleep']) assert.ok(app.includes(marker),marker);
-for(const marker of ['/oauth/google/authorize','/oauth/google/token','/api/google-home/fulfillment','/__cf/google-home-health']) assert.ok(index.includes(marker),marker);
+assert.ok(index.includes('/oauth/google/authorize'),'/oauth/google/authorize');
+for(const marker of ['/oauth/google/token','/api/google-home/fulfillment','/__cf/google-home-health']) assert.ok(publicRoutes.includes(marker),marker);
 for(const marker of ['assistant.event.OkGoogle','device.command.ActivateScene','home.execution.Webhook','動的読み上げ']) assert.ok(docs.includes(marker),marker);
 
 const db=path.join(os.tmpdir(),`familytodo-google-home-foundation-${process.pid}-${Date.now()}.sqlite`);
