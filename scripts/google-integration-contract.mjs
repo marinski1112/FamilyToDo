@@ -26,7 +26,7 @@ assert.throws(()=>assertVersionContract({version:'12.144.0-wave125'},{version:'1
 for(const token of ['INVALID_SERVICE_ACCOUNT_JSON','JWT_SIGN_FAILED','TOKEN_HTTP_${response.status}','HOMEGRAPH_HTTP_${response.status}','async:false','agentUserId:`ft-member-${memberId}`'])assert.ok(requestSource.includes(token),token);
 for(const token of ["category:'家族ログ'",'`${possessive}${q.name}`',"`${possessive}${q.name}を記録`"])assert.ok(home.includes(token),token);
 for(const token of ['hasGoogleVoiceMarker','voiceContexts=new Map','voiceContexts.set(familyId,pending)',"String(existing.status)==='EXECUTED'","String(existing.external_etag)===String(item.etag||'')","status<>'EXECUTED'"])assert.ok(tasks.includes(token),token);
-assert.match(tasks,/MAX_D1_QUERY_BUDGET=40/);assert.match(tasks,/MAX_TASKS_PER_INVOCATION=8/);
+assert.match(tasks,/MAX_D1_QUERY_BUDGET=40/);assert.match(tasks,/MAX_TASKS_PER_INVOCATION=3/);
 
 const js=p=>ts.transpileModule(read(p),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const data=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');

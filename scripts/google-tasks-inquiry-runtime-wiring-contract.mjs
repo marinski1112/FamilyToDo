@@ -6,6 +6,8 @@ const call=tasks.indexOf('executeGoogleTasksInquiryCommand(env,'); const legacy=
 must(call>=0&&legacy>call,'typed inquiry adapter must run before legacy marked-command parsing');
 must(tasks.includes('kind=>resolveGoogleVoiceInquiryLines(env,Number(a.family_id),Number(a.member_id),kind)'),'runtime must inject canonical app resolver');
 must(tasks.includes("if(inquiry!=='not-inquiry')"),'non-inquiry commands must fall through');
+must(tasks.includes('MAX_D1_QUERY_BUDGET=40')&&tasks.includes('MAX_TASKS_PER_INVOCATION=3'),'inbound page size must reserve D1 budget for an all-inquiry page');
+must(tasks.includes('maxResults:String(MAX_TASKS_PER_INVOCATION)')&&tasks.includes('.slice(0,MAX_TASKS_PER_INVOCATION)'),'fetch and processing caps must stay aligned so no fetched command is dropped');
 must(app.includes('export async function resolveGoogleVoiceInquiryLines'),'canonical inquiry resolver must be retained in app domain');
 const start=app.indexOf('export async function resolveGoogleVoiceInquiryLines'); const end=app.indexOf('export async function today',start); const helper=app.slice(start,end);
 must(helper.includes('makeViewData({env,member} as AppContext,date)'),'schedule inquiry must reuse recurrence-aware daily projection');

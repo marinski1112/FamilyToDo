@@ -10,7 +10,8 @@ export const GOOGLE_TASKS_SCOPE='https://www.googleapis.com/auth/tasks';
 const TASKS_API='https://tasks.googleapis.com/tasks/v1';
 const OVERLAP_MS=60_000;
 export const MAX_D1_QUERY_BUDGET=40;
-export const MAX_TASKS_PER_INVOCATION=8;
+// A page can be all INQUIRY commands; keep the requested page itself inside the D1 statement budget.
+export const MAX_TASKS_PER_INVOCATION=3;
 const MAX_ACCOUNTS=1,LEASE_SECONDS=120;
 const now=()=>utcNow();
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
