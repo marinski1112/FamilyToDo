@@ -27,7 +27,6 @@ for(const value of [
   'shopping:[...f.querySelectorAll',
   'is_event:editIsEvent?.checked||false',
 ]) assert.ok(taskEdit.includes(value),`task-edit shopping/event integration missing: ${value}`);
-assert.ok(!app.includes('カテゴリー（全商品共通）'),'task edit must not present linked shopping category as a shared field that collapses mixed categories');
 
 for(const value of [
   '.task-child-toggle',
@@ -39,6 +38,7 @@ const taskEditStart=app.indexOf('export async function taskEdit(');
 const taskEditEnd=app.indexOf('export async function taskApiLegacy(',taskEditStart);
 assert.ok(taskEditStart>=0&&taskEditEnd>taskEditStart,'task edit server handler boundaries must remain identifiable');
 const taskEditServer=app.slice(taskEditStart,taskEditEnd);
+assert.ok(!taskEditServer.includes('カテゴリー（全商品共通）'),'task edit must not present linked shopping category as a shared field that collapses mixed categories');
 assert.match(taskEditServer,shoppingInsertSql,'task edit must insert new shopping rows with task_id linkage');
 assert.match(taskEditServer,/\.bind\(m\.family_id,name,qty,category,null,noDate\?null:date,m\.id,now,now,id,url\)\.run\(\)/,'task edit shopping insert must bind the edited task id');
 assert.match(taskEditServer,/INSERT OR IGNORE INTO shopping_assignees\(shopping_item_id,member_id\)[\s\S]{0,240}?\.bind\(sid2,mid,m\.family_id\)/,'task edit must preserve shopping assignee linkage');
