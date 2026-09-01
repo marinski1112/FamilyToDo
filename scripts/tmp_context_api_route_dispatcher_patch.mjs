@@ -129,4 +129,98 @@ if(!manifest.includes(anchor)) throw new Error('regression manifest page route a
 manifest=manifest.replace(anchor,anchor+"      ['context-api-route-dispatcher','node scripts/context-api-route-dispatcher-contract.mjs'],\n");
 fs.writeFileSync(manifestPath,manifest);
 
-console.log(`context API route dispatcher extraction applied (${routeLines.length} routes)`);
+function replaceOnce(path,from,to){
+  let source=fs.readFileSync(path,'utf8');
+  const count=source.split(from).length-1;
+  if(count!==1) throw new Error(`${path}: expected one responsibility marker, found ${count}: ${from}`);
+  source=source.replace(from,to);
+  fs.writeFileSync(path,source);
+}
+
+replaceOnce('scripts/item-api-modularity-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst itemApi=fs.readFileSync('src/item-api.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\nconst itemApi=fs.readFileSync('src/item-api.ts','utf8');");
+replaceOnce('scripts/item-api-modularity-contract.mjs',
+  "if(!index.includes(\"import { itemApi } from './item-api';\")) throw new Error('index.ts must import item API module');",
+  "if(!apiRoutes.includes(\"import { itemApi } from './item-api';\")) throw new Error('context API dispatcher must import item API module');");
+replaceOnce('scripts/item-api-modularity-contract.mjs',
+  "if(!index.includes(\"if(url.pathname==='/api/item') return await itemApi(request,context);\")) throw new Error('item API route wiring changed');",
+  "if(!apiRoutes.includes(\"if(url.pathname==='/api/item') return await itemApi(request,context);\")) throw new Error('item API route wiring changed');");
+
+replaceOnce('scripts/task-api-modularity-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst taskApi=fs.readFileSync('src/task-api.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\nconst taskApi=fs.readFileSync('src/task-api.ts','utf8');");
+replaceOnce('scripts/task-api-modularity-contract.mjs',
+  "if(!index.includes(\"import { taskApi } from './task-api';\")) throw new Error('index.ts must import task API module');",
+  "if(!apiRoutes.includes(\"import { taskApi } from './task-api';\")) throw new Error('context API dispatcher must import task API module');");
+replaceOnce('scripts/task-api-modularity-contract.mjs',
+  "if(!index.includes(\"if(url.pathname==='/api/task') return await taskApi(request,context);\")) throw new Error('task API route wiring changed');",
+  "if(!apiRoutes.includes(\"if(url.pathname==='/api/task') return await taskApi(request,context);\")) throw new Error('task API route wiring changed');");
+
+replaceOnce('scripts/page-route-dispatcher-contract.mjs',
+  "const pages=fs.readFileSync('src/page-routes.ts','utf8');",
+  "const pages=fs.readFileSync('src/page-routes.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/page-route-dispatcher-contract.mjs',
+  "for(const required of [\n  \"if(url.pathname==='/api/toggle') return await toggle(request,context);\",",
+  "if(!apiRoutes.includes(\"if(url.pathname==='/api/toggle') return await toggle(request,context);\")) throw new Error('context API toggle routing changed');\nfor(const required of [");
+
+replaceOnce('scripts/child-growth-journal-contract.mjs',
+  "const pageRoutes=fs.readFileSync(new URL('../src/page-routes.ts',import.meta.url),'utf8');",
+  "const pageRoutes=fs.readFileSync(new URL('../src/page-routes.ts',import.meta.url),'utf8');\nconst apiRoutes=fs.readFileSync(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');");
+replaceOnce('scripts/child-growth-journal-contract.mjs',
+  "if(!index.includes(\"url.pathname==='/api/child-journal'\"))throw new Error('Worker must route the Child Journal write boundary');",
+  "if(!apiRoutes.includes(\"url.pathname==='/api/child-journal'\"))throw new Error('Worker must route the Child Journal write boundary');");
+
+replaceOnce('scripts/calendar-projection-queue-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst app=fs.readFileSync('src/app.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\nconst app=fs.readFileSync('src/app.ts','utf8');");
+replaceOnce('scripts/calendar-projection-queue-contract.mjs',
+  "assert.ok(index.includes(\"'/api/google-calendar/backfill'\"),'Calendar backfill route must remain registered');",
+  "assert.ok(apiRoutes.includes(\"'/api/google-calendar/backfill'\"),'Calendar backfill route must remain registered');");
+
+replaceOnce('scripts/ics-import-contract.mjs',
+  "const routes=fs.readFileSync('src/index.ts','utf8');",
+  "const routes=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/ics-import-contract.mjs',
+  "for(const route of ['/api/calendar-import/preview','/api/calendar-import/normalization-preview','/api/calendar-import/apply','/api/calendar-import/rollback']){assert.ok(routes.includes(route),`missing route ${route}`);assert.ok(routes.includes('return await calendarImport'),`calendar import routing must remain delegated: ${route}`);}",
+  "for(const route of ['/api/calendar-import/preview','/api/calendar-import/normalization-preview','/api/calendar-import/apply','/api/calendar-import/rollback']){assert.ok(apiRoutes.includes(route),`missing route ${route}`);assert.ok(apiRoutes.includes('return await calendarImport'),`calendar import routing must remain delegated: ${route}`);}");
+replaceOnce('scripts/ics-import-contract.mjs',
+  "assert.match(routes,/calendar-import\\/prepare/);assert.match(routes,/calendar-import\\/status/);",
+  "assert.match(apiRoutes,/calendar-import\\/prepare/);assert.match(apiRoutes,/calendar-import\\/status/);");
+
+replaceOnce('scripts/ics-import-format-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\nconst pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');");
+replaceOnce('scripts/ics-import-format-contract.mjs',
+  "]) assert.ok(index.includes(route),route);",
+  "]) assert.ok(apiRoutes.includes(route),route);");
+
+replaceOnce('scripts/google-calendar-inbound-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/google-calendar-inbound-contract.mjs',
+  "for(const marker of [\"'/api/google-calendar/sync'\",'processCalendarInbound(env)']) assert.ok(index.includes(marker),marker);",
+  "assert.ok(apiRoutes.includes(\"'/api/google-calendar/sync'\"),'/api/google-calendar/sync');\nassert.ok(index.includes('processCalendarInbound(env)'),'processCalendarInbound(env)');");
+
+replaceOnce('scripts/family-ai-actions-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/family-ai-actions-contract.mjs',
+  "for(const path of ['/api/family-ai/plan','/api/family-ai/execute']) assert.ok(index.includes(path),path);",
+  "for(const path of ['/api/family-ai/plan','/api/family-ai/execute']) assert.ok(apiRoutes.includes(path),path);");
+
+replaceOnce('scripts/family-ai-provider-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/family-ai-provider-contract.mjs',
+  "assert.ok(index.includes('/api/family-ai/model-catalog'));\nassert.ok(index.includes('/api/family-ai/model-probe'));",
+  "assert.ok(apiRoutes.includes('/api/family-ai/model-catalog'));\nassert.ok(apiRoutes.includes('/api/family-ai/model-probe'));");
+
+replaceOnce('scripts/family-ai-foundation-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');");
+replaceOnce('scripts/family-ai-foundation-contract.mjs',
+  "assert.ok(index.includes('/api/family-ai/query'),'Family AI query route must remain registered');",
+  "assert.ok(apiRoutes.includes('/api/family-ai/query'),'Family AI query route must remain registered');");
+
+console.log(`context API route dispatcher extraction applied (${routeLines.length} routes; responsibility contracts migrated)`);
