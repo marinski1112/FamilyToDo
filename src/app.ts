@@ -1227,7 +1227,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     for(const v of shopping){
       const o=v as any; const name=String(o?.name||'').trim(); if(!name)continue;
       const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const sid=Number(o?.id||0);
-      const rawCategory=Object.prototype.hasOwnProperty.call(o,'category')?String(o.category||'').trim():(fallbackCategory||existingShopCategoryById.get(sid)||'');
+      const rawCategory=Object.prototype.hasOwnProperty.call(o,'category')?String(o.category||'').trim():(existingShopCategoryById.get(sid)||fallbackCategory||'');
       if(rawCategory.length>255)throw new BadRequest('カテゴリーは255文字以内で入力してください。');
       const category=rawCategory||null;
       if(sid&&existingShopIds.has(sid)){
