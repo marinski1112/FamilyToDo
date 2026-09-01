@@ -26,9 +26,13 @@ export function childJournalVoiceMilestoneFromSlug(slug:string):ChildJournalVoic
   return MILESTONE_SLUGS[slug]||null;
 }
 
+export async function childJournalGoogleHomeReady(env:Env):Promise<boolean> {
+  return childJournalFoundationReady(env.DB);
+}
+
 export async function recordExternalChildJournalMilestoneDomain(env:Env,member:CurrentMember,subjectId:number,code:ChildJournalVoiceMilestone):Promise<{ok:boolean;logId?:number}> {
   if(!MILESTONE_LABELS[code]||!Number.isInteger(subjectId)||subjectId<=0)return {ok:false};
-  if(!(await childJournalFoundationReady(env.DB)))return {ok:false};
+  if(!(await childJournalGoogleHomeReady(env)))return {ok:false};
   const subject=await env.DB.prepare("SELECT id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD') LIMIT 1")
     .bind(subjectId,member.family_id).first<Row>();
   if(!subject)return {ok:false};
