@@ -45,7 +45,7 @@ must(call>=0&&legacy>call,'typed inquiry adapter must run before legacy marked-c
 must(tasks.includes('kind=>resolveGoogleVoiceInquiryLines(env,Number(a.family_id),Number(a.member_id),kind)'),'runtime must inject canonical app resolver');
 must(tasks.includes("if(inquiry!=='not-inquiry')"),'non-inquiry commands must fall through');
 must(app.includes('export async function resolveGoogleVoiceInquiryLines'),'canonical inquiry resolver must be retained in app domain');
-const start=app.indexOf('export async function resolveGoogleVoiceInquiryLines'); const helper=app.slice(start,app.indexOf('\nexport async function today',start));
+const start=app.indexOf('export async function resolveGoogleVoiceInquiryLines'); const end=app.indexOf('export async function today',start); const helper=app.slice(start,end);
 must(helper.includes('makeViewData({env,member} as AppContext,date)'),'schedule inquiry must reuse recurrence-aware daily projection');
 must(helper.includes("taskChildVisibilitySql('s')")&&helper.includes("s.status='pending'"),'shopping inquiry must reuse child privacy predicate and only open rows');
 must(helper.includes('LIMIT 32')&&helper.includes('.slice(0,32)'),'inquiry line sources must stay bounded');
