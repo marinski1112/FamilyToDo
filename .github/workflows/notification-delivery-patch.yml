@@ -45,7 +45,7 @@ jobs:
         run: |
           rm scripts/tmp_notification_delivery_patch.mjs
           rm .github/workflows/notification-delivery-patch.yml
-          git add src/index.ts src/notification-delivery.ts scripts/notification-delivery-modularity-contract.mjs scripts/regression-manifest.mjs scripts/tmp_notification_delivery_patch.mjs .github/workflows/notification-delivery-patch.yml
+          git add src/index.ts src/notification-delivery.ts scripts/notification-delivery-modularity-contract.mjs scripts/regression-manifest.mjs scripts/worker-error-log-privacy-contract.mjs scripts/notification-lifecycle-modularity-contract.mjs scripts/platform-integration-contract.mjs scripts/tmp_notification_delivery_patch.mjs .github/workflows/notification-delivery-patch.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Refactor notification delivery out of index"
