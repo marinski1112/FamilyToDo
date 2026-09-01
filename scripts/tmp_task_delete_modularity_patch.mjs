@@ -69,7 +69,7 @@ for(const marker of [
   "DELETE FROM tasks WHERE id=? AND family_id=?",
   'await ctx.env.DB.batch(statements)',
 ]) if(!taskDelete.includes(marker)) throw new Error(\`task delete behavior sentinel missing: \${marker}\`);
-if((taskDelete.match(/queueCalendarProjectionAfterMutation\(/g)||[]).length<2) throw new Error('calendar delete projection hooks must remain before and after batch');
+if(taskDelete.split('queueCalendarProjectionAfterMutation(').length-1<2) throw new Error('calendar delete projection hooks must remain before and after batch');
 console.log('task delete modularity contract: ok');
 `;
 fs.writeFileSync(contractPath,contract);
