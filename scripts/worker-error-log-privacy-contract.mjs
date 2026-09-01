@@ -4,7 +4,8 @@ const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
 const observability=fs.readFileSync(new URL('../src/observability/errors.ts',import.meta.url),'utf8');
 const lineWebhook=fs.readFileSync(new URL('../src/line-webhook.ts',import.meta.url),'utf8');
 const taskApi=fs.readFileSync(new URL('../src/task-api.ts',import.meta.url),'utf8');
-const workerOperational=index+lineWebhook+taskApi;
+const notificationDelivery=fs.readFileSync(new URL('../src/notification-delivery.ts',import.meta.url),'utf8');
+const workerOperational=index+lineWebhook+taskApi+notificationDelivery;
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
 
 if(workerOperational.includes('console.error'))throw new Error('Worker operational modules must not directly forward exceptions to console.error');
