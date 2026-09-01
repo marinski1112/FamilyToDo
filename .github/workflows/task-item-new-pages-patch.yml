@@ -45,7 +45,7 @@ jobs:
         run: |
           rm scripts/tmp_task_item_new_pages_patch.mjs
           rm .github/workflows/task-item-new-pages-patch.yml
-          git add src/index.ts src/new-entry-pages.ts scripts/new-entry-pages-modularity-contract.mjs scripts/regression-manifest.mjs scripts/tmp_task_item_new_pages_patch.mjs .github/workflows/task-item-new-pages-patch.yml
+          git add src/index.ts src/new-entry-pages.ts scripts/new-entry-pages-modularity-contract.mjs scripts/form-control-contract.mjs scripts/regression-manifest.mjs scripts/tmp_task_item_new_pages_patch.mjs .github/workflows/task-item-new-pages-patch.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Refactor task and item new pages out of index"
