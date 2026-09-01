@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const app=read('src/app.ts');
 const index=read('src/index.ts');
+const dailyDigest=read('src/line-daily-digest.ts');
 const calendar=read('src/google-calendar.ts')+read('src/google-calendar-core.ts');
 const calendarJs=read('public/assets/calendar.js');
 const familyCss=read('public/assets/family.css');
@@ -21,7 +22,7 @@ for(const token of ['text-overflow:clip','-webkit-line-clamp:2','repeat(4'])asse
 assert.ok(!app.includes('その他のタイマー'),'obsolete timer section must remain removed');
 assert.ok(index.includes("const channel='WEB_PUSH'")&&!index.slice(index.indexOf('async function processNotifications'),index.indexOf('async function taskDelete')).includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');
 for(const token of ['UNIQUE(family_id,member_id,local_date)','line_daily_digest_receipts','line_daily_digest_recipients'])assert.ok(migration.includes(token),token);
-assert.ok(index.includes("visibility_scope='PRIVATE' AND private_owner_id=?")&&index.includes('current>target+29'),'PRIVATE digest filtering and 30-minute target-time guard must remain intact');
+assert.ok(dailyDigest.includes("visibility_scope='PRIVATE' AND private_owner_id=?")&&dailyDigest.includes('current>target+29'),'PRIVATE digest filtering and 30-minute target-time guard must remain intact');
 for(const token of ['active channel count','fallback polling active','DB_SCHEMA_MIGRATION_REQUIRED'])assert.ok((calendar+index).includes(token),token);
 
 console.log('platform-integration-contract: Calendar recurrence, visibility, digest, notification and projection contracts ok');
