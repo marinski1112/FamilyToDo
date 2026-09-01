@@ -80,4 +80,14 @@ if(!manifest.includes(anchor)) throw new Error('reorder API manifest anchor miss
 manifest=manifest.replace(anchor,anchor+"      ['task-delete-modularity','node scripts/task-delete-modularity-contract.mjs'],\n");
 fs.writeFileSync(manifestPath,manifest);
 
+const projectionContractPath='scripts/calendar-projection-queue-contract.mjs';
+let projection=fs.readFileSync(projectionContractPath,'utf8');
+const projectionRead="const index=fs.readFileSync('src/index.ts','utf8');\n";
+if(!projection.includes(projectionRead)) throw new Error('calendar projection contract index source anchor missing');
+projection=projection.replace(projectionRead,projectionRead+"const taskDelete=fs.readFileSync('src/task-delete.ts','utf8');\n");
+const oldProjectionAssertion="assert.ok((index.match(/queueCalendarProjectionAfterMutation/g)||[]).length>=3,'index mutation routes must keep Calendar projection queue hooks');";
+if(!projection.includes(oldProjectionAssertion)) throw new Error('calendar projection contract old index hook assertion missing');
+projection=projection.replace(oldProjectionAssertion,"assert.ok(((index+taskDelete).match(/queueCalendarProjectionAfterMutation/g)||[]).length>=3,'index-routed mutation handlers must keep Calendar projection queue hooks');");
+fs.writeFileSync(projectionContractPath,projection);
+
 console.log('taskDelete extraction applied from exact TypeScript AST');
