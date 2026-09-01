@@ -19,14 +19,16 @@ type CalendarPerfStage =
   | 'row_inputs_ready'
   | 'physical_map_copies_ready'
   | 'detail_map_started'
+  | 'detail_physical_copies_ready'
+  | 'detail_map_complete'
   | 'range_build_started'
   | 'calendar_html_ready'
   | 'response_ready'
   | 'response_body_complete';
 
 type CalendarPerfRecord = {
-  message: 'calendar_perf';
-  event: 'calendar_perf';
+  message: 'calendar_perf' | 'calendar_detail_perf';
+  event: 'calendar_perf' | 'calendar_detail_perf';
   trace_id: string;
   stage: CalendarPerfStage;
   month: string;
@@ -59,9 +61,13 @@ const CALENDAR_PERF_ALLOWED_KEYS = new Set<keyof CalendarPerfRecord>([
   'multi_day_bands','multi_day_rows','rendered_html_length','status','projection_count_source',
 ]);
 const MAX_CALENDAR_PERF_LOGS = 12;
+const CALENDAR_DETAIL_PERF_STAGES = new Set<CalendarPerfStage>([
+  'detail_map_started','detail_physical_copies_ready','detail_map_complete','range_build_started',
+]);
 
 function calendarPerfLog(record: CalendarPerfInput): void {
-  const safe: Record<string, unknown> = { message: 'calendar_perf', event: 'calendar_perf' };
+  const signal = CALENDAR_DETAIL_PERF_STAGES.has(record.stage) ? 'calendar_detail_perf' : 'calendar_perf';
+  const safe: Record<string, unknown> = { message: signal, event: signal };
   for (const [key, value] of Object.entries(record)) {
     if (CALENDAR_PERF_ALLOWED_KEYS.has(key as keyof CalendarPerfRecord)) safe[key] = value;
   }
@@ -178,16 +184,13 @@ function inclusiveSpanDays(row: Record<PropertyKey, unknown>): number {
 }
 
 /**
- * Observes only retained Calendar SELECT boundaries and physical-row clone boundaries needed
- * to locate the 1102 stage. SQL text and row contents never leave this function. Unrelated/native
+ * Observes only retained Calendar SELECT boundaries and clone boundaries needed to locate the
+ * detail-map 1102 stage. SQL text and row contents never leave this function. Unrelated/native
  * D1 statements retain their identity so recurrence materialization batches are not disturbed.
  *
- * Important: object spread happens once per rendered day while addToMap() copies a physical row.
- * A copy is counted only after its final enumerable property has been read. This brackets the
- * physical portion of the first map pass, the start of the second/detail map pass, and completion
- * of the physical portion of that second pass without logging row values. Recurrence rows are not
- * proxied; absence of detail_map_started after physical_map_copies_ready points at the recurring-row
- * portion of the first map pass.
+ * Physical object spread is counted only after its final enumerable property has been read.
+ * Accessory rows are observed only for the first due-date read, which happens after detailTasks
+ * mapping has returned. This keeps the hot-path trace to four filterable aggregate-only stages.
  */
 function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?: Partial<CalendarPerfInput>) => void): Env {
   let recurrenceReady = false;
@@ -199,6 +202,7 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
   let physicalMapReady = false;
   let detailMapStarted = false;
   let physicalDetailReady = false;
+  let detailMapComplete = false;
   let rangeBuildStarted = false;
 
   const noteCompletedPhysicalCopy = (physicalCount: number) => {
@@ -211,6 +215,7 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
       emit('detail_map_started', { physical_tasks: physicalCount });
     } else if (detailMapStarted && !physicalDetailReady && physicalCopyCount === expectedPhysicalCopies * 2) {
       physicalDetailReady = true;
+      emit('detail_physical_copies_ready', { physical_tasks: physicalCount });
     }
   };
 
@@ -246,6 +251,23 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
           return Reflect.get(target, property, receiver);
         },
       });
+    });
+    return result;
+  };
+
+  const wrapAccessoryRows = (kind: 'shopping' | 'items', result: { results?: unknown[] } | null | undefined) => {
+    if (!Array.isArray(result?.results) || result.results.length === 0) return result;
+    const property = kind === 'shopping' ? 'due_date' : 'due_at';
+    const first = result.results[0];
+    if (!first || typeof first !== 'object') return result;
+    result.results[0] = new Proxy(first as Record<PropertyKey, unknown>, {
+      get(target, key, receiver) {
+        if (!detailMapComplete && key === property) {
+          detailMapComplete = true;
+          emit('detail_map_complete');
+        }
+        return Reflect.get(target, key, receiver);
+      },
     });
     return result;
   };
@@ -287,6 +309,7 @@ function calendarStageEnv(env: Env, emit: (stage: CalendarPerfStage, aggregate?:
               return async (...args: unknown[]) => {
                 const result = await (inner.all as (...values: unknown[]) => Promise<{ results?: unknown[] }>).apply(inner, args);
                 if (kind === 'physical') wrapPhysicalRows(result);
+                else wrapAccessoryRows(kind, result);
                 afterAll(kind, result);
                 return result;
               };
