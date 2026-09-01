@@ -16,7 +16,7 @@ const routeLines=[
   "if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env,ctx);return await authHealth(context);}",
   "if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);",
   "if(url.pathname==='/__cf/integrations-health') return integrationsHealthResponse(env);",
-  "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchWebhook(request,env,ctx);",
+  "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);",
   "if(url.pathname==='/oauth/google/token') return await googleToken(request,env);",
   "if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);",
   "if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);",
