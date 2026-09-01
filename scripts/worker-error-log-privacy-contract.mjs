@@ -2,9 +2,11 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
 const observability=fs.readFileSync(new URL('../src/observability/errors.ts',import.meta.url),'utf8');
+const lineWebhook=fs.readFileSync(new URL('../src/line-webhook.ts',import.meta.url),'utf8');
+const workerOperational=index+lineWebhook;
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
 
-if(index.includes('console.error'))throw new Error('src/index.ts must not directly forward operational exceptions to console.error');
+if(workerOperational.includes('console.error'))throw new Error('Worker operational modules must not directly forward exceptions to console.error');
 for(const forbidden of [
   'task creation cleanup failed',
   'console.error(e)',
@@ -13,7 +15,7 @@ for(const forbidden of [
   'taskId:id',
   'error:String((cleanup as any)?.message||cleanup)',
 ]){
-  if(index.includes(forbidden))throw new Error(`legacy raw exception logging remains: ${forbidden}`);
+  if(workerOperational.includes(forbidden))throw new Error(`legacy raw exception logging remains: ${forbidden}`);
 }
 
 for(const required of [
@@ -23,7 +25,7 @@ for(const required of [
   "logLineWebhookFailure('handle',e)",
   'logNotificationFailure(e)',
 ]){
-  const count=index.split(required).length-1;
+  const count=workerOperational.split(required).length-1;
   if(count!==1)throw new Error(`privacy logging wrapper must remain singular: ${required} (${count})`);
 }
 

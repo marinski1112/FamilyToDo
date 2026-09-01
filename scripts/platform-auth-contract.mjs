@@ -48,8 +48,9 @@ assert.ok(!continuation.includes('`/liff?flow=google_home'),'Google Home OAuth m
 const normalLiff=continuation.slice(continuation.indexOf('export async function normalLiff'),continuation.indexOf('export async function liffDispatcher'));
 assert.ok(!normalLiff.includes('ctx.member)return go'),'normal LIFF flow must not bypass continuation after member lookup');
 const index=read('src/index.ts');
+const lineWebhook=read('src/line-webhook.ts');
 assert.ok(index.includes('return await liffDispatcher(request,env)'));
-assert.ok(index.includes("verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)"),'LINE webhook must continue using the Messaging API channel secret');
+assert.ok(lineWebhook.includes("verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)"),'LINE webhook must continue using the Messaging API channel secret');
 assert.ok(index.includes("url.pathname.startsWith('/liff/')"),'path-based LIFF routing must stay wired');
 assert.ok(index.includes("code:'AUTH_REQUIRED'"),'LIFF auth-required response must stay explicit');
 assert.ok(index.includes('encodeURIComponent(next)'),'LIFF continuation target must remain URL encoded');
