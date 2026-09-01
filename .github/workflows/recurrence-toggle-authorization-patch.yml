@@ -1,0 +1,52 @@
+name: Recurrence toggle authorization order
+on:
+  push:
+    branches: [fix/recurrence-toggle-authorization-order]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recurrence-toggle-authorization-order
+  cancel-in-progress: true
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: fix/recurrence-toggle-authorization-order
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact patch
+        run: node scripts/tmp_recurrence_toggle_authorization_patch.mjs
+      - name: Focused authorization-order contract
+        run: node scripts/recurrence-toggle-authorization-order-contract.mjs
+      - run: npm run typecheck
+        if: always()
+      - run: npm run check:browser-js
+        if: always()
+      - run: npm run check:static-assets
+        if: always()
+      - run: npm run check:migrations
+        if: always()
+      - run: node scripts/regression-suite.mjs
+        if: always()
+      - name: Diff check
+        run: git diff --check
+        if: always()
+      - name: Commit verified fix
+        if: success()
+        run: |
+          rm scripts/tmp_recurrence_toggle_authorization_patch.mjs
+          rm .github/workflows/recurrence-toggle-authorization-patch.yml
+          git add src/app.ts scripts/recurrence-toggle-authorization-order-contract.mjs scripts/regression-manifest.mjs scripts/tmp_recurrence_toggle_authorization_patch.mjs .github/workflows/recurrence-toggle-authorization-patch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Validate recurrence assignee before completion mutation"
+          git push
