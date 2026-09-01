@@ -49,4 +49,31 @@ let modularity=fs.readFileSync(modularityPath,'utf8');
 modularity=replaceOnce(modularity,"const activityLogImport=\"import { logsPage } from './activity-log-page';\";\nif(!index.includes(activityLogImport)) throw new Error('index.ts must import activity log page module');","const activityLogImport=\"import { logsPage } from './activity-log-page';\";\nif(!pageRoutes.includes(activityLogImport)) throw new Error('page dispatcher must import activity log page module');",'activity log import responsibility');
 fs.writeFileSync(modularityPath,modularity);
 
+const pageContractPath='scripts/page-route-dispatcher-contract.mjs';
+let pageContract=fs.readFileSync(pageContractPath,'utf8');
+pageContract=replaceOnce(pageContract,"for(const required of [\n  \"if(url.pathname==='/app/recurring.php')\",\n  'return await env.ASSETS.fetch(request);',\n]) if(!index.includes(required)) throw new Error(`non-page routing moved unexpectedly: ${required}`);","if(!exceptionRoutes.includes(\"if(url.pathname!=='/app/recurring.php') return null;\")) throw new Error('early recurring routing boundary changed');\nif(!index.includes('return await env.ASSETS.fetch(request);')) throw new Error('asset fallback moved unexpectedly');",'page recurring boundary');
+fs.writeFileSync(pageContractPath,pageContract);
+
+const publicContractPath='scripts/public-route-dispatcher-contract.mjs';
+let publicContract=fs.readFileSync(publicContractPath,'utf8');
+publicContract=replaceOnce(publicContract,"for(const required of [\n  \"if(url.pathname==='/app/recurring.php') {\",\n  'const context=await makeContext(request,env,ctx);',\n  'const apiResponse=await dispatchContextApiRoute(request,context,url);',\n  'const pageResponse=await dispatchPageRoute(request,context,env,url);',\n  'return await env.ASSETS.fetch(request);',\n]) if(!index.includes(required)) throw new Error(`non-public routing moved unexpectedly: ${required}`);","if(!exceptionRoutes.includes(\"if(url.pathname!=='/app/recurring.php') return null;\")) throw new Error('early recurring routing boundary changed');\nfor(const required of [\n  'const context=await makeContext(request,env,ctx);',\n  'const apiResponse=await dispatchContextApiRoute(request,context,url);',\n  'const pageResponse=await dispatchPageRoute(request,context,env,url);',\n  'return await env.ASSETS.fetch(request);',\n]) if(!index.includes(required)) throw new Error(`non-public routing moved unexpectedly: ${required}`);",'public recurring boundary');
+fs.writeFileSync(publicContractPath,publicContract);
+
+const exceptionContractPath='scripts/exception-route-dispatchers-contract.mjs';
+let exceptionContract=fs.readFileSync(exceptionContractPath,'utf8');
+exceptionContract=replaceOnce(exceptionContract,"  \"import { dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';\",\n  'const preludeResponse=await dispatchContextPreludeRoute(request,context,env,url);',","  \"import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';\",\n  'const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);',\n  'const preludeResponse=await dispatchContextPreludeRoute(request,context,env,url);',",'exception dispatcher wiring');
+exceptionContract=replaceOnce(exceptionContract,"for(const marker of [\n  \"if(url.pathname==='/oauth/google/authorize')\",","for(const marker of [\n  \"if(url.pathname!=='/app/recurring.php') return null;\",\n  \"if(url.pathname==='/oauth/google/authorize')\",",'exception recurring location');
+exceptionContract=replaceOnce(exceptionContract,"for(const marker of [\n  \"if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder')\",","for(const marker of [\n  'export async function dispatchEarlyAuthenticatedRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{',\n  \"event:'recurring_route_post'\",\n  'return await recurring(request,context);',\n  \"if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder')\",",'exception recurring behavior');
+fs.writeFileSync(exceptionContractPath,exceptionContract);
+
+const childContractPath='scripts/child-growth-journal-contract.mjs';
+let childContract=fs.readFileSync(childContractPath,'utf8');
+childContract=replaceOnce(childContract,"if(!index.includes(\"from './child-journal'\"))throw new Error('Worker must import the Child Journal module');","if(!pageRoutes.includes(\"from './child-journal'\")||!apiRoutes.includes(\"from './child-journal'\"))throw new Error('Child Journal page/API dispatchers must import the Child Journal module');",'child journal import responsibility');
+fs.writeFileSync(childContractPath,childContract);
+
+const googleContractPath='scripts/google-integration-contract.mjs';
+let googleContract=fs.readFileSync(googleContractPath,'utf8');
+googleContract=replaceOnce(googleContract,"for(const file of ['src/google-home.ts','src/google-tasks.ts','src/index.ts'])assert.ok(read(file).includes('formatStoredUtcForFamily'),file);","for(const file of ['src/google-home.ts','src/google-tasks.ts'])assert.ok(read(file).includes('formatStoredUtcForFamily'),file);",'google timezone responsibility');
+fs.writeFileSync(googleContractPath,googleContract);
+
 console.log('final index entrypoint cleanup applied');
