@@ -47,6 +47,23 @@ export function extractMarkedGoogleVoiceInquiryBody(value:unknown):string|null{
 }
 
 /**
+ * Recognize the command families already owned by the deterministic Google
+ * Tasks write parser. This is deliberately syntax-only: the inquiry layer does
+ * not need member/subject data and must not duplicate write parsing or mutate
+ * anything. Matching a family means only "do not disclose this body to Gemini";
+ * the existing downstream parser remains authoritative for validity, subject
+ * resolution and execution.
+ */
+export function isDeterministicGoogleVoiceWriteBody(value:unknown):boolean{
+  const raw=boundedInput(value);
+  if(raw===null)return true;
+  const body=normalize(raw);
+  if(!body)return false;
+  if(/^(?:買い物(?:完了)?|(?:タスク|TODO)(?:完了)?)(?: |$)/i.test(body))return true;
+  return /(?:^| )(?:成長日記|ミルク|おしっこ|うんち|離乳食|お風呂|吐いた|体温)(?: |$)/.test(body);
+}
+
+/**
  * Small composable adapter for the existing Google Tasks voice-command pipeline.
  * It owns only marker stripping and typed INQUIRY classification. Non-inquiry
  * commands return null so TASK/SHOPPING/FAMILY_LOG parsing can continue unchanged.
