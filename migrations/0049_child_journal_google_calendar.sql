@@ -81,8 +81,32 @@ BEGIN
   SELECT RAISE(ABORT, 'child_journal_calendar_log_mismatch');
 END;
 
+CREATE TRIGGER IF NOT EXISTS trg_child_journal_calendar_outbox_tenant_update
+BEFORE UPDATE OF log_id,family_id ON child_journal_calendar_outbox
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1 FROM family_log_journal_entries j
+  JOIN family_logs l ON l.id=j.log_id AND l.family_id=j.family_id
+  WHERE j.log_id=NEW.log_id AND j.family_id=NEW.family_id AND j.journal_kind='CHILD'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'child_journal_calendar_log_mismatch');
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_child_journal_calendar_link_tenant_insert
 BEFORE INSERT ON child_journal_calendar_links
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1 FROM family_log_journal_entries j
+  JOIN family_logs l ON l.id=j.log_id AND l.family_id=j.family_id
+  WHERE j.log_id=NEW.log_id AND j.family_id=NEW.family_id AND j.journal_kind='CHILD'
+)
+BEGIN
+  SELECT RAISE(ABORT, 'child_journal_calendar_log_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_child_journal_calendar_link_tenant_update
+BEFORE UPDATE OF log_id,family_id ON child_journal_calendar_links
 FOR EACH ROW
 WHEN NOT EXISTS (
   SELECT 1 FROM family_log_journal_entries j
