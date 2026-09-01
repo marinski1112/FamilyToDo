@@ -1,0 +1,102 @@
+name: Child Growth Journal foundation patch
+
+on:
+  push:
+    branches:
+      - feature/child-growth-journal-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/child-growth-journal-foundation
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact Child Journal wiring and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/app.ts)" = "677c2b81103dd529d854206e2d1b40cad44370bd"
+          test "$(git hash-object src/index.ts)" = "ff3ca302679a56b3714ca9e71b72bba69524f0b9"
+          test "$(git hash-object scripts/regression-manifest.mjs)" = "fedbfb976f1016615b58c2178ef3a4d0c131dd23"
+          test "$(git hash-object src/child-journal.ts)" = "960b6ffa25cec7cd8cde7800a3b8e8c50b925033"
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_one(path, old, new, label):
+              p=Path(path); source=p.read_text()
+              if source.count(old)!=1:
+                  raise SystemExit(f'{label}: expected one exact anchor, found {source.count(old)}')
+              p.write_text(source.replace(old,new,1))
+
+          replace_one(
+              'src/app.ts',
+              'async function logActivity(ctx: AppContext, action: string, targetType: string, targetId: number | null, metadata: Row = {}) {',
+              'export async function logActivity(ctx: AppContext, action: string, targetType: string, targetId: number | null, metadata: Row = {}) {',
+              'logActivity export',
+          )
+          old_header='''  const dailyBody=`<div class=\\"page-head family-log-head\\"><h1>🐣 家族ログ</h1><a class=\\"family-log-gear\\" href=\\"/app/settings_family_log.php\\" aria-label=\\"家族ログ設定\\" title=\\"家族ログ設定\\">⚙️</a></div>\n  ${subjectChips}\n'''
+          new_header='''  const dailyBody=`<div class=\\"page-head family-log-head\\"><h1>🐣 家族ログ</h1><a class=\\"family-log-gear\\" href=\\"/app/settings_family_log.php\\" aria-label=\\"家族ログ設定\\" title=\\"家族ログ設定\\">⚙️</a></div>\n  <div class=\\"card\\"><a class=\\"btn\\" href=\\"/app/child_journal.php\\">📔 成長日記</a><p class=\\"small\\">立った・歩いた・歯・身長・体重など、残したい成長だけを月ごとに振り返れます。</p></div>\n  ${subjectChips}\n'''
+          replace_one('src/app.ts',old_header,new_header,'family log journal entry link')
+
+          index=Path('src/index.ts'); source=index.read_text()
+          import_anchor="import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';\n"
+          import_line="import { childJournalApi, childJournalPage } from './child-journal';\n"
+          if source.count(import_anchor)!=1 or import_line in source:
+              raise SystemExit('child journal import anchor mismatch')
+          source=source.replace(import_anchor,import_anchor+import_line,1)
+          api_anchor="      if(url.pathname==='/api/family-log') return await familyLog(request,context);\n"
+          api_line="      if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);\n"
+          if source.count(api_anchor)!=1:
+              raise SystemExit('child journal api route anchor mismatch')
+          source=source.replace(api_anchor,api_anchor+api_line,1)
+          page_anchor="      if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);\n"
+          page_line="      if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);\n"
+          if source.count(page_anchor)!=1:
+              raise SystemExit('child journal page route anchor mismatch')
+          source=source.replace(page_anchor,page_anchor+page_line,1)
+          index.write_text(source)
+
+          replace_one(
+              'scripts/regression-manifest.mjs',
+              "      ['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs'],\n",
+              "      ['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs'],\n      ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],\n",
+              'child journal regression manifest',
+          )
+
+          replace_one(
+              'src/child-journal.ts',
+              "  const member=requireMember(ctx);const url=new URL(request.url);const timezone=String(member.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);",
+              "  const member=requireMember(ctx);if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();const url=new URL(request.url);const timezone=String(member.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);",
+              'child journal csrf bootstrap',
+          )
+          replace_one(
+              'src/child-journal.ts',
+              "${esc(s.icon||String(s.subject_kind)==='BABY'?'👶':'🧒')} ${esc(s.name)}",
+              "${esc(s.icon||(String(s.subject_kind)==='BABY'?'👶':'🧒'))} ${esc(s.name)}",
+              'child journal subject icon precedence',
+          )
+          PY
+          node scripts/child-growth-journal-contract.mjs
+          npm test
+          git diff --check
+          rm .github/workflows/child-growth-journal-foundation-patch.yml
+      - name: Commit Child Journal foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app.ts src/index.ts src/child-journal.ts scripts/regression-manifest.mjs .github/workflows/child-growth-journal-foundation-patch.yml
+          git diff --cached --check
+          git commit -m "Wire Child Growth Journal foundation"
+          git push origin HEAD:feature/child-growth-journal-foundation
