@@ -48,6 +48,10 @@ try{
   assert.match(app,/task_range/,'settings diagnostics must expose aggregate task-range inspection');
   assert.match(app,/repair_unambiguous_task_ranges/,'narrow repair path must be explicit');
   assert.match(app,/substr\(start_at,1,10\)=substr\(end_at,1,10\)/,'automatic repair must be limited to same-day unambiguous all-day rows');
+  assert.ok(app.includes("date(substr(start_at,1,10), '+0 days')=substr(start_at,1,10)"),'task-range diagnostics and repair must round-trip persisted start calendar dates');
+  assert.ok(app.includes("date(substr(end_at,1,10), '+0 days')=substr(end_at,1,10)"),'task-range diagnostics and repair must round-trip persisted end calendar dates');
+  assert.ok(app.includes("date(substr(start_at,1,10), '+0 days')<>substr(start_at,1,10)"),'impossible persisted start dates must count as diagnostic issues');
+  assert.ok(app.includes("date(substr(end_at,1,10), '+0 days')<>substr(end_at,1,10)"),'impossible persisted end dates must count as diagnostic issues');
   assert.doesNotMatch(app,/console\.(?:log|error|warn)\([^\n]*(?:start_at|end_at|task_range)/,'range safety must not log persisted dates or row details');
 
   console.log('calendar-range-safety contract: ok');
