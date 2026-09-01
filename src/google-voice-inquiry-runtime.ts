@@ -1,5 +1,5 @@
 import { deliverGoogleVoiceInquiry, type GoogleVoiceInquiryLineResolver } from './google-voice-inquiry-delivery';
-import { extractMarkedGoogleVoiceInquiryBody, parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
+import { extractMarkedGoogleVoiceInquiryBody, isDeterministicGoogleVoiceWriteBody, parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
 import { classifyMarkedGoogleVoiceInquiryWithGemini } from './google-voice-inquiry-gemini';
 import type { MemberPushResult } from './webpush';
 
@@ -10,8 +10,9 @@ export type GoogleVoiceInquiryRuntimeResult =
 /**
  * Composes deterministic marked INQUIRY parsing with the existing member-scoped
  * delivery boundary. Only an explicitly marked command that misses the exact
- * parser may use the narrow Gemini classifier. Upstream/ambiguous classification
- * falls through without delivery or mutation.
+ * parser and is not owned by a deterministic write-command family may use the
+ * narrow Gemini classifier. Upstream/ambiguous classification falls through
+ * without delivery or mutation.
  */
 export async function executeMarkedGoogleVoiceInquiry(
   env: Env,
@@ -24,6 +25,7 @@ export async function executeMarkedGoogleVoiceInquiry(
   if (!inquiry) {
     const body = extractMarkedGoogleVoiceInquiryBody(value);
     if (body === null) return { handled: false };
+    if (isDeterministicGoogleVoiceWriteBody(body)) return { handled: false };
     inquiry = await classifyMarkedGoogleVoiceInquiryWithGemini(env, familyId, body);
   }
   if (!inquiry) return { handled: false };
