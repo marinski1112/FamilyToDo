@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const migration=fs.readFileSync(new URL('../migrations/0048_child_growth_journal.sql',import.meta.url),'utf8');
 const journal=fs.readFileSync(new URL('../src/child-journal.ts',import.meta.url),'utf8');
+const schema=fs.readFileSync(new URL('../src/child-journal-schema.ts',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../src/app.ts',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
@@ -36,6 +37,9 @@ for(const marker of [
   '体重',
 ])if(!journal.includes(marker))throw new Error(`Child Journal implementation contract missing: ${marker}`);
 
+if(!schema.includes("const FOUNDATION_TABLES = ['family_log_journal_entries'] as const"))throw new Error('Child Journal schema guard must use an allow-listed foundation table');
+if(!journal.includes('childJournalFoundationReady(ctx.env.DB)'))throw new Error('Child Journal writes must fail closed until migration 0048 is present');
+if(!journal.includes('データベース更新の反映待ちです。'))throw new Error('Child Journal page must remain usable while migration 0048 is pending');
 if(!journal.includes("FROM family_log_journal_entries j JOIN family_logs l ON l.id=j.log_id"))throw new Error('Child Journal calendar must read only explicitly journal-promoted Family Log rows');
 if(!journal.includes("j.family_id=? AND j.subject_id=?"))throw new Error('Child Journal read model must be family/subject scoped');
 if(!journal.includes("l.family_id=j.family_id"))throw new Error('Child Journal read model must preserve tenant join integrity');

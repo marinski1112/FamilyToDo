@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const migration=fs.readFileSync(new URL('../migrations/0049_child_journal_google_calendar.sql',import.meta.url),'utf8');
 const sync=fs.readFileSync(new URL('../src/child-journal-calendar.ts',import.meta.url),'utf8');
+const schema=fs.readFileSync(new URL('../src/child-journal-schema.ts',import.meta.url),'utf8');
 const journal=fs.readFileSync(new URL('../src/child-journal.ts',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
@@ -30,6 +31,10 @@ for(const marker of [
   "summary:`📔 ${String(row.subject_name||'子ども')}：${label}`",
 ])if(!sync.includes(marker))throw new Error(`Child Journal calendar worker missing: ${marker}`);
 
+if(!schema.includes("'child_journal_calendar_outbox'"))throw new Error('Child Journal calendar schema guard must allow-list the dedicated outbox');
+if(!sync.includes('if(!(await childJournalCalendarReady(env.DB)))return result;'))throw new Error('Child Journal calendar cron must fail closed until migration 0049 is present');
+if(!sync.includes('schemaReady:false'))throw new Error('Child Journal calendar status must report pending schema without querying missing tables');
+if(!journal.includes("!calendarSync.schemaReady?'Google Calendar同期のDB更新待ち'"))throw new Error('Child Journal UI must expose migration-pending calendar state');
 if(sync.includes("child_journal_calendar_accounts WHERE family_id=? AND status='ACTIVE'"))throw new Error('Retry must reuse the existing dedicated calendar even while its status is ERROR');
 for(const forbidden of [
   'external_calendar_links',
