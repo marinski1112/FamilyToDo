@@ -39,7 +39,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git rm scripts/tmp_task_delete_modularity_patch.mjs .github/workflows/task-delete-modularity-patch.yml
-          git add src/index.ts src/task-delete.ts scripts/task-delete-modularity-contract.mjs scripts/regression-manifest.mjs
+          git add src/index.ts src/task-delete.ts scripts/task-delete-modularity-contract.mjs scripts/regression-manifest.mjs scripts/calendar-projection-queue-contract.mjs
           git diff --cached --check
           git commit -m "Refactor task delete out of index"
           git push
