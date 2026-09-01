@@ -1,0 +1,104 @@
+name: Task shopping per-item category patch
+on:
+  push:
+    branches:
+      - audit/task-shopping-per-item-category-329
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/task-shopping-per-item-category-329
+      - name: Patch retained sources and regression contract
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path)
+              s=p.read_text()
+              count=s.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              p.write_text(s.replace(old,new,1))
+
+          replace_once('src/app.ts',
+          """    const existingShopIds=new Set(shops.results.map(r=>Number(r.id)));
+    const postedShopIds=new Set<number>();
+    const category=String(b.shopping_category||'').trim()||String(shops.results[0]?.category||'').trim()||null;
+    for(const v of shopping){
+      const o=v as any; const name=String(o?.name||'').trim(); if(!name)continue;
+      const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const sid=Number(o?.id||0);
+""",
+          """    const existingShopIds=new Set(shops.results.map(r=>Number(r.id)));
+    const existingShopCategoryById=new Map(shops.results.map(r=>[Number(r.id),String(r.category||'').trim()||null]));
+    const postedShopIds=new Set<number>();
+    const fallbackCategory=String(b.shopping_category||'').trim()||null;
+    for(const v of shopping){
+      const o=v as any; const name=String(o?.name||'').trim(); if(!name)continue;
+      const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const sid=Number(o?.id||0);
+      const rawCategory=Object.prototype.hasOwnProperty.call(o,'category')?String(o.category||'').trim():(fallbackCategory||existingShopCategoryById.get(sid)||'');
+      if(rawCategory.length>255)throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+      const category=rawCategory||null;
+""")
+
+          replace_once('src/app.ts',
+          """  const shopRows=shops.results.map(r=>`<div class=\"product-row task-child-row\"><input type=\"hidden\" name=\"shopping_id[]\" value=\"${r.id}\"><input name=\"shopping_name[]\" value=\"${safe(r.name)}\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"${safe(r.quantity||'1')}\" placeholder=\"数量\"><input type=\"url\" name=\"shopping_url[]\" value=\"${safe(r.url||'')}\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button></div>`).join('');
+""",
+          """  const shopRows=shops.results.map(r=>`<div class=\"product-row task-child-row\"><input type=\"hidden\" name=\"shopping_id[]\" value=\"${r.id}\"><input name=\"shopping_name[]\" value=\"${safe(r.name)}\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"${safe(r.quantity||'1')}\" placeholder=\"数量\"><input name=\"shopping_category[]\" value=\"${safe(r.category||'')}\" list=\"taskShopCategories\" maxlength=\"255\" placeholder=\"カテゴリー\"><input type=\"url\" name=\"shopping_url[]\" value=\"${safe(r.url||'')}\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button></div>`).join('');
+""")
+
+          replace_once('src/app.ts',
+          """    <div class=\"sub-card\"><button type=\"button\" class=\"section-button\" id=\"shopToggle\">🛒 買い物を編集</button><div id=\"shopBox\" ${shops.results.length?'':'style=\"display:none\"'}><label>カテゴリー（全商品共通）</label><input name=\"shopping_category\" value=\"${safe(shops.results[0]?.category||'')}\" list=\"taskShopCategories\" placeholder=\"例：食品\"><datalist id=\"taskShopCategories\">${categories.results.map(c=>`<option value=\"${safe(c.category)}\">`).join('')}</datalist><div id=\"shopRows\">${shopRows||`<div class=\"product-row task-child-row\"><input type=\"hidden\" name=\"shopping_id[]\" value=\"0\"><input name=\"shopping_name[]\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"1\" placeholder=\"数量\"><input type=\"url\" name=\"shopping_url[]\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button></div>`}</div><button type=\"button\" class=\"btn gray small\" id=\"addShopRow\">＋ 商品を追加</button></div></div>
+""",
+          """    <div class=\"sub-card\"><button type=\"button\" class=\"section-button\" id=\"shopToggle\">🛒 買い物を編集</button><div id=\"shopBox\" ${shops.results.length?'':'style=\"display:none\"'}><datalist id=\"taskShopCategories\">${categories.results.map(c=>`<option value=\"${safe(c.category)}\">`).join('')}</datalist><div id=\"shopRows\">${shopRows||`<div class=\"product-row task-child-row\"><input type=\"hidden\" name=\"shopping_id[]\" value=\"0\"><input name=\"shopping_name[]\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"1\" placeholder=\"数量\"><input name=\"shopping_category[]\" list=\"taskShopCategories\" maxlength=\"255\" placeholder=\"カテゴリー\"><input type=\"url\" name=\"shopping_url[]\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button></div>`}</div><button type=\"button\" class=\"btn gray small\" id=\"addShopRow\">＋ 商品を追加</button></div></div>
+""")
+
+          replace_once('public/assets/task-edit.js',
+          """  document.getElementById('addShopRow').onclick=()=>{const d=document.createElement('div');d.className='product-row task-child-row';d.innerHTML='<input type=\"hidden\" name=\"shopping_id[]\" value=\"0\"><input name=\"shopping_name[]\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"1\" placeholder=\"数量\"><input type=\"url\" name=\"shopping_url[]\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button>';document.getElementById('shopRows').appendChild(d)};
+""",
+          """  document.getElementById('addShopRow').onclick=()=>{const d=document.createElement('div');d.className='product-row task-child-row';d.innerHTML='<input type=\"hidden\" name=\"shopping_id[]\" value=\"0\"><input name=\"shopping_name[]\" placeholder=\"商品名\"><input name=\"shopping_quantity[]\" value=\"1\" placeholder=\"数量\"><input name=\"shopping_category[]\" list=\"taskShopCategories\" maxlength=\"255\" placeholder=\"カテゴリー\"><input type=\"url\" name=\"shopping_url[]\" placeholder=\"URL（任意）\"><button type=\"button\" class=\"btn gray small remove-child\">×</button>';document.getElementById('shopRows').appendChild(d)};
+""")
+
+          replace_once('public/assets/task-edit.js',
+          """shopping_category:fd.get('shopping_category'),assignees:[...f.querySelectorAll('[name=\"assignees\"]:checked')].map(x=>Number(x.value)),shopping:[...f.querySelectorAll('[name=\"shopping_name[]\"]')].map((x,j)=>({id:Number(f.querySelectorAll('[name=\"shopping_id[]\"]')[j]?.value||0),name:x.value.trim(),quantity:f.querySelectorAll('[name=\"shopping_quantity[]\"]')[j]?.value.trim()||'1',url:f.querySelectorAll('[name=\"shopping_url[]\"]')[j]?.value.trim()||''})).filter(x=>x.name),items:
+""",
+          """shopping_category:fd.get('shopping_category'),assignees:[...f.querySelectorAll('[name=\"assignees\"]:checked')].map(x=>Number(x.value)),shopping:[...f.querySelectorAll('[name=\"shopping_name[]\"]')].map((x,j)=>({id:Number(f.querySelectorAll('[name=\"shopping_id[]\"]')[j]?.value||0),name:x.value.trim(),quantity:f.querySelectorAll('[name=\"shopping_quantity[]\"]')[j]?.value.trim()||'1',category:f.querySelectorAll('[name=\"shopping_category[]\"]')[j]?.value.trim()||'',url:f.querySelectorAll('[name=\"shopping_url[]\"]')[j]?.value.trim()||''})).filter(x=>x.name),items:
+""")
+
+          contract=Path('scripts/task-event-shopping-integration-contract.mjs')
+          cs=contract.read_text()
+          old="""  'shopping_quantity[]',
+  'shopping_url[]',
+  'shopping:[...f.querySelectorAll',
+"""
+          new="""  'shopping_quantity[]',
+  'shopping_category[]',
+  'shopping_url[]',
+  'category:f.querySelectorAll(\'[name=\"shopping_category[]\"]\')',
+  'shopping:[...f.querySelectorAll',
+"""
+          if cs.count(old)!=1: raise SystemExit('contract client anchor mismatch')
+          cs=cs.replace(old,new,1)
+          anchor="""assert.match(taskEditServer,/INSERT OR IGNORE INTO shopping_assignees\\(shopping_item_id,member_id\\)[\\s\\S]{0,240}?\\.bind\\(sid2,mid,m\\.family_id\\)/,'task edit must preserve shopping assignee linkage');
+"""
+          addition=anchor+"""assert.match(taskEditServer,/existingShopCategoryById=new Map\\(shops\\.results\\.map\\(r=>\\[Number\\(r\\.id\\),String\\(r\\.category\\|\\|'')\\.trim\\(\\)\\|\\|null\\]\\)\\)/,'task edit must retain persisted per-item categories for backward-compatible submissions');
+assert.match(taskEditServer,/Object\\.prototype\\.hasOwnProperty\\.call\\(o,'category'\\)/,'task edit must distinguish an explicitly cleared per-item category from a missing legacy category field');
+assert.match(taskEditServer,/rawCategory\\.length>255/,'task edit must bound per-item category metadata server-side');
+"""
+          if cs.count(anchor)!=1: raise SystemExit('contract server anchor mismatch')
+          contract.write_text(cs.replace(anchor,addition,1))
+          PY
+          node --check public/assets/task-edit.js
+          node scripts/task-event-shopping-integration-contract.mjs
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/app.ts public/assets/task-edit.js scripts/task-event-shopping-integration-contract.mjs
+          git rm .github/workflows/task-shopping-category-patch-329.yml
+          git commit -m "Preserve per-item Task shopping categories"
+          git push origin HEAD:audit/task-shopping-per-item-category-329
