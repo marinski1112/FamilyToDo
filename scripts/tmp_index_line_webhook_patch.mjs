@@ -6,6 +6,7 @@ const modulePath='src/line-webhook.ts';
 const contractPath='scripts/line-webhook-modularity-contract.mjs';
 const manifestPath='scripts/regression-manifest.mjs';
 const privacyPath='scripts/worker-error-log-privacy-contract.mjs';
+const authPath='scripts/platform-auth-contract.mjs';
 
 if(fs.existsSync(modulePath)) throw new Error(`${modulePath} already exists`);
 if(fs.existsSync(contractPath)) throw new Error(`${contractPath} already exists`);
@@ -104,5 +105,15 @@ privacy=privacy.replace('if(index.includes(forbidden))','if(workerOperational.in
 if(!privacy.includes('const count=index.split(required).length-1;')) throw new Error('worker privacy required wrapper count anchor missing');
 privacy=privacy.replace('const count=index.split(required).length-1;','const count=workerOperational.split(required).length-1;');
 fs.writeFileSync(privacyPath,privacy);
+
+let auth=fs.readFileSync(authPath,'utf8');
+const authIndexAnchor="const index=read('src/index.ts');\n";
+if(!auth.includes(authIndexAnchor)) throw new Error('platform auth index anchor missing');
+auth=auth.replace(authIndexAnchor,authIndexAnchor+"const lineWebhook=read('src/line-webhook.ts');\n");
+const oldAuthAssertion="assert.ok(index.includes(\"verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)\"),'LINE webhook must continue using the Messaging API channel secret');";
+const newAuthAssertion="assert.ok(lineWebhook.includes(\"verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET)\"),'LINE webhook must continue using the Messaging API channel secret');";
+if(!auth.includes(oldAuthAssertion)) throw new Error('platform auth LINE webhook assertion anchor missing');
+auth=auth.replace(oldAuthAssertion,newAuthAssertion);
+fs.writeFileSync(authPath,auth);
 
 console.log('LINE webhook extraction patch applied');
