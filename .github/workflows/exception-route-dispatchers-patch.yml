@@ -1,0 +1,52 @@
+name: Exception route dispatcher extraction
+on:
+  push:
+    branches: [refactor/exception-route-dispatchers]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: exception-route-dispatchers-extraction
+  cancel-in-progress: true
+
+jobs:
+  extract-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: refactor/exception-route-dispatchers
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact extraction
+        run: node scripts/tmp_exception_route_dispatchers_patch.mjs
+      - name: Focused dispatcher contract
+        run: node scripts/exception-route-dispatchers-contract.mjs
+      - run: npm run typecheck
+        if: always()
+      - run: npm run check:browser-js
+        if: always()
+      - run: npm run check:static-assets
+        if: always()
+      - run: npm run check:migrations
+        if: always()
+      - run: node scripts/regression-suite.mjs
+        if: always()
+      - name: Diff check
+        run: git diff --check
+        if: always()
+      - name: Commit verified extraction
+        if: success()
+        run: |
+          rm scripts/tmp_exception_route_dispatchers_patch.mjs
+          rm .github/workflows/exception-route-dispatchers-patch.yml
+          git add src/index.ts src/exception-routes.ts scripts/exception-route-dispatchers-contract.mjs scripts/regression-manifest.mjs scripts/tmp_exception_route_dispatchers_patch.mjs .github/workflows/exception-route-dispatchers-patch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Refactor exceptional routes out of index"
+          git push
