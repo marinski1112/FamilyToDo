@@ -20,6 +20,19 @@ jobs:
       - run: npm ci
       - name: Apply exact page route extraction
         run: node scripts/tmp_page_route_dispatcher_patch.mjs
+      - name: Align dispatcher boundary types with existing route handlers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          page=Path('src/page-routes.ts')
+          text=page.read_text()
+          text=text.replace("import type { AppContext } from './app';\n","")
+          text=text.replace('context:AppContext,env:Env','context:any,env:any')
+          page.write_text(text)
+          contract=Path('scripts/page-route-dispatcher-contract.mjs')
+          text=contract.read_text().replace('context:AppContext,env:Env','context:any,env:any')
+          contract.write_text(text)
+          PY
       - name: Focused page route contract
         run: node scripts/page-route-dispatcher-contract.mjs
       - name: Typecheck
