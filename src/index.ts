@@ -14,13 +14,14 @@ import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHo
 import { validateLiffNext } from './liff-target';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { buildStoredTaskRange } from './task-range-safety';
-import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';
+import { logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';
 import { childJournalApi, childJournalPage } from './child-journal';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
 import { dbSchemaHealth, dbRuntimeHealth, liffConfigDiagnose } from './runtime-diagnostics';
 import { logsPage } from './activity-log-page';
 import { cleanupNotificationLifecycle } from './notification-lifecycle';
 import { processLineDailyDigests } from './line-daily-digest';
+import { webhook } from './line-webhook';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -343,42 +344,7 @@ async function itemApi(request:Request,ctx:any):Promise<Response>{
 
 
 
-async function verifyLineWebhook(body: string, signature: string, secret: string): Promise<boolean> {
-  if (!body || !signature || !secret) return false;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
-  const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
-  let binary=''; for(const b of digest) binary += String.fromCharCode(b);
-  const expected = btoa(binary);
-  return expected === signature;
-}
 
-async function webhook(request: Request, env: Env): Promise<Response> {
-  if(request.method !== 'POST') return new Response('OK',{status:200});
-  const body = await request.text();
-  const sig = request.headers.get('x-line-signature') || '';
-  if(!(await verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET))) return new Response('OK',{status:200});
-  try {
-    const data = JSON.parse(body) as {events?:Array<any>};
-    for(const event of data.events||[]) {
-      const userId = String(event?.source?.userId||'');
-      const now = nowJst();
-      const member = userId ? await env.DB.prepare('SELECT id,family_id,name FROM members WHERE line_user_id=? AND active=1 LIMIT 1').bind(userId).first() : null;
-      if(member) {
-        await env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(member.family_id,member.id,`LINE_${String(event.type||'UNKNOWN').toUpperCase()}`,event.message?.type||event.postback?.data||null,null,JSON.stringify({event_type:event.type,message_type:event.message?.type||null}),now).run();
-      }
-      if(event.type==='message' && event.message?.type==='text' && event.replyToken && env.LINE_ACCESS_TOKEN) {
-        const text=String(event.message.text||'').trim();
-        let reply='Family TODO LINEを受信しました。';
-        if(text==='今日') reply='今日の予定はFamily TODO LINEの「今日」から確認できます。';
-        else if(text==='明日') reply='明日の予定はFamily TODO LINEの「明日の準備」から確認できます。';
-        else if(text==='買い物') reply='買い物リストはFamily TODO LINEの「買い物」から確認できます。';
-        const { replyLineMessage } = await import('./line');
-        try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { logLineWebhookFailure('reply',e); }
-      }
-    }
-  } catch(e) { logLineWebhookFailure('handle',e); }
-  return new Response('OK',{status:200});
-}
 
 async function processNotifications(env: Env): Promise<void> {
   await cleanupNotificationLifecycle(env);
