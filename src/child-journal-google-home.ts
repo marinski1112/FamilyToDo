@@ -11,9 +11,19 @@ const MILESTONE_LABELS: Record<ChildJournalVoiceMilestone,string> = {
   FIRST_TOOTH:'最初の歯',
   TOOTH:'歯',
 };
+const MILESTONE_SLUGS: Record<string,ChildJournalVoiceMilestone> = {
+  stand:'STAND',
+  first_step:'FIRST_STEP',
+  first_tooth:'FIRST_TOOTH',
+  tooth:'TOOTH',
+};
 
 export function childJournalVoiceMilestoneLabel(code:ChildJournalVoiceMilestone):string {
   return MILESTONE_LABELS[code];
+}
+
+export function childJournalVoiceMilestoneFromSlug(slug:string):ChildJournalVoiceMilestone|null {
+  return MILESTONE_SLUGS[slug]||null;
 }
 
 export async function recordExternalChildJournalMilestoneDomain(env:Env,member:CurrentMember,subjectId:number,code:ChildJournalVoiceMilestone):Promise<{ok:boolean;logId?:number}> {
@@ -23,7 +33,7 @@ export async function recordExternalChildJournalMilestoneDomain(env:Env,member:C
     .bind(subjectId,member.family_id).first<Row>();
   if(!subject)return {ok:false};
   const timezone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),timestamp=familyNow(timezone),label=MILESTONE_LABELS[code];
-  const inserted=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?, ?,?,NULL,NULL,NULL,?,NULL,NULL,NULL,?,?,?,NULL)')
+  const inserted=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,NULL,NULL,NULL,?,NULL,NULL,NULL,?,?,?,NULL)')
     .bind(member.family_id,subjectId,'MEMO',timestamp,`JOURNAL_${code}`,label,member.id,timestamp,timestamp).run();
   const logId=Number(inserted.meta.last_row_id||0);if(!logId)return {ok:false};
   try{
