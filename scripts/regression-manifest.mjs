@@ -9,6 +9,7 @@ export const activeRegressionGroups=[
       ['d1-remote-trigger-compat','node scripts/d1-remote-trigger-compat-contract.mjs'],
       ['public-integrations-health-privacy','node scripts/public-integrations-health-privacy-contract.mjs'],
       ['public-secrets-health-privacy','node scripts/public-secrets-health-privacy-contract.mjs'],
+      ['task-event-occurrence-date','node scripts/task-event-occurrence-date-contract.mjs'],
     ],
   },
   {

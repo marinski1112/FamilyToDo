@@ -391,9 +391,17 @@ async function makeViewData(ctx: AppContext, date:string) {
       FROM tasks t
       WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status IN ('pending','completed')
         AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
-        AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
-          OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?)))
-      ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,ctx.member!.id,date,date,date).all<Row>(),
+        AND (
+          (lower(COALESCE(t.task_kind,''))='event' AND (
+            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND date(COALESCE(t.end_at,t.start_at))>=date(?))
+            OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
+          ))
+          OR (lower(COALESCE(t.task_kind,''))<>'event' AND (
+            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
+            OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
+          ))
+        )
+      ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(ctx.member!.family_id,ctx.member!.id,date,date,date,date,date,date).all<Row>(),
     ctx.env.DB.prepare(`SELECT i.*, (SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) AS assignees
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at)=date(?) ORDER BY i.due_at,i.status,i.id`).bind(ctx.member!.family_id,ctx.member!.id,date).all<Row>(),
     recurringForDate(ctx,date),
