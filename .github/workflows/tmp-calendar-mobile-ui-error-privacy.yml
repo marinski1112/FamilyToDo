@@ -24,8 +24,8 @@ jobs:
           from pathlib import Path
           p=Path('public/assets/calendar-mobile-ui.js')
           s=p.read_text()
-          old="""}catch(error){\n  document.documentElement.dataset.calendarMobileUi='error';\n  console.error('[calendar-mobile-ui] initialization failed',error);\n}\n})();\n"""
-          new="""}catch{\n  document.documentElement.dataset.calendarMobileUi='error';\n  console.error('[calendar-mobile-ui] initialization failed');\n}\n})();\n"""
+          old="""}catch(error){\n  document.documentElement.dataset.calendarMobileUi='error';\n  console.error('[calendar-mobile-ui] initialization failed',error);\n}\n})();"""
+          new="""}catch{\n  document.documentElement.dataset.calendarMobileUi='error';\n  console.error('[calendar-mobile-ui] initialization failed');\n}\n})();"""
           if old not in s:
               raise SystemExit('expected Calendar compact UI catch block not found')
           p.write_text(s.replace(old,new,1))
