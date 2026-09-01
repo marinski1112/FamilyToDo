@@ -61,8 +61,8 @@ assert.match(messageNew,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message submi
 assert.match(messageNew,/catch\(err\)\{alert\(/,'message submit transport failures must reach the existing user-visible error path');
 assert.match(messageNew,/location\.href='\/app\/messages\.php'/,'successful message submit must keep the existing redirect');
 assert.match(messages,/document\.getElementById\('msgForm'\)\.onsubmit=async e=>\{e\.preventDefault\(\);try\{/,'message list composer must contain transport failures');
-assert.match(messages,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error/,'message list composer must tolerate non-JSON and HTTP/API failures');
-assert.match(messages,/location\.reload\(\);\}catch\(err\)\{alert\(/,'message list composer must preserve successful reload and route failures to the existing alert path');
+assert.match(messages,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('投稿できませんでした。'\)/,'message list composer must tolerate non-JSON and HTTP/API failures without surfacing arbitrary server detail');
+assert.match(messages,/location\.reload\(\);\}catch\([^)]*\)\{alert\('投稿できませんでした。'\)/,'message list composer must preserve successful reload and route failures to the fixed browser-safe alert path');
 
 // LINE morning digest priority and scheduler-jitter resilience.
 assert.match(worker,/current<target\|\|current>target\+29/,'daily digest must tolerate a full 30-minute scheduler/retry window');
