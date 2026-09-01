@@ -21,20 +21,21 @@ Token endpointはclient secretのform送信とHTTP BasicのON/OFF両方に対応
 
 ## Scene catalog
 
-音声対象はactiveな **BABY / CHILDだけ**です。PET / ADULT / OTHERは対象外です。active対象が家族内で1人なら表示名から名前を省略し、2人以上なら必ず名前を付けます。IDにはどちらの場合もsubject IDを保持します。
+子どもの睡眠・排泄・成長日記Sceneはactiveな **BABY / CHILD**を対象にします。PETは専用のペットScene、ちょこっと家事は家族共通Sceneとして別に公開します。ADULT / OTHERは子ども向けSceneの対象外です。activeなBABY / CHILDが家族内で1人なら表示名から名前を省略し、2人以上なら必ず名前を付けます。IDにはどちらの場合もsubject IDを保持します。
 
 * 睡眠: `寝た` / `起きた`（複数なら `ゆうま寝た` / `ゆうま起きた`）
 * BABY排泄: `DIAPER` + `WET` / `DIRTY`
 * CHILD排泄: `TOILET` + `WET` / `DIRTY`
 * 現在: `ft:log:wet:<subject_id>:now` / `ft:log:dirty:<subject_id>:now`
 * 1時間前: `ft:log:wet:<subject_id>:m60` / `ft:log:dirty:<subject_id>:m60`
+* 成長日記: `ft:journal:stand:<subject_id>` / `ft:journal:first_step:<subject_id>` / `ft:journal:first_tooth:<subject_id>` / `ft:journal:tooth:<subject_id>`（立った・歩いた・最初の歯・歯）
 * ちょこっと家事: 従来どおり `ft:chore:<id>`
 
 `enabled_types_json` でBABYのDIAPERまたはCHILDのTOILETが無効なら排泄SceneをSYNCせず、EXECUTE時にも再検証します。名前とnicknameはUnicode code pointで60文字以内です。自然な補助名は「おしっこを記録」「排尿記録」「睡眠開始」「起床記録」など少数に限定し、名前には「OK Google」「Hey Google」「Google」を含めません。
 
 ## Cloud-to-cloud Sceneの制約
 
-Cloud-to-cloud Sceneの `action.devices.commands.ActivateScene` がfulfillmentへ渡す動的parameterはactivate/deactivateだけです。自由な音声文をFamily TODOへそのまま転送できません。「1時間前」はWave114では固定のpreset Sceneであり、nowとminus 60分だけをallowlistします。30分、37分、昨日、具体時刻、量（140ml）などの任意値は解析しません。任意時刻・量にはFamily AIを利用できる別入力チャネルが必要です。Google Home向けの非公式NLU webhook（`home.execution.Webhook`）は作りません。
+Cloud-to-cloud Sceneの `action.devices.commands.ActivateScene` がfulfillmentへ渡す動的parameterはactivate/deactivateだけです。自由な音声文をFamily TODOへそのまま転送できません。 成長日記も4つの固定マイルストーンだけをScene化し、身長・体重の数値や自由メモはGoogle Home Sceneから受け取りません。「1時間前」はWave114では固定のpreset Sceneであり、nowとminus 60分だけをallowlistします。30分、37分、昨日、具体時刻、量（140ml）などの任意値は解析しません。任意時刻・量にはFamily AIを利用できる別入力チャネルが必要です。Google Home向けの非公式NLU webhook（`home.execution.Webhook`）は作りません。
 
 Script Editorの `assistant.event.OkGoogle` は`device.command.ActivateScene` で固定queryからpreset Sceneを起動する補助には使えますが、queryから可変時間をcaptureしてActivateSceneへ渡せるとは仮定しません。Wave114ではScript Editorは必須ではありません。
 
@@ -45,7 +46,7 @@ Script Editorの `assistant.event.OkGoogle` は`device.command.ActivateScene` �
 3. Google Homeアプリで「デバイス」→「追加」→「Works with Google Home」を開き、`Family TODO` を選びます。
 4. Family TODOのLINEログインを完了し、連携画面で、Googleからの記録者になるmemberを確認して「連携する」を押します。共有スピーカーのvoice identityではなく、このlinked memberが `created_by` になります。
 5. Googleの初回SYNC完了後、Home appまたはHome Graph/Test SuiteでScene一覧と件数を確認します。初回link前にWave114 catalogをdeployするため、Request Sync APIは不要です。
-6. 対象が1人なら「寝た」「おしっこ記録」「1時間前のうんち記録」、複数なら名前付きSceneがあることを確認します。PETや無効typeがないことも確認します。
+6. 対象が1人なら「寝た」「おしっこ記録」「1時間前のうんち記録」に加えて「立った記録」「歩いた記録」「最初の歯記録」「歯記録」があり、複数なら名前付きSceneになることを確認します。PETや無効typeの扱いも確認します。
 7. Sceneを1件ずつactivateし、Family Logの対象、detail、時刻、記録者を確認します。同じGoogle request IDの再送は `external_command_receipts` により二重記録されません。
 8. 管理 → 外部連携 → Google Homeで最終SYNC、Scene総数、カテゴリ別preview、最終operationを確認します。request payloadやtokenは表示されません。
 9. DISCONNECTではlink tokenだけが失効し、Family TODOのaccount/dataは残ります。必要なら再linkします。
