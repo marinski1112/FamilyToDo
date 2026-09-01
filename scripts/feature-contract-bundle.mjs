@@ -37,6 +37,7 @@ const groups={
     ['google-home-voice',['node','scripts/google-home-voice-contract.mjs']],
     ['google-home-foundation',['node','scripts/google-home-foundation-contract.mjs']],
     ['google-home-family-log',['node','scripts/google-home-family-log-contract.mjs']],
+    ['child-journal-google-home',['node','scripts/child-journal-google-home-contract.mjs']],
     ['google-tasks-voice',['node','scripts/google-tasks-voice-contract.mjs']],
     ['google-voice-completion-privacy',['node','scripts/google-voice-completion-privacy-contract.mjs']],
     ['google-voice-inquiry-foundation',['node','scripts/google-voice-inquiry-foundation-contract.mjs']],
