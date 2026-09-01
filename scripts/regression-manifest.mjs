@@ -7,6 +7,7 @@ export const activeRegressionGroups=[
       ['package-test-entrypoint','node scripts/package-test-entrypoint-contract.mjs'],
       ['form-audit','node scripts/form-control-contract.mjs'],
       ['d1-remote-trigger-compat','node scripts/d1-remote-trigger-compat-contract.mjs'],
+      ['public-integrations-health-privacy','node scripts/public-integrations-health-privacy-contract.mjs'],
     ],
   },
   {
