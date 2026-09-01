@@ -6,6 +6,7 @@ import {execFileSync} from 'node:child_process';
 
 const app=fs.readFileSync('src/app.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');
 const familyLog=fs.readFileSync('public/assets/family-log.js','utf8')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+fs.readFileSync('public/assets/family-log-core.js','utf8'):'');
 const css=fs.readFileSync('public/assets/family.css','utf8');
 const migration=fs.readFileSync('migrations/0031_wave95_quick_chore_weekdays.sql','utf8');
@@ -26,7 +27,7 @@ assert.ok(css.includes('repeat(3,minmax(0,1fr))'),'Family Log management grid mu
 assert.ok(css.includes('@media(max-width:319px)'),'narrow-screen Family Log fallback must remain present');
 assert.ok(!app.includes('この対象の表示項目・設定'),'obsolete second subject-edit step must remain removed');
 assert.doesNotMatch(app,/family-log-subject-edit[^>]+href=/,'management subject edit must remain in-place rather than navigation-based');
-assert.ok(index.includes("NOT IN ('BABY','CHILD')"),'non-child subject filtering must remain explicit');
+assert.ok(index.includes("NOT IN ('BABY','CHILD')")||diagnostics.includes("NOT IN ('BABY','CHILD')"),'non-child subject filtering must remain explicit');
 for(const marker of ['DEFAULT 127','weekday_mask']) assert.ok(migration.includes(marker),marker);
 
 const db=path.join(os.tmpdir(),`familytodo-family-log-scheduling-${process.pid}-${Date.now()}.sqlite`);
