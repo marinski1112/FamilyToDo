@@ -1,5 +1,5 @@
 import { json, redirect, html } from './response';
-import { makeContext, layout, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden, taskVisibilitySql, taskChildVisibilitySql } from './app';
+import { makeContext, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
@@ -29,6 +29,7 @@ import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
 import { reorderApi } from './reorder-api';
 import { taskDelete } from './task-delete';
+import { taskNew, itemNew } from './new-entry-pages';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -101,34 +102,6 @@ export default {
     if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}
   }
 } satisfies ExportedHandler<Env>;
-
-
-
-
-
-
-async function taskNew(ctx: any,date:string,returnTo:string=''): Promise<Response>{
-  if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));
-  const [members,categories]=await Promise.all([
-    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
-    ctx.env.DB.prepare(`SELECT DISTINCT s.category FROM shopping_items s WHERE s.family_id=? AND ${taskChildVisibilitySql('s')} AND s.category IS NOT NULL AND s.category<>'' ORDER BY s.category`).bind(ctx.member.family_id,ctx.member.id).all()
-  ]);
-  const body=`<div class="card form-card"><h1>📝 タスク・イベント追加</h1><form id="taskForm" class="compact-form" autocomplete="off"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>タイトル</label><input name="title" required maxlength="255" autofocus><label class="checkrow"><input id="isEvent" type="checkbox" name="is_event"><span>イベントとして登録（誕生日・有給など）</span></label><p class="small event-help">イベントはチェックボックスと期限切れ判定の対象外です。日付・通知・場所・カレンダー色などは通常タスクと同じです。</p><label>説明</label><textarea name="description" maxlength="5000"></textarea><label class="checkrow private-task-option"><input id="isPrivate" type="checkbox" name="is_private"><span>🔒 自分専用</span></label><p class="small private-task-help">他の家族にはタスク・カレンダー・詳細を表示しません</p><label>日付</label><div class="date-option-row date-range-grid task-date-row"><div><span class="small">開始日</span><input id="taskDate" type="date" name="dateOnly" value="${date}"></div><div id="endDateWrap"><span class="small">終了日</span><input id="taskEndDate" type="date" name="endDateOnly" value="${date}"></div><label class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div><label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="task-time-fields" style="display:none"><div class="field-block"><label>開始時刻</label><input type="time" name="startTime"></div><div class="field-block"><label>終了時刻</label><input type="time" name="endTime"></div></div><label>場所</label><input name="location"><label>カレンダー表示</label><label class="checkrow"><input id="taskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label><div id="taskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color"><option value="#7c3aed">紫</option><option value="#2563eb">青</option><option value="#16a34a">緑</option><option value="#ea580c">橙</option><option value="#dc2626">赤</option><option value="#db2777">ピンク</option><option value="#0891b2">水色</option><option value="#64748b">灰</option></select></div><div id="taskCompletionWrap"><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select></div><label>担当者</label><div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>\"]/g,'')}</label>`).join('')}</div><label>通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定すると担当者へタスク詳細を設定した通知方法で通知します。通知設定はON/OFFのみです。</p><div class="sub-card"><button type="button" class="section-button" id="shoppingToggle">＋ このタスクに買い物を追加</button><div id="shoppingBox" style="display:none"><label>カテゴリー</label><select name="shopping_category"><option value="">カテゴリーなし</option>${categories.results.map((c:any)=>`<option value="${String(c.category).replace(/[&<>\"]/g,'')}">${String(c.category).replace(/[&<>\"]/g,'')}</option>`).join('')}<option value="__custom__">自由入力</option></select><input id="shoppingCustom" name="shopping_category_custom" placeholder="新しいカテゴリー" style="display:none"><div id="shoppingRows"><div class="product-row"><input name="shopping_name[]" placeholder="商品名"><input type="text" name="shopping_quantity[]" value="1" inputmode="numeric" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"></div></div><button type="button" class="btn gray small" id="addShoppingRow">＋ 商品を追加</button></div></div><div class="sub-card"><button type="button" class="section-button" id="itemsToggle">＋ このタスクに持ち物を追加</button><div id="itemsBox" style="display:none"><div id="itemRows"><div class="item-entry"><input name="item_name[]" placeholder="持ち物名"></div></div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div><button>登録する</button></form></div><script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script><script src="/assets/task-new.js?v=12.144.0-wave125"></script>`;
-  return new Response(layout('タスク・イベント追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
-}
-async function itemNew(ctx:any,date:string,selectedTaskId=0):Promise<Response>{
-  if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/item/new.php?date='+date));
-  const [members,tasks]=await Promise.all([
-    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
-    ctx.env.DB.prepare(`SELECT id,title,start_at,due_at,visibility_scope FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY coalesce(start_at,due_at),id LIMIT 200`).bind(ctx.member.family_id,selectedTaskId,ctx.member.id).all()
-  ]);
-  const selectedTask=tasks.results.find((t:any)=>Number(t.id)===selectedTaskId),privateContext=String(selectedTask?.visibility_scope||'')==='PRIVATE';
-  const body=`<div class="card form-card"><h1>🎒 持ち物追加</h1><div id="itemFormError" class="error" style="display:none"></div><form id="itemForm"><input type="hidden" name="csrf" value="${String(ctx.session.csrfToken||'')}"><label>持ち物名</label><input name="name" maxlength="255" required autofocus><label>関連タスク</label>${privateContext?`<p class="notice">🔒 自分専用タスク: ${String(selectedTask.title).replace(/[&<>"]/g,'')}</p><input type="hidden" name="task_id" value="${selectedTaskId}">`:`<select name="task_id"><option value="0">タスクなし</option>${tasks.results.map((t:any)=>`<option value="${t.id}" ${Number(t.id)===selectedTaskId?'selected':''}>${String(t.title).replace(/[&<>"]/g,'')}</option>`).join('')}</select>`}<label>日付（タスクを指定しない場合）</label><input type="date" name="date" value="${date}"><label>メモ</label><textarea name="memo" maxlength="5000"></textarea><label>担当者</label>${privateContext?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':`<div class="assignee-list">${members.results.map((m:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${m.id}"> ${String(m.name).replace(/[&<>"]/g,'')}</label>`).join('')}</div>`}<button type="submit">登録する</button></form></div><script src="/assets/item-new.js?v=12.93-wave74"></script>`;
-  return new Response(layout('持ち物追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}})
-}
-
-
-
 
 
 
