@@ -1,0 +1,50 @@
+name: Calendar range diagnostic exact-source patch
+on:
+  push:
+    branches: [fix/calendar-task-range-diagnostic-date-validation]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply exact Calendar diagnostic date patch') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Patch retained app source exactly
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/app.ts')
+          s=p.read_text()
+          old="(datetime(start_at) IS NULL OR (end_at IS NOT NULL AND (datetime(end_at) IS NULL OR datetime(end_at)<datetime(start_at))))"
+          new="(datetime(start_at) IS NULL OR date(substr(start_at,1,10), '+0 days') IS NULL OR date(substr(start_at,1,10), '+0 days')<>substr(start_at,1,10) OR (end_at IS NOT NULL AND (datetime(end_at) IS NULL OR date(substr(end_at,1,10), '+0 days') IS NULL OR date(substr(end_at,1,10), '+0 days')<>substr(end_at,1,10) OR datetime(end_at)<datetime(start_at))))"
+          if s.count(old) != 2:
+              raise SystemExit(f'expected 2 task-range diagnostic predicates, found {s.count(old)}')
+          s=s.replace(old,new)
+          old_repair="datetime(start_at) IS NOT NULL AND datetime(end_at) IS NOT NULL AND datetime(end_at)<datetime(start_at) AND substr(start_at,1,10)=substr(end_at,1,10)"
+          new_repair="datetime(start_at) IS NOT NULL AND datetime(end_at) IS NOT NULL AND date(substr(start_at,1,10), '+0 days')=substr(start_at,1,10) AND date(substr(end_at,1,10), '+0 days')=substr(end_at,1,10) AND datetime(end_at)<datetime(start_at) AND substr(start_at,1,10)=substr(end_at,1,10)"
+          if s.count(old_repair) != 2:
+              raise SystemExit(f'expected 2 repair predicates, found {s.count(old_repair)}')
+          s=s.replace(old_repair,new_repair)
+          p.write_text(s)
+          PY
+      - run: npm ci
+      - run: node scripts/calendar-range-safety-contract.mjs
+      - run: npm run typecheck
+      - run: git diff --check
+      - name: Commit exact source patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/app.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'Apply exact Calendar diagnostic date patch'
+          git push origin HEAD:${GITHUB_REF_NAME}
