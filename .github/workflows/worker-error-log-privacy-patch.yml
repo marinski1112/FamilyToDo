@@ -1,0 +1,218 @@
+name: Worker error log privacy patch
+
+on:
+  push:
+    branches:
+      - fix/worker-error-log-privacy-338
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/worker-error-log-privacy-338
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact privacy patch and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/index.ts)" = "6ce9112b71392c5fc7a6c1c35d630b302dea616a"
+          test "$(git hash-object src/observability/errors.ts)" = "3ca6605b706025915fb9b345221fe29446ddf18f"
+          test "$(git hash-object scripts/regression-manifest.mjs)" = "06147a3d78bd609da53f8b56cafff4496fe84289"
+          test ! -e scripts/worker-error-log-privacy-contract.mjs
+          python - <<'PY'
+          from pathlib import Path
+
+          index_path=Path('src/index.ts')
+          source=index_path.read_text()
+          replacements=[
+              (
+                  "import { logRequestFailure } from './observability/errors';",
+                  "import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';",
+              ),
+              (
+                  "]); } catch(cleanup){ console.error('[Family TODO LINE] task creation cleanup failed',{taskId:id,error:String((cleanup as any)?.message||cleanup)}); }",
+                  "]); } catch(cleanup){ logTaskCreationCleanupFailure(cleanup); }",
+              ),
+              (
+                  "try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { console.error(e); }",
+                  "try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { logLineWebhookFailure('reply',e); }",
+              ),
+              (
+                  "} catch(e) { console.error('[Family TODO LINE] webhook',e); }",
+                  "} catch(e) { logLineWebhookFailure('handle',e); }",
+              ),
+              (
+                  "console.error('[Family TODO LINE] notification',e);",
+                  "logNotificationFailure(e);",
+              ),
+          ]
+          for old,new in replacements:
+              count=source.count(old)
+              if count != 1:
+                  raise SystemExit(f'unexpected exact replacement count {count}: {old[:80]}')
+              source=source.replace(old,new,1)
+          if 'console.error' in source:
+              raise SystemExit('direct console.error remains in src/index.ts after privacy patch')
+          index_path.write_text(source)
+
+          manifest_path=Path('scripts/regression-manifest.mjs')
+          manifest=manifest_path.read_text()
+          anchor="      ['task-event-occurrence-date','node scripts/task-event-occurrence-date-contract.mjs'],\n"
+          addition="      ['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs'],\n"
+          if manifest.count(anchor) != 1 or addition in manifest:
+              raise SystemExit('unexpected regression manifest anchor state')
+          manifest_path.write_text(manifest.replace(anchor,anchor+addition,1))
+          PY
+          cat > src/observability/errors.ts <<'EOF'
+          export interface RequestFailureDetails {
+            message: string;
+            requestId: string;
+          }
+
+          type FailureCategory='REQUEST_FAILURE'|'TASK_CREATION_CLEANUP'|'LINE_WEBHOOK'|'NOTIFICATION';
+          type FailureStage='request'|'rollback'|'reply'|'handle'|'dispatch';
+          type RouteClass='health'|'api'|'oauth'|'app'|'webhook'|'page';
+          type RequestMethodClass='GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'OPTIONS'|'HEAD'|'OTHER';
+          type AllowedErrorName='Error'|'TypeError'|'RangeError'|'ReferenceError'|'SyntaxError'|'URIError'|'EvalError'|'AggregateError'|'DOMException';
+
+          interface FailureLogDetails {
+            category: FailureCategory;
+            stage: FailureStage;
+            result: 'error';
+            exception_class: AllowedErrorName;
+            route_class?: RouteClass;
+            method?: RequestMethodClass;
+            request_id?: string;
+          }
+
+          const ERROR_NAME_ALLOWLIST=new Set<AllowedErrorName>(['Error','TypeError','RangeError','ReferenceError','SyntaxError','URIError','EvalError','AggregateError','DOMException']);
+          const REQUEST_METHOD_ALLOWLIST=new Set<RequestMethodClass>(['GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD']);
+
+          function sanitizeErrorName(error: unknown): AllowedErrorName {
+            let candidate='';
+            try {
+              const value=(error as {name?:unknown}|null)?.name;
+              candidate=typeof value==='string'?value:'';
+            } catch {}
+            return ERROR_NAME_ALLOWLIST.has(candidate as AllowedErrorName)?candidate as AllowedErrorName:'Error';
+          }
+
+          function normalizeRequestMethod(method: string): RequestMethodClass {
+            const candidate=String(method||'').toUpperCase() as RequestMethodClass;
+            return REQUEST_METHOD_ALLOWLIST.has(candidate)?candidate:'OTHER';
+          }
+
+          function classifyRoute(pathname: string): RouteClass {
+            if(pathname==='/webhook'||pathname==='/app/api/webhook'||pathname==='/app/api/webhook.php')return 'webhook';
+            if(pathname.startsWith('/__cf/'))return 'health';
+            if(pathname.startsWith('/api/')||pathname.startsWith('/app/api/'))return 'api';
+            if(pathname.startsWith('/oauth/'))return 'oauth';
+            if(pathname.startsWith('/app/'))return 'app';
+            return 'page';
+          }
+
+          function emitFailure(details: FailureLogDetails): void {
+            console.error('[Family TODO LINE] operational failure',details);
+          }
+
+          export function logRequestFailure(error: unknown, request: Request, url: URL): RequestFailureDetails {
+            const e=error as any;
+            const message=String(e?.message||e||'内部エラーです。');
+            const requestId=crypto.randomUUID();
+            emitFailure({category:'REQUEST_FAILURE',stage:'request',result:'error',exception_class:sanitizeErrorName(error),route_class:classifyRoute(url.pathname),method:normalizeRequestMethod(request.method),request_id:requestId});
+            return {message,requestId};
+          }
+
+          export function logTaskCreationCleanupFailure(error: unknown): void {
+            emitFailure({category:'TASK_CREATION_CLEANUP',stage:'rollback',result:'error',exception_class:sanitizeErrorName(error)});
+          }
+
+          export function logLineWebhookFailure(stage: 'reply'|'handle', error: unknown): void {
+            emitFailure({category:'LINE_WEBHOOK',stage,result:'error',exception_class:sanitizeErrorName(error)});
+          }
+
+          export function logNotificationFailure(error: unknown): void {
+            emitFailure({category:'NOTIFICATION',stage:'dispatch',result:'error',exception_class:sanitizeErrorName(error)});
+          }
+          EOF
+          cat > scripts/worker-error-log-privacy-contract.mjs <<'EOF'
+          import fs from 'node:fs';
+
+          const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
+          const observability=fs.readFileSync(new URL('../src/observability/errors.ts',import.meta.url),'utf8');
+          const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
+
+          if(index.includes('console.error'))throw new Error('src/index.ts must not directly forward operational exceptions to console.error');
+          for(const forbidden of [
+            'task creation cleanup failed',
+            'console.error(e)',
+            "console.error('[Family TODO LINE] webhook'",
+            "console.error('[Family TODO LINE] notification'",
+            'taskId:id',
+            'error:String((cleanup as any)?.message||cleanup)',
+          ]){
+            if(index.includes(forbidden))throw new Error(`legacy raw exception logging remains: ${forbidden}`);
+          }
+
+          for(const required of [
+            'logRequestFailure(e,request,url)',
+            'logTaskCreationCleanupFailure(cleanup)',
+            "logLineWebhookFailure('reply',e)",
+            "logLineWebhookFailure('handle',e)",
+            'logNotificationFailure(e)',
+          ]){
+            const count=index.split(required).length-1;
+            if(count!==1)throw new Error(`privacy logging wrapper must remain singular: ${required} (${count})`);
+          }
+
+          const consoleCalls=(observability.match(/console\.error/g)||[]).length;
+          if(consoleCalls!==1)throw new Error(`observability error boundary must have exactly one replaceable console.error sink, found ${consoleCalls}`);
+          if(!observability.includes("console.error('[Family TODO LINE] operational failure',details);"))throw new Error('operational failure sink must only receive typed aggregate details');
+          if(!observability.includes('ERROR_NAME_ALLOWLIST'))throw new Error('exception class allowlist is missing');
+          if(!observability.includes("?candidate as AllowedErrorName:'Error'"))throw new Error('unknown exception names must collapse to Error');
+
+          const schemaMatch=observability.match(/interface FailureLogDetails \{([\s\S]*?)\n\}/);
+          if(!schemaMatch)throw new Error('FailureLogDetails schema is missing');
+          const schema=schemaMatch[1].toLowerCase();
+          for(const sensitive of ['taskid','task_id','member_id','family_id','replytoken','reply_token','title','description','message','authorization','cookie','access_token','refresh_token','sql','body','url']){
+            if(schema.includes(sensitive))throw new Error(`aggregate failure log schema exposes sensitive field: ${sensitive}`);
+          }
+
+          const payloads=[...observability.matchAll(/emitFailure\(\{([\s\S]*?)\}\);/g)].map(match=>match[1]);
+          if(payloads.length!==4)throw new Error(`expected four bounded failure payloads, found ${payloads.length}`);
+          for(const payload of payloads){
+            if(/\berror\s*:/.test(payload)||/\bmessage\s*:/.test(payload))throw new Error('raw exception/message property forwarded into aggregate failure payload');
+            if(!payload.includes('exception_class:sanitizeErrorName(error)'))throw new Error('failure payload must use sanitized exception class');
+          }
+
+          for(const marker of ["category:'REQUEST_FAILURE'","category:'TASK_CREATION_CLEANUP'","category:'LINE_WEBHOOK'","category:'NOTIFICATION'"]){
+            if(!observability.includes(marker))throw new Error(`bounded failure category missing: ${marker}`);
+          }
+          if(!manifest.includes("['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs']"))throw new Error('worker error log privacy contract is not active in regression manifest');
+
+          console.log('worker error log privacy contract ok');
+          EOF
+          node scripts/worker-error-log-privacy-contract.mjs
+          npm test
+          git diff --check
+          rm .github/workflows/worker-error-log-privacy-patch.yml
+      - name: Commit privacy fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/index.ts src/observability/errors.ts scripts/regression-manifest.mjs scripts/worker-error-log-privacy-contract.mjs .github/workflows/worker-error-log-privacy-patch.yml
+          git diff --cached --check
+          git commit -m "Sanitize Worker exception logging privacy"
+          git push origin HEAD:fix/worker-error-log-privacy-338
