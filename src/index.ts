@@ -1,33 +1,16 @@
-import { json, redirect, html } from './response';
-import { makeContext, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden } from './app';
-import { openSession, getSessionCookie } from './session';
-import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
-import { familyLogImportApi, familyLogImportPage } from './family-log-import';
-import { googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
-import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
-import { googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
-import { googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill, calendarWatchWebhook, renewCalendarWatches, wakeCalendarOutbox } from './google-calendar';
-import { formatStoredUtcForFamily, utcNow } from './timezone';
-import { integrationsHealthResponse } from './environment-health';
-import { liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
+import { json, redirect } from './response';
+import { makeContext, AuthRequired, BadRequest, Forbidden } from './app';
+import { processGoogleTasksInbound } from './google-tasks';
+import { processCalendarOutbox, processCalendarInbound, renewCalendarWatches } from './google-calendar';
 import { validateLiffNext } from './liff-target';
-import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { logRequestFailure } from './observability/errors';
-import { childJournalApi, childJournalPage } from './child-journal';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
-import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';
-import { logsPage } from './activity-log-page';
 import { processNotifications } from './notification-delivery';
 import { processLineDailyDigests } from './line-daily-digest';
-import { itemApi } from './item-api';
-import { taskApi } from './task-api';
 import { dispatchPageRoute } from './page-routes';
 import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
-import { dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
-
-const text = (r: Response) => r;
-const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
+import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -35,15 +18,8 @@ export default {
     try{
       const publicResponse=await dispatchPublicRoute(request,env,ctx,url);
       if(publicResponse) return publicResponse;
-      // 認証が必要なページは、例外ベースのリダイレクトに依存せず
-      // ルーティング直下で未ログインを処理する。Cloudflare Runtimeでの
-      // 例外化/Response処理の差異による1101を避けるため。
-      if(url.pathname==='/app/recurring.php') {
-        if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
-        const context=await makeContext(request,env,ctx);
-        if(!context.member){const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
-        return await recurring(request,context);
-      }
+      const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);
+      if(earlyAuthenticatedResponse) return earlyAuthenticatedResponse;
       const context=await makeContext(request,env,ctx);
       const preludeResponse=await dispatchContextPreludeRoute(request,context,env,url);
       if(preludeResponse) return preludeResponse;

@@ -51,7 +51,7 @@ if(/source:'child_journal'[^}]*note/.test(journal))throw new Error('Child Journa
 
 if(!app.includes('export async function logActivity('))throw new Error('Child Journal must reuse the canonical activity log boundary');
 if(!app.includes('href="/app/child_journal.php"'))throw new Error('Family Log must expose the Child Journal entry point');
-if(!index.includes("from './child-journal'"))throw new Error('Worker must import the Child Journal module');
+if(!pageRoutes.includes("from './child-journal'")||!apiRoutes.includes("from './child-journal'"))throw new Error('Child Journal page/API dispatchers must import the Child Journal module');
 if(!apiRoutes.includes("url.pathname==='/api/child-journal'"))throw new Error('Worker must route the Child Journal write boundary');
 if(!pageRoutes.includes("url.pathname==='/app/child_journal.php'"))throw new Error('Worker must route the Child Journal page');
 if(!manifest.includes("['child-growth-journal','node scripts/child-growth-journal-contract.mjs']"))throw new Error('Child Journal regression contract must be active');

@@ -34,8 +34,8 @@ for(const required of [
   "if(url.pathname==='/oauth/google/authorize') {",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
 ]) if(!exceptionRoutes.includes(required)) throw new Error(`exception routing boundary changed: ${required}`);
+if(!exceptionRoutes.includes("if(url.pathname!=='/app/recurring.php') return null;")) throw new Error('early recurring routing boundary changed');
 for(const required of [
-  "if(url.pathname==='/app/recurring.php') {",
   'const context=await makeContext(request,env,ctx);',
   'const apiResponse=await dispatchContextApiRoute(request,context,url);',
   'const pageResponse=await dispatchPageRoute(request,context,env,url);',

@@ -52,9 +52,7 @@ for(const required of [
   "if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
 ]) if(!exceptionRoutes.includes(required)) throw new Error(`exception routing boundary changed: ${required}`);
-for(const required of [
-  "if(url.pathname==='/app/recurring.php')",
-  'return await env.ASSETS.fetch(request);',
-]) if(!index.includes(required)) throw new Error(`non-page routing moved unexpectedly: ${required}`);
+if(!exceptionRoutes.includes("if(url.pathname!=='/app/recurring.php') return null;")) throw new Error('early recurring routing boundary changed');
+if(!index.includes('return await env.ASSETS.fetch(request);')) throw new Error('asset fallback moved unexpectedly');
 if(!pages.includes('return null;')) throw new Error('unmatched page route must fall through');
 console.log('page route dispatcher contract: ok');
