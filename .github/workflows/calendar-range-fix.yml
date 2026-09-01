@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   patch:
@@ -24,7 +25,21 @@ jobs:
       - name: Apply exact retained-source patch
         run: node scripts/apply-calendar-range-fix.mjs
       - name: Verify complete suite before committing
-        run: npm test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          npm test > /tmp/calendar-range-test.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            {
+              echo 'Calendar range exact-patch validation failed (sanitized static CI tail):'
+              echo '```text'
+              tail -n 120 /tmp/calendar-range-test.log
+              echo '```'
+            } | gh issue comment 318 --body-file -
+            exit "$status"
+          fi
       - name: Commit patched sources and remove temporary patch machinery
         run: |
           git config user.name "github-actions[bot]"
