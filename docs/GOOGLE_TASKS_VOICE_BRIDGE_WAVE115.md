@@ -33,6 +33,21 @@ Mapping is title → title, notes → description, due date → all-day due, and
 
 External edits update only an unedited imported task. A local edit creates `CONFLICT`. External deletion creates a `TOMBSTONE` and never hard-deletes the Family TODO task. Existing Family TODO tasks are not backfilled and names are never used for matching.
 
+## Child Journal voice commands
+
+The same marker-gated Google Tasks bridge can record variable-value Child Growth Journal entries with zero Gemini inference. A command becomes a journal entry only when **成長日記と明示**されている場合です。Ordinary Family Log commands are not silently promoted into the journal.
+
+Supported command titles are deliberately bounded:
+
+- `FT 成長日記 身長 82.5` → 82.5cm
+- `FT 成長日記 体重 10.25` → 10.25kg
+- `FT 成長日記 メモ 初めて靴を履いた`
+- With multiple child subjects, prefix the subject name, for example `FT ゆうま 成長日記 身長 82.5`.
+
+The existing relative-time phrase remains available, for example `FT ゆうま 1時間前 成長日記 体重 10.2`. The supported range is **最大24時間前** and future-time phrases are rejected for review. Height is bounded to 20–250cm, weight to 0.2–300kg, and memo text to 500 characters. PET subjects are rejected for Child Journal commands.
+
+Journal commands are stored as canonical `family_logs` plus journal metadata. The existing Google Tasks command receipt remains `FAMILY_LOG_RECORD`, preserving the current external-task ID/etag idempotency without a new database command enum. When the dedicated Child Journal Google Calendar projection is available, these records are also eligible for the existing **FamilyToDo → Google Calendar** one-way journal sync.
+
 ## Real-device checklist
 
 1. Apply migration `0038_wave115_google_tasks_voice_inbox.sql` and deploy the Worker.
