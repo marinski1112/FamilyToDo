@@ -17,6 +17,7 @@ export const activeRegressionGroups=[
       ['line-webhook-modularity','node scripts/line-webhook-modularity-contract.mjs'],
       ['item-api-modularity','node scripts/item-api-modularity-contract.mjs'],
       ['task-api-modularity','node scripts/task-api-modularity-contract.mjs'],
+      ['recurring-occurrence-modularity','node scripts/recurring-occurrence-modularity-contract.mjs'],
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
       ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
     ],
