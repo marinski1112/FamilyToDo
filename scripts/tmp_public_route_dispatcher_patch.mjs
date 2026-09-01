@@ -115,4 +115,61 @@ if(!manifest.includes(anchor)) throw new Error('regression manifest context API 
 manifest=manifest.replace(anchor,anchor+"      ['public-route-dispatcher','node scripts/public-route-dispatcher-contract.mjs'],\n");
 fs.writeFileSync(manifestPath,manifest);
 
-console.log(`public route dispatcher extraction applied (${routeLines.length} routes)`);
+function replaceExact(path,from,to){
+  let source=fs.readFileSync(path,'utf8');
+  if(!source.includes(from)) throw new Error(`contract migration sentinel missing in ${path}: ${from.slice(0,120)}`);
+  source=source.replace(from,to);
+  fs.writeFileSync(path,source);
+}
+
+replaceExact('scripts/public-secrets-health-privacy-contract.mjs',"../src/index.ts","../src/public-routes.ts");
+
+replaceExact('scripts/index-entrypoint-modularity-contract.mjs',
+  "const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');\n",
+  "const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');\nconst publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');\n");
+replaceExact('scripts/index-entrypoint-modularity-contract.mjs',
+  "const requiredImport=\"import { dbSchemaHealth, dbRuntimeHealth, liffConfigDiagnose } from './runtime-diagnostics';\";\nif(!index.includes(requiredImport)) throw new Error('index.ts must import runtime diagnostics module');",
+  "if(!publicRoutes.includes(\"import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';\")) throw new Error('public routes must import runtime diagnostics module');\nif(!index.includes('liffConfigDiagnose')) throw new Error('index.ts must retain authenticated LIFF diagnostics routing');");
+replaceExact('scripts/index-entrypoint-modularity-contract.mjs',
+  "for(const route of [\n  \"if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);\",\n  \"if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);\",\n  \"if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return await liffConfigDiagnose(env);\",\n]){\n  if(!index.includes(route)) throw new Error(`diagnostics route wiring changed: ${route}`);\n}",
+  "for(const route of [\n  \"if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);\",\n  \"if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);\",\n]){\n  if(!publicRoutes.includes(route)) throw new Error(`public diagnostics route wiring changed: ${route}`);\n}\nconst liffDiagnosticRoute=\"if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return await liffConfigDiagnose(env);\";\nif(!index.includes(liffDiagnosticRoute)) throw new Error(`authenticated diagnostics route wiring changed: ${liffDiagnosticRoute}`);");
+
+replaceExact('scripts/context-api-route-dispatcher-contract.mjs',
+  "const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\n",
+  "const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');\nconst publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');\n");
+replaceExact('scripts/context-api-route-dispatcher-contract.mjs',
+  "for(const required of [\n  \"if(url.pathname==='/api/google-calendar/watch') return await calendarWatchWebhook(request,env,ctx);\",\n  \"if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);\",\n  \"if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);\",\n  'const pageResponse=await dispatchPageRoute(request,context,env,url);',\n  \"if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);\",\n]) if(!index.includes(required)) throw new Error(`routing boundary moved unexpectedly: ${required}`);",
+  "for(const required of [\n  \"if(url.pathname==='/api/google-calendar/watch') return await calendarWatchWebhook(request,env,ctx);\",\n  \"if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);\",\n]) if(!publicRoutes.includes(required)) throw new Error(`public routing boundary moved unexpectedly: ${required}`);\nfor(const required of [\n  \"if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);\",\n  'const pageResponse=await dispatchPageRoute(request,context,env,url);',\n  \"if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);\",\n]) if(!index.includes(required)) throw new Error(`authenticated routing boundary moved unexpectedly: ${required}`);");
+
+replaceExact('scripts/google-integration-contract.mjs',
+  "const index=read('src/index.ts');\n",
+  "const index=read('src/index.ts');\nconst publicRoutes=read('src/public-routes.ts');\n");
+replaceExact('scripts/google-integration-contract.mjs',
+  "assert.ok(index.includes(\"'/api/google-calendar/watch'\"));",
+  "assert.ok(publicRoutes.includes(\"'/api/google-calendar/watch'\"));");
+
+replaceExact('scripts/calendar-sync-foundation-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\n",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');\n");
+replaceExact('scripts/calendar-sync-foundation-contract.mjs',
+  "for(const marker of [\n  '/oauth/google-calendar/authorize',\n  '/oauth/google-calendar/callback',\n  'processCalendarOutbox',\n]) assert.ok(index.includes(marker),marker);",
+  "for(const marker of [\n  '/oauth/google-calendar/authorize',\n  'processCalendarOutbox',\n]) assert.ok(index.includes(marker),marker);\nassert.ok(publicRoutes.includes('/oauth/google-calendar/callback'),'/oauth/google-calendar/callback');");
+
+replaceExact('scripts/google-home-foundation-contract.mjs',
+  "const index=fs.readFileSync('src/index.ts','utf8');\n",
+  "const index=fs.readFileSync('src/index.ts','utf8');\nconst publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');\n");
+replaceExact('scripts/google-home-foundation-contract.mjs',
+  "for(const marker of ['/oauth/google/authorize','/oauth/google/token','/api/google-home/fulfillment','/__cf/google-home-health']) assert.ok(index.includes(marker),marker);",
+  "assert.ok(index.includes('/oauth/google/authorize'),'/oauth/google/authorize');\nfor(const marker of ['/oauth/google/token','/api/google-home/fulfillment','/__cf/google-home-health']) assert.ok(publicRoutes.includes(marker),marker);");
+
+replaceExact('scripts/platform-auth-contract.mjs',
+  "const index=read('src/index.ts');\nconst lineWebhook=read('src/line-webhook.ts');",
+  "const index=read('src/index.ts');\nconst publicRoutes=read('src/public-routes.ts');\nconst lineWebhook=read('src/line-webhook.ts');");
+replaceExact('scripts/platform-auth-contract.mjs',
+  "assert.ok(index.includes('return await liffDispatcher(request,env)'));",
+  "assert.ok(publicRoutes.includes('return await liffDispatcher(request,env)'));");
+replaceExact('scripts/platform-auth-contract.mjs',
+  "assert.ok(index.includes(\"url.pathname.startsWith('/liff/')\"),'path-based LIFF routing must stay wired');",
+  "assert.ok(publicRoutes.includes(\"url.pathname.startsWith('/liff/')\"),'path-based LIFF routing must stay wired');");
+
+console.log(`public route dispatcher extraction applied (${routeLines.length} routes) with contract responsibility migrations`);
