@@ -27,6 +27,7 @@ for(const value of [
   'shopping:[...f.querySelectorAll',
   'is_event:editIsEvent?.checked||false',
 ]) assert.ok(taskEdit.includes(value),`task-edit shopping/event integration missing: ${value}`);
+assert.ok(!app.includes('カテゴリー（全商品共通）'),'task edit must not present linked shopping category as a shared field that collapses mixed categories');
 
 for(const value of [
   '.task-child-toggle',
@@ -46,7 +47,6 @@ assert.ok(taskEditServer.includes("Object.prototype.hasOwnProperty.call(o,'categ
 assert.ok(taskEditServer.includes('rawCategory.length>255'), 'task edit must bound per-item category metadata server-side');
 assert.ok(taskEditServer.includes("(existingShopCategoryById.get(sid)||fallbackCategory||'')"), 'legacy task edit submissions must preserve each persisted category before using the shared fallback');
 
-
 // Task creation must persist submitted shopping against the newly-created task, not as an unrelated shopping row.
 // Keep this assertion tied to the concrete INSERT/bind shape so unrelated mentions of task_id cannot satisfy the contract.
 assert.match(app,/INSERT INTO shopping_items\(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url\) VALUES\(\?,\?,\?,\?,\?,\?,'pending',\?,\?,\?,\?,\?\)[\s\S]{0,320}?\.bind\(m\.family_id,[^)]*?,taskId,(?:url|p\.url\|\|null)\)\.run\(\)/,'task creation must bind a newly-created taskId into shopping_items.task_id');
@@ -63,4 +63,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskNewSubmit,eventShoppingDiscard,'task-new must not discard shopping just because the record is an EVENT');
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 
-console.log('task-event-shopping-integration-contract: task/event create, edit, removable linked shopping rows, linked child completion, and concrete server task/shopping linkage remain integrated');
+console.log('task-event-shopping-integration-contract: task/event create, edit, per-item linked shopping categories, removable linked shopping rows, child completion, and concrete server task/shopping linkage remain integrated');
