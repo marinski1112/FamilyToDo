@@ -12,6 +12,10 @@ for(const marker of [
   "journal_kind IN ('CHILD','PET')",
   "entry_kind IN ('MILESTONE','MEASUREMENT','MEMO')",
   'google_sync_enabled INTEGER NOT NULL DEFAULT 1',
+  'trg_family_log_journal_tenant_insert',
+  'trg_family_log_journal_tenant_update',
+  "NEW.journal_kind='CHILD' AND s.subject_kind IN ('BABY','CHILD')",
+  "NEW.journal_kind='PET' AND s.subject_kind='PET'",
   'family_log_journal_tenant_mismatch',
 ])if(!migration.includes(marker))throw new Error(`Child Journal migration contract missing: ${marker}`);
 
