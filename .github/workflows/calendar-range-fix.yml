@@ -26,6 +26,22 @@ jobs:
         run: |
           node scripts/apply-calendar-range-fix.mjs
           node scripts/apply-calendar-range-fix-v2.mjs
+      - name: Verify focused Calendar range contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node scripts/calendar-range-safety-contract.mjs > /tmp/calendar-range-focused.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            {
+              echo 'Calendar range focused contract failed (static CI output):'
+              echo '```text'
+              cat /tmp/calendar-range-focused.log
+              echo '```'
+            } | gh issue comment 318 --body-file -
+            exit "$status"
+          fi
       - name: Verify complete suite before committing
         env:
           GH_TOKEN: ${{ github.token }}
