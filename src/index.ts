@@ -1,7 +1,7 @@
 import { json, redirect } from './response';
 import { makeContext, AuthRequired, BadRequest, Forbidden } from './app';
 import { processGoogleTasksInbound } from './google-tasks';
-import { processCalendarOutbox, processCalendarInbound, renewCalendarWatches } from './google-calendar';
+import { processCalendarOutbox, renewCalendarWatches } from './google-calendar';
 import { validateLiffNext } from './liff-target';
 import { logRequestFailure } from './observability/errors';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
@@ -54,6 +54,6 @@ export default {
       ctx.waitUntil(processCalendarOutbox(env));
       ctx.waitUntil(processChildJournalCalendarOutbox(env));
     }
-    if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}
+    if(controller.cron==='7,37 * * * *') ctx.waitUntil(renewCalendarWatches(env));
   }
 } satisfies ExportedHandler<Env>;

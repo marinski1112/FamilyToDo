@@ -18,6 +18,8 @@ for(const marker of [
 
 assert.ok((calendar.match(/refresh_token_ciphertext/g)||[]).length>=2,'encrypted refresh token flow must remain present');
 assert.ok(apiRoutes.includes("'/api/google-calendar/sync'"),'/api/google-calendar/sync');
-assert.ok(index.includes('processCalendarInbound(env)'),'processCalendarInbound(env)');
+assert.ok(!index.includes('processCalendarInbound'),'scheduled Worker entrypoint must not run normal Calendar inbound mutation');
+assert.ok(index.includes('processCalendarOutbox(env)'),'scheduled outbound Calendar projection must remain present');
+assert.ok(index.includes('renewCalendarWatches(env)'),'calendar watch renewal must remain present');
 
-console.log('google-calendar-inbound-contract: sync token, inbound projection, revoke, visibility, and encrypted refresh-token markers ok');
+console.log('google-calendar-inbound-contract: inbound implementation remains bounded while scheduled runtime is outbound-only and watch renewal is preserved');
