@@ -23,6 +23,8 @@ assert.ok(taskNew.includes("category:f.querySelectorAll('[name=\"shopping_catego
 assert.ok(taskNewPage.includes('datalist id="taskShopCategories"'),'task-new page must expose existing shopping categories as per-row suggestions');
 assert.ok(taskNewPage.includes('name="shopping_category[]" list="taskShopCategories" maxlength="255"'),'task-new initial shopping row must use a bounded per-row category field');
 assert.ok(!taskNewPage.includes('<select name="shopping_category">'),'task-new must not collapse linked shopping rows into one shared category selector');
+assert.ok(taskNewPage.includes('<script src="/assets/task-new.js?v=12.147.0-wave128"></script>'),'task-new page must use the post-shopping-parity asset revision so service-worker clients cannot receive the incompatible pre-change script');
+assert.ok(!taskNewPage.includes('/assets/task-new.js?v=12.144.0-wave125'),'task-new page must not reuse the pre-shopping-parity cache key');
 
 for(const value of [
   "document.getElementById('shopToggle')",
