@@ -16,6 +16,7 @@ import { calendarImportPage, calendarImportPreview, calendarImportNormalizationP
 import { buildStoredTaskRange } from './task-range-safety';
 import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';
 import { childJournalApi, childJournalPage } from './child-journal';
+import { processChildJournalCalendarOutbox } from './child-journal-calendar';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -162,6 +163,7 @@ export default {
       ctx.waitUntil(processNotifications(env));
       ctx.waitUntil(processLineDailyDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
+      ctx.waitUntil(processChildJournalCalendarOutbox(env));
     }
     if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}
   }
