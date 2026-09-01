@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const index=fs.readFileSync('src/index.ts','utf8');
 const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');
 const activityLogPage=fs.readFileSync('src/activity-log-page.ts','utf8');
+const notificationLifecycle=fs.readFileSync('src/notification-lifecycle.ts','utf8');
 
 const requiredImport="import { dbSchemaHealth, dbRuntimeHealth, liffConfigDiagnose } from './runtime-diagnostics';";
 if(!index.includes(requiredImport)) throw new Error('index.ts must import runtime diagnostics module');
@@ -18,6 +19,14 @@ if(!activityLogPage.includes('export async function logsPage(')) throw new Error
 if(!index.includes("if(url.pathname==='/app/logs.php') return await logsPage(context);")) throw new Error('activity log route wiring changed');
 for(const sentinel of ["activityLogVisibilitySql('a')","ORDER BY a.occurred_at DESC,a.id DESC LIMIT 51 OFFSET ?",'activity_logsはUTC保存で31日保持です。']){
   if(!activityLogPage.includes(sentinel)) throw new Error(`activity log behavior sentinel missing: ${sentinel}`);
+}
+const notificationLifecycleImport="import { cleanupNotificationLifecycle } from './notification-lifecycle';";
+if(!index.includes(notificationLifecycleImport)) throw new Error('index.ts must import notification lifecycle module');
+if(index.includes('async function cleanupNotificationLifecycle(')) throw new Error('cleanupNotificationLifecycle must not remain defined in index.ts');
+if(!notificationLifecycle.includes('export async function cleanupNotificationLifecycle(')) throw new Error('cleanupNotificationLifecycle must be exported from notification-lifecycle.ts');
+if(!index.includes('cleanupNotificationLifecycle(env)')) throw new Error('notification lifecycle call site changed');
+for(const sentinel of ["DELETE FROM activity_logs WHERE occurred_at < datetime(?,'-31 days')","lower(COALESCE(t.task_kind,'')) IN ('recurring','recurrence_template')",'keep.id<notifications.id',"console.warn('[Family TODO LINE] lifecycle audit',audit)"]){
+  if(!notificationLifecycle.includes(sentinel)) throw new Error(`notification lifecycle behavior sentinel missing: ${sentinel}`);
 }
 for(const route of [
   "if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);",
