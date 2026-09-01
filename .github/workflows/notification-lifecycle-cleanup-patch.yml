@@ -1,0 +1,41 @@
+name: Notification lifecycle cleanup patch
+
+on:
+  push:
+    branches:
+      - refactor/notification-lifecycle-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/notification-lifecycle-cleanup
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply exact extraction patch
+        run: python3 scripts/tmp_notification_lifecycle_cleanup_patch.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify focused contract
+        run: node scripts/notification-lifecycle-modularity-contract.mjs
+      - name: Full regression suite
+        run: npm test
+      - name: Diff check
+        run: git diff --check
+      - name: Commit verified refactor
+        run: |
+          rm .github/workflows/notification-lifecycle-cleanup-patch.yml scripts/tmp_notification_lifecycle_cleanup_patch.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Refactor notification lifecycle cleanup out of index"
+          git push origin HEAD:refactor/notification-lifecycle-cleanup
