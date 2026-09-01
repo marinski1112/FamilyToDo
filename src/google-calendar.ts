@@ -12,6 +12,7 @@ import {
   integrationsSettings as coreIntegrationsSettings,
   processCalendarOutbox as coreProcessCalendarOutbox,
 } from './google-calendar-core';
+import { pendingChildJournalCalendarSyncCount, processChildJournalCalendarOutbox } from './child-journal-calendar';
 
 type Row = Record<string, unknown>;
 const PROVIDER = 'GOOGLE_CALENDAR';
@@ -265,7 +266,12 @@ export async function processCalendarInbound(env: Env, limit = 10, familyId?: nu
 }
 
 export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
-  return coreProcessCalendarOutbox(env, Math.min(Math.max(1, limit), OUTBOX_LIMIT), familyId);
+  const bounded=Math.min(Math.max(1,limit),OUTBOX_LIMIT);
+  const [schedule,journal]=await Promise.all([
+    coreProcessCalendarOutbox(env,bounded,familyId),
+    processChildJournalCalendarOutbox(env,bounded,familyId),
+  ]);
+  return {sent:schedule.sent+journal.sent,errors:schedule.errors+journal.errors};
 }
 
 export async function calendarSyncNow(request: Request, ctx: AppContext) {
@@ -277,8 +283,11 @@ export async function calendarSyncNow(request: Request, ctx: AppContext) {
   if (String(body.csrf || '') !== String(ctx.session.csrfToken || '')) return json({ ok: false, error: 'CSRF検証に失敗しました' }, 403);
 
   const familyId = ctx.member.family_id;
-  const pendingCount = async () => Number((await ctx.env.DB.prepare("SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?")
-    .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
+  const pendingCount = async () => {
+    const schedule=Number((await ctx.env.DB.prepare("SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?")
+      .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
+    return schedule+await pendingChildJournalCalendarSyncCount(ctx.env.DB,familyId);
+  };
   const pendingBefore = await pendingCount();
   const outgoing = await processCalendarOutbox(ctx.env, OUTBOX_LIMIT, familyId);
   const incoming = await processCalendarInbound(ctx.env, 1, familyId);

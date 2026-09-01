@@ -1,6 +1,7 @@
 import { html, redirect } from './response';
 import { AuthRequired, Forbidden, layout, logActivity, type AppContext } from './app';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate, familyNow } from './timezone';
+import { enqueueChildJournalCalendarSync, processChildJournalCalendarOutbox } from './child-journal-calendar';
 
 type Row = Record<string, unknown>;
 type JournalInputKind = 'STAND'|'FIRST_STEP'|'FIRST_TOOTH'|'TOOTH'|'HEIGHT'|'WEIGHT'|'MEMO';
@@ -42,6 +43,7 @@ export async function childJournalApi(request:Request,ctx:AppContext):Promise<Re
     await ctx.env.DB.prepare("INSERT INTO family_log_journal_entries(log_id,family_id,subject_id,journal_kind,entry_kind,milestone_code,google_sync_enabled,created_by,created_at,updated_at) VALUES(?,?,?,'CHILD',?,?,1,?,?,?)")
       .bind(logId,member.family_id,subjectId,entryKind,milestoneCode,member.id,now,now).run();
   }catch(error){await ctx.env.DB.prepare('DELETE FROM family_logs WHERE id=? AND family_id=?').bind(logId,member.family_id).run().catch(()=>{});throw error;}
+  try{await enqueueChildJournalCalendarSync(ctx.env.DB,member.family_id,logId);ctx.executionContext?.waitUntil(processChildJournalCalendarOutbox(ctx.env,1,member.family_id));}catch{/* journal remains authoritative */}
   await logActivity(ctx,'CREATED','family_log',logId,{source:'child_journal',entry_kind:entryKind});
   return redirect(`/app/child_journal.php?month=${occurredDate.slice(0,7)}&subject_id=${subjectId}`,303);
 }
