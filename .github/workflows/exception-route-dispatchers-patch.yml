@@ -24,7 +24,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply exact extraction
-        run: node scripts/tmp_exception_route_dispatchers_patch.mjs
+        run: |
+          node scripts/tmp_exception_route_dispatchers_patch.mjs
+          node scripts/tmp_exception_route_contracts_patch.mjs
       - name: Focused dispatcher contract
         run: node scripts/exception-route-dispatchers-contract.mjs
       - run: npm run typecheck
@@ -44,8 +46,9 @@ jobs:
         if: success()
         run: |
           rm scripts/tmp_exception_route_dispatchers_patch.mjs
+          rm scripts/tmp_exception_route_contracts_patch.mjs
           rm .github/workflows/exception-route-dispatchers-patch.yml
-          git add src/index.ts src/exception-routes.ts scripts/exception-route-dispatchers-contract.mjs scripts/regression-manifest.mjs scripts/tmp_exception_route_dispatchers_patch.mjs .github/workflows/exception-route-dispatchers-patch.yml
+          git add src/index.ts src/exception-routes.ts scripts/exception-route-dispatchers-contract.mjs scripts/regression-manifest.mjs scripts/index-entrypoint-modularity-contract.mjs scripts/line-webhook-modularity-contract.mjs scripts/recurring-occurrence-modularity-contract.mjs scripts/page-route-dispatcher-contract.mjs scripts/context-api-route-dispatcher-contract.mjs scripts/public-route-dispatcher-contract.mjs scripts/reorder-api-modularity-contract.mjs scripts/task-delete-modularity-contract.mjs scripts/new-entry-pages-modularity-contract.mjs scripts/calendar-sync-retry-contract.mjs scripts/calendar-sync-foundation-contract.mjs scripts/google-home-foundation-contract.mjs scripts/tmp_exception_route_dispatchers_patch.mjs scripts/tmp_exception_route_contracts_patch.mjs .github/workflows/exception-route-dispatchers-patch.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Refactor exceptional routes out of index"
