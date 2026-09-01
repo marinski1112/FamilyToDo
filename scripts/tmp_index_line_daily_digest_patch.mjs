@@ -77,4 +77,31 @@ if(!manifest.includes(anchor)) throw new Error('regression manifest notification
 manifest=manifest.replace(anchor,anchor+"      ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],\n");
 fs.writeFileSync(manifestPath,manifest);
 
+const platformPath='scripts/platform-integration-contract.mjs';
+let platform=fs.readFileSync(platformPath,'utf8');
+const platformIndexAnchor="const index=read('src/index.ts');\n";
+if(!platform.includes(platformIndexAnchor)) throw new Error('platform integration index anchor missing');
+platform=platform.replace(platformIndexAnchor,platformIndexAnchor+"const dailyDigest=read('src/line-daily-digest.ts');\n");
+const oldPlatformDigest=`assert.ok(index.includes("visibility_scope='PRIVATE' AND private_owner_id=?")&&index.includes('current>target+29'),'PRIVATE digest filtering and 30-minute target-time guard must remain intact');`;
+const newPlatformDigest=`assert.ok(dailyDigest.includes("visibility_scope='PRIVATE' AND private_owner_id=?")&&dailyDigest.includes('current>target+29'),'PRIVATE digest filtering and 30-minute target-time guard must remain intact');`;
+if(!platform.includes(oldPlatformDigest)) throw new Error('platform integration digest assertion anchor missing');
+platform=platform.replace(oldPlatformDigest,newPlatformDigest);
+fs.writeFileSync(platformPath,platform);
+
+const uiProductPath='scripts/ui-product-contract.mjs';
+let uiProduct=fs.readFileSync(uiProductPath,'utf8');
+const workerAnchor="const worker=fs.readFileSync('src/index.ts','utf8');\n";
+if(!uiProduct.includes(workerAnchor)) throw new Error('ui-product worker anchor missing');
+uiProduct=uiProduct.replace(workerAnchor,workerAnchor+"const dailyDigest=fs.readFileSync('src/line-daily-digest.ts','utf8');\n");
+for(const prefix of [
+  'assert.match(worker,/current<target',
+  'assert.match(worker,/ORDER BY CASE',
+  'assert.match(worker,/INSERT OR IGNORE INTO line_daily_digest_receipts/',
+  'assert.match(worker,/String\\(receipt',
+]){
+  if(!uiProduct.includes(prefix)) throw new Error(`ui-product digest assertion anchor missing: ${prefix}`);
+  uiProduct=uiProduct.replace(prefix,prefix.replace('assert.match(worker','assert.match(dailyDigest'));
+}
+fs.writeFileSync(uiProductPath,uiProduct);
+
 console.log('LINE daily digest extraction patch applied');
