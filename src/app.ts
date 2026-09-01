@@ -10,6 +10,7 @@ import type { CurrentMember, SessionData } from './types';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveTaskChildCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured, webPushPublicKey } from './webpush';
 import { DEFAULT_FAMILY_TIMEZONE, FAMILY_TIMEZONE_OPTIONS, addWallClockMinutes, familyNow, validateTimezone } from './timezone';
+import { buildStoredTaskRange, isValidDateOnly, safeCalendarDateRange } from './task-range-safety';
 
 export interface AppContext { request: Request; env: Env; session: SessionData; member: CurrentMember | null; executionContext?: ExecutionContext; }
 
@@ -689,16 +690,11 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   const shoppingMap:Record<string,Row[]>=Object.create(null);
   const itemMap:Record<string,Row[]>=Object.create(null);
   const addToMap=(target:Record<string,Row[]>,t:Row)=>{
-    const s=String(t.start_at||t.due_at||'').slice(0,10);
-    const e=String(t.end_at||s).slice(0,10);
-    if(!s)return;
-    let d=new Date(`${s}T12:00:00Z`),last=new Date(`${e}T12:00:00Z`);
-    if(last<d)last=d;
-    const firstMs=new Date(`${s}T12:00:00Z`).getTime();
-    const spanDays=Math.max(1,Math.round((last.getTime()-firstMs)/86400000)+1);
-    for(;d<=last;d.setUTCDate(d.getUTCDate()+1)){
-      const k=d.toISOString().slice(0,10);
-      (target[k]??=[]).push({...t,_segment:d.getTime()===firstMs?'start':d.getTime()===last.getTime()?'end':'mid',_spanDays:spanDays});
+    const range=safeCalendarDateRange(t.start_at||t.due_at,t.end_at||t.start_at||t.due_at);
+    if(!range)return;
+    for(let cursorMs=range.startMs;cursorMs<=range.endMs;cursorMs+=86400000){
+      const k=new Date(cursorMs).toISOString().slice(0,10);
+      (target[k]??=[]).push({...t,_segment:cursorMs===range.startMs?'start':cursorMs===range.endMs?'end':'mid',_spanDays:range.spanDays});
     }
   };
   tasks.forEach(t=>addToMap(map,t));
@@ -855,15 +851,20 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       if(title.length>255) throw new BadRequest('タスク名は255文字以内にしてください。');
       const isEvent=Boolean(b.is_event); const noDate=!isEvent&&Boolean(b.no_date); const date=String(b.date||'').trim();
       if(isEvent&&!date) throw new BadRequest('イベントには日付を指定してください。');
-      if(!noDate&&!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BadRequest('開始日を入力してください。');
       const endDate=String(b.end_date||date).trim();
-      if(!noDate&&!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new BadRequest('終了日が不正です。');
-      if(!noDate&&endDate<date) throw new BadRequest('終了日は開始日以降にしてください。');
       const allDay=b.all_day!==false && String(b.all_day)!=='0';
       const st=String(b.start_time||'').trim(),et=String(b.end_time||'').trim();
-      const startAt=noDate?null:(allDay?`${date} 00:00:00`:(st?`${date} ${st}:00`:null));
-      const endAt=noDate?null:(allDay?(endDate!==date?`${endDate} 23:59:59`:null):(et?`${endDate} ${et}:00`:null));
-      if(!noDate&&!allDay&&!startAt) throw new BadRequest('開始時刻を入力してください。');
+      const range=buildStoredTaskRange({noDate,allDay,startDate:date,endDate,startTime:st,endTime:et,requireTimedStart:!allDay});
+      if(!range.ok){
+        if(range.error==='START_DATE_INVALID')throw new BadRequest('開始日が不正です。');
+        if(range.error==='END_DATE_INVALID')throw new BadRequest('終了日が不正です。');
+        if(range.error==='DATE_ORDER')throw new BadRequest('終了日は開始日以降にしてください。');
+        if(range.error==='START_TIME_REQUIRED')throw new BadRequest('開始時刻を入力してください。');
+        if(range.error==='START_TIME_INVALID')throw new BadRequest('開始時刻が不正です。');
+        if(range.error==='END_TIME_INVALID')throw new BadRequest('終了時刻が不正です。');
+        throw new BadRequest('終了時刻は開始時刻以降にしてください。');
+      }
+      const startAt=range.startAt,endAt=range.endAt;
       if(startAt&&endAt&&endAt<startAt) throw new BadRequest('終了日時は開始日時以降にしてください。');
       const completionMode=String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY';
       const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
@@ -1151,20 +1152,27 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const date=String(b.date||'').trim(); const noDate=!isEvent&&(Boolean(b.no_date)||date==='');
     if(!title) throw new BadRequest('タイトルを入力してください。');
     if(isEvent&&!date) throw new BadRequest('イベントには日付を指定してください。');
-    if(!noDate&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) throw new BadRequest('日付が不正です。');
     const endDate=String(b.end_date||date).trim();
-    if(!noDate&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(endDate)) throw new BadRequest('終了日が不正です。');
-    if(!noDate&&endDate<date) throw new BadRequest('終了日は開始日以降にしてください。');
     const st=String(b.start_time||'').trim(), et=String(b.end_time||'').trim();
-    const start=noDate?null:(st?`${date} ${st}:00`:null), end=noDate?null:(et?`${endDate} ${et}:00`:(allDayDateEnd(date,endDate)?`${endDate} 23:59:59`:null));
-    if(start&&end&&end<start) throw new BadRequest('終了時刻は開始時刻以降にしてください。');
+    const allDayRequested=b.all_day===true||String(b.all_day)==='1'||String(b.all_day)==='on';
+    const range=buildStoredTaskRange({noDate,allDay:allDayRequested,startDate:date,endDate,startTime:st,endTime:et,requireTimedStart:!allDayRequested});
+    if(!range.ok){
+      if(range.error==='START_DATE_INVALID')throw new BadRequest('日付が不正です。');
+      if(range.error==='END_DATE_INVALID')throw new BadRequest('終了日が不正です。');
+      if(range.error==='DATE_ORDER')throw new BadRequest('終了日は開始日以降にしてください。');
+      if(range.error==='START_TIME_REQUIRED')throw new BadRequest('開始時刻を入力してください。');
+      if(range.error==='START_TIME_INVALID')throw new BadRequest('開始時刻が不正です。');
+      if(range.error==='END_TIME_INVALID')throw new BadRequest('終了時刻が不正です。');
+      throw new BadRequest('終了時刻は開始時刻以降にしてください。');
+    }
+    const start=range.startAt,end=range.endAt;
     const reminderRaw=String(b.reminder_at||'').trim();
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
     if(reminderRaw&&!reminderAt) throw new BadRequest('通知日時が不正です。');
     const now=nowJst();
     if(reminderAt && reminderAt <= now) throw new BadRequest('通知日時は現在より後の日時を指定してください。');
         const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
-    const allDay=b.all_day?1:0;
+    const allDay=allDayRequested?1:0;
     const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
     const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):String(task.calendar_color||'#7c3aed');
 
@@ -2324,6 +2332,7 @@ export async function settingsContent(ctx:AppContext):Promise<Response>{
 
 type DiagnosticDefinition={key:string;label:string;description:string;sql:string;params?:(familyId:number,now:string)=>unknown[]};
 const DIAGNOSTIC_DEFINITIONS:DiagnosticDefinition[]=[
+  {key:'task_range',label:'タスク期間の不正・逆転',description:'開始/終了日時が不正、または終了が開始より前のタスク',sql:"SELECT COUNT(*) c FROM tasks WHERE family_id=? AND start_at IS NOT NULL AND (datetime(start_at) IS NULL OR (end_at IS NOT NULL AND (datetime(end_at) IS NULL OR datetime(end_at)<datetime(start_at))))"},
   {key:'notification_duplicate',label:'通知の重複グループ',description:'同じ宛先・対象・日時でpending/retryが複数ある状態',sql:"SELECT COUNT(*) c FROM (SELECT member_id,target_type,target_id,notify_at FROM notifications WHERE family_id=? AND status IN ('pending','retry') GROUP BY member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)"},
   {key:'notification_orphan',label:'通知の孤児',description:'削除済みタスク/伝言を指すpending/retry通知',sql:"SELECT COUNT(*) c FROM notifications n WHERE n.family_id=? AND n.status IN ('pending','retry') AND ((n.target_type='task' AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=n.target_id AND t.family_id=n.family_id)) OR (n.target_type='message' AND NOT EXISTS(SELECT 1 FROM messages x WHERE x.id=n.target_id AND x.family_id=n.family_id)))"},
   {key:'recurrence_exception_orphan',label:'定期タスク例外リンクの孤児',description:'存在しない通常タスクをexceptionとして参照',sql:'SELECT COUNT(*) c FROM recurrence_occurrences o WHERE o.family_id=? AND o.exception_task_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM tasks t WHERE t.id=o.exception_task_id AND t.family_id=o.family_id)'},
@@ -2355,6 +2364,19 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
 export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):Promise<Response>{
   const m=requireMember(ctx),role=String(m.role||'').toUpperCase();if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です。'},403);
   const issue=new URL(request.url).searchParams.get('issue')||'';const d=DIAGNOSTIC_DEFINITIONS.find(x=>x.key===issue);if(!d)return json({ok:false,error:'診断キーが不正です。'},400);
+  if(issue==='task_range'){
+    if(request.method==='POST'){
+      const b=await bodyJson(request);await ensureCsrf(ctx,b.csrf);
+      if(String(b.action||'')!=='repair_unambiguous_task_ranges')return json({ok:false,error:'修復操作が不正です。'},400);
+      const now=nowJst();
+      const repaired=await ctx.env.DB.prepare("UPDATE tasks SET end_at=start_at,updated_at=? WHERE family_id=? AND all_day=1 AND start_at IS NOT NULL AND end_at IS NOT NULL AND datetime(start_at) IS NOT NULL AND datetime(end_at) IS NOT NULL AND datetime(end_at)<datetime(start_at) AND substr(start_at,1,10)=substr(end_at,1,10)").bind(now,m.family_id).run();
+      return json({ok:true,issue,repaired_count:Number(repaired.meta.changes||0)});
+    }
+    if(request.method!=='GET')return json({ok:false,error:'GET/POST only'},405);
+    const counts=await ctx.env.DB.prepare("SELECT COUNT(*) c,SUM(CASE WHEN all_day=1 AND datetime(start_at) IS NOT NULL AND datetime(end_at) IS NOT NULL AND datetime(end_at)<datetime(start_at) AND substr(start_at,1,10)=substr(end_at,1,10) THEN 1 ELSE 0 END) repairable FROM tasks WHERE family_id=? AND start_at IS NOT NULL AND (datetime(start_at) IS NULL OR (end_at IS NOT NULL AND (datetime(end_at) IS NULL OR datetime(end_at)<datetime(start_at))))").bind(m.family_id).first<Row>();
+    return json({ok:true,issue,count:Number(counts?.c||0),repairable_count:Number(counts?.repairable||0)});
+  }
+  if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
   // SQL is server-side allowlisted; never accept SQL from the browser. IDs only avoid leaking content or credentials.
   const rows=await ctx.env.DB.prepare(`SELECT id FROM tasks WHERE family_id=? AND id IN (SELECT task_id FROM external_calendar_links WHERE family_id=?) LIMIT 20`).bind(m.family_id,m.family_id).all<Row>();
   return json({ok:true,issue,items:rows.results.map(x=>({id:Number(x.id)})),limited:20});
