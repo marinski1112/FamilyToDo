@@ -116,4 +116,31 @@ if(!manifest.includes(anchor)) throw new Error('regression manifest item API anc
 manifest=manifest.replace(anchor,anchor+"      ['task-api-modularity','node scripts/task-api-modularity-contract.mjs'],\n");
 fs.writeFileSync(manifestPath,manifest);
 
+const privacyPath='scripts/worker-error-log-privacy-contract.mjs';
+let privacy=fs.readFileSync(privacyPath,'utf8');
+const privacyAnchor="const lineWebhook=fs.readFileSync(new URL('../src/line-webhook.ts',import.meta.url),'utf8');\nconst workerOperational=index+lineWebhook;";
+if(!privacy.includes(privacyAnchor)) throw new Error('worker privacy contract anchor missing');
+privacy=privacy.replace(privacyAnchor,"const lineWebhook=fs.readFileSync(new URL('../src/line-webhook.ts',import.meta.url),'utf8');\nconst taskApi=fs.readFileSync(new URL('../src/task-api.ts',import.meta.url),'utf8');\nconst workerOperational=index+lineWebhook+taskApi;");
+fs.writeFileSync(privacyPath,privacy);
+
+const rangeContractPath='scripts/calendar-range-safety-contract.mjs';
+let rangeContract=fs.readFileSync(rangeContractPath,'utf8');
+const rangeReadAnchor="  const index=source('src/index.ts');\n  const taskNew=source('public/assets/task-new.js');";
+if(!rangeContract.includes(rangeReadAnchor)) throw new Error('calendar range contract read anchor missing');
+rangeContract=rangeContract.replace(rangeReadAnchor,"  const index=source('src/index.ts');\n  const taskApi=source('src/task-api.ts');\n  const taskNew=source('public/assets/task-new.js');");
+const rangeAssert="  assert.match(index,/buildStoredTaskRange/,'task create API must use authoritative range validation');";
+if(!rangeContract.includes(rangeAssert)) throw new Error('calendar range contract task create assertion missing');
+rangeContract=rangeContract.replace(rangeAssert,"  assert.match(taskApi,/buildStoredTaskRange/,'task create API must use authoritative range validation');");
+fs.writeFileSync(rangeContractPath,rangeContract);
+
+const privateContractPath='scripts/private-task-foundation-contract.sh';
+let privateContract=fs.readFileSync(privateContractPath,'utf8');
+const privateCheck="['migrations/0023_wave83_private_tasks.sql',\"visibility_scope TEXT NOT NULL DEFAULT 'FAMILY'\"],['src/index.ts','private_owner_id'],";
+if(!privateContract.includes(privateCheck)) throw new Error('private task contract ownership check anchor missing');
+privateContract=privateContract.replace(privateCheck,"['migrations/0023_wave83_private_tasks.sql',\"visibility_scope TEXT NOT NULL DEFAULT 'FAMILY'\"],['src/task-api.ts','private_owner_id'],");
+const privateIndexBlock="const index=fs.readFileSync('src/index.ts','utf8');\nif(index.includes('const ids=isPrivate?[]:'))throw new Error('src/index.ts: PRIVATE create must not drop its owner recipient');\nif(!index.includes('const ids=isPrivate?[m.id]:'))throw new Error('src/index.ts: PRIVATE create must assign its owner as the sole recipient scope');\nif(!index.includes('if(reminderAt && ids.length){'))throw new Error('src/index.ts: scheduled task reminders must use the resolved recipient scope');";
+if(!privateContract.includes(privateIndexBlock)) throw new Error('private task contract create assertions anchor missing');
+privateContract=privateContract.replace(privateIndexBlock,"const taskApi=fs.readFileSync('src/task-api.ts','utf8');\nif(taskApi.includes('const ids=isPrivate?[]:'))throw new Error('src/task-api.ts: PRIVATE create must not drop its owner recipient');\nif(!taskApi.includes('const ids=isPrivate?[m.id]:'))throw new Error('src/task-api.ts: PRIVATE create must assign its owner as the sole recipient scope');\nif(!taskApi.includes('if(reminderAt && ids.length){'))throw new Error('src/task-api.ts: scheduled task reminders must use the resolved recipient scope');");
+fs.writeFileSync(privateContractPath,privateContract);
+
 console.log('taskApi extraction patch applied');
