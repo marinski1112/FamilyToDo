@@ -4,6 +4,7 @@ on:
     branches: [refactor/page-route-dispatcher]
     paths-ignore:
       - scripts/tmp_page_route_typecheck.txt
+      - scripts/tmp_page_route_regression.txt
 
 permissions:
   contents: write
@@ -58,7 +59,19 @@ jobs:
       - name: Migrations
         run: npm run check:migrations
       - name: Full regression suite
-        run: node scripts/regression-suite.mjs
+        id: regression
+        continue-on-error: true
+        run: node scripts/regression-suite.mjs 2>&1 | tee /tmp/page-route-regression.log
+      - name: Preserve regression diagnostics
+        if: steps.regression.outcome == 'failure'
+        run: |
+          cp /tmp/page-route-regression.log scripts/tmp_page_route_regression.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/tmp_page_route_regression.txt
+          git commit -m "Record page route regression diagnostics"
+          git push
+          exit 1
       - name: Diff check
         run: git diff --check
       - name: Commit verified dispatcher extraction
@@ -67,6 +80,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git rm scripts/tmp_page_route_dispatcher_patch.mjs .github/workflows/page-route-dispatcher-patch.yml
           if [ -f scripts/tmp_page_route_typecheck.txt ]; then git rm scripts/tmp_page_route_typecheck.txt; fi
+          if [ -f scripts/tmp_page_route_regression.txt ]; then git rm scripts/tmp_page_route_regression.txt; fi
           git add src/index.ts src/page-routes.ts scripts/page-route-dispatcher-contract.mjs scripts/regression-manifest.mjs
           git diff --cached --check
           git commit -m "Refactor page routes into dispatcher"
