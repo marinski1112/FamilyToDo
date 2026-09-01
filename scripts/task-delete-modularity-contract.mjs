@@ -2,9 +2,10 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const taskDelete=fs.readFileSync('src/task-delete.ts','utf8');
-if(!index.includes("import { taskDelete } from './task-delete';")) throw new Error('index.ts must import taskDelete module');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
+if(!exceptionRoutes.includes("import { taskDelete } from './task-delete';")) throw new Error('exception routes must import taskDelete module');
 if(index.includes('async function taskDelete(')) throw new Error('taskDelete must not remain defined in index.ts');
-if(!index.includes("if(url.pathname==='/task/delete.php') return await taskDelete(request,context);")) throw new Error('task delete route wiring changed');
+if(!exceptionRoutes.includes("if(url.pathname==='/task/delete.php') return await taskDelete(request,context);")) throw new Error('task delete route wiring changed');
 if(!taskDelete.includes('export async function taskDelete(')) throw new Error('taskDelete export missing');
 for(const marker of [
   "request.method!=='POST'&&request.method!=='DELETE'",

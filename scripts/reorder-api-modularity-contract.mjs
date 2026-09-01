@@ -2,9 +2,10 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const reorder=fs.readFileSync('src/reorder-api.ts','utf8');
-if(!index.includes("import { reorderApi } from './reorder-api';")) throw new Error('index.ts must import reorderApi module');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
+if(!exceptionRoutes.includes("import { reorderApi } from './reorder-api';")) throw new Error('exception routes must import reorderApi module');
 if(index.includes('async function reorderApi(')) throw new Error('reorderApi must not remain defined in index.ts');
-if(!index.includes("if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return await reorderApi(request,context);")) throw new Error('reorder route wiring changed');
+if(!exceptionRoutes.includes("if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return await reorderApi(request,context);")) throw new Error('reorder route wiring changed');
 if(!reorder.includes('export async function reorderApi(')) throw new Error('reorderApi export missing');
 for(const marker of [
   "request.method!=='POST'",

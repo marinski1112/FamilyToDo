@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 for(const marker of [
   'utcNow()',
@@ -18,7 +19,7 @@ for(const marker of [
   "visibility_scope||'FAMILY'",
 ]) assert.ok(calendar.includes(marker),marker);
 
-for(const marker of ['family_timezone','env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE']) assert.ok(index.includes(marker),marker);
+for(const marker of ['family_timezone','env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE']) assert.ok(exceptionRoutes.includes(marker),marker);
 
 const utc=date=>date.toISOString().slice(0,19).replace('T',' ');
 const at=new Date('2026-08-28T00:00:00Z');
