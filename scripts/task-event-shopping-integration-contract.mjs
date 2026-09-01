@@ -46,8 +46,11 @@ assert.ok(taskEditServer.includes('existingShopCategoryById=new Map(shops.result
 assert.ok(taskEditServer.includes("Object.prototype.hasOwnProperty.call(o,'category')"), 'task edit must distinguish an explicitly cleared per-item category from a missing legacy category field');
 assert.ok(taskEditServer.includes('rawCategory.length>255'), 'task edit must bound per-item category metadata server-side');
 const shoppingCategoryPreflight=taskEditServer.indexOf('const rawShoppingCategories=');
-const firstTaskEditMutation=taskEditServer.indexOf('UPDATE notifications SET');
-assert.ok(shoppingCategoryPreflight>=0&&firstTaskEditMutation>shoppingCategoryPreflight,'task edit must validate all submitted shopping categories before database mutations');
+assert.ok(shoppingCategoryPreflight>=0,'task edit shopping category preflight must remain present');
+for(const marker of ['UPDATE notifications SET','UPDATE tasks SET','DELETE FROM task_assignees','INSERT OR IGNORE INTO task_assignees']){
+  const mutation=taskEditServer.indexOf(marker);
+  assert.ok(mutation<0||shoppingCategoryPreflight<mutation,`task edit shopping category validation must precede database mutation: ${marker}`);
+}
 assert.ok(taskEditServer.includes("String(b.shopping_category||'').trim().length>255"),'legacy shared category fallback must be bounded before database mutations');
 assert.ok(taskEditServer.includes("(existingShopCategoryById.get(sid)||fallbackCategory||'')"), 'legacy task edit submissions must preserve each persisted category before using the shared fallback');
 
@@ -67,4 +70,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskNewSubmit,eventShoppingDiscard,'task-new must not discard shopping just because the record is an EVENT');
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 
-console.log('task-event-shopping-integration-contract: task/event create, edit, per-item linked shopping categories, removable linked shopping rows, child completion, and concrete server task/shopping linkage remain integrated');
+console.log('task-event-shopping-integration-contract: task/event create, edit, preflight-safe per-item linked shopping categories, removable linked shopping rows, child completion, and concrete server task/shopping linkage remain integrated');
