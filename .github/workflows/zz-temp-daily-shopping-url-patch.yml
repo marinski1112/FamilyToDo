@@ -1,0 +1,36 @@
+name: Temporary daily Shopping URL patch
+on:
+  push:
+    branches:
+      - fix/daily-shopping-product-url-safety
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/daily-shopping-product-url-safety
+          fetch-depth: 0
+      - name: Apply exact retained-source patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/app.ts')
+          s=p.read_text()
+          old='''  const shoppingRows=(items:Row[])=>items.map(i=>`<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(i.id)}" ${i.status==='completed'?'checked':''}><span class="${i.status==='completed'?'done':''}">${i.url?`<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.name)}</a>`:`<a href="/app/shopping_edit.php?id=${i.id}">${esc(i.name)}</a>`}${i.quantity&&i.quantity!=='1'?` × ${esc(i.quantity)}`:''}</span></label><div class="meta">${[i.category||'',i.assignees?'担当 '+i.assignees:'',i.due_date?'期限 '+i.due_date:''].filter(Boolean).map(esc).join(' ・ ')}${i.url?` ・ <a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div></div>`).join('');'''
+          new='''  const safeDailyProductUrl=(value:unknown)=>{const raw=String(value||'').trim();if(!raw||raw.length>2048)return '';try{const parsed=new URL(raw);if(parsed.username||parsed.password)return '';return parsed.protocol==='http:'||parsed.protocol==='https:'?parsed.href:'';}catch{return '';}};
+  const shoppingRows=(items:Row[])=>items.map(i=>{const productUrl=safeDailyProductUrl(i.url);return `<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(i.id)}" ${i.status==='completed'?'checked':''}><span class="${i.status==='completed'?'done':''}">${productUrl?`<a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">${esc(i.name)}</a>`:`<a href="/app/shopping_edit.php?id=${i.id}">${esc(i.name)}</a>`}${i.quantity&&i.quantity!=='1'?` × ${esc(i.quantity)}`:''}</span></label><div class="meta">${[i.category||'',i.assignees?'担当 '+i.assignees:'',i.due_date?'期限 '+i.due_date:''].filter(Boolean).map(esc).join(' ・ ')}${productUrl?` ・ <a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div></div>`;}).join('');'''
+          if s.count(old)!=1:
+              raise SystemExit(f'exact daily shoppingRows source mismatch: {s.count(old)} matches')
+          p.write_text(s.replace(old,new,1))
+          Path('.github/workflows/zz-temp-daily-shopping-url-patch.yml').unlink()
+      - name: Commit exact patch and remove patcher
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/app.ts .github/workflows/zz-temp-daily-shopping-url-patch.yml
+          git commit -m "Harden daily Shopping product links"
+          git push origin HEAD:fix/daily-shopping-product-url-safety
