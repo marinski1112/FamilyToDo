@@ -30,6 +30,10 @@ try{
   assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:true,startDate:'2026-08-20',endDate:'2026-08-22'}),{ok:true,startAt:'2026-08-20 00:00:00',endAt:'2026-08-22 23:59:59'});
   assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-20',startTime:'18:00',endTime:'17:00',requireTimedStart:true}),{ok:false,error:'TIME_ORDER'});
   assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-21',startTime:'23:00',endTime:'01:00',requireTimedStart:true}),{ok:true,startAt:'2026-08-20 23:00:00',endAt:'2026-08-21 01:00:00'});
+  assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-20',startTime:'2026-08-20T18:00',endTime:'2026-08-20T19:00',requireTimedStart:true}),{ok:true,startAt:'2026-08-20 18:00:00',endAt:'2026-08-20 19:00:00'},'legacy local datetime API syntax must remain accepted when it matches the authoritative date fields');
+  assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-20',startTime:'2026-08-21T18:00',endTime:'19:00',requireTimedStart:true}),{ok:false,error:'START_TIME_INVALID'},'embedded start date must not override the authoritative start date');
+  assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-21',startTime:'2026-08-20T23:00',endTime:'2026-08-21T01:00',requireTimedStart:true}),{ok:true,startAt:'2026-08-20 23:00:00',endAt:'2026-08-21 01:00:00'},'legacy local datetime syntax must preserve valid overnight ranges');
+  assert.deepEqual(range.buildStoredTaskRange({noDate:false,allDay:false,startDate:'2026-08-20',endDate:'2026-08-21',startTime:'23:00',endTime:'2026-08-22T01:00',requireTimedStart:true}),{ok:false,error:'END_TIME_INVALID'},'embedded end date must not override the authoritative end date');
 
   const app=source('src/app.ts');
   const index=source('src/index.ts');
