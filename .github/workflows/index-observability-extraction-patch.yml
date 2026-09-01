@@ -42,12 +42,13 @@ jobs:
               raise SystemExit('observability import already present')
           source = source.replace(import_anchor, import_anchor + import_line, 1)
 
-          old = """      const message=String(e?.message||e||'内部エラーです。');
-          const requestId=crypto.randomUUID();
-          console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
-          """
-          new = """      const {message,requestId}=logRequestFailure(e,request,url);
-          """
+          indent = ' ' * 6
+          old = (
+              indent + "const message=String(e?.message||e||'内部エラーです。');\n"
+              + indent + "const requestId=crypto.randomUUID();\n"
+              + indent + "console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });\n"
+          )
+          new = indent + "const {message,requestId}=logRequestFailure(e,request,url);\n"
           if source.count(old) != 1:
               raise SystemExit('unexpected request failure logging block count')
           source = source.replace(old, new, 1)
@@ -55,19 +56,19 @@ jobs:
 
           module = Path('src/observability/errors.ts')
           module.parent.mkdir(parents=True, exist_ok=True)
-          module.write_text("""export interface RequestFailureDetails {
-            message: string;
-            requestId: string;
-          }
-
-          export function logRequestFailure(error: unknown, request: Request, url: URL): RequestFailureDetails {
-            const e=error as any;
-            const message=String(e?.message||e||'内部エラーです。');
-            const requestId=crypto.randomUUID();
-            console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
-            return {message,requestId};
-          }
-          """)
+          module.write_text(
+              "export interface RequestFailureDetails {\n"
+              "  message: string;\n"
+              "  requestId: string;\n"
+              "}\n\n"
+              "export function logRequestFailure(error: unknown, request: Request, url: URL): RequestFailureDetails {\n"
+              "  const e=error as any;\n"
+              "  const message=String(e?.message||e||'内部エラーです。');\n"
+              "  const requestId=crypto.randomUUID();\n"
+              "  console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });\n"
+              "  return {message,requestId};\n"
+              "}\n"
+          )
           PY
           npm test
           git diff --check
