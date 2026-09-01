@@ -13,6 +13,7 @@ export const activeRegressionGroups=[
     name:'calendar-imports',
     checks:[
       ['feature-contracts','node scripts/feature-contract-bundle.mjs calendar-imports'],
+      ['calendar-stamp-assets-transport','node scripts/calendar-stamp-assets-transport-contract.mjs'],
     ],
   },
   {
