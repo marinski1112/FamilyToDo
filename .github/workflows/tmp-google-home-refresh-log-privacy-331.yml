@@ -1,0 +1,29 @@
+name: tmp-google-home-refresh-log-privacy-331
+on:
+  push:
+    branches:
+      - audit/google-home-refresh-log-privacy-331
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/tmp-patch-google-home-refresh-log-privacy-331.mjs
+      - run: |
+          if git diff --quiet -- src/google-home.ts; then
+            echo 'Expected patch did not change src/google-home.ts' >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/google-home.ts
+          git commit -m 'Remove Google Home refresh identifiers from logs'
+          git push
