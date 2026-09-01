@@ -237,8 +237,8 @@ try{
   window.addEventListener('blur',clearPreview,{passive:true});
 
   document.documentElement.dataset.calendarMobileUi='ready';
-}catch(error){
+}catch{
   document.documentElement.dataset.calendarMobileUi='error';
-  console.error('[calendar-mobile-ui] initialization failed',error);
+  console.error('[calendar-mobile-ui] initialization failed');
 }
 })();

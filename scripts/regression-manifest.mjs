@@ -18,6 +18,7 @@ export const activeRegressionGroups=[
       ['feature-contracts','node scripts/feature-contract-bundle.mjs calendar-imports'],
       ['calendar-stamp-assets-transport','node scripts/calendar-stamp-assets-transport-contract.mjs'],
       ['calendar-stamp-read-api','node scripts/calendar-animated-stamps-read-api-contract.mjs'],
+      ['calendar-mobile-ui-error-privacy','node scripts/calendar-mobile-ui-error-privacy-contract.mjs'],
     ],
   },
   {
