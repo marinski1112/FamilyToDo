@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import ts from 'typescript';
 
 const indexPath='src/index.ts';
 const modulePath='src/page-routes.ts';
@@ -10,14 +9,6 @@ if(fs.existsSync(modulePath)) throw new Error(`${modulePath} already exists`);
 if(fs.existsSync(contractPath)) throw new Error(`${contractPath} already exists`);
 
 let index=fs.readFileSync(indexPath,'utf8');
-const sf=ts.createSourceFile(indexPath,index,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-const exportDefault=sf.statements.find(s=>ts.isExportAssignment(s));
-if(!exportDefault||!ts.isObjectLiteralExpression(exportDefault.expression)) throw new Error('default Worker object not found');
-const fetchMethod=exportDefault.expression.properties.find(p=>ts.isMethodDeclaration(p)&&p.name?.getText(sf)==='fetch');
-if(!fetchMethod?.body) throw new Error('Worker fetch method not found');
-const tryStmt=fetchMethod.body.statements.find(s=>ts.isTryStatement(s));
-if(!tryStmt) throw new Error('fetch try block not found');
-
 const routeSentinels=[
   "url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php'",
   "url.pathname==='/app/create.php'||url.pathname==='/app/create'",
@@ -53,15 +44,17 @@ const routeSentinels=[
   "url.pathname==='/app/shopping_edit.php'",
 ];
 
-const topLevelIfs=tryStmt.tryBlock.statements.filter(ts.isIfStatement);
 const selected=routeSentinels.map(sentinel=>{
-  const matches=topLevelIfs.filter(node=>node.getText(sf).includes(sentinel));
-  if(matches.length!==1) throw new Error(`expected one page route for ${sentinel}, found ${matches.length}`);
-  return matches[0];
-});
-const unique=new Set(selected.map(n=>n.getStart(sf)));
-if(unique.size!==selected.length) throw new Error('page route selection is not unique');
-selected.sort((a,b)=>a.getStart(sf)-b.getStart(sf));
+  const count=index.split(sentinel).length-1;
+  if(count!==1) throw new Error(`expected one page route sentinel for ${sentinel}, found ${count}`);
+  const pos=index.indexOf(sentinel);
+  const start=index.lastIndexOf('\n',pos)+1;
+  const newline=index.indexOf('\n',pos);
+  const end=newline===-1?index.length:newline+1;
+  const text=index.slice(start,end).trim();
+  if(!text.startsWith('if(')||!text.endsWith(';')) throw new Error(`page route must remain a one-line if statement: ${sentinel}`);
+  return {start,end,text,sentinel};
+}).sort((a,b)=>a.start-b.start);
 
 for(const required of [
   "if(url.pathname==='/api/toggle') return await toggle(request,context);",
@@ -85,20 +78,16 @@ function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=f
 
 export async function dispatchPageRoute(request:Request,context:AppContext,env:Env,url:URL):Promise<Response|null>{
 `;
-const moduleBody=selected.map(node=>`  ${node.getText(sf)}`).join('\n');
+const moduleBody=selected.map(route=>`  ${route.text}`).join('\n');
 fs.writeFileSync(modulePath,`${moduleHeader}${moduleBody}\n  return null;\n}\n`);
 
 const first=selected[0];
-for(const node of [...selected].sort((a,b)=>b.getStart(sf)-a.getStart(sf))){
-  if(node===first) continue;
-  const start=node.getFullStart();
-  const end=node.end;
-  index=index.slice(0,start)+index.slice(end);
+for(const route of [...selected].sort((a,b)=>b.start-a.start)){
+  if(route===first) continue;
+  index=index.slice(0,route.start)+index.slice(route.end);
 }
-const firstStart=first.getStart(sf);
-const firstEnd=first.end;
-const call="const pageResponse=await dispatchPageRoute(request,context,env,url);\n      if(pageResponse) return pageResponse;";
-index=index.slice(0,firstStart)+call+index.slice(firstEnd);
+const call="      const pageResponse=await dispatchPageRoute(request,context,env,url);\n      if(pageResponse) return pageResponse;\n";
+index=index.slice(0,first.start)+call+index.slice(first.end);
 
 const importAnchor="import { convertOccurrence } from './recurring-occurrence';\n";
 if(!index.includes(importAnchor)) throw new Error('recurring occurrence import anchor missing');
