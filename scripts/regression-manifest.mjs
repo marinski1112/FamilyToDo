@@ -12,6 +12,7 @@ export const activeRegressionGroups=[
       ['task-event-occurrence-date','node scripts/task-event-occurrence-date-contract.mjs'],
       ['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs'],
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
+      ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
     ],
   },
   {
