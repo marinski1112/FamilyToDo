@@ -1,0 +1,45 @@
+name: Context API route dispatcher patch
+on:
+  push:
+    branches: [refactor/context-api-route-dispatcher]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact context API route extraction
+        run: node scripts/tmp_context_api_route_dispatcher_patch.mjs
+      - name: Focused context API route contract
+        run: node scripts/context-api-route-dispatcher-contract.mjs
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Browser JS
+        run: npm run check:browser-js
+      - name: Static assets
+        run: npm run check:static-assets
+      - name: Migrations
+        run: npm run check:migrations
+      - name: Full regression suite
+        run: node scripts/regression-suite.mjs
+      - name: Diff check
+        run: git diff --check
+      - name: Commit verified context API route extraction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm scripts/tmp_context_api_route_dispatcher_patch.mjs .github/workflows/context-api-route-dispatcher-patch.yml
+          git add src/index.ts src/context-api-routes.ts scripts/context-api-route-dispatcher-contract.mjs scripts/regression-manifest.mjs
+          git diff --cached --check
+          git commit -m "Refactor context API routes into dispatcher"
+          git push
