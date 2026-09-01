@@ -32,6 +32,7 @@ export const activeRegressionGroups=[
     checks:[
       ['feature-contracts','node scripts/feature-contract-bundle.mjs ui-product'],
       ['messages-action-error-display-privacy','node scripts/messages-action-error-display-privacy-contract.mjs'],
+      ['task-shopping-error-display-privacy','node scripts/task-shopping-error-display-privacy-contract.mjs'],
     ],
   },
 ];
