@@ -45,6 +45,10 @@ assert.match(taskEditServer,/INSERT OR IGNORE INTO shopping_assignees\(shopping_
 assert.ok(taskEditServer.includes('existingShopCategoryById=new Map(shops.results.map'), 'task edit must retain persisted per-item categories for backward-compatible submissions');
 assert.ok(taskEditServer.includes("Object.prototype.hasOwnProperty.call(o,'category')"), 'task edit must distinguish an explicitly cleared per-item category from a missing legacy category field');
 assert.ok(taskEditServer.includes('rawCategory.length>255'), 'task edit must bound per-item category metadata server-side');
+const shoppingCategoryPreflight=taskEditServer.indexOf('const rawShoppingCategories=');
+const firstTaskEditMutation=taskEditServer.indexOf('UPDATE notifications SET');
+assert.ok(shoppingCategoryPreflight>=0&&firstTaskEditMutation>shoppingCategoryPreflight,'task edit must validate all submitted shopping categories before database mutations');
+assert.ok(taskEditServer.includes("String(b.shopping_category||'').trim().length>255"),'legacy shared category fallback must be bounded before database mutations');
 assert.ok(taskEditServer.includes("(existingShopCategoryById.get(sid)||fallbackCategory||'')"), 'legacy task edit submissions must preserve each persisted category before using the shared fallback');
 
 // Task creation must persist submitted shopping against the newly-created task, not as an unrelated shopping row.

@@ -1145,7 +1145,14 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   ]);
 
   if(request.method==='POST'){
-    const b=await bodyJson(request); await ensureCsrf(ctx,b.csrf);
+    const b=await bodyJson(request);
+    const rawShoppingCategories=Array.isArray(b.shopping)?(b.shopping as unknown[]).slice(0,50):[];
+    for(const rawShopping of rawShoppingCategories){
+      const raw=rawShopping as Record<string,unknown>|null;
+      if(raw&&typeof raw==='object'&&Object.prototype.hasOwnProperty.call(raw,'category')&&String(raw.category||'').trim().length>255) throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+    }
+    if(String(b.shopping_category||'').trim().length>255) throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+ await ensureCsrf(ctx,b.csrf);
     const title=String(b.title||'').trim();
     const isEvent=Boolean(b.is_event);
     const makePrivate=privateTaskRequested(b);
