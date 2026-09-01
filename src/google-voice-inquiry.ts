@@ -60,7 +60,7 @@ export function isDeterministicGoogleVoiceWriteBody(value:unknown):boolean{
   const body=normalize(raw);
   if(!body)return false;
   if(/^(?:買い物(?:完了)?|(?:タスク|TODO)(?:完了)?)(?: |$)/i.test(body))return true;
-  return /(?:^| )(?:成長日記|ミルク(?=\s|\d|$)|おしっこ|うんち|離乳食|お風呂|吐いた|体温)(?: |$)/.test(body);
+  return /(?:^| )(?:成長日記|ミルク(?: ?\d+)?|おしっこ|うんち|離乳食|お風呂|吐いた|体温)(?: |$)/.test(body);
 }
 
 /**
