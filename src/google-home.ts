@@ -66,7 +66,7 @@ export async function googleToken(request:Request,env:Env):Promise<Response>{
     // Refresh tokens are deliberately not rotated. A signed, expiring access token
     // is deterministic for the current minute, so concurrent refreshes cannot
     // invalidate one another and no raw credential is persisted.
-    const access=await refreshedAccessToken(env,row,now);console.log(JSON.stringify({category:'GOOGLE_HOME_TOKEN_REFRESHED',family_id:row.family_id,member_id:row.member_id,stage:'token',result:'success'}));
+    const access=await refreshedAccessToken(env,row,now);console.log(JSON.stringify({category:'GOOGLE_HOME_TOKEN_REFRESHED',provider:'GOOGLE_HOME',stage:'token',result:'success'}));
     return json({token_type:'Bearer',access_token:access.token,expires_in:access.expires-now},200,{'cache-control':'no-store','pragma':'no-cache'});
   }
   return oauthError('unsupported_grant_type','Only authorization_code and refresh_token are supported');
