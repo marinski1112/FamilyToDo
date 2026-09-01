@@ -44,8 +44,8 @@ jobs:
               'export async function logActivity(ctx: AppContext, action: string, targetType: string, targetId: number | null, metadata: Row = {}) {',
               'logActivity export',
           )
-          old_header='''  const dailyBody=`<div class=\\"page-head family-log-head\\"><h1>🐣 家族ログ</h1><a class=\\"family-log-gear\\" href=\\"/app/settings_family_log.php\\" aria-label=\\"家族ログ設定\\" title=\\"家族ログ設定\\">⚙️</a></div>\n  ${subjectChips}\n'''
-          new_header='''  const dailyBody=`<div class=\\"page-head family-log-head\\"><h1>🐣 家族ログ</h1><a class=\\"family-log-gear\\" href=\\"/app/settings_family_log.php\\" aria-label=\\"家族ログ設定\\" title=\\"家族ログ設定\\">⚙️</a></div>\n  <div class=\\"card\\"><a class=\\"btn\\" href=\\"/app/child_journal.php\\">📔 成長日記</a><p class=\\"small\\">立った・歩いた・歯・身長・体重など、残したい成長だけを月ごとに振り返れます。</p></div>\n  ${subjectChips}\n'''
+          old_header='''  const dailyBody=`<div class="page-head family-log-head"><h1>🐣 家族ログ</h1><a class="family-log-gear" href="/app/settings_family_log.php" aria-label="家族ログ設定" title="家族ログ設定">⚙️</a></div>\n  ${subjectChips}\n'''
+          new_header='''  const dailyBody=`<div class="page-head family-log-head"><h1>🐣 家族ログ</h1><a class="family-log-gear" href="/app/settings_family_log.php" aria-label="家族ログ設定" title="家族ログ設定">⚙️</a></div>\n  <div class="card"><a class="btn" href="/app/child_journal.php">📔 成長日記</a><p class="small">立った・歩いた・歯・身長・体重など、残したい成長だけを月ごとに振り返れます。</p></div>\n  ${subjectChips}\n'''
           replace_one('src/app.ts',old_header,new_header,'family log journal entry link')
 
           index=Path('src/index.ts'); source=index.read_text()
