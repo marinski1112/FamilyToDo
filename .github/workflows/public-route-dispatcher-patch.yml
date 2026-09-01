@@ -39,7 +39,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git rm scripts/tmp_public_route_dispatcher_patch.mjs .github/workflows/public-route-dispatcher-patch.yml
-          git add src/index.ts src/public-routes.ts scripts/public-route-dispatcher-contract.mjs scripts/regression-manifest.mjs
+          git add src/index.ts src/public-routes.ts scripts/public-route-dispatcher-contract.mjs scripts/regression-manifest.mjs scripts/public-secrets-health-privacy-contract.mjs scripts/index-entrypoint-modularity-contract.mjs scripts/context-api-route-dispatcher-contract.mjs scripts/google-integration-contract.mjs scripts/calendar-sync-foundation-contract.mjs scripts/google-home-foundation-contract.mjs scripts/platform-auth-contract.mjs
           git diff --cached --check
           git commit -m "Refactor public routes into dispatcher"
           git push
