@@ -1,42 +1,36 @@
 import { json, redirect, html } from './response';
-import { makeContext, liffLogin, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, toggle, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden } from './app';
+import { makeContext, liffEntryPage, authHealth, createFamily, joinFamily, today, tomorrow, taskEvents, calendar, messages, shopping, home, loginPage, createFamilyPage, apiMe, taskView, taskEdit, itemEdit, shoppingEdit, settings, settingsMembers, settingsNotifications, settingsContent, settingsDiagnostics, settingsDiagnosticsDetail, familyLog, recordOccurrenceFamilyLog, webPushApi, shoppingNew, messageNew, inviteCreate, invitePage, recurring, AuthRequired, BadRequest, Forbidden } from './app';
 import { openSession, getSessionCookie } from './session';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured } from './webpush';
 import { familyLogImportApi, familyLogImportPage } from './family-log-import';
-import { googleAuthorize, googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
+import { googleFulfillment, googleHomeHealth, googleHomeSettings, googleToken } from './google-home';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
-import { googleTasksAuthorize, googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
-import { googleCalendarAuthorize, googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill, calendarWatchWebhook, renewCalendarWatches, wakeCalendarOutbox } from './google-calendar';
-import { DEFAULT_FAMILY_TIMEZONE, familyDate, formatStoredUtcForFamily, utcNow } from './timezone';
+import { googleTasksCallback, googleTasksSettings, googleTasksAction, processGoogleTasksInbound } from './google-tasks';
+import { googleCalendarCallback, integrationsSettings, queueCalendarProjectionAfterMutation, processCalendarOutbox, processCalendarInbound, calendarSyncNow, calendarDisconnect, calendarRetryFailed, calendarBackfill, calendarWatchWebhook, renewCalendarWatches, wakeCalendarOutbox } from './google-calendar';
+import { formatStoredUtcForFamily, utcNow } from './timezone';
 import { integrationsHealthResponse } from './environment-health';
-import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
+import { liffDispatcher, resumeGoogleHome, lineGoogleHomeStart, lineGoogleHomeCallback } from './oauth-continuation';
 import { validateLiffNext } from './liff-target';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { logNotificationFailure, logRequestFailure } from './observability/errors';
 import { childJournalApi, childJournalPage } from './child-journal';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
-import { dbSchemaHealth, dbRuntimeHealth, liffConfigDiagnose } from './runtime-diagnostics';
+import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';
 import { logsPage } from './activity-log-page';
 import { cleanupNotificationLifecycle } from './notification-lifecycle';
 import { processLineDailyDigests } from './line-daily-digest';
-import { webhook } from './line-webhook';
 import { itemApi } from './item-api';
 import { taskApi } from './task-api';
-import { convertOccurrence } from './recurring-occurrence';
 import { dispatchPageRoute } from './page-routes';
 import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
-import { reorderApi } from './reorder-api';
-import { taskDelete } from './task-delete';
-import { taskNew, itemNew } from './new-entry-pages';
+import { dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
 
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
-
-function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -54,26 +48,14 @@ export default {
         return await recurring(request,context);
       }
       const context=await makeContext(request,env,ctx);
-      if(url.pathname==='/oauth/google/authorize') {
-        console.log(JSON.stringify({stage:'AUTHORIZE_RECEIVED',provider:'GOOGLE_HOME'}));
-        return await preserveGoogleHomeLogin(request,env,await googleAuthorize(request,context));
-      }
-      if(url.pathname==='/oauth/google-tasks/authorize') return await googleTasksAuthorize(request,context);
-      if(url.pathname==='/oauth/google-calendar/authorize') return await googleCalendarAuthorize(request,context);
-      if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);
+      const preludeResponse=await dispatchContextPreludeRoute(request,context,env,url);
+      if(preludeResponse) return preludeResponse;
       const apiResponse=await dispatchContextApiRoute(request,context,url);
       if(apiResponse) return apiResponse;
       const pageResponse=await dispatchPageRoute(request,context,env,url);
       if(pageResponse) return pageResponse;
-      if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return await liffConfigDiagnose(env);
-      if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);
-      if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return await reorderApi(request,context);
-      if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);
-      if(url.pathname==='/logout.php'||url.pathname==='/logout') return await logout(request,env);
-      if(url.pathname==='/task/delete.php') return await taskDelete(request,context);
-      if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);
-      if(url.pathname==='/task/new.php') return await taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');
-      if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));
+      const fallbackResponse=await dispatchContextFallbackRoute(request,context,env,url);
+      if(fallbackResponse) return fallbackResponse;
       return await env.ASSETS.fetch(request);
     }catch(e:any){
       if(e instanceof AuthRequired){if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/app/api/'))return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
@@ -136,10 +118,4 @@ async function processNotifications(env: Env): Promise<void> {
       logNotificationFailure(e);
     }
   }
-}
-
-
-async function logout(request:Request,env:Env):Promise<Response>{
-  const headers=new Headers({'Location':'/login.php','Set-Cookie':'family_line_cf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
-  return new Response(null,{status:302,headers});
 }

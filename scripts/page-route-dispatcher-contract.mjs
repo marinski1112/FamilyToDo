@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const index=fs.readFileSync('src/index.ts','utf8');
 const pages=fs.readFileSync('src/page-routes.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 if(!index.includes("import { dispatchPageRoute } from './page-routes';")) throw new Error('index.ts must import page dispatcher');
 if(!index.includes('const pageResponse=await dispatchPageRoute(request,context,env,url);')) throw new Error('index.ts must invoke page dispatcher');
@@ -50,6 +51,8 @@ if(!apiRoutes.includes("if(url.pathname==='/api/toggle') return await toggle(req
 for(const required of [
   "if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
+]) if(!exceptionRoutes.includes(required)) throw new Error(`exception routing boundary changed: ${required}`);
+for(const required of [
   "if(url.pathname==='/app/recurring.php')",
   'return await env.ASSETS.fetch(request);',
 ]) if(!index.includes(required)) throw new Error(`non-page routing moved unexpectedly: ${required}`);

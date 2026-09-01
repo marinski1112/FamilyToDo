@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 if(!index.includes("import { dispatchPublicRoute } from './public-routes';")) throw new Error('index.ts must import public dispatcher');
 if(!index.includes('const publicResponse=await dispatchPublicRoute(request,env,ctx,url);')) throw new Error('index.ts must invoke public dispatcher before context routing');
 if(!index.includes('if(publicResponse) return publicResponse;')) throw new Error('index.ts must return matched public response');
@@ -30,12 +31,14 @@ for(const route of routeLines){
   if(index.split('\n').some(line=>line.trim()===route)) throw new Error(`public route must not remain in index.ts: ${route}`);
 }
 for(const required of [
+  "if(url.pathname==='/oauth/google/authorize') {",
+  "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
+]) if(!exceptionRoutes.includes(required)) throw new Error(`exception routing boundary changed: ${required}`);
+for(const required of [
   "if(url.pathname==='/app/recurring.php') {",
   'const context=await makeContext(request,env,ctx);',
-  "if(url.pathname==='/oauth/google/authorize') {",
   'const apiResponse=await dispatchContextApiRoute(request,context,url);',
   'const pageResponse=await dispatchPageRoute(request,context,env,url);',
-  "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
   'return await env.ASSETS.fetch(request);',
 ]) if(!index.includes(required)) throw new Error(`non-public routing moved unexpectedly: ${required}`);
 for(const privacy of [

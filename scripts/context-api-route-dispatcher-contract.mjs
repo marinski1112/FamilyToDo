@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const index=fs.readFileSync('src/index.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 if(!index.includes("import { dispatchContextApiRoute } from './context-api-routes';")) throw new Error('index.ts must import context API dispatcher');
 if(!index.includes('const apiResponse=await dispatchContextApiRoute(request,context,url);')) throw new Error('index.ts must invoke context API dispatcher');
 if(!index.includes('if(apiResponse) return apiResponse;')) throw new Error('index.ts must return matched context API response');
@@ -55,8 +56,8 @@ for(const required of [
 ]) if(!publicRoutes.includes(required)) throw new Error(`public routing boundary moved unexpectedly: ${required}`);
 for(const required of [
   "if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);",
-  'const pageResponse=await dispatchPageRoute(request,context,env,url);',
   "if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);",
-]) if(!index.includes(required)) throw new Error(`authenticated routing boundary moved unexpectedly: ${required}`);
+]) if(!exceptionRoutes.includes(required)) throw new Error(`authenticated exception routing boundary changed: ${required}`);
+if(!index.includes('const pageResponse=await dispatchPageRoute(request,context,env,url);')) throw new Error('page dispatcher boundary moved unexpectedly');
 if(!apiRoutes.includes('return null;')) throw new Error('unmatched context API route must fall through');
 console.log('context API route dispatcher contract: ok');

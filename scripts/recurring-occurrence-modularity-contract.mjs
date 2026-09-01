@@ -2,10 +2,11 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const occurrence=fs.readFileSync('src/recurring-occurrence.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
-if(!index.includes("import { convertOccurrence } from './recurring-occurrence';")) throw new Error('index.ts must import recurring occurrence module');
+if(!exceptionRoutes.includes("import { convertOccurrence } from './recurring-occurrence';")) throw new Error('exception routes must import recurring occurrence module');
 if(index.includes('async function convertOccurrence(')) throw new Error('convertOccurrence implementation must not remain in index.ts');
-if(!index.includes("if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);")) throw new Error('convert occurrence route wiring changed');
+if(!exceptionRoutes.includes("if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);")) throw new Error('convert occurrence route wiring changed');
 if(!occurrence.includes('export async function convertOccurrence(request:Request,ctx:any):Promise<Response>{')) throw new Error('recurring occurrence module must export convertOccurrence');
 for(const sentinel of [
   "if(request.method!=='POST')",

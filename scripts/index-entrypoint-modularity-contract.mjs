@@ -5,9 +5,10 @@ const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');
 const activityLogPage=fs.readFileSync('src/activity-log-page.ts','utf8');
 const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
+const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 if(!publicRoutes.includes("import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';")) throw new Error('public routes must import runtime diagnostics module');
-if(!index.includes('liffConfigDiagnose')) throw new Error('index.ts must retain authenticated LIFF diagnostics routing');
+if(!exceptionRoutes.includes("import { liffConfigDiagnose } from './runtime-diagnostics';")) throw new Error('exception routes must import authenticated LIFF diagnostics handler');
 for(const name of ['dbSchemaHealth','dbRuntimeHealth','liffConfigDiagnose']){
   if(index.includes(`async function ${name}(`)) throw new Error(`${name} must not remain defined in index.ts`);
   if(!diagnostics.includes(`export async function ${name}(`)) throw new Error(`${name} must be exported from runtime-diagnostics.ts`);
@@ -28,7 +29,7 @@ for(const route of [
   if(!publicRoutes.includes(route)) throw new Error(`public diagnostics route wiring changed: ${route}`);
 }
 const liffDiagnosticRoute="if(url.pathname==='/app/api/liff_config_diagnose.php'||url.pathname==='/app/api/liff_config_diagnose') return await liffConfigDiagnose(env);";
-if(!index.includes(liffDiagnosticRoute)) throw new Error(`authenticated diagnostics route wiring changed: ${liffDiagnosticRoute}`);
+if(!exceptionRoutes.includes(liffDiagnosticRoute)) throw new Error(`authenticated diagnostics route wiring changed: ${liffDiagnosticRoute}`);
 for(const sentinel of [
   "families:['id','timezone']",
   "['tasks','SELECT id,family_id,title,status,completion_mode,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,visibility_scope,private_owner_id FROM tasks LIMIT 1']",
