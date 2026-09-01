@@ -8,7 +8,6 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, 'Apply exact daily Shopping URL patch') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,18 +21,19 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import base64
           p=Path('src/app.ts')
           s=p.read_text()
-          marker="  const shoppingRows=(items:Row[])=>items.map(i=>`<div class=\"linked-shopping-row\""
+          marker='  const shoppingRows=(items:Row[])=>items.map(i=>`<div class="linked-shopping-row"'
           if s.count(marker) != 1:
               raise SystemExit(f'expected one daily shoppingRows renderer, found {s.count(marker)}')
           start=s.index(marker)
           end=s.index(".join('');",start)+len(".join('');")
           old=s[start:end]
-          if 'i.url?' not in old or 'href=\"${esc(i.url)}\"' not in old:
+          if 'i.url?' not in old or 'href="${esc(i.url)}"' not in old:
               raise SystemExit('daily shoppingRows renderer no longer matches expected raw URL shape')
-          new='''  const safeDailyProductUrl=(value:unknown)=>{const raw=String(value||'').trim();if(!raw||raw.length>2048)return '';try{const parsed=new URL(raw);if(parsed.username||parsed.password)return '';return parsed.protocol==='http:'||parsed.protocol==='https:'?parsed.href:'';}catch{return '';}};
-  const shoppingRows=(items:Row[])=>items.map(i=>{const productUrl=safeDailyProductUrl(i.url);return `<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(i.id)}" ${i.status==='completed'?'checked':''}><span class="${i.status==='completed'?'done':''}">${productUrl?`<a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">${esc(i.name)}</a>`:`<a href="/app/shopping_edit.php?id=${i.id}">${esc(i.name)}</a>`}${i.quantity&&i.quantity!=='1'?` × ${esc(i.quantity)}`:''}</span></label><div class="meta">${[i.category||'',i.assignees?'担当 '+i.assignees:'',i.due_date?'期限 '+i.due_date:''].filter(Boolean).map(esc).join(' ・ ')}${productUrl?` ・ <a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div></div>`;}).join('');'''
+          encoded='ICBjb25zdCBzYWZlRGFpbHlQcm9kdWN0VXJsPSh2YWx1ZTp1bmtub3duKT0+e2NvbnN0IHJhdz1TdHJpbmcodmFsdWV8fCcnKS50cmltKCk7aWYoIXJhd3x8cmF3Lmxlbmd0aD4yMDQ4KXJldHVybiAnJzt0cnl7Y29uc3QgcGFyc2VkPW5ldyBVUkwocmF3KTtpZihwYXJzZWQudXNlcm5hbWV8fHBhcnNlZC5wYXNzd29yZClyZXR1cm4gJyc7cmV0dXJuIHBhcnNlZC5wcm90b2NvbD09PSdodHRwOid8fHBhcnNlZC5wcm90b2NvbD09PSdodHRwczonP3BhcnNlZC5ocmVmOicnO31jYXRjaHtyZXR1cm4gJyc7fX07CiAgY29uc3Qgc2hvcHBpbmdSb3dzPShpdGVtczpSb3dbXSk9Pml0ZW1zLm1hcChpPT57Y29uc3QgcHJvZHVjdFVybD1zYWZlRGFpbHlQcm9kdWN0VXJsKGkudXJsKTtyZXR1cm4gYDxkaXYgY2xhc3M9ImxpbmtlZC1zaG9wcGluZy1yb3ciPjxsYWJlbCBjbGFzcz0ic2hvcHBpbmctY2hlY2stcm93Ij48aW5wdXQgY2xhc3M9ImNoZWNrIHRvZ2dsZSIgdHlwZT0iY2hlY2tib3giIGRhdGEtdHlwZT0ic2hvcHBpbmciIGRhdGEtaWQ9IiR7ZXNjKGkuaWQpfSIgJHtpLnN0YXR1cz09PSdjb21wbGV0ZWQnPydjaGVja2VkJzonJ30+PHNwYW4gY2xhc3M9IiR7aS5zdGF0dXM9PT0nY29tcGxldGVkJz8nZG9uZSc6Jyd9Ij4ke3Byb2R1Y3RVcmw/YDxhIGhyZWY9IiR7ZXNjKHByb2R1Y3RVcmwpfSIgdGFyZ2V0PSJfYmxhbmsiIHJlbD0ibm9vcGVuZXIgbm9yZWZlcnJlciI+JHtlc2MoaS5uYW1lKX08L2E+YDpgPGEgaHJlZj0iL2FwcC9zaG9wcGluZ19lZGl0LnBocD9pZD0ke2kuaWR9Ij4ke2VzYyhpLm5hbWUpfTwvYT5gfSR7aS5xdWFudGl0eSYmaS5xdWFudGl0eSE9PScxJz9gIMOXICR7ZXNjKGkucXVhbnRpdHkpfWA6Jyd9PC9zcGFuPjwvbGFiZWw+PGRpdiBjbGFzcz0ibWV0YSI+JHtbaS5jYXRlZ29yeXx8JycsaS5hc3NpZ25lZXM/J+aLheW9kyAnK2kuYXNzaWduZWVzOicnLGkuZHVlX2RhdGU/J+acn+mZkCAnK2kuZHVlX2RhdGU6JyddLmZpbHRlcihCb29sZWFuKS5tYXAoZXNjKS5qb2luKCcg44O7ICcpfSR7cHJvZHVjdFVybD9gIOODuyA8YSBocmVmPSIke2VzYyhwcm9kdWN0VXJsKX0iIHRhcmdldD0iX2JsYW5rIiByZWw9Im5vb3BlbmVyIG5vcmVmZXJyZXIiPuWVhuWTgeODmuODvOOCuDwvYT5gOicnfTwvZGl2PjwvZGl2PmA7fSkuam9pbignJyk7'
+          new=base64.b64decode(encoded).decode()
           p.write_text(s[:start]+new+s[end:])
           PY
       - run: npm ci
