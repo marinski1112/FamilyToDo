@@ -67,7 +67,7 @@ export function childJournalCalendarEvent(row:Row){
 }
 
 async function ensureJournalCalendar(env:Env,account:Row,token:string){
-  const existing=await env.DB.prepare("SELECT * FROM child_journal_calendar_accounts WHERE family_id=? AND status='ACTIVE' LIMIT 1").bind(account.family_id).first<Row>();
+  const existing=await env.DB.prepare('SELECT * FROM child_journal_calendar_accounts WHERE family_id=? LIMIT 1').bind(account.family_id).first<Row>();
   if(existing?.calendar_id)return existing;
   const created=await googleApi('/calendars',token,{method:'POST',body:JSON.stringify({summary:JOURNAL_CALENDAR_NAME,timeZone:String(account.timezone||DEFAULT_FAMILY_TIMEZONE)})}) as any;
   const calendarId=String(created.id||'');
