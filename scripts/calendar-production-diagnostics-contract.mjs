@@ -14,8 +14,10 @@ must(Boolean(runWorkerFirstMatch),'assets.run_worker_first must remain an explic
 must(/"\/app\/calendar\.php"/.test(runWorkerFirstMatch[1]),'GET /app/calendar.php must explicitly run the diagnostics Worker before static-asset routing');
 must(/request\.method === 'GET' && url\.pathname === '\/app\/calendar\.php'/.test(worker),'instrumentation must be scoped to GET /app/calendar.php');
 must(/const traceId = crypto\.randomUUID\(\)/.test(worker),'one opaque trace id must be created per instrumented request');
-must(/message: 'calendar_perf', event: 'calendar_perf'/.test(worker),'calendar_perf search keys must be fixed inside the logger');
-must(/const safe: Record<string, unknown> = \{ message: 'calendar_perf', event: 'calendar_perf' \}/.test(worker),'searchable message/event must be logger-owned rather than request/content-derived');
+must(/message: 'calendar_perf' \| 'calendar_detail_perf'/.test(worker) && /event: 'calendar_perf' \| 'calendar_detail_perf'/.test(worker),'diagnostic search keys must remain a closed logger-owned set');
+must(/const CALENDAR_DETAIL_PERF_STAGES = new Set<CalendarPerfStage>/.test(worker),'focused search-key selection must be driven only by an explicit stage allowlist');
+must(/const signal = CALENDAR_DETAIL_PERF_STAGES\.has\(record\.stage\) \? 'calendar_detail_perf' : 'calendar_perf'/.test(worker),'search-key selection must remain fixed inside the logger');
+must(/const safe: Record<string, unknown> = \{ message: signal, event: signal \}/.test(worker),'searchable message/event must be logger-owned rather than request/content-derived');
 must(/wall_checkpoint_ms/.test(worker),'coarse wall checkpoint field is required');
 must(/not CPU timings/.test(worker),'source must explicitly document that wall checkpoints are not CPU timings');
 must(!/performance\.now\(/.test(worker),'performance.now must not be presented as Calendar CPU timing');
