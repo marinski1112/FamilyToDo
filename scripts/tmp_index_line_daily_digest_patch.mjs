@@ -61,7 +61,8 @@ for(const sentinel of [
   "visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?)",
   'LIMIT 12',
   "const {pushLineMessage}=await import('./line')",
-  "lines.join('\\n').slice(0,1000)",
+  'lines.join(',
+  '.slice(0,1000)',
   'attempt_count=attempt_count+1',
 ]){
   if(!digest.includes(sentinel)) throw new Error(\`LINE daily digest behavior sentinel missing: \${sentinel}\`);
