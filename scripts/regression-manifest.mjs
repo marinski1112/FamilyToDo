@@ -26,6 +26,7 @@ export const activeRegressionGroups=[
       ['task-delete-modularity','node scripts/task-delete-modularity-contract.mjs'],
       ['new-entry-pages-modularity','node scripts/new-entry-pages-modularity-contract.mjs'],
       ['exception-route-dispatchers','node scripts/exception-route-dispatchers-contract.mjs'],
+      ['index-entrypoint-final','node scripts/index-entrypoint-final-contract.mjs'],
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
       ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
     ],

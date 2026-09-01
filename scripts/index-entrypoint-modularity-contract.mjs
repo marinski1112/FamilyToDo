@@ -14,7 +14,7 @@ for(const name of ['dbSchemaHealth','dbRuntimeHealth','liffConfigDiagnose']){
   if(!diagnostics.includes(`export async function ${name}(`)) throw new Error(`${name} must be exported from runtime-diagnostics.ts`);
 }
 const activityLogImport="import { logsPage } from './activity-log-page';";
-if(!index.includes(activityLogImport)) throw new Error('index.ts must import activity log page module');
+if(!pageRoutes.includes(activityLogImport)) throw new Error('page dispatcher must import activity log page module');
 if(index.includes('async function logsPage(')) throw new Error('logsPage must not remain defined in index.ts');
 if(index.includes('activityLogVisibilitySql')) throw new Error('activity log SQL dependency must not remain in index.ts');
 if(!activityLogPage.includes('export async function logsPage(')) throw new Error('logsPage must be exported from activity-log-page.ts');

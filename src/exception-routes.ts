@@ -1,4 +1,6 @@
-import { liffLogin, toggle } from './app';
+import { makeContext, recurring, liffLogin, toggle } from './app';
+import { redirect } from './response';
+import { validateLiffNext } from './liff-target';
 import { preserveGoogleHomeLogin } from './oauth-continuation';
 import { googleAuthorize } from './google-home';
 import { googleTasksAuthorize } from './google-tasks';
@@ -16,6 +18,16 @@ function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=f
 async function logout():Promise<Response>{
   const headers=new Headers({'Location':'/login.php','Set-Cookie':'family_line_cf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
   return new Response(null,{status:302,headers});
+}
+
+export async function dispatchEarlyAuthenticatedRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{
+  if(url.pathname!=='/app/recurring.php') return null;
+  // 認証が必要な recurring は通常 context flow より先に未ログインを処理し、
+  // Cloudflare Runtime の例外化/Response 差異による 1101 を避ける。
+  if(request.method==='POST') console.log(JSON.stringify({event:'recurring_route_post',path:url.pathname,method:request.method,content_type:request.headers.get('content-type')||'',accept:request.headers.get('accept')||'',ts:new Date().toISOString()}));
+  const context=await makeContext(request,env,ctx);
+  if(!context.member){const next=validateLiffNext(url.pathname+url.search);return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');}
+  return await recurring(request,context);
 }
 
 export async function dispatchContextPreludeRoute(request:Request,context:any,env:Env,url:URL):Promise<Response|null>{

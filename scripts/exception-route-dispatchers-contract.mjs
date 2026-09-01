@@ -4,7 +4,8 @@ const index=fs.readFileSync('src/index.ts','utf8');
 const routes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 for(const marker of [
-  "import { dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';",
+  "import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';",
+  'const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);',
   'const preludeResponse=await dispatchContextPreludeRoute(request,context,env,url);',
   'const fallbackResponse=await dispatchContextFallbackRoute(request,context,env,url);',
 ]) if(!index.includes(marker)) throw new Error(`index dispatcher wiring missing: ${marker}`);
@@ -16,6 +17,7 @@ const fallbackPos=index.indexOf('const fallbackResponse=');
 if(!(preludePos>=0&&preludePos<apiPos&&apiPos<pagePos&&pagePos<fallbackPos)) throw new Error('exception dispatcher ordering changed');
 
 for(const marker of [
+  "if(url.pathname!=='/app/recurring.php') return null;",
   "if(url.pathname==='/oauth/google/authorize')",
   "if(url.pathname==='/oauth/google-tasks/authorize')",
   "if(url.pathname==='/oauth/google-calendar/authorize')",
@@ -30,6 +32,9 @@ for(const marker of [
   if(!routes.includes(marker)) throw new Error(`exception route missing from dispatcher: ${marker}`);
 }
 for(const marker of [
+  'export async function dispatchEarlyAuthenticatedRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{',
+  "event:'recurring_route_post'",
+  'return await recurring(request,context);',
   "if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder')",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php')",
   "if(url.pathname==='/task/delete.php')",

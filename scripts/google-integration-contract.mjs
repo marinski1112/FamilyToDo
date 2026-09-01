@@ -54,7 +54,7 @@ assert.equal(timezone.formatStoredUtcForFamily('2026-08-28 18:03:42','America/Lo
 assert.equal(timezone.formatStoredUtcForFamily('2026-01-01 02:03:42','America/Los_Angeles'),'2025-12-31 18:03:42');
 assert.equal(timezone.formatStoredUtcForFamily(null,'Asia/Tokyo'),'—');
 assert.equal(timezone.formatStoredUtcForFamily('invalid','Asia/Tokyo'),'invalid');
-for(const file of ['src/google-home.ts','src/google-tasks.ts','src/index.ts'])assert.ok(read(file).includes('formatStoredUtcForFamily'),file);
+for(const file of ['src/google-home.ts','src/google-tasks.ts'])assert.ok(read(file).includes('formatStoredUtcForFamily'),file);
 assert.ok(calendar.includes('formatStoredUtcForFamily'),'Google Calendar must use family timezone formatting');
 
 for(const token of ["pageSize','1000'",'page<2','nextPageToken','supportedGenerationMethods',"includes('generateContent')",'unsuitableModel','freeTierAssumed:false','autoSwitch:false'])assert.ok(ai.includes(token),token);
