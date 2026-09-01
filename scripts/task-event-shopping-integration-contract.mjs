@@ -4,18 +4,25 @@ import fs from 'node:fs';
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
+const taskApi=fs.readFileSync('src/task-api.ts','utf8');
+const taskNewPage=fs.readFileSync('src/new-entry-pages.ts','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 
 for(const value of [
   "document.getElementById('shoppingToggle')",
   'shopping_name[]',
   'shopping_quantity[]',
+  'shopping_category[]',
   'shopping_url[]',
   'remove-shopping-row',
   "b.closest('.task-child-row')?.remove()",
   'b.shopping=',
   'b.is_event=Boolean(isEvent?.checked)',
 ]) assert.ok(taskNew.includes(value),`task-new shopping/event integration missing: ${value}`);
+assert.ok(taskNew.includes("category:f.querySelectorAll('[name=\"shopping_category[]\"]')[j]?.value.trim()||''"),'task-new must submit each linked shopping row category independently');
+assert.ok(taskNewPage.includes('datalist id="taskShopCategories"'),'task-new page must expose existing shopping categories as per-row suggestions');
+assert.ok(taskNewPage.includes('name="shopping_category[]" list="taskShopCategories" maxlength="255"'),'task-new initial shopping row must use a bounded per-row category field');
+assert.ok(!taskNewPage.includes('<select name="shopping_category">'),'task-new must not collapse linked shopping rows into one shared category selector');
 
 for(const value of [
   "document.getElementById('shopToggle')",
@@ -54,10 +61,16 @@ for(const marker of ['UPDATE notifications SET','UPDATE tasks SET','DELETE FROM 
 assert.ok(taskEditServer.includes("String(b.shopping_category||'').trim().length>255"),'legacy shared category fallback must be bounded before database mutations');
 assert.ok(taskEditServer.includes("(existingShopCategoryById.get(sid)||fallbackCategory||'')"), 'legacy task edit submissions must preserve each persisted category before using the shared fallback');
 
-// Task creation must persist submitted shopping against the newly-created task, not as an unrelated shopping row.
-// Keep this assertion tied to the concrete INSERT/bind shape so unrelated mentions of task_id cannot satisfy the contract.
-assert.match(app,/INSERT INTO shopping_items\(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url\) VALUES\(\?,\?,\?,\?,\?,\?,'pending',\?,\?,\?,\?,\?\)[\s\S]{0,320}?\.bind\(m\.family_id,[^)]*?,taskId,(?:url|p\.url\|\|null)\)\.run\(\)/,'task creation must bind a newly-created taskId into shopping_items.task_id');
-assert.match(app,/INSERT OR IGNORE INTO shopping_assignees\(shopping_item_id,member_id\)[\s\S]{0,260}?\.bind\([^,]+,mid,m\.family_id\)/,'server-side linked shopping must preserve assignee linkage');
+// Task creation must persist each submitted shopping row against the newly-created task with its own category.
+assert.match(taskApi,shoppingInsertSql,'task creation must insert linked shopping with category support');
+assert.ok(taskApi.includes("Object.prototype.hasOwnProperty.call(v||{},'category')"),'task creation must distinguish explicit per-row category values from legacy shared-category submissions');
+assert.ok(taskApi.includes("String(v?.category??'').trim().length>255"),'task creation must bound per-row category metadata before database mutation');
+const createCategoryPreflight=taskApi.indexOf('const legacyShoppingCategory=');
+const createTaskInsert=taskApi.indexOf('INSERT INTO tasks(');
+assert.ok(createCategoryPreflight>=0&&createTaskInsert>createCategoryPreflight,'task creation shopping category validation must precede task database mutation');
+assert.ok(taskApi.includes("const category=(Object.prototype.hasOwnProperty.call(v||{},'category')?String(v?.category??'').trim():legacyShoppingCategory)||null"),'task creation must prefer the row category while retaining a legacy shared-category fallback');
+assert.match(taskApi,/\.bind\(m\.family_id,name,qty,category,null,dueDate,m\.id,now2,now2,id,url\|\|null\)\.run\(\)/,'task creation must bind the newly-created task id and row category into shopping_items');
+assert.match(taskApi,/INSERT OR IGNORE INTO shopping_assignees\(shopping_item_id,member_id\)[\s\S]{0,260}?\.bind\(sid,mid,m\.family_id\)/,'task creation linked shopping must preserve assignee linkage');
 
 const submitRegion=(source,startMarker,endMarker)=>{
   const start=source.indexOf(startMarker),end=source.indexOf(endMarker,start);
@@ -70,4 +83,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskNewSubmit,eventShoppingDiscard,'task-new must not discard shopping just because the record is an EVENT');
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 
-console.log('task-event-shopping-integration-contract: task/event create, edit, preflight-safe per-item linked shopping categories, removable linked shopping rows, child completion, and concrete server task/shopping linkage remain integrated');
+console.log('task-event-shopping-integration-contract: task/event create and edit preserve per-item linked shopping categories, legacy create fallback, removable linked shopping rows, child completion, and concrete server task/shopping linkage');
