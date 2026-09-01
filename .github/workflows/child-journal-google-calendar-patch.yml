@@ -1,0 +1,111 @@
+name: Child Journal Google Calendar patch
+
+on:
+  push:
+    branches:
+      - feature/child-journal-google-calendar
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/child-journal-google-calendar
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact Child Journal calendar wiring and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/child-journal.ts)" = "3a1e4223c34982c5efea51be3e12f8777724bfa2"
+          test "$(git hash-object src/google-calendar.ts)" = "77fc969d22233e9f4a04cb858504e04097667065"
+          test "$(git hash-object scripts/regression-manifest.mjs)" = "b65e7c73370a00f3012daddeedfef7f8c9505951"
+          test "$(git hash-object src/child-journal-calendar.ts)" = "b7ddc9fc3a97d9d4e51de048947f1bd52591d189"
+          test "$(git hash-object migrations/0049_child_journal_google_calendar.sql)" = "c47dd78fbfcfc565b079b8737fe543eaf1e5defd"
+          test "$(git hash-object scripts/child-journal-google-calendar-contract.mjs)" = "5f11d02bd157792b8d7101baf6d0d255ad8e6698"
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_one(path, old, new, label):
+              p=Path(path); source=p.read_text()
+              count=source.count(old)
+              if count!=1:
+                  raise SystemExit(f'{label}: expected one exact anchor, found {count}')
+              p.write_text(source.replace(old,new,1))
+
+          child=Path('src/child-journal.ts'); source=child.read_text()
+          import_anchor="import { DEFAULT_FAMILY_TIMEZONE, familyDate, familyNow } from './timezone';\n"
+          import_line="import { enqueueChildJournalCalendarSync, processChildJournalCalendarOutbox } from './child-journal-calendar';\n"
+          if source.count(import_anchor)!=1 or import_line in source:
+              raise SystemExit('Child Journal calendar import anchor mismatch')
+          source=source.replace(import_anchor,import_anchor+import_line,1)
+          sync_anchor="  }catch(error){await ctx.env.DB.prepare('DELETE FROM family_logs WHERE id=? AND family_id=?').bind(logId,member.family_id).run().catch(()=>{});throw error;}\n  await logActivity(ctx,'CREATED','family_log',logId,{source:'child_journal',entry_kind:entryKind});\n"
+          sync_replacement="  }catch(error){await ctx.env.DB.prepare('DELETE FROM family_logs WHERE id=? AND family_id=?').bind(logId,member.family_id).run().catch(()=>{});throw error;}\n  try{await enqueueChildJournalCalendarSync(ctx.env.DB,member.family_id,logId);ctx.executionContext?.waitUntil(processChildJournalCalendarOutbox(ctx.env,1,member.family_id));}catch{/* journal remains authoritative */}\n  await logActivity(ctx,'CREATED','family_log',logId,{source:'child_journal',entry_kind:entryKind});\n"
+          if source.count(sync_anchor)!=1:
+              raise SystemExit('Child Journal post-save sync anchor mismatch')
+          child.write_text(source.replace(sync_anchor,sync_replacement,1))
+
+          google=Path('src/google-calendar.ts'); source=google.read_text()
+          core_anchor="} from './google-calendar-core';\n"
+          child_import="import { pendingChildJournalCalendarSyncCount, processChildJournalCalendarOutbox } from './child-journal-calendar';\n"
+          if source.count(core_anchor)!=1 or child_import in source:
+              raise SystemExit('Google Calendar Child Journal import anchor mismatch')
+          source=source.replace(core_anchor,core_anchor+child_import,1)
+          old_outbox="""export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
+  return coreProcessCalendarOutbox(env, Math.min(Math.max(1, limit), OUTBOX_LIMIT), familyId);
+}
+"""
+          new_outbox="""export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
+  const bounded=Math.min(Math.max(1,limit),OUTBOX_LIMIT);
+  const [schedule,journal]=await Promise.all([
+    coreProcessCalendarOutbox(env,bounded,familyId),
+    processChildJournalCalendarOutbox(env,bounded,familyId),
+  ]);
+  return {sent:schedule.sent+journal.sent,errors:schedule.errors+journal.errors};
+}
+"""
+          if source.count(old_outbox)!=1:
+              raise SystemExit('Google Calendar outbox wrapper anchor mismatch')
+          source=source.replace(old_outbox,new_outbox,1)
+          old_pending="""  const pendingCount = async () => Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")
+    .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
+"""
+          new_pending="""  const pendingCount = async () => {
+    const schedule=Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")
+      .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
+    return schedule+await pendingChildJournalCalendarSyncCount(ctx.env.DB,familyId);
+  };
+"""
+          if source.count(old_pending)!=1:
+              raise SystemExit('Google Calendar manual pending count anchor mismatch')
+          google.write_text(source.replace(old_pending,new_pending,1))
+
+          replace_one(
+              'scripts/regression-manifest.mjs',
+              "      ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],\n",
+              "      ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],\n      ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],\n",
+              'Child Journal Google Calendar regression manifest',
+          )
+          PY
+          node scripts/child-journal-google-calendar-contract.mjs
+          npm test
+          git diff --check
+          rm .github/workflows/child-journal-google-calendar-patch.yml
+      - name: Commit Child Journal calendar wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/child-journal.ts src/google-calendar.ts scripts/regression-manifest.mjs .github/workflows/child-journal-google-calendar-patch.yml
+          git diff --cached --check
+          git commit -m "Wire Child Journal Google Calendar projection"
+          git push origin HEAD:feature/child-journal-google-calendar
