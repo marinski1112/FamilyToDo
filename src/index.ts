@@ -27,11 +27,7 @@ export default {
     const url=new URL(request.url);
     try{
       if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
-      if(url.pathname==='/__cf/secrets-health') {
-        const names = ['APP_SECRET','LINE_ACCESS_TOKEN','LINE_CHANNEL_ID','LINE_CHANNEL_SECRET','LINE_LOGIN_CHANNEL_ID','LINE_LOGIN_CHANNEL_SECRET','LINE_LIFF_ID','NOTIFY_SECRET','VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT'] as const;
-        const secrets = Object.fromEntries(names.map((name) => [name, { present: typeof env[name] === 'string' && env[name].length > 0, length: typeof env[name] === 'string' ? env[name].length : 0 }]));
-        return json({ok:true,worker:env.ENVIRONMENT||'unknown',secrets});
-      }
+      if(url.pathname==='/__cf/secrets-health') return json({ok:true,service:'familytodo-secrets'});
       if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
       if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);
       if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);
