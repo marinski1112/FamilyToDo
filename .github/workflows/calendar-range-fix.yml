@@ -27,37 +27,25 @@ jobs:
           node scripts/apply-calendar-range-fix.mjs
           node scripts/apply-calendar-range-fix-v2.mjs
       - name: Verify focused Calendar range contract
+        run: node scripts/calendar-range-safety-contract.mjs
+      - name: Verify Calendar feature bundle
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          node scripts/calendar-range-safety-contract.mjs > /tmp/calendar-range-focused.log 2>&1
+          node scripts/feature-contract-bundle.mjs calendar-imports > /tmp/calendar-bundle.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
             {
-              echo 'Calendar range focused contract failed (static CI output):'
+              echo 'Calendar feature bundle failed after range patch (static CI output):'
               echo '```text'
-              cat /tmp/calendar-range-focused.log
+              cat /tmp/calendar-bundle.log
               echo '```'
             } | gh issue comment 318 --body-file -
             exit "$status"
           fi
       - name: Verify complete suite before committing
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          npm test > /tmp/calendar-range-test.log 2>&1
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            {
-              echo 'Calendar range exact-patch validation failed (sanitized static CI tail):'
-              echo '```text'
-              tail -n 120 /tmp/calendar-range-test.log
-              echo '```'
-            } | gh issue comment 318 --body-file -
-            exit "$status"
-          fi
+        run: npm test
       - name: Commit patched sources and remove temporary patch machinery
         run: |
           git config user.name "github-actions[bot]"
