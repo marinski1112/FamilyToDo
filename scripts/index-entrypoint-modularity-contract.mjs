@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const index=fs.readFileSync('src/index.ts','utf8');
 const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');
 const activityLogPage=fs.readFileSync('src/activity-log-page.ts','utf8');
+const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
 
 const requiredImport="import { dbSchemaHealth, dbRuntimeHealth, liffConfigDiagnose } from './runtime-diagnostics';";
 if(!index.includes(requiredImport)) throw new Error('index.ts must import runtime diagnostics module');
@@ -15,7 +16,7 @@ if(!index.includes(activityLogImport)) throw new Error('index.ts must import act
 if(index.includes('async function logsPage(')) throw new Error('logsPage must not remain defined in index.ts');
 if(index.includes('activityLogVisibilitySql')) throw new Error('activity log SQL dependency must not remain in index.ts');
 if(!activityLogPage.includes('export async function logsPage(')) throw new Error('logsPage must be exported from activity-log-page.ts');
-if(!index.includes("if(url.pathname==='/app/logs.php') return await logsPage(context);")) throw new Error('activity log route wiring changed');
+if(!pageRoutes.includes("if(url.pathname==='/app/logs.php') return await logsPage(context);")) throw new Error('activity log route wiring changed');
 for(const sentinel of ["activityLogVisibilitySql('a')","ORDER BY a.occurred_at DESC,a.id DESC LIMIT 51 OFFSET ?",'activity_logsはUTC保存で31日保持です。']){
   if(!activityLogPage.includes(sentinel)) throw new Error(`activity log behavior sentinel missing: ${sentinel}`);
 }

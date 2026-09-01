@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const parser=fs.readFileSync('src/calendar-ics-import.ts','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
 const migration=fs.readFileSync('migrations/0036_wave108_calendar_ics_import.sql','utf8');
 const ui=fs.readFileSync('public/assets/calendar-import.js','utf8');
 
@@ -14,8 +15,9 @@ for(const feature of [
 ]) assert.ok(parser.includes(feature),feature);
 
 for(const route of [
-  '/api/calendar-import/preview','/api/calendar-import/apply','/api/calendar-import/rollback','/app/calendar_import.php',
+  '/api/calendar-import/preview','/api/calendar-import/apply','/api/calendar-import/rollback',
 ]) assert.ok(index.includes(route),route);
+assert.ok(pageRoutes.includes('/app/calendar_import.php'),'/app/calendar_import.php');
 
 assert.match(migration,/UNIQUE\(family_id,source_format,source_uid,source_recurrence_key\)/);
 assert.ok(app.includes("lower(t.task_kind)='task'"),'historical EVENT overdue exclusion');

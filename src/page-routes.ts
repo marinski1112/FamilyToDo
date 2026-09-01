@@ -1,4 +1,5 @@
-import { loginPage, createFamilyPage, invitePage, home, today, tomorrow, taskEvents, calendar, messages, shopping, familyLog, childJournalPage, settings, messageNew, shoppingNew, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, recurring, taskView, taskEdit, itemEdit, shoppingEdit } from './app';
+import { loginPage, createFamilyPage, invitePage, home, today, tomorrow, taskEvents, calendar, messages, shopping, familyLog, settings, messageNew, shoppingNew, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, recurring, taskView, taskEdit, itemEdit, shoppingEdit } from './app';
+import { childJournalPage } from './child-journal';
 import { familyLogImportPage } from './family-log-import';
 import { googleTasksSettings } from './google-tasks';
 import { googleHomeSettings } from './google-home';
