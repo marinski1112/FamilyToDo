@@ -15,6 +15,7 @@ export const activeRegressionGroups=[
       ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
       ['line-webhook-modularity','node scripts/line-webhook-modularity-contract.mjs'],
+      ['item-api-modularity','node scripts/item-api-modularity-contract.mjs'],
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
       ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
     ],
