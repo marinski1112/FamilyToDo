@@ -4,6 +4,7 @@ const indexPath='src/index.ts';
 const modulePath='src/new-entry-pages.ts';
 const contractPath='scripts/new-entry-pages-modularity-contract.mjs';
 const manifestPath='scripts/regression-manifest.mjs';
+const formContractPath='scripts/form-control-contract.mjs';
 
 const replaceOnce=(source,from,to,label)=>{
   const first=source.indexOf(from);
@@ -37,5 +38,20 @@ fs.writeFileSync(contractPath,contract);
 let manifest=fs.readFileSync(manifestPath,'utf8');
 manifest=replaceOnce(manifest,"      ['task-delete-modularity','node scripts/task-delete-modularity-contract.mjs'],","      ['task-delete-modularity','node scripts/task-delete-modularity-contract.mjs'],\n      ['new-entry-pages-modularity','node scripts/new-entry-pages-modularity-contract.mjs'],",'regression manifest anchor');
 fs.writeFileSync(manifestPath,manifest);
+
+let formContract=fs.readFileSync(formContractPath,'utf8');
+formContract=replaceOnce(
+  formContract,
+  "const app=fs.readFileSync('src/app.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),css=fs.readFileSync('public/assets/family.css','utf8');",
+  "const app=fs.readFileSync('src/app.ts','utf8'),index=fs.readFileSync('src/index.ts','utf8'),newEntryPages=fs.readFileSync('src/new-entry-pages.ts','utf8'),css=fs.readFileSync('public/assets/family.css','utf8');",
+  'form contract source declarations',
+);
+formContract=replaceOnce(
+  formContract,
+  "if(!index.includes('date-option-row date-range-grid task-date-row')||!app.includes('date-option-row date-range-grid'))throw Error('task new/edit date pair missing');",
+  "if(!newEntryPages.includes('date-option-row date-range-grid task-date-row')||!app.includes('date-option-row date-range-grid'))throw Error('task new/edit date pair missing');",
+  'form contract task new location',
+);
+fs.writeFileSync(formContractPath,formContract);
 
 console.log('task/item new pages extraction applied');
