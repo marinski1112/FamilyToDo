@@ -5,6 +5,7 @@ const journal=fs.readFileSync(new URL('../src/child-journal.ts',import.meta.url)
 const schema=fs.readFileSync(new URL('../src/child-journal-schema.ts',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../src/app.ts',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
+const pageRoutes=fs.readFileSync(new URL('../src/page-routes.ts',import.meta.url),'utf8');
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
 
 for(const marker of [
@@ -51,7 +52,7 @@ if(!app.includes('export async function logActivity('))throw new Error('Child Jo
 if(!app.includes('href="/app/child_journal.php"'))throw new Error('Family Log must expose the Child Journal entry point');
 if(!index.includes("from './child-journal'"))throw new Error('Worker must import the Child Journal module');
 if(!index.includes("url.pathname==='/api/child-journal'"))throw new Error('Worker must route the Child Journal write boundary');
-if(!index.includes("url.pathname==='/app/child_journal.php'"))throw new Error('Worker must route the Child Journal page');
+if(!pageRoutes.includes("url.pathname==='/app/child_journal.php'"))throw new Error('Worker must route the Child Journal page');
 if(!manifest.includes("['child-growth-journal','node scripts/child-growth-journal-contract.mjs']"))throw new Error('Child Journal regression contract must be active');
 
 for(const forbidden of ['CHILD_JOURNAL','googleCalendar','calendar_id']){

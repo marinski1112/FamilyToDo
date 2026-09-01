@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const read=p=>fs.readFileSync(p,'utf8');
 const app=read('src/app.ts');
-const routes=read('src/index.ts');
+const routes=read('src/page-routes.ts');
 const dailyStart=app.indexOf('const dailyBody=');
 const dailyEnd=app.indexOf('const sharedControls=');
 assert.ok(dailyStart>=0&&dailyEnd>dailyStart,'Family Log daily body boundaries missing');
