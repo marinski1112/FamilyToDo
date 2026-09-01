@@ -74,7 +74,12 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   const reminderAt=reminderRaw && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
   if(reminderRaw && !reminderAt)return json({ok:false,error:'通知日時が不正です。'},400);
   const shoppingPre=Array.isArray(b.shopping)?(b.shopping as any[]).slice(0,50):[];
-  for(const v of shoppingPre){const u=String(v?.url||'').trim();if(u){try{const parsed=new URL(u);if(!['http:','https:'].includes(parsed.protocol))throw new Error();}catch{return json({ok:false,error:'買い物URLが不正です。'},400);}}}
+  const legacyShoppingCategory=String(b.shopping_category==='__custom__'?b.shopping_category_custom:b.shopping_category||'').trim();
+  if(legacyShoppingCategory.length>255)return json({ok:false,error:'買い物カテゴリーが長すぎます。'},400);
+  for(const v of shoppingPre){
+    const u=String(v?.url||'').trim();if(u){try{const parsed=new URL(u);if(!['http:','https:'].includes(parsed.protocol))throw new Error();}catch{return json({ok:false,error:'買い物URLが不正です。'},400);}}
+    if(Object.prototype.hasOwnProperty.call(v||{},'category')&&String(v?.category??'').trim().length>255)return json({ok:false,error:'買い物カテゴリーが長すぎます。'},400);
+  }
   const now=nowJst();const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
   const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
   const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
@@ -93,10 +98,9 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     const now2=nowJst();
     const shopping=shoppingPre;
     if(shopping.length){
-      const category=String(b.shopping_category==='__custom__'?b.shopping_category_custom:b.shopping_category||'').trim()||null;
-      if(category && b.shopping_category==='__custom__') await ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_categories(family_id,name,created_at) VALUES(?,?,?)').bind(m.family_id,category,now2).run().catch(()=>{});
+      if(legacyShoppingCategory && b.shopping_category==='__custom__') await ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_categories(family_id,name,created_at) VALUES(?,?,?)').bind(m.family_id,legacyShoppingCategory,now2).run().catch(()=>{});
       const dueDate=noDate?null:date; const group=crypto.randomUUID().replaceAll('-','').slice(0,16);
-      for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,null,dueDate,m.id,now2,now2,id,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
+      for(const v of shopping.slice(0,50)){const name=String(v?.name||'').trim();if(!name)continue;const qty=String(v?.quantity||'1').trim()||'1';const category=(Object.prototype.hasOwnProperty.call(v||{},'category')?String(v?.category??'').trim():legacyShoppingCategory)||null;const url=String(v?.url||'').trim();const sr=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,qty,category,null,dueDate,m.id,now2,now2,id,url||null).run(); const sid=Number(sr.meta.last_row_id); if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));}
     }
     const itemNames=Array.isArray(b.items)?(b.items as unknown[]).map(String).map(x=>x.trim()).filter(Boolean).slice(0,50):[];
     if(itemNames.length){const group=crypto.randomUUID().replaceAll('-','').slice(0,16);for(const name of itemNames){const ir=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)").bind(m.family_id,name,null,date?`${date} 00:00:00`:null,m.id,now2,now2,id,group).run();const iid=Number(ir.meta.last_row_id);if(ids.length)await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(iid,mid,m.family_id)));}}
