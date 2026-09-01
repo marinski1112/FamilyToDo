@@ -1,0 +1,34 @@
+name: Task Event Occurrence Date Patch
+on:
+  push:
+    branches: [fix/task-event-occurrence-date-regression-333]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/task-event-occurrence-date-regression-333
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/patch-task-event-occurrence-date.mjs
+      - run: node scripts/task-event-occurrence-date-contract.mjs
+      - run: npm test
+      - run: git diff --check
+      - name: Commit exact retained-source patch and remove runner
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm scripts/patch-task-event-occurrence-date.mjs .github/workflows/task-event-occurrence-date-patch.yml
+          git add src/app.ts scripts/task-event-occurrence-date-contract.mjs scripts/regression-manifest.mjs
+          git commit -m "Fix Task/Event daily event occurrence filtering"
+          git push origin HEAD:fix/task-event-occurrence-date-regression-333
