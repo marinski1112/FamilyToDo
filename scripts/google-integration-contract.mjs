@@ -14,6 +14,7 @@ const calendarEntry=read('src/google-calendar.ts');
 const calendarCore=read('src/google-calendar-core.ts');
 const calendar=calendarEntry+calendarCore;
 const index=read('src/index.ts');
+const publicRoutes=read('src/public-routes.ts');
 const wrangler=read('wrangler.jsonc');
 const version=read('src/version.ts');
 const watchMigration=read('migrations/0041_wave127_calendar_watch_channels.sql');
@@ -60,7 +61,7 @@ for(const token of ["pageSize','1000'",'page<2','nextPageToken','supportedGenera
 assert.ok(!ai.includes('GEMINI_FREE_CANDIDATES'));
 for(const token of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALLBACK','BUILT_IN_DEFAULT','family_ai_gemini_model','family_ai_test','FUNCTION_CALLING_UNAVAILABLE','MODEL_NOT_IN_CATALOG'])assert.ok(ai.includes(token),token);
 for(const token of ['external_calendar_watch_channels','token_hash','createCalendarWatch','calendarWatchWebhook','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((calendar+watchMigration).includes(token),token);
-assert.ok(index.includes("'/api/google-calendar/watch'"));
+assert.ok(publicRoutes.includes("'/api/google-calendar/watch'"));
 assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
 assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
 assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));

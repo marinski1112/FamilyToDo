@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const source=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../src/public-routes.ts',import.meta.url),'utf8');
 const marker="if(url.pathname==='/__cf/secrets-health')";
 const start=source.indexOf(marker);
 if(start<0)throw new Error('public secrets health route is missing');
