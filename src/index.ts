@@ -15,6 +15,7 @@ import { validateLiffNext } from './liff-target';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { buildStoredTaskRange } from './task-range-safety';
 import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';
+import { childJournalApi, childJournalPage } from './child-journal';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -71,6 +72,7 @@ export default {
       if(url.pathname==='/api/messages') return await messages(request,context);
       if(url.pathname==='/api/shopping') return await shopping(request,context);
       if(url.pathname==='/api/family-log') return await familyLog(request,context);
+      if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);
       if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);
       if(url.pathname==='/api/family-ai/plan') return await familyAiPlan(request,context);
       if(url.pathname==='/api/family-ai/execute') return await familyAiExecute(request,context);
@@ -110,6 +112,7 @@ export default {
       if(url.pathname==='/app/messages.php') return await messages(request,context);
       if(url.pathname==='/app/shopping.php') return await shopping(request,context);
       if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
+      if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);
       if(url.pathname==='/app/family_log_import.php') return await familyLogImportPage(context);
       if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
       if(url.pathname==='/app/settings.php') return await settings(request,context);
