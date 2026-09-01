@@ -1145,7 +1145,14 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   ]);
 
   if(request.method==='POST'){
-    const b=await bodyJson(request); await ensureCsrf(ctx,b.csrf);
+    const b=await bodyJson(request);
+    const rawShoppingCategories=Array.isArray(b.shopping)?(b.shopping as unknown[]).slice(0,50):[];
+    for(const rawShopping of rawShoppingCategories){
+      const raw=rawShopping as Record<string,unknown>|null;
+      if(raw&&typeof raw==='object'&&Object.prototype.hasOwnProperty.call(raw,'category')&&String(raw.category||'').trim().length>255) throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+    }
+    if(String(b.shopping_category||'').trim().length>255) throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+ await ensureCsrf(ctx,b.csrf);
     const title=String(b.title||'').trim();
     const isEvent=Boolean(b.is_event);
     const makePrivate=privateTaskRequested(b);
@@ -1221,11 +1228,15 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
 
     // 子要素はフォームに残っているものを更新し、削除された行だけ消す。
     const existingShopIds=new Set(shops.results.map(r=>Number(r.id)));
+    const existingShopCategoryById=new Map(shops.results.map(r=>[Number(r.id),String(r.category||'').trim()||null]));
     const postedShopIds=new Set<number>();
-    const category=String(b.shopping_category||'').trim()||String(shops.results[0]?.category||'').trim()||null;
+    const fallbackCategory=String(b.shopping_category||'').trim()||null;
     for(const v of shopping){
       const o=v as any; const name=String(o?.name||'').trim(); if(!name)continue;
       const qty=String(o?.quantity||'1').trim()||'1'; const url=String(o?.url||'').trim()||null; const sid=Number(o?.id||0);
+      const rawCategory=Object.prototype.hasOwnProperty.call(o,'category')?String(o.category||'').trim():(existingShopCategoryById.get(sid)||fallbackCategory||'');
+      if(rawCategory.length>255)throw new BadRequest('カテゴリーは255文字以内で入力してください。');
+      const category=rawCategory||null;
       if(sid&&existingShopIds.has(sid)){
         postedShopIds.add(sid);
         await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,url=?,category=?,updated_at=? WHERE id=? AND task_id=? AND family_id=?').bind(name,qty,url,category,now,sid,id,m.family_id).run();
@@ -1264,7 +1275,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const et=task.end_at?String(task.end_at).slice(11,16):'';
   const selected=new Set((await ctx.env.DB.prepare('SELECT member_id FROM task_assignees WHERE task_id=?').bind(id).all<Row>()).results.map(x=>Number(x.member_id)));
   const safe=(v:unknown)=>esc(String(v??''));
-  const shopRows=shops.results.map(r=>`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="${r.id}"><input name="shopping_name[]" value="${safe(r.name)}" placeholder="商品名"><input name="shopping_quantity[]" value="${safe(r.quantity||'1')}" placeholder="数量"><input type="url" name="shopping_url[]" value="${safe(r.url||'')}" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
+  const shopRows=shops.results.map(r=>`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="${r.id}"><input name="shopping_name[]" value="${safe(r.name)}" placeholder="商品名"><input name="shopping_quantity[]" value="${safe(r.quantity||'1')}" placeholder="数量"><input name="shopping_category[]" value="${safe(r.category||'')}" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" value="${safe(r.url||'')}" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
   const itemRows=items.results.map(r=>`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="${r.id}"><input name="item_name[]" value="${safe(r.name)}" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
   const body=`<div class="card form-card"><h1>📝 タスク・イベント編集</h1><form id="taskEditForm" class="compact-form">
     <input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">
@@ -1277,7 +1288,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${task.calendar_color&&!['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'].includes(String(task.calendar_color))?`<option value="${safe(task.calendar_color)}" selected>インポート色 ${safe(task.calendar_color)}</option>`:''}<option value="#7c3aed" ${String(task.calendar_color||'#7c3aed')==='#7c3aed'?'selected':''}>紫</option><option value="#2563eb" ${String(task.calendar_color||'')==='#2563eb'?'selected':''}>青</option><option value="#16a34a" ${String(task.calendar_color||'')==='#16a34a'?'selected':''}>緑</option><option value="#ea580c" ${String(task.calendar_color||'')==='#ea580c'?'selected':''}>橙</option><option value="#dc2626" ${String(task.calendar_color||'')==='#dc2626'?'selected':''}>赤</option><option value="#db2777" ${String(task.calendar_color||'')==='#db2777'?'selected':''}>ピンク</option><option value="#0891b2" ${String(task.calendar_color||'')==='#0891b2'?'selected':''}>水色</option><option value="#64748b" ${String(task.calendar_color||'')==='#64748b'?'selected':''}>灰</option></select></div>
     <label>担当者</label><div class="assignee-list">${members.results.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}" ${selected.has(Number(x.id))?'checked':''}> ${safe(x.name)}</label>`).join('')}</div>
     <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると担当者へ指定日時に詳細を設定した通知方法で通知します。</p>
-    <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><label>カテゴリー（全商品共通）</label><input name="shopping_category" value="${safe(shops.results[0]?.category||'')}" list="taskShopCategories" placeholder="例：食品"><datalist id="taskShopCategories">${categories.results.map(c=>`<option value="${safe(c.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
+    <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><datalist id="taskShopCategories">${categories.results.map(c=>`<option value="${safe(c.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input name="shopping_category[]" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
     <div class="sub-card"><button type="button" class="section-button" id="itemToggle">🎒 持ち物を編集</button><div id="itemBox" ${items.results.length?'':'style="display:none"'}><div id="itemRows">${itemRows||`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="0"><input name="item_name[]" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
     <script src="/assets/task-edit.js?v=12.147.0-wave128"></script>`;
