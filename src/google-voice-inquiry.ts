@@ -32,17 +32,29 @@ export function parseGoogleVoiceInquiryBody(value:unknown):GoogleVoiceInquiry|nu
 }
 
 /**
+ * Return only the bounded body of an explicitly marked FamilyToDo command.
+ * This keeps marker parsing in one place and lets a fallback classifier run
+ * only after the deterministic parser misses an already opt-in command.
+ */
+export function extractMarkedGoogleVoiceInquiryBody(value:unknown):string|null{
+  const raw=boundedInput(value);
+  if(raw===null)return null;
+  const normalized=raw.normalize('NFKC').replace(/[\s　]+/g,' ').trim();
+  const matched=marker.exec(normalized);
+  if(!matched)return null;
+  const body=normalize(normalized.slice(matched[0].length));
+  return body||null;
+}
+
+/**
  * Small composable adapter for the existing Google Tasks voice-command pipeline.
  * It owns only marker stripping and typed INQUIRY classification. Non-inquiry
  * commands return null so TASK/SHOPPING/FAMILY_LOG parsing can continue unchanged.
  * Execution, member data reads and Web Push delivery remain outside this module.
  */
 export function parseMarkedGoogleVoiceInquiryCommand(value:unknown):MarkedGoogleVoiceInquiryCommand|null{
-  const raw=boundedInput(value);
-  if(raw===null)return null;
-  const normalized=raw.normalize('NFKC').replace(/[\s　]+/g,' ').trim();
-  const matched=marker.exec(normalized);
-  if(!matched)return null;
-  const inquiry=parseGoogleVoiceInquiryBody(normalized.slice(matched[0].length));
+  const body=extractMarkedGoogleVoiceInquiryBody(value);
+  if(body===null)return null;
+  const inquiry=parseGoogleVoiceInquiryBody(body);
   return inquiry?{marked:true,...inquiry}:null;
 }
