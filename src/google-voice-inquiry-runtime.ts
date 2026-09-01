@@ -1,5 +1,6 @@
 import { deliverGoogleVoiceInquiry, type GoogleVoiceInquiryLineResolver } from './google-voice-inquiry-delivery';
-import { parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
+import { extractMarkedGoogleVoiceInquiryBody, parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
+import { classifyMarkedGoogleVoiceInquiryWithGemini } from './google-voice-inquiry-gemini';
 import type { MemberPushResult } from './webpush';
 
 export type GoogleVoiceInquiryRuntimeResult =
@@ -7,10 +8,10 @@ export type GoogleVoiceInquiryRuntimeResult =
   | { handled: true; kind: 'TODAY_SCHEDULE' | 'TOMORROW_SCHEDULE' | 'OPEN_SHOPPING'; push: MemberPushResult };
 
 /**
- * Composes the deterministic marked INQUIRY parser with the existing
- * member-scoped Web Push delivery adapter. Canonical domain reads stay injected
- * through resolveLines so callers retain task/recurrence/shopping visibility
- * semantics instead of duplicating those queries here.
+ * Composes deterministic marked INQUIRY parsing with the existing member-scoped
+ * delivery boundary. Only an explicitly marked command that misses the exact
+ * parser may use the narrow Gemini classifier. Upstream/ambiguous classification
+ * falls through without delivery or mutation.
  */
 export async function executeMarkedGoogleVoiceInquiry(
   env: Env,
@@ -19,7 +20,12 @@ export async function executeMarkedGoogleVoiceInquiry(
   value: unknown,
   resolveLines: GoogleVoiceInquiryLineResolver,
 ): Promise<GoogleVoiceInquiryRuntimeResult> {
-  const inquiry = parseMarkedGoogleVoiceInquiryCommand(value);
+  let inquiry = parseMarkedGoogleVoiceInquiryCommand(value);
+  if (!inquiry) {
+    const body = extractMarkedGoogleVoiceInquiryBody(value);
+    if (body === null) return { handled: false };
+    inquiry = await classifyMarkedGoogleVoiceInquiryWithGemini(env, familyId, body);
+  }
   if (!inquiry) return { handled: false };
 
   const push = await deliverGoogleVoiceInquiry(env, familyId, memberId, inquiry, resolveLines);
