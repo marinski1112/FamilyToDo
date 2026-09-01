@@ -8,6 +8,7 @@ if(!index.includes("import { dispatchContextApiRoute } from './context-api-route
 if(!index.includes('const apiResponse=await dispatchContextApiRoute(request,context,url);')) throw new Error('index.ts must invoke context API dispatcher');
 if(!index.includes('if(apiResponse) return apiResponse;')) throw new Error('index.ts must return matched context API response');
 if(!apiRoutes.includes('export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{')) throw new Error('context API dispatcher export missing');
+if(!apiRoutes.includes("import { calendarStampReadApi } from './calendar-stamp-api';")) throw new Error('calendar stamp read adapter import missing');
 const routeLines=[
   "if(url.pathname==='/api/family/create') return await createFamily(request,context);",
   "if(url.pathname==='/api/family/join') return await joinFamily(request,context);",
@@ -20,6 +21,7 @@ const routeLines=[
   "if(url.pathname==='/api/shopping') return await shopping(request,context);",
   "if(url.pathname==='/api/family-log') return await familyLog(request,context);",
   "if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);",
+  "if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});",
   "if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);",
   "if(url.pathname==='/api/family-ai/plan') return await familyAiPlan(request,context);",
   "if(url.pathname==='/api/family-ai/execute') return await familyAiExecute(request,context);",
