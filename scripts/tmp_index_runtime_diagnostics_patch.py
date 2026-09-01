@@ -6,6 +6,8 @@ INDEX = Path('src/index.ts')
 MODULE = Path('src/runtime-diagnostics.ts')
 CONTRACT = Path('scripts/index-entrypoint-modularity-contract.mjs')
 MANIFEST = Path('scripts/regression-manifest.mjs')
+FAMILY_LOG_CONTRACT = Path('scripts/family-log-contract.mjs')
+FAMILY_LOG_SCHEDULING_CONTRACT = Path('scripts/family-log-scheduling-contract.mjs')
 
 expected_index_blob = '8288c1f0b9f80147e6024fc40ff0886ab92af79e'
 actual_index_blob = subprocess.check_output(['git', 'hash-object', str(INDEX)], text=True).strip()
@@ -79,5 +81,36 @@ if manifest.count(anchor) != 1:
 if entry not in manifest:
     manifest = manifest.replace(anchor, anchor + entry, 1)
 MANIFEST.write_text(manifest)
+
+# Existing Family Log regression contracts intentionally inspect runtime schema
+# diagnostics. Keep those contracts location-independent when diagnostics leave
+# the Worker entrypoint.
+family_log_contract = FAMILY_LOG_CONTRACT.read_text()
+read_anchor = "const index=read('src/index.ts');\n"
+read_entry = "const diagnostics=read('src/runtime-diagnostics.ts');\n"
+if family_log_contract.count(read_anchor) != 1:
+    raise SystemExit('family-log-contract index read anchor moved')
+if read_entry not in family_log_contract:
+    family_log_contract = family_log_contract.replace(read_anchor, read_anchor + read_entry, 1)
+old_quick = "assert.ok(app.includes(\"['family_log_quick_actions'\")||index.includes(\"['family_log_quick_actions'\"),'Family Log schema/table checks must retain quick-action persistence');"
+new_quick = "assert.ok(app.includes(\"['family_log_quick_actions'\")||index.includes(\"['family_log_quick_actions'\")||diagnostics.includes(\"['family_log_quick_actions'\"),'Family Log schema/table checks must retain quick-action persistence');"
+if family_log_contract.count(old_quick) != 1:
+    raise SystemExit('family-log-contract quick-action assertion moved')
+family_log_contract = family_log_contract.replace(old_quick, new_quick, 1)
+FAMILY_LOG_CONTRACT.write_text(family_log_contract)
+
+scheduling_contract = FAMILY_LOG_SCHEDULING_CONTRACT.read_text()
+sched_anchor = "const index=fs.readFileSync('src/index.ts','utf8');\n"
+sched_entry = "const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');\n"
+if scheduling_contract.count(sched_anchor) != 1:
+    raise SystemExit('family-log-scheduling index read anchor moved')
+if sched_entry not in scheduling_contract:
+    scheduling_contract = scheduling_contract.replace(sched_anchor, sched_anchor + sched_entry, 1)
+old_filter = "assert.ok(index.includes(\"NOT IN ('BABY','CHILD')\"),'non-child subject filtering must remain explicit');"
+new_filter = "assert.ok(index.includes(\"NOT IN ('BABY','CHILD')\")||diagnostics.includes(\"NOT IN ('BABY','CHILD')\"),'non-child subject filtering must remain explicit');"
+if scheduling_contract.count(old_filter) != 1:
+    raise SystemExit('family-log-scheduling subject filter assertion moved')
+scheduling_contract = scheduling_contract.replace(old_filter, new_filter, 1)
+FAMILY_LOG_SCHEDULING_CONTRACT.write_text(scheduling_contract)
 
 print('runtime diagnostics extraction patch applied')
