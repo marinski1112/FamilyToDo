@@ -8,6 +8,8 @@ assert.match(source,/const MAX_PRODUCT_NAME_UNITS=255;/,'Shopping batch create m
 assert.match(source,/const MAX_PRODUCT_QUANTITY_UNITS=128;/,'Shopping batch create must bound free-form quantity text');
 assert.match(source,/const MAX_CATEGORY_UNITS=255;/,'Shopping batch create must bound free-form category text');
 assert.match(source,/const MAX_MEMO_UNITS=2000;/,'Shopping batch create must bound free-form memo text');
+assert.match(source,/const MAX_CSRF_UNITS=512;/,'Shopping batch create must retain an explicit bounded CSRF payload');
+assert.match(source,/const csrf=String\(payload\.csrf\|\|''\);/,'Shopping batch create must normalize the bootstrapped CSRF value exactly once');
 assert.match(source,/maxlength="128"[^>]*name="product_quantity\[\]"|name="product_quantity\[\]"[^>]*maxlength="128"/,'quantity input must expose the same client-side bound');
 assert.match(source,/name="product_url\[\]" maxlength="2048"/,'product URL input must expose the existing URL bound');
 assert.match(source,/const safeDueDate=value=>/,'Shopping batch create must retain an explicit due-date validator');
@@ -20,6 +22,7 @@ const addLimit=source.indexOf("list.querySelectorAll('[data-product-row]').lengt
 assert.ok(addStart>=0&&addLimit>addStart&&addLimit<addCreate,'row-count limit must run before a new Shopping product row is created');
 
 const submitStart=source.indexOf('form.onsubmit=async e=>{');
+const csrfGuard=source.indexOf('if(!csrf||csrf.length>MAX_CSRF_UNITS)',submitStart);
 const rowsBound=source.indexOf('rows.length>MAX_BATCH_PRODUCTS',submitStart);
 const mapNames=source.indexOf("form.querySelectorAll('[name=\"product_name[]\"]')",submitStart);
 const dueDateGuard=source.indexOf("const dueDate=safeDueDate(fd.get('due_date'))",submitStart);
@@ -27,6 +30,7 @@ const categoryGuard=source.indexOf('category.length>MAX_CATEGORY_UNITS',submitSt
 const memoGuard=source.indexOf('memo.length>MAX_MEMO_UNITS',submitStart);
 const bodyAssembly=source.indexOf("const body={action:'add_batch'",submitStart);
 const network=source.indexOf("fetch('/api/shopping'",submitStart);
+assert.ok(submitStart>=0&&csrfGuard>submitStart&&csrfGuard<rowsBound,'missing or oversized CSRF must fail closed before Shopping field mapping');
 assert.ok(submitStart>=0&&rowsBound>submitStart&&rowsBound<mapNames,'submission must reject oversized batches before mapping product fields');
 assert.ok(network>rowsBound,'batch bounds must be enforced before Shopping network I/O');
 assert.ok(dueDateGuard>submitStart&&dueDateGuard<network,'due date validation must run before Shopping network I/O');
@@ -35,6 +39,8 @@ assert.ok(memoGuard>categoryGuard&&memoGuard<bodyAssembly,'memo length validatio
 assert.ok(bodyAssembly>memoGuard&&network>bodyAssembly,'validated free-form metadata must be assembled only after its bounds and before network I/O');
 assert.match(source,/dueDate===null/,'malformed or impossible due dates must fail closed');
 assert.match(source,/due_date:dueDate/,'validated due date must be used in the existing add_batch payload');
+assert.match(source,/const body=\{action:'add_batch',csrf,products:/,'Shopping batch payload must use only the prevalidated bounded CSRF variable');
+assert.doesNotMatch(source,/csrf:String\(payload\.csrf/,'Shopping batch request assembly must not re-read an unbounded raw CSRF value');
 assert.match(source,/category,due_date:dueDate,task_id:taskId,assignees,memo:memo/,'validated category and memo variables must be used in the existing add_batch payload while retaining the entity-ID contract shape');
 assert.match(source,/names\.length!==rows\.length\|\|quantities\.length!==rows\.length\|\|urls\.length!==rows\.length/,'parallel product arrays must stay aligned with bounded visible rows');
 assert.match(source,/names\.some\(name=>name\.length>MAX_PRODUCT_NAME_UNITS\)/,'programmatic bypass of product-name maxlength must fail closed');
@@ -48,4 +54,4 @@ assert.doesNotMatch(source,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?
 assert.doesNotMatch(source,/calendar_perf|\/app\/calendar\.php|CALENDAR_PERF_DIAGNOSTICS/,'Shopping payload bounds must remain isolated from Calendar diagnostics');
 assert.doesNotMatch(source,/cookie|authorization|member_name|family_name|private_owner_id/i,'Shopping payload bounds must not add identity/session handling');
 
-console.log('shopping batch payload bounds contract: input metadata remains bounded and Shopping batch API failures use a fixed browser-safe message without exposing arbitrary server detail');
+console.log('shopping batch payload bounds contract: CSRF, input metadata, and API failure display remain bounded and fail closed before Shopping network I/O');
