@@ -25,8 +25,8 @@ for(const route of [
 ]) if(!exceptionRoutes.includes(route)) throw new Error(`new page route wiring changed: ${route}`);
 for(const marker of [
   "if(payload.returnTo==='calendar'){",
-  "const calendarUrl='/app/calendar.php?view='+encodeURIComponent(calendarReturnView);",
-  "location.href=!b.noDate&&savedDate?calendarUrl+'&month='",
+  "location.href=!b.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='",
+  ":'/app/calendar.php?view='+encodeURIComponent(calendarReturnView);",
   "location.href=b.noDate?'/app/tasks.php':'/app/tasks.php?date='",
 ]) if(!taskNewJs.includes(marker)) throw new Error(`task-new calendar return contract changed: ${marker}`);
 if(taskNewJs.includes("payload.returnTo==='calendar'&&!b.noDate&&savedDate")) throw new Error('calendar-origin no-date tasks must not fall back to Tasks');
