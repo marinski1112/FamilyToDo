@@ -23,7 +23,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply exact retained-source patch
-        run: node scripts/apply-calendar-range-fix.mjs
+        run: |
+          node scripts/apply-calendar-range-fix.mjs
+          node scripts/apply-calendar-range-fix-v2.mjs
       - name: Verify complete suite before committing
         env:
           GH_TOKEN: ${{ github.token }}
@@ -44,7 +46,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/calendar-range-fix.yml scripts/apply-calendar-range-fix.mjs
+          git rm .github/workflows/calendar-range-fix.yml scripts/apply-calendar-range-fix.mjs scripts/apply-calendar-range-fix-v2.mjs
           git add src/app.ts src/index.ts
           git diff --cached --check
           git commit -m "Fix Calendar reversed range rendering"
