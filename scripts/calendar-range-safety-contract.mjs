@@ -37,11 +37,12 @@ try{
 
   const app=source('src/app.ts');
   const index=source('src/index.ts');
+  const taskApi=source('src/task-api.ts');
   const taskNew=source('public/assets/task-new.js');
   const taskEdit=source('public/assets/task-edit.js');
   assert.match(app,/safeCalendarDateRange/,'Calendar renderer must use the finite range helper');
   assert.doesNotMatch(app,/if\(last<d\)last=d/,'mutable Date alias fallback must not return');
-  assert.match(index,/buildStoredTaskRange/,'task create API must use authoritative range validation');
+  assert.match(taskApi,/buildStoredTaskRange/,'task create API must use authoritative range validation');
   assert.match(app,/buildStoredTaskRange/,'task edit/create-adjacent server writes must use authoritative range validation');
   assert.match(taskNew,/validateTaskRange/,'task create UI should reject reversed input before the API call');
   assert.match(taskEdit,/validateTaskRange/,'task edit UI should reject reversed input before the API call');
