@@ -4,7 +4,8 @@ import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAction } from './google-tasks';
-import { calendarSyncNow, calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
+import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
+import { calendarSyncOutboundOnly } from './google-calendar-one-way';
 import { familyLogImportApi } from './family-log-import';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 
@@ -31,7 +32,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family-ai/model-reset') return await familyAiModelReset(request,context);
   if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);
   if(url.pathname==='/api/google-tasks/action') return await googleTasksAction(request,context);
-  if(url.pathname==='/api/google-calendar/sync') return await calendarSyncNow(request,context);
+  if(url.pathname==='/api/google-calendar/sync') return await calendarSyncOutboundOnly(request,context);
   if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
   if(url.pathname==='/api/google-calendar/disconnect') return await calendarDisconnect(request,context);
   if(url.pathname==='/api/google-calendar/retry-failed') return await calendarRetryFailed(request,context);
