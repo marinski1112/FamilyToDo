@@ -59,7 +59,7 @@ if(!itemApi.includes('export async function itemApi(request:Request,ctx:any):Pro
 for(const sentinel of [
   "if(request.method!=='POST') return json({ok:false,error:'POST only'},405);",
   "String(b.csrf||'')!==String(ctx.session.csrfToken||'')",
-  "WHERE id=? AND family_id=? AND \\${taskVisibilitySql('t')}",
+  "taskVisibilitySql('t')",
   "visibility_scope,private_owner_id",
   "INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id)",
   "privateOwner?[privateOwner]",
