@@ -1,4 +1,4 @@
-import { parseMarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
+import { extractMarkedGoogleVoiceInquiryBody } from './google-voice-inquiry';
 import { GoogleVoiceInquiryDeliveryError } from './google-voice-inquiry-delivery';
 import { executeMarkedGoogleVoiceInquiry } from './google-voice-inquiry-runtime';
 import type { GoogleVoiceInquiryLineResolver } from './google-voice-inquiry-delivery';
@@ -120,8 +120,7 @@ export async function executeGoogleTasksInquiryCommand(
   item: GoogleTasksInquiryItem,
   resolveLines: GoogleVoiceInquiryLineResolver,
 ): Promise<GoogleTasksInquiryCommandResult> {
-  const inquiry = parseMarkedGoogleVoiceInquiryCommand(item.title);
-  if (!inquiry) return 'not-inquiry';
+  if (extractMarkedGoogleVoiceInquiryBody(item.title) === null) return 'not-inquiry';
 
   validateAccount(account);
   if (!String(item.id || '').trim()) throw new Error('invalid-external-task-id');
