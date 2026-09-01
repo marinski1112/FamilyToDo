@@ -10,6 +10,8 @@ for(const marker of [
   'CREATE TABLE IF NOT EXISTS child_journal_calendar_accounts',
   'CREATE TABLE IF NOT EXISTS child_journal_calendar_links',
   'CREATE TABLE IF NOT EXISTS child_journal_calendar_outbox',
+  'INSERT OR IGNORE INTO child_journal_calendar_outbox',
+  "SELECT j.family_id,j.log_id,'CREATE','PENDING'",
   'trg_child_journal_follow_log_subject',
   'trg_child_journal_calendar_enqueue_insert',
   'trg_child_journal_calendar_enqueue_metadata_update',
@@ -21,12 +23,14 @@ for(const marker of [
 for(const marker of [
   "const JOURNAL_CALENDAR_NAME='Family TODO - 成長日記'",
   "JOIN external_calendar_accounts a ON a.family_id=o.family_id AND a.provider=? AND a.status='ACTIVE'",
+  "SELECT * FROM child_journal_calendar_accounts WHERE family_id=? LIMIT 1",
   "extendedProperties:{private:{familyTodoChildJournalLogId:String(row.log_id)}}",
   'processChildJournalCalendarOutbox',
   'childJournalCalendarStatus',
   "summary:`📔 ${String(row.subject_name||'子ども')}：${label}`",
 ])if(!sync.includes(marker))throw new Error(`Child Journal calendar worker missing: ${marker}`);
 
+if(sync.includes("child_journal_calendar_accounts WHERE family_id=? AND status='ACTIVE'"))throw new Error('Retry must reuse the existing dedicated calendar even while its status is ERROR');
 for(const forbidden of [
   'external_calendar_links',
   'calendar_sync_outbox',
