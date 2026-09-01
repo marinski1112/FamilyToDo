@@ -42,11 +42,14 @@ for(const key of ['physical_tasks','task_span_days_max','task_span_days_total','
 must(/task_span_days_max/.test(worker)&&/task_span_days_total/.test(worker),'Calendar snapshot must expose bounded aggregate task-span diagnostics');
 must(/julianday\(COALESCE\(date\(t\.end_at\),date\(t\.start_at\),date\(t\.due_at\)\)\)/.test(worker),'task-span diagnostics must be calculated in the existing aggregate snapshot query');
 
-// The current renderer expands every physical task across its raw stored span before laying out the visible month.
-// Keep this check while 1102 is under investigation so a long-span task cannot silently remain invisible to diagnostics.
+// The production trace isolated the 1102 failure to physical-task spreading and exposed the mutable-Date alias bug.
+// Keep the aggregate snapshot available for one natural post-fix verification, but never require the unsafe loop to exist.
 const addToMapMatch=app.match(/const addToMap=\([\s\S]*?\n  \};/);
-must(Boolean(addToMapMatch),'Calendar renderer addToMap implementation must remain detectable during the 1102 investigation');
-must(/for\(;d<=last;d\.setUTCDate\(d\.getUTCDate\(\)\+1\)\)/.test(addToMapMatch[0]),'task-span diagnostics are temporary evidence for the current raw-span renderer and should be revisited when that loop is fixed');
+must(Boolean(addToMapMatch),'Calendar renderer addToMap implementation must remain detectable during the 1102 verification window');
+must(/safeCalendarDateRange/.test(addToMapMatch[0]),'Calendar renderer must normalize persisted ranges through the finite range helper');
+must(/for\(let cursorMs=range\.startMs;cursorMs<=range\.endMs;cursorMs\+=86400000\)/.test(addToMapMatch[0]),'Calendar physical spreading must advance immutable numeric day cursors over a finite normalized range');
+must(!/if\s*\(last<d\)\s*last=d/.test(addToMapMatch[0]),'mutable Date alias fallback must never return');
+must(!/d\.setUTCDate\(/.test(addToMapMatch[0]),'Calendar range spreading must not mutate the same Date object used as its bound');
 
 must(/const MAX_CALENDAR_PERF_LOGS = 12/.test(worker),'Calendar diagnostics must retain an explicit low-double-digit runtime cap');
 must(/if \(count >= MAX_CALENDAR_PERF_LOGS\) return/.test(worker),'runtime logger must enforce the cap rather than relying on static call-site counting');
@@ -56,4 +59,4 @@ for(const stage of ['request_start','snapshot_ready','snapshot_error','delegate_
 must(/return baseWorker\.fetch\(request, env, ctx\)/.test(worker),'all non-instrumented routes must delegate unchanged');
 must(/return baseWorker\.scheduled\(controller, env, ctx\)/.test(worker),'scheduled handler must delegate unchanged');
 
-console.log('calendar production diagnostics contract: searchable privacy-safe runtime-bounded diagnostics ok');
+console.log('calendar production diagnostics contract: privacy-safe bounded diagnostics and finite renderer verification guard ok');
