@@ -1,0 +1,84 @@
+name: Index observability extraction patch
+
+on:
+  push:
+    branches:
+      - refactor/index-request-error-observability
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/index-request-error-observability
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Patch exact source and run regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/index.ts)" = "f4a24f5a8815426c522164b714abf8241d4e415b"
+          test "$(wc -l < src/index.ts | tr -d ' ')" = "755"
+          test ! -e src/observability/errors.ts
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/index.ts')
+          source = path.read_text()
+
+          import_anchor = "import { buildStoredTaskRange } from './task-range-safety';\n"
+          import_line = "import { logRequestFailure } from './observability/errors';\n"
+          if source.count(import_anchor) != 1:
+              raise SystemExit('unexpected task-range import anchor count')
+          if import_line in source:
+              raise SystemExit('observability import already present')
+          source = source.replace(import_anchor, import_anchor + import_line, 1)
+
+          old = """      const message=String(e?.message||e||'内部エラーです。');
+          const requestId=crypto.randomUUID();
+          console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
+          """
+          new = """      const {message,requestId}=logRequestFailure(e,request,url);
+          """
+          if source.count(old) != 1:
+              raise SystemExit('unexpected request failure logging block count')
+          source = source.replace(old, new, 1)
+          path.write_text(source)
+
+          module = Path('src/observability/errors.ts')
+          module.parent.mkdir(parents=True, exist_ok=True)
+          module.write_text("""export interface RequestFailureDetails {
+            message: string;
+            requestId: string;
+          }
+
+          export function logRequestFailure(error: unknown, request: Request, url: URL): RequestFailureDetails {
+            const e=error as any;
+            const message=String(e?.message||e||'内部エラーです。');
+            const requestId=crypto.randomUUID();
+            console.error('[Family TODO LINE] request failure', { path:url.pathname, method:request.method, name:e?.name||'Error', message, requestId });
+            return {message,requestId};
+          }
+          """)
+          PY
+          npm test
+          git diff --check
+          rm .github/workflows/index-observability-extraction-patch.yml
+      - name: Commit extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/index.ts src/observability/errors.ts .github/workflows/index-observability-extraction-patch.yml
+          git diff --cached --check
+          git commit -m "Extract request failure logging from index"
+          git push origin HEAD:refactor/index-request-error-observability
