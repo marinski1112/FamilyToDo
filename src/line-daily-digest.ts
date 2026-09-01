@@ -1,0 +1,18 @@
+import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
+
+export async function processLineDailyDigests(env:Env):Promise<void>{
+  const settings=await env.DB.prepare("SELECT s.family_id,s.send_time,f.timezone FROM line_daily_digest_settings s JOIN families f ON f.id=s.family_id WHERE s.enabled=1").all();
+  for(const setting of settings.results){
+    const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
+    const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
+    const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all();
+    for(const member of recipients.results){
+      const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
+      const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
+      const rows=await env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?)) AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND status<>'completed' AND date(COALESCE(start_at,due_at))<?)) ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 12`).bind(setting.family_id,member.id,localDate,localDate,localDate).all();
+      if(!rows.results.length){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',sent_at=?,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();continue;}
+      const events=rows.results.filter(x=>String(x.task_kind).toUpperCase()==='EVENT'&&String(x.at).slice(0,10)===localDate),tasks=rows.results.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK'&&String(x.at).slice(0,10)===localDate),overdue=rows.results.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK'&&String(x.at).slice(0,10)<localDate);const lines=[`☀️ ${localDate} 朝まとめ`,...events.slice(0,4).map(x=>`📌 ${String(x.title)}`),...tasks.slice(0,5).map(x=>`□ ${String(x.title)}`)];if(overdue.length)lines.push(`⚠️ 期限切れ ${overdue.length}件`);
+      try{const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),lines.join('\n').slice(0,1000));await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();}catch(error){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),n,receipt.id).run();}
+    }
+  }
+}
