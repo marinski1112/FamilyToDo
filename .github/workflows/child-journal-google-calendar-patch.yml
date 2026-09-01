@@ -53,6 +53,12 @@ jobs:
               raise SystemExit('Child Journal post-save sync anchor mismatch')
           child.write_text(source.replace(sync_anchor,sync_replacement,1))
 
+          projector=Path('src/child-journal-calendar.ts'); source=projector.read_text()
+          call='childJournalCalendarEvent(journal)'
+          if source.count(call)!=2:
+              raise SystemExit(f'Child Journal projector non-null call count mismatch: {source.count(call)}')
+          projector.write_text(source.replace(call,'childJournalCalendarEvent(journal!)'))
+
           google=Path('src/google-calendar.ts'); source=google.read_text()
           core_anchor="} from './google-calendar-core';\n"
           child_import="import { pendingChildJournalCalendarSyncCount, processChildJournalCalendarOutbox } from './child-journal-calendar';\n"
@@ -109,7 +115,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/child-journal.ts src/google-calendar.ts scripts/regression-manifest.mjs .github/workflows/child-journal-google-calendar-patch.yml
+          git add src/child-journal.ts src/child-journal-calendar.ts src/google-calendar.ts scripts/regression-manifest.mjs .github/workflows/child-journal-google-calendar-patch.yml
           git diff --cached --check
           git commit -m "Wire Child Journal Google Calendar projection"
           git push origin HEAD:feature/child-journal-google-calendar
