@@ -14,7 +14,7 @@ jobs:
         with:
           ref: audit/task-shopping-per-item-category-329
       - name: Apply retained-source patch
-        run: python3 .github/patch-329e.py
+        run: python3 .github/patch-329f.py
       - name: Run focused checks
         run: |
           node --check public/assets/task-edit.js
@@ -24,6 +24,6 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/app.ts public/assets/task-edit.js scripts/task-event-shopping-integration-contract.mjs
-          git rm .github/patch-329.py .github/patch-329b.py .github/patch-329c.py .github/patch-329d.py .github/patch-329e.py .github/workflows/task-shopping-category-patch-329.yml
+          git rm .github/patch-329.py .github/patch-329b.py .github/patch-329c.py .github/patch-329d.py .github/patch-329e.py .github/patch-329f.py .github/workflows/task-shopping-category-patch-329.yml
           git commit -m "Preserve per-item Task shopping categories"
           git push origin HEAD:audit/task-shopping-per-item-category-329
