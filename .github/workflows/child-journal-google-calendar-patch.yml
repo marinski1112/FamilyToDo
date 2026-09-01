@@ -59,31 +59,35 @@ jobs:
           if source.count(core_anchor)!=1 or child_import in source:
               raise SystemExit('Google Calendar Child Journal import anchor mismatch')
           source=source.replace(core_anchor,core_anchor+child_import,1)
-          old_outbox="""export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
-  return coreProcessCalendarOutbox(env, Math.min(Math.max(1, limit), OUTBOX_LIMIT), familyId);
-}
-"""
-          new_outbox="""export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {
-  const bounded=Math.min(Math.max(1,limit),OUTBOX_LIMIT);
-  const [schedule,journal]=await Promise.all([
-    coreProcessCalendarOutbox(env,bounded,familyId),
-    processChildJournalCalendarOutbox(env,bounded,familyId),
-  ]);
-  return {sent:schedule.sent+journal.sent,errors:schedule.errors+journal.errors};
-}
-"""
+          old_outbox=(
+              "export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {\n"
+              "  return coreProcessCalendarOutbox(env, Math.min(Math.max(1, limit), OUTBOX_LIMIT), familyId);\n"
+              "}\n"
+          )
+          new_outbox=(
+              "export async function processCalendarOutbox(env: Env, limit = 10, familyId?: number) {\n"
+              "  const bounded=Math.min(Math.max(1,limit),OUTBOX_LIMIT);\n"
+              "  const [schedule,journal]=await Promise.all([\n"
+              "    coreProcessCalendarOutbox(env,bounded,familyId),\n"
+              "    processChildJournalCalendarOutbox(env,bounded,familyId),\n"
+              "  ]);\n"
+              "  return {sent:schedule.sent+journal.sent,errors:schedule.errors+journal.errors};\n"
+              "}\n"
+          )
           if source.count(old_outbox)!=1:
               raise SystemExit('Google Calendar outbox wrapper anchor mismatch')
           source=source.replace(old_outbox,new_outbox,1)
-          old_pending="""  const pendingCount = async () => Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")
-    .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
-"""
-          new_pending="""  const pendingCount = async () => {
-    const schedule=Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")
-      .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);
-    return schedule+await pendingChildJournalCalendarSyncCount(ctx.env.DB,familyId);
-  };
-"""
+          old_pending=(
+              "  const pendingCount = async () => Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")\n"
+              "    .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);\n"
+          )
+          new_pending=(
+              "  const pendingCount = async () => {\n"
+              "    const schedule=Number((await ctx.env.DB.prepare(\"SELECT COUNT(*) c FROM calendar_sync_outbox WHERE family_id=? AND provider=? AND status IN ('PENDING','ERROR') AND retry_count<?\")\n"
+              "      .bind(familyId, PROVIDER, CALENDAR_MAX_RETRIES).first<Row>())?.c || 0);\n"
+              "    return schedule+await pendingChildJournalCalendarSyncCount(ctx.env.DB,familyId);\n"
+              "  };\n"
+          )
           if source.count(old_pending)!=1:
               raise SystemExit('Google Calendar manual pending count anchor mismatch')
           google.write_text(source.replace(old_pending,new_pending,1))
