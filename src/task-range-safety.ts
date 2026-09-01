@@ -6,6 +6,7 @@ export type StoredTaskRangeResult=
 
 const DATE_ONLY=/^\d{4}-\d{2}-\d{2}$/;
 const TIME_ONLY=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const LOCAL_DATE_TIME=/^(\d{4}-\d{2}-\d{2})T((?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 export function isValidDateOnly(value:string):boolean{
   if(!DATE_ONLY.test(value))return false;
@@ -14,6 +15,14 @@ export function isValidDateOnly(value:string):boolean{
 }
 
 export function isValidTimeOnly(value:string):boolean{return TIME_ONLY.test(value);}
+
+function normalizeLocalTime(value:string,baseDate:string):string|null{
+  if(!value)return '';
+  if(isValidTimeOnly(value))return value;
+  const match=value.match(LOCAL_DATE_TIME);
+  if(!match||match[1]!==baseDate||!isValidDateOnly(match[1]))return null;
+  return match[2];
+}
 
 export function buildStoredTaskRange(input:{
   noDate:boolean;
@@ -33,11 +42,13 @@ export function buildStoredTaskRange(input:{
   if(input.allDay){
     return {ok:true,startAt:`${startDate} 00:00:00`,endAt:endDate===startDate?null:`${endDate} 23:59:59`};
   }
-  const startTime=String(input.startTime||'').trim();
-  const endTime=String(input.endTime||'').trim();
-  if(input.requireTimedStart&&!startTime)return {ok:false,error:'START_TIME_REQUIRED'};
-  if(startTime&&!isValidTimeOnly(startTime))return {ok:false,error:'START_TIME_INVALID'};
-  if(endTime&&!isValidTimeOnly(endTime))return {ok:false,error:'END_TIME_INVALID'};
+  const startRaw=String(input.startTime||'').trim();
+  const endRaw=String(input.endTime||'').trim();
+  if(input.requireTimedStart&&!startRaw)return {ok:false,error:'START_TIME_REQUIRED'};
+  const startTime=normalizeLocalTime(startRaw,startDate);
+  const endTime=normalizeLocalTime(endRaw,endDate);
+  if(startRaw&&startTime===null)return {ok:false,error:'START_TIME_INVALID'};
+  if(endRaw&&endTime===null)return {ok:false,error:'END_TIME_INVALID'};
   const startAt=startTime?`${startDate} ${startTime}:00`:null;
   const endAt=endTime?`${endDate} ${endTime}:00`:null;
   if(startAt&&endAt&&endAt<startAt)return {ok:false,error:'TIME_ORDER'};
