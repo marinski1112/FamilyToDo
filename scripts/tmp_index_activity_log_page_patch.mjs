@@ -54,6 +54,7 @@ if((index.match(/activityLogVisibilitySql/g)||[]).length!==1||!index.includes(ac
 index=index.replace(activityImportToken,'');
 if(index.includes('async function logsPage(')) throw new Error('logsPage remained in index.ts');
 if(index.includes('activityLogVisibilitySql')) throw new Error('activity log SQL dependency remained in index.ts');
+index=index.replace(/\n+$/,'\n');
 fs.writeFileSync(indexPath,index);
 
 let contract=fs.readFileSync(contractPath,'utf8');
