@@ -5,7 +5,7 @@ const app=fs.readFileSync('src/app.ts','utf8');
 const fail=(message)=>{console.error(`calendar inner-stage diagnostics contract: ${message}`);process.exit(1);};
 const must=(condition,message)=>{if(!condition)fail(message);};
 
-for(const stage of ['physical_query_ready','recurrence_projection_ready','row_inputs_ready','physical_map_copies_ready','detail_map_started','range_build_started','calendar_html_ready']){
+for(const stage of ['physical_query_ready','recurrence_projection_ready','row_inputs_ready','physical_map_copies_ready','detail_map_started','detail_physical_copies_ready','detail_map_complete','range_build_started','calendar_html_ready']){
   must(worker.includes(`'${stage}'`),`inner Calendar stage ${stage} must remain explicit`);
 }
 for(const misleading of ['row_maps_ready','week_layout_started','detail_projection_started','physical_detail_map_copies_ready']){
@@ -26,12 +26,21 @@ must(/spreadKeys!\.delete\(property\);[\s\S]*?spreadKeys = null;\s*noteCompleted
 must(/if \(spreadKeys\.size === 0\) \{\s*spreadKeys = null;\s*noteCompletedPhysicalCopy\(physicalCount\);\s*\}/.test(worker),'empty enumerable spread must still complete exactly once');
 must(/physicalCopyCount === expectedPhysicalCopies/.test(worker),'first map boundary must be tied to the expected completed physical spread count');
 must(/physicalCopyCount === expectedPhysicalCopies \+ 1/.test(worker),'detail-map start must be observed only after the recurring portion of the first map pass has returned');
-must(/physicalCopyCount === expectedPhysicalCopies \* 2\) \{\s*physicalDetailReady = true;\s*\}/.test(worker),'physical detail completion must be tracked internally without consuming another runtime log');
+must(/physicalCopyCount === expectedPhysicalCopies \* 2\) \{\s*physicalDetailReady = true;\s*emit\('detail_physical_copies_ready', \{ physical_tasks: physicalCount \}\);\s*\}/.test(worker),'physical detail-copy completion must emit one focused aggregate boundary');
 must(/else if \(physicalDetailReady && !rangeBuildStarted && property === 'start_at'\)/.test(worker),'range-build marker must occur only after second-pass physical copies complete and outside spread reads');
-for(const stage of ['physical_map_copies_ready','detail_map_started','range_build_started']){
+for(const stage of ['physical_map_copies_ready','detail_map_started','detail_physical_copies_ready','range_build_started']){
   must(new RegExp(`emit\\('${stage}', \\{ physical_tasks: physicalCount \\}\\)`).test(worker),`${stage} must expose only physical task count`);
 }
 must(/return Reflect\.get\(target, property, receiver\)/.test(worker),'row observation must return native values without copying them into diagnostics');
+
+must(/const wrapAccessoryRows = \(kind: 'shopping' \| 'items'/.test(worker),'detail completion must be observed only through already-retained accessory rows');
+must(/const property = kind === 'shopping' \? 'due_date' : 'due_at'/.test(worker),'accessory observer must use only the existing due-date boundary');
+must(/if \(!detailMapComplete && key === property\) \{\s*detailMapComplete = true;\s*emit\('detail_map_complete'\);\s*\}/.test(worker),'first accessory date read must mark return from detail-map iteration without row values');
+must(/if \(kind === 'physical'\) wrapPhysicalRows\(result\);\s*else wrapAccessoryRows\(kind, result\);/.test(worker),'only retained physical/accessory result rows may be wrapped');
+
+must(/const CALENDAR_DETAIL_PERF_STAGES = new Set<CalendarPerfStage>\(\[\s*'detail_map_started','detail_physical_copies_ready','detail_map_complete','range_build_started',\s*\]\)/.test(worker),'hot-path markers must remain a small explicit filterable stage set');
+must(/const signal = CALENDAR_DETAIL_PERF_STAGES\.has\(record\.stage\) \? 'calendar_detail_perf' : 'calendar_perf'/.test(worker),'hot-path diagnostics must be searchable without scanning all calendar_perf records');
+must(/const safe: Record<string, unknown> = \{ message: signal, event: signal \}/.test(worker),'diagnostic signal names must remain logger-owned');
 
 must(/recurrence_span_days_max/.test(worker)&&/recurrence_span_days_total/.test(worker),'snapshot must retain aggregate recurrence template span diagnostics');
 must(/julianday\(date\(t\.end_at\)\).*julianday\(date\(t\.start_at\)\)/s.test(worker),'recurrence span aggregate must derive only from template dates');
@@ -52,9 +61,9 @@ for(const forbidden of ['message','event','title','description','name','member_n
 }
 must(!/console\.(?:log|warn|error)\([^\n]*(?:sql|query|title|description|name|cookie|authorization|token|note|memo|location|email)/i.test(worker),'query text and content-bearing values must never be directly logged');
 must(/SQL text and row contents never leave this function/.test(worker),'source must document the privacy boundary around query classification');
-must(/without logging row values/.test(worker),'source must document that renderer row values are not logged');
+must(/without row values/.test(worker),'source must document that renderer row values are not logged');
 
 // Removal stays isolated to the temporary Worker diagnostics layer: app/calendar rendering remains untouched.
-must(!/calendarStageEnv|observedCalendarQuery|physical_query_ready|recurrence_projection_ready|row_inputs_ready|physical_map_copies_ready|detail_map_started|range_build_started|calendar_html_ready/.test(app),'temporary inner diagnostics must not leak into the long-lived app/calendar source');
+must(!/calendarStageEnv|observedCalendarQuery|physical_query_ready|recurrence_projection_ready|row_inputs_ready|physical_map_copies_ready|detail_map_started|detail_physical_copies_ready|detail_map_complete|range_build_started|calendar_html_ready|calendar_detail_perf/.test(app),'temporary inner diagnostics must not leak into the long-lived app/calendar source');
 
-console.log('calendar inner-stage diagnostics contract: bounded aggregate-only removable completed-copy tracing ok');
+console.log('calendar inner-stage diagnostics contract: focused aggregate-only removable detail-map tracing ok');
