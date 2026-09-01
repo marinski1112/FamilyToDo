@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('src/calendar-ics-import.ts','utf8');
 const routes=fs.readFileSync('src/index.ts','utf8');
+const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const ui=fs.readFileSync('public/assets/calendar-import.js','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 const css=fs.readFileSync('public/assets/calendar.css','utf8');
@@ -31,7 +32,7 @@ const rollback=rollbackPack(Array(10).fill(4));assert.equal(rollback.q,39);asser
 assert.doesNotMatch(source,/source_uid=\? AND source_recurrence_key=\?/,'import lookup must not regress to the per-row two-bind identity query');
 assert.match(source,/WHERE family_id=\? AND source_format='ICS'/,'ICS provenance must stay family/source scoped');
 for(const token of ['ROLLED_BACK','MISSING','EDITED_KEPT',"status='ACTIVE'",'source_recurrence_key'])assert.ok(source.includes(token),`missing provenance contract: ${token}`);
-for(const route of ['/api/calendar-import/preview','/api/calendar-import/normalization-preview','/api/calendar-import/apply','/api/calendar-import/rollback']){assert.ok(routes.includes(route),`missing route ${route}`);assert.ok(routes.includes('return await calendarImport'),`calendar import routing must remain delegated: ${route}`);}
+for(const route of ['/api/calendar-import/preview','/api/calendar-import/normalization-preview','/api/calendar-import/apply','/api/calendar-import/rollback']){assert.ok(apiRoutes.includes(route),`missing route ${route}`);assert.ok(apiRoutes.includes('return await calendarImport'),`calendar import routing must remain delegated: ${route}`);}
 assert.ok(routes.includes('CALENDAR_IMPORT_INTERNAL_ERROR'),'calendar import route must retain stable internal-error mapping');
 assert.ok(ui.includes('サーバーエラーが発生しました（HTTP'),'import UI must expose HTTP failures');
 for(const token of ['DETERMINISTIC_START','DETERMINISTIC_RANGE','AI_REVIEW_REQUIRED','missing_end_minutes','normalization_token','familyAiProvider'])assert.ok(source.includes(token),`missing normalization contract: ${token}`);
@@ -53,7 +54,7 @@ assert.doesNotMatch(source,/calendarImportApply[\s\S]{0,500}requestState/,'apply
 assert.match(source,/parsedCount>ICS_APPLY_CHUNK/);assert.match(source,/sha_count:parsedCount/);assert.match(source,/parsed_event_count:parsedCount/);
 assert.match(source,/status='IMPORTING'/);assert.match(source,/requestedOffset!==serverOffset/);assert.match(source,/COUNT\(\*\) active_count/);
 assert.match(ui,/splitIcs/);assert.match(ui,/chunk_ics:(?:chunks\[chunkIndex\]|buildChunk)/);assert.doesNotMatch(ui,/calendar-import\/apply',\{\.\.\.args\(\)/);
-assert.match(ui,/インポート準備中/);assert.match(ui,/処理が中断されました。再開できます/);assert.match(routes,/calendar-import\/prepare/);assert.match(routes,/calendar-import\/status/);
+assert.match(ui,/インポート準備中/);assert.match(ui,/処理が中断されました。再開できます/);assert.match(apiRoutes,/calendar-import\/prepare/);assert.match(apiRoutes,/calendar-import\/status/);
 remaining=634;let requests=0;
 while(remaining){const parsed=Math.min(15,remaining);assert.ok(parsed<=15);remaining-=parsed;requests++;}
 assert.equal(requests,43);assert.equal(remaining,0);
