@@ -14,7 +14,7 @@ import { preserveGoogleHomeLogin, liffDispatcher, resumeGoogleHome, lineGoogleHo
 import { validateLiffNext } from './liff-target';
 import { calendarImportPage, calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { buildStoredTaskRange } from './task-range-safety';
-import { logRequestFailure } from './observability/errors';
+import { logLineWebhookFailure, logNotificationFailure, logRequestFailure, logTaskCreationCleanupFailure } from './observability/errors';
 
 const text = (r: Response) => r;
 const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
@@ -444,7 +444,7 @@ async function taskApi(request:Request,ctx:any):Promise<Response>{
         ctx.env.DB.prepare('DELETE FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id),
         ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
         ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id),
-      ]); } catch(cleanup){ console.error('[Family TODO LINE] task creation cleanup failed',{taskId:id,error:String((cleanup as any)?.message||cleanup)}); }
+      ]); } catch(cleanup){ logTaskCreationCleanupFailure(cleanup); }
     }
     throw e;
   }
@@ -501,10 +501,10 @@ async function webhook(request: Request, env: Env): Promise<Response> {
         else if(text==='明日') reply='明日の予定はFamily TODO LINEの「明日の準備」から確認できます。';
         else if(text==='買い物') reply='買い物リストはFamily TODO LINEの「買い物」から確認できます。';
         const { replyLineMessage } = await import('./line');
-        try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { console.error(e); }
+        try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { logLineWebhookFailure('reply',e); }
       }
     }
-  } catch(e) { console.error('[Family TODO LINE] webhook',e); }
+  } catch(e) { logLineWebhookFailure('handle',e); }
   return new Response('OK',{status:200});
 }
 
@@ -593,7 +593,7 @@ async function processNotifications(env: Env): Promise<void> {
       const attempts=Number(current?.attempt_count||0)+1;
       const status=attempts>=5?'error':'retry';
       await env.DB.prepare('UPDATE notifications SET status=?,attempt_count=?,last_error=?,updated_at=? WHERE id=?').bind(status,attempts,String(e instanceof Error?e.message:e).slice(0,1000),nowJst(),n.id).run().catch(()=>{});
-      console.error('[Family TODO LINE] notification',e);
+      logNotificationFailure(e);
     }
   }
 }
