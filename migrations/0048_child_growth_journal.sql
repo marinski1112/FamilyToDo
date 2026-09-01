@@ -33,7 +33,24 @@ WHEN NOT EXISTS (
     AND l.family_id=NEW.family_id
     AND l.subject_id=NEW.subject_id
     AND s.family_id=NEW.family_id
-    AND s.subject_kind IN ('BABY','CHILD','PET')
+    AND ((NEW.journal_kind='CHILD' AND s.subject_kind IN ('BABY','CHILD')) OR (NEW.journal_kind='PET' AND s.subject_kind='PET'))
+)
+BEGIN
+  SELECT RAISE(ABORT, 'family_log_journal_tenant_mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_family_log_journal_tenant_update
+BEFORE UPDATE OF log_id,family_id,subject_id,journal_kind ON family_log_journal_entries
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM family_logs l
+  JOIN family_log_subjects s ON s.id=NEW.subject_id
+  WHERE l.id=NEW.log_id
+    AND l.family_id=NEW.family_id
+    AND l.subject_id=NEW.subject_id
+    AND s.family_id=NEW.family_id
+    AND ((NEW.journal_kind='CHILD' AND s.subject_kind IN ('BABY','CHILD')) OR (NEW.journal_kind='PET' AND s.subject_kind='PET'))
 )
 BEGIN
   SELECT RAISE(ABORT, 'family_log_journal_tenant_mismatch');
