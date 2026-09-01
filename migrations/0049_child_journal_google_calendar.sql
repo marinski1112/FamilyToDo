@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS child_journal_calendar_outbox (
 CREATE INDEX IF NOT EXISTS idx_child_journal_calendar_outbox_due
   ON child_journal_calendar_outbox(status,next_retry_at,id);
 
+-- Entries created after 0048 but before this migration still need their first
+-- projection. The outbox is new here, so INSERT OR IGNORE is deterministic.
+INSERT OR IGNORE INTO child_journal_calendar_outbox(
+  family_id,log_id,operation,status,retry_count,next_retry_at,last_error,created_at,updated_at
+)
+SELECT j.family_id,j.log_id,'CREATE','PENDING',0,CURRENT_TIMESTAMP,NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+  FROM family_log_journal_entries j
+  JOIN family_logs l ON l.id=j.log_id AND l.family_id=j.family_id
+ WHERE j.journal_kind='CHILD'
+   AND j.google_sync_enabled=1
+   AND l.deleted_at IS NULL;
+
 -- If a canonical Family Log entry changes subjects, keep journal metadata in
 -- lock-step. The tenant/kind trigger created in 0048 rejects invalid moves.
 CREATE TRIGGER IF NOT EXISTS trg_child_journal_follow_log_subject
