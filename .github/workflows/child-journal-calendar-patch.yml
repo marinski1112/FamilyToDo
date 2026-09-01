@@ -1,0 +1,57 @@
+name: Child Journal calendar wiring
+
+on:
+  push:
+    branches:
+      - feature/child-journal-google-calendar-sync
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/child-journal-google-calendar-sync
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wire scheduled Child Journal calendar projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/index.ts)" = "48604992166c3ee8f546d6a4f395489a143cf885"
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/index.ts')
+          source=p.read_text()
+          import_anchor="import { childJournalApi, childJournalPage } from './child-journal';\n"
+          import_line="import { processChildJournalCalendarOutbox } from './child-journal-calendar';\n"
+          if source.count(import_anchor)!=1 or import_line in source:
+              raise SystemExit('child journal calendar import anchor mismatch')
+          source=source.replace(import_anchor,import_anchor+import_line,1)
+          cron_anchor="""      ctx.waitUntil(processCalendarOutbox(env));\n    }\n    if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}\n"""
+          cron_new="""      ctx.waitUntil(processCalendarOutbox(env));\n      ctx.waitUntil(processChildJournalCalendarOutbox(env));\n    }\n    if(controller.cron==='7,37 * * * *'){ctx.waitUntil(processCalendarInbound(env));ctx.waitUntil(renewCalendarWatches(env));}\n"""
+          if source.count(cron_anchor)!=1:
+              raise SystemExit(f'child journal calendar cron anchor mismatch: {source.count(cron_anchor)}')
+          p.write_text(source.replace(cron_anchor,cron_new,1))
+          PY
+          node scripts/child-journal-google-calendar-contract.mjs
+          npm test
+          git diff --check
+          rm .github/workflows/child-journal-calendar-patch.yml
+      - name: Commit Child Journal calendar wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/index.ts .github/workflows/child-journal-calendar-patch.yml
+          git diff --cached --check
+          git commit -m "Wire Child Journal calendar scheduler"
+          git push origin HEAD:feature/child-journal-google-calendar-sync
