@@ -13,6 +13,10 @@ for(const marker of [
   "FIRST_STEP:'歩いた'",
   "FIRST_TOOTH:'最初の歯'",
   "TOOTH:'歯'",
+  "stand:'STAND'",
+  "first_step:'FIRST_STEP'",
+  "first_tooth:'FIRST_TOOTH'",
+  "tooth:'TOOTH'",
   'childJournalFoundationReady(env.DB)',
   "subject_kind IN ('BABY','CHILD')",
   "`JOURNAL_${code}`",
@@ -28,16 +32,18 @@ assert.doesNotMatch(domain,/subject_name|note:/,'Activity metadata must not copy
 
 for(const marker of [
   "from './child-journal-google-home'",
-  'ft:journal:stand:',
-  'ft:journal:first_step:',
-  'ft:journal:first_tooth:',
-  'ft:journal:tooth:',
+  "['stand','STAND','立った記録'",
+  "['first_step','FIRST_STEP','歩いた記録'",
+  "['first_tooth','FIRST_TOOTH','最初の歯記録'",
+  "['tooth','TOOTH','歯記録'",
+  'ft:journal:${slug}:${s.id}',
   "category:'成長日記'",
   'recordExternalChildJournalMilestoneDomain',
   "const journal=/^ft:journal:(stand|first_step|first_tooth|tooth):(\\d+)$/",
   "['睡眠','排泄','成長日記','家族ログ','ペット','ちょこっと家事']",
 ])assert.ok(home.includes(marker),`Google Home Child Journal wiring missing: ${marker}`);
 
+assert.ok(home.includes('childJournalGoogleHomeReady(env)'),'Scene SYNC must hide Child Journal milestones until migration 0048 is ready');
 assert.ok(home.includes("external_command_receipts"),'Child Journal scenes must remain under canonical Google Home idempotency receipts');
 assert.ok(home.includes("subject_kind IN ('BABY','CHILD','PET')"),'Scene catalog must retain explicit subject-kind boundary');
 assert.ok(bundle.includes("['child-journal-google-home',['node','scripts/child-journal-google-home-contract.mjs']]"),'Google integration bundle must run the Child Journal voice contract');
