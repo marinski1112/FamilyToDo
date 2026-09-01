@@ -44,6 +44,7 @@ const groups={
     ['google-voice-inquiry-delivery',['node','scripts/google-voice-inquiry-delivery-contract.mjs']],
     ['google-voice-inquiry-runtime',['node','scripts/google-voice-inquiry-runtime-contract.mjs']],
     ['google-tasks-inquiry-command',['node','scripts/google-tasks-inquiry-command-contract.mjs']],
+    ['google-tasks-inquiry-runtime-wiring',['node','scripts/google-tasks-inquiry-runtime-wiring-contract.mjs']],
     ['google-tasks-sync',['node','scripts/google-tasks-sync-contract.mjs']],
     ['platform-auth',['node','scripts/platform-auth-contract.mjs']],
   ],

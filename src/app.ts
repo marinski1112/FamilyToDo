@@ -9,7 +9,7 @@ import { json, html, redirect } from './response';
 import type { CurrentMember, SessionData } from './types';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveTaskChildCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { sendWebPush, webPushConfigured, webPushPublicKey } from './webpush';
-import { DEFAULT_FAMILY_TIMEZONE, FAMILY_TIMEZONE_OPTIONS, addWallClockMinutes, familyNow, validateTimezone } from './timezone';
+import { DEFAULT_FAMILY_TIMEZONE, FAMILY_TIMEZONE_OPTIONS, addWallClockMinutes, familyDate, familyNow, validateTimezone } from './timezone';
 import { buildStoredTaskRange, isValidDateOnly, safeCalendarDateRange } from './task-range-safety';
 
 export interface AppContext { request: Request; env: Env; session: SessionData; member: CurrentMember | null; executionContext?: ExecutionContext; }
@@ -412,6 +412,23 @@ async function makeViewData(ctx: AppContext, date:string) {
 expiredTasksFor(ctx)
   ]);
   return {date,tasks:[...tasks.results,...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at))),items:items.results,shopping:shopping.results,expiredTasks};
+}
+
+export type GoogleVoiceInquiryLineKind='TODAY_SCHEDULE'|'TOMORROW_SCHEDULE'|'OPEN_SHOPPING';
+/** Reuses the same recurrence-aware daily projection and child visibility predicate as app views. */
+export async function resolveGoogleVoiceInquiryLines(env:Env,familyId:number,memberId:number,kind:GoogleVoiceInquiryLineKind):Promise<readonly string[]>{
+  if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid-google-inquiry-scope');
+  const member=await memberById(env,memberId);
+  if(!member||member.family_id!==familyId)throw new Error('google-inquiry-member-tenant-mismatch');
+  if(kind==='OPEN_SHOPPING'){
+    const rows=await env.DB.prepare(`SELECT s.name,s.quantity FROM shopping_items s WHERE s.family_id=? AND s.status='pending' AND ${taskChildVisibilitySql('s')} ORDER BY CASE WHEN s.due_date IS NULL OR s.due_date='' THEN 1 ELSE 0 END,s.due_date,s.id LIMIT 32`).bind(familyId,memberId).all<Row>();
+    return rows.results.map(row=>{const name=String(row.name||'').trim();const quantity=Number(row.quantity||1);return name?(Number.isFinite(quantity)&&quantity>1?`${name} ×${quantity}`:name):'';}).filter(Boolean);
+  }
+  const zone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),base=familyDate(zone);
+  let date=base;
+  if(kind==='TOMORROW_SCHEDULE'){const d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+1);date=d.toISOString().slice(0,10);}
+  const data=await makeViewData({env,member} as AppContext,date);
+  return data.tasks.filter(row=>String(row.status||'pending')!=='completed').slice(0,32).map(row=>String(row.title||'').trim()).filter(Boolean);
 }
 
 export async function today(request: Request, ctx: AppContext, targetDate: string): Promise<Response> { requireMember(ctx); const data=await makeViewData(ctx,targetDate); const unorganized=await unorganizedTasksFor(ctx); return html(renderDailyPage(ctx,targetDate,data,false,unorganized)); }
