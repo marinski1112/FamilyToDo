@@ -71,8 +71,8 @@ try {
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
     finally{if(button)button.disabled=false;}
   };
-} catch(error) {
+} catch {
   root.dataset.shoppingNewJs='error';
-  console.error('[shopping-new] initialization failed',error);
+  console.error('[shopping-new] initialization failed');
 }
 })();

@@ -51,7 +51,10 @@ assert.match(source,/const assignees=assigneeValues\.map\(safeEntityId\)/,'bound
 assert.match(source,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('追加に失敗しました。'\)/,'Shopping batch API failures must fall back to a fixed client-safe message even when the response body is malformed');
 assert.doesNotMatch(source,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?\.error|alert\(d\.error/,'Shopping batch create must not surface arbitrary server error detail in the browser');
 
+assert.match(source,/\} catch \{\s*root\.dataset\.shoppingNewJs='error';\s*console\.error\('\[shopping-new\] initialization failed'\);\s*\}/,'Shopping batch initialization failures must log only a fixed non-content-bearing diagnostic');
+assert.doesNotMatch(source,/console\.error\([^\n]*(?:error|payload|csrf|memo|product|category|assignee|taskId)[,)]/i,'Shopping initialization logging must never forward exception, payload, or form-derived values');
+
 assert.doesNotMatch(source,/calendar_perf|\/app\/calendar\.php|CALENDAR_PERF_DIAGNOSTICS/,'Shopping payload bounds must remain isolated from Calendar diagnostics');
 assert.doesNotMatch(source,/cookie|authorization|member_name|family_name|private_owner_id/i,'Shopping payload bounds must not add identity/session handling');
 
-console.log('shopping batch payload bounds contract: CSRF, input metadata, and API failure display remain bounded and fail closed before Shopping network I/O');
+console.log('shopping batch payload bounds contract: CSRF, input metadata, API failure display, and initialization logging remain bounded and fail closed without exposing content');
