@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const pages=fs.readFileSync('src/page-routes.ts','utf8');
+const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 
 if(!index.includes("import { dispatchPageRoute } from './page-routes';")) throw new Error('index.ts must import page dispatcher');
 if(!index.includes('const pageResponse=await dispatchPageRoute(request,context,env,url);')) throw new Error('index.ts must invoke page dispatcher');
@@ -45,8 +46,8 @@ for(const sentinel of routeSentinels){
   if(!pages.includes(sentinel)) throw new Error(`page dispatcher route missing: ${sentinel}`);
   if(index.includes(sentinel)) throw new Error(`page route must not remain in index.ts: ${sentinel}`);
 }
+if(!apiRoutes.includes("if(url.pathname==='/api/toggle') return await toggle(request,context);")) throw new Error('context API toggle routing changed');
 for(const required of [
-  "if(url.pathname==='/api/toggle') return await toggle(request,context);",
   "if(url.pathname==='/app/api/check.php'||url.pathname==='/app/api/check') return await toggle(request,context);",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
   "if(url.pathname==='/app/recurring.php')",

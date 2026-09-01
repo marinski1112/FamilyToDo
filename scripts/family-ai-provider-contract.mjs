@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const app=fs.readFileSync('src/app.ts','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
@@ -11,8 +12,8 @@ const docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
 
 assert.ok(ai.includes("new URL('https://generativelanguage.googleapis.com/v1beta/models')"));
 assert.ok(ai.includes("'x-goog-api-key':env.GEMINI_API_KEY"));
-assert.ok(index.includes('/api/family-ai/model-catalog'));
-assert.ok(index.includes('/api/family-ai/model-probe'));
+assert.ok(apiRoutes.includes('/api/family-ai/model-catalog'));
+assert.ok(apiRoutes.includes('/api/family-ai/model-probe'));
 
 const catalog=ai.slice(ai.indexOf('export async function familyAiModelCatalog'));
 assert.ok(catalog.includes('listGeminiModels'));

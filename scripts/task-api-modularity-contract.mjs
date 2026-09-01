@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
+const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 
-if(!index.includes("import { taskApi } from './task-api';")) throw new Error('index.ts must import task API module');
+if(!apiRoutes.includes("import { taskApi } from './task-api';")) throw new Error('context API dispatcher must import task API module');
 if(index.includes('async function taskApi(')||index.includes('function calendarVisibleFlag(')) throw new Error('task API implementation/helper must not remain in index.ts');
-if(!index.includes("if(url.pathname==='/api/task') return await taskApi(request,context);")) throw new Error('task API route wiring changed');
+if(!apiRoutes.includes("if(url.pathname==='/api/task') return await taskApi(request,context);")) throw new Error('task API route wiring changed');
 if(!taskApi.includes('export async function taskApi(request:Request,ctx:any):Promise<Response>{')) throw new Error('task API module must export taskApi');
 for(const sentinel of [
   "if(request.method==='DELETE')",

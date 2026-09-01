@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
+const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const itemApi=fs.readFileSync('src/item-api.ts','utf8');
 
-if(!index.includes("import { itemApi } from './item-api';")) throw new Error('index.ts must import item API module');
+if(!apiRoutes.includes("import { itemApi } from './item-api';")) throw new Error('context API dispatcher must import item API module');
 if(index.includes('async function itemApi(')) throw new Error('itemApi must not remain defined in index.ts');
-if(!index.includes("if(url.pathname==='/api/item') return await itemApi(request,context);")) throw new Error('item API route wiring changed');
+if(!apiRoutes.includes("if(url.pathname==='/api/item') return await itemApi(request,context);")) throw new Error('item API route wiring changed');
 if(!itemApi.includes('export async function itemApi(request:Request,ctx:any):Promise<Response>{')) throw new Error('item API module must export itemApi');
 for(const sentinel of [
   "if(request.method!=='POST') return json({ok:false,error:'POST only'},405);",
