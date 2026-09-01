@@ -1,0 +1,48 @@
+name: Child Journal Google Tasks voice patch
+
+on:
+  push:
+    branches:
+      - feature/child-journal-google-tasks-voice
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/child-journal-google-tasks-voice
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply exact Child Journal Google Tasks voice wiring and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object src/google-tasks.ts)" = "386bad3c63ba123beff3fcb53f3daaf5e4e5ed20"
+          test "$(git hash-object src/child-journal-google-tasks.ts)" = "9ba019c9bd62017efa46a3da537f357449ab893f"
+          test "$(git hash-object scripts/child-journal-google-tasks-voice-contract.mjs)" = "bedaad45605446ac56bb10e321f087fe36d2edf6"
+          test "$(git hash-object scripts/feature-contract-bundle.mjs)" = "1da6e16c23f777bfa06d3b1e6542625dec6b077a"
+          test "$(git hash-object docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md)" = "fcc1794116428ac4efa477f0e254d233beecf9ed"
+          test "$(git hash-object scripts/tmp_child_journal_google_tasks_voice_patch.py)" = "f8936411ad8daf6fd5f7312ab947271733e40d05"
+          python scripts/tmp_child_journal_google_tasks_voice_patch.py
+          node scripts/child-journal-google-tasks-voice-contract.mjs
+          npm test
+          git diff --check
+          rm .github/workflows/child-journal-google-tasks-voice-patch.yml scripts/tmp_child_journal_google_tasks_voice_patch.py
+      - name: Commit Child Journal Google Tasks voice bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/google-tasks.ts src/child-journal-google-tasks.ts scripts/child-journal-google-tasks-voice-contract.mjs scripts/feature-contract-bundle.mjs docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md .github/workflows/child-journal-google-tasks-voice-patch.yml scripts/tmp_child_journal_google_tasks_voice_patch.py
+          git diff --cached --check
+          git commit -m "Add Google Tasks Child Journal voice commands"
+          git push origin HEAD:feature/child-journal-google-tasks-voice
