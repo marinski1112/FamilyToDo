@@ -39,7 +39,22 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git rm scripts/tmp_context_api_route_dispatcher_patch.mjs .github/workflows/context-api-route-dispatcher-patch.yml
-          git add src/index.ts src/context-api-routes.ts scripts/context-api-route-dispatcher-contract.mjs scripts/regression-manifest.mjs
+          git add \
+            src/index.ts \
+            src/context-api-routes.ts \
+            scripts/context-api-route-dispatcher-contract.mjs \
+            scripts/regression-manifest.mjs \
+            scripts/item-api-modularity-contract.mjs \
+            scripts/task-api-modularity-contract.mjs \
+            scripts/page-route-dispatcher-contract.mjs \
+            scripts/child-growth-journal-contract.mjs \
+            scripts/calendar-projection-queue-contract.mjs \
+            scripts/ics-import-contract.mjs \
+            scripts/ics-import-format-contract.mjs \
+            scripts/google-calendar-inbound-contract.mjs \
+            scripts/family-ai-actions-contract.mjs \
+            scripts/family-ai-provider-contract.mjs \
+            scripts/family-ai-foundation-contract.mjs
           git diff --cached --check
           git commit -m "Refactor context API routes into dispatcher"
           git push
