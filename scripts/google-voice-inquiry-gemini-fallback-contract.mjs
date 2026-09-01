@@ -22,6 +22,7 @@ assert.match(inquiry,/export function isDeterministicGoogleVoiceWriteBody\(value
 for(const family of ['買い物','タスク','TODO','成長日記','ミルク','おしっこ','うんち','離乳食','お風呂','吐いた','体温']){
   assert.ok(inquiry.includes(family),`deterministic write-family guard must recognize ${family}`);
 }
+assert.match(inquiry,/ミルク\(\?: \?\\d\+\)\?/,'deterministic write-family guard must recognize the compact milk quantity accepted by the authoritative parser');
 
 const deterministic=runtime.indexOf('parseMarkedGoogleVoiceInquiryCommand(value)');
 const writeGuard=runtime.indexOf('isDeterministicGoogleVoiceWriteBody(body)');
@@ -31,4 +32,4 @@ assert.match(runtime,/if \(body === null\) return \{ handled: false \};/,'unmark
 assert.match(runtime,/if \(isDeterministicGoogleVoiceWriteBody\(body\)\) return \{ handled: false \};/,'known deterministic write families must fall through before Gemini fallback');
 assert.match(taskAdapter,/extractMarkedGoogleVoiceInquiryBody\(item\.title\) === null/,'Google Tasks adapter must admit marked deterministic misses without admitting unmarked tasks');
 
-console.log('google voice inquiry Gemini fallback contract: marked-only, deterministic inquiry first, deterministic writes bypass AI, family-scoped model, strict enum classification, privacy-safe fail-closed behavior ok');
+console.log('google voice inquiry Gemini fallback contract: marked-only, deterministic inquiry first, compact deterministic writes bypass AI, family-scoped model, strict enum classification, privacy-safe fail-closed behavior ok');
