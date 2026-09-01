@@ -5,7 +5,7 @@ const pages=fs.readFileSync('src/new-entry-pages.ts','utf8');
 const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 if(!exceptionRoutes.includes("import { taskNew, itemNew } from './new-entry-pages';")) throw new Error('exception routes must import new page handlers');
-for(const marker of ['async function taskNew(','async function itemNew(','id=\"taskNewPayload\"','id=\"itemFormError\"']) {
+for(const marker of ['async function taskNew(','async function itemNew(','id="taskNewPayload"','id="itemFormError"']) {
   if(index.includes(marker)) throw new Error(`new page implementation leaked into index: ${marker}`);
 }
 for(const marker of [
@@ -13,7 +13,7 @@ for(const marker of [
   'export async function itemNew(',
   "SELECT DISTINCT s.category FROM shopping_items",
   "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
-  '/assets/task-new.js?v=12.144.0-wave125',
+  '/assets/task-new.js?v=12.147.0-wave128',
   '/assets/item-new.js?v=12.93-wave74',
   'taskChildVisibilitySql',
   'taskVisibilitySql',
