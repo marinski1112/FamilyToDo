@@ -20,7 +20,7 @@ const block=index.slice(start,end).trim();
 if(!block.includes('async function itemNew(')) throw new Error('itemNew is not inside expected extraction block');
 if((block.match(/async function taskNew\(/g)||[]).length!==1||(block.match(/async function itemNew\(/g)||[]).length!==1) throw new Error('unexpected new page function multiplicity');
 
-const moduleSource=`import { layout, redirect } from './response';\nimport { taskVisibilitySql, taskChildVisibilitySql } from './app';\n\n${block
+const moduleSource=`import { redirect } from './response';\nimport { layout, taskVisibilitySql, taskChildVisibilitySql } from './app';\n\n${block
   .replace('async function taskNew(','export async function taskNew(')
   .replace('async function itemNew(','export async function itemNew(')}\n`;
 fs.writeFileSync(modulePath,moduleSource);
