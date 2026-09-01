@@ -2,6 +2,8 @@ name: Page route dispatcher patch
 on:
   push:
     branches: [refactor/page-route-dispatcher]
+    paths-ignore:
+      - scripts/tmp_page_route_typecheck.txt
 
 permissions:
   contents: write
@@ -36,7 +38,19 @@ jobs:
       - name: Focused page route contract
         run: node scripts/page-route-dispatcher-contract.mjs
       - name: Typecheck
-        run: npm run typecheck
+        id: typecheck
+        continue-on-error: true
+        run: npm run typecheck 2>&1 | tee /tmp/page-route-typecheck.log
+      - name: Preserve typecheck diagnostics
+        if: steps.typecheck.outcome == 'failure'
+        run: |
+          cp /tmp/page-route-typecheck.log scripts/tmp_page_route_typecheck.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/tmp_page_route_typecheck.txt
+          git commit -m "Record page route typecheck diagnostics"
+          git push
+          exit 1
       - name: Browser JS
         run: npm run check:browser-js
       - name: Static assets
@@ -52,6 +66,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git rm scripts/tmp_page_route_dispatcher_patch.mjs .github/workflows/page-route-dispatcher-patch.yml
+          if [ -f scripts/tmp_page_route_typecheck.txt ]; then git rm scripts/tmp_page_route_typecheck.txt; fi
           git add src/index.ts src/page-routes.ts scripts/page-route-dispatcher-contract.mjs scripts/regression-manifest.mjs
           git diff --cached --check
           git commit -m "Refactor page routes into dispatcher"
