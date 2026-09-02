@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 const taskNewPage=fs.readFileSync('src/new-entry-pages.ts','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 
 for(const value of [
   "document.getElementById('shoppingToggle')",
