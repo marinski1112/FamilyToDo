@@ -17,11 +17,15 @@ for(const marker of [
   "if(type==='recurrence')",
   "定期タスクの発生日が見つかりません。",
   "定期タスクのルールが見つかりません。",
-  "担当者が設定されていない定期タスクは完了できません。",
-  "この定期タスクの担当者ではありません。",
-  'SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id',
+  'const recurrenceTaskId=Number(rule.task_id);',
+  'const assignedCount=Number(assigned?.c||0);',
+  "if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'この定期タスクの担当者ではありません。'},403);",
   'INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at)',
   'DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=? AND member_id=?',
+  'const done=assignedCount>0',
+  'JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?',
+  "const mode=assignedCount>0?String(rule.completion_mode||'ANY').toUpperCase():'ANY';",
+  'const completedBy=isComplete?(Number(latest?.member_id||0)||null):null;',
   'updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB',
   "if(type==='task')",
   "イベントは完了チェックの対象外です。",
@@ -53,6 +57,7 @@ for(const forbiddenSql of [
   'SELECT s.id,s.completion_mode FROM shopping_items',
   'current.completion_mode',
 ]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
+if(api.includes('担当者が設定されていない定期タスクは完了できません。')) throw new Error('unassigned recurrence must remain completable by an active family member');
 if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
 if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
