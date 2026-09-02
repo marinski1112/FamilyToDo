@@ -18,6 +18,7 @@ export const activeRegressionGroups=[
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['family-invite-page-boundary','node scripts/family-invite-page-boundary-contract.mjs'],
       ['message-new-page-boundary','node scripts/message-new-page-boundary-contract.mjs'],
+      ['shopping-new-page-boundary','node scripts/shopping-new-page-boundary-contract.mjs'],
       ['messages-api-boundary','node scripts/messages-api-boundary-contract.mjs'],
       ['settings-root-boundary','node scripts/settings-root-boundary-contract.mjs'],
       ['settings-members-page-boundary','node scripts/settings-members-page-boundary-contract.mjs'],
