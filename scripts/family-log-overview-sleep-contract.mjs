@@ -9,7 +9,6 @@ const css=read('public/assets/family.css');
 const migration=read('migrations/0030_wave94_family_log_overview.sql');
 
 for(const marker of [
-  'All-view intentionally does not union',
   'familyLogOverviewQuickTypes',
   "action==='sleep_start'",
   "action==='sleep_stop'",
