@@ -37,7 +37,8 @@ for(const marker of [
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
 
 if(!handlers.includes("export { taskEvents } from './task-events-page';"))throw new Error('taskEvents must route through retained unified checklist page');
-if(!handlers.includes("export { today, tomorrow, taskEdit, itemEdit } from './app';"))throw new Error('unmigrated task page handlers changed unexpectedly');
+if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('daily pages must route through retained daily task page');
+if(!handlers.includes("export { taskEdit, itemEdit } from './app';"))throw new Error('unmigrated task edit handlers changed unexpectedly');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('retained taskView boundary regressed');
 if(!routes.includes("if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"))throw new Error('unified checklist route changed');
 for(const marker of ["el.matches('.toggle[data-type][data-id]')","fetch('/api/toggle'","occurrence_id:Number(el.dataset.occurrenceId||0)"])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
