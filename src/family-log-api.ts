@@ -1,11 +1,17 @@
 import type { AppContext } from './app-context';
-import { BadRequest, Forbidden, familyLog as legacyFamilyLog, normalizeMilkAmountPresets, recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain } from './app';
+import { BadRequest, Forbidden } from './errors';
+import { normalizeMilkAmountPresets, recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain } from './family-external-domain';
 import { bodyJson as parseBody, RequestBodyParseError } from './request-body';
 import { json } from './response';
 import { logActivity } from './activity-log';
 import { completeLinkedTargetFromFamilyLog } from './family-log-linked-completion';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { requestGoogleHomeSyncForFamily } from './google-home-request-sync';
+
+async function legacyFamilyLog(request:Request,ctx:AppContext):Promise<Response>{
+  const { familyLogPage }=await import('./family-log-page');
+  return familyLogPage(request,ctx);
+}
 
 type Row=Record<string,unknown>;
 const FAMILY_LOG_TYPES=Object.keys(FAMILY_LOG_TYPE_META);

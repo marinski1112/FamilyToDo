@@ -1,6 +1,7 @@
 import { html, json, redirect } from './response';
-import type { AppContext } from './app';
-import { recordConfiguredQuickActionDomain, recordExternalFamilyLogDomain, recordExternalPetQuickLogDomain, recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain, layout } from './app';
+import type { AppContext } from './app-context';
+import { recordConfiguredQuickActionDomain, recordExternalFamilyLogDomain, recordExternalPetQuickLogDomain, recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain } from './family-external-domain';
+import { layout } from './app-shell';
 import type { CurrentMember } from './types';
 import { googleHomeRequestSyncConfigured, googleHomeServiceAccountReadiness, requestGoogleHomeSyncForFamily, validateGoogleHomeServiceAccountSecret } from './google-home-request-sync';
 import { DEFAULT_FAMILY_TIMEZONE, formatStoredUtcForFamily } from './timezone';

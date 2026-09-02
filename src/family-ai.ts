@@ -1,7 +1,7 @@
 import { json } from './response';
-import type { AppContext } from './app';
+import type { AppContext } from './app-context';
 import { DEFAULT_FAMILY_TIMEZONE, familyNow } from './timezone';
-import { recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain } from './app';
+import { recordQuickChoreDomain, startDedicatedSleepDomain, stopDedicatedSleepDomain } from './family-external-domain';
 import { queueCalendarProjectionAfterMutation, wakeCalendarOutbox } from './google-calendar';
 
 /** Runtime default lives here only; GEMINI_MODEL remains the deployment override. */
