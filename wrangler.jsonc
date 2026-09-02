@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "familytodo",
-  "main": "src/calendar-perf-worker.ts",
+  "main": "src/index.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": [
     "nodejs_compat"
@@ -40,7 +40,6 @@
     "APP_TIMEZONE": "Asia/Tokyo",
     "NOTIFY_MODE": "scheduled",
     "ENVIRONMENT": "staging",
-    "CALENDAR_PERF_DIAGNOSTICS": "1",
     "GOOGLE_HOME_CLIENT_ID": "Family_ToDo",
     "GOOGLE_HOME_PROJECT_ID": "family-todo-home",
     "FAMILY_AI_PROVIDER": "GEMINI",

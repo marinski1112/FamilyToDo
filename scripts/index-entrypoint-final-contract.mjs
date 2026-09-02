@@ -2,6 +2,11 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const routes=fs.readFileSync('src/exception-routes.ts','utf8');
+const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
+
+if(!/"main"\s*:\s*"src\/index\.ts"/.test(wrangler)) throw new Error('canonical Worker entrypoint must remain src/index.ts');
+if(/CALENDAR_PERF_DIAGNOSTICS|CALENDAR_INNER_DIAGNOSTICS/.test(wrangler)) throw new Error('temporary Calendar diagnostics flags must remain removed');
+if(fs.existsSync('src/calendar-perf-worker.ts')) throw new Error('temporary Calendar diagnostics wrapper must remain removed');
 
 for(const marker of [
   "import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';",
