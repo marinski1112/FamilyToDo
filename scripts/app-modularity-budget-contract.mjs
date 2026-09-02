@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const APP_PATH='src/app.ts';
-const APP_MAX_BYTES=407156;
 const NEW_MODULE_MAX_BYTES=200000;
 
 function tsFiles(dir){
@@ -15,26 +14,19 @@ function tsFiles(dir){
   return out;
 }
 
-const app=fs.readFileSync(APP_PATH,'utf8');
-const appBytes=Buffer.byteLength(app,'utf8');
-if(appBytes>APP_MAX_BYTES){
-  throw new Error(`src/app.ts grew from the frozen modularization baseline: ${appBytes} > ${APP_MAX_BYTES} bytes. Extract responsibility to a retained module instead of enlarging app.ts.`);
-}
+if(fs.existsSync(APP_PATH)) throw new Error('src/app.ts monolith must remain removed after retained ownership migration');
 
 for(const forbidden of ['src/app-legacy.ts','src/legacy-app.ts','src/app-monolith.ts']){
   if(fs.existsSync(forbidden)) throw new Error(`giant app.ts must not be renamed into another monolith: ${forbidden}`);
 }
 
 for(const file of tsFiles('src')){
-  if(file===APP_PATH) continue;
   const bytes=fs.statSync(file).size;
   if(bytes>NEW_MODULE_MAX_BYTES){
     throw new Error(`${file} is ${bytes} bytes. Do not replace app.ts with another giant TypeScript module; split by responsibility.`);
   }
+  const source=fs.readFileSync(file,'utf8');
+  if(source.includes("from './app'")||source.includes('from "./app"')) throw new Error(`${file} must not import removed src/app.ts`);
 }
 
-for(const locationMarker of ['LocationProvider','LocationQueryService','NormalizedLocationPoint','location_devices','member_location_history']){
-  if(app.includes(locationMarker)) throw new Error(`new Location responsibility must not be added to src/app.ts: ${locationMarker}`);
-}
-
-console.log(`app modularity budget ok: app.ts=${appBytes}/${APP_MAX_BYTES} bytes; no replacement monolith`);
+console.log('app modularity budget ok: src/app.ts removed; no replacement monolith or direct imports');
