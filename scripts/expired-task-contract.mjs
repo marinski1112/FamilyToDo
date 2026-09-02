@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const taskEvents=fs.readFileSync('public/assets/task-events.js','utf8');
 
 for(const marker of [
