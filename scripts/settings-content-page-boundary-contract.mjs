@@ -37,7 +37,7 @@ for(const marker of [
 if(!handlers.includes("export { settingsContent } from './settings-content-page';")) throw new Error('settings page handlers must export retained settingsContent');
 const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bsettingsContent\b/.test(appExport)) throw new Error('settingsContent must not remain exported from app.ts');
-for(const transitional of ['settings','settingsDiagnostics','settingsNotifications','recurring']) if(!new RegExp(`\\b${transitional}\\b`).test(appExport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+for(const transitional of ['settings','settingsDiagnostics','recurring']) if(!new RegExp(`\\b${transitional}\\b`).test(appExport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
 if(!handlers.includes("export { settingsMembers } from './settings-members-page';")) throw new Error('settingsMembers retained boundary regressed');
 
 if(!routes.includes("if(url.pathname==='/app/settings_content.php') return await settingsContent(context);")) throw new Error('settings-content route wiring changed');
