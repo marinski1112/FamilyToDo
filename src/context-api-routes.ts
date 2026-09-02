@@ -1,4 +1,4 @@
-import { toggle, familyLog } from './app';
+import { toggle } from './app';
 import { createFamily } from './family-create-api';
 import { joinFamily } from './family-join-api';
 import { inviteCreate } from './family-invite-api';
@@ -19,6 +19,7 @@ import { webPushApi } from './web-push-api';
 import { messages } from './messages-api';
 import { settings } from './settings-root';
 import { shopping } from './shopping-root';
+import { familyLog } from './family-log-root';
 
 export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/api/family/create') return await createFamily(request,context);
