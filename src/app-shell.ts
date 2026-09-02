@@ -16,7 +16,7 @@ const esc = (v: unknown) => String(v ?? '')
  */
 export function layout(title: string, body: string, active = ''): string {
   const navItems = [
-    ['/app/tasks.php','✅','タスク・イベント'],
+    ['/app/tasks.php','✅','チェックリスト'],
     ['/app/calendar.php','📅','カレンダー'],
     ['/app/location.php','📍','位置情報'],
     ['/app/family_log.php','🐣','家族ログ'],
