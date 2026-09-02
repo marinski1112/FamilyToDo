@@ -35,7 +35,9 @@ if(!routes.includes("if(url.pathname==='/api/push/subscribe'||url.pathname==='/a
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bwebPushApi\b/.test(appImport)) throw new Error('context API dispatcher must not import webPushApi from app.ts');
 if(/\binviteCreate\b/.test(appImport)) throw new Error('context API dispatcher must not import inviteCreate from app.ts');
+if(/\brecordOccurrenceFamilyLog\b/.test(appImport)) throw new Error('context API dispatcher must not import recordOccurrenceFamilyLog from app.ts');
 if(!routes.includes("import { inviteCreate } from './family-invite-api';")) throw new Error('family invitation retained boundary is missing');
-for(const transitional of ['toggle','messages','shopping','familyLog','recordOccurrenceFamilyLog','settings']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+if(!routes.includes("import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';")) throw new Error('recurrence Family Log retained boundary is missing');
+for(const transitional of ['toggle','messages','shopping','familyLog','settings']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
 
 console.log('Web Push retained API boundary contract ok');
