@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../src/calendar-stamp-api.ts',import.meta.url),'utf8');
+const shell=fs.readFileSync(new URL('../src/app-shell.ts',import.meta.url),'utf8');
+const ui=fs.readFileSync(new URL('../public/assets/calendar-stamp-ui.js',import.meta.url),'utf8');
 const fail=message=>{console.error(message);process.exit(1)};
 const mustSource=(needle,message)=>{if(!source.includes(needle))fail(message)};
 
@@ -24,4 +26,17 @@ for(const sensitive of ['familyId:','memberId:','createdBy:','privateOwnerId:','
 }
 if(/storage_key|thumbnail_storage_key|visibility_scope|private_owner_id|created_by|family_id|member_id/.test(projection))fail('raw persistence/private scope fields must not enter browser projection');
 
-console.log('calendar animated stamps read API contract: ok');
+if(!shell.includes('<script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}"></script>'))fail('Calendar shell must load the stamp renderer only through the Calendar asset bundle');
+for(const needle of [
+  "fetch('/api/calendar-stamps?from='",
+  "const firstByDate=new Map()",
+  "image.className='calendar-stamp-thumb'",
+  "viewer.className='calendar-stamp-viewer'",
+  "url.searchParams.set('stamp_play',String(Date.now()))",
+  "new MutationObserver",
+  "event.stopImmediatePropagation()",
+  "u.origin===location.origin",
+])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
+if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
+
+console.log('calendar animated stamps read API + month-cell consumer contract: ok');
