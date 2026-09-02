@@ -11,13 +11,15 @@ export const CALENDAR_COLOR_OPTIONS=[
   {value:'#64748b',label:'灰'},
 ] as const;
 
-const CALENDAR_COLOR_VALUES=new Set<string>(CALENDAR_COLOR_OPTIONS.map(option=>option.value));
+const CALENDAR_COLOR_PATTERN=/^#[0-9a-f]{6}$/i;
 
 export function isAllowedCalendarColor(value:unknown):boolean{
-  return CALENDAR_COLOR_VALUES.has(String(value||''));
+  return CALENDAR_COLOR_PATTERN.test(String(value||'').trim());
 }
 
 export function normalizeCalendarColor(value:unknown,fallback=DEFAULT_CALENDAR_COLOR):string{
-  const candidate=String(value||'');
-  return isAllowedCalendarColor(candidate)?candidate:fallback;
+  const candidate=String(value||'').trim();
+  if(isAllowedCalendarColor(candidate))return candidate.toLowerCase();
+  const safeFallback=String(fallback||'').trim();
+  return isAllowedCalendarColor(safeFallback)?safeFallback.toLowerCase():DEFAULT_CALENDAR_COLOR;
 }
