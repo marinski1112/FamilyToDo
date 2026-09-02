@@ -109,13 +109,23 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
 
   const current=await ctx.env.DB.prepare(`SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
   if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+  const shopTask=await ctx.env.DB.prepare('SELECT task_id FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
+  const linkedTaskId=Number(shopTask?.task_id||0);
   const shopAssigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=?').bind(id).first<Row>();
+  const directAssigned=Number(shopAssigned?.c||0);
   const shopActorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=? AND sa.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
-  if(Number(shopAssigned?.c||0)===0)return json({ok:false,error:'担当者が設定されていない買い物は完了できません。'},409);
-  if(!shopActorAssigned)return json({ok:false,error:'この買い物の担当者ではありません。'},403);
+  const taskAssigned=directAssigned===0&&linkedTaskId?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(linkedTaskId).first<Row>():null;
+  const inheritedAssigned=Number(taskAssigned?.c||0);
+  const taskActorAssigned=directAssigned===0&&inheritedAssigned>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(linkedTaskId,m.id).first<Row>():null;
+  if(directAssigned>0&&!shopActorAssigned)return json({ok:false,error:'この買い物の担当者ではありません。'},403);
+  if(directAssigned===0&&inheritedAssigned>0&&!taskActorAssigned)return json({ok:false,error:'この買い物に紐づくタスクの担当者ではありません。'},403);
   if(completed)await ctx.env.DB.prepare('INSERT INTO shopping_completions(shopping_item_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(shopping_item_id,member_id) DO UPDATE SET completed_at=excluded.completed_at').bind(id,m.id,now).run();
   else await ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id=?').bind(id,m.id).run();
-  const shopDone=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(id).first<Row>();
+  const shopDone=directAssigned>0
+    ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(id).first<Row>()
+    :inheritedAssigned>0
+      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(linkedTaskId,id).first<Row>()
+      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?').bind(m.family_id,id).first<Row>();
   const shopComplete=Number(shopDone?.c||0)>0;
   const shopLatest=shopComplete?await ctx.env.DB.prepare('SELECT member_id,completed_at FROM shopping_completions WHERE shopping_item_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1').bind(id).first<Row>():null;
   await ctx.env.DB.prepare('UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(shopComplete?'completed':'pending',shopComplete?Number(shopLatest?.member_id||0)||null:null,shopComplete?String(shopLatest?.completed_at||now):null,now,id,m.family_id).run();

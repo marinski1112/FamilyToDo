@@ -29,6 +29,12 @@ for(const marker of [
   "if(type==='item')",
   'INSERT INTO item_completion_history(item_id,member_id,action,occurred_at)',
   'SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=?',
+  'SELECT task_id FROM shopping_items WHERE id=? AND family_id=?',
+  'const directAssigned=Number(shopAssigned?.c||0);',
+  'const inheritedAssigned=Number(taskAssigned?.c||0);',
+  "if(directAssigned>0&&!shopActorAssigned)return json({ok:false,error:'この買い物の担当者ではありません。'},403);",
+  "if(directAssigned===0&&inheritedAssigned>0&&!taskActorAssigned)return json({ok:false,error:'この買い物に紐づくタスクの担当者ではありません。'},403);",
+  'JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?',
   'const shopComplete=Number(shopDone?.c||0)>0;',
   'INSERT INTO shopping_completion_history(shopping_item_id,member_id,action,occurred_at)',
   "taskVisibilitySql('t')",
@@ -39,6 +45,7 @@ for(const forbiddenSql of [
   'SELECT s.id,s.completion_mode FROM shopping_items',
   'current.completion_mode',
 ]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
+if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
 for(const marker of [
   "PRAGMA table_info(recurrence_occurrences)",
@@ -57,4 +64,4 @@ if(!exceptionRoutes.includes("if(url.pathname==='/app/api/check.php'||url.pathna
 const appImport=exceptionRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\btoggle\b/.test(appImport)) throw new Error('exception routes must not import toggle from app.ts');
 
-console.log('toggle-api-boundary: retained routing, authorization and D1 schema compatibility ok');
+console.log('toggle-api-boundary: retained routing, authorization, assignment fallback and D1 schema compatibility ok');

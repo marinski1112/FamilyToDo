@@ -3,8 +3,7 @@
 try{
   if(location.pathname!=='/app/settings_family_log.php')return;
   const head=document.querySelector('.family-log-management-head');
-  const legacyHeadAction=head?.lastElementChild;
-  if(legacyHeadAction&&legacyHeadAction.tagName!=='H1')legacyHeadAction.remove();
+  if(head)[...head.children].forEach(element=>{if(element.tagName!=='H1')element.remove();});
 
   const originalOpen=document.getElementById('familyLogSubjectOpen');
   const subjectRows=[...document.querySelectorAll('.family-log-management-row:not(.family-chore-management-row)')];

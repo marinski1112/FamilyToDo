@@ -106,11 +106,12 @@ assert.match(calendar,/viewportW-rect\.width-margin/,'floating preview must clam
 assert.match(calendar,/cellRect\.top-gap-rect\.height/,'floating preview should prefer placement above the pressed date');
 assert.match(calendar,/viewportH-rect\.height-84/,'floating preview must stay clear of the bottom navigation');
 assert.doesNotMatch(calendar,/calendar-cell\.calendar-press-preview/,'press preview must not enlarge the pressed date cell itself');
-assert.match(familyLoader,/family-log-core\.js\?v=wave128-fix17/,'Family Log loader must preserve the existing core implementation');
-assert.match(familyLoader,/family-log-management-ui\.js\?v=wave128-fix17/,'Family Log loader must include the consolidated management UI');
+assert.match(familyLoader,/family-log-core\.js\?v=wave128-fix18/,'Family Log loader must preserve the existing core implementation with the refreshed cache key');
+assert.match(familyLoader,/family-log-management-ui\.js\?v=wave128-fix18/,'Family Log loader must include the refreshed consolidated management UI');
 assert.match(familyCore,/familyLogSubjectOpen/,'Family Log core must retain subject creation/edit behavior');
-assert.match(familyUi,/legacyHeadAction&&legacyHeadAction\.tagName!=='H1'/,'Family Log management must never remove the page heading when no legacy action is present');
-assert.match(familyUi,/legacyHeadAction\.remove\(\)/,'Family Log management must still remove the legacy top-right action when present');
+assert.match(familyUi,/if\(head\)\[\.\.\.head\.children\]\.forEach/,'Family Log management must inspect every header child rather than only one legacy action');
+assert.match(familyUi,/element\.tagName!=='H1'/,'Family Log management must preserve only the page heading in its header');
+assert.match(familyUi,/element\.remove\(\)/,'Family Log management must remove stale top-right header actions when present');
 assert.match(familyUi,/＋ 対象・項目/,'Family Log subject management must use one consolidated entry point');
 assert.match(familyUi,/family-log-subject-manager-list/,'Family Log subject manager must expose existing rows inside the manager');
 assert.match(familyUi,/edit\?\.click\(\)/,'tapping an existing subject row must reuse the existing edit flow');
