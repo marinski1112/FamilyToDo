@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const read=p=>fs.readFileSync(p,'utf8');
-const app=read('src/app.ts');
+const app=retainedAppContractSource();
 const css=read('public/assets/family.css');
 const has=(text,token)=>assert.ok(text.includes(token),`missing ${token}`);
 
