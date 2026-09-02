@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const index=fs.readFileSync('src/index.ts','utf8');
 const diagnostics=fs.readFileSync('src/runtime-diagnostics.ts','utf8');
 const familyLog=fs.readFileSync('public/assets/family-log.js','utf8')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+fs.readFileSync('public/assets/family-log-core.js','utf8'):'');
