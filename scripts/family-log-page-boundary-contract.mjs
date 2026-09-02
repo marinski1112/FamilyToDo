@@ -4,6 +4,8 @@ const page=fs.readFileSync('src/family-log-page.ts','utf8');
 const recurrence=fs.readFileSync('src/recurrence-projection.ts','utf8');
 const api=fs.readFileSync('src/family-log-api.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
+const shell=fs.readFileSync('src/app-shell.ts','utf8');
+const familyLogLayout=fs.readFileSync('public/assets/family-log-layout.css','utf8');
 if(handler.includes("from './app'"))throw new Error('Family Log page handler still forwards to app.ts');
 if(!handler.includes("export { familyLogPage as familyLog } from './family-log-page';"))throw new Error('retained Family Log page export missing');
 if(!routes.includes("url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php'"))throw new Error('Family Log page routes changed');
@@ -33,4 +35,13 @@ for(const marker of [
   'recurrence_occurrence_id:Number(occ.id)',
 ])if(!recurrence.includes(marker))throw new Error(`retained recurrence projection marker missing: ${marker}`);
 if(!api.includes('export async function familyLogApi'))throw new Error('retained Family Log mutation API missing');
-console.log('family-log-page-boundary: retained page, recurrence projection and mutation delegation ok');
+if(!shell.includes("active==='/app/family_log.php'?`<link rel=\"stylesheet\" href=\"/assets/family-log-layout.css?v=${APP_VERSION}\">`:''"))throw new Error('Family Log scoped layout override is not loaded');
+for(const marker of [
+  '.family-log-quick-grid > .family-log-quick',
+  'display:flex',
+  'flex-direction:row',
+  'white-space:nowrap',
+  'overflow-wrap:normal',
+  'word-break:keep-all',
+])if(!familyLogLayout.includes(marker))throw new Error(`Family Log quick label geometry missing: ${marker}`);
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation and quick-label geometry ok');
