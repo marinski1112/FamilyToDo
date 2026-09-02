@@ -12,9 +12,11 @@ const tasks=read('src/google-tasks.ts');
 const ai=read('src/family-ai.ts');
 const calendarEntry=read('src/google-calendar.ts');
 const calendarCore=read('src/google-calendar-core.ts');
+const calendarOneWay=read('src/google-calendar-one-way.ts');
 const calendar=calendarEntry+calendarCore;
 const index=read('src/index.ts');
 const publicRoutes=read('src/public-routes.ts');
+const apiRoutes=read('src/context-api-routes.ts');
 const wrangler=read('wrangler.jsonc');
 const version=read('src/version.ts');
 const watchMigration=read('migrations/0041_wave127_calendar_watch_channels.sql');
@@ -60,18 +62,21 @@ assert.ok(calendar.includes('formatStoredUtcForFamily'),'Google Calendar must us
 for(const token of ["pageSize','1000'",'page<2','nextPageToken','supportedGenerationMethods',"includes('generateContent')",'unsuitableModel','freeTierAssumed:false','autoSwitch:false'])assert.ok(ai.includes(token),token);
 assert.ok(!ai.includes('GEMINI_FREE_CANDIDATES'));
 for(const token of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALLBACK','BUILT_IN_DEFAULT','family_ai_gemini_model','family_ai_test','FUNCTION_CALLING_UNAVAILABLE','MODEL_NOT_IN_CATALOG'])assert.ok(ai.includes(token),token);
-for(const token of ['external_calendar_watch_channels','token_hash','createCalendarWatch','calendarWatchWebhook','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((calendar+watchMigration).includes(token),token);
+
+for(const token of ['external_calendar_watch_channels','token_hash','createCalendarWatch','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((calendar+calendarOneWay+watchMigration).includes(token),token);
 assert.ok(publicRoutes.includes("'/api/google-calendar/watch'"));
+assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'));
+assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'));
 assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
 assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
 assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
-for(const ui of ['受信対象カレンダー: Family TODO','sync token:','使用モデル:'])assert.ok(calendar.includes(ui),ui);
+for(const ui of ['FamilyToDo → Google Calendar','Google CalendarからFamilyToDoへの予定取り込みは行いません','watch notificationは連携状態確認','使用モデル:'])assert.ok(calendar.includes(ui),ui);
 assert.match(calendar,/pending_count/);
 assert.match(calendar,/status IN \('PENDING','ERROR'\)/);
-assert.match(calendar,/pending_before/);
-assert.match(calendar,/pending_after/);
-for(const guardrail of ["calendar.app.created","q.set('syncToken',syncToken)",'e.status===410',"status='ACTIVE'", "1,'EVENT'"])assert.ok(calendar.includes(guardrail),guardrail);
+assert.match(calendarOneWay,/pendingBefore/);
+assert.match(calendarOneWay,/pendingAfter/);
+for(const guardrail of ["calendar.app.created",'e.status===404||e.status===410',"status='ACTIVE'",'familyTodoTaskId'])assert.ok(calendar.includes(guardrail),guardrail);
 assert.ok(!calendar.includes('googleapis.com/tasks'));
 assert.ok(!/UPDATE tasks SET[^'\n]*task_kind/.test(calendar));
 
@@ -92,22 +97,21 @@ assert.doesNotMatch(retryMigration,/status\s*=\s*'ERROR'/);
 assert.doesNotMatch(retryMigration,/UPDATE\s+tasks|DELETE\s+FROM\s+tasks|external_calendar_links|external_calendar_accounts|calendar_sync_state|external_calendar_watch_channels/i);
 
 assert.match(calendarEntry,/export \* from '\.\/google-calendar-core'/);
-assert.match(calendarEntry,/INBOUND_PAGE_SIZE = 25/);
 assert.match(calendarEntry,/OUTBOX_LIMIT = 20/);
-assert.match(calendarEntry,/PAGE_PREFIX = 'PAGE:'/);
-assert.match(calendarEntry,/encodePageState\(syncToken, nextPageToken\)/);
-assert.match(calendarEntry,/pendingAfter > 0 \|\| incoming\.more/);
 assert.match(calendarEntry,/INSERT INTO calendar_sync_outbox/);
 assert.match(calendarEntry,/target_count: count/);
 assert.doesNotMatch(calendarEntry,/LIMIT 1000/);
 assert.match(calendarEntry,/calendar-backfill-limit\{display:none!important\}/);
 assert.match(calendarCore,/processCalendarOutbox/);
 assert.match(calendarCore,/effectiveDelete=op==='DELETE'\|\|!task\|\|!eligibleTask\(task\)/);
+assert.ok(calendarOneWay.includes('received: 0')&&calendarOneWay.includes('inbound_more: false'),'manual sync compatibility must explicitly report no inbound work');
 
-for(const token of ['reconcileHintedInbound','familyTodoTaskId','hintedInboundAlreadyProjected','dependency_count','sameInboundShape','applyInboundSafely'])assert.ok(calendarEntry.includes(token),token);
+for(const retired of ['processCalendarInbound','calendarSyncNow','calendarWatchWebhook','syncCalendarAccount','inboundEventTimes','applyInbound','PAGE_PREFIX','INBOUND_PAGE_SIZE','reconcileHintedInbound','hintedInboundAlreadyProjected','sameInboundShape','applyInboundSafely']){
+  assert.ok(!calendar.includes(retired),`retired normal Calendar inbound must stay absent: ${retired}`);
+}
 assert.ok(!calendarEntry.includes('duplicateCandidates'));
 assert.ok(!calendarEntry.includes("action === 'diagnose_duplicates'"));
 assert.ok(!calendarEntry.includes("action === 'repair_duplicates'"));
 assert.ok(!calendarEntry.includes('calendarDuplicateDiagnose')&&!calendarEntry.includes('calendarDuplicateRepair'));
 
-console.log('google-integration-contract: Home, credentials, AI model, Calendar diagnostics/watch/sync/delete/retry/duplicate contracts ok');
+console.log('google-integration-contract: Home, credentials, AI model, and one-way Calendar diagnostics/watch/outbound/delete/retry contracts ok');
