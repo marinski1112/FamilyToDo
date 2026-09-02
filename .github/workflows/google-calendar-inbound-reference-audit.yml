@@ -1,0 +1,24 @@
+name: Google Calendar Inbound Reference Audit
+
+on:
+  push:
+    branches:
+      - control/remove-google-calendar-inbound
+
+permissions:
+  contents: read
+
+jobs:
+  references:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enumerate dormant inbound references
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RInE \
+            --exclude-dir=.git \
+            --exclude=google-calendar-inbound-reference-audit.yml \
+            'processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncCalendarAccount|syncCalendarAccountPage|applyInboundSafely|reconcileHintedInbound|hintedInboundAlreadyProjected|sameInboundShape|inboundEventTimes|applyInbound|PAGE_PREFIX|INBOUND_PAGE_SIZE|syncLeases' \
+            src scripts public package.json wrangler.jsonc || true
