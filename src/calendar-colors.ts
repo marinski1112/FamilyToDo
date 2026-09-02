@@ -21,7 +21,3 @@ export function normalizeCalendarColor(value:unknown,fallback=DEFAULT_CALENDAR_C
   const candidate=String(value||'');
   return isAllowedCalendarColor(candidate)?candidate:fallback;
 }
-
-export function calendarColorOptionsHtml():string{
-  return CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}">${option.label}</option>`).join('');
-}
