@@ -40,9 +40,7 @@ for(const marker of [
 
 if(!routes.includes("import { familyLogApi } from './family-log-api';")) throw new Error('context API dispatcher must import retained familyLogApi');
 if(!routes.includes("if(url.pathname==='/api/family-log') return await familyLogApi(request,context);")) throw new Error('Family Log API route must use retained familyLogApi');
-const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
-if(/\bfamilyLog\b/.test(appImport)) throw new Error('context API dispatcher must not import familyLog from app.ts');
-if(!/\btoggle\b/.test(appImport)) throw new Error('toggle remains the only expected transitional context API app.ts dependency');
-for(const old of ['messages','shopping','settings','inviteCreate','recordOccurrenceFamilyLog']) if(new RegExp(`\\b${old}\\b`).test(appImport)) throw new Error(`${old} must not regress into the context app.ts import`);
+if(routes.includes("from './app'")) throw new Error('context API dispatcher must not depend on app.ts');
+if(!routes.includes("import { toggle } from './toggle-api';")) throw new Error('retained toggle API boundary missing from context dispatcher');
 
 console.log('Family Log retained mutation API boundary contract ok');

@@ -32,20 +32,15 @@ if(api.includes("from './app'")) throw new Error('Web Push API must not depend o
 
 if(!routes.includes("import { webPushApi } from './web-push-api';")) throw new Error('context API dispatcher must import retained webPushApi');
 if(!routes.includes("if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return await webPushApi(request,context);")) throw new Error('Web Push route wiring changed');
-const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
-if(/\bwebPushApi\b/.test(appImport)) throw new Error('context API dispatcher must not import webPushApi from app.ts');
-if(/\binviteCreate\b/.test(appImport)) throw new Error('context API dispatcher must not import inviteCreate from app.ts');
-if(/\brecordOccurrenceFamilyLog\b/.test(appImport)) throw new Error('context API dispatcher must not import recordOccurrenceFamilyLog from app.ts');
-if(/\bmessages\b/.test(appImport)) throw new Error('context API dispatcher must not import messages from app.ts');
-if(/\bsettings\b/.test(appImport)) throw new Error('context API dispatcher must not import settings from app.ts');
-if(/\bshopping\b/.test(appImport)) throw new Error('context API dispatcher must not import shopping from app.ts');
-if(/\bfamilyLog\b/.test(appImport)) throw new Error('context API dispatcher must not import familyLog from app.ts');
-if(!routes.includes("import { inviteCreate } from './family-invite-api';")) throw new Error('family invitation retained boundary is missing');
-if(!routes.includes("import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';")) throw new Error('recurrence Family Log retained boundary is missing');
-if(!routes.includes("import { messages } from './messages-api';")) throw new Error('messages retained boundary is missing');
-if(!routes.includes("import { settings } from './settings-root';")) throw new Error('settings retained boundary is missing');
-if(!routes.includes("import { shopping } from './shopping-root';")) throw new Error('shopping retained boundary is missing');
-if(!routes.includes("import { familyLogApi } from './family-log-api';")) throw new Error('Family Log retained API boundary is missing');
-if(!/\btoggle\b/.test(appImport)) throw new Error('toggle transition boundary moved unexpectedly');
+if(routes.includes("from './app'")) throw new Error('context API dispatcher must not depend on app.ts');
+for(const marker of [
+  "import { inviteCreate } from './family-invite-api';",
+  "import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';",
+  "import { messages } from './messages-api';",
+  "import { settings } from './settings-root';",
+  "import { shopping } from './shopping-root';",
+  "import { familyLogApi } from './family-log-api';",
+  "import { toggle } from './toggle-api';",
+]) if(!routes.includes(marker)) throw new Error(`retained context API boundary missing: ${marker}`);
 
 console.log('Web Push retained API boundary contract ok');
