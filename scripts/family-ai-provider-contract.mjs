@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const home=fs.readFileSync('src/google-home.ts','utf8');
