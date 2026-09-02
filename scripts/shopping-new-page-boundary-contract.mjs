@@ -20,7 +20,7 @@ for(const marker of [
   "queueCalendarProjectionAfterMutation",
   "status<>'completed'",
   "taskChildVisibilitySql('s')",
-  "visibility_scope='PRIVATE'",
+  "String(task.visibility_scope)==='PRIVATE'",
   "id=\"shoppingPayload\"",
   '/assets/shopping.js?v=${APP_VERSION}',
   "return html(layout('買い物',body,'/app/shopping.php'));",
