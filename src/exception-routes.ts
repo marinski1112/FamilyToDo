@@ -1,4 +1,4 @@
-import { recurring } from './app';
+import { recurring } from './recurring-page';
 import { toggle } from './toggle-api';
 import { makeContext } from './app-context';
 import { liffLogin } from './liff-login';

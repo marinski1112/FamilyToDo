@@ -14,13 +14,15 @@ const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-hand
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
 const transitionalBoundaryFiles={
   'src/calendar-page-handler.ts':['calendar'],
-  'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
 };
 for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
   const source=fs.readFileSync(file,'utf8');
   if(!source.includes("from './app';")) throw new Error(`temporary page boundary must forward to current app implementation: ${file}`);
   for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
 }
+const settingsBoundary=fs.readFileSync('src/settings-page-handlers.ts','utf8');
+if(settingsBoundary.includes("from './app'")) throw new Error('settings page handler boundary must not depend on app.ts');
+for(const marker of ["export { recurring } from './recurring-page';","export { settings } from './settings-root';","export { settingsContent } from './settings-content-page';","export { settingsMembers } from './settings-members-page';","export { settingsNotifications } from './settings-notifications-page';","export { settingsDiagnostics } from './settings-diagnostics';"]) if(!settingsBoundary.includes(marker)) throw new Error(`settings retained page handler missing: ${marker}`);
 const taskBoundary=fs.readFileSync('src/task-page-handlers.ts','utf8');
 if(taskBoundary.includes("from './app'")) throw new Error('task page handler boundary must not depend on app.ts');
 if(!taskBoundary.includes("export { today, tomorrow } from './daily-task-page';")) throw new Error('task retained daily page handlers missing');
