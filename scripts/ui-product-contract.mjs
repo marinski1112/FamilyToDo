@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
@@ -11,7 +12,7 @@ const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
 const messages=fs.readFileSync('public/assets/messages.js','utf8');
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const worker=fs.readFileSync('src/index.ts','utf8');
 const digest=fs.readFileSync('src/line-daily-digest.ts','utf8');
 
