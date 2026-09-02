@@ -37,10 +37,12 @@ if(messageBoundary.includes("from './app'")) throw new Error('message page bound
 if(!messageBoundary.includes("export { messages } from './messages-api';")) throw new Error('message page boundary must export retained messages handler');
 if(!messageBoundary.includes("export { messageNew } from './message-new-page';")) throw new Error('message page boundary must export retained messageNew handler');
 const shoppingBoundary=fs.readFileSync('src/shopping-page-handlers.ts','utf8');
-if(!shoppingBoundary.includes("export { shopping, shoppingEdit } from './app';")) throw new Error('shopping and shoppingEdit must remain transitional app.ts exports');
-if(!shoppingBoundary.includes("export { shoppingNew } from './shopping-new-page';")) throw new Error('shopping page boundary must export retained shoppingNew handler');
-const shoppingAppExport=shoppingBoundary.split('\n').find(line=>line.includes("from './app'"))||'';
-if(/\bshoppingNew\b/.test(shoppingAppExport)) throw new Error('shoppingNew must not remain in app.ts page export');
+if(shoppingBoundary.includes("from './app'")) throw new Error('shopping page boundary must not depend on app.ts');
+for(const marker of [
+  "export { shopping } from './shopping-root';",
+  "export { shoppingNew } from './shopping-new-page';",
+  "export { shoppingEdit } from './shopping-edit-page';",
+]) if(!shoppingBoundary.includes(marker)) throw new Error(`shopping retained page handler missing: ${marker}`);
 const routeSentinels=[
   "url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php'",
   "url.pathname==='/app/create.php'||url.pathname==='/app/create'",
