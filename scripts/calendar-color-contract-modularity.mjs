@@ -6,6 +6,8 @@ const newEntry=fs.readFileSync('src/new-entry-pages.ts','utf8');
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('src/task-edit-page.ts','utf8');
 const taskEditJs=fs.readFileSync('public/assets/task-edit.js','utf8');
+const recurringPage=fs.readFileSync('src/recurring-page.ts','utf8');
+const recurringJs=fs.readFileSync('public/assets/recurring.js','utf8');
 
 const expected=[
   ['#7c3aed','紫'],
@@ -44,5 +46,14 @@ if(!taskEdit.includes('id="editCalendarColorCustom" type="color"')) throw new Er
 if(!taskEditJs.includes("const syncSelectFromCustomColor=()=>")) throw new Error('task edit custom picker must synchronize into the submitted selector');
 if(!taskEditJs.includes("editCalendarColorCustom.addEventListener('input',syncSelectFromCustomColor)")) throw new Error('task edit custom color input wiring changed');
 if(!taskEditJs.includes("colorSelect.addEventListener('change',syncCustomColorFromSelect)")) throw new Error('task edit preset selection must remain synchronized with the picker');
+
+if(!recurringPage.includes("import { CALENDAR_COLOR_OPTIONS, normalizeCalendarColor } from './calendar-colors';")) throw new Error('recurring page must use canonical calendar color contract');
+if((recurringPage.match(/normalizeCalendarColor\(b\.calendar_color\)/g)||[]).length<2) throw new Error('recurring create/update must accept safe custom colors through canonical normalization');
+if(recurringPage.includes('const allowedColors=[')) throw new Error('recurring page must not duplicate the hardcoded color allowlist');
+if(!recurringPage.includes('CALENDAR_COLOR_OPTIONS.map(option=>')) throw new Error('recurring preset selector must render from canonical options');
+if(!recurringPage.includes('id="recCalendarColorCustom" type="color"')) throw new Error('recurring page must expose a native custom color picker');
+if(!recurringJs.includes("const syncSelectFromCustomColor=()=>")) throw new Error('recurring custom picker must synchronize into the submitted selector');
+if(!recurringJs.includes("recCalendarColorCustom?.addEventListener('input',syncSelectFromCustomColor)")) throw new Error('recurring custom color input wiring changed');
+if(!recurringJs.includes("calendarColorSelect?.addEventListener('change',syncCustomColorFromSelect)")) throw new Error('recurring preset selection must remain synchronized with the picker');
 
 console.log('calendar color contract modularity ok');
