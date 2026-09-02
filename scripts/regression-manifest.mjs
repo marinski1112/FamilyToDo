@@ -24,6 +24,7 @@ export const activeRegressionGroups=[
       ['recurring-occurrence-modularity','node scripts/recurring-occurrence-modularity-contract.mjs'],
       ['recurrence-toggle-authorization-order','node scripts/recurrence-toggle-authorization-order-contract.mjs'],
       ['page-route-dispatcher','node scripts/page-route-dispatcher-contract.mjs'],
+      ['page-handler-boundaries','node scripts/page-handler-boundary-contract.mjs'],
       ['context-api-route-dispatcher','node scripts/context-api-route-dispatcher-contract.mjs'],
       ['public-route-dispatcher','node scripts/public-route-dispatcher-contract.mjs'],
       ['reorder-api-modularity','node scripts/reorder-api-modularity-contract.mjs'],
