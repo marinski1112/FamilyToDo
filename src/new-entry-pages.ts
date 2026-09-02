@@ -1,5 +1,5 @@
 import { redirect } from './response';
-import { layout } from './app';
+import { layout } from './app-shell';
 import { taskVisibilitySql, taskChildVisibilitySql } from './task-visibility';
 import { CALENDAR_COLOR_OPTIONS } from './calendar-colors';
 
