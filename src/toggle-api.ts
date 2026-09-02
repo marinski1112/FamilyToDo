@@ -39,21 +39,30 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     if(!occ)return json({ok:false,error:'定期タスクの発生日が見つかりません。'},404);
     const rule=await ctx.env.DB.prepare('SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.id=? AND r.family_id=?').bind(Number(occ.recurrence_rule_id),m.family_id).first<Row>();
     if(!rule)return json({ok:false,error:'定期タスクのルールが見つかりません。'},404);
-    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(Number(rule.task_id)).first<Row>();
-    const actorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(Number(rule.task_id),m.id).first<Row>();
-    if(Number(assigned?.c||0)===0)return json({ok:false,error:'担当者が設定されていない定期タスクは完了できません。'},409);
-    if(!actorAssigned)return json({ok:false,error:'この定期タスクの担当者ではありません。'},403);
+    const recurrenceTaskId=Number(rule.task_id);
+    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(recurrenceTaskId).first<Row>();
+    const assignedCount=Number(assigned?.c||0);
+    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(recurrenceTaskId,m.id).first<Row>():null;
+    if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'この定期タスクの担当者ではありません。'},403);
     if(completed){
       await ctx.env.DB.prepare('INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(occurrence_id,member_id) DO UPDATE SET completed_at=excluded.completed_at').bind(occId,m.id,now).run();
     }else{
       await ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=? AND member_id=?').bind(occId,m.id).run();
     }
-    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=?').bind(Number(rule.task_id),occId).first<Row>();
-    const mode=String(rule.completion_mode||'ANY').toUpperCase();
+    const done=assignedCount>0
+      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=?').bind(recurrenceTaskId,occId).first<Row>()
+      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?').bind(m.family_id,occId).first<Row>();
+    const mode=assignedCount>0?String(rule.completion_mode||'ANY').toUpperCase():'ANY';
     const isComplete=mode==='ALL'
-      ? Number(assigned?.c||0)>0&&Number(done?.c||0)>=Number(assigned?.c||0)
+      ? assignedCount>0&&Number(done?.c||0)>=assignedCount
       : Number(done?.c||0)>0;
-    await updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB,{occurrenceId:occId,familyId:m.family_id,isComplete,completedBy:isComplete?m.id:null,now});
+    const latest=isComplete
+      ?assignedCount>0
+        ?await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC,c.member_id DESC LIMIT 1').bind(recurrenceTaskId,occId).first<Row>()
+        :await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC,c.member_id DESC LIMIT 1').bind(m.family_id,occId).first<Row>()
+      :null;
+    const completedBy=isComplete?(Number(latest?.member_id||0)||null):null;
+    await updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB,{occurrenceId:occId,familyId:m.family_id,isComplete,completedBy,now});
     await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','recurrence',occId,{occurrence_id:occId,rule_id:Number(occ.recurrence_rule_id),status:isComplete?'completed':'pending'});
     return commitSession(json({ok:true,status:isComplete?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);
   }
