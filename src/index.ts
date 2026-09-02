@@ -1,5 +1,6 @@
 import { json, redirect } from './response';
-import { makeContext, AuthRequired, BadRequest, Forbidden } from './app';
+import { AuthRequired, BadRequest, Forbidden } from './app';
+import { makeContext } from './app-context';
 import { processGoogleTasksInbound } from './google-tasks';
 import { processCalendarOutbox, renewCalendarWatches } from './google-calendar';
 import { validateLiffNext } from './liff-target';
