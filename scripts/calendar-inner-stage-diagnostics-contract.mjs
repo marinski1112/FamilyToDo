@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const worker=fs.readFileSync('src/calendar-perf-worker.ts','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const calendar=fs.readFileSync('src/calendar-page.ts','utf8');
 const fail=(message)=>{console.error(`calendar inner-stage diagnostics contract: ${message}`);process.exit(1);};
 const must=(condition,message)=>{if(!condition)fail(message);};
 
@@ -63,6 +63,6 @@ must(!/console\.(?:log|warn|error)\([^\n]*(?:sql|query|title|description|name|co
 must(/SQL text and row contents never leave this function/.test(worker),'source must document that query text and renderer row contents never leave the observer');
 
 // Removal stays isolated to the temporary Worker diagnostics layer: app/calendar rendering remains untouched.
-must(!/calendarStageEnv|observedCalendarQuery|physical_query_ready|recurrence_projection_ready|row_inputs_ready|physical_map_copies_ready|detail_map_started|detail_physical_copies_ready|detail_map_complete|range_build_started|calendar_html_ready|calendar_detail_perf/.test(app),'temporary inner diagnostics must not leak into the long-lived app/calendar source');
+must(!/calendarStageEnv|observedCalendarQuery|physical_query_ready|recurrence_projection_ready|row_inputs_ready|physical_map_copies_ready|detail_map_started|detail_physical_copies_ready|detail_map_complete|range_build_started|calendar_html_ready|calendar_detail_perf/.test(calendar),'temporary inner diagnostics must not leak into the retained Calendar source');
 
 console.log('calendar inner-stage diagnostics contract: focused aggregate-only removable detail-map tracing ok');

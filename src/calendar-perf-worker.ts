@@ -1,5 +1,6 @@
 import baseWorker from './index';
-import { makeContext, taskVisibilitySql } from './app';
+import { makeContext } from './app-context';
+import { taskVisibilitySql } from './task-visibility';
 import { DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 type CountRow = {

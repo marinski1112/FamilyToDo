@@ -5,10 +5,10 @@ const tasks=fs.readFileSync('src/google-tasks.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
 const migration=fs.readFileSync('migrations/0039_wave116_google_tasks_cursor_commands.sql','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const externalDomain=fs.readFileSync('src/family-external-domain.ts','utf8');
 
 for(const value of ['MAX_D1_QUERY_BUDGET=40','MAX_TASKS_PER_INVOCATION=3','maxResults:String(MAX_TASKS_PER_INVOCATION)','sync_window_updated_min','sync_page_token','sync_latest_seen_at',"status='SYNCING' AND sync_lease_expires_at<?",'PAGE_TOKEN_RESET','parseGoogleVoiceCommand','SHOPPING_ADD','NEEDS_REVIEW'])assert.ok(tasks.includes(value),value);
-assert.ok(app.includes('createExternalShoppingItemDomain'));
+assert.ok(externalDomain.includes('createExternalShoppingItemDomain'));
 assert.ok(migration.includes('UNIQUE(account_id,external_tasklist_id,external_task_id)'));
 assert.match(index,/controller\.cron==='3,8,13,18,23,28,33,38,43,48,53,58 \* \* \* \*'[\s\S]+processGoogleTasksInbound/);
 assert.match(wrangler,/3,8,13,18,23,28,33,38,43,48,53,58/);

@@ -1,7 +1,7 @@
 export * from './google-calendar-core';
 
 import { json } from './response';
-import type { AppContext } from './app';
+import type { AppContext } from './app-context';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
 import {
   CALENDAR_MAX_RETRIES,

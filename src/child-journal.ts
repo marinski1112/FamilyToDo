@@ -1,5 +1,8 @@
 import { html, redirect } from './response';
-import { AuthRequired, Forbidden, layout, logActivity, type AppContext } from './app';
+import { AuthRequired, Forbidden } from './errors';
+import { layout } from './app-shell';
+import { logActivity } from './activity-log';
+import type { AppContext } from './app-context';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate, familyNow } from './timezone';
 import { childJournalCalendarStatus, processChildJournalCalendarOutbox } from './child-journal-calendar';
 import { childJournalFoundationReady, childJournalSchemaStatus } from './child-journal-schema';

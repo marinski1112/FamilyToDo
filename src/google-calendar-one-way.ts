@@ -1,5 +1,5 @@
 import { json } from './response';
-import type { AppContext } from './app';
+import type { AppContext } from './app-context';
 import { CALENDAR_MAX_RETRIES } from './google-calendar-core';
 import { processCalendarOutbox } from './google-calendar';
 import { utcNow } from './timezone';
