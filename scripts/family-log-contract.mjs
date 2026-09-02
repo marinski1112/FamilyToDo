@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const read=p=>fs.readFileSync(p,'utf8');
-const app=read('src/app.ts');
+const app=retainedAppContractSource();
 const index=read('src/index.ts');
 const diagnostics=read('src/runtime-diagnostics.ts');
 const tasks=read('src/google-tasks.ts');
