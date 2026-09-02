@@ -1,8 +1,9 @@
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const migration=fs.readFileSync('migrations/0047_web_push_member_family_integrity.sql','utf8');
 const webpush=fs.readFileSync('src/webpush.ts','utf8');
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 
 const fail=(message)=>{console.error(`web push tenant integrity contract: ${message}`);process.exit(1);};
 const must=(condition,message)=>{if(!condition)fail(message);};

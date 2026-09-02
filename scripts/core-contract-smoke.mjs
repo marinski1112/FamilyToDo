@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const lifecycle=fs.readFileSync('src/lifecycle.ts','utf8');
 const schema=fs.readFileSync('database/schema.d1.sql','utf8');
 

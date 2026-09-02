@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const read=p=>fs.readFileSync(p,'utf8');
-const app=read('src/app.ts');
+const app=retainedAppContractSource();
 const routes=read('src/page-routes.ts');
 const dailyStart=app.indexOf('const dailyBody=');
 const dailyEnd=app.indexOf('const sharedControls=');

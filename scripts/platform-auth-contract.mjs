@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { resolveLiffDestination, validateLiffNext } from '../src/liff-target.ts';
 import { safeLineTokenErrorCategory } from '../src/line-oauth-diagnostics.ts';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const read=p=>fs.readFileSync(p,'utf8');
 const wrangler=JSON.parse(read('wrangler.jsonc'));
@@ -55,7 +56,7 @@ assert.ok(lineWebhook.includes("verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECR
 assert.ok(publicRoutes.includes("url.pathname.startsWith('/liff/')"),'path-based LIFF routing must stay wired');
 assert.ok(index.includes("code:'AUTH_REQUIRED'"),'LIFF auth-required response must stay explicit');
 assert.ok(index.includes('encodeURIComponent(next)'),'LIFF continuation target must remain URL encoded');
-assert.ok(read('src/app.ts').includes('validateLiffNext(body.next)'));
+assert.ok(retainedAppContractSource().includes('validateLiffNext(body.next)'));
 
 const client=read('public/assets/liff-auth.js');
 assert.ok(client.includes('await window.liff.init'));

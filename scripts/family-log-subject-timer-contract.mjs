@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const familyLog=fs.readFileSync('public/assets/family-log.js','utf8')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+fs.readFileSync('public/assets/family-log-core.js','utf8'):'');
 const migration=fs.readFileSync('migrations/0024_wave87_custom_timer.sql','utf8');
 

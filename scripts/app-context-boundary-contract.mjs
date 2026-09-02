@@ -42,7 +42,7 @@ if(!index.includes("import { makeContext } from './app-context';")) throw new Er
 const indexAppImport=index.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bmakeContext\b/.test(indexAppImport)) throw new Error('worker entrypoint must not import makeContext from app.ts');
 for(const marker of [
-  "import { AuthRequired, BadRequest, Forbidden } from './app';",
+  "import { AuthRequired, BadRequest, Forbidden } from './errors';",
   'const context=await makeContext(request,env,ctx);',
 ]) if(!index.includes(marker)) throw new Error(`worker entrypoint behavior boundary changed: ${marker}`);
 
