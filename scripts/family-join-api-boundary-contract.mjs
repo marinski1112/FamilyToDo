@@ -37,6 +37,7 @@ if(!routes.includes("import { joinFamily } from './family-join-api';")) throw ne
 if(!routes.includes("if(url.pathname==='/api/family/join') return await joinFamily(request,context);")) throw new Error('family join route wiring changed');
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bjoinFamily\b/.test(appImport)) throw new Error('context API dispatcher must not import joinFamily from app.ts');
-if(!/\binviteCreate\b/.test(appImport)) throw new Error('inviteCreate transition boundary moved unexpectedly');
+if(/\binviteCreate\b/.test(appImport)) throw new Error('context API dispatcher must not import inviteCreate from app.ts');
+if(!routes.includes("import { inviteCreate } from './family-invite-api';")) throw new Error('family invitation retained boundary is missing');
 
 console.log('family join retained API boundary contract ok');
