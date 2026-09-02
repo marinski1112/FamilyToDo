@@ -33,6 +33,7 @@ for(const marker of [
 }
 for(const marker of [
   'export async function dispatchEarlyAuthenticatedRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{',
+  "import { makeContext } from './app-context';",
   "event:'recurring_route_post'",
   'return await recurring(request,context);',
   "if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder')",
@@ -43,5 +44,6 @@ for(const marker of [
   "'Set-Cookie':'family_line_cf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'",
   'preserveGoogleHomeLogin(request,env,await googleAuthorize(request,context))',
 ]) if(!routes.includes(marker)) throw new Error(`exception route behavior marker missing: ${marker}`);
+if(/import\s*\{[^}]*makeContext[^}]*\}\s*from\s*['"]\.\/app['"]/.test(routes)) throw new Error('exception routes must not import makeContext from app.ts');
 
 console.log('exception route dispatchers contract ok');
