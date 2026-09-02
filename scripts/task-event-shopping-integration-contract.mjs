@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 const taskNewPage=fs.readFileSync('src/new-entry-pages.ts','utf8');
-const app=retainedAppContractSource();
+const taskEditServer=fs.readFileSync('src/task-edit-page.ts','utf8');
 
 for(const value of [
   "document.getElementById('shoppingToggle')",
@@ -44,10 +43,7 @@ for(const value of [
 ]) assert.ok(taskView.includes(value),`task-view child completion integration missing: ${value}`);
 
 const shoppingInsertSql=/INSERT INTO shopping_items\(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url\) VALUES\(\?,\?,\?,\?,\?,\?,'pending',\?,\?,\?,\?,\?\)/;
-const taskEditStart=app.indexOf('export async function taskEdit(');
-const taskEditEnd=app.indexOf('export async function taskApiLegacy(',taskEditStart);
-assert.ok(taskEditStart>=0&&taskEditEnd>taskEditStart,'task edit server handler boundaries must remain identifiable');
-const taskEditServer=app.slice(taskEditStart,taskEditEnd);
+assert.ok(taskEditServer.includes('export async function taskEdit('),'retained task edit server handler must remain identifiable');
 assert.ok(!taskEditServer.includes('カテゴリー（全商品共通）'),'task edit must not present linked shopping category as a shared field that collapses mixed categories');
 assert.match(taskEditServer,shoppingInsertSql,'task edit must insert new shopping rows with task_id linkage');
 assert.match(taskEditServer,/\.bind\(m\.family_id,name,qty,category,null,noDate\?null:date,m\.id,now,now,id,url\)\.run\(\)/,'task edit shopping insert must bind the edited task id');
