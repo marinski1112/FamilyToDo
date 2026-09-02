@@ -13,6 +13,7 @@ export const activeRegressionGroups=[
       ['worker-error-log-privacy','node scripts/worker-error-log-privacy-contract.mjs'],
       ['index-entrypoint-modularity','node scripts/index-entrypoint-modularity-contract.mjs'],
       ['app-modularity-budget','node scripts/app-modularity-budget-contract.mjs'],
+      ['task-visibility-boundary','node scripts/task-visibility-boundary-contract.mjs'],
       ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],
       ['notification-delivery-modularity','node scripts/notification-delivery-modularity-contract.mjs'],
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
