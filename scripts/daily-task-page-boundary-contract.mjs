@@ -31,9 +31,10 @@ for(const marker of [
   "/assets/occurrence-family-log.js?v=${APP_VERSION}",
 ])if(!daily.includes(marker))throw new Error(`retained daily behavior/privacy marker missing: ${marker}`);
 
+if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('today/tomorrow must route through retained daily page');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('item edit retained boundary missing');
-if(!handlers.includes("export { taskEdit } from './app';"))throw new Error('task edit ownership changed outside this extraction');
+if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('task edit retained boundary missing');
 for(const marker of [
   "if(url.pathname==='/today.php') return await today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));",
   "if(url.pathname==='/tomorrow.php') return await tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));",

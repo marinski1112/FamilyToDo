@@ -23,11 +23,12 @@ for(const marker of [
   '/task/convert_occurrence.php',
 ])if(!view.includes(marker))throw new Error(`retained task detail behavior/privacy marker missing: ${marker}`);
 
+if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('task page boundary must route taskView through retained module');
 if(!handlers.includes("export { taskEvents } from './task-events-page';"))throw new Error('retained taskEvents boundary missing');
 if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('retained daily task page boundary missing');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary missing');
-if(!handlers.includes("export { taskEdit } from './app';"))throw new Error('taskEdit ownership changed outside this extraction');
+if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!routes.includes("if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));"))throw new Error('task detail page route changed');
 
 console.log('task-view-page-boundary: retained detail ownership and PRIVATE physical/occurrence visibility ok');
