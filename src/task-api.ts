@@ -65,7 +65,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   if(!title)return json({ok:false,error:'タイトルを入力してください。'},400);
   if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);
   const allDay=Boolean(b.allDay); const endDate=String(b.endDateOnly??date).trim(); const st=String(b.startTime??'').trim();const et=String(b.endTime??'').trim();
-  const range=buildStoredTaskRange({noDate,allDay,startDate:date,endDate,startTime:st,endTime:endTime=et,requireTimedStart:!allDay});
+  const range=buildStoredTaskRange({noDate,allDay,startDate:date,endDate,startTime:st,endTime:et,requireTimedStart:!allDay});
   if(!range.ok){
     const error=range.error==='START_DATE_INVALID'?'日付が不正です。':range.error==='END_DATE_INVALID'?'終了日が不正です。':range.error==='DATE_ORDER'?'終了日は開始日以降にしてください。':range.error==='START_TIME_REQUIRED'?'開始日時を指定してください。':range.error==='START_TIME_INVALID'?'開始日時が不正です。':range.error==='END_TIME_INVALID'?'終了日時が不正です。':'終了日時は開始日時以降にしてください。';
     return json({ok:false,error},400);
