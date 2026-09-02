@@ -1,9 +1,20 @@
 import fs from 'node:fs';
 
 const boundary=fs.readFileSync('src/task-visibility.ts','utf8');
-for(const marker of ['taskVisibilitySql','taskChildVisibilitySql','activityLogVisibilitySql','canAccessTask',"from './app'"]){
+for(const marker of [
+  'taskVisibilitySql',
+  'taskChildVisibilitySql',
+  'activityLogVisibilitySql',
+  'canAccessTask',
+  'invalid task SQL alias',
+  'invalid child SQL alias',
+  'invalid activity log SQL alias',
+  'visibility_scope',
+  'private_owner_id',
+]){
   if(!boundary.includes(marker)) throw new Error(`task visibility boundary lost marker: ${marker}`);
 }
+if(boundary.includes("from './app'")) throw new Error('task visibility boundary must own its canonical implementation instead of re-exporting app.ts');
 
 const expectations=[
   ['src/task-api.ts',['taskVisibilitySql']],
@@ -21,4 +32,4 @@ for(const [file,names] of expectations){
   if(directAppImport) throw new Error(`${file} must not reach into app.ts directly for task visibility: ${directAppImport}`);
 }
 
-console.log('task visibility retained boundary contract ok');
+console.log('task visibility canonical boundary contract ok');
