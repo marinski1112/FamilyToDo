@@ -6,6 +6,7 @@ const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
+if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
@@ -16,7 +17,12 @@ for(const marker of [
   "lower(COALESCE(t.task_kind,''))='event'",
   "recurringForDate(ctx,date)",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
-  "OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})",
+  "const LINKED_SHOPPING_TASK_CHUNK_SIZE=80;",
+  "Math.ceil(baseTaskIds.length/LINKED_SHOPPING_TASK_CHUNK_SIZE)",
+  "baseTaskIds.slice(index*LINKED_SHOPPING_TASK_CHUNK_SIZE,(index+1)*LINKED_SHOPPING_TASK_CHUNK_SIZE)",
+  "s.task_id IN (${chunk.map(()=>'?').join(',')})",
+  ".bind(member.family_id,member.id,...chunk).all<Row>()",
+  "const shoppingById=new Map<string,Row>();",
   "data-type=\"shopping\"",
   "data-type=\"item\"",
   "data-type=\"${Number(task.id)<0?'recurrence':'task'}\"",
@@ -36,4 +42,4 @@ if(!handlers.includes("export { taskView } from './task-view-page';"))throw new 
 if(!routes.includes("if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"))throw new Error('unified checklist route changed');
 for(const marker of ["el.matches('.toggle[data-type][data-id]')","fetch('/api/toggle'","occurrence_id:Number(el.dataset.occurrenceId||0)"])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + Shopping checklist, privacy and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + Shopping checklist, privacy, bounded D1 linkage and completion transport ok');
