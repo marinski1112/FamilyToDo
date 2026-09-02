@@ -10,6 +10,7 @@ for(const marker of [
   "import { layout } from './app-shell';",
   "import { taskVisibilitySql } from './task-visibility';",
   "export async function taskView(ctx:AppContext,id:number):Promise<Response>{",
+  "r.name recurrence_name,t.completion_mode,r.task_id,t.*",
   "WHERE o.id=? AND o.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1",
   ".bind(occurrenceId,m.family_id,m.id)",
   "WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')} GROUP BY t.id LIMIT 1",
@@ -22,6 +23,7 @@ for(const marker of [
   'data-type=\"item\"',
   '/task/convert_occurrence.php',
 ])if(!view.includes(marker))throw new Error(`retained task detail behavior/privacy marker missing: ${marker}`);
+if(view.includes('r.name recurrence_name,r.completion_mode'))throw new Error('recurrence detail must read completion_mode from parent tasks, not recurrence_rules');
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('task page boundary must route taskView through retained module');
@@ -31,4 +33,4 @@ if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new 
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!routes.includes("if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));"))throw new Error('task detail page route changed');
 
-console.log('task-view-page-boundary: retained detail ownership and PRIVATE physical/occurrence visibility ok');
+console.log('task-view-page-boundary: retained detail ownership, PRIVATE visibility and recurrence D1 completion-mode source ok');
