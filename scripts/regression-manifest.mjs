@@ -17,6 +17,7 @@ export const activeRegressionGroups=[
       ['login-page-boundary','node scripts/login-page-boundary-contract.mjs'],
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['app-context-boundary','node scripts/app-context-boundary-contract.mjs'],
+      ['api-me-boundary','node scripts/api-me-boundary-contract.mjs'],
       ['task-visibility-boundary','node scripts/task-visibility-boundary-contract.mjs'],
       ['calendar-color-contract','node scripts/calendar-color-contract-modularity.mjs'],
       ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],
