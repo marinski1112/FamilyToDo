@@ -23,6 +23,7 @@ export const activeRegressionGroups=[
       ['settings-notifications-page-boundary','node scripts/settings-notifications-page-boundary-contract.mjs'],
       ['settings-diagnostics','node scripts/settings-diagnostics-contract.mjs'],
       ['family-create-api-boundary','node scripts/family-create-api-boundary-contract.mjs'],
+      ['family-join-api-boundary','node scripts/family-join-api-boundary-contract.mjs'],
       ['web-push-api-boundary','node scripts/web-push-api-boundary-contract.mjs'],
       ['liff-entry-boundary','node scripts/liff-entry-boundary-contract.mjs'],
       ['liff-login-boundary','node scripts/liff-login-boundary-contract.mjs'],
