@@ -17,8 +17,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo '=== runtime/support references ==='
           grep -RInE \
             --exclude-dir=.git \
             --exclude=google-calendar-inbound-reference-audit.yml \
-            'processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncCalendarAccount|syncCalendarAccountPage|applyInboundSafely|reconcileHintedInbound|hintedInboundAlreadyProjected|sameInboundShape|inboundEventTimes|applyInbound|PAGE_PREFIX|INBOUND_PAGE_SIZE|syncLeases' \
+            'processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncCalendarAccount|syncCalendarAccountPage|applyInboundSafely|reconcileHintedInbound|hintedInboundAlreadyProjected|sameInboundShape|inboundEventTimes|applyInbound|PAGE_PREFIX|INBOUND_PAGE_SIZE|syncLeases|parseImportDateTime|archiveTaskCompletionStatements|archiveShoppingCompletionStatements|archiveItemCompletionStatements' \
             src scripts public package.json wrangler.jsonc || true
+          echo '=== regression markers tied to inbound behavior ==='
+          grep -RInE \
+            --exclude=google-calendar-inbound-reference-audit.yml \
+            "processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncLeases|inboundEventTimes|applyInbound|nextSyncToken|PAGE_PREFIX|INBOUND_PAGE_SIZE|reconcileHintedInbound|hintedInboundAlreadyProjected|source:'GOOGLE_CALENDAR'|calendar_visible=0|familyTodoTaskId" \
+            scripts || true
