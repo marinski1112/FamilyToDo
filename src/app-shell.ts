@@ -18,7 +18,7 @@ export function layout(title: string, body: string, active = ''): string {
   const navItems = [
     ['/app/tasks.php','✅','タスク・イベント'],
     ['/app/calendar.php','📅','カレンダー'],
-    ['/app/shopping.php','🛒','買い物'],
+    ['/app/location.php','📍','位置情報'],
     ['/app/family_log.php','🐣','家族ログ'],
     ['/app/messages.php','💬','伝言'],
     ['/app/settings.php','⚙️','管理'],
