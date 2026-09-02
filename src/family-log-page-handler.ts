@@ -1,1 +1,1 @@
-export { familyLog } from './app';
+export { familyLogPage as familyLog } from './family-log-page';
