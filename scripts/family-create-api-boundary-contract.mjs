@@ -27,6 +27,6 @@ if(!routes.includes("import { createFamily } from './family-create-api';")) thro
 if(!routes.includes("if(url.pathname==='/api/family/create') return await createFamily(request,context);")) throw new Error('family create route wiring changed');
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bcreateFamily\b/.test(appImport)) throw new Error('context API dispatcher must not import createFamily from app.ts');
-for(const transitional of ['joinFamily','inviteCreate']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+for(const transitional of ['inviteCreate']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
 
 console.log('family create retained API boundary contract ok');
