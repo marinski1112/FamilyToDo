@@ -50,6 +50,7 @@ export const activeRegressionGroups=[
       ['recurring-occurrence-modularity','node scripts/recurring-occurrence-modularity-contract.mjs'],
       ['toggle-api-boundary','node scripts/toggle-api-boundary-contract.mjs'],
       ['recurrence-toggle-authorization-order','node scripts/recurrence-toggle-authorization-order-contract.mjs'],
+      ['recurrence-overdue-invariant','node scripts/recurrence-overdue-invariant-contract.mjs'],
       ['page-route-dispatcher','node scripts/page-route-dispatcher-contract.mjs'],
       ['context-api-route-dispatcher','node scripts/context-api-route-dispatcher-contract.mjs'],
       ['public-route-dispatcher','node scripts/public-route-dispatcher-contract.mjs'],
