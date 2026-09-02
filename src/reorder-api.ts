@@ -1,5 +1,5 @@
 import { json } from './response';
-import { taskVisibilitySql } from './app';
+import { taskVisibilitySql } from './task-visibility';
 
 export async function reorderApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);if(request.method!=='POST')return json({ok:false,error:'POST only'},405);

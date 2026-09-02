@@ -6,6 +6,8 @@ const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 if(!exceptionRoutes.includes("import { reorderApi } from './reorder-api';")) throw new Error('exception routes must import reorderApi module');
 if(index.includes('async function reorderApi(')) throw new Error('reorderApi must not remain defined in index.ts');
 if(!exceptionRoutes.includes("if(url.pathname==='/app/api/reorder.php'||url.pathname==='/app/api/reorder') return await reorderApi(request,context);")) throw new Error('reorder route wiring changed');
+if(!reorder.includes("import { taskVisibilitySql } from './task-visibility';")) throw new Error('reorderApi must consume canonical task visibility boundary');
+if(reorder.includes("from './app'")) throw new Error('reorderApi must not depend directly on app.ts');
 if(!reorder.includes('export async function reorderApi(')) throw new Error('reorderApi export missing');
 for(const marker of [
   "request.method!=='POST'",
