@@ -1,5 +1,6 @@
-import { joinFamily, inviteCreate, toggle, messages, shopping, familyLog, recordOccurrenceFamilyLog, settings } from './app';
+import { inviteCreate, toggle, messages, shopping, familyLog, recordOccurrenceFamilyLog, settings } from './app';
 import { createFamily } from './family-create-api';
+import { joinFamily } from './family-join-api';
 import { apiMe } from './api-me';
 import { taskApi } from './task-api';
 import { itemApi } from './item-api';
