@@ -34,8 +34,8 @@ function render(){
   const showAll=Boolean(showAllInput.checked);
   const visible=tasks.filter(task=>showAll||overlaps(task,date)||task.id===current||task.id===initialSelected).sort((a,b)=>{
     const am=overlaps(a,date)?0:1,bm=overlaps(b,date)?0:1;if(am!==bm)return am-bm;
-    if(date){const ad=dateOf(a),bd=dateOf(b);const af=ad>=date?0:ad?2:1,bf=bd>=date?0:bd?2:1;if(af!==bf)return af-bf;const dd=distance(a,date)-distance(b,date);if(dd)return dd;}
-    return a.id-b.id;
+    if(date){const ad=dateOf(a),bd=dateOf(b);const af=ad>=date?0:ad?2:1,bf=bd>=date?0:bd?2:1;if(af!==bf)return af-bf;const dd=distance(a,date)-distance(b,date);if(dd)return dd;return b.id-a.id;}
+    return b.id-a.id;
   });
   const fragment=document.createDocumentFragment();
   const none=document.createElement('option');none.value='0';none.textContent='タスクなし';fragment.appendChild(none);
