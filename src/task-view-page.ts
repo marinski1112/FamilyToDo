@@ -12,6 +12,24 @@ const esc=(v:unknown)=>String(v??'')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
 
+const TASK_DETAIL_RETURN_PATHS=new Set(['/app/tasks.php','/app/calendar.php']);
+
+function resolveTaskDetailReturn(request:Request,date:string):{url:string;label:string}{
+  const fallback=`/app/tasks.php?date=${encodeURIComponent(date||'')}`;
+  const current=new URL(request.url);
+  const explicit=current.searchParams.get('return_to');
+  const candidates=[explicit,request.headers.get('referer')];
+  for(const raw of candidates){
+    if(!raw)continue;
+    try{
+      const candidate=new URL(raw,current.origin);
+      if(candidate.origin!==current.origin||!TASK_DETAIL_RETURN_PATHS.has(candidate.pathname))continue;
+      return {url:`${candidate.pathname}${candidate.search}${candidate.hash}`,label:candidate.pathname==='/app/calendar.php'?'カレンダーに戻る':'チェックリストに戻る'};
+    }catch{}
+  }
+  return {url:fallback,label:'チェックリストに戻る'};
+}
+
 /** Canonical retained task/event detail view, including recurrence occurrences. */
 export async function taskView(ctx:AppContext,id:number):Promise<Response>{
   const m=ctx.member;
@@ -61,6 +79,7 @@ export async function taskView(ctx:AppContext,id:number):Promise<Response>{
   const role=String(m.role||'').toUpperCase();
   const canEdit=!isVirtual&&(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id);
   const dateForChildren=String(task.start_at||task.due_at||'').slice(0,10);
+  const returnContext=resolveTaskDetailReturn(ctx.request,dateForChildren);
   const childShoppingHtml=linkedShopping.results.length?`<div class="card"><div class="section-head"><h2>🛒 このタスクの買い物 <span class="small">(${linkedShopping.results.length})</span></h2>${!isVirtual?`<a class="btn gray small" href="/app/shopping_new.php?date=${encodeURIComponent(dateForChildren)}&task_id=${baseTaskId}">＋ 追加</a>`:''}</div>${linkedShopping.results.map(r=>`<div class="row"><label class="shopping-check-row"><input type="checkbox" class="task-child-toggle" data-type="shopping" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}">${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>`:esc(r.name)}${r.quantity&&r.quantity!=='1'?` × ${esc(r.quantity)}`:''}</span></label><div class="meta">${[r.category,r.assignees?'担当 '+r.assignees:'',r.due_date?'期限 '+r.due_date:''].filter(Boolean).map(esc).join(' ・ ')}</div></div>`).join('')}</div>`:'';
   const childItemsHtml=`<div class="card"><div class="section-head"><h2>🎒 このタスクの持ち物 <span class="small">(${linkedItems.results.length})</span></h2>${!isVirtual?`<a class="btn gray small" href="/item/new.php?date=${encodeURIComponent(dateForChildren)}&task_id=${baseTaskId}">＋ 追加</a>`:''}</div>${linkedItems.results.map(r=>`<div class="row"><label class="shopping-check-row"><input type="checkbox" class="task-child-toggle" data-type="item" data-id="${r.id}" ${r.status==='completed'?'checked':''}><span class="${r.status==='completed'?'done':''}">${esc(r.name)}</span></label><div class="meta">${esc(r.assignees||'')}</div></div>`).join('')||'<p class="empty">紐付く持ち物はありません。</p>'}</div>`;
   const reminderHtml=reminders.results.length?`<div class="card"><h2>🔔 通知</h2>${reminders.results.map(r=>`<div class="row"><div>${esc(String(r.notify_at||'').slice(0,16))} ・ ${esc(r.status)}</div><div class="meta">${esc(r.message||'')}</div></div>`).join('')}</div>`:'';
@@ -68,9 +87,9 @@ export async function taskView(ctx:AppContext,id:number):Promise<Response>{
   const body=`<div class="card"><h1>${isEvent?'📌 イベント詳細':'📝 タスク詳細'}</h1><h2>${esc(task.title)}</h2><div class="meta">${esc(dateForChildren||'指定なし')}${isVirtual?' ・ 🔁 定期タスクの発生日':''}</div>
   ${task.start_at?`<div class="meta">開始：${esc(task.start_at)}${task.end_at?' ・ 終了：'+esc(task.end_at):''}</div>`:''}${task.location?`<div class="meta">場所：${esc(task.location)}</div>`:''}${assignees?`<p>担当：${esc(assignees)}</p>`:''}${task.description?`<div class="sub-card">${esc(task.description).replaceAll('\n','<br>')}</div>`:''}
   ${isEvent?'<p><span class="event-badge">イベント</span> <span class="small">チェック・期限切れ判定の対象外</span></p>':`<p>状態：<strong id="taskStatus">${task.status==='completed'?'完了':'未完了'}</strong></p><label class="checkrow"><input type="checkbox" id="done" ${task.status==='completed'?'checked':''}> 完了</label>`}
-  ${canEdit?`<p><a class="btn" href="/task/edit.php?id=${id}">編集</a> ${exceptionOrigin?`<button class="btn danger" id="exceptionDeleteOpen" type="button">削除</button>`:`<button class="btn danger" id="del" type="button">削除</button>`}</p>`:''}<p><a class="btn gray" href="/app/tasks.php?date=${encodeURIComponent(dateForChildren||'')}">戻る</a></p></div>${convertHtml}${childShoppingHtml}${childItemsHtml}${reminderHtml}
+  ${canEdit?`<p><a class="btn" href="/task/edit.php?id=${id}">編集</a> ${exceptionOrigin?`<button class="btn danger" id="exceptionDeleteOpen" type="button">削除</button>`:`<button class="btn danger" id="del" type="button">削除</button>`}</p>`:''}<p><a class="btn gray" href="${esc(returnContext.url)}">${esc(returnContext.label)}</a></p></div>${convertHtml}${childShoppingHtml}${childItemsHtml}${reminderHtml}
   ${isEvent?'':`<div class="card"><h2>完了履歴</h2>${history.results.map(h=>`<div class="row">${esc(h.action)} ・ ${esc(h.member_name||'')} ・ ${esc(h.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div>`}
   ${exceptionOrigin?`<div class="exception-delete-backdrop" id="exceptionDeleteModal" aria-hidden="true"><div class="exception-delete-sheet" role="dialog" aria-modal="true"><div class="section-head"><h2>この日の例外タスクを削除</h2><button class="btn gray small" id="exceptionDeleteClose" type="button">×</button></div><p><strong>${esc(exceptionOrigin.occurrence_date)}</strong> は「${esc(exceptionOrigin.recurrence_name||'定期タスク')}」から通常タスク化した日です。</p><p class="small">削除後の定期タスク側の扱いを選んでください。</p><button class="btn exception-delete-choice" id="exceptionDeleteRestore" type="button">元の定期日に戻す</button><button class="btn danger exception-delete-choice" id="exceptionDeleteExclude" type="button">この日だけ除外したまま削除</button></div></div>`:''}
-  <script type="application/json" id="taskViewPayload">${JSON.stringify({csrf:ctx.session.csrfToken||'',id,occurrenceId,toggleType:isVirtual?'recurrence':'task',returnUrl:'/app/tasks.php?date='+encodeURIComponent(dateForChildren||'')}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-view.js?v=12.147.0-wave128"></script>`;
+  <script type="application/json" id="taskViewPayload">${JSON.stringify({csrf:ctx.session.csrfToken||'',id,occurrenceId,toggleType:isVirtual?'recurrence':'task',returnUrl:returnContext.url}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-view.js?v=12.147.0-wave128"></script>`;
   return html(layout(isEvent?'イベント詳細':'タスク詳細',body,''));
 }

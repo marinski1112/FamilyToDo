@@ -9,6 +9,10 @@ for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "import { taskVisibilitySql } from './task-visibility';",
+  "const TASK_DETAIL_RETURN_PATHS=new Set(['/app/tasks.php','/app/calendar.php']);",
+  'function resolveTaskDetailReturn(request:Request,date:string):{url:string;label:string}{',
+  "if(candidate.origin!==current.origin||!TASK_DETAIL_RETURN_PATHS.has(candidate.pathname))continue;",
+  "candidate.pathname==='/app/calendar.php'?'カレンダーに戻る':'チェックリストに戻る'",
   "export async function taskView(ctx:AppContext,id:number):Promise<Response>{",
   "r.name recurrence_name,t.completion_mode,r.task_id,t.*",
   "WHERE o.id=? AND o.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1",
@@ -17,6 +21,9 @@ for(const marker of [
   ".bind(id,m.family_id,m.id)",
   "return new Response('定期タスクの発生日が見つかりません。',{status:404});",
   "return new Response('タスクが見つかりません。',{status:404});",
+  'const returnContext=resolveTaskDetailReturn(ctx.request,dateForChildren);',
+  'href="${esc(returnContext.url)}">${esc(returnContext.label)}</a>',
+  'returnUrl:returnContext.url',
   'taskViewPayload',
   '/assets/task-view.js?v=12.147.0-wave128',
   'data-type=\"shopping\"',
@@ -24,6 +31,7 @@ for(const marker of [
   '/task/convert_occurrence.php',
 ])if(!view.includes(marker))throw new Error(`retained task detail behavior/privacy marker missing: ${marker}`);
 if(view.includes('r.name recurrence_name,r.completion_mode'))throw new Error('recurrence detail must read completion_mode from parent tasks, not recurrence_rules');
+if(view.includes("returnUrl:'/app/tasks.php?date='"))throw new Error('task detail must not hard-code checklist as the post-action return destination');
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('task page boundary must route taskView through retained module');
@@ -33,4 +41,4 @@ if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new 
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!routes.includes("if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));"))throw new Error('task detail page route changed');
 
-console.log('task-view-page-boundary: retained detail ownership, PRIVATE visibility and recurrence D1 completion-mode source ok');
+console.log('task-view-page-boundary: retained detail ownership, PRIVATE visibility, recurrence D1 source and safe return context ok');
