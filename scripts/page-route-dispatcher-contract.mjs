@@ -13,7 +13,6 @@ if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depe
 const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-handlers'","from './calendar-page-handler'","from './message-page-handlers'","from './shopping-page-handlers'","from './location-page'","from './family-log-page-handler'","from './settings-page-handlers'"];
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
 const transitionalBoundaryFiles={
-  'src/task-page-handlers.ts':['taskEdit'],
   'src/calendar-page-handler.ts':['calendar'],
   'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
 };
@@ -23,10 +22,12 @@ for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
   for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
 }
 const taskBoundary=fs.readFileSync('src/task-page-handlers.ts','utf8');
+if(taskBoundary.includes("from './app'")) throw new Error('task page handler boundary must not depend on app.ts');
 if(!taskBoundary.includes("export { today, tomorrow } from './daily-task-page';")) throw new Error('task retained daily page handlers missing');
 if(!taskBoundary.includes("export { taskEvents } from './task-events-page';")) throw new Error('task retained checklist handler missing');
 if(!taskBoundary.includes("export { taskView } from './task-view-page';")) throw new Error('task retained detail handler missing');
 if(!taskBoundary.includes("export { itemEdit } from './item-edit-page';")) throw new Error('task retained item edit handler missing');
+if(!taskBoundary.includes("export { taskEdit } from './task-edit-page';")) throw new Error('task retained task edit handler missing');
 const authBoundary=fs.readFileSync('src/auth-page-handlers.ts','utf8');
 if(authBoundary.includes("from './app'")) throw new Error('auth page boundary must not depend on app.ts');
 for(const marker of ["export { loginPage } from './login-page';","export { createFamilyPage } from './family-onboarding-page';","export { invitePage } from './family-invite-page';","export { home } from './home-page';"]) if(!authBoundary.includes(marker)) throw new Error(`auth retained page handler missing: ${marker}`);
