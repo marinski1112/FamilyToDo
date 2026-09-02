@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const context=fs.readFileSync('src/app-context.ts','utf8');
 const auth=fs.readFileSync('src/auth-health.ts','utf8');
 const routes=fs.readFileSync('src/public-routes.ts','utf8');
+const index=fs.readFileSync('src/index.ts','utf8');
 
 for(const marker of [
   "from './session'",
@@ -36,5 +37,13 @@ if(auth.includes("from './app'")) throw new Error('auth-health must not depend o
 if(!routes.includes("import { makeContext } from './app-context';")) throw new Error('public routes must consume retained app context');
 if(!routes.includes("import { authHealth } from './auth-health';")) throw new Error('public routes must consume retained auth health');
 if(routes.includes("from './app'")) throw new Error('public-routes.ts must not depend directly on app.ts');
+
+if(!index.includes("import { makeContext } from './app-context';")) throw new Error('worker entrypoint must consume retained app context');
+const indexAppImport=index.split('\n').find(line=>line.includes("from './app'"))||'';
+if(/\bmakeContext\b/.test(indexAppImport)) throw new Error('worker entrypoint must not import makeContext from app.ts');
+for(const marker of [
+  "import { AuthRequired, BadRequest, Forbidden } from './app';",
+  'const context=await makeContext(request,env,ctx);',
+]) if(!index.includes(marker)) throw new Error(`worker entrypoint behavior boundary changed: ${marker}`);
 
 console.log('app context retained boundary contract ok');
