@@ -21,5 +21,5 @@ document.querySelectorAll('.family-log-quick strong,.family-quick-chore-record s
   label.replaceChildren(document.createTextNode(chars.slice(0,splitAt).join('')),document.createElement('br'),document.createTextNode(chars.slice(splitAt).join('')));
   label.dataset.wave128Label='1';
 });
-load('/assets/family-log-core.js?v=wave128-fix17',()=>load('/assets/family-log-management-ui.js?v=wave128-fix17'));
+load('/assets/family-log-core.js?v=wave128-fix18',()=>load('/assets/family-log-management-ui.js?v=wave128-fix18'));
 })();
