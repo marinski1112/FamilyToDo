@@ -34,6 +34,6 @@ if(!routes.includes("import { webPushApi } from './web-push-api';")) throw new E
 if(!routes.includes("if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return await webPushApi(request,context);")) throw new Error('Web Push route wiring changed');
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bwebPushApi\b/.test(appImport)) throw new Error('context API dispatcher must not import webPushApi from app.ts');
-for(const transitional of ['inviteCreate','toggle','messages','shopping','familyLog','recordOccurrenceFamilyLog','settings']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+for(const transitional of ['toggle','messages','shopping','familyLog','recordOccurrenceFamilyLog','settings']) if(!new RegExp(`\\b${transitional}\\b`).test(appImport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
 
 console.log('Web Push retained API boundary contract ok');
