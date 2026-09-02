@@ -30,7 +30,7 @@ function jpHolidayBase(date:string):string|null{
   return null;
 }
 
-function jpHolidayName(date:string):string|null{
+export function jpHolidayName(date:string):string|null{
   const d=new Date(`${date}T12:00:00Z`),wd=d.getUTCDay(),base=jpHolidayBase(date);
   if(base)return base;
   if(wd>=1&&wd<=5){const prev=new Date(d);prev.setUTCDate(prev.getUTCDate()-1);const next=new Date(d);next.setUTCDate(next.getUTCDate()+1);if(jpHolidayBase(prev.toISOString().slice(0,10))&&jpHolidayBase(next.toISOString().slice(0,10)))return '国民の休日';}

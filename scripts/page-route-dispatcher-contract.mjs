@@ -12,14 +12,9 @@ if(!pages.includes('export async function dispatchPageRoute(request:Request,cont
 if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depend directly on the app.ts monolith');
 const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-handlers'","from './calendar-page-handler'","from './message-page-handlers'","from './shopping-page-handlers'","from './location-page'","from './family-log-page-handler'","from './settings-page-handlers'"];
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
-const transitionalBoundaryFiles={
-  'src/calendar-page-handler.ts':['calendar'],
-};
-for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
-  const source=fs.readFileSync(file,'utf8');
-  if(!source.includes("from './app';")) throw new Error(`temporary page boundary must forward to current app implementation: ${file}`);
-  for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
-}
+const calendarBoundary=fs.readFileSync('src/calendar-page-handler.ts','utf8');
+if(calendarBoundary.includes("from './app'")) throw new Error('calendar page boundary must not depend on app.ts');
+if(!calendarBoundary.includes("export { calendar } from './calendar-page';")) throw new Error('calendar retained page handler missing');
 const settingsBoundary=fs.readFileSync('src/settings-page-handlers.ts','utf8');
 if(settingsBoundary.includes("from './app'")) throw new Error('settings page handler boundary must not depend on app.ts');
 for(const marker of ["export { recurring } from './recurring-page';","export { settings } from './settings-root';","export { settingsContent } from './settings-content-page';","export { settingsMembers } from './settings-members-page';","export { settingsNotifications } from './settings-notifications-page';","export { settingsDiagnostics } from './settings-diagnostics';"]) if(!settingsBoundary.includes(marker)) throw new Error(`settings retained page handler missing: ${marker}`);

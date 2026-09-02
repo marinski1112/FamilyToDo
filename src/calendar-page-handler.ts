@@ -1,1 +1,1 @@
-export { calendar } from './app';
+export { calendar } from './calendar-page';
