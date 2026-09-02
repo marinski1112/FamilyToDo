@@ -1,4 +1,6 @@
-import { makeContext, liffEntryPage, layout } from './app';
+import { makeContext } from './app-context';
+import { layout } from './app-shell';
+import { liffEntryPage } from './liff-entry-page';
 import { commitSession } from './session';
 import { verifyLineIdToken } from './line';
 import { html } from './response';
