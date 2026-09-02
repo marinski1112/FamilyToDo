@@ -1,4 +1,10 @@
-import { loginPage, createFamilyPage, invitePage, home, today, tomorrow, taskEvents, calendar, messages, shopping, familyLog, settings, messageNew, shoppingNew, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, recurring, taskView, taskEdit, itemEdit, shoppingEdit } from './app';
+import { loginPage, createFamilyPage, invitePage, home } from './auth-page-handlers';
+import { today, tomorrow, taskEvents, taskView, taskEdit, itemEdit } from './task-page-handlers';
+import { calendar } from './calendar-page-handler';
+import { messages, messageNew } from './message-page-handlers';
+import { shopping, shoppingNew, shoppingEdit } from './shopping-page-handlers';
+import { familyLog } from './family-log-page-handler';
+import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, recurring } from './settings-page-handlers';
 import { childJournalPage } from './child-journal';
 import { familyLogImportPage } from './family-log-import';
 import { googleTasksSettings } from './google-tasks';
