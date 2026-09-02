@@ -5,7 +5,7 @@ type Row=Record<string,unknown>;
 
 const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T').replace('T',' ');
 
-function parseJsonArray(value:unknown):number[]{
+export function parseJsonArray(value:unknown):number[]{
   if(Array.isArray(value))return value.map(Number).filter(Number.isFinite);
   try{const v=JSON.parse(String(value||'[]'));return Array.isArray(v)?v.map(Number).filter(Number.isFinite):[];}catch{return [];}
 }
@@ -38,7 +38,7 @@ function jpHolidayName(date:string):string|null{
   return null;
 }
 
-function matchesRecurrence(rule:Row,date:string):boolean{
+export function matchesRecurrence(rule:Row,date:string):boolean{
   const start=String(rule.start_date||''),end=String(rule.end_date||'');
   if(date<start||(end&&date>end)||Number(rule.active)!==1)return false;
   const d=new Date(`${date}T12:00:00Z`),sd=new Date(`${start}T12:00:00Z`);
