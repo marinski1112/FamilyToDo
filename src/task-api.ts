@@ -1,5 +1,5 @@
 import { json } from './response';
-import { taskVisibilitySql } from './app';
+import { taskVisibilitySql } from './task-visibility';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation, wakeCalendarOutbox } from './google-calendar';
 import { buildStoredTaskRange } from './task-range-safety';
