@@ -20,7 +20,7 @@ assert.match(messageNew,/catch\([^)]*\)\{alert\('投稿できませんでした�
 assert.match(source,/taskStatus\.textContent='';alert\('タスクに追加できませんでした。'\)/,'task conversion transport/server failures must use fixed browser-safe text');
 assert.match(source,/shoppingStatus\.textContent='';alert\('買い物に追加できませんでした。'\)/,'shopping conversion transport/server failures must use fixed browser-safe text');
 assert.match(source,/editStatus\.textContent='';alert\('編集に失敗しました'\)/,'message edit transport/server failures must use fixed browser-safe text');
-assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-task-error-display-privacy'/,'Messages privacy fix must remain covered by the current static cache generation so stale vulnerable assets are evicted');
+assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-shopping-task-fallback'/,'Messages privacy fix must remain covered by the current static cache generation so stale vulnerable assets are evicted');
 assert.match(serviceWorker,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'static cache rotation must continue evicting superseded FamilyToDo caches');
 assert.doesNotMatch(source+messageNew,/calendar_perf|CHILD_JOURNAL|CHILD_MILESTONE|OwnTracks|geofence/i,'Messages error hardening must remain isolated from deferred Calendar/Child Journal/location work');
 

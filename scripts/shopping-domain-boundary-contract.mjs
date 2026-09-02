@@ -5,6 +5,7 @@ const newPage=fs.readFileSync('src/shopping-new-page.ts','utf8');
 const editPage=fs.readFileSync('src/shopping-edit-page.ts','utf8');
 const handlers=fs.readFileSync('src/shopping-page-handlers.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
+const taskLink=fs.readFileSync('public/assets/shopping-task-link.js','utf8');
 
 for(const [label,source] of [['root',root],['new',newPage],['edit',editPage]]){
   if(source.includes("from './app'")) throw new Error(`shopping ${label} must not depend on app.ts`);
@@ -23,6 +24,10 @@ for(const marker of [
   'archiveShoppingCompletionStatements',
   'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN',
 ]) if(!editPage.includes(marker)) throw new Error(`shopping edit lost ${marker}`);
+for(const marker of [
+  "const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;",
+  'if(showAllLabel)showAllLabel.textContent=`その他の未完了タスクも表示${hidden?`（${hidden}件）`:\'\'}`;',
+]) if(!taskLink.includes(marker)) throw new Error(`shopping task candidate count lost ${marker}`);
 for(const marker of [
   "export { shopping } from './shopping-root';",
   "export { shoppingNew } from './shopping-new-page';",

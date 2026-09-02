@@ -19,7 +19,7 @@ assert.match(taskNew,/if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('登録に失敗�
 assert.match(taskNew,/catch\(_err\)\{alert\('登録に失敗しました'\)/,'task create transport failures must use fixed browser-safe text');
 assert.match(taskEdit,/if\(!r\.ok\|\|d\?\.error\)throw new Error\('更新に失敗しました'\)/,'task edit must fail closed on HTTP/API error responses');
 assert.match(taskEdit,/catch\(_err\)\{alert\('更新に失敗しました'\)/,'task edit transport failures must use fixed browser-safe text');
-assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-task-error-display-privacy'/,'Task privacy deployment must rotate the static cache so stale vulnerable assets are evicted');
+assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-shopping-task-fallback'/,'Task privacy deployment must remain covered by the current static cache generation so stale vulnerable assets are evicted');
 assert.match(serviceWorker,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'static cache rotation must continue evicting superseded FamilyToDo caches');
 assert.doesNotMatch(taskNew+taskEdit,/calendar_perf|CHILD_JOURNAL|CHILD_MILESTONE|OwnTracks|geofence/i,'Task/Shopping error hardening must remain isolated from deferred Calendar/Child Journal/location work');
 
