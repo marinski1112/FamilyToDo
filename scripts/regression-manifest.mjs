@@ -14,6 +14,7 @@ export const activeRegressionGroups=[
       ['index-entrypoint-modularity','node scripts/index-entrypoint-modularity-contract.mjs'],
       ['app-modularity-budget','node scripts/app-modularity-budget-contract.mjs'],
       ['app-shell-boundary','node scripts/app-shell-boundary-contract.mjs'],
+      ['location-page-boundary','node scripts/location-page-boundary-contract.mjs'],
       ['login-page-boundary','node scripts/login-page-boundary-contract.mjs'],
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['family-invite-page-boundary','node scripts/family-invite-page-boundary-contract.mjs'],
