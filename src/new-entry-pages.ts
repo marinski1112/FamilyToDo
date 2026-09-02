@@ -1,5 +1,6 @@
 import { redirect } from './response';
-import { layout, taskVisibilitySql, taskChildVisibilitySql } from './app';
+import { layout } from './app';
+import { taskVisibilitySql, taskChildVisibilitySql } from './task-visibility';
 
 export async function taskNew(ctx: any,date:string,returnTo:string=''): Promise<Response>{
   if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));
