@@ -33,7 +33,6 @@ for(const marker of [
   "action==='sleep_stop'",
   "action==='timer_stop'",
   "action==='timer_cancel'",
-  "visibility",
   "completeLinkedTargetFromFamilyLog(ctx,linkedTaskId,linkedOccurrenceId",
   "requestGoogleHomeSyncForFamily(ctx.env,m.family_id)",
   "WHERE id=? AND family_id=?",
