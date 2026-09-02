@@ -39,6 +39,7 @@ if(!routes.includes("if(url.pathname==='/api/settings') return await settings(re
 if(!pages.includes("export { settings } from './settings-root';")) throw new Error('/app/settings.php page boundary must use retained settings handler');
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bsettings\b/.test(appImport)) throw new Error('context API dispatcher must not import settings from app.ts');
-if(!/\brecurring\b/.test(pages.split('\n').find(line=>line.includes("from './app'"))||'')) throw new Error('recurring transition boundary moved unexpectedly');
+if(pages.includes("from './app'")) throw new Error('settings page handlers must not depend on app.ts after recurring extraction');
+if(!pages.includes("export { recurring } from './recurring-page';")) throw new Error('recurring retained boundary missing');
 
 console.log('Top-level settings retained page/API boundary contract ok');
