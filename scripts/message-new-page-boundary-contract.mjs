@@ -23,10 +23,9 @@ for(const marker of [
 ]) if(!page.includes(marker)) throw new Error(`message-new page lost behavior marker: ${marker}`);
 if(page.includes("from './app'")) throw new Error('message-new page must not depend on app.ts');
 
+if(!handlers.includes("export { messages } from './messages-api';")) throw new Error('message page handlers must export retained messages handler');
 if(!handlers.includes("export { messageNew } from './message-new-page';")) throw new Error('message page handlers must export retained messageNew');
-const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
-if(!/\bmessages\b/.test(appExport)) throw new Error('messages transitional export moved unexpectedly');
-if(/\bmessageNew\b/.test(appExport)) throw new Error('messageNew must not remain exported from app.ts');
+if(handlers.includes("from './app'")) throw new Error('message page handlers must not depend on app.ts');
 
 if(!routes.includes("import { messages, messageNew } from './message-page-handlers';")) throw new Error('page dispatcher message handler import changed');
 if(!routes.includes("if(url.pathname==='/app/message_new.php') return await messageNew(context);")) throw new Error('message-new route wiring changed');
