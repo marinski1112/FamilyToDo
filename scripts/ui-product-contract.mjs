@@ -12,6 +12,7 @@ const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
 const messages=fs.readFileSync('public/assets/messages.js','utf8');
 const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
+const taskEditServer=fs.readFileSync('src/task-edit-page.ts','utf8');
 const app=retainedAppContractSource();
 const worker=fs.readFileSync('src/index.ts','utf8');
 const digest=fs.readFileSync('src/line-daily-digest.ts','utf8');
@@ -42,11 +43,11 @@ assert.match(taskNew,/if\(isEvent\?\.checked\)\{noDate\.checked=false;noDate\.di
 assert.match(taskEdit,/if\(editIsEvent\?\.checked\)\{editNoDate\.checked=false;editNoDate\.disabled=true;\}else\{editNoDate\.disabled=false;\}if\(editIsPrivate\)editIsPrivate\.disabled=false/,'editing an EVENT must keep PRIVATE visibility available');
 assert.doesNotMatch(taskEdit,/editIsPrivate\.checked=false/,'editing an EVENT must never silently reset PRIVATE to FAMILY');
 assert.match(taskEdit,/is_private:editIsPrivate\?\.checked\|\|false/,'edit submit payload must carry PRIVATE visibility explicitly');
-assert.match(app,/const makePrivate=privateTaskRequested\(b\);/,'server edit flow must honor PRIVATE for both TASK and EVENT');
-assert.doesNotMatch(app,/const makePrivate=!isEvent&&privateTaskRequested\(b\);/,'server edit flow must not force EVENT visibility back to FAMILY');
-assert.ok(app.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
-assert.ok(app.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
-assert.ok(app.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
+assert.match(taskEditServer,/const makePrivate=truthy\(b\.visibility_scope==='PRIVATE'\|\|b\.is_private,false\);/,'server edit flow must honor PRIVATE for both TASK and EVENT');
+assert.doesNotMatch(taskEditServer,/const makePrivate=!isEvent&&/,'server edit flow must not force EVENT visibility back to FAMILY');
+assert.ok(taskEditServer.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
+assert.ok(taskEditServer.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
+assert.ok(taskEditServer.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
 
 // Task creation transport failure handling
 assert.match(taskNew,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('登録に失敗しました'\)/,'task creation must treat non-JSON, HTTP, and API failures as fixed-detail failures');
