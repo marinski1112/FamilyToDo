@@ -1,5 +1,6 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
+import { CALENDAR_COLOR_OPTIONS, normalizeCalendarColor } from './calendar-colors';
 import { archiveItemCompletionStatements, archiveShoppingCompletionStatements } from './lifecycle';
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
@@ -115,8 +116,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     if(reminderAt&&reminderAt<=now)return bad('通知日時は現在より後の日時を指定してください。');
     const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
     const allDay=allDayRequested?1:0;
-    const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
-    const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):String(task.calendar_color||'#7c3aed');
+    const calendarColor=normalizeCalendarColor(b.calendar_color,normalizeCalendarColor(task.calendar_color));
 
     const shopping=Array.isArray(b.shopping)?(b.shopping as unknown[]).slice(0,50):[];
     const itemsIn=Array.isArray(b.items)?(b.items as unknown[]).slice(0,50):[];
@@ -236,6 +236,8 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const endTime=task.end_at?String(task.end_at).slice(11,16):'';
   const selected=new Set((await ctx.env.DB.prepare('SELECT member_id FROM task_assignees WHERE task_id=?').bind(id).all<Row>()).results.map(row=>Number(row.member_id)));
   const safe=(value:unknown)=>esc(String(value??''));
+  const currentCalendarColor=normalizeCalendarColor(task.calendar_color);
+  const currentCalendarColorIsPreset=CALENDAR_COLOR_OPTIONS.some(option=>option.value===currentCalendarColor);
   const shopRows=shops.results.map(row=>`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="${row.id}"><input name="shopping_name[]" value="${safe(row.name)}" placeholder="商品名"><input name="shopping_quantity[]" value="${safe(row.quantity||'1')}" placeholder="数量"><input name="shopping_category[]" value="${safe(row.category||'')}" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" value="${safe(row.url||'')}" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
   const itemRows=items.results.map(row=>`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="${row.id}"><input name="item_name[]" value="${safe(row.name)}" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
   const body=`<div class="card form-card"><h1>📝 タスク・イベント編集</h1><form id="taskEditForm" class="compact-form">
@@ -246,7 +248,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label>場所</label><input name="location" value="${safe(task.location||'')}">
     <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea><label class="checkrow"><input id="editIsPrivate" type="checkbox" name="is_private" ${String(task.visibility_scope||'FAMILY')==='PRIVATE'?'checked':''}><span>🔒 自分専用</span></label><p class="small">他の家族にはタスク・カレンダー・詳細を表示しません</p>
     <label class="checkrow"><input id="editAllDay" type="checkbox" name="all_day" ${Number(task.all_day??0)?'checked':''}> 終日</label>
-    <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${task.calendar_color&&!['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'].includes(String(task.calendar_color))?`<option value="${safe(task.calendar_color)}" selected>インポート色 ${safe(task.calendar_color)}</option>`:''}<option value="#7c3aed" ${String(task.calendar_color||'#7c3aed')==='#7c3aed'?'selected':''}>紫</option><option value="#2563eb" ${String(task.calendar_color||'')==='#2563eb'?'selected':''}>青</option><option value="#16a34a" ${String(task.calendar_color||'')==='#16a34a'?'selected':''}>緑</option><option value="#ea580c" ${String(task.calendar_color||'')==='#ea580c'?'selected':''}>橙</option><option value="#dc2626" ${String(task.calendar_color||'')==='#dc2626'?'selected':''}>赤</option><option value="#db2777" ${String(task.calendar_color||'')==='#db2777'?'selected':''}>ピンク</option><option value="#0891b2" ${String(task.calendar_color||'')==='#0891b2'?'selected':''}>水色</option><option value="#64748b" ${String(task.calendar_color||'')==='#64748b'?'selected':''}>灰</option></select></div>
+    <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div>
     <label>担当者</label><div class="assignee-list">${members.results.map(member=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${member.id}" ${selected.has(Number(member.id))?'checked':''}> ${safe(member.name)}</label>`).join('')}</div>
     <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると担当者へ指定日時に詳細を設定した通知方法で通知します。</p>
     <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><datalist id="taskShopCategories">${categories.results.map(category=>`<option value="${safe(category.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input name="shopping_category[]" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
