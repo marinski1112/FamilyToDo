@@ -32,7 +32,8 @@ for(const marker of [
 ])if(!daily.includes(marker))throw new Error(`retained daily behavior/privacy marker missing: ${marker}`);
 
 if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('today/tomorrow must route through retained daily page');
-if(!handlers.includes("export { taskEdit, itemEdit } from './app';"))throw new Error('task/item edit ownership changed outside this extraction');
+if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('item edit retained boundary missing');
+if(!handlers.includes("export { taskEdit } from './app';"))throw new Error('task edit ownership changed outside this extraction');
 for(const marker of [
   "if(url.pathname==='/today.php') return await today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));",
   "if(url.pathname==='/tomorrow.php') return await tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));",
