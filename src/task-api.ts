@@ -1,5 +1,6 @@
 import { json } from './response';
 import { taskVisibilitySql } from './task-visibility';
+import { normalizeCalendarColor } from './calendar-colors';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation, wakeCalendarOutbox } from './google-calendar';
 import { buildStoredTaskRange } from './task-range-safety';
@@ -81,8 +82,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     if(Object.prototype.hasOwnProperty.call(v||{},'category')&&String(v?.category??'').trim().length>255)return json({ok:false,error:'買い物カテゴリーが長すぎます。'},400);
   }
   const now=nowJst();const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
-  const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
-  const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
+  const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
   const ids=isPrivate?[m.id]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
   if(ids.length){
