@@ -14,6 +14,7 @@ export const activeRegressionGroups=[
       ['index-entrypoint-modularity','node scripts/index-entrypoint-modularity-contract.mjs'],
       ['app-modularity-budget','node scripts/app-modularity-budget-contract.mjs'],
       ['task-visibility-boundary','node scripts/task-visibility-boundary-contract.mjs'],
+      ['calendar-color-contract','node scripts/calendar-color-contract-modularity.mjs'],
       ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],
       ['notification-delivery-modularity','node scripts/notification-delivery-modularity-contract.mjs'],
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
