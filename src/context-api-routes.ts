@@ -1,4 +1,4 @@
-import { joinFamily, inviteCreate, toggle, messages, shopping, familyLog, settingsDiagnosticsDetail, recordOccurrenceFamilyLog, settings } from './app';
+import { joinFamily, inviteCreate, toggle, messages, shopping, familyLog, recordOccurrenceFamilyLog, settings } from './app';
 import { createFamily } from './family-create-api';
 import { apiMe } from './api-me';
 import { taskApi } from './task-api';
@@ -11,6 +11,7 @@ import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './goo
 import { calendarSyncOutboundOnly } from './google-calendar-one-way';
 import { familyLogImportApi } from './family-log-import';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
+import { settingsDiagnosticsDetail } from './settings-diagnostics';
 import { webPushApi } from './web-push-api';
 
 export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{
