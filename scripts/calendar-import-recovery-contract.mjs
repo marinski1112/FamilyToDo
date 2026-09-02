@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const google=fs.readFileSync('src/google-calendar.ts','utf8');
+const google=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
 const ics=fs.readFileSync('src/calendar-ics-import.ts','utf8');
 
 // Explicit, dependency-safe EVENT reset for pre-production recovery.
@@ -14,12 +14,13 @@ assert.ok(google.includes('DELETE FROM recurrence_occurrences'),'EVENT reset mus
 assert.ok(google.includes('DELETE FROM recurrence_rules'),'EVENT reset must remove linked recurrence rules');
 assert.ok(google.includes('id="calendarEventReset"'),'integration settings must retain the EVENT reset control');
 
-// Import identity and color fidelity must survive recovery/reset.
+// Import identity and color fidelity must survive recovery/reset independently of Google inbound.
 assert.ok(ics.includes('calendar_visible,calendar_color,task_kind')&&ics.includes('e.allDay?1:0,e.color'),'ICS COLOR must continue to map into tasks.calendar_color');
 assert.ok(ics.includes('source_uid')&&ics.includes('eventKey'),'ICS UID identity tracking must remain enabled');
 
-// The inbound duplicate guard is part of reset/re-import safety.
-assert.ok(google.includes('hintedInboundAlreadyProjected'),'Google inbound must guard already-projected hinted tasks');
-assert.ok(google.includes('if (await hintedInboundAlreadyProjected(env, account, event)) return 0'),'duplicate hinted Google events must not create another local EVENT');
+for(const retired of ['hintedInboundAlreadyProjected','applyInboundSafely','processCalendarInbound','syncCalendarAccount']) {
+  assert.ok(!google.includes(retired),`ICS recovery must not depend on retired normal Google inbound: ${retired}`);
+}
+assert.ok(google.includes('familyTodoTaskId'),'outbound projection identity hint must remain available for Google events created by FamilyToDo');
 
-console.log('calendar-import-recovery-contract: EVENT reset, ICS identity/color, and duplicate guard ok');
+console.log('calendar-import-recovery-contract: EVENT reset and ICS identity/color recovery remain intact without normal Google inbound');

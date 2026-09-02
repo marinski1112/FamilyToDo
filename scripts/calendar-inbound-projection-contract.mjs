@@ -1,21 +1,32 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
+const calendarEntry=fs.readFileSync('src/google-calendar.ts','utf8');
+const calendarCore=fs.readFileSync('src/google-calendar-core.ts','utf8');
+const oneWay=fs.readFileSync('src/google-calendar-one-way.ts','utf8');
+const calendar=calendarEntry+calendarCore;
 
-assert.match(calendar,/UPDATE tasks SET title=\?,description=\?,start_at=\?,end_at=\?,due_at=\?,location=\?,all_day=\?,calendar_visible=1,updated_at=\?/,'linked Calendar projection update must remain field-scoped');
-assert.doesNotMatch(calendar,/UPDATE tasks SET[^'\n]*task_kind/,'linked Calendar projection must not mutate task_kind');
 for(const marker of [
-  "1,'EVENT'",
-  'external_event_id=?',
   'familyTodoTaskId',
-  't.family_id=l.family_id',
-  "event.status==='cancelled'",
-  'calendar_visible=0',
+  'external_event_id',
   'external_etag',
-  'syncLeases',
   "visibility_scope||'FAMILY'",
-  'inboundEventTimes',
+  "effectiveDelete=op==='DELETE'||!task||!eligibleTask(task)",
+  "ON CONFLICT(provider,task_id)",
 ]) assert.ok(calendar.includes(marker),marker);
 
-console.log('calendar-inbound-projection-contract: linked TASK/EVENT projection, dedupe, cancellation, visibility, and lease guardrails ok');
+assert.ok(oneWay.includes('received: 0'),'manual normal Calendar sync must remain outbound-only');
+assert.ok(oneWay.includes('inbound_more: false'),'manual response compatibility must report no inbound continuation');
+for(const forbidden of [
+  'UPDATE tasks SET title=',
+  "1,'EVENT'",
+  "event.status==='cancelled'",
+  'calendar_visible=0',
+  'syncLeases',
+  'inboundEventTimes',
+  'applyInbound',
+  'processCalendarInbound',
+  'syncCalendarAccount',
+]) assert.ok(!calendar.includes(forbidden),`normal Calendar must not mutate local tasks from Google: ${forbidden}`);
+
+console.log('calendar-inbound-projection-contract: outbound projection identity remains while normal Google-to-FamilyToDo mutation stays absent');
