@@ -27,6 +27,14 @@ for(const marker of [
   "イベントは完了チェックの対象外です。",
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
   "if(type==='item')",
+  'SELECT i.id,i.task_id FROM items i WHERE i.id=? AND i.family_id=?',
+  'const itemDirectAssigned=Number(itemAssigned?.c||0);',
+  'const itemInheritedAssigned=Number(itemTaskAssigned?.c||0);',
+  "if(itemDirectAssigned>0&&!itemActorAssigned)return json({ok:false,error:'この持ち物の担当者ではありません。'},403);",
+  "if(itemDirectAssigned===0&&itemInheritedAssigned>0&&!itemTaskActorAssigned)return json({ok:false,error:'この持ち物に紐づくタスクの担当者ではありません。'},403);",
+  'const itemEffectiveAssigned=itemDirectAssigned>0?itemDirectAssigned:itemInheritedAssigned;',
+  'JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=?',
+  "const mode=itemEffectiveAssigned>0?String(itemMode?.completion_mode||'ANY').toUpperCase():'ANY';",
   'INSERT INTO item_completion_history(item_id,member_id,action,occurred_at)',
   'SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=?',
   'SELECT task_id FROM shopping_items WHERE id=? AND family_id=?',
@@ -45,6 +53,7 @@ for(const forbiddenSql of [
   'SELECT s.id,s.completion_mode FROM shopping_items',
   'current.completion_mode',
 ]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
+if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
 if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
 for(const marker of [
