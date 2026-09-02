@@ -21,5 +21,44 @@ document.querySelectorAll('.family-log-quick strong,.family-quick-chore-record s
   if(chars.length===4){label.classList.add('family-log-label-nowrap');return;}
   label.replaceChildren(document.createTextNode(chars.slice(0,4).join('')),document.createElement('br'),document.createTextNode(chars.slice(4).join('')));
 });
+// Phase 1 of the Family Log quick-action unification: the "すべて" overview can
+// execute the same retained per-subject quick actions used on a subject page. This
+// is a pure consumer change: subject kinds and historical family_logs remain intact.
+try{
+  const payloadNode=document.getElementById('familyLogPayload');
+  const payload=payloadNode?JSON.parse(payloadNode.textContent||'{}'):null;
+  if(payload&&!payload.managementMode&&!Number(payload.selectedSubject||0)&&!payload.adultAggregate){
+    const actions=Array.isArray(payload.quickActions)?payload.quickActions:[];
+    const subjects=payload.subjects&&typeof payload.subjects==='object'?payload.subjects:{};
+    const showAdultLogs=payload.showAdultLogs!==false;
+    const groups=[];
+    for(const subject of Object.values(subjects)){
+      if(!subject||!Number(subject.id))continue;
+      if(!showAdultLogs&&String(subject.subject_kind||'').toUpperCase()==='ADULT')continue;
+      // Sleep toggle needs live timer state; keep the existing overview sleep control
+      // authoritative until that state is projected into the page payload.
+      const subjectActions=actions.filter(action=>Number(action?.subject_id)===Number(subject.id)&&Number(action?.active??1)===1&&String(action?.mode||'QUICK')!=='SLEEP_TOGGLE');
+      if(!subjectActions.length)continue;
+      const section=document.createElement('section');section.className='family-log-overview-group family-log-unified-quick-group';
+      const title=document.createElement('h2');title.textContent=`${subject.icon||'👤'} ${subject.name||subject.member_name||'対象'} クイック`;section.appendChild(title);
+      const grid=document.createElement('div');grid.className='family-log-quick-grid';
+      for(const action of subjectActions){
+        const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${String(action.mode||'QUICK')==='QUICK'?'family-log-quick-action':'family-log-form-action'}`;
+        button.dataset.quickActionId=String(Number(action.id||0));button.dataset.subjectId=String(Number(subject.id));
+        button.dataset.detail=String(action.detail_code||'');button.dataset.amount=action.amount==null?'':String(action.amount);button.dataset.unit=String(action.unit||'');button.dataset.valueText=String(action.value_text||'');
+        if(String(action.mode||'QUICK')!=='QUICK')button.dataset.logType=String(action.log_type||'MEMO');
+        const icon=document.createElement('span');icon.textContent=String(action.icon||'＋');const label=document.createElement('strong');label.textContent=String(action.name||'記録');
+        if(Array.from(label.textContent||'').length===4)label.classList.add('family-log-label-nowrap');
+        button.append(icon,label);grid.appendChild(button);
+      }
+      section.appendChild(grid);groups.push(section);
+    }
+    if(groups.length){
+      let overview=document.querySelector('.family-log-overview-quick');
+      if(!overview){overview=document.createElement('div');overview.className='family-log-overview-quick';document.querySelector('.family-log-date-head')?.insertAdjacentElement('afterend',overview);}
+      for(let i=groups.length-1;i>=0;i--)overview.prepend(groups[i]);
+    }
+  }
+}catch(_error){/* retain the server-rendered Family Log overview on enhancement failure */}
 load('/assets/family-log-core.js?v=wave128-fix18',()=>load('/assets/family-log-management-ui.js?v=wave128-fix18'));
 })();
