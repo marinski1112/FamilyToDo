@@ -11,7 +11,7 @@ for(const message of ['投稿できませんでした。','買い物に追加で
 
 for(const [name,asset] of [['messages list',source],['message new',messageNew]]){
   assert.doesNotMatch(asset,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?\.error|alert\(d\.error/,`${name} must not surface arbitrary server error detail`);
-  assert.doesNotMatch(asset,/alert\([^\n]*(?:err|error|e)\?*\.message|alert\([^\n]*String\((?:err|error|e\)/,`${name} must not surface raw exception messages or objects`);
+  assert.doesNotMatch(asset,/alert\([^\n]*(?:err|error|e)\?*\.message|alert\([^\n]*String\((?:err|error|e)\)/,`${name} must not surface raw exception messages or objects`);
   assert.doesNotMatch(asset,/console\.(?:log|warn|error)\(/,`${name} must not log private message/task/shopping payloads or exception detail`);
 }
 
