@@ -1,2 +1,3 @@
 export { loginPage } from './login-page';
-export { createFamilyPage, invitePage, home } from './app';
+export { createFamilyPage } from './family-onboarding-page';
+export { invitePage, home } from './app';
