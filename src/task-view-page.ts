@@ -27,7 +27,7 @@ export async function taskView(ctx:AppContext,id:number):Promise<Response>{
   let occurrence:Row|null=null;
 
   if(isVirtual){
-    occurrence=await ctx.env.DB.prepare(`SELECT o.id occurrence_id,o.occurrence_date,o.status occurrence_status,o.recurrence_rule_id,r.name recurrence_name,r.completion_mode,r.task_id,t.*
+    occurrence=await ctx.env.DB.prepare(`SELECT o.id occurrence_id,o.occurrence_date,o.status occurrence_status,o.recurrence_rule_id,r.name recurrence_name,t.completion_mode,r.task_id,t.*
       FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id
       JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id
       WHERE o.id=? AND o.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(occurrenceId,m.family_id,m.id).first<Row>();
