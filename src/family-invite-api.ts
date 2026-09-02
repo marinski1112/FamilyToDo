@@ -1,4 +1,5 @@
 import type { AppContext } from './app-context';
+import { logActivity } from './activity-log';
 import { lineOfficialAccountInfo } from './line-official-account';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
@@ -14,14 +15,6 @@ const familyLogSubjectKind=(value:unknown):string=>{
   const kind=String(value||'ADULT').toUpperCase();
   return ['BABY','CHILD','ADULT','PET','OTHER'].includes(kind)?kind:'OTHER';
 };
-
-async function logInviteActivity(ctx:AppContext,action:string,targetType:string,targetId:number|null,metadata:Row={}):Promise<void>{
-  if(!ctx.member)return;
-  try{
-    await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)')
-      .bind(ctx.member.family_id,ctx.member.id,action,targetType,targetId,JSON.stringify(metadata),nowJst()).run();
-  }catch{}
-}
 
 /** Canonical family-invitation create/revoke API independent from the legacy app.ts monolith. */
 export async function inviteCreate(request:Request,ctx:AppContext):Promise<Response>{
@@ -52,7 +45,7 @@ export async function inviteCreate(request:Request,ctx:AppContext):Promise<Respo
     if(inv.used_at)return json({ok:false,error:'使用済みの招待は取り消せません。'},400);
     const now=nowJst();
     await ctx.env.DB.prepare('UPDATE family_invitations SET expires_at=? WHERE id=? AND family_id=? AND used_at IS NULL').bind(now,id,m.family_id).run();
-    await logInviteActivity(ctx,'REVOKED','family_invitation',id,{family_log_subject_id:Number(inv.family_log_subject_id||0)||null});
+    await logActivity(ctx,'REVOKED','family_invitation',id,{family_log_subject_id:Number(inv.family_log_subject_id||0)||null});
     return json({ok:true,id});
   }
   if(action!=='create')return json({ok:false,error:'操作が不正です。'},400);
@@ -78,7 +71,7 @@ export async function inviteCreate(request:Request,ctx:AppContext):Promise<Respo
   const invitationId=Number(inserted.meta.last_row_id||0);
   const base=(ctx.env.APP_URL||new URL(ctx.request.url).origin).replace(/\/$/,'');
   const official=await lineOfficialAccountInfo(ctx.env);
-  await logInviteActivity(ctx,'CREATED','family_invitation',invitationId,{expires_at:expires,family_log_subject_id:subjectId||null,subject_name:String(subject?.name||'')});
-  if(subjectId)await logInviteActivity(ctx,'INVITED','family_log_subject',subjectId,{invitation_id:invitationId,expires_at:expires});
+  await logActivity(ctx,'CREATED','family_invitation',invitationId,{expires_at:expires,family_log_subject_id:subjectId||null,subject_name:String(subject?.name||'')});
+  if(subjectId)await logActivity(ctx,'INVITED','family_log_subject',subjectId,{invitation_id:invitationId,expires_at:expires});
   return json({ok:true,token,expires_at:expires,url:`${base}/family/join.php?token=${encodeURIComponent(token)}`,official_account:official,subject:subjectId?{id:subjectId,name:String(subject?.name||''),subject_kind:familyLogSubjectKind(subject?.subject_kind)}:null});
 }
