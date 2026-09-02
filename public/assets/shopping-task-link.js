@@ -4,6 +4,7 @@ const payloadNode=document.getElementById('shoppingTaskLinkPayload');
 const select=document.getElementById('shoppingTaskId');
 const dueInput=document.getElementById('shoppingTaskDueDate');
 const showAllInput=document.getElementById('shoppingTaskShowAll');
+const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;
 const hint=document.getElementById('shoppingTaskHint');
 if(!payloadNode||!select||!dueInput||!showAllInput)return;
 let payload={};
@@ -56,6 +57,7 @@ function render(){
   if(current&&!visible.some(task=>task.id===current))select.value='0';
   const sameDay=overlapsForDate.length;
   const hidden=Math.max(0,tasks.length-visible.length);
+  if(showAllLabel)showAllLabel.textContent=`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;
   if(hint){
     if(date&&sameDay)hint.textContent=`期限日に重なる未完了タスク ${sameDay}件を優先表示中${sameDay>DEFAULT_VISIBLE_LIMIT?'（先頭12件）':''}${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
     else if(date)hint.textContent=`期限日に重なるタスクがないため、近い未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
