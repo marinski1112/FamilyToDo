@@ -30,9 +30,11 @@ for(const marker of [
 if(page.includes("from './app'")) throw new Error('settings members page must not depend on app.ts');
 
 if(!handlers.includes("export { settingsMembers } from './settings-members-page';")) throw new Error('settings page handlers must export retained settingsMembers');
+if(!handlers.includes("export { settings } from './settings-root';")) throw new Error('top-level settings retained boundary regressed');
 const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bsettingsMembers\b/.test(appExport)) throw new Error('settingsMembers must not remain exported from app.ts');
-for(const transitional of ['settings','recurring']) if(!new RegExp(`\\b${transitional}\\b`).test(appExport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+if(/\bsettings\b/.test(appExport)) throw new Error('settings must not remain exported from app.ts');
+if(!/\brecurring\b/.test(appExport)) throw new Error('recurring transition boundary moved unexpectedly');
 
 if(!routes.includes("if(url.pathname==='/app/settings_members.php') return await settingsMembers(request,context);")) throw new Error('settings-members route wiring changed');
 

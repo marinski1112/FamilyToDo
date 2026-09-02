@@ -36,9 +36,11 @@ for(const marker of [
 if(page.includes("from './app'")) throw new Error('settings notifications page must not depend on app.ts');
 
 if(!handlers.includes("export { settingsNotifications } from './settings-notifications-page';")) throw new Error('settings page handlers must export retained settingsNotifications');
+if(!handlers.includes("export { settings } from './settings-root';")) throw new Error('top-level settings retained boundary regressed');
 const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bsettingsNotifications\b/.test(appExport)) throw new Error('settingsNotifications must not remain exported from app.ts');
-for(const transitional of ['settings','recurring']) if(!new RegExp(`\\b${transitional}\\b`).test(appExport)) throw new Error(`${transitional} transition boundary moved unexpectedly`);
+if(/\bsettings\b/.test(appExport)) throw new Error('settings must not remain exported from app.ts');
+if(!/\brecurring\b/.test(appExport)) throw new Error('recurring transition boundary moved unexpectedly');
 for(const retained of [
   "export { settingsContent } from './settings-content-page';",
   "export { settingsMembers } from './settings-members-page';",
