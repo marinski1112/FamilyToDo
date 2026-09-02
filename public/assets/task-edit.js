@@ -2,7 +2,7 @@
 'use strict';
 try{
   const f=document.getElementById('taskEditForm');if(!f)return;
-  const editDate=document.getElementById('editTaskDate'),editEndDate=document.getElementById('editTaskEndDate'),editNoDate=document.getElementById('editNoDate'),editAllDay=document.getElementById('editAllDay'),editTimeFields=document.getElementById('editTimeFields'),editCalendarVisible=document.getElementById('editCalendarVisible'),editCalendarColorWrap=document.getElementById('editCalendarColorWrap'),editIsEvent=document.getElementById('editIsEvent'),editIsPrivate=document.getElementById('editIsPrivate'),assignees=[...f.querySelectorAll('[name=assignees]')];
+  const editDate=document.getElementById('editTaskDate'),editEndDate=document.getElementById('editTaskEndDate'),editNoDate=document.getElementById('editNoDate'),editAllDay=document.getElementById('editAllDay'),editTimeFields=document.getElementById('editTimeFields'),editCalendarVisible=document.getElementById('editCalendarVisible'),editCalendarColorWrap=document.getElementById('editCalendarColorWrap'),editCalendarColorCustom=document.getElementById('editCalendarColorCustom'),editIsEvent=document.getElementById('editIsEvent'),editIsPrivate=document.getElementById('editIsPrivate'),assignees=[...f.querySelectorAll('[name=assignees]')];
   const importedColorNames=new Map([
     ['#f35f8c','ローズピンク（TimeTree）'],
     ['#2ecc87','エメラルド（TimeTree）'],
@@ -13,6 +13,11 @@ try{
   ]);
   const colorSelect=f.querySelector('[name=calendar_color]');
   if(colorSelect){for(const option of colorSelect.options){const name=importedColorNames.get(String(option.value||'').toLowerCase());if(name)option.textContent=name;}}
+  const syncCustomColorFromSelect=()=>{const value=String(colorSelect?.value||'').toLowerCase();if(editCalendarColorCustom&&/^#[0-9a-f]{6}$/.test(value))editCalendarColorCustom.value=value;};
+  const syncSelectFromCustomColor=()=>{if(!colorSelect||!editCalendarColorCustom)return;const value=String(editCalendarColorCustom.value||'').toLowerCase();if(!/^#[0-9a-f]{6}$/.test(value))return;let option=[...colorSelect.options].find(entry=>String(entry.value||'').toLowerCase()===value);if(!option){option=document.createElement('option');option.value=value;option.textContent=`カスタム ${value}`;option.dataset.customColor='1';colorSelect.prepend(option);}else{for(const entry of [...colorSelect.options])if(entry.dataset.customColor==='1'&&entry!==option)entry.remove();}colorSelect.value=value;};
+  if(colorSelect)colorSelect.addEventListener('change',syncCustomColorFromSelect);
+  if(editCalendarColorCustom)editCalendarColorCustom.addEventListener('input',syncSelectFromCustomColor);
+  syncCustomColorFromSelect();
   const syncEditDate=()=>{editDate.disabled=editNoDate.checked;if(editEndDate)editEndDate.disabled=editNoDate.checked;if(editNoDate.checked){editDate.value='';if(editEndDate)editEndDate.value='';f.querySelectorAll('[name=start_time],[name=end_time]').forEach(x=>x.value='');}if(editTimeFields)editTimeFields.style.display=(!editNoDate.checked&&!editAllDay.checked)?'grid':'none';};
   const syncKind=()=>{if(editIsEvent?.checked){editNoDate.checked=false;editNoDate.disabled=true;}else{editNoDate.disabled=false;}if(editIsPrivate)editIsPrivate.disabled=false;assignees.forEach(x=>{x.disabled=Boolean(editIsPrivate?.checked);if(editIsPrivate?.checked)x.checked=false;});syncEditDate();};
   const syncEditCalendar=()=>{if(editCalendarColorWrap)editCalendarColorWrap.style.display=editCalendarVisible.checked?'block':'none'};
