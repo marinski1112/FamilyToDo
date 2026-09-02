@@ -6,6 +6,7 @@ const api=fs.readFileSync('src/family-log-api.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const familyLogLayout=fs.readFileSync('public/assets/family-log-layout.css','utf8');
+const familyLogJs=fs.readFileSync('public/assets/family-log.js','utf8');
 if(handler.includes("from './app'"))throw new Error('Family Log page handler still forwards to app.ts');
 if(!handler.includes("export { familyLogPage as familyLog } from './family-log-page';"))throw new Error('retained Family Log page export missing');
 if(!routes.includes("url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php'"))throw new Error('Family Log page routes changed');
@@ -44,4 +45,15 @@ for(const marker of [
   'overflow-wrap:normal',
   'word-break:keep-all',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log quick label geometry missing: ${marker}`);
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation and quick-label geometry ok');
+for(const marker of [
+  "!Number(payload.selectedSubject||0)&&!payload.adultAggregate",
+  "const actions=Array.isArray(payload.quickActions)?payload.quickActions:[]",
+  "Number(action?.subject_id)===Number(subject.id)",
+  "String(action?.mode||'QUICK')!=='SLEEP_TOGGLE'",
+  "family-log-unified-quick-group",
+  "family-log-quick-action':'family-log-form-action'",
+  "button.dataset.quickActionId",
+  "overview.prepend(groups[i])",
+])if(!familyLogJs.includes(marker))throw new Error(`Family Log overview quick-action consumer missing: ${marker}`);
+if(/DELETE FROM family_logs|UPDATE family_logs SET deleted_at/.test(familyLogJs))throw new Error('overview quick-action consumer must not mutate or delete retained history directly');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry and overview quick actions ok');
