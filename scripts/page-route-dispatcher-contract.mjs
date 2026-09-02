@@ -13,7 +13,7 @@ if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depe
 const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-handlers'","from './calendar-page-handler'","from './message-page-handlers'","from './shopping-page-handlers'","from './location-page'","from './family-log-page-handler'","from './settings-page-handlers'"];
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
 const transitionalBoundaryFiles={
-  'src/task-page-handlers.ts':['today','tomorrow','taskEdit','itemEdit'],
+  'src/task-page-handlers.ts':['taskEdit','itemEdit'],
   'src/calendar-page-handler.ts':['calendar'],
   'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
 };
@@ -23,6 +23,7 @@ for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
   for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
 }
 const taskBoundary=fs.readFileSync('src/task-page-handlers.ts','utf8');
+if(!taskBoundary.includes("export { today, tomorrow } from './daily-task-page';")) throw new Error('task retained daily page handlers missing');
 if(!taskBoundary.includes("export { taskEvents } from './task-events-page';")) throw new Error('task retained checklist handler missing');
 if(!taskBoundary.includes("export { taskView } from './task-view-page';")) throw new Error('task retained detail handler missing');
 const authBoundary=fs.readFileSync('src/auth-page-handlers.ts','utf8');
