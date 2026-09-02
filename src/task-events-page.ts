@@ -9,6 +9,7 @@ type Row=Record<string,unknown>;
 
 type TaskEventsData={tasks:Row[];items:Row[];shopping:Row[];expiredTasks:Row[]};
 
+const LINKED_SHOPPING_TASK_CHUNK_SIZE=80;
 const esc=(v:unknown)=>String(v??'')
   .replaceAll('&','&amp;')
   .replaceAll('<','&lt;')
@@ -18,6 +19,12 @@ const esc=(v:unknown)=>String(v??'')
 const dateOnly=(d=new Date())=>new Intl.DateTimeFormat('sv-SE',{
   timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',
 }).format(d);
+const compareShoppingRows=(a:Row,b:Row)=>{
+  const status=String(a.status??'').localeCompare(String(b.status??''));if(status)return status;
+  const nullDue=Number(a.due_date==null)-Number(b.due_date==null);if(nullDue)return nullDue;
+  for(const key of ['due_date','category','name'] as const){const diff=String(a[key]??'').localeCompare(String(b[key]??''));if(diff)return diff;}
+  return Number(a.id||0)-Number(b.id||0);
+};
 
 async function expiredTasksFor(ctx:AppContext):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
@@ -72,15 +79,25 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   ]);
   const taskRows=[...tasks.results,...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at)));
   const baseTaskIds=[...new Set(taskRows.map(row=>Number(row.id)<0?Number(row.task_id||0):Number(row.id||0)).filter(id=>Number.isSafeInteger(id)&&id>0))];
-  const linkedClause=baseTaskIds.length?` OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})`:'';
-  const shopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,
+  const baseShopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,
       (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
       WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
-        AND ((s.due_date IS NOT NULL AND s.due_date=?) OR (s.due_date IS NULL AND s.task_id IS NULL)${linkedClause})
+        AND ((s.due_date IS NOT NULL AND s.due_date=?) OR (s.due_date IS NULL AND s.task_id IS NULL))
       ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`)
-    .bind(member.family_id,member.id,date,...baseTaskIds).all<Row>();
-  return {tasks:taskRows,items:items.results,shopping:shopping.results,expiredTasks};
+    .bind(member.family_id,member.id,date).all<Row>();
+  const linkedShoppingResults=await Promise.all(Array.from({length:Math.ceil(baseTaskIds.length/LINKED_SHOPPING_TASK_CHUNK_SIZE)},(_,index)=>{
+    const chunk=baseTaskIds.slice(index*LINKED_SHOPPING_TASK_CHUNK_SIZE,(index+1)*LINKED_SHOPPING_TASK_CHUNK_SIZE);
+    return ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,
+        (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
+      FROM shopping_items s JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
+      WHERE s.family_id=? AND ${taskVisibilitySql('t')} AND s.task_id IN (${chunk.map(()=>'?').join(',')})`)
+      .bind(member.family_id,member.id,...chunk).all<Row>();
+  }));
+  const shoppingById=new Map<string,Row>();
+  for(const row of [...baseShopping.results,...linkedShoppingResults.flatMap(result=>result.results)])shoppingById.set(String(row.id),row);
+  const shopping=[...shoppingById.values()].sort(compareShoppingRows);
+  return {tasks:taskRows,items:items.results,shopping,expiredTasks};
 }
 
 function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,unorganized:Row[]):string{
