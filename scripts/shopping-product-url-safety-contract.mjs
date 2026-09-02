@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('public/assets/shopping.js','utf8');
 const createSource=fs.readFileSync('public/assets/shopping-new.js','utf8');
-const appSource=fs.readFileSync('src/app.ts','utf8');
+const appSource=fs.readFileSync('src/daily-task-page.ts','utf8');
 
 assert.ok(source.includes('safeProductUrl'),'shopping detail must normalize product links through a dedicated safety boundary');
 assert.match(source,/raw\.length>2048/,'product URL safety boundary must reject oversized persisted links before URL parsing');
@@ -28,7 +28,7 @@ assert.doesNotMatch(createSource,/products:names\.map\(\(name,j\)=>\(\{name,quan
 assert.doesNotMatch(createSource,/cookie|authorization|token|member_name|family_name|private_owner_id/i,'shopping create URL safety must not add identity/session handling');
 
 const dailyStart=appSource.indexOf('function renderDailyPage(');
-const dailyEnd=appSource.indexOf('\nexport async function ',dailyStart+1);
+const dailyEnd=appSource.indexOf('\nasync function dailyPage(',dailyStart+1);
 assert.ok(dailyStart>=0&&dailyEnd>dailyStart,'daily renderer source must remain detectable');
 const dailySource=appSource.slice(dailyStart,dailyEnd);
 const dailySafetyStart=dailySource.indexOf('  const safeDailyProductUrl=');
@@ -40,8 +40,8 @@ assert.match(dailySafetySource,/raw\.length>2048/,'daily renderer must reject ov
 assert.match(dailySafetySource,/new URL\(raw\)/,'daily renderer must parse persisted product links as absolute URLs');
 assert.match(dailySafetySource,/parsed\.username\|\|parsed\.password/,'daily renderer must reject credential-bearing product links');
 assert.match(dailySafetySource,/parsed\.protocol==='http:'\|\|parsed\.protocol==='https:'/,'daily renderer must allow only http/https product links');
-assert.match(dailySafetySource,/const productUrl=safeDailyProductUrl\(i\.url\)/,'daily renderer must sanitize each persisted Shopping URL before HTML assembly');
-assert.doesNotMatch(dailySafetySource,/i\.url\?`<a href="\$\{esc\(i\.url\)\}/,'daily renderer must never insert raw persisted Shopping URLs into href');
+assert.match(dailySafetySource,/const productUrl=safeDailyProductUrl\((?:i|item)\.url\)/,'daily renderer must sanitize each persisted Shopping URL before HTML assembly');
+assert.doesNotMatch(dailySafetySource,/(?:i|item)\.url\?`<a href="\$\{esc\((?:i|item)\.url\)\}/,'daily renderer must never insert raw persisted Shopping URLs into href');
 assert.doesNotMatch(dailySafetySource,/console\.(?:log|warn|error)|cookie|authorization|token|member_name|family_name|private_owner_id/i,'daily product-link safety block must not introduce sensitive logging or identity/session handling');
 
 console.log('shopping product url safety contract: shopping and daily renderers accept only bounded credential-free absolute http/https links');
