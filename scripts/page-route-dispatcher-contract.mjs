@@ -9,6 +9,31 @@ if(!index.includes("import { dispatchPageRoute } from './page-routes';")) throw 
 if(!index.includes('const pageResponse=await dispatchPageRoute(request,context,env,url);')) throw new Error('index.ts must invoke page dispatcher');
 if(!index.includes('if(pageResponse) return pageResponse;')) throw new Error('index.ts must return matched page response');
 if(!pages.includes('export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{')) throw new Error('page dispatcher export missing');
+if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depend directly on the app.ts monolith');
+const pageBoundaryImports=[
+  "from './auth-page-handlers'",
+  "from './task-page-handlers'",
+  "from './calendar-page-handler'",
+  "from './message-page-handlers'",
+  "from './shopping-page-handlers'",
+  "from './family-log-page-handler'",
+  "from './settings-page-handlers'",
+];
+for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
+const boundaryFiles={
+  'src/auth-page-handlers.ts':['loginPage','createFamilyPage','invitePage','home'],
+  'src/task-page-handlers.ts':['today','tomorrow','taskEvents','taskView','taskEdit','itemEdit'],
+  'src/calendar-page-handler.ts':['calendar'],
+  'src/message-page-handlers.ts':['messages','messageNew'],
+  'src/shopping-page-handlers.ts':['shopping','shoppingNew','shoppingEdit'],
+  'src/family-log-page-handler.ts':['familyLog'],
+  'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
+};
+for(const [file,exports] of Object.entries(boundaryFiles)){
+  const source=fs.readFileSync(file,'utf8');
+  if(!source.includes("from './app';")) throw new Error(`temporary page boundary must forward to current app implementation: ${file}`);
+  for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
+}
 const routeSentinels=[
   "url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php'",
   "url.pathname==='/app/create.php'||url.pathname==='/app/create'",

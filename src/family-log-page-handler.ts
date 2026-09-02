@@ -1,0 +1,1 @@
+export { familyLog } from './app';
