@@ -17,6 +17,7 @@ export const activeRegressionGroups=[
       ['login-page-boundary','node scripts/login-page-boundary-contract.mjs'],
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['family-invite-page-boundary','node scripts/family-invite-page-boundary-contract.mjs'],
+      ['family-create-api-boundary','node scripts/family-create-api-boundary-contract.mjs'],
       ['liff-entry-boundary','node scripts/liff-entry-boundary-contract.mjs'],
       ['liff-login-boundary','node scripts/liff-login-boundary-contract.mjs'],
       ['app-context-boundary','node scripts/app-context-boundary-contract.mjs'],
