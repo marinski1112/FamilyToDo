@@ -9,22 +9,45 @@ permissions:
   contents: read
 
 jobs:
-  references:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Enumerate dormant inbound references
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Assert retired normal Calendar inbound source is absent
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== runtime/support references ==='
-          grep -RInE \
-            --exclude-dir=.git \
-            --exclude=google-calendar-inbound-reference-audit.yml \
-            'processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncCalendarAccount|syncCalendarAccountPage|applyInboundSafely|reconcileHintedInbound|hintedInboundAlreadyProjected|sameInboundShape|inboundEventTimes|applyInbound|PAGE_PREFIX|INBOUND_PAGE_SIZE|syncLeases|parseImportDateTime|archiveTaskCompletionStatements|archiveShoppingCompletionStatements|archiveItemCompletionStatements' \
-            src scripts public package.json wrangler.jsonc || true
-          echo '=== regression markers tied to inbound behavior ==='
-          grep -RInE \
-            --exclude=google-calendar-inbound-reference-audit.yml \
-            "processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncLeases|inboundEventTimes|applyInbound|nextSyncToken|PAGE_PREFIX|INBOUND_PAGE_SIZE|reconcileHintedInbound|hintedInboundAlreadyProjected|source:'GOOGLE_CALENDAR'|calendar_visible=0|familyTodoTaskId" \
-            scripts || true
+          if grep -nE 'processCalendarInbound|calendarSyncNow|calendarWatchWebhook|syncCalendarAccount|syncCalendarAccountPage|syncCalendarAccountUnlocked|applyInboundSafely|reconcileHintedInbound|hintedInboundAlreadyProjected|sameInboundShape|inboundEventTimes|applyInbound|PAGE_PREFIX|INBOUND_PAGE_SIZE|syncLeases|nextSyncToken' src/google-calendar.ts src/google-calendar-core.ts; then
+            echo 'Retired normal Calendar inbound implementation remains in source.' >&2
+            exit 1
+          fi
+          grep -n 'calendarSyncOutboundOnly(request,context)' src/context-api-routes.ts
+          grep -n 'calendarWatchNotificationOnly(request,env)' src/public-routes.ts
+          grep -n 'received: 0' src/google-calendar-one-way.ts
+          grep -n 'inbound_more: false' src/google-calendar-one-way.ts
+      - run: npm run typecheck
+        if: always()
+      - run: npm run check:browser-js
+        if: always()
+      - run: npm run check:static-assets
+        if: always()
+      - run: npm run check:migrations
+        if: always()
+      - run: node scripts/regression-suite.mjs
+        if: always()
+      - name: Diff check against current main
+        if: always()
+        shell: bash
+        run: |
+          git fetch origin main
+          git diff --check origin/main...HEAD
+      - name: Workers dry-run
+        if: always()
+        run: npx wrangler deploy --dry-run
