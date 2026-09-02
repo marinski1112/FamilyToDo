@@ -1,4 +1,5 @@
-import { layout, activityLogVisibilitySql } from './app';
+import { layout } from './app';
+import { activityLogVisibilitySql } from './task-visibility';
 import { html, redirect } from './response';
 import { DEFAULT_FAMILY_TIMEZONE, formatStoredUtcForFamily } from './timezone';
 
