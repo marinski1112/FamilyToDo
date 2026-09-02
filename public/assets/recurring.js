@@ -1,9 +1,15 @@
 (()=>{
 'use strict';
 try{
-  const config=JSON.parse(document.getElementById('recurringConfig')?.textContent||'{}'),f=document.getElementById('recForm'),csrf=String(config.csrf||''),today=String(config.today||''),heading=document.getElementById('recHeading'),submit=document.getElementById('recSubmit'),cancel=document.getElementById('recCancel'),status=document.getElementById('recStatus');
+  const config=JSON.parse(document.getElementById('recurringConfig')?.textContent||'{}'),f=document.getElementById('recForm'),csrf=String(config.csrf||''),today=String(config.today||''),heading=document.getElementById('recHeading'),submit=document.getElementById('recSubmit'),cancel=document.getElementById('recCancel'),status=document.getElementById('recStatus'),recCalendarColorCustom=document.getElementById('recCalendarColorCustom');
   if(status)status.textContent='';
-  const q=n=>f.querySelector('[name="'+n+'"]'),setVal=(name,v)=>{const e=q(name);if(!e)return;if(name==='calendar_color'&&v&&![...e.options].some(o=>o.value===v)){const o=new Option('インポート色 '+v,v,true,true);e.add(o,0);}e.value=v??''};
+  const q=n=>f.querySelector('[name="'+n+'"]'),setVal=(name,v)=>{const e=q(name);if(!e)return;if(name==='calendar_color'&&v&&![...e.options].some(o=>o.value===v)){const o=new Option('カスタム '+v,v,true,true);o.dataset.customColor='1';e.add(o,0);}e.value=v??'';if(name==='calendar_color'&&recCalendarColorCustom&&/^#[0-9a-f]{6}$/i.test(String(v||'')))recCalendarColorCustom.value=String(v).toLowerCase();};
+  const calendarColorSelect=q('calendar_color');
+  const syncCustomColorFromSelect=()=>{const value=String(calendarColorSelect?.value||'').toLowerCase();if(recCalendarColorCustom&&/^#[0-9a-f]{6}$/.test(value))recCalendarColorCustom.value=value;};
+  const syncSelectFromCustomColor=()=>{if(!calendarColorSelect||!recCalendarColorCustom)return;const value=String(recCalendarColorCustom.value||'').toLowerCase();if(!/^#[0-9a-f]{6}$/.test(value))return;let option=[...calendarColorSelect.options].find(entry=>String(entry.value||'').toLowerCase()===value);if(!option){option=document.createElement('option');option.value=value;option.textContent=`カスタム ${value}`;option.dataset.customColor='1';calendarColorSelect.prepend(option);}else{for(const entry of [...calendarColorSelect.options])if(entry.dataset.customColor==='1'&&entry!==option)entry.remove();}calendarColorSelect.value=value;};
+  calendarColorSelect?.addEventListener('change',syncCustomColorFromSelect);
+  recCalendarColorCustom?.addEventListener('input',syncSelectFromCustomColor);
+  syncCustomColorFromSelect();
   function refreshRecurringFields(){
     const type=String(q('recurrence_type')?.value||'DAILY');
     document.querySelectorAll('[data-rec-show]').forEach(el=>{const allowed=String(el.dataset.recShow||'').split(',');el.style.display=allowed.includes(type)?'block':'none';});
@@ -15,7 +21,7 @@ try{
   const editScopeWrap=document.getElementById('recEditScope'),editScope=document.getElementById('recEditScopeSelect'),effectiveDateWrap=document.getElementById('recEffectiveDateWrap');
   function refreshEditScope(){if(effectiveDateWrap)effectiveDateWrap.style.display=editScope?.value==='future'?'block':'none';}
   editScope?.addEventListener('change',refreshEditScope);
-  function resetForm(){f.reset();setVal('action','create');setVal('id','');setVal('start_date',today);setVal('interval_value',1);setVal('business_day_ordinal',1);setVal('effective_date',today);if(editScope)editScope.value='all';if(editScopeWrap)editScopeWrap.style.display='none';refreshEditScope();f.querySelectorAll('[name=week_numbers]').forEach(x=>x.checked=false);heading.textContent='定期タスクを作成';submit.textContent='定期タスクを作成';cancel.style.display='none';status.textContent='';f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=false);resetChildren();refreshRecurringFields();}
+  function resetForm(){f.reset();setVal('action','create');setVal('id','');setVal('start_date',today);setVal('interval_value',1);setVal('business_day_ordinal',1);setVal('effective_date',today);if(editScope)editScope.value='all';if(editScopeWrap)editScopeWrap.style.display='none';refreshEditScope();f.querySelectorAll('[name=week_numbers]').forEach(x=>x.checked=false);heading.textContent='定期タスクを作成';submit.textContent='定期タスクを作成';cancel.style.display='none';status.textContent='';f.querySelectorAll('[name=weekdays]').forEach(x=>x.checked=false);resetChildren();syncCustomColorFromSelect();refreshRecurringFields();}
   document.getElementById('recShopToggle').onclick=()=>{const b=document.getElementById('recShopBox');b.style.display=b.style.display==='none'?'block':'none'};
   document.getElementById('recItemToggle').onclick=()=>{const b=document.getElementById('recItemBox');b.style.display=b.style.display==='none'?'block':'none'};
   document.getElementById('recAddShop').onclick=()=>{const d=document.createElement('div');d.className='product-row';d.innerHTML='<input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input type="url" name="shopping_url[]" placeholder="URL（任意）">';document.getElementById('recShopRows').appendChild(d)};
