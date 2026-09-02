@@ -31,8 +31,9 @@ for(const marker of [
   "<h2>完了履歴</h2>",
 ])if(!page.includes(marker))throw new Error(`retained item edit behavior/privacy marker missing: ${marker}`);
 
+if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('itemEdit must route through retained item edit page');
-if(!handlers.includes("export { taskEdit } from './app';"))throw new Error('taskEdit ownership changed outside item extraction');
+if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('taskEdit retained boundary missing');
 if(!routes.includes("if(url.pathname==='/item/edit.php') return await itemEdit(request,context,Number(url.searchParams.get('id')||0));"))throw new Error('item edit route changed');
 
 console.log('item-edit-page-boundary: retained item edit ownership, PRIVATE parent lock and lifecycle semantics ok');
