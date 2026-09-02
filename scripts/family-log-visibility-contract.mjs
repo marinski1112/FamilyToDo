@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const read=p=>fs.readFileSync(p,'utf8');
-const app=read('src/app.ts');
+const app=retainedAppContractSource();
 const js=read('public/assets/family-log.js')+(fs.existsSync('public/assets/family-log-core.js')?'\n'+read('public/assets/family-log-core.js'):'');
 const migration92=read('migrations/0029_wave92_family_log_settings.sql');
 const migration91=read('migrations/0028_wave91_family_log_dashboard_index.sql');
