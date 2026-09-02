@@ -19,6 +19,7 @@ for(const marker of [
   "定期タスクのルールが見つかりません。",
   "担当者が設定されていない定期タスクは完了できません。",
   "この定期タスクの担当者ではありません。",
+  'SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id',
   'INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at)',
   'DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=? AND member_id=?',
   'updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB',
@@ -27,9 +28,17 @@ for(const marker of [
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
   "if(type==='item')",
   'INSERT INTO item_completion_history(item_id,member_id,action,occurred_at)',
+  'SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=?',
+  'const shopComplete=Number(shopDone?.c||0)>0;',
   'INSERT INTO shopping_completion_history(shopping_item_id,member_id,action,occurred_at)',
   "taskVisibilitySql('t')",
 ]) if(!api.includes(marker)) throw new Error(`retained toggle behavior marker missing: ${marker}`);
+
+for(const forbiddenSql of [
+  'SELECT task_id,completion_mode FROM recurrence_rules',
+  'SELECT s.id,s.completion_mode FROM shopping_items',
+  'current.completion_mode',
+]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
 
 for(const marker of [
   "PRAGMA table_info(recurrence_occurrences)",
@@ -48,4 +57,4 @@ if(!exceptionRoutes.includes("if(url.pathname==='/app/api/check.php'||url.pathna
 const appImport=exceptionRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\btoggle\b/.test(appImport)) throw new Error('exception routes must not import toggle from app.ts');
 
-console.log('toggle-api-boundary: retained routing, authorization and recurrence compatibility ok');
+console.log('toggle-api-boundary: retained routing, authorization and D1 schema compatibility ok');
