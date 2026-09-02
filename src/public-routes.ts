@@ -1,5 +1,6 @@
 import { json } from './response';
-import { makeContext, authHealth } from './app';
+import { makeContext } from './app-context';
+import { authHealth } from './auth-health';
 import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';
 import { googleHomeHealth, googleToken, googleFulfillment } from './google-home';
 import { integrationsHealthResponse } from './environment-health';
