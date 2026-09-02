@@ -5,12 +5,32 @@ import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
 import { taskVisibilitySql } from './task-visibility';
 import { validateLiffNext } from './liff-target';
+import { APP_VERSION } from './version';
 
 type Row=Record<string,unknown>;
 
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T').replace('T',' ');
 const bad=(message:string)=>json({ok:false,error:message,code:'BAD_REQUEST'},400);
+
+function taskRange(task:Row):{start:string;end:string}{
+  const start=String(task.start_at||task.due_at||'').slice(0,10);
+  let end=String(task.end_at||task.start_at||task.due_at||'').slice(0,10);
+  if(start&&end&&end<start)end=start;
+  return {start,end};
+}
+
+function taskOverlapsDate(task:Row,date:string):boolean{
+  if(!date)return false;
+  const {start,end}=taskRange(task);
+  return Boolean(start&&start<=date&&(!end||end>=date));
+}
+
+function taskOption(task:Row,selectedTaskId:number):string{
+  const {start,end}=taskRange(task);
+  const dateLabel=start?(end&&end!==start?`${start}〜${end}`:start):'期限なし';
+  return `<option value="${task.id}" ${Number(task.id)===selectedTaskId?'selected':''}>${esc(task.title)}（${esc(dateLabel)}）</option>`;
+}
 
 function authRequiredResponse(ctx:AppContext):Response{
   const url=new URL(ctx.request.url);
@@ -41,7 +61,7 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
   const privateParent=Number(item.task_id||0)?await ctx.env.DB.prepare("SELECT id,title,private_owner_id FROM tasks WHERE id=? AND family_id=? AND visibility_scope='PRIVATE' AND private_owner_id=?").bind(Number(item.task_id),m.family_id,m.id).first<Row>():null;
-  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id").bind(m.family_id).all<Row>();
+  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,end_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id").bind(m.family_id).all<Row>();
   const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
   const assigned=await ctx.env.DB.prepare('SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?').bind(id).all<Row>();
   const history=await ctx.env.DB.prepare('SELECT h.*,m.name member_name FROM shopping_completion_history h LEFT JOIN members m ON m.id=h.member_id WHERE h.shopping_item_id=? ORDER BY h.occurred_at DESC,h.id DESC LIMIT 30').bind(id).all<Row>();
@@ -83,6 +103,17 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     return redirect('/app/shopping.php');
   }
 
-  const body=`<div class="card"><h1>🛒 買い物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" required value="${esc(item.name)}"><label>数量</label><input type="text" name="quantity" value="${esc(item.quantity||'1')}"><label>カテゴリー</label><input name="category" value="${esc(item.category||'')}"><label>URL</label><input type="url" name="url" value="${esc(item.url||'')}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>担当者</label>${privateParent?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':members.results.map(row=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${row.id}" ${assignedSet.has(Number(row.id))?'checked':''}> ${esc(row.name)}</label>`).join('')}<label>紐づくタスク</label><select name="task_id" ${privateParent?'disabled':''}>${privateParent?`<option value="${privateParent.id}" selected>🔒 ${esc(privateParent.title)}</option>`:`<option value="0">タスクなし</option>${tasks.results.map(task=>`<option value="${task.id}" ${Number(item.task_id)===Number(task.id)?'selected':''}>${esc(task.title)}</option>`).join('')}`}</select>${privateParent?`<input type="hidden" name="task_id" value="${privateParent.id}"><p class="small">自分専用タスクとの紐付けは編集時に解除できません。</p>`:''}<label>期限日</label><input type="date" name="due_date" value="${esc(item.due_date||'')}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(row=>`<div class="row">${esc(row.action)} ・ ${esc(row.member_name||'')} ・ ${esc(row.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この買い物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;
+  const selectedTaskId=Number(item.task_id||0);
+  const dueDate=String(item.due_date||'').slice(0,10);
+  const initialTasks=tasks.results.filter(task=>Number(task.id)===selectedTaskId||taskOverlapsDate(task,dueDate));
+  const otherTaskCount=Math.max(0,tasks.results.length-initialTasks.length);
+  const taskLinkPayload=JSON.stringify({
+    selectedTaskId,
+    tasks:tasks.results.map(task=>{
+      const {start,end}=taskRange(task);
+      return {id:Number(task.id),title:String(task.title||''),start,end,due:String(task.due_at||'').slice(0,10)};
+    }),
+  }).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const body=`<div class="card"><h1>🛒 買い物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" required value="${esc(item.name)}"><label>数量</label><input type="text" name="quantity" value="${esc(item.quantity||'1')}"><label>カテゴリー</label><input name="category" value="${esc(item.category||'')}"><label>URL</label><input type="url" name="url" value="${esc(item.url||'')}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>担当者</label>${privateParent?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':members.results.map(row=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${row.id}" ${assignedSet.has(Number(row.id))?'checked':''}> ${esc(row.name)}</label>`).join('')}<label>紐づくタスク</label>${privateParent?`<select name="task_id" disabled><option value="${privateParent.id}" selected>🔒 ${esc(privateParent.title)}</option></select><input type="hidden" name="task_id" value="${privateParent.id}"><p class="small">自分専用タスクとの紐付けは編集時に解除できません。</p>`:`<select name="task_id" id="shoppingTaskId"><option value="0">タスクなし</option>${initialTasks.map(task=>taskOption(task,selectedTaskId)).join('')}</select><label class="checkrow"><input type="checkbox" id="shoppingTaskShowAll"><span>その他の未完了タスクも表示${otherTaskCount?`（${otherTaskCount}件）`:''}</span></label><p class="small" id="shoppingTaskHint">${dueDate?`期限日に重なる未完了タスク ${initialTasks.filter(task=>taskOverlapsDate(task,dueDate)).length}件を優先表示しています。`:'期限を指定すると、その日に重なる未完了タスクだけを先に表示します。'}</p>`}<label>期限日</label><input type="date" name="due_date" id="shoppingTaskDueDate" value="${esc(item.due_date||'')}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(row=>`<div class="row">${esc(row.action)} ・ ${esc(row.member_name||'')} ・ ${esc(row.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この買い物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form>${privateParent?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1"></script>`}</div>`;
   return html(layout('買い物編集',body,''));
 }

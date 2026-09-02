@@ -6,6 +6,8 @@ const editPage=fs.readFileSync('src/shopping-edit-page.ts','utf8');
 const handlers=fs.readFileSync('src/shopping-page-handlers.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
+const taskLink=fs.readFileSync('public/assets/shopping-task-link.js','utf8');
+const pkg=fs.readFileSync('package.json','utf8');
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
@@ -32,8 +34,15 @@ for(const marker of [
   'export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):Promise<Response>{',
   "status<>'completed'",
   "visibility_scope='FAMILY'",
+  'SELECT id,title,start_at,end_at,due_at,visibility_scope',
   'ORDER BY coalesce(start_at,due_at),id LIMIT 200',
   "privateContext=String(selectedTask?.visibility_scope||'')==='PRIVATE'",
+  'taskOverlapsDate(task,date)',
+  'id="shoppingTaskDueDate"',
+  'id="shoppingTaskId"',
+  'id="shoppingTaskShowAll"',
+  'id="shoppingTaskLinkPayload"',
+  '/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1',
   'name="product_name[]"',
   'name="product_quantity[]"',
   'name="product_url[]"',
@@ -45,15 +54,35 @@ for(const marker of [
 for(const marker of [
   "import { archiveShoppingCompletionStatements } from './lifecycle';",
   "import { taskVisibilitySql } from './task-visibility';",
+  "import { APP_VERSION } from './version';",
   'export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{',
   "visibility_scope='PRIVATE' AND private_owner_id=?",
   "role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id",
+  'SELECT id,title,start_at,end_at,due_at FROM tasks',
+  'taskOverlapsDate(task,dueDate)',
+  'id="shoppingTaskDueDate"',
+  'id="shoppingTaskId"',
+  'id="shoppingTaskShowAll"',
+  'id="shoppingTaskLinkPayload"',
+  '/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1',
   "archiveShoppingCompletionStatements",
   "DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN",
   "UPDATE shopping_items SET status=CASE WHEN",
   "return redirect('/app/shopping.php');",
   "return html(layout('買い物編集',body,''));",
 ]) if(!editPage.includes(marker)) throw new Error(`Shopping edit page lost behavior marker: ${marker}`);
+
+for(const marker of [
+  "const payloadNode=document.getElementById('shoppingTaskLinkPayload');",
+  "const select=document.getElementById('shoppingTaskId');",
+  "const dueInput=document.getElementById('shoppingTaskDueDate');",
+  "const showAllInput=document.getElementById('shoppingTaskShowAll');",
+  'showAll||overlaps(task,date)||task.id===current||task.id===initialSelected',
+  "dueInput.addEventListener('change',render);",
+  "showAllInput.addEventListener('change',render);",
+  'その他 ${hidden}件はチェックで表示できます。',
+]) if(!taskLink.includes(marker)) throw new Error(`Shopping task-link helper lost behavior marker: ${marker}`);
+if(!pkg.includes('node --check public/assets/shopping-task-link.js')) throw new Error('Shopping task-link helper must be covered by browser JS syntax check');
 
 for(const [name,source] of [['root',root],['new',newPage],['edit',editPage]]){
   if(source.includes("from './app'")) throw new Error(`Shopping ${name} retained handler must not depend on app.ts`);
