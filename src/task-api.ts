@@ -1,5 +1,6 @@
 import { json } from './response';
 import { taskVisibilitySql } from './task-visibility';
+import { normalizeCalendarColor } from './calendar-colors';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation, wakeCalendarOutbox } from './google-calendar';
 import { buildStoredTaskRange } from './task-range-safety';
@@ -64,7 +65,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   if(!title)return json({ok:false,error:'タイトルを入力してください。'},400);
   if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);
   const allDay=Boolean(b.allDay); const endDate=String(b.endDateOnly??date).trim(); const st=String(b.startTime??'').trim();const et=String(b.endTime??'').trim();
-  const range=buildStoredTaskRange({noDate,allDay,startDate:date,endDate,startTime:st,endTime:et,requireTimedStart:!allDay});
+  const range=buildStoredTaskRange({noDate,allDay,startDate:date,endDate,startTime:st,endTime:endTime=et,requireTimedStart:!allDay});
   if(!range.ok){
     const error=range.error==='START_DATE_INVALID'?'日付が不正です。':range.error==='END_DATE_INVALID'?'終了日が不正です。':range.error==='DATE_ORDER'?'終了日は開始日以降にしてください。':range.error==='START_TIME_REQUIRED'?'開始日時を指定してください。':range.error==='START_TIME_INVALID'?'開始日時が不正です。':range.error==='END_TIME_INVALID'?'終了日時が不正です。':'終了日時は開始日時以降にしてください。';
     return json({ok:false,error},400);
@@ -81,8 +82,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     if(Object.prototype.hasOwnProperty.call(v||{},'category')&&String(v?.category??'').trim().length>255)return json({ok:false,error:'買い物カテゴリーが長すぎます。'},400);
   }
   const now=nowJst();const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
-  const allowedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b'];
-  const calendarColor=allowedColors.includes(String(b.calendar_color||''))?String(b.calendar_color):'#7c3aed';
+  const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
   const ids=isPrivate?[m.id]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
   if(ids.length){
