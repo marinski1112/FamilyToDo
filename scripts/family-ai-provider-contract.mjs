@@ -8,6 +8,7 @@ const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const app=retainedAppContractSource();
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync('src/google-calendar-core.ts','utf8');
+const oneWay=fs.readFileSync('src/google-calendar-one-way.ts','utf8');
 const home=fs.readFileSync('src/google-home.ts','utf8');
 const docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
 
@@ -52,7 +53,9 @@ assert.ok(!ai.includes('AUTO'));
 assert.match(ai,/if\(!authorizedAdmin\(ctx\)\)return json\(\{ok:false,error:'管理者権限が必要です。'\},403\)/);
 assert.ok(app.includes('!managementMode&&familyLogIsAdmin'));
 
-for(const marker of ['model-compatibility','calendar.app.created',"1,'EVENT'",'syncToken',"visibility_scope='FAMILY'",'calendar_sync_outbox'])assert.ok(calendar.includes(marker),marker);
+for(const marker of ['model-compatibility','calendar.app.created',"visibility_scope='FAMILY'",'calendar_sync_outbox','familyTodoTaskId','processCalendarOutbox'])assert.ok(calendar.includes(marker),marker);
+assert.ok(oneWay.includes('received: 0')&&oneWay.includes('inbound_more: false'),'Family AI integration prerequisites must not depend on Google Calendar inbound');
+for(const retired of ['processCalendarInbound','applyInbound','syncCalendarAccount'])assert.ok(!calendar.includes(retired),`retired normal Calendar inbound must stay absent: ${retired}`);
 for(const marker of ['oauth-redirect.googleusercontent.com','oauth-redirect-sandbox.googleusercontent.com','GOOGLE_HOME_PROJECT_ID','action.devices.types.SCENE','action.devices.commands.ActivateScene','external_command_receipts'])assert.ok(home.includes(marker),marker);
 
-console.log('family-ai-provider-contract: provider catalog, quota/error diagnostics, privacy guardrails, model probing, planner boundary, admin gate, and integration prerequisites ok');
+console.log('family-ai-provider-contract: provider catalog, quota/error diagnostics, privacy guardrails, model probing, planner boundary, admin gate, and one-way integration prerequisites ok');
