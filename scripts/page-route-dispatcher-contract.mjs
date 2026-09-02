@@ -20,20 +20,23 @@ const pageBoundaryImports=[
   "from './settings-page-handlers'",
 ];
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
-const boundaryFiles={
+const transitionalBoundaryFiles={
   'src/auth-page-handlers.ts':['loginPage','createFamilyPage','invitePage','home'],
   'src/task-page-handlers.ts':['today','tomorrow','taskEvents','taskView','taskEdit','itemEdit'],
   'src/calendar-page-handler.ts':['calendar'],
-  'src/message-page-handlers.ts':['messages','messageNew'],
   'src/shopping-page-handlers.ts':['shopping','shoppingNew','shoppingEdit'],
   'src/family-log-page-handler.ts':['familyLog'],
   'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
 };
-for(const [file,exports] of Object.entries(boundaryFiles)){
+for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
   const source=fs.readFileSync(file,'utf8');
   if(!source.includes("from './app';")) throw new Error(`temporary page boundary must forward to current app implementation: ${file}`);
   for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
 }
+const messageBoundary=fs.readFileSync('src/message-page-handlers.ts','utf8');
+if(messageBoundary.includes("from './app'")) throw new Error('message page boundary must not depend on app.ts');
+if(!messageBoundary.includes("export { messages } from './messages-api';")) throw new Error('message page boundary must export retained messages handler');
+if(!messageBoundary.includes("export { messageNew } from './message-new-page';")) throw new Error('message page boundary must export retained messageNew handler');
 const routeSentinels=[
   "url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php'",
   "url.pathname==='/app/create.php'||url.pathname==='/app/create'",
