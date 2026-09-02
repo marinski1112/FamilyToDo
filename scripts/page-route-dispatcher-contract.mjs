@@ -13,7 +13,6 @@ if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depe
 const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-handlers'","from './calendar-page-handler'","from './message-page-handlers'","from './shopping-page-handlers'","from './family-log-page-handler'","from './settings-page-handlers'"];
 for(const marker of pageBoundaryImports) if(!pages.includes(marker)) throw new Error(`page handler boundary missing: ${marker}`);
 const transitionalBoundaryFiles={
-  'src/auth-page-handlers.ts':['loginPage','createFamilyPage','invitePage','home'],
   'src/task-page-handlers.ts':['today','tomorrow','taskEvents','taskView','taskEdit','itemEdit'],
   'src/calendar-page-handler.ts':['calendar'],
   'src/settings-page-handlers.ts':['settings','settingsContent','settingsDiagnostics','settingsMembers','settingsNotifications','recurring'],
@@ -23,6 +22,9 @@ for(const [file,exports] of Object.entries(transitionalBoundaryFiles)){
   if(!source.includes("from './app';")) throw new Error(`temporary page boundary must forward to current app implementation: ${file}`);
   for(const name of exports) if(!source.includes(name)) throw new Error(`${file} lost page handler: ${name}`);
 }
+const authBoundary=fs.readFileSync('src/auth-page-handlers.ts','utf8');
+if(authBoundary.includes("from './app'")) throw new Error('auth page boundary must not depend on app.ts');
+for(const marker of ["export { loginPage } from './login-page';","export { createFamilyPage } from './family-onboarding-page';","export { invitePage } from './family-invite-page';","export { home } from './home-page';"]) if(!authBoundary.includes(marker)) throw new Error(`auth retained page handler missing: ${marker}`);
 const messageBoundary=fs.readFileSync('src/message-page-handlers.ts','utf8');
 if(messageBoundary.includes("from './app'")) throw new Error('message page boundary must not depend on app.ts');
 if(!messageBoundary.includes("export { messages } from './messages-api';")) throw new Error('message page boundary must export retained messages handler');

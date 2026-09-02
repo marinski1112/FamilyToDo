@@ -35,8 +35,7 @@ for(const marker of [
 if(lineOfficial.includes("from './app'")) throw new Error('LINE official account helper must not depend on app.ts');
 
 if(!handlers.includes("export { invitePage } from './family-invite-page';")) throw new Error('auth page boundary must route invitePage through retained module');
-if(!handlers.includes("export { home } from './app';")) throw new Error('home transition boundary moved unexpectedly');
-const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
-if(/\binvitePage\b/.test(appExport)) throw new Error('auth page boundary must not export invitePage from app.ts');
+if(!handlers.includes("export { home } from './home-page';")) throw new Error('auth page boundary must route home through retained module');
+if(handlers.includes("from './app'")) throw new Error('auth page boundary must not depend on app.ts');
 
 console.log('family invite page retained boundary contract ok');
