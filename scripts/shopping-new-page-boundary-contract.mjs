@@ -7,6 +7,7 @@ const handlers=fs.readFileSync('src/shopping-page-handlers.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
 const taskLink=fs.readFileSync('public/assets/shopping-task-link.js','utf8');
+const sw=fs.readFileSync('public/sw.js','utf8');
 const pkg=fs.readFileSync('package.json','utf8');
 
 for(const marker of [
@@ -77,11 +78,26 @@ for(const marker of [
   "const select=document.getElementById('shoppingTaskId');",
   "const dueInput=document.getElementById('shoppingTaskDueDate');",
   "const showAllInput=document.getElementById('shoppingTaskShowAll');",
-  'showAll||overlaps(task,date)||task.id===current||task.id===initialSelected',
+  'const DEFAULT_VISIBLE_LIMIT=12;',
+  "const todayJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'",
+  'const referenceDate=date||todayJst();',
+  'const defaults=(overlapsForDate.length?overlapsForDate:sorted).slice(0,DEFAULT_VISIBLE_LIMIT);',
+  'if(current)defaultIds.add(current);',
+  'if(initialSelected)defaultIds.add(initialSelected);',
+  'const visible=(showAll?sorted:sorted.filter(task=>defaultIds.has(task.id)));',
   "dueInput.addEventListener('change',render);",
   "showAllInput.addEventListener('change',render);",
+  '期限日に重なるタスクがないため、近い未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中',
+  '未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中。期限を指定すると、その日に重なるタスクを優先します',
   'その他 ${hidden}件はチェックで表示できます。',
 ]) if(!taskLink.includes(marker)) throw new Error(`Shopping task-link helper lost behavior marker: ${marker}`);
+if(taskLink.includes('showAll||overlaps(task,date)||task.id===current||task.id===initialSelected')) throw new Error('Shopping task-link must not regress to exact-overlap-only default filtering');
+for(const marker of [
+  "const STATIC_CACHE='familytodo-static-shopping-task-fallback';",
+  "name.startsWith('familytodo-static-')&&name!==STATIC_CACHE",
+  'self.skipWaiting();',
+  'await self.clients.claim();',
+]) if(!sw.includes(marker)) throw new Error(`Shopping fallback cache rotation missing: ${marker}`);
 if(!pkg.includes('node --check public/assets/shopping-task-link.js')) throw new Error('Shopping task-link helper must be covered by browser JS syntax check');
 
 for(const [name,source] of [['root',root],['new',newPage],['edit',editPage]]){
