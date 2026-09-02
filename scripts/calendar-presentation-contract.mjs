@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
+import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
-const app=fs.readFileSync('src/app.ts','utf8');
+const app=retainedAppContractSource();
 const family=fs.readFileSync('public/assets/family.css','utf8');
 const calendarCss=fs.readFileSync('public/assets/calendar.css','utf8');
 const calendar=fs.readFileSync('public/assets/calendar.js','utf8');
@@ -10,8 +11,6 @@ const ui=fs.readFileSync('public/assets/calendar-mobile-ui.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
 
 execFileSync(process.execPath,['--check','public/assets/calendar-mobile-ui.js'],{stdio:'inherit'});
-
-// Compact month/date jump controls and mobile geometry.
 for(const token of ['calendar-month-jump','calendar-jump-go','class="compact-form"'])assert.ok(app.includes(token),`missing Calendar jump markup: ${token}`);
 for(const token of ['calendarJumpPanel','calendarMonthJump','calendarDateJump','2000','2100','openDate'])assert.ok(app.includes(token)||calendar.includes(token),`missing Calendar jump behavior: ${token}`);
 assert.ok(calendar.includes("get('open')"),'Calendar must preserve direct-date open handling');
@@ -22,8 +21,6 @@ assert.equal(app.match(/>移動<\/button>/g)?.length,2,'Calendar must retain bot
 for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-space:nowrap'])assert.ok(family.includes(token),`missing shared compact-control CSS: ${token}`);
 for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','width:min(300px,calc(100vw - 24px))','minmax(0,.65fr)','min-width:0','min-height:40px','position:static','min-width:52px','color:#fff'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
 for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
-
-// Compact Calendar chrome and expandable filtering.
 assert.match(calendar,/calendar-mobile-ui\.js\?v=wave128-fix14/,'Calendar must load the compact UI module');
 assert.match(calendar,/monthLabel\.textContent=currentMonth\.slice\(0,4\)\+'年'\+Number\(currentMonth\.slice\(5\)\)\+'月'/,'month navigation must keep the compact year/month label');
 assert.match(ui,/calendar-page-head h1\{display:none/,'Calendar heading must remain hidden in compact mobile chrome');
@@ -36,16 +33,12 @@ assert.match(ui,/calendar-grid \.calendar-item,body\.calendar-compact-ui \.calen
 assert.match(ui,/font-size:10px!important/,'Calendar task/event text must remain materially larger than the old 7px mobile rule');
 assert.match(ui,/text-overflow:clip!important/,'Calendar labels must clip rather than render ellipsis');
 assert.ok(ui.includes("replace(/^\\s*📌\\s*/,''"),'event pin prefix must be removed from month labels');
-
-// Press preview and compact schedule interaction.
 assert.ok(ui.includes('calendar-overflow-hidden'),'normal month view must support an explicit hidden-row marker');
 assert.match(ui,/calendar-press-popover/,'press preview must remain available as a temporary floating view');
 assert.ok(ui.includes('schedulesForCell(cell)'),'press preview must include spanning bands and hidden rows for the pressed date');
 assert.ok(ui.includes("removeAttribute('href')"),'mobile schedule labels must not navigate when used as press-preview targets');
 assert.ok(ui.includes("document.addEventListener('touchend'"),'touch release must restore the compact view');
 assert.ok(ui.includes("document.addEventListener('click'"),'schedule click must be intercepted so date/blank click remains the day-detail path');
-
-// Calendar date-content positioning must account for multi-day band rows.
 assert.ok(app.includes('--calendar-day-band-rows:'),'Calendar cells must publish their band-row count');
 assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'),'Calendar content must be positioned below date and band zones');
 assert.ok(calendarCss.includes('--calendar-no-band-content-top:29px'),'Calendar no-band cells must retain the compact content offset');
@@ -53,19 +46,13 @@ assert.ok(calendarCss.includes('[data-band-rows="0"]'),'Calendar no-band positio
 assert.match(calendarCss,/top:calc\(var\(--calendar-date-zone\) \+ var\(--calendar-day-band-rows\) \* var\(--calendar-band-step\)\)!important/,'Calendar item positioning must include band rows');
 assert.ok(calendarCss.includes('var(--calendar-day-band-rows) * var(--calendar-band-step)'),'Calendar content positioning must use per-day band row count');
 assert.ok(!calendarCss.includes('margin-top:calc(var(--calendar-band-rows)'),'obsolete band-row margin positioning must remain retired');
-const contentTop=(dateZone,dayBands,step)=>dateZone+dayBands*step;
-assert.equal(contentTop(34,0,17),34);
-assert.equal(contentTop(34,2,17),68);
-
-// Recurring multi-day Calendar bands must retain links after initial and AJAX month renders.
+const contentTop=(dateZone,dayBands,step)=>dateZone+dayBands*step;assert.equal(contentTop(34,0,17),34);assert.equal(contentTop(34,2,17),68);
 assert.match(calendar,/function repairRecurringBandLinks\(/,'Calendar must own recurring band link repair');
 for(const token of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.match(calendar,new RegExp(token),`${token} must remain available for recurring Calendar bands`);
 assert.match(calendar,/a\.calendar-band\[data-task-id\]/,'Calendar band repair must target task-backed bands');
 assert.match(calendar,/\/app\/recurring\.php\?/,'recurring Calendar bands must preserve their editing destination');
 assert.match(calendar,/gridNow\.innerHTML=nextGrid\.innerHTML;[\s\S]*?detail=payload\.detail\|\|\{\};[\s\S]*?repairRecurringBandLinks\(gridNow\)/,'AJAX month replacement must repair recurring band links using the replacement payload');
 assert.match(calendar,/repairRecurringBandLinks\(document\.querySelector\('\.calendar-grid'\)\)/,'initial Calendar grid must repair recurring band links');
-
-// Hard two-row schedule budget including recurring and multi-day rows.
 assert.ok(ui.includes("Number(row?.spanDays||1)<=1"),'one-day rows must be detected by spanDays, not legacy segment labels');
 assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule cap must include recurring/task/event rows while excluding carry-item rows');
 assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'third and later schedule rows must stay hidden despite important display rules');
@@ -76,10 +63,7 @@ assert.ok(ui.includes('calendar-overflow-indicator'),'hidden schedules must expo
 assert.ok(ui.includes('… +${hidden}'),'overflow indicator must retain the visible hidden-count text');
 assert.ok(ui.includes('`ほか${hidden}件の予定`'),'overflow indicator must retain an accessible hidden-count label');
 assert.ok(ui.includes('requestAnimationFrame'),'Calendar row-budget recalculation must remain deferred until layout is ready');
-
-// Service-worker cache lifecycle required for Calendar asset updates.
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'obsolete pre-Wave128 static cache namespace must remain retired');
-
 console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links, two-row schedule and overflow contracts ok');
