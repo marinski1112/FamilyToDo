@@ -1,6 +1,7 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { html, redirect } from './response';
+import { resolveShoppingCategoryOptions, SHOPPING_CATEGORY_MAX_LENGTH } from './shopping-categories';
 import { taskVisibilitySql } from './task-visibility';
 import { validateLiffNext } from './liff-target';
 import { APP_VERSION } from './version';
@@ -33,7 +34,7 @@ function taskOption(task:Row,selectedTaskId:number):string{
   return `<option value="${task.id}" ${Number(task.id)===selectedTaskId?'selected':''}>${esc(task.title)}（${esc(dateLabel)}）</option>`;
 }
 
-function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],selectedTaskId=0):string{
+function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],selectedTaskId=0,categoryOptions:string[]=[]):string{
   const csrf=ctx.session.csrfToken??'';
   const defaultDate=esc(date);
   const selectedTask=tasks.find(t=>Number(t.id)===selectedTaskId),privateContext=String(selectedTask?.visibility_scope||'')==='PRIVATE';
@@ -46,6 +47,7 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
       return {id:Number(task.id),title:String(task.title||''),start,end,due:String(task.due_at||'').slice(0,10)};
     }),
   }).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const categoryOptionHtml=categoryOptions.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
   return `<div class="card form-card batch-shopping-card" id="addShopping">
     <div class="section-head"><h2>＋ 買い物を追加</h2><span class="meta">複数商品を一度に登録できます</span></div>
     <form id="shopBatchForm" class="compact-form">
@@ -55,9 +57,11 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
       </div>
       <button type="button" class="btn gray small add-product" id="addProduct">＋ 商品を追加</button>
       <div class="batch-common-settings">
-        <label>カテゴリー（全商品共通）</label>
-        <input name="category" list="shoppingCategories" placeholder="例：食品">
-        <datalist id="shoppingCategories"><option value="食品"><option value="日用品"><option value="子供"><option value="薬・衛生"><option value="その他"></datalist>
+        <label for="shoppingCategorySelect">カテゴリー（全商品共通）</label>
+        <select id="shoppingCategorySelect" aria-describedby="shoppingCategoryHint"><option value="">カテゴリーなし</option>${categoryOptionHtml}<option value="__custom__">自由入力</option></select>
+        <div id="shoppingCategoryCustomWrap" hidden><label for="shoppingCategoryCustom">自由入力</label><input type="text" id="shoppingCategoryCustom" maxlength="${SHOPPING_CATEGORY_MAX_LENGTH}" autocomplete="off" placeholder="カテゴリー名"></div>
+        <input type="hidden" name="category" id="shoppingCategoryValue" value="">
+        <p class="small" id="shoppingCategoryHint">登録済みカテゴリーから選択できます。候補にない場合は「自由入力」を選んでください。</p>
         <label>期限（全商品共通）</label>
         <input type="date" name="due_date" id="shoppingTaskDueDate" value="${defaultDate}">
         <label>担当者（全商品共通）</label>
@@ -72,7 +76,7 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
   ${privateContext?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1"></script>`}
-  <script src="/assets/shopping-new.js?v=${APP_VERSION}"></script>`;
+  <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-select-1"></script>`;
 }
 
 /** Canonical server-rendered shopping-new page independent from the legacy app.ts monolith. */
@@ -84,10 +88,12 @@ export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):
     return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');
   }
   const d=date&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
-  const [tasks,members]=await Promise.all([
+  const [tasks,members,catalog]=await Promise.all([
     ctx.env.DB.prepare(`SELECT id,title,start_at,end_at,due_at,visibility_scope FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY coalesce(start_at,due_at),id LIMIT 200`).bind(m.family_id,selectedTaskId,m.id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
+    ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE,id').bind(m.family_id).all<Row>(),
   ]);
-  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId)}`;
+  const categoryOptions=resolveShoppingCategoryOptions(catalog.results);
+  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId,categoryOptions)}`;
   return html(layout('買い物を追加',body,'/app/shopping.php'));
 }
