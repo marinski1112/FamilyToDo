@@ -1,4 +1,4 @@
-import {calendarStampAssetsForPicker,createCalendarStampPlacement} from './calendar-stamp-actions';
+import {calendarStampAssetsForPicker,createCalendarStampPlacement,deleteCalendarStampPlacement} from './calendar-stamp-actions';
 import {calendarStampAssetUrl} from './calendar-stamp-asset-url';
 import {bodyJson,RequestBodyParseError} from './request-body';
 import {json} from './response';
@@ -27,12 +27,25 @@ export async function calendarStampOptionsApi(request:Request,context:any):Promi
 }
 
 export async function calendarStampPlacementApi(request:Request,context:any):Promise<Response>{
-  if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
+  if(request.method!=='POST'&&request.method!=='DELETE')return json({ok:false,error:'POST or DELETE only'},405);
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   let body:Record<string,unknown>;
   try{body=await bodyJson(request);}catch(error){if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);throw error;}
   const csrf=String(body.csrf||''),expectedCsrf=String(context.session?.csrfToken||'');
   if(!csrf||!expectedCsrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF_FAILED'},403);
+  if(request.method==='DELETE'){
+    const placementId=Number(body.placementId||0);
+    if(!Number.isSafeInteger(placementId)||placementId<=0)return json({ok:false,error:'INVALID_PLACEMENT'},400);
+    try{
+      const deleted=await deleteCalendarStampPlacement(context.env,s.familyId,s.memberId,placementId);
+      return deleted?json({ok:true,placementId}):json({ok:false,error:'PLACEMENT_NOT_FOUND'},404);
+    }catch(error){
+      const message=String((error as {message?:unknown})?.message||'');
+      if(message.includes('member unavailable'))return json({ok:false,error:'AUTH_REQUIRED'},401);
+      if(message.includes('invalid calendar stamp placement'))return json({ok:false,error:'INVALID_PLACEMENT'},400);
+      return json({ok:false,error:'STAMP_DELETE_FAILED'},500);
+    }
+  }
   const assetId=Number(body.assetId||0),stampDate=String(body.stampDate||''),visibilityScope=body.visibilityScope==null?'FAMILY':String(body.visibilityScope);
   if(!Number.isSafeInteger(assetId)||assetId<=0)return json({ok:false,error:'INVALID_ASSET'},400);
   try{
