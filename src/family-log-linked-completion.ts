@@ -21,7 +21,7 @@ const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{
  * completion state of its linked Task or recurring occurrence.
  *
  * The caller owns authentication and Family Log persistence. This service owns
- * assignee authorization, no-assignee self-assignment, ANY/ALL aggregation,
+ * assignee authorization, zero-assignee family-member fallback, ANY/ALL aggregation,
  * completion history, notification cancellation and privacy-safe activity log
  * projection for the linked completion only.
  */
@@ -45,23 +45,21 @@ export async function completeLinkedTargetFromFamilyLog(
       .bind(linkedTaskId,m.id).first<Row>();
     if(already)return {ok:true,message:'関連タスクはすでにこの記録者が完了済みです。',target_type:'task',target_id:linkedTaskId,status:String(task.status||'pending')};
 
-    let assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?')
+    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?')
       .bind(linkedTaskId).first<Row>();
-    let actorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1')
-      .bind(linkedTaskId,m.id).first<Row>();
-    if(Number(assigned?.c||0)===0){
-      await ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) VALUES(?,?)').bind(linkedTaskId,m.id).run();
-      assigned={c:1};
-      actorAssigned={x:1};
-    }
-    if(!actorAssigned)return {ok:false,message:'記録者が関連タスクの担当者ではないため、自動完了は行いませんでした。',target_type:'task',target_id:linkedTaskId};
+    const assignedCount=Number(assigned?.c||0);
+    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1')
+      .bind(linkedTaskId,m.id).first<Row>():{x:1};
+    if(assignedCount>0&&!actorAssigned)return {ok:false,message:'記録者が関連タスクの担当者ではないため、自動完了は行いませんでした。',target_type:'task',target_id:linkedTaskId};
 
     await ctx.env.DB.prepare('INSERT INTO task_completions(task_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(task_id,member_id) DO UPDATE SET completed_at=excluded.completed_at')
       .bind(linkedTaskId,m.id,now).run();
-    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?')
-      .bind(linkedTaskId).first<Row>();
-    const shouldComplete=String(task.completion_mode||'ANY').toUpperCase()==='ALL'
-      ? Number(done?.c||0)>=Number(assigned?.c||0)
+    const done=assignedCount>0
+      ? await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(linkedTaskId).first<Row>()
+      : await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?').bind(m.family_id,linkedTaskId).first<Row>();
+    const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';
+    const shouldComplete=mode==='ALL'
+      ? assignedCount>0&&Number(done?.c||0)>=assignedCount
       : Number(done?.c||0)>0;
     await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?')
       .bind(shouldComplete?'completed':'pending',shouldComplete?m.id:null,shouldComplete?now:null,now,linkedTaskId,m.family_id).run();
@@ -85,23 +83,21 @@ export async function completeLinkedTargetFromFamilyLog(
       .bind(linkedOccurrenceId,m.id).first<Row>();
     if(already)return {ok:true,message:'関連する定期タスク発生日はすでにこの記録者が完了済みです。',target_type:'recurrence',target_id:linkedOccurrenceId};
 
-    let assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?')
+    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?')
       .bind(taskId).first<Row>();
-    let actorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1')
-      .bind(taskId,m.id).first<Row>();
-    if(Number(assigned?.c||0)===0){
-      await ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) VALUES(?,?)').bind(taskId,m.id).run();
-      assigned={c:1};
-      actorAssigned={x:1};
-    }
-    if(!actorAssigned)return {ok:false,message:'記録者が定期タスクの担当者ではないため、自動完了は行いませんでした。',target_type:'recurrence',target_id:linkedOccurrenceId};
+    const assignedCount=Number(assigned?.c||0);
+    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1')
+      .bind(taskId,m.id).first<Row>():{x:1};
+    if(assignedCount>0&&!actorAssigned)return {ok:false,message:'記録者が定期タスクの担当者ではないため、自動完了は行いませんでした。',target_type:'recurrence',target_id:linkedOccurrenceId};
 
     await ctx.env.DB.prepare('INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(occurrence_id,member_id) DO UPDATE SET completed_at=excluded.completed_at')
       .bind(linkedOccurrenceId,m.id,now).run();
-    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=?')
-      .bind(taskId,linkedOccurrenceId).first<Row>();
-    const isComplete=String(occ.completion_mode||'ANY').toUpperCase()==='ALL'
-      ? Number(done?.c||0)>=Number(assigned?.c||0)
+    const done=assignedCount>0
+      ? await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=?').bind(taskId,linkedOccurrenceId).first<Row>()
+      : await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?').bind(m.family_id,linkedOccurrenceId).first<Row>();
+    const mode=assignedCount>0?String(occ.completion_mode||'ANY').toUpperCase():'ANY';
+    const isComplete=mode==='ALL'
+      ? assignedCount>0&&Number(done?.c||0)>=assignedCount
       : Number(done?.c||0)>0;
     await ctx.env.DB.prepare('UPDATE recurrence_occurrences SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?')
       .bind(isComplete?'completed':'pending',isComplete?m.id:null,isComplete?now:null,now,linkedOccurrenceId,m.family_id).run();
