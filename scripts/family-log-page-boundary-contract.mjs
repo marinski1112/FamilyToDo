@@ -9,9 +9,15 @@ const familyLogLayout=fs.readFileSync('public/assets/family-log-layout.css','utf
 const familyLogJs=fs.readFileSync('public/assets/family-log.js','utf8');
 const familyLogManagementUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 if(handler.includes("from './app'"))throw new Error('Family Log page handler still forwards to app.ts');
-if(!handler.includes("export { familyLogPage as familyLog } from './family-log-page';"))throw new Error('retained Family Log page export missing');
+for(const marker of [
+  "import { familyLogMutationBoundary } from './family-log-mutation-boundary';",
+  "import { familyLogPage } from './family-log-page';",
+  'export async function familyLog(request:Request,ctx:AppContext):Promise<Response>{',
+  "if(request.method==='POST')return familyLogMutationBoundary(request,ctx);",
+  'return familyLogPage(request,ctx);',
+])if(!handler.includes(marker))throw new Error(`retained Family Log page handler marker missing: ${marker}`);
 if(!routes.includes("url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php'"))throw new Error('Family Log page routes changed');
-if(!page.includes("if(request.method==='POST')return familyLogApi(request,ctx);"))throw new Error('page POST compatibility must delegate to retained mutation API');
+if(!page.includes("if(request.method==='POST')return familyLogApi(request,ctx);"))throw new Error('retained page compatibility POST path changed');
 for(const marker of [
   "pathname==='/app/settings_family_log.php'",
   "permission_key='MANAGE_QUICK_CHORES'",
@@ -95,4 +101,4 @@ for(const marker of [
 ])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
