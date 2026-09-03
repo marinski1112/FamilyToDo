@@ -7,6 +7,7 @@ const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const familyLogLayout=fs.readFileSync('public/assets/family-log-layout.css','utf8');
 const familyLogJs=fs.readFileSync('public/assets/family-log.js','utf8');
+const familyLogManagementUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 if(handler.includes("from './app'"))throw new Error('Family Log page handler still forwards to app.ts');
 if(!handler.includes("export { familyLogPage as familyLog } from './family-log-page';"))throw new Error('retained Family Log page export missing');
 if(!routes.includes("url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php'"))throw new Error('Family Log page routes changed');
@@ -69,4 +70,18 @@ for(const marker of [
 if(familyLogJs.includes('heading.startsWith(prefix)'))throw new Error('Family Log overview must not remove legacy palettes by ambiguous heading prefix');
 if(!familyLogJs.includes('Any name/icon collision preserves the fallback'))throw new Error('Family Log overview must preserve fallback when multiple subjects share display identity');
 if(/DELETE FROM family_logs|UPDATE family_logs SET deleted_at/.test(familyLogJs))throw new Error('overview quick-action consumer must not mutate or delete retained history directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation and subject-collision-safe overview quick actions ok');
+for(const marker of [
+  "location.pathname!=='/app/settings_family_log.php'",
+  "const quickActions=Array.isArray(payload.quickActions)?payload.quickActions:[];",
+  "const subjects=payload.subjects&&typeof payload.subjects==='object'?payload.subjects:{};",
+  "quickManageTitle.textContent='クイックタスク'",
+  "quickAdd.textContent='＋ クイックタスク'",
+  "allQuickCard.className='card family-log-all-quick-tasks'",
+  'すべての対象のクイックタスクをここから確認・管理できます。',
+  "subjects[String(subjectId)]||null",
+  "href=\"/app/settings_family_log.php?subject=${subjectId}\"",
+  "inactive?' · 非表示':''",
+])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
+if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
+if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
