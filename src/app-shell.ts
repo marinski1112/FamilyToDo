@@ -7,7 +7,7 @@ const esc = (v: unknown) => String(v ?? '')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
 
-const CALENDAR_STAMP_UI_REVISION = 'stamp-viewer-488';
+const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-1';
 
 /**
  * Canonical shell for retained server-rendered pages.
