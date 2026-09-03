@@ -44,7 +44,7 @@ async function makeDailyData(ctx:AppContext,date:string):Promise<DailyData>{
             OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
           ))
           OR (lower(COALESCE(t.task_kind,''))<>'event' AND (
-            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
+            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?))
             OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
           ))
         )
