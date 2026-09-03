@@ -15,14 +15,7 @@ function validCalendarDate(value:string):boolean{
   return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===value;
 }
 
-/**
- * Read-only browser boundary for the Calendar month stamp UI.
- *
- * The underlying read model owns tenant/private visibility and the 62-day/256-row
- * bounds. This adapter intentionally exposes no family/member/creator identifiers,
- * storage keys, names, task/message contents, cookies, or tokens. UPLOAD-backed
- * assets remain hidden until their authenticated transport is implemented.
- */
+/** Read-only browser boundary for the Calendar month stamp UI. */
 export async function calendarStampReadApi(request:Request,env:Env,scope:CalendarStampReadScope):Promise<Response>{
   if(request.method!=='GET')return jsonBody({ok:false,error:'GET only'},405);
   if(!Number.isSafeInteger(scope.familyId)||scope.familyId<=0||!Number.isSafeInteger(scope.memberId)||scope.memberId<=0){
@@ -35,15 +28,17 @@ export async function calendarStampReadApi(request:Request,env:Env,scope:Calenda
 
   try{
     const placements=await calendarStampPlacementsForRange(env,scope.familyId,scope.memberId,from,to);
-    const frameRows=await calendarStampFramesForAssets(env,scope.familyId,scope.memberId,placements.map(placement=>placement.asset_id));
-    const framesByAsset=new Map<number,typeof frameRows>();
-    for(const frame of frameRows){const list=framesByAsset.get(frame.asset_id)||[];list.push(frame);framesByAsset.set(frame.asset_id,list);}
+    const frameRead=await calendarStampFramesForAssets(env,scope.familyId,scope.memberId,placements.map(placement=>placement.asset_id));
+    const invalidFrameAssets=new Set(frameRead.invalidAssetIds);
+    const framesByAsset=new Map<number,typeof frameRead.frames>();
+    for(const frame of frameRead.frames){const list=framesByAsset.get(frame.asset_id)||[];list.push(frame);framesByAsset.set(frame.asset_id,list);}
     const stamps=placements.flatMap(placement=>{
       const fullUrl=calendarStampAssetUrl(placement,'full');
       const thumbnailUrl=calendarStampAssetUrl(placement,'thumbnail');
       if(!fullUrl||!thumbnailUrl)return [];
       let frames:{url:string;durationMs:number}[]=[];
       if(placement.asset_kind==='ANIMATED'&&placement.mime_type==='image/png'){
+        if(invalidFrameAssets.has(placement.asset_id))return [];
         const rows=framesByAsset.get(placement.asset_id)||[];
         if(rows.length<2||rows.some((frame,index)=>frame.frame_index!==index))return [];
         frames=rows.flatMap(frame=>{
