@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const domain=fs.readFileSync('src/location-domain.ts','utf8');
+const providers=fs.readFileSync('src/location-providers.ts','utf8');
 const page=fs.readFileSync('src/location-page.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
@@ -29,8 +30,24 @@ for(const marker of [
   "key:'distance'",
 ])if(!domain.includes(marker))throw new Error(`Location privacy/domain default missing: ${marker}`);
 
+for(const marker of [
+  'export type LocationScope=',
+  'familyId:number;',
+  'requesterMemberId:number;',
+  'export type LocationPoint=',
+  'export interface LocationQueryService{',
+  'latest(query:LatestLocationQuery):Promise<LocationPoint|null>;',
+  'history(query:LocationHistoryQuery):Promise<readonly LocationPoint[]>;',
+  'export interface MapProvider{',
+  'export interface RouteProvider{',
+  'export interface VoiceProvider{',
+])if(!providers.includes(marker))throw new Error(`Location provider boundary marker missing: ${marker}`);
+
 for(const forbidden of ['ctx.env.DB','DB.prepare','navigator.geolocation','fetch(','/api/location']){
-  if(page.includes(forbidden)||domain.includes(forbidden))throw new Error(`Location shell must not activate persistence/ingress yet: ${forbidden}`);
+  if(page.includes(forbidden)||domain.includes(forbidden)||providers.includes(forbidden))throw new Error(`Location shell/boundaries must not activate persistence/ingress yet: ${forbidden}`);
+}
+for(const providerSpecific of ['googleapis.com','maps.googleapis.com','owntracks','LINE_ACCESS_TOKEN','GOOGLE_']){
+  if(providers.toLowerCase().includes(providerSpecific.toLowerCase()))throw new Error(`Location provider-neutral boundary must not embed a provider implementation: ${providerSpecific}`);
 }
 if(!routes.includes("import { locationPage } from './location-page';"))throw new Error('Location page import missing');
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context);"))throw new Error('Location page route missing');
@@ -39,4 +56,4 @@ if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Erro
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: privacy-first shell, retained Shopping management route and Location navigation ok');
+console.log('location-page-boundary: privacy-first shell, provider-neutral service boundaries, retained Shopping management route and Location navigation ok');
