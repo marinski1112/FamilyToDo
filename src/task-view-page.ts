@@ -51,9 +51,10 @@ export async function taskView(ctx:AppContext,id:number):Promise<Response>{
       WHERE o.id=? AND o.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(occurrenceId,m.family_id,m.id).first<Row>();
     if(!occurrence)return new Response('定期タスクの発生日が見つかりません。',{status:404});
     const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(Number(occurrence.task_id)).first<Row>();
-    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=? AND ta.task_id=(SELECT task_id FROM recurrence_rules WHERE id=(SELECT recurrence_rule_id FROM recurrence_occurrences WHERE id=?))').bind(occurrenceId,occurrenceId).first<Row>();
-    const mode=String(occurrence.completion_mode||'ANY').toUpperCase();
-    const complete=mode==='ALL'?Number(assigned?.c||0)>0&&Number(done?.c||0)>=Number(assigned?.c||0):Number(done?.c||0)>0;
+    const assignedCount=Number(assigned?.c||0);
+    const done=await ctx.env.DB.prepare(`SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN members cm ON cm.id=c.member_id AND cm.family_id=? AND cm.active=1 WHERE c.occurrence_id=? AND (NOT EXISTS(SELECT 1 FROM task_assignees ta0 JOIN members am0 ON am0.id=ta0.member_id AND am0.active=1 WHERE ta0.task_id=?) OR EXISTS(SELECT 1 FROM task_assignees ta1 JOIN members am1 ON am1.id=ta1.member_id AND am1.active=1 WHERE ta1.task_id=? AND ta1.member_id=c.member_id))`).bind(m.family_id,occurrenceId,Number(occurrence.task_id),Number(occurrence.task_id)).first<Row>();
+    const mode=assignedCount>0?String(occurrence.completion_mode||'ANY').toUpperCase():'ANY';
+    const complete=mode==='ALL'?assignedCount>0&&Number(done?.c||0)>=assignedCount:Number(done?.c||0)>0;
     task={...occurrence,id,status:complete?'completed':'pending',due_at:`${occurrence.occurrence_date} 00:00:00`,start_at:occurrence.start_at?`${occurrence.occurrence_date} ${String(occurrence.start_at).slice(11,19)}`:null,end_at:occurrence.end_at?`${occurrence.occurrence_date} ${String(occurrence.end_at).slice(11,19)}`:null};
   }else{
     task=await ctx.env.DB.prepare(`SELECT t.*, COALESCE(GROUP_CONCAT(am.name,'、'),'') assignees,
