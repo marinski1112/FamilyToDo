@@ -21,9 +21,9 @@ document.querySelectorAll('.family-log-quick strong,.family-quick-chore-record s
   if(chars.length===4){label.classList.add('family-log-label-nowrap');return;}
   label.replaceChildren(document.createTextNode(chars.slice(0,4).join('')),document.createElement('br'),document.createTextNode(chars.slice(4).join('')));
 });
-// Phase 1 of the Family Log quick-action unification: the "すべて" overview can
-// execute the same retained per-subject quick actions used on a subject page. This
-// is a pure consumer change: subject kinds and historical family_logs remain intact.
+// Family Log quick-action unification: the "すべて" overview executes the same
+// retained per-subject quick actions used on subject pages. Subject kinds and
+// historical family_logs remain intact as compatibility/history metadata.
 try{
   const payloadNode=document.getElementById('familyLogPayload');
   const payload=payloadNode?JSON.parse(payloadNode.textContent||'{}'):null;
@@ -32,6 +32,7 @@ try{
     const subjects=payload.subjects&&typeof payload.subjects==='object'?payload.subjects:{};
     const showAdultLogs=payload.showAdultLogs!==false;
     const groups=[];
+    const authoritativePrefixes=[];
     for(const subject of Object.values(subjects)){
       if(!subject||!Number(subject.id))continue;
       if(!showAdultLogs&&String(subject.subject_kind||'').toUpperCase()==='ADULT')continue;
@@ -39,8 +40,10 @@ try{
       // authoritative until that state is projected into the page payload.
       const subjectActions=actions.filter(action=>Number(action?.subject_id)===Number(subject.id)&&Number(action?.active??1)===1&&String(action?.mode||'QUICK')!=='SLEEP_TOGGLE');
       if(!subjectActions.length)continue;
-      const section=document.createElement('section');section.className='family-log-overview-group family-log-unified-quick-group';
-      const title=document.createElement('h2');title.textContent=`${subject.icon||'👤'} ${subject.name||subject.member_name||'対象'} クイック`;section.appendChild(title);
+      const subjectPrefix=`${subject.icon||'👤'} ${subject.name||subject.member_name||'対象'}`;
+      authoritativePrefixes.push(subjectPrefix);
+      const section=document.createElement('section');section.className='family-log-overview-group family-log-unified-quick-group';section.dataset.subjectId=String(Number(subject.id));
+      const title=document.createElement('h2');title.textContent=`${subjectPrefix} クイック`;section.appendChild(title);
       const grid=document.createElement('div');grid.className='family-log-quick-grid';
       for(const action of subjectActions){
         const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${String(action.mode||'QUICK')==='QUICK'?'family-log-quick-action':'family-log-form-action'}`;
@@ -56,6 +59,13 @@ try{
     if(groups.length){
       let overview=document.querySelector('.family-log-overview-quick');
       if(!overview){overview=document.createElement('div');overview.className='family-log-overview-quick';document.querySelector('.family-log-date-head')?.insertAdjacentElement('afterend',overview);}
+      // Once a subject has retained custom quick actions, hide only that subject's
+      // older per-type overview palette. Subjects without custom actions keep the
+      // server-rendered legacy fallback, so this transition never removes access.
+      overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)').forEach(section=>{
+        const heading=String(section.querySelector('h2')?.textContent||'').trim();
+        if(authoritativePrefixes.some(prefix=>heading.startsWith(prefix)))section.remove();
+      });
       for(let i=groups.length-1;i>=0;i--)overview.prepend(groups[i]);
     }
   }
