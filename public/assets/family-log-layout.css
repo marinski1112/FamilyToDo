@@ -20,3 +20,28 @@
   word-break:keep-all;
   -webkit-line-clamp:unset;
 }
+
+/* History rows already open the edit sheet when the row itself is tapped.
+ * Keep the redundant button visually hidden but keyboard-accessible; reveal it
+ * only while keyboard focus is on that control.
+ */
+.family-log-timeline .family-log-edit{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.family-log-timeline .family-log-edit:focus-visible{
+  position:static;
+  width:auto;
+  height:auto;
+  margin:0;
+  overflow:visible;
+  clip:auto;
+  white-space:normal;
+}
