@@ -4,6 +4,8 @@ const migration=readFileSync(new URL('../migrations/0051_shopping_category_catal
 const domain=readFileSync(new URL('../src/shopping-categories.ts',import.meta.url),'utf8');
 const newPage=readFileSync(new URL('../src/shopping-new-page.ts',import.meta.url),'utf8');
 const newJs=readFileSync(new URL('../public/assets/shopping-new.js',import.meta.url),'utf8');
+const editPage=readFileSync(new URL('../src/shopping-edit-page.ts',import.meta.url),'utf8');
+const editJs=readFileSync(new URL('../public/assets/shopping-edit.js',import.meta.url),'utf8');
 const categoryApi=readFileSync(new URL('../src/shopping-category-api.ts',import.meta.url),'utf8');
 const contextRoutes=readFileSync(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
 
@@ -48,6 +50,35 @@ for(const pattern of [
   /fetch\('\/api\/shopping-categories'/,
   /const body=\{action:'add_batch',[\s\S]*category,/,
 ]) requireMatch(newJs,pattern,'Shopping new browser helper must register only explicitly checked custom categories and preserve add_batch submission');
+
+for(const pattern of [
+  /SELECT name,enabled FROM shopping_category_catalog WHERE family_id=\?/,
+  /resolveShoppingCategoryOptions\(catalog\.results\)/,
+  /shoppingCategoryKey\(currentCategory\)/,
+  /id="shoppingEditCategorySelect"/,
+  /value="__custom__"[\s\S]*自由入力/,
+  /id="shoppingEditCategoryCustomWrap"/,
+  /maxlength="\$\{SHOPPING_CATEGORY_MAX_LENGTH\}"/,
+  /id="shoppingEditCategoryRegister"/,
+  /このカテゴリを登録/,
+  /name="category" id="shoppingEditCategoryValue"/,
+  /normalizeShoppingCategoryName\(b\.category\)/,
+  /category&&!isValidShoppingCategoryName\(category\)/,
+  /category\|\|null/,
+  /\/assets\/shopping-edit\.js\?v=\$\{APP_VERSION\}-category-picker-1/,
+]) requireMatch(editPage,pattern,'Shopping edit page must preserve the current category while using the family dropdown/free-input contract');
+
+for(const pattern of [
+  /const categorySelect=document\.getElementById\('shoppingEditCategorySelect'\)/,
+  /const categoryRegister=document\.getElementById\('shoppingEditCategoryRegister'\)/,
+  /const syncCategory=\(\)=>/,
+  /categoryCustomWrap\.hidden=!custom/,
+  /if\(!custom\)categoryRegister\.checked=false/,
+  /categorySelect\.value==='__custom__'&&!category/,
+  /const registerCategory=categorySelect\.value==='__custom__'&&categoryRegister\.checked/,
+  /fetch\('\/api\/shopping-categories'/,
+  /form\.submit\(\)/,
+]) requireMatch(editJs,pattern,'Shopping edit browser helper must register only explicitly checked custom categories before preserving the existing form save');
 
 for(const pattern of [
   /if\(!member\)return json\(\{ok:false,error:'ログインが必要です。'/,
