@@ -27,7 +27,9 @@ export async function calendarStampOptionsApi(request:Request,context:any):Promi
 }
 
 export async function calendarStampPlacementApi(request:Request,context:any):Promise<Response>{
-  if(request.method!=='POST'&&request.method!=='PATCH'&&request.method!=='DELETE')return json({ok:false,error:'POST, PATCH or DELETE only'},405);
+  if(request.method!=='POST'&&request.method!=='DELETE'){
+    if(request.method!=='PATCH')return json({ok:false,error:'POST, PATCH or DELETE only'},405);
+  }
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   let body:Record<string,unknown>;
   try{body=await bodyJson(request);}catch(error){if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);throw error;}
