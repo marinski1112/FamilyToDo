@@ -150,7 +150,13 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
       ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(linkedTaskId,id).first<Row>()
       :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?').bind(m.family_id,id).first<Row>();
   const shopComplete=Number(shopDone?.c||0)>0;
-  const shopLatest=shopComplete?await ctx.env.DB.prepare('SELECT member_id,completed_at FROM shopping_completions WHERE shopping_item_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1').bind(id).first<Row>():null;
+  const shopLatest=shopComplete
+    ?directAssigned>0
+      ?await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(id).first<Row>()
+      :inheritedAssigned>0
+        ?await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(linkedTaskId,id).first<Row>()
+        :await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
+    :null;
   await ctx.env.DB.prepare('UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(shopComplete?'completed':'pending',shopComplete?Number(shopLatest?.member_id||0)||null:null,shopComplete?String(shopLatest?.completed_at||now):null,now,id,m.family_id).run();
   await ctx.env.DB.prepare('INSERT INTO shopping_completion_history(shopping_item_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run();
   await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','shopping',id,{status:shopComplete?'completed':'pending'});

@@ -57,6 +57,9 @@ for(const marker of [
   "if(directAssigned===0&&inheritedAssigned>0&&!taskActorAssigned)return json({ok:false,error:'この買い物に紐づくタスクの担当者ではありません。'},403);",
   'JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?',
   'const shopComplete=Number(shopDone?.c||0)>0;',
+  'SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1',
+  'SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1',
+  'SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1',
   'INSERT INTO shopping_completion_history(shopping_item_id,member_id,action,occurred_at)',
   "taskVisibilitySql('t')",
 ]) if(!api.includes(marker)) throw new Error(`retained toggle behavior marker missing: ${marker}`);
@@ -65,7 +68,8 @@ for(const forbiddenSql of [
   'SELECT task_id,completion_mode FROM recurrence_rules',
   'SELECT s.id,s.completion_mode FROM shopping_items',
   'current.completion_mode',
-]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
+  'SELECT member_id,completed_at FROM shopping_completions WHERE shopping_item_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1',
+]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query invalid or unscoped completion data: ${forbiddenSql}`);
 if(api.includes('担当者が設定されていない定期タスクは完了できません。')) throw new Error('unassigned recurrence must remain completable by an active family member');
 if(api.includes('担当者が設定されていないタスクは完了できません。')) throw new Error('unassigned task must remain completable by an active family member');
 if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
