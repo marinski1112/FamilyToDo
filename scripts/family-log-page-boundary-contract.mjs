@@ -7,6 +7,7 @@ const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const familyLogLayout=fs.readFileSync('public/assets/family-log-layout.css','utf8');
 const familyLogJs=fs.readFileSync('public/assets/family-log.js','utf8');
+const familyLogCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyLogManagementUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 if(handler.includes("from './app'"))throw new Error('Family Log page handler still forwards to app.ts');
 for(const marker of [
@@ -52,6 +53,12 @@ for(const marker of [
   'overflow-wrap:normal',
   'word-break:keep-all',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log quick label geometry missing: ${marker}`);
+if(!familyLogLayout.includes('.family-log-timeline .family-log-edit')||!familyLogLayout.includes('display:none'))throw new Error('Family Log history must hide the redundant explicit edit button');
+for(const marker of [
+  "document.querySelectorAll('.family-log-row')",
+  "if(e.target.closest('a,button,input'))return;",
+  'openEdit(Number(row.dataset.id||0));',
+])if(!familyLogCore.includes(marker))throw new Error(`Family Log row-tap edit behavior missing: ${marker}`);
 for(const marker of [
   "!Number(payload.selectedSubject||0)&&!payload.adultAggregate",
   "const actions=Array.isArray(payload.quickActions)?payload.quickActions:[]",
@@ -101,4 +108,4 @@ for(const marker of [
 ])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, row-tap edit with redundant button hidden, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
