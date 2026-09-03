@@ -17,7 +17,9 @@ assert.match(source,/excluded\.received_at>member_location_latest\.received_at/,
 assert.match(source,/d\.enabled=1 AND d\.sharing_enabled=1 AND d\.revoked_at IS NULL/,'every persistence path must retain fail-closed device-state guards');
 assert.match(source,/m\.id=d\.member_id AND m\.family_id=d\.family_id AND m\.active=1/,'history/latest writes must re-check active same-family member binding');
 assert.match(source,/EXISTS \([\s\S]*m\.id=location_devices\.member_id[\s\S]*m\.family_id=location_devices\.family_id[\s\S]*m\.active=1/,'last-seen mutation must re-check active same-family member binding');
-assert.match(source,/await db\.batch\(\[history,latest,deviceSeen\]\)/,'history/latest/device heartbeat must use one D1 batch');
+assert.match(source,/const results=await db\.batch\(\[history,latest,deviceSeen\]\)/,'history/latest/device heartbeat must use one D1 batch');
+assert.match(source,/results\[2\]\?\.meta\?\.changes/,'persistence acceptance must depend on the guarded device mutation result');
+assert.match(source,/authorizedChanges>0/,'revoked/share-off/inactive mutation races must fail closed');
 assert.doesNotMatch(source,/console\.(?:log|info|warn|error)/,'Location persistence must not log coordinates or credential-adjacent data');
 assert.doesNotMatch(source,/Authorization|raw_payload|request\.url|searchParams/i,'Location persistence must not depend on request credentials or raw payloads');
 
