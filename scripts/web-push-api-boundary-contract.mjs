@@ -39,7 +39,7 @@ for(const marker of [
   "import { messages } from './messages-api';",
   "import { settings } from './settings-root';",
   "import { shopping } from './shopping-root';",
-  "import { familyLogApi } from './family-log-api';",
+  "import { familyLogMutationBoundary } from './family-log-mutation-boundary';",
   "import { toggle } from './toggle-api';",
 ]) if(!routes.includes(marker)) throw new Error(`retained context API boundary missing: ${marker}`);
 

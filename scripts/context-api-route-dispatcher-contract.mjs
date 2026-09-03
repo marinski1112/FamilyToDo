@@ -12,7 +12,7 @@ if(!apiRoutes.includes("import { calendarStampReadApi } from './calendar-stamp-a
 if(!apiRoutes.includes("import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';")) throw new Error('calendar stamp placement adapter import missing');
 if(!apiRoutes.includes("import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';")) throw new Error('calendar stamp admin adapter import missing');
 if(!apiRoutes.includes("import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';")) throw new Error('calendar stamp media adapter import missing');
-if(!apiRoutes.includes("import { familyLogApi } from './family-log-api';")) throw new Error('Family Log retained API import missing');
+if(!apiRoutes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('Family Log retained mutation boundary import missing');
 const routeLines=[
   "if(url.pathname==='/api/family/create') return await createFamily(request,context);",
   "if(url.pathname==='/api/family/join') return await joinFamily(request,context);",
@@ -23,7 +23,7 @@ const routeLines=[
   "if(url.pathname==='/api/item') return await itemApi(request,context);",
   "if(url.pathname==='/api/messages') return await messages(request,context);",
   "if(url.pathname==='/api/shopping') return await shopping(request,context);",
-  "if(url.pathname==='/api/family-log') return await familyLogApi(request,context);",
+  "if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);",
   "if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);",
   "if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});",
   "if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);",

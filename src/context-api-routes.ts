@@ -16,7 +16,7 @@ import { googleTasksAction } from './google-tasks';
 import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
 import { calendarSyncOutboundOnly } from './google-calendar-one-way';
 import { familyLogImportApi } from './family-log-import';
-import { familyLogApi } from './family-log-api';
+import { familyLogMutationBoundary } from './family-log-mutation-boundary';
 import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { settingsDiagnosticsDetail } from './settings-diagnostics';
@@ -36,7 +36,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/messages') return await messages(request,context);
   if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
-  if(url.pathname==='/api/family-log') return await familyLogApi(request,context);
+  if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);
   if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);
   if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});
   if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);
