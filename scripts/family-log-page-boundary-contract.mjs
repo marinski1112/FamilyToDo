@@ -51,9 +51,15 @@ for(const marker of [
   "Number(action?.subject_id)===Number(subject.id)",
   "String(action?.mode||'QUICK')!=='SLEEP_TOGGLE'",
   "family-log-unified-quick-group",
+  "section.dataset.subjectId=String(Number(subject.id))",
   "family-log-quick-action':'family-log-form-action'",
   "button.dataset.quickActionId",
+  'const authoritativePrefixes=[]',
+  "overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)')",
+  'authoritativePrefixes.some(prefix=>heading.startsWith(prefix))',
+  "section.remove()",
   "overview.prepend(groups[i])",
 ])if(!familyLogJs.includes(marker))throw new Error(`Family Log overview quick-action consumer missing: ${marker}`);
+if(!familyLogJs.includes('Subjects without custom actions keep the'))throw new Error('Family Log overview must preserve legacy fallback for subjects without custom quick actions');
 if(/DELETE FROM family_logs|UPDATE family_logs SET deleted_at/.test(familyLogJs))throw new Error('overview quick-action consumer must not mutate or delete retained history directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry and overview quick actions ok');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry and authoritative overview quick actions ok');
