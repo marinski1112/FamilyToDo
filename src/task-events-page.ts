@@ -116,12 +116,26 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   for(const item of data.shopping){const tid=Number(item.task_id||0);if(tid){const list=shoppingByTask.get(tid)||[];list.push(item);shoppingByTask.set(tid,list);}}
   for(const item of data.items){const tid=Number(item.task_id||0);if(tid){const list=itemsByTask.get(tid)||[];list.push(item);itemsByTask.set(tid,list);}}
   const safeProductUrl=(value:unknown)=>{const raw=String(value||'').trim();if(!raw||raw.length>2048)return '';try{const parsed=new URL(raw);if(parsed.username||parsed.password)return '';return parsed.protocol==='http:'||parsed.protocol==='https:'?parsed.href:'';}catch{return '';}};
-  const shoppingRows=(items:Row[])=>items.map(item=>{
-    const productUrl=safeProductUrl(item.url);
-    const effectiveDue=String(item.due_date||item.task_end_at||item.task_due_at||item.task_start_at||'').slice(0,10);
-    const meta=[item.category||'',item.task_title?'予定 '+item.task_title:'',item.assignees?'担当 '+item.assignees:'',effectiveDue?'期限 '+effectiveDue:''].filter(Boolean).map(esc).join(' ・ ');
-    return `<div class="row linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}"><a href="/app/shopping_edit.php?id=${esc(item.id)}">${esc(item.name)}</a>${item.quantity&&item.quantity!=='1'?` × ${esc(item.quantity)}`:''}</span></label><div class="meta">${meta}${productUrl?` ・ <a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div></div>`;
-  }).join('');
+  const effectiveShoppingDue=(item:Row)=>String(item.due_date||item.task_end_at||item.task_due_at||item.task_start_at||'').slice(0,10);
+  const shoppingRows=(items:Row[])=>{
+    const groups=new Map<string,{title:string;due:string;items:Row[]}>();
+    for(const item of items){
+      const taskId=Number(item.task_id||0);
+      const due=effectiveShoppingDue(item);
+      const key=taskId&&item.task_title?`${taskId}|${due}`:`item:${String(item.id)}`;
+      const group=groups.get(key)||{title:taskId?String(item.task_title||''):'',due,items:[]};
+      group.items.push(item);groups.set(key,group);
+    }
+    return [...groups.values()].map(group=>{
+      const groupHead=group.title?`<div class="shopping-group-head"><strong>${esc(group.title)}</strong>${group.due?`<span class="meta">${esc(group.due)}</span>`:''}</div>`:'';
+      const rows=group.items.map(item=>{
+        const productUrl=safeProductUrl(item.url);
+        const itemMeta=[item.category||'',item.assignees?'担当 '+item.assignees:''].filter(Boolean).map(esc).join(' ・ ');
+        return `<div class="row linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}"><a href="/app/shopping_edit.php?id=${esc(item.id)}">${esc(item.name)}</a>${item.quantity&&item.quantity!=='1'?` × ${esc(item.quantity)}`:''}</span></label>${itemMeta||productUrl?`<div class="meta">${itemMeta}${itemMeta&&productUrl?' ・ ':''}${productUrl?`<a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div>`:''}</div>`;
+      }).join('');
+      return `<div class="shopping-group">${groupHead}${rows}</div>`;
+    }).join('');
+  };
   const taskRows=data.tasks.map(task=>{
     const templateId=Number(task.task_id||0)||Math.abs(Number(task.id));
     const linkedShopping=shoppingByTask.get(templateId)||shoppingByTask.get(Math.abs(Number(task.id)))||[];
