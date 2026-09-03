@@ -48,6 +48,8 @@ for(const marker of [
 for(const marker of [
   "!Number(payload.selectedSubject||0)&&!payload.adultAggregate",
   "const actions=Array.isArray(payload.quickActions)?payload.quickActions:[]",
+  "const eligibleSubjects=Object.values(subjects).filter",
+  "const displayPrefix=subject=>",
   "Number(action?.subject_id)===Number(subject.id)",
   "String(action?.mode||'QUICK')!=='SLEEP_TOGGLE'",
   "family-log-unified-quick-group",
@@ -55,6 +57,8 @@ for(const marker of [
   "family-log-quick-action':'family-log-form-action'",
   "button.dataset.quickActionId",
   'const authoritativeSubjects=[]',
+  'const matchingSubjects=eligibleSubjects.filter(subject=>displayPrefix(subject)===authority.subjectPrefix)',
+  'if(matchingSubjects.length!==1)continue',
   "String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix",
   'if(matches.length!==1)continue',
   "legacy.querySelectorAll('.family-log-sleep-start,.family-log-sleep-stop')",
@@ -63,6 +67,6 @@ for(const marker of [
   "overview.prepend(groups[i])",
 ])if(!familyLogJs.includes(marker))throw new Error(`Family Log overview quick-action consumer missing: ${marker}`);
 if(familyLogJs.includes('heading.startsWith(prefix)'))throw new Error('Family Log overview must not remove legacy palettes by ambiguous heading prefix');
-if(!familyLogJs.includes('preserves the fallback rather than guessing'))throw new Error('Family Log overview must preserve ambiguous legacy fallback sections');
+if(!familyLogJs.includes('Any name/icon collision preserves the fallback'))throw new Error('Family Log overview must preserve fallback when multiple subjects share display identity');
 if(/DELETE FROM family_logs|UPDATE family_logs SET deleted_at/.test(familyLogJs))throw new Error('overview quick-action consumer must not mutate or delete retained history directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation and collision-safe overview quick actions ok');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation and subject-collision-safe overview quick actions ok');
