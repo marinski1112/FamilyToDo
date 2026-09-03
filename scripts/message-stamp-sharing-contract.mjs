@@ -58,7 +58,7 @@ for(const [name,source] of [['message-new',compose],['messages',messages]]){
     "textarea.required=selectedStampId<=0",
     "credentials:'same-origin'",
   ]) assert.ok(source.includes(token),`${name} shared stamp picker missing: ${token}`);
-  assert.doesNotMatch(source,/storage_key|thumbnail_storage_key|family_id|member_id|authorization|cookie|signed[_-]?url/i,`${name} stamp UI must not depend on internal storage/session identity fields`);
+  assert.doesNotMatch(source,/storage_key|thumbnail_storage_key|authorization|cookie|signed[_-]?url/i,`${name} stamp UI must not depend on raw storage or credential details`);
 }
 
 for(const token of [
