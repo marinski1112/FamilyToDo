@@ -14,6 +14,9 @@ for(const sentinel of [
   "String(b.csrf||'')!==String(ctx.session.csrfToken||'')",
   'const occId=Number(b.occurrence_id||0)',
   'occ.exception_task_id',
+  'function shiftedOccurrenceEndDate(occurrenceDate:string,templateStartAt:unknown,templateEndAt:unknown):string',
+  'const endDate=shiftedOccurrenceEndDate(date,occ.start_at,occ.end_at)',
+  'et?`${endDate} ${et}`:null',
   'INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode',
   "'OCCURRENCE'",
   'INSERT OR IGNORE INTO task_assignees(task_id,member_id)',
@@ -26,4 +29,5 @@ for(const sentinel of [
   'UPDATE recurrence_occurrences SET exception_task_id=?,updated_at=?',
   'redirectTo=`/task/view.php?id=${taskId}`',
 ]) if(!occurrence.includes(sentinel)) throw new Error(`recurring occurrence behavior sentinel missing: ${sentinel}`);
+if(occurrence.includes('et?`${date} ${et}`:null')) throw new Error('multi-day recurring exception conversion must not collapse end_at onto the occurrence start date');
 console.log('recurring occurrence modularity contract: ok');
