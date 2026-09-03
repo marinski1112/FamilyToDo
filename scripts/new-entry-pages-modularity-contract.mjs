@@ -12,16 +12,17 @@ for(const marker of ['async function taskNew(','async function itemNew(','id="ta
 for(const marker of [
   'export async function taskNew(',
   'export async function itemNew(',
-  "SELECT DISTINCT s.category FROM shopping_items",
+  'shopping_category_catalog',
+  'resolveShoppingCategoryOptions',
   "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
-  '/assets/task-new.js?v=12.147.0-wave128-calendar-return1',
+  '/assets/task-new.js?v=12.147.0-wave128-shopping-categories1',
   '/assets/item-new.js?v=12.93-wave74',
-  'taskChildVisibilitySql',
   'taskVisibilitySql',
   "import { layout } from './app-shell';",
 ]) if(!pages.includes(marker)) throw new Error(`new page module lost behavior marker: ${marker}`);
 if(pages.includes("from './app'")) throw new Error('new entry pages must not depend on app.ts');
-if(pages.includes('/assets/task-new.js?v=12.147.0-wave128"')) throw new Error('task-new Calendar return fix must use a rotated cache key');
+if(pages.includes('SELECT DISTINCT s.category FROM shopping_items')) throw new Error('task-new must use the canonical family shopping category catalog instead of historical item-derived suggestions');
+if(pages.includes('/assets/task-new.js?v=12.147.0-wave128-calendar-return1')) throw new Error('task-new category UX must use a rotated cache key');
 for(const route of [
   "if(url.pathname==='/task/new.php') return await taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');",
   "if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));",
