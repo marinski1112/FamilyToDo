@@ -1,5 +1,5 @@
-import {calendarStampPlacementsForRange} from './calendar-stamps';
-import {calendarStampAssetUrl} from './calendar-stamp-asset-url';
+import {calendarStampFramesForAssets,calendarStampPlacementsForRange} from './calendar-stamps';
+import {calendarStampAssetUrl,calendarStampStorageKeyUrl} from './calendar-stamp-asset-url';
 
 export type CalendarStampReadScope={familyId:number;memberId:number};
 
@@ -35,10 +35,23 @@ export async function calendarStampReadApi(request:Request,env:Env,scope:Calenda
 
   try{
     const placements=await calendarStampPlacementsForRange(env,scope.familyId,scope.memberId,from,to);
+    const frameRows=await calendarStampFramesForAssets(env,scope.familyId,scope.memberId,placements.map(placement=>placement.asset_id));
+    const framesByAsset=new Map<number,typeof frameRows>();
+    for(const frame of frameRows){const list=framesByAsset.get(frame.asset_id)||[];list.push(frame);framesByAsset.set(frame.asset_id,list);}
     const stamps=placements.flatMap(placement=>{
       const fullUrl=calendarStampAssetUrl(placement,'full');
       const thumbnailUrl=calendarStampAssetUrl(placement,'thumbnail');
       if(!fullUrl||!thumbnailUrl)return [];
+      let frames:{url:string;durationMs:number}[]=[];
+      if(placement.asset_kind==='ANIMATED'&&placement.mime_type==='image/png'){
+        const rows=framesByAsset.get(placement.asset_id)||[];
+        if(rows.length<2||rows.some((frame,index)=>frame.frame_index!==index))return [];
+        frames=rows.flatMap(frame=>{
+          const frameUrl=calendarStampStorageKeyUrl(placement.storage_provider,frame.storage_key);
+          return frameUrl?[{url:frameUrl,durationMs:frame.duration_ms}]:[];
+        });
+        if(frames.length!==rows.length)return [];
+      }
       return [{
         date:placement.stamp_date,
         placementId:placement.placement_id,
@@ -46,6 +59,7 @@ export async function calendarStampReadApi(request:Request,env:Env,scope:Calenda
         mimeType:placement.mime_type,
         thumbnailUrl,
         fullUrl,
+        frames,
         width:placement.width,
         height:placement.height,
       }];
