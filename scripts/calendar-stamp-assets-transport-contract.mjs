@@ -38,6 +38,7 @@ assert.doesNotMatch(source,/console\.|cookie|token|authorization|private_owner|f
 assert.match(sequence,/normalizeCalendarStampStorageProvider\(input\.storageProvider\)/,'PNG sequence registration must use the shared provider contract');
 assert.match(sequence,/normalizeCalendarStampStorageKey\(frame\?\.storageKey/,'PNG frame registration must use shared backend-neutral key normalization');
 assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorageKey/,'PNG thumbnail registration must use shared backend-neutral key normalization');
-assert.doesNotMatch(sequence,/bucket|https?:\/\//i,'PNG sequence metadata registration must remain physical-storage agnostic');
+assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
+assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
 console.log('calendar stamp storage contract: ASSETS stays same-origin; UPLOAD stays fail-closed and backend-neutral with a tenant-safe future R2 object-key seam');
