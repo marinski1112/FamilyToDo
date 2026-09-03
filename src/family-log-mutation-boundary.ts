@@ -1,4 +1,5 @@
 import type { AppContext } from './app-context';
+import { logActivity } from './activity-log';
 import { familyLogApi } from './family-log-api';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
@@ -30,8 +31,13 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
   if(!Number.isSafeInteger(id)||id<=0)return json({ok:false,error:'クイック記録が不正です。'},400);
   const familyId=Number(member.family_id||0);
   if(!Number.isSafeInteger(familyId)||familyId<=0)return json({ok:false,error:'家族情報が不正です。'},400);
-  const row=await ctx.env.DB.prepare('SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1').bind(id,familyId).first<Row>();
+  const row=await ctx.env.DB.prepare('SELECT id,active,name FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1').bind(id,familyId).first<Row>();
   if(!row)return json({ok:false,error:'クイック記録が見つかりません。'},404);
 
-  return familyLogApi(request,ctx);
+  const wasActive=Number(row.active||0)===1;
+  const response=await familyLogApi(request,ctx);
+  if(response.ok&&wasActive){
+    await logActivity(ctx,'DISABLED','family_log_quick_action',id,{name:String(row.name||'')});
+  }
+  return response;
 }
