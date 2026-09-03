@@ -10,6 +10,7 @@ if(!index.includes('if(apiResponse) return apiResponse;')) throw new Error('inde
 if(!apiRoutes.includes('export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{')) throw new Error('context API dispatcher export missing');
 if(!apiRoutes.includes("import { calendarStampReadApi } from './calendar-stamp-api';")) throw new Error('calendar stamp read adapter import missing');
 if(!apiRoutes.includes("import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';")) throw new Error('calendar stamp placement adapter import missing');
+if(!apiRoutes.includes("import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';")) throw new Error('calendar stamp admin adapter import missing');
 if(!apiRoutes.includes("import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';")) throw new Error('calendar stamp media adapter import missing');
 if(!apiRoutes.includes("import { familyLogApi } from './family-log-api';")) throw new Error('Family Log retained API import missing');
 const routeLines=[
@@ -28,7 +29,9 @@ const routeLines=[
   "if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-placement') return await calendarStampPlacementApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);",
+  "if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);",
+  "if(url.pathname==='/api/calendar-stamp-admin/png-sequence') return await calendarStampPngSequenceAdminApi(request,context);",
   "if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);",
   "if(url.pathname==='/api/family-ai/plan') return await familyAiPlan(request,context);",
   "if(url.pathname==='/api/family-ai/execute') return await familyAiExecute(request,context);",
