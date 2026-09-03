@@ -21,14 +21,14 @@ assert.doesNotMatch(migration,/CREATE TABLE\s+.*stamp.*asset/i,'Messages must re
 
 for(const token of [
   "import {calendarStampFramesForAssets} from './calendar-stamps'",
-  "import {calendarStampAssetUrl,calendarStampStorageKeyUrl} from './calendar-stamp-asset-url'",
+  "import {calendarStampAssetUrl,calendarStampFrameUrl} from './calendar-stamp-asset-url'",
   'export async function messageStampApi',
   'SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1',
   'JOIN calendar_stamp_assets asset ON asset.id=attachment.asset_id AND asset.family_id=attachment.family_id AND asset.active=1',
   'calendarStampFramesForAssets(context.env,s.familyId,s.memberId',
   "calendarStampAssetUrl(row,'thumbnail')",
   "calendarStampAssetUrl(row,'full')",
-  'calendarStampStorageKeyUrl(row.storage_provider,frame.storage_key)',
+  'calendarStampFrameUrl(row.storage_provider,row.asset_id,frame.frame_index,frame.storage_key)',
   "const csrf=String(body.csrf||''),expected=String(context.session?.csrfToken||'')",
   'WHERE id=? AND family_id=? AND active=1',
   'INSERT INTO messages(family_id,sender_id,target_member_id,text,reminder_at,created_at,updated_at)',
@@ -43,7 +43,7 @@ const projection=api.slice(projectionStart,projectionEnd+3);
 for(const field of ['messageId:','kind:','mimeType:','thumbnailUrl','fullUrl','frames','width:','height:'])assert.ok(projection.includes(field),`message stamp projection missing field: ${field}`);
 for(const sensitive of ['familyId','memberId','storage_key','thumbnail_storage_key','created_by','target_member_id'])assert.ok(!projection.includes(sensitive),`message stamp projection exposes internal field: ${sensitive}`);
 assert.doesNotMatch(api,/https?:\/\//i,'message stamp API must not embed remote asset URLs');
-assert.doesNotMatch(api,/R2Bucket|env\.[A-Za-z0-9_]*R2/i,'message stamp attachment API must stay independent of the future R2 binding');
+assert.doesNotMatch(api,/R2Bucket|env\.[A-Za-z0-9_]*R2|\.MEDIA\./i,'message stamp attachment API must stay independent of the physical R2 binding; transport remains behind the shared resolver/media endpoint');
 
 for(const token of [
   "import { messageStampApi } from './message-stamp-api';",
@@ -76,4 +76,4 @@ for(const token of [
 assert.ok(messages.includes('catch{/* stamp enhancement is optional; normal Messages stay usable */}'),'stamp read enhancement must fail closed without breaking normal Messages');
 assert.doesNotMatch(messages,/row\.querySelectorAll\('\.convert-shopping,\.convert-task,\.edit-message'\).*hidden=true/,'stamp enhancement must not create a client-only action restriction that can be bypassed while attachment state is loading');
 
-console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, rendering and sequential-PNG playback semantics');
+console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, ASSETS/R2 rendering and sequential-PNG playback semantics');
