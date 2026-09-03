@@ -20,11 +20,19 @@ for(const value of [
   'b.is_event=Boolean(isEvent?.checked)',
 ]) assert.ok(taskNew.includes(value),`task-new shopping/event integration missing: ${value}`);
 assert.ok(taskNew.includes("category:f.querySelectorAll('[name=\"shopping_category[]\"]')[j]?.value.trim()||''"),'task-new must submit each linked shopping row category independently');
-assert.ok(taskNewPage.includes('datalist id="taskShopCategories"'),'task-new page must expose existing shopping categories as per-row suggestions');
-assert.ok(taskNewPage.includes('name="shopping_category[]" list="taskShopCategories" maxlength="255"'),'task-new initial shopping row must use a bounded per-row category field');
+for(const marker of [
+  'shopping_category_catalog',
+  'resolveShoppingCategoryOptions',
+  'task-shopping-category-select',
+  'value="__custom__"',
+  'task-shopping-category-register',
+  'name="shopping_category[]" class="task-shopping-category-value"',
+]) assert.ok(taskNewPage.includes(marker),`task-new canonical category selector missing: ${marker}`);
+assert.ok(taskNew.includes("fetch('/api/shopping-categories'"),'task-new must opt-in register custom categories through the canonical family category API');
+assert.ok(!taskNewPage.includes('datalist id="taskShopCategories"'),'task-new must not derive category suggestions from historical Shopping rows');
 assert.ok(!taskNewPage.includes('<select name="shopping_category">'),'task-new must not collapse linked shopping rows into one shared category selector');
-assert.ok(taskNewPage.includes('<script src="/assets/task-new.js?v=12.147.0-wave128-calendar-return1"></script>'),'task-new page must use a cache-rotated post-shopping-parity asset revision so service-worker clients receive current Calendar return behavior');
-assert.ok(!taskNewPage.includes('/assets/task-new.js?v=12.144.0-wave125'),'task-new page must not reuse the pre-shopping-parity cache key');
+assert.ok(taskNewPage.includes('<script src="/assets/task-new.js?v=12.147.0-wave128-shopping-categories1"></script>'),'task-new page must use a cache-rotated canonical category asset revision');
+assert.ok(!taskNewPage.includes('/assets/task-new.js?v=12.147.0-wave128-calendar-return1'),'task-new page must not reuse the pre-category-selector cache key');
 
 for(const value of [
   "document.getElementById('shopToggle')",
@@ -82,4 +90,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskNewSubmit,eventShoppingDiscard,'task-new must not discard shopping just because the record is an EVENT');
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 
-console.log('task-event-shopping-integration-contract: task/event create and edit preserve per-item linked shopping categories, legacy create fallback, removable linked shopping rows, child completion, and concrete server task/shopping linkage');
+console.log('task-event-shopping-integration-contract: task/event create uses canonical family category options with opt-in custom registration while create/edit preserve per-item linked shopping categories, legacy create fallback, removable linked shopping rows, child completion, and concrete server task/shopping linkage');
