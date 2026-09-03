@@ -50,6 +50,8 @@ export async function calendarStampReadApi(request:Request,env:Env,scope:Calenda
       return [{
         date:placement.stamp_date,
         placementId:placement.placement_id,
+        visibilityScope:placement.visibility_scope,
+        sortOrder:placement.sort_order,
         kind:placement.asset_kind,
         mimeType:placement.mime_type,
         thumbnailUrl,
