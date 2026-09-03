@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../src/calendar-stamp-api.ts',import.meta.url),'utf8');
 const model=fs.readFileSync(new URL('../src/calendar-stamps.ts',import.meta.url),'utf8');
 const resolver=fs.readFileSync(new URL('../src/calendar-stamp-asset-url.ts',import.meta.url),'utf8');
+const storage=fs.readFileSync(new URL('../src/calendar-stamp-storage.ts',import.meta.url),'utf8');
 const placementApi=fs.readFileSync(new URL('../src/calendar-stamp-placement-api.ts',import.meta.url),'utf8');
 const shell=fs.readFileSync(new URL('../src/app-shell.ts',import.meta.url),'utf8');
 const ui=fs.readFileSync(new URL('../public/assets/calendar-stamp-ui.js',import.meta.url),'utf8');
@@ -39,7 +40,8 @@ for(const needle of [
   'frames.filter(frame=>!invalidAssetIds.has(frame.asset_id))',
 ])if(!model.includes(needle))fail(`bounded PNG frame read model missing: ${needle}`);
 if(model.includes("row.asset_kind==='ANIMATED'&&row.mime_type==='image/png'"))fail('privacy read model must no longer reject supported sequential PNG animation assets');
-for(const needle of ['calendarStampStorageKeyUrl',"storageProvider!=='ASSETS'",'ASSET_PATH_RE'])if(!resolver.includes(needle))fail(`shared frame asset resolver missing: ${needle}`);
+for(const needle of ['calendarStampStorageKeyUrl',"storageProvider!=='ASSETS'",'normalizeCalendarStampStorageKey'])if(!resolver.includes(needle))fail(`shared frame asset resolver missing: ${needle}`);
+for(const needle of ["export type CalendarStampStorageProvider='ASSETS'|'UPLOAD'",'normalizeCalendarStampStorageKey'])if(!storage.includes(needle))fail(`shared stamp storage boundary missing: ${needle}`);
 
 const start=source.indexOf('return [{');
 const end=start>=0?source.indexOf('}];',start):-1;
@@ -85,4 +87,4 @@ for(const needle of [
 ])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
 if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
 
-console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, malformed-sequence fail-closed behavior, picker placement flow and legacy GIF/WebP fallback ok');
+console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, shared safe storage resolution, malformed-sequence fail-closed behavior, picker placement flow and legacy GIF/WebP fallback ok');
