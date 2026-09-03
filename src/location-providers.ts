@@ -1,14 +1,18 @@
+import type { NormalizedLocationPoint } from './location-domain';
+
 export type LocationScope=Readonly<{
   familyId:number;
   requesterMemberId:number;
 }>;
 
-export type LocationPoint=Readonly<{
-  latitude:number;
-  longitude:number;
-  recordedAt:string;
-  accuracyMeters?:number;
-}>;
+/**
+ * Coordinate/time subset shared by current query/map/route provider contracts.
+ * Provider adapters produce the richer NormalizedLocationPoint at ingress; this
+ * projection keeps existing provider APIs small while sharing one canonical
+ * location field definition.
+ */
+export type LocationPoint=Pick<NormalizedLocationPoint,
+  'latitude'|'longitude'|'recordedAt'|'accuracyMeters'>;
 
 export type LatestLocationQuery=Readonly<{
   scope:LocationScope;
