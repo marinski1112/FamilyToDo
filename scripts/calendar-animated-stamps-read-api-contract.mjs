@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../src/calendar-stamp-api.ts',import.meta.url),'utf8');
 const model=fs.readFileSync(new URL('../src/calendar-stamps.ts',import.meta.url),'utf8');
 const resolver=fs.readFileSync(new URL('../src/calendar-stamp-asset-url.ts',import.meta.url),'utf8');
+const placementApi=fs.readFileSync(new URL('../src/calendar-stamp-placement-api.ts',import.meta.url),'utf8');
 const shell=fs.readFileSync(new URL('../src/app-shell.ts',import.meta.url),'utf8');
 const ui=fs.readFileSync(new URL('../public/assets/calendar-stamp-ui.js',import.meta.url),'utf8');
 const fail=message=>{console.error(message);process.exit(1)};
@@ -51,6 +52,14 @@ for(const sensitive of ['familyId:','memberId:','createdBy:','privateOwnerId:','
 }
 if(/storage_key|thumbnail_storage_key|visibility_scope|private_owner_id|created_by|family_id|member_id/.test(projection))fail('raw persistence/private scope fields must not enter browser projection');
 
+for(const needle of [
+  'calendarStampOptionsApi',
+  'calendarStampPlacementApi',
+  "csrf!==expectedCsrf",
+  'createCalendarStampPlacement',
+  "calendarStampAssetUrl(asset,'thumbnail')",
+])if(!placementApi.includes(needle))fail(`Calendar stamp picker/placement API boundary missing: ${needle}`);
+
 if(!shell.includes('<script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}"></script>'))fail('Calendar shell must load the stamp renderer only through the Calendar asset bundle');
 for(const needle of [
   "fetch('/api/calendar-stamps?from='",
@@ -66,7 +75,14 @@ for(const needle of [
   "new MutationObserver",
   "event.stopImmediatePropagation()",
   "u.origin===location.origin",
+  "fetch('/api/calendar-stamp-options'",
+  "fetch('/api/calendar-stamp-placement'",
+  "JSON.stringify({csrf,assetId,stampDate,visibilityScope})",
+  "pickerButton.textContent='スタンプ'",
+  "selectedModalDate=()=>",
+  "visibilityScope=String(pickerScope?.value||'FAMILY')",
+  "await renderStamps()",
 ])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
 if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
 
-console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, malformed-sequence fail-closed behavior and legacy GIF/WebP fallback ok');
+console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, malformed-sequence fail-closed behavior, picker placement flow and legacy GIF/WebP fallback ok');
