@@ -1,5 +1,5 @@
 import {calendarStampFramesForAssets,calendarStampPlacementsForRange} from './calendar-stamps';
-import {calendarStampAssetUrl,calendarStampStorageKeyUrl} from './calendar-stamp-asset-url';
+import {calendarStampAssetUrl,calendarStampFrameUrl} from './calendar-stamp-asset-url';
 
 export type CalendarStampReadScope={familyId:number;memberId:number};
 
@@ -42,7 +42,7 @@ export async function calendarStampReadApi(request:Request,env:Env,scope:Calenda
         const rows=framesByAsset.get(placement.asset_id)||[];
         if(rows.length<2||rows.some((frame,index)=>frame.frame_index!==index))return [];
         frames=rows.flatMap(frame=>{
-          const frameUrl=calendarStampStorageKeyUrl(placement.storage_provider,frame.storage_key);
+          const frameUrl=calendarStampFrameUrl(placement.storage_provider,placement.asset_id,frame.frame_index,frame.storage_key);
           return frameUrl?[{url:frameUrl,durationMs:frame.duration_ms}]:[];
         });
         if(frames.length!==rows.length)return [];

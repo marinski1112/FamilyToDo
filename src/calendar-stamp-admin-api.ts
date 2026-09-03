@@ -16,10 +16,11 @@ export async function calendarStampPngSequenceAdminApi(request:Request,context:a
   if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);
   const rawFrames=Array.isArray(body.frames)?body.frames:[];
   const frames=rawFrames.map((frame:any)=>({storageKey:String(frame?.storageKey||''),durationMs:frame?.durationMs==null?undefined:Number(frame.durationMs)}));
+  const storageProvider=body.storageProvider==='UPLOAD'?'UPLOAD':'ASSETS';
   try{
     const assetId=await registerCalendarStampPngSequence(context.env,s.familyId,s.memberId,{
       name:String(body.name||''),
-      storageProvider:'ASSETS',
+      storageProvider,
       frames,
       thumbnailStorageKey:body.thumbnailStorageKey==null?null:String(body.thumbnailStorageKey),
       width:body.width==null?null:Number(body.width),
