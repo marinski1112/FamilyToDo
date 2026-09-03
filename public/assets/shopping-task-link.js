@@ -28,7 +28,7 @@ searchInput.hidden=tasks.length===0;
 select.parentNode?.insertBefore(searchInput,select);
 const todayJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const dateOf=task=>task.start||task.due||'';
-const endOf=task=>task.end||dateOf(task);
+const endOf=task=>task.end||task.due||task.start||'';
 const overlaps=(task,date)=>Boolean(date&&dateOf(task)&&dateOf(task)<=date&&(!endOf(task)||endOf(task)>=date));
 const distance=(task,date)=>{
   const d=dateOf(task);if(!d)return Number.POSITIVE_INFINITY;
