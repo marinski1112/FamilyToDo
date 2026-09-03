@@ -82,15 +82,17 @@ for(const marker of [
   "href=\"/app/settings_family_log.php?subject=${subjectId}\"",
   "inactive?' · 非表示':''",
   "subjectForm?.elements.namedItem('subject_kind')",
-  "subjectKind.hidden=true",
-  "typeHead.hidden=true",
-  "typeGrid.hidden=true",
-  "overviewToggle.hidden=true",
-  "overviewTypes.hidden=true",
+  "const hideLegacyControl=element=>",
+  "element.style.display='none'",
+  "hideLegacyControl(subjectKind)",
+  "hideLegacyControl(typeHead)",
+  "hideLegacyControl(typeGrid)",
+  "hideLegacyControl(overviewToggle)",
+  "hideLegacyControl(overviewTypes)",
   "subjectCardTitle.textContent='記録対象'",
   "trigger.textContent='＋ 対象'",
   'compatibility metadata',
 ])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions, hidden legacy subject controls and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
