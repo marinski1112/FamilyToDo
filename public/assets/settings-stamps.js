@@ -31,13 +31,59 @@
     });
   };
 
+  const selectedFiles=data=>{
+    const input=form.elements.namedItem('pngFrames');
+    if(!(input instanceof HTMLInputElement)||!input.files)return [];
+    return Array.from(input.files);
+  };
+
+  const validateUploadFiles=files=>{
+    if(files.length<2||files.length>48)throw new Error('PNGファイルは2〜48枚選択してください。');
+    for(let index=0;index<files.length;index++){
+      const file=files[index];
+      if(!(file instanceof File)||file.type!=='image/png'||!/\.png$/i.test(file.name))throw new Error(`${index+1}枚目はPNGファイルを選択してください。`);
+      if(file.size<=0||file.size>4*1024*1024)throw new Error(`${index+1}枚目は4MiB以下にしてください。`);
+    }
+  };
+
+  const uploadFrames=async(files,csrf,durationMs)=>{
+    const frames=[];
+    for(let index=0;index<files.length;index++){
+      setStatus(`PNGをアップロードしています… ${index+1}/${files.length}`);
+      const response=await fetch('/api/calendar-stamp-media/upload',{
+        method:'POST',
+        credentials:'same-origin',
+        headers:{'content-type':'image/png','x-csrf-token':csrf},
+        body:files[index],
+      });
+      let payload={};
+      try{payload=await response.json();}catch{}
+      if(!response.ok||payload?.ok!==true||!text(payload?.storageKey)){
+        const code=text(payload?.error);
+        if(response.status===413||code==='FILE_TOO_LARGE')throw new Error(`${index+1}枚目が大きすぎます。1枚4MiB以下にしてください。`);
+        if(response.status===415||code==='PNG_REQUIRED'||code==='INVALID_PNG')throw new Error(`${index+1}枚目のPNGを確認してください。`);
+        if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')throw new Error('登録権限を確認して、ページを再読み込みしてください。');
+        throw new Error(`${index+1}枚目のアップロードに失敗しました。`);
+      }
+      frames.push({storageKey:text(payload.storageKey),durationMs});
+    }
+    return frames;
+  };
+
   form.addEventListener('submit',async event=>{
     event.preventDefault();
     const data=new FormData(form);
     const name=text(data.get('name'));
     if(!name){setStatus('スタンプ名を入力してください。');return;}
-    let frames;
-    try{frames=parseFrames(data.get('frames'));}catch(error){setStatus(error instanceof Error?error.message:'フレームを確認してください。');return;}
+    const csrf=text(data.get('csrf'));
+    const files=selectedFiles(data);
+    const durationMs=Number(text(data.get('durationMs'))||120);
+    if(!Number.isSafeInteger(durationMs)||durationMs<40||durationMs>2000){setStatus('表示時間は40〜2000msで指定してください。');return;}
+    let frames=null,storageProvider='ASSETS';
+    try{
+      if(files.length){validateUploadFiles(files);storageProvider='UPLOAD';}
+      else frames=parseFrames(data.get('frames'));
+    }catch(error){setStatus(error instanceof Error?error.message:'フレームを確認してください。');return;}
     const widthRaw=text(data.get('width')),heightRaw=text(data.get('height'));
     if(Boolean(widthRaw)!==Boolean(heightRaw)){setStatus('幅と高さは両方入力するか、両方空欄にしてください。');return;}
     const width=widthRaw?Number(widthRaw):null,height=heightRaw?Number(heightRaw):null;
@@ -45,17 +91,19 @@
       setStatus('幅と高さは1〜4096の整数で指定してください。');return;
     }
     if(submit instanceof HTMLButtonElement)submit.disabled=true;
-    setStatus('登録しています…');
     try{
+      if(storageProvider==='UPLOAD')frames=await uploadFrames(files,csrf,durationMs);
+      setStatus('スタンプとして登録しています…');
       const response=await fetch('/api/calendar-stamp-admin/png-sequence',{
         method:'POST',
         credentials:'same-origin',
         headers:{'content-type':'application/json'},
         body:JSON.stringify({
-          csrf:text(data.get('csrf')),
+          csrf,
           name,
+          storageProvider,
           frames,
-          thumbnailStorageKey:text(data.get('thumbnailStorageKey'))||null,
+          thumbnailStorageKey:storageProvider==='ASSETS'?(text(data.get('thumbnailStorageKey'))||null):null,
           width,
           height,
         }),
@@ -63,7 +111,7 @@
       let payload={};
       try{payload=await response.json();}catch{}
       if(response.ok&&payload&&payload.ok===true){
-        setStatus('登録しました。カレンダーのスタンプ候補に表示されます。',true);
+        setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true);
         form.reset();
         return;
       }
@@ -71,8 +119,8 @@
       if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')setStatus('登録権限を確認して、ページを再読み込みしてください。');
       else if(response.status===400||code==='INVALID_BODY'||code==='INVALID_SEQUENCE')setStatus('入力内容を確認してください。');
       else setStatus('スタンプの登録に失敗しました。');
-    }catch{
-      setStatus('通信に失敗しました。時間をおいて再試行してください。');
+    }catch(error){
+      setStatus(error instanceof Error?error.message:'通信に失敗しました。時間をおいて再試行してください。');
     }finally{
       if(submit instanceof HTMLButtonElement)submit.disabled=false;
     }
