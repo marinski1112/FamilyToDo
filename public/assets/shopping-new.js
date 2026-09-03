@@ -6,7 +6,11 @@ try {
   const list=document.getElementById('shoppingProducts');
   const add=document.getElementById('addProduct');
   const form=document.getElementById('shopBatchForm');
-  if(!list||!add||!form) throw new Error('買い物フォームの初期化対象が見つかりません。');
+  const categorySelect=document.getElementById('shoppingCategorySelect');
+  const categoryCustomWrap=document.getElementById('shoppingCategoryCustomWrap');
+  const categoryCustom=document.getElementById('shoppingCategoryCustom');
+  const categoryValue=document.getElementById('shoppingCategoryValue');
+  if(!list||!add||!form||!categorySelect||!categoryCustomWrap||!categoryCustom||!categoryValue) throw new Error('買い物フォームの初期化対象が見つかりません。');
   let payload={};
   try{payload=JSON.parse(payloadNode?.textContent||'{}');}catch{payload={};}
   root.dataset.shoppingNewJs='ready';
@@ -21,6 +25,15 @@ try {
   const safeEntityId=value=>{const id=Number(value);return Number.isSafeInteger(id)&&id>0?id:0};
   const safeProductUrl=value=>{const raw=String(value??'').trim();if(!raw)return '';if(raw.length>2048)return null;try{const parsed=new URL(raw);if(parsed.username||parsed.password)return null;return parsed.protocol==='http:'||parsed.protocol==='https:'?raw:null;}catch{return null;}};
   const safeDueDate=value=>{const raw=String(value??'').trim();if(!raw)return '';if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const date=new Date(`${raw}T00:00:00Z`);return Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==raw?null:raw;};
+  const syncCategory=()=>{
+    const custom=String(categorySelect.value||'')==='__custom__';
+    categoryCustomWrap.hidden=!custom;
+    categoryValue.value=custom?String(categoryCustom.value||'').trim():String(categorySelect.value||'').trim();
+    return categoryValue.value;
+  };
+  categorySelect.addEventListener('change',()=>{syncCategory();if(categorySelect.value==='__custom__')categoryCustom.focus();});
+  categoryCustom.addEventListener('input',syncCategory);
+  syncCategory();
   const rowHtml=()=>'<input type="text" name="product_name[]" maxlength="255" placeholder="商品名" required><input type="text" name="product_quantity[]" value="1" maxlength="128" inputmode="text" placeholder="数量" aria-label="数量"><button type="button" class="product-url-toggle" aria-expanded="false" aria-label="商品URLを入力" title="商品URL">🔗</button><button type="button" class="remove-product" aria-label="商品欄を削除">×</button><div class="product-url-popover" hidden><div class="product-url-popover-head"><strong>商品URL</strong><button type="button" class="product-url-close" aria-label="URL入力を閉じる">×</button></div><input type="url" name="product_url[]" maxlength="2048" placeholder="https://..." aria-label="商品URL"><p class="small">商品ページのURLがある場合だけ入力してください。</p></div>';
   function closeUrl(row){const pop=row?.querySelector('.product-url-popover');const toggle=row?.querySelector('.product-url-toggle');if(pop)pop.hidden=true;if(toggle)toggle.setAttribute('aria-expanded','false');}
   function closeAll(except=null){list.querySelectorAll('[data-product-row]').forEach(row=>{if(row!==except)closeUrl(row);});}
@@ -52,10 +65,12 @@ try {
     if(quantities.some(quantity=>quantity.length>MAX_PRODUCT_QUANTITY_UNITS)){alert(`数量は${MAX_PRODUCT_QUANTITY_UNITS}文字以内で入力してください。`);return;}
     const safeUrls=urls.map(safeProductUrl);
     if(safeUrls.some(url=>url===null)){alert('商品URLは認証情報を含まない http または https のURLを入力してください。');return;}
+    syncCategory();
     const fd=new FormData(form);
     const dueDate=safeDueDate(fd.get('due_date'));
     if(dueDate===null){alert('期限の日付が不正です。');return;}
     const category=String(fd.get('category')||'').trim();
+    if(categorySelect.value==='__custom__'&&!category){alert('自由入力のカテゴリー名を入力してください。');categoryCustom.focus();return;}
     if(category.length>MAX_CATEGORY_UNITS){alert(`カテゴリーは${MAX_CATEGORY_UNITS}文字以内で入力してください。`);return;}
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
