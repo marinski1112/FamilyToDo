@@ -10,6 +10,8 @@ for(const token of [
   "storageProvider!=='ASSETS'",
   "variant==='thumbnail'&&placement.thumbnail_storage_key",
   'normalizeCalendarStampStorageKey(storageKey)',
+  'const ASSET_PATH_RE=',
+  'ASSET_PATH_RE.test(normalized)',
   "return `/${normalized}`",
   'return calendarStampStorageKeyUrl(placement.storage_provider,key)',
 ]) assert.ok(source.includes(token),`Calendar stamp ASSETS transport missing: ${token}`);
@@ -30,6 +32,7 @@ assert.match(storage,/normalized\.includes\('\/\/'\)[\s\S]*segment==='\.\.'/,'ma
 assert.match(storage,/Number\.isSafeInteger\(familyId\).*familyId<=0/,'future managed-upload object keys must require a positive family id');
 assert.doesNotMatch(storage,/bucket[_-]?name|account[_-]?id|secret|signed[_-]?url/i,'storage boundary must not embed backend credentials or physical bucket identity');
 
+assert.match(source,/ASSET_PATH_RE=\/\^\[A-Za-z0-9\._~\/-\]\+\$\//,'ASSETS URLs must retain a conservative URL-safe path allowlist');
 assert.match(source,/UPLOAD is the migration-stable logical provider/,'UPLOAD/R2 must remain fail-closed until a concrete transport exists');
 assert.match(source,/intentionally unresolved until a concrete authenticated upload\/R2 transport and[\s\S]*binding exist/,'asset resolver must not pretend R2 exists before a binding is configured');
 assert.doesNotMatch(source,/https?:\/\//i,'stamp transport must remain same-origin and must not embed remote URLs');
@@ -41,4 +44,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS stays same-origin; UPLOAD stays fail-closed and backend-neutral with a tenant-safe future R2 object-key seam');
+console.log('calendar stamp storage contract: ASSETS keeps its conservative same-origin URL allowlist; UPLOAD stays fail-closed and backend-neutral with a tenant-safe future R2 object-key seam');
