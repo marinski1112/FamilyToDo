@@ -54,9 +54,10 @@ export async function buildLocationPointDedupeKey(point:NormalizedLocationPoint)
  *
  * This service is deliberately not an HTTP boundary. The caller must first
  * authenticate the device and normalize the provider payload. Identity is
- * checked again here before any mutation. History is replay-safe, latest only
- * moves forward by sensor time (then receipt time), and all three mutations run
- * as one D1 batch.
+ * checked again here before any mutation. Every mutation also re-checks the
+ * current device/member sharing state in D1, so revoke/disable/share-off fails
+ * closed even if it changes after credential verification. History is replay-
+ * safe and latest only moves forward by sensor time (then receipt time).
  */
 export async function persistAuthenticatedLocationPoint(
   db:D1Database,
@@ -76,18 +77,31 @@ export async function persistAuthenticatedLocationPoint(
     point.batteryPercent??null,
   ] as const;
 
+  const activeDeviceWhere=`
+    d.id=? AND d.public_id=? AND d.family_id=? AND d.member_id=? AND d.provider=?
+    AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL
+  `;
+
   const history=db.prepare(`
     INSERT INTO member_location_history (
       family_id,member_id,device_id,provider,dedupe_key,
       latitude,longitude,accuracy_meters,altitude_meters,
       speed_meters_per_second,heading_degrees,battery_percent,trigger,
       recorded_at,received_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    )
+    SELECT
+      d.family_id,d.member_id,d.id,d.provider,?,
+      ?,?,?,?,?,?,?,?, ?,?
+    FROM location_devices d
+    JOIN members m
+      ON m.id=d.member_id AND m.family_id=d.family_id AND m.active=1
+    WHERE ${activeDeviceWhere}
     ON CONFLICT(device_id,dedupe_key) DO NOTHING
   `).bind(
-    device.familyId,device.memberId,device.id,device.provider,dedupeKey,
+    dedupeKey,
     point.latitude,point.longitude,...telemetry,point.trigger,
     point.recordedAt,point.receivedAt,
+    device.id,device.publicId,device.familyId,device.memberId,device.provider,
   );
 
   const latest=db.prepare(`
@@ -95,7 +109,14 @@ export async function persistAuthenticatedLocationPoint(
       member_id,family_id,device_id,provider,latitude,longitude,
       accuracy_meters,altitude_meters,speed_meters_per_second,
       heading_degrees,battery_percent,trigger,recorded_at,received_at,updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    )
+    SELECT
+      d.member_id,d.family_id,d.id,d.provider,
+      ?,?,?,?,?,?,?,?, ?,?,CURRENT_TIMESTAMP
+    FROM location_devices d
+    JOIN members m
+      ON m.id=d.member_id AND m.family_id=d.family_id AND m.active=1
+    WHERE ${activeDeviceWhere}
     ON CONFLICT(member_id) DO UPDATE SET
       family_id=excluded.family_id,
       device_id=excluded.device_id,
@@ -118,9 +139,9 @@ export async function persistAuthenticatedLocationPoint(
           AND excluded.received_at>member_location_latest.received_at)
       )
   `).bind(
-    device.memberId,device.familyId,device.id,device.provider,
     point.latitude,point.longitude,...telemetry,point.trigger,
     point.recordedAt,point.receivedAt,
+    device.id,device.publicId,device.familyId,device.memberId,device.provider,
   );
 
   const deviceSeen=db.prepare(`
@@ -132,6 +153,12 @@ export async function persistAuthenticatedLocationPoint(
     updated_at=CURRENT_TIMESTAMP
     WHERE id=? AND public_id=? AND family_id=? AND member_id=? AND provider=?
       AND enabled=1 AND sharing_enabled=1 AND revoked_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM members m
+        WHERE m.id=location_devices.member_id
+          AND m.family_id=location_devices.family_id
+          AND m.active=1
+      )
   `).bind(
     point.receivedAt,point.receivedAt,
     device.id,device.publicId,device.familyId,device.memberId,device.provider,
