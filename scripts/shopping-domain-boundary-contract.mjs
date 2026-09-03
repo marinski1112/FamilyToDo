@@ -19,6 +19,9 @@ for(const marker of [
   "queueCalendarProjectionAfterMutation",
   "INSERT INTO shopping_completion_history",
 ]) if(!root.includes(marker)) throw new Error(`shopping root lost ${marker}`);
+if(!root.includes('date(COALESCE(pt.end_at,pt.due_at,pt.start_at)) < ?')) throw new Error('shopping linked-task expiry must use end_at -> due_at -> start_at deadline precedence');
+if(!root.includes('substr(COALESCE(t.end_at,t.due_at,t.start_at),1,10)')) throw new Error('shopping expired ordering must use the same linked-task effective deadline precedence');
+if(root.includes('COALESCE(pt.end_at,pt.start_at,pt.due_at)')||root.includes('COALESCE(t.end_at,t.start_at,t.due_at)')) throw new Error('shopping must not regress to start_at before due_at for linked-task expiry');
 for(const marker of [
   "visibility_scope='PRIVATE' AND private_owner_id=?",
   'archiveShoppingCompletionStatements',
