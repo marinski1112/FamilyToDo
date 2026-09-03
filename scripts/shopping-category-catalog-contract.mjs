@@ -4,6 +4,8 @@ const migration=readFileSync(new URL('../migrations/0051_shopping_category_catal
 const domain=readFileSync(new URL('../src/shopping-categories.ts',import.meta.url),'utf8');
 const newPage=readFileSync(new URL('../src/shopping-new-page.ts',import.meta.url),'utf8');
 const newJs=readFileSync(new URL('../public/assets/shopping-new.js',import.meta.url),'utf8');
+const categoryApi=readFileSync(new URL('../src/shopping-category-api.ts',import.meta.url),'utf8');
+const contextRoutes=readFileSync(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
 
 const requireMatch=(text,pattern,message)=>{
   if(!pattern.test(text))throw new Error(message);
@@ -30,15 +32,34 @@ for(const pattern of [
   /id="shoppingCategorySelect"/,
   /<option value="__custom__">自由入力<\/option>/,
   /id="shoppingCategoryCustomWrap" hidden/,
+  /id="shoppingCategoryRegister"/,
+  /このカテゴリを登録/,
   /name="category" id="shoppingCategoryValue"/,
-]) requireMatch(newPage,pattern,'Shopping new page must render the family category dropdown and one-off custom input');
+]) requireMatch(newPage,pattern,'Shopping new page must render the family category dropdown and explicit custom registration control');
 
 for(const pattern of [
   /const categorySelect=document\.getElementById\('shoppingCategorySelect'\)/,
+  /const categoryRegister=document\.getElementById\('shoppingCategoryRegister'\)/,
   /const syncCategory=\(\)=>/,
   /categoryCustomWrap\.hidden=!custom/,
+  /if\(!custom\)categoryRegister\.checked=false/,
   /categorySelect\.value==='__custom__'&&!category/,
+  /const registerCategory=categorySelect\.value==='__custom__'&&categoryRegister\.checked/,
+  /fetch\('\/api\/shopping-categories'/,
   /const body=\{action:'add_batch',[\s\S]*category,/,
-]) requireMatch(newJs,pattern,'Shopping new browser helper must preserve dropdown/custom category submission');
+]) requireMatch(newJs,pattern,'Shopping new browser helper must register only explicitly checked custom categories and preserve add_batch submission');
+
+for(const pattern of [
+  /if\(!member\)return json\(\{ok:false,error:'ログインが必要です。'/,
+  /body\.csrf!==ctx\.session\.csrfToken/,
+  /normalizeShoppingCategoryName\(body\.name\)/,
+  /isValidShoppingCategoryName\(name\)/,
+  /INSERT OR IGNORE INTO shopping_category_catalog\(family_id,name,enabled,is_custom,created_by_member_id/,
+  /UPDATE shopping_category_catalog SET enabled=1,updated_at=CURRENT_TIMESTAMP[\s\S]*WHERE family_id=\? AND name=\? COLLATE NOCASE/,
+]) requireMatch(categoryApi,pattern,'Shopping category registration API must be CSRF-protected, validated, family-scoped, duplicate-safe, and re-enable existing options');
+if(/UPDATE\s+shopping_items|DELETE\s+FROM\s+shopping_items/i.test(categoryApi)){
+  throw new Error('category registration API must not rewrite/delete historical shopping item category strings');
+}
+requireMatch(contextRoutes,/url\.pathname==='\/api\/shopping-categories'[\s\S]*shoppingCategoryApi\(request,context\)/,'Shopping category registration API must be reachable through the retained context router');
 
 console.log('shopping category catalog contract ok');
