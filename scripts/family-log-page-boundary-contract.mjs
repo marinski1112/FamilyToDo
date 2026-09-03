@@ -53,7 +53,14 @@ for(const marker of [
   'overflow-wrap:normal',
   'word-break:keep-all',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log quick label geometry missing: ${marker}`);
-if(!familyLogLayout.includes('.family-log-timeline .family-log-edit')||!familyLogLayout.includes('display:none'))throw new Error('Family Log history must hide the redundant explicit edit button');
+for(const marker of [
+  '.family-log-timeline .family-log-edit{',
+  'position:absolute',
+  'clip:rect(0,0,0,0)',
+  '.family-log-timeline .family-log-edit:focus-visible{',
+  'position:static',
+  'overflow:visible',
+])if(!familyLogLayout.includes(marker))throw new Error(`Family Log accessible hidden edit control missing: ${marker}`);
 for(const marker of [
   "document.querySelectorAll('.family-log-row')",
   "if(e.target.closest('a,button,input'))return;",
@@ -108,4 +115,4 @@ for(const marker of [
 ])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, row-tap edit with redundant button hidden, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, row-tap edit with visually hidden keyboard-accessible button, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
