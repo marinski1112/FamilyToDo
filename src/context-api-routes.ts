@@ -9,6 +9,7 @@ import { childJournalApi } from './child-journal';
 import { calendarStampReadApi } from './calendar-stamp-api';
 import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';
 import { calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
+import { messageStampApi } from './message-stamp-api';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAction } from './google-tasks';
 import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
@@ -32,6 +33,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);
+  if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
   if(url.pathname==='/api/family-log') return await familyLogApi(request,context);
   if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);
