@@ -20,3 +20,10 @@
   word-break:keep-all;
   -webkit-line-clamp:unset;
 }
+
+/* History rows already open the edit sheet when the row itself is tapped.
+ * Hide the redundant explicit edit button while preserving that row gesture.
+ */
+.family-log-timeline .family-log-edit{
+  display:none;
+}
