@@ -8,7 +8,7 @@ import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
 import { calendarStampReadApi } from './calendar-stamp-api';
 import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';
-import { calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
+import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
 import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';
 import { messageStampApi } from './message-stamp-api';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
@@ -42,6 +42,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);
   if(url.pathname==='/api/calendar-stamp-placement') return await calendarStampPlacementApi(request,context);
   if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);
+  if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/png-sequence') return await calendarStampPngSequenceAdminApi(request,context);
   if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);
