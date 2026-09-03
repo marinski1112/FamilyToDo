@@ -32,16 +32,16 @@ try{
     const subjects=payload.subjects&&typeof payload.subjects==='object'?payload.subjects:{};
     const showAdultLogs=payload.showAdultLogs!==false;
     const groups=[];
-    const authoritativePrefixes=[];
+    const authoritativeSubjects=[];
     for(const subject of Object.values(subjects)){
       if(!subject||!Number(subject.id))continue;
       if(!showAdultLogs&&String(subject.subject_kind||'').toUpperCase()==='ADULT')continue;
-      // Sleep toggle needs live timer state; keep the existing overview sleep control
-      // authoritative until that state is projected into the page payload.
+      // Sleep toggle needs live timer state. It is intentionally not synthesized here;
+      // when a legacy overview section is safely replaced, its live sleep control is
+      // moved into the unified group before the old palette is removed.
       const subjectActions=actions.filter(action=>Number(action?.subject_id)===Number(subject.id)&&Number(action?.active??1)===1&&String(action?.mode||'QUICK')!=='SLEEP_TOGGLE');
       if(!subjectActions.length)continue;
       const subjectPrefix=`${subject.icon||'👤'} ${subject.name||subject.member_name||'対象'}`;
-      authoritativePrefixes.push(subjectPrefix);
       const section=document.createElement('section');section.className='family-log-overview-group family-log-unified-quick-group';section.dataset.subjectId=String(Number(subject.id));
       const title=document.createElement('h2');title.textContent=`${subjectPrefix} クイック`;section.appendChild(title);
       const grid=document.createElement('div');grid.className='family-log-quick-grid';
@@ -54,18 +54,23 @@ try{
         if(Array.from(label.textContent||'').length===4)label.classList.add('family-log-label-nowrap');
         button.append(icon,label);grid.appendChild(button);
       }
-      section.appendChild(grid);groups.push(section);
+      section.appendChild(grid);groups.push(section);authoritativeSubjects.push({subjectId:Number(subject.id),subjectPrefix,section});
     }
     if(groups.length){
       let overview=document.querySelector('.family-log-overview-quick');
       if(!overview){overview=document.createElement('div');overview.className='family-log-overview-quick';document.querySelector('.family-log-date-head')?.insertAdjacentElement('afterend',overview);}
-      // Once a subject has retained custom quick actions, hide only that subject's
-      // older per-type overview palette. Subjects without custom actions keep the
-      // server-rendered legacy fallback, so this transition never removes access.
-      overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)').forEach(section=>{
-        const heading=String(section.querySelector('h2')?.textContent||'').trim();
-        if(authoritativePrefixes.some(prefix=>heading.startsWith(prefix)))section.remove();
-      });
+      // The retained server page does not yet expose a stable subject id on legacy
+      // overview sections. Until it does, replace a legacy palette only when its full
+      // heading matches exactly one custom-action subject. This avoids prefix/name
+      // collisions and preserves the fallback rather than guessing.
+      const legacySections=[...overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)')];
+      for(const authority of authoritativeSubjects){
+        const matches=legacySections.filter(section=>String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix);
+        if(matches.length!==1)continue;
+        const legacy=matches[0],grid=authority.section.querySelector('.family-log-quick-grid');
+        legacy.querySelectorAll('.family-log-sleep-start,.family-log-sleep-stop').forEach(control=>grid?.appendChild(control));
+        legacy.remove();
+      }
       for(let i=groups.length-1;i>=0;i--)overview.prepend(groups[i]);
     }
   }

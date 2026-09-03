@@ -54,12 +54,15 @@ for(const marker of [
   "section.dataset.subjectId=String(Number(subject.id))",
   "family-log-quick-action':'family-log-form-action'",
   "button.dataset.quickActionId",
-  'const authoritativePrefixes=[]',
-  "overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)')",
-  'authoritativePrefixes.some(prefix=>heading.startsWith(prefix))',
-  "section.remove()",
+  'const authoritativeSubjects=[]',
+  "String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix",
+  'if(matches.length!==1)continue',
+  "legacy.querySelectorAll('.family-log-sleep-start,.family-log-sleep-stop')",
+  'grid?.appendChild(control)',
+  "legacy.remove()",
   "overview.prepend(groups[i])",
 ])if(!familyLogJs.includes(marker))throw new Error(`Family Log overview quick-action consumer missing: ${marker}`);
-if(!familyLogJs.includes('Subjects without custom actions keep the'))throw new Error('Family Log overview must preserve legacy fallback for subjects without custom quick actions');
+if(familyLogJs.includes('heading.startsWith(prefix)'))throw new Error('Family Log overview must not remove legacy palettes by ambiguous heading prefix');
+if(!familyLogJs.includes('preserves the fallback rather than guessing'))throw new Error('Family Log overview must preserve ambiguous legacy fallback sections');
 if(/DELETE FROM family_logs|UPDATE family_logs SET deleted_at/.test(familyLogJs))throw new Error('overview quick-action consumer must not mutate or delete retained history directly');
-console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry and authoritative overview quick actions ok');
+console.log('family-log-page-boundary: retained page, recurrence projection, mutation delegation, quick-label geometry, sleep preservation and collision-safe overview quick actions ok');
