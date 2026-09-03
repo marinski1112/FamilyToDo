@@ -50,7 +50,7 @@ form.onsubmit=async e=>{
     const d=await r.json().catch(()=>null);
     if(!r.ok||!d?.ok)throw new Error('投稿できませんでした。');
     location.href='/app/messages.php';
-  }catch{alert('投稿できませんでした。');}
+  }catch(err){alert('投稿できませんでした。');}
 };
 syncRequired();
 })();
