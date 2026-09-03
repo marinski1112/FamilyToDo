@@ -4,6 +4,8 @@ import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-stamp-asset-url.ts','utf8');
 const storage=fs.readFileSync('src/calendar-stamp-storage.ts','utf8');
 const sequence=fs.readFileSync('src/calendar-stamp-png-sequence-actions.ts','utf8');
+const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
+const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
 
 for(const token of [
   'calendarStampStorageKeyUrl',
@@ -34,9 +36,15 @@ assert.doesNotMatch(storage,/bucket[_-]?name|account[_-]?id|secret|signed[_-]?ur
 
 assert.match(source,/ASSET_PATH_RE=\/\^\[A-Za-z0-9\._~\/-\]\+\$\//,'ASSETS URLs must retain a conservative URL-safe path allowlist');
 assert.match(source,/UPLOAD is the migration-stable logical provider/,'UPLOAD/R2 must remain fail-closed until a concrete transport exists');
-assert.match(source,/intentionally unresolved until a concrete authenticated upload\/R2 transport and[\s\S]*binding exist/,'asset resolver must not pretend R2 exists before a binding is configured');
+assert.match(source,/intentionally unresolved until a concrete authenticated upload\/R2 transport and[\s\S]*binding exist/,'asset resolver must not pretend R2 exists before an authenticated transport is wired');
 assert.doesNotMatch(source,/https?:\/\//i,'stamp transport must remain same-origin and must not embed remote URLs');
 assert.doesNotMatch(source,/console\.|cookie|token|authorization|private_owner|family_id|member_id/i,'stamp asset URL resolution must not log or depend on sensitive/session/identity data');
+
+assert.match(wrangler,/"r2_buckets"\s*:\s*\[/,'Worker config must provision an R2 binding');
+assert.match(wrangler,/"binding"\s*:\s*"MEDIA"[\s\S]*"bucket_name"\s*:\s*"familytodo"/,'R2 MEDIA binding must target the user-provisioned familytodo bucket');
+assert.match(workerTypes,/interface R2Bucket/,'Worker type surface must declare R2Bucket');
+assert.match(workerTypes,/MEDIA:R2Bucket/,'Env must expose the MEDIA R2 binding');
+assert.doesNotMatch(workerTypes,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID/i,'R2 binding must not require persisted API credentials');
 
 assert.match(sequence,/normalizeCalendarStampStorageProvider\(input\.storageProvider\)/,'PNG sequence registration must use the shared provider contract');
 assert.match(sequence,/normalizeCalendarStampStorageKey\(frame\?\.storageKey/,'PNG frame registration must use shared backend-neutral key normalization');
@@ -44,4 +52,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS keeps its conservative same-origin URL allowlist; UPLOAD stays fail-closed and backend-neutral with a tenant-safe future R2 object-key seam');
+console.log('calendar stamp storage contract: ASSETS remains same-origin, MEDIA binds the familytodo R2 bucket, and UPLOAD metadata stays backend-neutral until authenticated upload/read transport is wired');
