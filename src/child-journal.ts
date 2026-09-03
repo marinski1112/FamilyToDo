@@ -56,7 +56,7 @@ export async function childJournalPage(request:Request,ctx:AppContext):Promise<R
   const member=requireMember(ctx);if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();const url=new URL(request.url);const timezone=String(member.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);const today=familyDate(timezone);const requestedMonth=String(url.searchParams.get('month')||'');const month=validMonth(requestedMonth)?requestedMonth:today.slice(0,7);const requestedSubject=Number(url.searchParams.get('subject_id')||0);
   const schema=await childJournalSchemaStatus(ctx.env.DB);if(!schema.foundation){const body='<div class="card"><h1>📔 成長日記</h1><p>データベース更新の反映待ちです。管理側でmigration適用後に自動で利用可能になります。</p><a class="btn gray" href="/app/family_log.php">家族ログへ戻る</a></div>';return html(layout('成長日記',body,'/app/family_log.php'));}
   const [subjects,calendarSync]=await Promise.all([
-    ctx.env.DB.prepare("SELECT id,name,subject_kind,icon FROM family_log_subjects WHERE family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD') ORDER BY COALESCE(sort_order,9999),id").bind(member.family_id).all<Row>(),
+    ctx.env.DB.prepare("SELECT id,name,subject_kind,icon FROM family_log_subjects WHERE family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD') ORDER BY id").bind(member.family_id).all<Row>(),
     childJournalCalendarStatus(ctx.env.DB,member.family_id),
   ]);
   const selected=subjects.results.find(x=>Number(x.id)===requestedSubject)||subjects.results[0]||null;const subjectId=selected?Number(selected.id):0;
