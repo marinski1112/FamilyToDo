@@ -29,6 +29,15 @@ for(const marker of [
   'updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB',
   "if(type==='task')",
   "イベントは完了チェックの対象外です。",
+  "const assignedCount=Number(assigned?.c||0);",
+  "const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees",
+  "if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'このタスクの担当者ではありません。'},403);",
+  'const done=assignedCount>0',
+  'JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?',
+  "const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';",
+  "const taskComplete=mode==='ALL'?assignedCount>0&&Number(done?.c||0)>=assignedCount:Number(done?.c||0)>0;",
+  'SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?',
+  "await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','task',id,{status:taskComplete?'completed':'pending'});",
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
   "if(type==='item')",
   'SELECT i.id,i.task_id FROM items i WHERE i.id=? AND i.family_id=?',
@@ -58,6 +67,7 @@ for(const forbiddenSql of [
   'current.completion_mode',
 ]) if(api.includes(forbiddenSql)) throw new Error(`toggle must not query non-schema completion column: ${forbiddenSql}`);
 if(api.includes('担当者が設定されていない定期タスクは完了できません。')) throw new Error('unassigned recurrence must remain completable by an active family member');
+if(api.includes('担当者が設定されていないタスクは完了できません。')) throw new Error('unassigned task must remain completable by an active family member');
 if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
 if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
