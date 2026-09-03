@@ -20,6 +20,11 @@ export type CalendarStampFrame = {
   duration_ms: number;
 };
 
+export type CalendarStampFrameReadResult = {
+  frames: CalendarStampFrame[];
+  invalidAssetIds: number[];
+};
+
 const DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS=62;
 const MAX_ROWS=256;
@@ -85,13 +90,7 @@ async function assertActiveMember(env:Env,familyId:number,memberId:number):Promi
   if(!row)throw new Error('calendar stamp member unavailable');
 }
 
-/**
- * Privacy-scoped, bounded read model for Calendar stamp rendering.
- * This deliberately performs no writes/materialization and is not wired into the
- * production Calendar page yet; callers can adopt it after the 1102 profile is stable.
- * Legacy or externally-mutated rows with unsafe renderer metadata fail closed here
- * instead of being exposed to a future DOM/asset resolver.
- */
+/** Privacy-scoped, bounded read model for Calendar stamp rendering. */
 export async function calendarStampPlacementsForRange(
   env:Env,
   familyId:number,
@@ -140,21 +139,22 @@ export async function calendarStampPlacementsForRange(
 }
 
 /**
- * Reads only ordered PNG-frame metadata for already privacy-authorized assets.
- * Asset ids are deduplicated, chunked, family-scoped and bounded to the same finite
- * placement set; storage keys are still screened before any browser projection.
+ * Reads ordered PNG-frame metadata for already privacy-authorized assets.
+ * Any malformed persisted row marks its whole asset invalid so the browser never
+ * receives a silently truncated animation sequence.
  */
 export async function calendarStampFramesForAssets(
   env:Env,
   familyId:number,
   memberId:number,
   assetIds:number[],
-):Promise<CalendarStampFrame[]>{
+):Promise<CalendarStampFrameReadResult>{
   if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid calendar stamp scope');
   await assertActiveMember(env,familyId,memberId);
   const ids=[...new Set(assetIds.filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,MAX_ROWS);
-  if(!ids.length)return [];
+  if(!ids.length)return {frames:[],invalidAssetIds:[]};
   const frames:CalendarStampFrame[]=[];
+  const invalidAssetIds=new Set<number>();
   for(let offset=0;offset<ids.length;offset+=FRAME_QUERY_CHUNK){
     const chunk=ids.slice(offset,offset+FRAME_QUERY_CHUNK);
     const placeholders=chunk.map(()=>'?').join(',');
@@ -165,7 +165,10 @@ export async function calendarStampFramesForAssets(
         AND a.active=1 AND a.asset_kind='ANIMATED' AND a.mime_type='image/png'
       ORDER BY f.asset_id,f.frame_index
       LIMIT ?`).bind(familyId,...chunk,chunk.length*MAX_FRAMES_PER_ASSET).all<CalendarStampFrame>();
-    for(const row of rows.results){if(safeCalendarStampFrame(row))frames.push(row);}
+    for(const row of rows.results){
+      if(safeCalendarStampFrame(row))frames.push(row);
+      else if(Number.isSafeInteger(row.asset_id)&&row.asset_id>0)invalidAssetIds.add(row.asset_id);
+    }
   }
-  return frames;
+  return {frames:frames.filter(frame=>!invalidAssetIds.has(frame.asset_id)),invalidAssetIds:[...invalidAssetIds]};
 }
