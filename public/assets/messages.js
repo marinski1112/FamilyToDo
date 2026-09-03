@@ -21,7 +21,7 @@
     const sync=()=>{if(textarea)textarea.required=selectedStampId<=0;clear.hidden=selectedStampId<=0;if(selectedStampId<=0)selected.textContent='';};
     clear.onclick=()=>{selectedStampId=0;options.querySelectorAll('.message-stamp-option').forEach(button=>button.classList.remove('selected'));sync();};
     const load=async()=>{
-      if(loaded)return;loaded=true;options.textContent='読み込み中…';
+      if(loaded)return;options.textContent='読み込み中…';
       try{
         const response=await fetch('/api/calendar-stamp-options',{credentials:'same-origin'}),data=await response.json().catch(()=>null);
         if(!response.ok||!data?.ok||!Array.isArray(data.options))throw new Error('load failed');
@@ -34,7 +34,8 @@
           options.appendChild(button);
         }
         if(!options.children.length)options.textContent='利用できるスタンプはありません。';
-      }catch{options.textContent='スタンプ候補を読み込めませんでした。';}
+        loaded=true;
+      }catch{loaded=false;options.textContent='スタンプ候補を読み込めませんでした。もう一度押すと再試行します。';}
     };
     toggle.onclick=async()=>{await load();options.classList.toggle('open');};
     sync();return ()=>selectedStampId;
@@ -87,7 +88,6 @@
         const image=document.createElement('img');image.className='message-stamp-attached';image.src=thumbnail;image.alt='スタンプ';image.tabIndex=0;image.setAttribute('role','button');image.setAttribute('aria-label','スタンプを拡大');
         const text=row.firstElementChild;if(text&&text.textContent.trim()==='スタンプ')text.hidden=true;
         if(text)text.insertAdjacentElement('afterend',image);else row.prepend(image);
-        row.querySelectorAll('.convert-shopping,.convert-task,.edit-message').forEach(button=>button.hidden=true);
         image.onclick=()=>openViewer(stamp);image.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openViewer(stamp);}};
       });
     }catch{/* stamp enhancement is optional; normal Messages stay usable */}
