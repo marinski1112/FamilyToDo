@@ -14,4 +14,6 @@ assert.match(source,/sharingEnabled:false/,'provisioning response must make shar
 assert.doesNotMatch(source,/console\.(?:log|info|warn|error)/,'provisioning must not log credential material');
 assert.doesNotMatch(source,/INSERT INTO location_devices\([\s\S]{0,300}?\bsecret\s*[,)]/i,'plaintext secret must never be a persisted location_devices column');
 
+await import('./location-device-api-contract.mjs');
+
 console.log('location-device-provisioning-contract: ok');
