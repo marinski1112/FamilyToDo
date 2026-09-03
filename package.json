@@ -25,8 +25,9 @@
     "check:static-assets": "node scripts/check-static-assets.mjs",
     "check:version": "node scripts/version-contract.mjs",
     "check:regression": "node scripts/regression-suite.mjs",
+    "check:location-device-api": "node scripts/location-device-api-contract.mjs",
     "check:legacy-regression": "node scripts/regression-legacy.mjs",
-    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:regression",
+    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:location-device-api && npm run check:regression",
     "test:legacy": "npm run check:legacy-regression"
   },
   "devDependencies": {
