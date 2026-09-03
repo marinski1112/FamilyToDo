@@ -31,7 +31,7 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
         thumbnailUrl:asset.active===1?calendarStampAssetUrl(asset,'thumbnail'):null,
         width:asset.width==null?null:Number(asset.width),
         height:asset.height==null?null:Number(asset.height),
-      }))},{headers:{'cache-control':'private, no-store'}});
+      }))},200,{'cache-control':'private, no-store'});
     }catch(error){return adminError(error);}
   }
   if(request.method!=='POST')return json({ok:false,error:'GET or POST only'},405);
