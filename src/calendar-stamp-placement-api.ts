@@ -31,7 +31,8 @@ export async function calendarStampPlacementApi(request:Request,context:any):Pro
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   let body:Record<string,unknown>;
   try{body=await bodyJson(request);}catch(error){if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);throw error;}
-  if(String(body.csrf||'')!==String(context.session?.csrfToken||''))return json({ok:false,error:'CSRF_FAILED'},403);
+  const csrf=String(body.csrf||''),expectedCsrf=String(context.session?.csrfToken||'');
+  if(!csrf||!expectedCsrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF_FAILED'},403);
   const assetId=Number(body.assetId||0),stampDate=String(body.stampDate||''),visibilityScope=body.visibilityScope==null?'FAMILY':String(body.visibilityScope);
   if(!Number.isSafeInteger(assetId)||assetId<=0)return json({ok:false,error:'INVALID_ASSET'},400);
   try{
