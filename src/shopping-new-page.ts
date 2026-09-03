@@ -59,9 +59,9 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
       <div class="batch-common-settings">
         <label for="shoppingCategorySelect">カテゴリー（全商品共通）</label>
         <select id="shoppingCategorySelect" aria-describedby="shoppingCategoryHint"><option value="">カテゴリーなし</option>${categoryOptionHtml}<option value="__custom__">自由入力</option></select>
-        <div id="shoppingCategoryCustomWrap" hidden><label for="shoppingCategoryCustom">自由入力</label><input type="text" id="shoppingCategoryCustom" maxlength="${SHOPPING_CATEGORY_MAX_LENGTH}" autocomplete="off" placeholder="カテゴリー名"></div>
+        <div id="shoppingCategoryCustomWrap" hidden><label for="shoppingCategoryCustom">自由入力</label><input type="text" id="shoppingCategoryCustom" maxlength="${SHOPPING_CATEGORY_MAX_LENGTH}" autocomplete="off" placeholder="カテゴリー名"><label class="checkrow"><input type="checkbox" id="shoppingCategoryRegister"><span>このカテゴリを登録</span></label></div>
         <input type="hidden" name="category" id="shoppingCategoryValue" value="">
-        <p class="small" id="shoppingCategoryHint">登録済みカテゴリーから選択できます。候補にない場合は「自由入力」を選んでください。</p>
+        <p class="small" id="shoppingCategoryHint">登録済みカテゴリーから選択できます。候補にない場合は「自由入力」を選び、必要なら家族の候補として登録できます。</p>
         <label>期限（全商品共通）</label>
         <input type="date" name="due_date" id="shoppingTaskDueDate" value="${defaultDate}">
         <label>担当者（全商品共通）</label>
@@ -76,7 +76,7 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
   ${privateContext?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1"></script>`}
-  <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-select-1"></script>`;
+  <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-register-1"></script>`;
 }
 
 /** Canonical server-rendered shopping-new page independent from the legacy app.ts monolith. */
