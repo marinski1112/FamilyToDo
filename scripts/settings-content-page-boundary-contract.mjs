@@ -33,10 +33,15 @@ for(const marker of [
   'id="calendarStampSequenceAdmin"',
   'id="calendarStampSequenceForm"',
   'name="csrf"',
+  'name="pngFrames"',
+  'type="file"',
+  'accept="image/png,.png"',
+  'multiple',
+  '2〜48枚',
+  '1枚4MiBまで',
+  'name="durationMs"',
   'name="frames"',
-  '2〜48フレーム',
-  '現在はASSETS登録のみです。',
-  'アプリ管理メディア（UPLOAD）',
+  '既存ASSETSのPNGパスから登録',
   'src="/assets/settings-stamps.js"',
 ]) if(!page.includes(marker)) throw new Error(`settings stamp administration marker missing: ${marker}`);
 if(/R2[^<]{0,80}(?:bucket|バケット)(?:名)?[^<]{0,80}(?:input|name=)/i.test(page))throw new Error('settings stamp UI must not request physical R2 bucket identity');
@@ -45,14 +50,21 @@ for(const marker of [
   "document.getElementById('calendarStampSequenceForm')",
   "lines.length<2||lines.length>48",
   'durationMs<40||durationMs>2000',
+  "files.length<2||files.length>48",
+  "file.size>4*1024*1024",
+  "fetch('/api/calendar-stamp-media/upload'",
+  "'x-csrf-token':csrf",
+  "headers:{'content-type':'image/png','x-csrf-token':csrf}",
+  "storageProvider='UPLOAD'",
   "fetch('/api/calendar-stamp-admin/png-sequence'",
   "credentials:'same-origin'",
   "headers:{'content-type':'application/json'}",
-  "csrf:text(data.get('csrf'))",
-  "thumbnailStorageKey:text(data.get('thumbnailStorageKey'))||null",
-  "setStatus('登録しました。カレンダーのスタンプ候補に表示されます。',true)",
+  'storageProvider,',
+  "csrf,",
+  "thumbnailStorageKey:storageProvider==='ASSETS'",
+  "setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true)",
 ]) if(!stampUi.includes(marker)) throw new Error(`settings stamp client marker missing: ${marker}`);
-if(/console\.|authorization|cookie|family_id|member_id|storage_provider|bucket[_-]?name|signed[_-]?url/i.test(stampUi))throw new Error('settings stamp client must not handle/log internal identity, storage-provider, or credential details');
+if(/console\.|authorization|cookie|family_id|member_id|bucket[_-]?name|signed[_-]?url/i.test(stampUi))throw new Error('settings stamp client must not handle/log internal identity, physical storage identity, or credential details');
 if(/payload\?\.(?:message|detail)|payload\.(?:message|detail)|response\.text\(/.test(stampUi))throw new Error('settings stamp UI must not surface raw server error detail');
 
 for(const marker of [
