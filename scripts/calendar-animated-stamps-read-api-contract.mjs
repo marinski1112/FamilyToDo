@@ -5,6 +5,7 @@ const model=fs.readFileSync(new URL('../src/calendar-stamps.ts',import.meta.url)
 const resolver=fs.readFileSync(new URL('../src/calendar-stamp-asset-url.ts',import.meta.url),'utf8');
 const storage=fs.readFileSync(new URL('../src/calendar-stamp-storage.ts',import.meta.url),'utf8');
 const placementApi=fs.readFileSync(new URL('../src/calendar-stamp-placement-api.ts',import.meta.url),'utf8');
+const actions=fs.readFileSync(new URL('../src/calendar-stamp-actions.ts',import.meta.url),'utf8');
 const shell=fs.readFileSync(new URL('../src/app-shell.ts',import.meta.url),'utf8');
 const ui=fs.readFileSync(new URL('../public/assets/calendar-stamp-ui.js',import.meta.url),'utf8');
 const fail=message=>{console.error(message);process.exit(1)};
@@ -57,10 +58,18 @@ if(/storage_key|thumbnail_storage_key|visibility_scope|private_owner_id|created_
 for(const needle of [
   'calendarStampOptionsApi',
   'calendarStampPlacementApi',
+  "request.method!=='POST'&&request.method!=='DELETE'",
   "csrf!==expectedCsrf",
   'createCalendarStampPlacement',
+  'deleteCalendarStampPlacement',
   "calendarStampAssetUrl(asset,'thumbnail')",
+  "request.method==='DELETE'",
+  "json({ok:false,error:'PLACEMENT_NOT_FOUND'},404)",
 ])if(!placementApi.includes(needle))fail(`Calendar stamp picker/placement API boundary missing: ${needle}`);
+for(const needle of [
+  'export async function deleteCalendarStampPlacement',
+  'WHERE id=? AND family_id=? AND created_by=?',
+])if(!actions.includes(needle))fail(`Calendar stamp creator-only placement deletion action missing: ${needle}`);
 
 if(!shell.includes('<script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}"></script>'))fail('Calendar shell must load the stamp renderer only through the Calendar asset bundle');
 for(const needle of [
@@ -80,6 +89,9 @@ for(const needle of [
   "fetch('/api/calendar-stamp-options'",
   "fetch('/api/calendar-stamp-placement'",
   "JSON.stringify({csrf,assetId,stampDate,visibilityScope})",
+  "method:'DELETE'",
+  "JSON.stringify({csrf,placementId})",
+  "viewerDelete.textContent",
   "pickerButton.textContent='スタンプ'",
   "selectedModalDate=()=>",
   "visibilityScope=String(pickerScope?.value||'FAMILY')",
@@ -87,4 +99,4 @@ for(const needle of [
 ])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
 if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
 
-console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, ASSETS/R2 safe storage resolution, malformed-sequence fail-closed behavior, picker placement flow and legacy GIF/WebP fallback ok');
+console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, ASSETS/R2 safe storage resolution, malformed-sequence fail-closed behavior, picker/create/delete placement flow and legacy GIF/WebP fallback ok');
