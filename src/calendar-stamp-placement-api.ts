@@ -1,4 +1,4 @@
-import {calendarStampAssetsForPicker,createCalendarStampPlacement,deleteCalendarStampPlacement} from './calendar-stamp-actions';
+import {calendarStampAssetsForPicker,createCalendarStampPlacement,deleteCalendarStampPlacement,updateCalendarStampPlacement} from './calendar-stamp-actions';
 import {calendarStampAssetUrl} from './calendar-stamp-asset-url';
 import {bodyJson,RequestBodyParseError} from './request-body';
 import {json} from './response';
@@ -27,7 +27,9 @@ export async function calendarStampOptionsApi(request:Request,context:any):Promi
 }
 
 export async function calendarStampPlacementApi(request:Request,context:any):Promise<Response>{
-  if(request.method!=='POST'&&request.method!=='DELETE')return json({ok:false,error:'POST or DELETE only'},405);
+  if(request.method!=='POST'&&request.method!=='DELETE'){
+    if(request.method!=='PATCH')return json({ok:false,error:'POST, PATCH or DELETE only'},405);
+  }
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   let body:Record<string,unknown>;
   try{body=await bodyJson(request);}catch(error){if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);throw error;}
@@ -44,6 +46,20 @@ export async function calendarStampPlacementApi(request:Request,context:any):Pro
       if(message.includes('member unavailable'))return json({ok:false,error:'AUTH_REQUIRED'},401);
       if(message.includes('invalid calendar stamp placement'))return json({ok:false,error:'INVALID_PLACEMENT'},400);
       return json({ok:false,error:'STAMP_DELETE_FAILED'},500);
+    }
+  }
+  if(request.method==='PATCH'){
+    if(body.visibilityScope==null||body.sortOrder==null)return json({ok:false,error:'INVALID_PLACEMENT'},400);
+    const placementId=Number(body.placementId||0),stampDate=String(body.stampDate||''),visibilityScope=String(body.visibilityScope),sortOrder=Number(body.sortOrder);
+    if(!Number.isSafeInteger(placementId)||placementId<=0||!Number.isSafeInteger(sortOrder))return json({ok:false,error:'INVALID_PLACEMENT'},400);
+    try{
+      const updated=await updateCalendarStampPlacement(context.env,s.familyId,s.memberId,placementId,{stampDate,visibilityScope:visibilityScope as 'FAMILY'|'PRIVATE',sortOrder});
+      return updated?json({ok:true,placementId,stampDate,visibilityScope,sortOrder}):json({ok:false,error:'PLACEMENT_NOT_FOUND'},404);
+    }catch(error){
+      const message=String((error as {message?:unknown})?.message||'');
+      if(message.includes('member unavailable'))return json({ok:false,error:'AUTH_REQUIRED'},401);
+      if(message.includes('invalid calendar stamp placement')||message.includes('invalid calendar stamp date')||message.includes('invalid calendar stamp visibility')||message.includes('invalid calendar stamp sort order'))return json({ok:false,error:'INVALID_PLACEMENT'},400);
+      return json({ok:false,error:'STAMP_UPDATE_FAILED'},500);
     }
   }
   const assetId=Number(body.assetId||0),stampDate=String(body.stampDate||''),visibilityScope=body.visibilityScope==null?'FAMILY':String(body.visibilityScope);
