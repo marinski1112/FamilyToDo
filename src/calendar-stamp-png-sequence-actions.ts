@@ -1,9 +1,10 @@
+import { normalizeCalendarStampStorageKey, normalizeCalendarStampStorageProvider, type CalendarStampStorageProvider } from './calendar-stamp-storage';
 import { utcNow } from './timezone';
 
 export type CalendarStampPngFrameInput={storageKey:string;durationMs?:number};
 export type CalendarStampPngSequenceInput={
   name:string;
-  storageProvider:'ASSETS'|'UPLOAD';
+  storageProvider:CalendarStampStorageProvider;
   frames:CalendarStampPngFrameInput[];
   thumbnailStorageKey?:string|null;
   width?:number|null;
@@ -11,7 +12,6 @@ export type CalendarStampPngSequenceInput={
 };
 
 const MAX_NAME_LENGTH=80;
-const MAX_STORAGE_KEY_LENGTH=512;
 const MIN_FRAMES=2;
 const MAX_FRAMES=48;
 const MIN_DURATION_MS=40;
@@ -20,16 +20,6 @@ const DEFAULT_DURATION_MS=120;
 
 function positiveId(value:number,label:string):void{
   if(!Number.isSafeInteger(value)||value<=0)throw new Error(`invalid ${label}`);
-}
-
-function storageKey(value:unknown,label:string):string{
-  const key=String(value??'').trim();
-  if(!key||key.length>MAX_STORAGE_KEY_LENGTH)throw new Error(`invalid ${label}`);
-  const lower=key.toLowerCase();
-  if(lower.startsWith('data:')||/^[A-Za-z][A-Za-z0-9+.-]*:/.test(key)||key.includes('://')||/[\u0000-\u001f\u007f]/.test(key))throw new Error(`invalid ${label}`);
-  const normalized=key.replaceAll('\\','/');
-  if(normalized.startsWith('//')||normalized.split('/').some(segment=>segment==='..'))throw new Error(`invalid ${label}`);
-  return key;
 }
 
 function dimension(value:unknown):number|null{
@@ -48,7 +38,7 @@ async function assertAdmin(env:Env,familyId:number,memberId:number):Promise<void
 /**
  * Registers metadata for a pre-provisioned sequence of PNG files.
  * The first frame is the canonical asset key and default thumbnail. No binary bytes,
- * remote URLs, or storage credentials enter this domain action.
+ * remote URLs, bucket names, or storage credentials enter this domain action.
  */
 export async function registerCalendarStampPngSequence(
   env:Env,
@@ -61,11 +51,10 @@ export async function registerCalendarStampPngSequence(
   await assertAdmin(env,familyId,memberId);
   const name=String(input.name??'').trim();
   if(!name||Array.from(name).length>MAX_NAME_LENGTH)throw new Error('invalid calendar stamp name');
-  const provider=input.storageProvider==='ASSETS'?'ASSETS':input.storageProvider==='UPLOAD'?'UPLOAD':null;
-  if(!provider)throw new Error('invalid calendar stamp storage provider');
+  const provider=normalizeCalendarStampStorageProvider(input.storageProvider);
   if(!Array.isArray(input.frames)||input.frames.length<MIN_FRAMES||input.frames.length>MAX_FRAMES)throw new Error('invalid calendar stamp PNG frame count');
   const frames=input.frames.map((frame,index)=>{
-    const key=storageKey(frame?.storageKey,`calendar stamp PNG frame ${index}`);
+    const key=normalizeCalendarStampStorageKey(frame?.storageKey,`calendar stamp PNG frame ${index}`);
     const raw=frame?.durationMs??DEFAULT_DURATION_MS;
     const durationMs=Number(raw);
     if(!Number.isSafeInteger(durationMs)||durationMs<MIN_DURATION_MS||durationMs>MAX_DURATION_MS)throw new Error('invalid calendar stamp PNG frame duration');
@@ -73,7 +62,7 @@ export async function registerCalendarStampPngSequence(
   });
   if(new Set(frames.map(frame=>frame.storageKey)).size!==frames.length)throw new Error('duplicate calendar stamp PNG frame key');
   const firstKey=frames[0]!.storageKey;
-  const thumbnail=input.thumbnailStorageKey==null||String(input.thumbnailStorageKey).trim()===''?firstKey:storageKey(input.thumbnailStorageKey,'calendar stamp thumbnail key');
+  const thumbnail=input.thumbnailStorageKey==null||String(input.thumbnailStorageKey).trim()===''?firstKey:normalizeCalendarStampStorageKey(input.thumbnailStorageKey,'calendar stamp thumbnail key');
   const width=dimension(input.width),height=dimension(input.height);
   if((width===null)!==(height===null))throw new Error('calendar stamp dimensions must be paired');
 
