@@ -17,6 +17,7 @@ export const activeRegressionGroups=[
       ['location-page-boundary','node scripts/location-page-boundary-contract.mjs'],
       ['location-owntracks-normalizer','node scripts/location-owntracks-normalizer-contract.mjs'],
       ['location-device-auth','node scripts/location-device-auth-contract.mjs'],
+      ['location-persistence','node scripts/location-persistence-contract.mjs'],
       ['login-page-boundary','node scripts/login-page-boundary-contract.mjs'],
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['family-invite-page-boundary','node scripts/family-invite-page-boundary-contract.mjs'],
