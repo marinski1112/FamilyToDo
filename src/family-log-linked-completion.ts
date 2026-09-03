@@ -1,5 +1,6 @@
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
+import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 
 type Row=Record<string,unknown>;
 
@@ -21,9 +22,9 @@ const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{
  * completion state of its linked Task or recurring occurrence.
  *
  * The caller owns authentication and Family Log persistence. This service owns
- * assignee authorization, zero-assignee family-member fallback, ANY/ALL aggregation,
- * completion history, notification cancellation and privacy-safe activity log
- * projection for the linked completion only.
+ * assignee authorization, canonical ordinary-task reconciliation, recurrence
+ * ANY/ALL aggregation, completion history, notification cancellation and
+ * privacy-safe activity log projection for the linked completion only.
  */
 export async function completeLinkedTargetFromFamilyLog(
   ctx:AppContext,
@@ -54,15 +55,9 @@ export async function completeLinkedTargetFromFamilyLog(
 
     await ctx.env.DB.prepare('INSERT INTO task_completions(task_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(task_id,member_id) DO UPDATE SET completed_at=excluded.completed_at')
       .bind(linkedTaskId,m.id,now).run();
-    const done=assignedCount>0
-      ? await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(linkedTaskId).first<Row>()
-      : await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?').bind(m.family_id,linkedTaskId).first<Row>();
-    const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';
-    const shouldComplete=mode==='ALL'
-      ? assignedCount>0&&Number(done?.c||0)>=assignedCount
-      : Number(done?.c||0)>0;
-    await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?')
-      .bind(shouldComplete?'completed':'pending',shouldComplete?m.id:null,shouldComplete?now:null,now,linkedTaskId,m.family_id).run();
+    await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,linkedTaskId,now);
+    const reconciled=await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(linkedTaskId,m.family_id).first<Row>();
+    const shouldComplete=String(reconciled?.status||'pending')==='completed';
     await ctx.env.DB.prepare('INSERT INTO task_completion_history(task_id,member_id,action,occurred_at) VALUES(?,?,?,?)')
       .bind(linkedTaskId,m.id,'COMPLETED',now).run();
     if(shouldComplete){
