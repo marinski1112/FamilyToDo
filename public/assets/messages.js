@@ -4,7 +4,7 @@
   const csrf=String(payload.csrf||'');
   const sameOriginUrl=value=>{try{const url=new URL(String(value||''),location.origin);return url.origin===location.origin?url.href:null;}catch{return null;}};
   const style=document.createElement('style');
-  style.textContent='.message-stamp-picker{margin:10px 0}.message-stamp-options{display:none;gap:8px;flex-wrap:wrap;margin-top:8px}.message-stamp-options.open{display:flex}.message-stamp-option{width:58px;height:58px;border:1px solid #ddd;border-radius:12px;background:#fff;padding:4px;display:grid;place-items:center}.message-stamp-option.selected{outline:3px solid currentColor}.message-stamp-option img{max-width:48px;max-height:48px;object-fit:contain}.message-stamp-selected{font-size:.9rem;margin-top:6px}.message-stamp-attached{display:block;width:min(128px,36vw);height:min(128px,36vw);object-fit:contain;margin:8px 0;cursor:pointer}.message-stamp-viewer{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.68);display:none;align-items:center;justify-content:center;padding:24px}.message-stamp-viewer.open{display:flex}.message-stamp-viewer img{max-width:min(88vw,520px);max-height:82vh;object-fit:contain}.message-stamp-viewer button{position:absolute;top:18px;right:18px}';
+  style.textContent='.message-stamp-picker{margin:10px 0}.message-stamp-options{display:none;gap:8px;flex-wrap:wrap;margin-top:8px}.message-stamp-options.open{display:flex}.message-stamp-option{width:58px;height:58px;border:1px solid #ddd;border-radius:12px;background:#fff;padding:4px;display:grid;place-items:center}.message-stamp-option.selected{outline:3px solid currentColor}.message-stamp-option img{max-width:48px;max-height:48px;object-fit:contain}.message-stamp-selected{font-size:.9rem;margin-top:6px}.message-stamp-attached{display:block;width:min(128px,36vw);height:min(128px,36vw);object-fit:contain;margin:8px 0;cursor:pointer}.message-stamp-viewer{position:fixed;inset:0;z-index:10000;background:transparent;display:none;align-items:center;justify-content:center;padding:24px;cursor:pointer}.message-stamp-viewer.open{display:flex}.message-stamp-viewer img{max-width:min(88vw,520px);max-height:82vh;object-fit:contain}';
   document.head.appendChild(style);
 
   const attachPicker=form=>{
@@ -59,27 +59,30 @@
   document.querySelectorAll('.edit-message').forEach(b=>b.onclick=()=>{editForm.reset();editForm.message_id.value=b.dataset.id||'';editForm.text.value=b.dataset.text||'';editForm.target_member_id.value=String(Number(b.dataset.target||0));const reminder=String(b.dataset.reminder||'').slice(0,16).replace(' ','T');editForm.reminder_at.value=reminder;editModal.classList.add('open');editModal.setAttribute('aria-hidden','false');setTimeout(()=>editForm.text.focus(),60)});
   editForm.onsubmit=async e=>{e.preventDefault();const body={action:'edit',id:Number(editForm.message_id.value),text:editForm.text.value.trim(),target_member_id:Number(editForm.target_member_id.value||0),reminder_at:editForm.reminder_at.value,csrf};if(!body.text){alert('伝言を入力してください。');return;}editSubmit.disabled=true;editStatus.textContent='保存しています…';try{const r=await fetch('/api/messages',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('編集に失敗しました');location.reload();}catch(_err){editStatus.textContent='';alert('編集に失敗しました');}finally{editSubmit.disabled=false}};
 
-  const viewer=document.createElement('div');viewer.className='message-stamp-viewer';viewer.setAttribute('aria-hidden','true');
-  const viewerImage=document.createElement('img');viewerImage.alt='スタンプ';
-  const viewerClose=document.createElement('button');viewerClose.type='button';viewerClose.className='btn gray';viewerClose.textContent='閉じる';viewer.append(viewerImage,viewerClose);document.body.appendChild(viewer);
-  let viewerTimer=0;
-  const closeViewer=()=>{if(viewerTimer)clearTimeout(viewerTimer);viewerTimer=0;viewer.classList.remove('open');viewer.setAttribute('aria-hidden','true');viewerImage.removeAttribute('src');};
-  viewerClose.onclick=closeViewer;viewer.onclick=e=>{if(e.target===viewer)closeViewer();};
+  const viewer=document.createElement('div');viewer.className='message-stamp-viewer';viewer.setAttribute('aria-hidden','true');viewer.setAttribute('role','dialog');viewer.setAttribute('aria-label','スタンプ');viewer.tabIndex=-1;
+  const viewerImage=document.createElement('img');viewerImage.alt='スタンプ';viewer.append(viewerImage);document.body.appendChild(viewer);
+  let viewerTimer=0,viewerReturnFocus=null;
+  const closeViewer=()=>{if(viewerTimer)clearTimeout(viewerTimer);viewerTimer=0;viewer.classList.remove('open');viewer.setAttribute('aria-hidden','true');viewerImage.removeAttribute('src');if(viewerReturnFocus instanceof HTMLElement)viewerReturnFocus.focus();viewerReturnFocus=null;};
+  viewer.onclick=()=>closeViewer();viewer.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();closeViewer();}};
   const normalizedFrames=stamp=>Array.isArray(stamp?.frames)?stamp.frames.flatMap(frame=>{const url=sameOriginUrl(frame?.url),durationMs=Number(frame?.durationMs||0);return url&&Number.isSafeInteger(durationMs)&&durationMs>=40&&durationMs<=2000?[{url,durationMs}]:[];}):[];
+  const preloadStampMedia=stamp=>{const frames=normalizedFrames(stamp);if(frames.length>=2){for(const frame of frames){const image=new Image();image.src=frame.url;}return;}const full=sameOriginUrl(stamp?.fullUrl);if(full){const image=new Image();image.src=full;}};
+  const preloadVisibleStamps=stamps=>{const preload=()=>stamps.slice(0,6).forEach(preloadStampMedia);if('requestIdleCallback'in window)requestIdleCallback(preload,{timeout:1200});else setTimeout(preload,120);};
   const openViewer=stamp=>{
-    if(viewerTimer)clearTimeout(viewerTimer);viewerTimer=0;viewer.classList.add('open');viewer.setAttribute('aria-hidden','false');
+    if(viewerTimer)clearTimeout(viewerTimer);viewerTimer=0;viewerReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;viewer.classList.add('open');viewer.setAttribute('aria-hidden','false');viewer.focus();
     const frames=normalizedFrames(stamp);
     if(frames.length>=2){
+      preloadStampMedia(stamp);
       if(matchMedia('(prefers-reduced-motion: reduce)').matches){viewerImage.src=frames[0].url;return;}
       let index=0;const play=()=>{const frame=frames[index%frames.length];viewerImage.src=frame.url;index++;viewerTimer=setTimeout(play,frame.durationMs);};play();return;
     }
     const full=sameOriginUrl(stamp?.fullUrl);if(!full){closeViewer();return;}
-    const url=new URL(full);url.searchParams.set('stamp_play',String(Date.now()));viewerImage.src=url.href;
+    viewerImage.src=full;
   };
   const renderMessageStamps=async()=>{
     try{
       const response=await fetch('/api/message-stamps',{credentials:'same-origin'}),data=await response.json().catch(()=>null);
       if(!response.ok||!data?.ok||!Array.isArray(data.stamps))return;
+      preloadVisibleStamps(data.stamps);
       const byMessage=new Map(data.stamps.map(stamp=>[Number(stamp?.messageId||0),stamp]));
       document.querySelectorAll('.message-row').forEach(row=>{
         const marker=row.querySelector('.delete-message[data-id],.edit-message[data-id],.convert-task[data-id],.convert-shopping[data-id]');

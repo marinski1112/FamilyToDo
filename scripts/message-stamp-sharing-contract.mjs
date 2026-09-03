@@ -69,11 +69,21 @@ for(const token of [
   'const normalizedFrames=stamp=>',
   'frames.length>=2',
   "matchMedia('(prefers-reduced-motion: reduce)').matches",
-  "url.searchParams.set('stamp_play',String(Date.now()))",
+  "background:transparent",
+  "viewer.append(viewerImage)",
+  "viewer.onclick=()=>closeViewer()",
+  "if(e.key==='Escape')",
+  'const preloadStampMedia=stamp=>',
+  'const preloadVisibleStamps=stamps=>',
+  'stamps.slice(0,6).forEach(preloadStampMedia)',
+  'viewerImage.src=full',
   "if(text&&text.textContent.trim()==='スタンプ')text.hidden=true",
   "image.className='message-stamp-attached'",
 ]) assert.ok(messages.includes(token),`Messages stamp rendering/playback missing: ${token}`);
+assert.doesNotMatch(messages,/background:rgba\(0,0,0/i,'Messages stamp viewer must not dim the whole page');
+assert.doesNotMatch(messages,/viewerClose|textContent='閉じる'/,'Messages stamp viewer must not render a normally visible close button');
+assert.doesNotMatch(messages,/stamp_play|Date\.now\(\)/,'Messages stamp playback must reuse canonical media URLs instead of defeating the browser cache on every open');
 assert.ok(messages.includes('catch{/* stamp enhancement is optional; normal Messages stay usable */}'),'stamp read enhancement must fail closed without breaking normal Messages');
 assert.doesNotMatch(messages,/row\.querySelectorAll\('\.convert-shopping,\.convert-task,\.edit-message'\).*hidden=true/,'stamp enhancement must not create a client-only action restriction that can be bypassed while attachment state is loading');
 
-console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, ASSETS/R2 rendering and sequential-PNG playback semantics');
+console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, transparent cache-friendly playback and sequential-PNG semantics');
