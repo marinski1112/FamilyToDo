@@ -5,6 +5,7 @@ import { archiveItemCompletionStatements, archiveShoppingCompletionStatements } 
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
+import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 import { buildStoredTaskRange } from './task-range-safety';
 import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
 import { APP_VERSION } from './version';
@@ -135,7 +136,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const assignees=makePrivate?[m.id]:(Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(memberId=>memberId>0):[]);
     await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id).run();
     if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,memberId,m.family_id)));
-    await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT member_id FROM task_assignees WHERE task_id=?)').bind(id,id).run();
+    if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);
 
     const linkedShopsForAssignees=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
     const linkedItemsForAssignees=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
@@ -157,7 +158,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       await ctx.env.DB.batch(linkedItemsForAssignees.results.map(row=>ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT member_id FROM item_assignees WHERE item_id=?)').bind(Number(row.id),Number(row.id))));
       await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) >= (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) > 0 THEN 'completed' ELSE 'pending' END, updated_at=? WHERE task_id=? AND family_id=?").bind(now,id,m.family_id).run();
     }
-    await ctx.env.DB.prepare("UPDATE tasks SET status=CASE WHEN (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id) >= (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id) > 0 THEN 'completed' ELSE 'pending' END, updated_at=? WHERE id=? AND family_id=?").bind(now,id,m.family_id).run();
 
     if(reminderAt&&assignees.length){
       const recipients=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();
