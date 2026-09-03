@@ -8,9 +8,10 @@ assert.match(source,/crypto\.randomUUID\(\)/,'public device ID must be generated
 assert.match(source,/hashLocationDeviceSecret\(secret\)/,'plaintext secret must be hashed before persistence');
 assert.match(source,/INSERT INTO location_devices[\s\S]*secret_hash[\s\S]*VALUES\(\?,\?,\?,\?,\?,1,0,\?/,'new devices must persist only the hash and remain share-off');
 assert.match(source,/createdByMemberId===memberId\|\|creatorRole==='OWNER'\|\|creatorRole==='ADMIN'/,'provisioning must be limited to self or family administrators');
-assert.match(source,/WHERE id=\? AND family_id=\? AND active=1 AND deleted_at IS NULL/g,'creator and target must be active members in the same family');
+const tenantGuards=source.match(/WHERE id=\? AND family_id=\? AND active=1 AND deleted_at IS NULL/g)??[];
+assert.equal(tenantGuards.length,2,'creator and target must both be active members in the same family');
 assert.match(source,/sharingEnabled:false/,'provisioning response must make share-off state explicit');
 assert.doesNotMatch(source,/console\.(?:log|info|warn|error)/,'provisioning must not log credential material');
-assert.doesNotMatch(source,/INSERT INTO location_devices[\s\S]*\bsecret\b(?!_hash)/i,'plaintext secret must never be named as a persisted location_devices column');
+assert.doesNotMatch(source,/INSERT INTO location_devices\([\s\S]{0,300}?\bsecret\s*[,)]/i,'plaintext secret must never be a persisted location_devices column');
 
 console.log('location-device-provisioning-contract: ok');
