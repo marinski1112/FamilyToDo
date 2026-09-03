@@ -40,6 +40,8 @@ for(const marker of [
   'csrf:',
   'el.checked=!checked',
   "data.status)==='completed'",
-]) assert.ok(taskEvents.includes(marker),`missing task-toggle contract marker: ${marker}`);
+  "document.querySelectorAll('details.expired-tasks')",
+  'section.open=true',
+]) assert.ok(taskEvents.includes(marker),`missing task-toggle/checklist visibility contract marker: ${marker}`);
 
-console.log('expired-task-contract: filtering, effective deadline alignment, visibility, compact shopping action, and toggle behavior ok');
+console.log('expired-task-contract: filtering, effective deadline alignment, visible overdue section, compact shopping action, and toggle behavior ok');
