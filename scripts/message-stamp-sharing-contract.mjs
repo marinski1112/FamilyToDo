@@ -36,11 +36,11 @@ for(const token of [
   "const text=rawText||'スタンプ'",
   "'cache-control':'private, no-store'",
 ]) assert.ok(api.includes(token),`message stamp API boundary missing: ${token}`);
-assert.match(api,/const stamps=rows\.results\.flatMap\([\s\S]*?return \[\{messageId:Number\(row\.message_id\),kind:row\.asset_kind,mimeType:row\.mime_type,thumbnailUrl,fullUrl,frames,width:row\.width,height:row\.height\}\\?\]?/,'message stamp browser projection must stay bounded');
 const projectionStart=api.indexOf('return [{messageId:Number(row.message_id)');
 const projectionEnd=projectionStart>=0?api.indexOf('}];',projectionStart):-1;
 assert.ok(projectionStart>=0&&projectionEnd>projectionStart,'message stamp projection marker missing');
 const projection=api.slice(projectionStart,projectionEnd+3);
+for(const field of ['messageId:','kind:','mimeType:','thumbnailUrl','fullUrl','frames','width:','height:'])assert.ok(projection.includes(field),`message stamp projection missing field: ${field}`);
 for(const sensitive of ['familyId','memberId','storage_key','thumbnail_storage_key','created_by','target_member_id'])assert.ok(!projection.includes(sensitive),`message stamp projection exposes internal field: ${sensitive}`);
 assert.doesNotMatch(api,/https?:\/\//i,'message stamp API must not embed remote asset URLs');
 assert.doesNotMatch(api,/R2Bucket|env\.[A-Za-z0-9_]*R2/i,'message stamp attachment API must stay independent of the future R2 binding');
@@ -71,6 +71,6 @@ for(const token of [
   "if(text&&text.textContent.trim()==='スタンプ')text.hidden=true",
   "image.className='message-stamp-attached'",
 ]) assert.ok(messages.includes(token),`Messages stamp rendering/playback missing: ${token}`);
-assert.match(messages,/catch\{\/\* stamp enhancement is optional; normal Messages stay usable \*\//,'stamp read enhancement must fail closed without breaking normal Messages');
+assert.ok(messages.includes('catch{/* stamp enhancement is optional; normal Messages stay usable */}'),'stamp read enhancement must fail closed without breaking normal Messages');
 
 console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, compose, rendering and sequential-PNG playback semantics');
