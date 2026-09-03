@@ -2,12 +2,51 @@
 'use strict';
 try{
   if(location.pathname!=='/app/settings_family_log.php')return;
+  const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const head=document.querySelector('.family-log-management-head');
   if(head)[...head.children].forEach(element=>{if(element.tagName!=='H1')element.remove();});
 
+  const payloadElement=document.getElementById('familyLogPayload');
+  let payload={};
+  try{payload=JSON.parse(payloadElement?.textContent||'{}');}catch(error){console.warn('[family-log-management-ui] payload parse failed',error);}
+  const quickActions=Array.isArray(payload.quickActions)?payload.quickActions:[];
+  const subjects=payload.subjects&&typeof payload.subjects==='object'?payload.subjects:{};
+
+  const quickManage=document.getElementById('familyLogQuickManage');
+  const quickManageTitle=quickManage?.querySelector('.section-head h3');
+  const quickAdd=document.getElementById('familyLogQuickAdd');
+  if(quickManageTitle)quickManageTitle.textContent='クイックタスク';
+  if(quickAdd)quickAdd.textContent='＋ クイックタスク';
+  const quickManageNote=quickManage?.querySelector('p.small');
+  if(quickManageNote)quickManageNote.textContent='ワンタッチ・入力して記録・睡眠開始/終了を、クイックタスクとして対象ごとに編集できます。';
+
   const originalOpen=document.getElementById('familyLogSubjectOpen');
   const subjectRows=[...document.querySelectorAll('.family-log-management-row:not(.family-chore-management-row)')];
-  if(!originalOpen||!subjectRows.length)return;
+  const subjectCard=subjectRows[0]?.closest('.card')||null;
+
+  if(subjectCard){
+    const allQuickCard=document.createElement('div');
+    allQuickCard.className='card family-log-all-quick-tasks';
+    allQuickCard.innerHTML=`<div class="section-head"><div><h2>⚡ クイックタスク</h2><p class="small">すべての対象のクイックタスクをここから確認・管理できます。</p></div></div><div class="family-log-all-quick-task-list"></div>`;
+    const allQuickList=allQuickCard.querySelector('.family-log-all-quick-task-list');
+    const rows=quickActions.map(action=>{
+      const subjectId=Number(action?.subject_id||0);
+      const subject=subjects[String(subjectId)]||null;
+      if(!subjectId||!subject)return '';
+      const inactive=Number(action?.active)===0;
+      const mode=String(action?.mode||'QUICK');
+      const modeLabel=mode==='FORM'?'入力':mode==='SLEEP_TOGGLE'?'睡眠':'ワンタッチ';
+      const subjectLabel=`${subject.icon||'👤'} ${subject.name||'対象'}`;
+      return `<div class="family-log-management-row family-log-all-quick-task-row"><span><strong>${escapeHtml(action?.icon||'＋')} ${escapeHtml(action?.name||'クイックタスク')}</strong><small>${escapeHtml(subjectLabel)} · ${escapeHtml(modeLabel)}${inactive?' · 非表示':''}</small></span><a class="btn gray small" href="/app/settings_family_log.php?subject=${subjectId}" aria-label="${escapeHtml(subject.name||'対象')}のクイックタスクを管理">管理</a></div>`;
+    }).filter(Boolean);
+    allQuickList.innerHTML=rows.join('')||'<p class="small">クイックタスクはまだありません。対象の管理から追加できます。</p>';
+    subjectCard.insertAdjacentElement('afterend',allQuickCard);
+  }
+
+  if(!originalOpen||!subjectRows.length){
+    document.documentElement.dataset.familyLogManagementUi='ready';
+    return;
+  }
 
   originalOpen.id='familyLogSubjectOpenCore';
   originalOpen.hidden=true;
@@ -25,6 +64,10 @@ try{
   style.textContent=`
     .family-log-management-head{grid-template-columns:minmax(0,1fr)!important}
     .family-log-management-head>:not(h1){display:none!important}
+    .family-log-all-quick-task-list{display:grid;gap:2px}
+    .family-log-all-quick-task-row{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;gap:10px!important}
+    .family-log-all-quick-task-row>span{min-width:0}
+    .family-log-all-quick-task-row small{display:block;margin-top:3px;color:#64748b}
     .family-log-subject-manager{position:fixed;inset:0;z-index:220;display:none;align-items:flex-end;justify-content:center;background:rgba(15,23,42,.34);padding:14px 10px calc(14px + env(safe-area-inset-bottom))}
     .family-log-subject-manager.open{display:flex}
     .family-log-subject-manager-panel{width:min(560px,100%);max-height:min(78vh,680px);overflow:auto;background:#fff;border-radius:18px 18px 14px 14px;box-shadow:0 20px 60px rgba(15,23,42,.28);padding:14px}
