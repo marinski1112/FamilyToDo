@@ -16,6 +16,42 @@ export const LOCATION_PRIVACY_DEFAULTS:LocationPrivacyDefaults=Object.freeze({
   persistHistory:false,
 });
 
+/**
+ * Sensor identity is kept at the ingestion boundary. Domain consumers must not
+ * depend on provider-specific payloads, so future Android collection can reuse
+ * the same latest/history/query contracts as OwnTracks.
+ */
+export type LocationProvider='OWNTRACKS'|'FAMILYTODO_ANDROID';
+
+export type LocationTrigger='PING'|'MOVE'|'ENTER'|'LEAVE'|'MANUAL'|'UNKNOWN';
+
+/**
+ * Canonical provider-neutral point produced after provider payload validation.
+ * `recordedAt` is the sensor timestamp and `receivedAt` is the Worker receipt
+ * timestamp. Optional telemetry is omitted when the provider does not supply a
+ * trustworthy value; raw provider JSON never belongs in this shape.
+ */
+export type NormalizedLocationPoint=Readonly<{
+  provider:LocationProvider;
+  familyId:number;
+  memberId:number;
+  deviceId:string;
+  latitude:number;
+  longitude:number;
+  recordedAt:string;
+  receivedAt:string;
+  trigger:LocationTrigger;
+  accuracyMeters?:number;
+  altitudeMeters?:number;
+  speedMetersPerSecond?:number;
+  headingDegrees?:number;
+  batteryPercent?:number;
+}>;
+
+/** Latitude/longitude guards are shared by provider adapters before persistence. */
+export const isValidLatitude=(value:number):boolean=>Number.isFinite(value)&&value>=-90&&value<=90;
+export const isValidLongitude=(value:number):boolean=>Number.isFinite(value)&&value>=-180&&value<=180;
+
 export type LocationRoadmapItem=Readonly<{
   key:'owntracks'|'latest'|'history'|'places'|'distance';
   label:string;
