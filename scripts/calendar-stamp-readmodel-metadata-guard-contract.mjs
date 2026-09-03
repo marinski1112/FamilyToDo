@@ -25,8 +25,8 @@ for(const token of [
   'cursorSort=last.sort_order',
   'cursorId=last.placement_id',
   'calendarStampFramesForAssets',
-  'frame.frame_index',
-  'frame.duration_ms',
+  'row.frame_index',
+  'row.duration_ms',
 ]) assert.ok(source.includes(token),`Calendar stamp read-model metadata guard missing: ${token}`);
 
 assert.match(source,/const MAX_STORAGE_KEY_LENGTH=512/,'storage keys must remain bounded');
