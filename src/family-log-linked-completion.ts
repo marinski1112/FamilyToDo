@@ -1,5 +1,6 @@
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
+import { updateRecurrenceOccurrenceAggregateCompat } from './recurrence-completion-state';
 import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 
 type Row=Record<string,unknown>;
@@ -69,7 +70,7 @@ export async function completeLinkedTargetFromFamilyLog(
   }
 
   if(linkedOccurrenceId){
-    const occ=await ctx.env.DB.prepare('SELECT o.id,o.recurrence_rule_id,r.task_id,r.completion_mode FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id WHERE o.id=? AND o.family_id=? LIMIT 1')
+    const occ=await ctx.env.DB.prepare('SELECT o.id,o.recurrence_rule_id,r.task_id,t.completion_mode FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE o.id=? AND o.family_id=? LIMIT 1')
       .bind(linkedOccurrenceId,m.family_id).first<Row>();
     if(!occ)return {ok:false,message:'関連する定期タスク発生日が見つからないため自動完了しませんでした。'};
     const taskId=Number(occ.task_id||0);
@@ -94,8 +95,13 @@ export async function completeLinkedTargetFromFamilyLog(
     const isComplete=mode==='ALL'
       ? assignedCount>0&&Number(done?.c||0)>=assignedCount
       : Number(done?.c||0)>0;
-    await ctx.env.DB.prepare('UPDATE recurrence_occurrences SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?')
-      .bind(isComplete?'completed':'pending',isComplete?m.id:null,isComplete?now:null,now,linkedOccurrenceId,m.family_id).run();
+    await updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB,{
+      occurrenceId:linkedOccurrenceId,
+      familyId:m.family_id,
+      isComplete,
+      completedBy:isComplete?m.id:null,
+      now,
+    });
     await logActivity(ctx,'COMPLETED','recurrence',linkedOccurrenceId,{occurrence_id:linkedOccurrenceId,rule_id:Number(occ.recurrence_rule_id||0),status:isComplete?'completed':'pending',source:'family_log',family_log_id:familyLogId});
     return {ok:true,message:'記録者を定期タスク発生日の完了者として記録しました。',target_type:'recurrence',target_id:linkedOccurrenceId,status:isComplete?'completed':'pending'};
   }
