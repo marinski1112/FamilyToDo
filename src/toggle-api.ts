@@ -72,27 +72,26 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     if(!task)return json({ok:false,error:'タスクが見つかりません。'},404);
     if(String(task.task_kind||'').toLowerCase()==='event')return json({ok:false,error:'イベントは完了チェックの対象外です。'},409);
     const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(id).first<Row>();
-    const actorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
-    if(Number(assigned?.c||0)>0&&!actorAssigned)return json({ok:false,error:'このタスクの担当者ではありません。'},403);
-    if(completed){
-      await ctx.env.DB.prepare('INSERT INTO task_completions(task_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(task_id,member_id) DO UPDATE SET completed_at=excluded.completed_at').bind(id,m.id,now).run();
-      const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(id).first<Row>();
-      const shouldComplete=Number(assigned?.c||0)>0&&(String(task.completion_mode||'ANY').toUpperCase()==='ALL'?Number(done?.c||0)>=Number(assigned?.c||0):Number(done?.c||0)>0);
-      await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(shouldComplete?'completed':'pending',shouldComplete?m.id:null,shouldComplete?now:null,now,id,m.family_id).run();
-    }else{
-      await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=? AND member_id=?').bind(id,m.id).run();
-      const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(id).first<Row>();
-      const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(id).first<Row>();
-      const mode=String(task.completion_mode||'ANY').toUpperCase();
-      const stillComplete=mode==='ALL'?Number(assigned?.c||0)>0&&Number(done?.c||0)>=Number(assigned?.c||0):Number(done?.c||0)>0;
-      const latest=stillComplete?await ctx.env.DB.prepare('SELECT member_id,completed_at FROM task_completions WHERE task_id=? ORDER BY completed_at DESC,member_id DESC LIMIT 1').bind(id).first<Row>():null;
-      await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(stillComplete?'completed':'pending',stillComplete?Number(latest?.member_id||0)||null:null,stillComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run();
-    }
-    if(String((await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>())?.status||'pending')==='completed')await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,id,m.family_id).run();
+    const assignedCount=Number(assigned?.c||0);
+    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(id,m.id).first<Row>():null;
+    if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'このタスクの担当者ではありません。'},403);
+    if(completed)await ctx.env.DB.prepare('INSERT INTO task_completions(task_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(task_id,member_id) DO UPDATE SET completed_at=excluded.completed_at').bind(id,m.id,now).run();
+    else await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=? AND member_id=?').bind(id,m.id).run();
+    const done=assignedCount>0
+      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(id).first<Row>()
+      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?').bind(m.family_id,id).first<Row>();
+    const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';
+    const taskComplete=mode==='ALL'?assignedCount>0&&Number(done?.c||0)>=assignedCount:Number(done?.c||0)>0;
+    const taskLatest=taskComplete
+      ?assignedCount>0
+        ?await ctx.env.DB.prepare('SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=? ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1').bind(id).first<Row>()
+        :await ctx.env.DB.prepare('SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=? ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
+      :null;
+    await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(taskComplete?'completed':'pending',taskComplete?Number(taskLatest?.member_id||0)||null:null,taskComplete?String(taskLatest?.completed_at||now):null,now,id,m.family_id).run();
+    if(taskComplete)await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,id,m.family_id).run();
     await ctx.env.DB.prepare('INSERT INTO task_completion_history(task_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run();
-    await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','task',id,{status:completed?'completed':'pending'});
-    const latest=await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
-    return commitSession(json({ok:true,status:String(latest?.status||'pending')}),ctx.session,ctx.env.APP_SECRET);
+    await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','task',id,{status:taskComplete?'completed':'pending'});
+    return commitSession(json({ok:true,status:taskComplete?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);
   }
 
   if(type==='item'){
