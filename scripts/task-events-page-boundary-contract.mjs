@@ -57,6 +57,14 @@ if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new 
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('retained taskView boundary regressed');
 if(!routes.includes("if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"))throw new Error('unified checklist route changed');
-for(const marker of ["el.matches('.toggle[data-type][data-id]')","fetch('/api/toggle'","occurrence_id:Number(el.dataset.occurrenceId||0)"])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
+for(const marker of [
+  "el.matches('.toggle[data-type][data-id]')",
+  "fetch('/api/toggle'",
+  "occurrence_id:Number(el.dataset.occurrenceId||0)",
+  "completedTasks.className='completed-tasks'",
+  "summary.textContent=`完了済み ${count}件`",
+  "row.querySelector('.task-main-row .task-main > .toggle[data-type=\"task\"],.task-main-row .task-main > .toggle[data-type=\"recurrence\"]')",
+  "moveCompletedTaskRow(el,serverCompleted)",
+])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, privacy, bounded D1 linkage, overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact completed tasks, privacy, bounded D1 linkage, overdue classification and completion transport ok');
