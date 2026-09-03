@@ -37,11 +37,13 @@ for(const token of [
   'CREATE TRIGGER calendar_stamp_asset_frames_family_insert',
   'CREATE TRIGGER calendar_stamp_asset_frames_family_update',
   "asset_kind='ANIMATED' AND mime_type='image/png'",
+  "instr(lower(storage_key),'://')=0",
+  "lower(storage_key) NOT LIKE 'data:%'",
   "RAISE(ABORT,'calendar stamp frame asset mismatch')",
 ]) assert.ok(frameMigration.includes(token),`calendar PNG frame foundation missing: ${token}`);
 
 assert.doesNotMatch(migration,/calendar_id/i,'calendar stamps must not couple to Google Calendar schedule identifiers');
 assert.doesNotMatch(frameMigration,/calendar_id|private_owner_id|created_by/i,'PNG frame metadata must stay asset-scoped and must not duplicate placement identity');
-assert.doesNotMatch(frameMigration,/https?:|data:/i,'PNG frame persistence must store opaque same-provider keys rather than remote or embedded URLs');
+assert.doesNotMatch(frameMigration,/https?:\/\//i,'PNG frame persistence must not contain remote asset URLs');
 
 console.log('calendar animated stamps foundation contract: tenant-safe assets/placements plus bounded ordered PNG-frame metadata and storage-provider extensibility ok');
