@@ -9,8 +9,9 @@ try {
   const categorySelect=document.getElementById('shoppingCategorySelect');
   const categoryCustomWrap=document.getElementById('shoppingCategoryCustomWrap');
   const categoryCustom=document.getElementById('shoppingCategoryCustom');
+  const categoryRegister=document.getElementById('shoppingCategoryRegister');
   const categoryValue=document.getElementById('shoppingCategoryValue');
-  if(!list||!add||!form||!categorySelect||!categoryCustomWrap||!categoryCustom||!categoryValue) throw new Error('買い物フォームの初期化対象が見つかりません。');
+  if(!list||!add||!form||!categorySelect||!categoryCustomWrap||!categoryCustom||!categoryRegister||!categoryValue) throw new Error('買い物フォームの初期化対象が見つかりません。');
   let payload={};
   try{payload=JSON.parse(payloadNode?.textContent||'{}');}catch{payload={};}
   root.dataset.shoppingNewJs='ready';
@@ -28,6 +29,7 @@ try {
   const syncCategory=()=>{
     const custom=String(categorySelect.value||'')==='__custom__';
     categoryCustomWrap.hidden=!custom;
+    if(!custom)categoryRegister.checked=false;
     categoryValue.value=custom?String(categoryCustom.value||'').trim():String(categorySelect.value||'').trim();
     return categoryValue.value;
   };
@@ -72,6 +74,7 @@ try {
     const category=String(fd.get('category')||'').trim();
     if(categorySelect.value==='__custom__'&&!category){alert('自由入力のカテゴリー名を入力してください。');categoryCustom.focus();return;}
     if(category.length>MAX_CATEGORY_UNITS){alert(`カテゴリーは${MAX_CATEGORY_UNITS}文字以内で入力してください。`);return;}
+    const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
     const rawTaskId=String(fd.get('task_id')??'').trim();
@@ -82,7 +85,14 @@ try {
     if(assignees.some(id=>!id)){alert('担当者の指定が不正です。');return;}
     const body={action:'add_batch',csrf,products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,task_id:taskId,assignees,memo:memo};
     const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
-    try{const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');location.href='/app/shopping.php';}
+    try{
+      if(registerCategory){
+        const categoryResponse=await fetch('/api/shopping-categories',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,name:category})});
+        const categoryData=await categoryResponse.json().catch(()=>null);
+        if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
+      }
+      const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');location.href='/app/shopping.php';
+    }
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
     finally{if(button)button.disabled=false;}
   };
