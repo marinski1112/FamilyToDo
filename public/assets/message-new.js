@@ -22,7 +22,7 @@ const syncRequired=()=>{if(textarea)textarea.required=selectedStampId<=0;clear.h
 clear.addEventListener('click',()=>{selectedStampId=0;options.querySelectorAll('.message-stamp-option').forEach(button=>button.classList.remove('selected'));syncRequired();});
 
 const loadOptions=async()=>{
-  if(loaded)return;loaded=true;options.textContent='読み込み中…';
+  if(loaded)return;options.textContent='読み込み中…';
   try{
     const response=await fetch('/api/calendar-stamp-options',{credentials:'same-origin'});
     const payload=await response.json().catch(()=>null);
@@ -36,7 +36,8 @@ const loadOptions=async()=>{
       options.appendChild(button);
     }
     if(!options.children.length)options.textContent='利用できるスタンプはありません。';
-  }catch{options.textContent='スタンプ候補を読み込めませんでした。';}
+    loaded=true;
+  }catch{loaded=false;options.textContent='スタンプ候補を読み込めませんでした。もう一度押すと再試行します。';}
 };
 toggle.addEventListener('click',async()=>{await loadOptions();options.classList.toggle('open');});
 
