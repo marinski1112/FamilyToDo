@@ -1,6 +1,7 @@
 (()=>{
   'use strict';
   const payload=JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}');
+  document.querySelectorAll('details.expired-tasks').forEach(section=>{section.open=true;});
   document.addEventListener('change',async event=>{
     const el=event.target;
     if(!(el instanceof HTMLInputElement)||!el.matches('.toggle[data-type][data-id]'))return;
