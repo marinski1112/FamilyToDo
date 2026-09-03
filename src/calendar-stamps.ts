@@ -13,6 +13,18 @@ export type CalendarStampPlacement = {
   height: number | null;
 };
 
+export type CalendarStampFrame = {
+  asset_id: number;
+  frame_index: number;
+  storage_key: string;
+  duration_ms: number;
+};
+
+export type CalendarStampFrameReadResult = {
+  frames: CalendarStampFrame[];
+  invalidAssetIds: number[];
+};
+
 const DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS=62;
 const MAX_ROWS=256;
@@ -20,6 +32,8 @@ const MAX_STORAGE_KEY_LENGTH=512;
 const MAX_DIMENSION=4096;
 const MIN_SORT_ORDER=-1000;
 const MAX_SORT_ORDER=1000;
+const MAX_FRAMES_PER_ASSET=48;
+const FRAME_QUERY_CHUNK=64;
 const SCHEME_RE=/^[A-Za-z][A-Za-z0-9+.-]*:/;
 
 function dayNumber(value:string):number{
@@ -51,7 +65,6 @@ function safeCalendarStampPlacement(row:CalendarStampPlacement,fromDay:number,to
   if(row.visibility_scope!=='FAMILY'&&row.visibility_scope!=='PRIVATE')return false;
   if(row.asset_kind!=='ANIMATED'&&row.asset_kind!=='STATIC')return false;
   if(!['image/gif','image/webp','image/png'].includes(row.mime_type))return false;
-  if(row.asset_kind==='ANIMATED'&&row.mime_type==='image/png')return false;
   if(row.storage_provider!=='ASSETS'&&row.storage_provider!=='UPLOAD')return false;
   if(!safeStorageKey(row.storage_key))return false;
   if(row.thumbnail_storage_key!==null&&!safeStorageKey(row.thumbnail_storage_key))return false;
@@ -64,19 +77,20 @@ function safeCalendarStampPlacement(row:CalendarStampPlacement,fromDay:number,to
   }
 }
 
+function safeCalendarStampFrame(row:CalendarStampFrame):boolean{
+  return Number.isSafeInteger(row.asset_id)&&row.asset_id>0
+    &&Number.isSafeInteger(row.frame_index)&&row.frame_index>=0&&row.frame_index<MAX_FRAMES_PER_ASSET
+    &&safeStorageKey(row.storage_key)
+    &&Number.isSafeInteger(row.duration_ms)&&row.duration_ms>=40&&row.duration_ms<=2000;
+}
+
 async function assertActiveMember(env:Env,familyId:number,memberId:number):Promise<void>{
   const row=await env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1')
     .bind(memberId,familyId).first<{id:number}>();
   if(!row)throw new Error('calendar stamp member unavailable');
 }
 
-/**
- * Privacy-scoped, bounded read model for Calendar stamp rendering.
- * This deliberately performs no writes/materialization and is not wired into the
- * production Calendar page yet; callers can adopt it after the 1102 profile is stable.
- * Legacy or externally-mutated rows with unsafe renderer metadata fail closed here
- * instead of being exposed to a future DOM/asset resolver.
- */
+/** Privacy-scoped, bounded read model for Calendar stamp rendering. */
 export async function calendarStampPlacementsForRange(
   env:Env,
   familyId:number,
@@ -122,4 +136,39 @@ export async function calendarStampPlacementsForRange(
     cursorId=last.placement_id;
   }
   return placements;
+}
+
+/**
+ * Reads ordered PNG-frame metadata for already privacy-authorized assets.
+ * Any malformed persisted row marks its whole asset invalid so the browser never
+ * receives a silently truncated animation sequence.
+ */
+export async function calendarStampFramesForAssets(
+  env:Env,
+  familyId:number,
+  memberId:number,
+  assetIds:number[],
+):Promise<CalendarStampFrameReadResult>{
+  if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid calendar stamp scope');
+  await assertActiveMember(env,familyId,memberId);
+  const ids=[...new Set(assetIds.filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,MAX_ROWS);
+  if(!ids.length)return {frames:[],invalidAssetIds:[]};
+  const frames:CalendarStampFrame[]=[];
+  const invalidAssetIds=new Set<number>();
+  for(let offset=0;offset<ids.length;offset+=FRAME_QUERY_CHUNK){
+    const chunk=ids.slice(offset,offset+FRAME_QUERY_CHUNK);
+    const placeholders=chunk.map(()=>'?').join(',');
+    const rows=await env.DB.prepare(`SELECT f.asset_id,f.frame_index,f.storage_key,f.duration_ms
+      FROM calendar_stamp_asset_frames f
+      JOIN calendar_stamp_assets a ON a.id=f.asset_id AND a.family_id=f.family_id
+      WHERE f.family_id=? AND f.asset_id IN (${placeholders})
+        AND a.active=1 AND a.asset_kind='ANIMATED' AND a.mime_type='image/png'
+      ORDER BY f.asset_id,f.frame_index
+      LIMIT ?`).bind(familyId,...chunk,chunk.length*MAX_FRAMES_PER_ASSET).all<CalendarStampFrame>();
+    for(const row of rows.results){
+      if(safeCalendarStampFrame(row))frames.push(row);
+      else if(Number.isSafeInteger(row.asset_id)&&row.asset_id>0)invalidAssetIds.add(row.asset_id);
+    }
+  }
+  return {frames:frames.filter(frame=>!invalidAssetIds.has(frame.asset_id)),invalidAssetIds:[...invalidAssetIds]};
 }

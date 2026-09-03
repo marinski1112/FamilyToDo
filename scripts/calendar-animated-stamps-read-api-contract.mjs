@@ -1,26 +1,51 @@
 import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../src/calendar-stamp-api.ts',import.meta.url),'utf8');
+const model=fs.readFileSync(new URL('../src/calendar-stamps.ts',import.meta.url),'utf8');
+const resolver=fs.readFileSync(new URL('../src/calendar-stamp-asset-url.ts',import.meta.url),'utf8');
 const shell=fs.readFileSync(new URL('../src/app-shell.ts',import.meta.url),'utf8');
 const ui=fs.readFileSync(new URL('../public/assets/calendar-stamp-ui.js',import.meta.url),'utf8');
 const fail=message=>{console.error(message);process.exit(1)};
 const mustSource=(needle,message)=>{if(!source.includes(needle))fail(message)};
 
 mustSource("calendarStampPlacementsForRange(env,scope.familyId,scope.memberId,from,to)",'read API must reuse privacy-scoped bounded stamp read model');
+mustSource("calendarStampFramesForAssets(env,scope.familyId,scope.memberId,placements.map(placement=>placement.asset_id))",'read API must fetch bounded PNG frames only after privacy-authorized placements are known');
+mustSource('const invalidFrameAssets=new Set(frameRead.invalidAssetIds)','read API must preserve evidence of malformed persisted frame rows');
+mustSource('if(invalidFrameAssets.has(placement.asset_id))return []','malformed persisted PNG frame metadata must suppress the entire asset');
 mustSource("calendarStampAssetUrl(placement,'thumbnail')",'read API must resolve thumbnail through the safe asset resolver');
 mustSource("calendarStampAssetUrl(placement,'full')",'read API must resolve full asset through the safe asset resolver');
+mustSource("calendarStampStorageKeyUrl(placement.storage_provider,frame.storage_key)",'PNG frames must reuse same-provider safe asset resolution');
+mustSource("placement.asset_kind==='ANIMATED'&&placement.mime_type==='image/png'",'read API must identify sequential PNG animation explicitly');
+mustSource("rows.length<2||rows.some((frame,index)=>frame.frame_index!==index)",'PNG animation must fail closed unless frames are contiguous from zero');
+mustSource("frames.length!==rows.length",'PNG animation must fail closed when any frame URL cannot be safely resolved');
 mustSource("'cache-control':'private, no-store'",'read API must forbid shared/browser cache reuse');
 mustSource("if(!fullUrl||!thumbnailUrl)return []",'unresolved UPLOAD/unsafe assets must fail closed');
 mustSource("if(request.method!=='GET')",'read API must remain read-only');
 mustSource("validCalendarDate(from)",'read API must validate range start');
 mustSource("validCalendarDate(to)",'read API must validate range end');
 
+for(const needle of [
+  'export type CalendarStampFrame',
+  'export type CalendarStampFrameReadResult',
+  'const MAX_FRAMES_PER_ASSET=48',
+  'const FRAME_QUERY_CHUNK=64',
+  'calendarStampFramesForAssets',
+  'FROM calendar_stamp_asset_frames f',
+  "a.asset_kind='ANIMATED' AND a.mime_type='image/png'",
+  'chunk.length*MAX_FRAMES_PER_ASSET',
+  'safeCalendarStampFrame(row)',
+  'invalidAssetIds.add(row.asset_id)',
+  'frames.filter(frame=>!invalidAssetIds.has(frame.asset_id))',
+])if(!model.includes(needle))fail(`bounded PNG frame read model missing: ${needle}`);
+if(model.includes("row.asset_kind==='ANIMATED'&&row.mime_type==='image/png'"))fail('privacy read model must no longer reject supported sequential PNG animation assets');
+for(const needle of ['calendarStampStorageKeyUrl',"storageProvider!=='ASSETS'",'ASSET_PATH_RE'])if(!resolver.includes(needle))fail(`shared frame asset resolver missing: ${needle}`);
+
 const start=source.indexOf('return [{');
 const end=start>=0?source.indexOf('}];',start):-1;
 if(start<0||end<0)fail('bounded browser projection is missing');
 const projection=source.slice(start,end+3);
 const mustProjection=(needle,message)=>{if(!projection.includes(needle))fail(message)};
-for(const allowed of ['date:','placementId:','kind:','mimeType:','thumbnailUrl,','fullUrl,','width:','height:'])mustProjection(allowed,`missing bounded UI projection field ${allowed}`);
+for(const allowed of ['date:','placementId:','kind:','mimeType:','thumbnailUrl,','fullUrl,','frames,','width:','height:'])mustProjection(allowed,`missing bounded UI projection field ${allowed}`);
 for(const sensitive of ['familyId:','memberId:','createdBy:','privateOwnerId:','storageKey:','thumbnailStorageKey:','name:','title:','description:','cookie:','token:']){
   if(projection.includes(sensitive))fail(`response projection must not expose sensitive/internal field ${sensitive}`);
 }
@@ -32,6 +57,11 @@ for(const needle of [
   "const firstByDate=new Map()",
   "image.className='calendar-stamp-thumb'",
   "viewer.className='calendar-stamp-viewer'",
+  "const normalizedFrames=stamp=>",
+  "frames.length>=2",
+  "viewerTimer=setTimeout(play,frame.durationMs)",
+  "prefers-reduced-motion: reduce",
+  "stampByPlacement.set(placementId,stamp)",
   "url.searchParams.set('stamp_play',String(Date.now()))",
   "new MutationObserver",
   "event.stopImmediatePropagation()",
@@ -39,4 +69,4 @@ for(const needle of [
 ])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
 if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
 
-console.log('calendar animated stamps read API + month-cell consumer contract: ok');
+console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, malformed-sequence fail-closed behavior and legacy GIF/WebP fallback ok');
