@@ -22,6 +22,10 @@ for(const marker of [
   "baseTaskIds.slice(index*LINKED_SHOPPING_TASK_CHUNK_SIZE,(index+1)*LINKED_SHOPPING_TASK_CHUNK_SIZE)",
   "s.task_id IN (${chunk.map(()=>'?').join(',')})",
   ".bind(member.family_id,member.id,...chunk).all<Row>()",
+  "const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));",
+  "COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL",
+  "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at)) < date(?)",
+  "if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);",
   "const shoppingById=new Map<string,Row>();",
   "data-type=\"shopping\"",
   "data-type=\"item\"",
@@ -29,6 +33,7 @@ for(const marker of [
   "const mainHtml=isEvent?",
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
+  "期限切れ買い物 ${data.expiredShopping.length}件",
   "選択日が期限、またはこの日の予定に紐付く買い物",
   "/app/shopping_new.php?date=",
   "href=\"/app/shopping.php\">一覧・管理</a>",
@@ -45,4 +50,4 @@ if(!handlers.includes("export { taskView } from './task-view-page';"))throw new 
 if(!routes.includes("if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"))throw new Error('unified checklist route changed');
 for(const marker of ["el.matches('.toggle[data-type][data-id]')","fetch('/api/toggle'","occurrence_id:Number(el.dataset.occurrenceId||0)"])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + Shopping checklist, privacy, bounded D1 linkage and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + Shopping checklist, privacy, bounded D1 linkage, overdue classification and completion transport ok');
