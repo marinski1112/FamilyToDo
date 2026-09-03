@@ -3,6 +3,8 @@ import type {CalendarStampPlacement} from './calendar-stamps';
 
 export type CalendarStampAssetVariant='thumbnail'|'full';
 
+type CalendarStampAssetRef=Pick<CalendarStampPlacement,'storage_provider'|'storage_key'|'thumbnail_storage_key'> & {id?:number;asset_id?:number};
+
 const ASSET_PATH_RE=/^[A-Za-z0-9._~/-]+$/;
 
 export function calendarStampStorageKeyUrl(storageProvider:CalendarStampStorageProvider,storageKey:string):string|null{
@@ -16,20 +18,24 @@ export function calendarStampStorageKeyUrl(storageProvider:CalendarStampStorageP
   }
 }
 
-/**
- * Resolve an already-provisioned Calendar stamp backed by Worker static ASSETS.
- *
- * UPLOAD is the migration-stable logical provider for app-managed media. It remains
- * intentionally unresolved until a concrete authenticated upload/R2 transport and
- * binding exist. Returning null keeps future renderer wiring fail-closed without
- * persisting physical storage identity, remote URLs, credentials, or signed URLs in D1.
- */
-export function calendarStampAssetUrl(
-  placement:Pick<CalendarStampPlacement,'storage_provider'|'storage_key'|'thumbnail_storage_key'>,
-  variant:CalendarStampAssetVariant='full',
-):string|null{
-  const key=variant==='thumbnail'&&placement.thumbnail_storage_key
-    ?placement.thumbnail_storage_key
-    :placement.storage_key;
-  return calendarStampStorageKeyUrl(placement.storage_provider,key);
+function assetIdOf(asset:CalendarStampAssetRef):number|null{
+  const value=Number(asset.asset_id??asset.id??0);
+  return Number.isSafeInteger(value)&&value>0?value:null;
+}
+
+/** Same-origin browser URL for a persisted stamp asset without exposing UPLOAD storage keys. */
+export function calendarStampAssetUrl(asset:CalendarStampAssetRef,variant:CalendarStampAssetVariant='full'):string|null{
+  const key=variant==='thumbnail'&&asset.thumbnail_storage_key?asset.thumbnail_storage_key:asset.storage_key;
+  if(asset.storage_provider==='ASSETS')return calendarStampStorageKeyUrl('ASSETS',key);
+  if(asset.storage_provider!=='UPLOAD')return null;
+  const assetId=assetIdOf(asset);
+  if(!assetId)return null;
+  return `/api/calendar-stamp-media?asset=${assetId}&variant=${variant}`;
+}
+
+/** Same-origin browser URL for one sequential PNG frame. */
+export function calendarStampFrameUrl(storageProvider:CalendarStampStorageProvider,assetId:number,frameIndex:number,storageKey:string):string|null{
+  if(storageProvider==='ASSETS')return calendarStampStorageKeyUrl('ASSETS',storageKey);
+  if(storageProvider!=='UPLOAD'||!Number.isSafeInteger(assetId)||assetId<=0||!Number.isSafeInteger(frameIndex)||frameIndex<0||frameIndex>=48)return null;
+  return `/api/calendar-stamp-media?asset=${assetId}&frame=${frameIndex}`;
 }
