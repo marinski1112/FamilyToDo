@@ -23,23 +23,23 @@ try{
   // subject_kind / enabled_types / overview_quick_types remain compatibility metadata,
   // but normal management no longer exposes the old baby/child/pet-specific record UI.
   const subjectForm=document.getElementById('familyLogSubjectForm');
+  const hideLegacyControl=element=>{if(element instanceof HTMLElement){element.hidden=true;element.style.display='none';element.setAttribute('aria-hidden','true');}};
   const subjectKind=subjectForm?.elements.namedItem('subject_kind');
   if(subjectKind instanceof HTMLElement){
     const label=subjectKind.previousElementSibling;
-    if(label?.tagName==='LABEL')label.hidden=true;
-    subjectKind.hidden=true;
-    subjectKind.setAttribute('aria-hidden','true');
+    hideLegacyControl(label);
+    hideLegacyControl(subjectKind);
   }
   const typeHead=subjectForm?.querySelector('.family-log-type-setting-head');
-  if(typeHead instanceof HTMLElement)typeHead.hidden=true;
+  hideLegacyControl(typeHead);
   const typeGrid=subjectForm?.querySelector('.choice-list.family-log-type-choice-grid');
-  if(typeGrid instanceof HTMLElement)typeGrid.hidden=true;
+  hideLegacyControl(typeGrid);
   const subjectGuide=document.getElementById('familyLogSubjectGuide');
-  if(subjectGuide)subjectGuide.hidden=true;
+  hideLegacyControl(subjectGuide);
   const overviewToggle=document.getElementById('familyLogShowOverview')?.closest('label');
-  if(overviewToggle instanceof HTMLElement)overviewToggle.hidden=true;
+  hideLegacyControl(overviewToggle);
   const overviewTypes=document.getElementById('familyLogOverviewTypes');
-  if(overviewTypes)overviewTypes.hidden=true;
+  hideLegacyControl(overviewTypes);
 
   const originalOpen=document.getElementById('familyLogSubjectOpen');
   const subjectRows=[...document.querySelectorAll('.family-log-management-row:not(.family-chore-management-row)')];
