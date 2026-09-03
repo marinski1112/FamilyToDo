@@ -18,6 +18,14 @@ const tasks=Array.isArray(payload.tasks)?payload.tasks.map(task=>({
 })).filter(task=>Number.isSafeInteger(task.id)&&task.id>0&&task.title):[];
 const initialSelected=Number(payload.selectedTaskId||0)||0;
 const DEFAULT_VISIBLE_LIMIT=12;
+const searchInput=document.createElement('input');
+searchInput.type='search';
+searchInput.id='shoppingTaskSearch';
+searchInput.placeholder='タスク名を検索';
+searchInput.setAttribute('aria-label','関連タスクをタスク名で検索');
+searchInput.autocomplete='off';
+searchInput.hidden=tasks.length===0;
+select.parentNode?.insertBefore(searchInput,select);
 const todayJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const dateOf=task=>task.start||task.due||'';
 const endOf=task=>task.end||dateOf(task);
@@ -38,18 +46,24 @@ const label=task=>{
   const suffix=start?(end&&end!==start?`（${start}〜${end}）`:`（${start}）`):'（期限なし）';
   return `${task.title}${suffix}`;
 };
+const normalizeSearch=value=>String(value||'').trim().toLowerCase();
 function render(){
   const date=String(dueInput.value||'');
   const referenceDate=date||todayJst();
   const current=Number(select.value||initialSelected||0)||0;
   const showAll=Boolean(showAllInput.checked);
+  const query=normalizeSearch(searchInput.value);
   const sorted=sortForDate(referenceDate);
   const overlapsForDate=date?sorted.filter(task=>overlaps(task,date)):[];
   const defaults=(overlapsForDate.length?overlapsForDate:sorted).slice(0,DEFAULT_VISIBLE_LIMIT);
   const defaultIds=new Set(defaults.map(task=>task.id));
   if(current)defaultIds.add(current);
   if(initialSelected)defaultIds.add(initialSelected);
-  const visible=(showAll?sorted:sorted.filter(task=>defaultIds.has(task.id)));
+  const matches=query?sorted.filter(task=>normalizeSearch(task.title).includes(query)):[];
+  const matchIds=new Set(matches.map(task=>task.id));
+  if(query&&current)matchIds.add(current);
+  if(query&&initialSelected)matchIds.add(initialSelected);
+  const visible=query?sorted.filter(task=>matchIds.has(task.id)):(showAll?sorted:sorted.filter(task=>defaultIds.has(task.id)));
   const fragment=document.createDocumentFragment();
   const none=document.createElement('option');none.value='0';none.textContent='タスクなし';fragment.appendChild(none);
   for(const task of visible){const option=document.createElement('option');option.value=String(task.id);option.textContent=label(task);if(task.id===current)option.selected=true;fragment.appendChild(option);}
@@ -57,15 +71,19 @@ function render(){
   if(current&&!visible.some(task=>task.id===current))select.value='0';
   const sameDay=overlapsForDate.length;
   const hidden=Math.max(0,tasks.length-visible.length);
-  if(showAllLabel)showAllLabel.textContent=`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;
+  if(showAllLabel)showAllLabel.textContent=query?`検索を解除すると候補表示を切り替えられます`:`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;
   if(hint){
-    if(date&&sameDay)hint.textContent=`期限日に重なる未完了タスク ${sameDay}件を優先表示中${sameDay>DEFAULT_VISIBLE_LIMIT?'（先頭12件）':''}${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
+    if(query){
+      const preserved=visible.length-matches.length;
+      hint.textContent=matches.length?`タスク名の検索結果 ${matches.length}件${preserved>0?'。選択中のタスクは検索条件に関係なく保持しています。':''}`:'一致するタスクはありません。選択中のタスクがある場合はその候補だけ保持します。';
+    }else if(date&&sameDay)hint.textContent=`期限日に重なる未完了タスク ${sameDay}件を優先表示中${sameDay>DEFAULT_VISIBLE_LIMIT?'（先頭12件）':''}${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
     else if(date)hint.textContent=`期限日に重なるタスクがないため、近い未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
     else hint.textContent=`未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中。期限を指定すると、その日に重なるタスクを優先します${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
   }
 }
 dueInput.addEventListener('change',render);
 showAllInput.addEventListener('change',render);
+searchInput.addEventListener('input',render);
 select.addEventListener('change',render);
 render();
 })();
