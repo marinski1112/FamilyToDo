@@ -1,7 +1,7 @@
+import type {AppContext} from './app-context';
 import {calendarStampFramesForAssets} from './calendar-stamps';
 import {calendarStampAssetUrl,calendarStampStorageKeyUrl} from './calendar-stamp-asset-url';
 import {bodyJson,RequestBodyParseError} from './request-body';
-import {json} from './response';
 
 type StampRow={
   message_id:number;
@@ -17,7 +17,7 @@ type StampRow={
 
 const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T').replace('T',' ');
 
-function scope(context:any):{familyId:number;memberId:number}|null{
+function scope(context:AppContext):{familyId:number;memberId:number}|null{
   const familyId=Number(context.member?.family_id||0),memberId=Number(context.member?.id||0);
   return Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(memberId)&&memberId>0?{familyId,memberId}:null;
 }
@@ -32,7 +32,7 @@ async function activeActor(env:Env,familyId:number,memberId:number):Promise<bool
 }
 
 /** Shared Calendar-stamp catalog attachment boundary for Messages/伝言. */
-export async function messageStampApi(request:Request,context:any):Promise<Response>{
+export async function messageStampApi(request:Request,context:AppContext):Promise<Response>{
   const s=scope(context);if(!s)return response({ok:false,error:'AUTH_REQUIRED'},401);
   if(!(await activeActor(context.env,s.familyId,s.memberId)))return response({ok:false,error:'AUTH_REQUIRED'},401);
 
