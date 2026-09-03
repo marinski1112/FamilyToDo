@@ -65,12 +65,13 @@ try {
     if(quantities.some(quantity=>quantity.length>MAX_PRODUCT_QUANTITY_UNITS)){alert(`数量は${MAX_PRODUCT_QUANTITY_UNITS}文字以内で入力してください。`);return;}
     const safeUrls=urls.map(safeProductUrl);
     if(safeUrls.some(url=>url===null)){alert('商品URLは認証情報を含まない http または https のURLを入力してください。');return;}
-    const category=syncCategory();
-    if(categorySelect.value==='__custom__'&&!category){alert('自由入力のカテゴリー名を入力してください。');categoryCustom.focus();return;}
-    if(category.length>MAX_CATEGORY_UNITS){alert(`カテゴリーは${MAX_CATEGORY_UNITS}文字以内で入力してください。`);return;}
+    syncCategory();
     const fd=new FormData(form);
     const dueDate=safeDueDate(fd.get('due_date'));
     if(dueDate===null){alert('期限の日付が不正です。');return;}
+    const category=String(fd.get('category')||'').trim();
+    if(categorySelect.value==='__custom__'&&!category){alert('自由入力のカテゴリー名を入力してください。');categoryCustom.focus();return;}
+    if(category.length>MAX_CATEGORY_UNITS){alert(`カテゴリーは${MAX_CATEGORY_UNITS}文字以内で入力してください。`);return;}
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
     const rawTaskId=String(fd.get('task_id')??'').trim();
