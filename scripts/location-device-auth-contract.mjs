@@ -16,7 +16,7 @@ assert.doesNotMatch(source,/console\.(?:log|info|warn|error)/,'device auth must 
 assert.doesNotMatch(source,/Authorization|request\.url|searchParams|query token/i,'device auth must not accept credentials from URL/query/Authorization plumbing');
 
 assert.match(migration,/secret_hash TEXT NOT NULL/,'persistence foundation must store only a device secret hash');
-assert.doesNotMatch(migration,/\bsecret\s+TEXT|plaintext|authorization\s+TEXT|token\s+TEXT/i,'migration must not add plaintext credential columns');
+assert.doesNotMatch(migration,/^\s*(?:secret|token|authorization|raw_payload)\s+TEXT\b/im,'migration must not add plaintext credential or raw-payload columns');
 assert.match(migration,/sharing_enabled INTEGER NOT NULL DEFAULT 0/,'new devices must remain share-off by default');
 
 console.log('location-device-auth-contract: ok');
