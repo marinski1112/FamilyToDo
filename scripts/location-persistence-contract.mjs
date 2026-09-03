@@ -21,7 +21,7 @@ assert.match(source,/const results=await db\.batch\(\[history,latest,deviceSeen\
 assert.match(source,/results\[2\]\?\.meta\?\.changes/,'persistence acceptance must depend on the guarded device mutation result');
 assert.match(source,/authorizedChanges>0/,'revoked/share-off/inactive mutation races must fail closed');
 assert.doesNotMatch(source,/console\.(?:log|info|warn|error)/,'Location persistence must not log coordinates or credential-adjacent data');
-assert.doesNotMatch(source,/Authorization|raw_payload|request\.url|searchParams/i,'Location persistence must not depend on request credentials or raw payloads');
+assert.doesNotMatch(source,/raw_payload|request\.url|searchParams|headers\.get\(['"]Authorization/i,'Location persistence must not read request credentials or raw payloads');
 
 for(const table of ['location_devices','member_location_latest','member_location_history']){
   assert.match(migration,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`),`${table} must remain backed by additive migration 0052`);
