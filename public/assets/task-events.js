@@ -18,9 +18,9 @@
     completedTasks=document.createElement('details');
     completedTasks.className='completed-tasks';
     const summary=document.createElement('summary');
+    summary.textContent='完了済み';
     completedTasks.append(summary);
     taskSection.append(completedTasks);
-    updateCompletedSummary();
     return completedTasks;
   };
   const moveCompletedTaskRow=(checkbox,completed)=>{
