@@ -27,19 +27,7 @@ mustSource("if(request.method!=='GET')",'read API must remain read-only');
 mustSource("validCalendarDate(from)",'read API must validate range start');
 mustSource("validCalendarDate(to)",'read API must validate range end');
 
-for(const needle of [
-  'export type CalendarStampFrame',
-  'export type CalendarStampFrameReadResult',
-  'const MAX_FRAMES_PER_ASSET=48',
-  'const FRAME_QUERY_CHUNK=64',
-  'calendarStampFramesForAssets',
-  'FROM calendar_stamp_asset_frames f',
-  "a.asset_kind='ANIMATED' AND a.mime_type='image/png'",
-  'chunk.length*MAX_FRAMES_PER_ASSET',
-  'safeCalendarStampFrame(row)',
-  'invalidAssetIds.add(row.asset_id)',
-  'frames.filter(frame=>!invalidAssetIds.has(frame.asset_id))',
-])if(!model.includes(needle))fail(`bounded PNG frame read model missing: ${needle}`);
+for(const needle of ['export type CalendarStampFrame','export type CalendarStampFrameReadResult','const MAX_FRAMES_PER_ASSET=48','const FRAME_QUERY_CHUNK=64','calendarStampFramesForAssets','FROM calendar_stamp_asset_frames f',"a.asset_kind='ANIMATED' AND a.mime_type='image/png'",'chunk.length*MAX_FRAMES_PER_ASSET','safeCalendarStampFrame(row)','invalidAssetIds.add(row.asset_id)','frames.filter(frame=>!invalidAssetIds.has(frame.asset_id))'])if(!model.includes(needle))fail(`bounded PNG frame read model missing: ${needle}`);
 if(model.includes("row.asset_kind==='ANIMATED'&&row.mime_type==='image/png'"))fail('privacy read model must no longer reject supported sequential PNG animation assets');
 for(const needle of ['calendarStampStorageKeyUrl','calendarStampFrameUrl',"asset.storage_provider==='ASSETS'","asset.storage_provider!=='UPLOAD'",'normalizeCalendarStampStorageKey'])if(!resolver.includes(needle))fail(`shared frame asset resolver missing: ${needle}`);
 for(const needle of ["export type CalendarStampStorageProvider='ASSETS'|'UPLOAD'",'normalizeCalendarStampStorageKey'])if(!storage.includes(needle))fail(`shared stamp storage boundary missing: ${needle}`);
@@ -50,53 +38,14 @@ if(start<0||end<0)fail('bounded browser projection is missing');
 const projection=source.slice(start,end+3);
 const mustProjection=(needle,message)=>{if(!projection.includes(needle))fail(message)};
 for(const allowed of ['date:','placementId:','kind:','mimeType:','thumbnailUrl,','fullUrl,','frames,','width:','height:'])mustProjection(allowed,`missing bounded UI projection field ${allowed}`);
-for(const sensitive of ['familyId:','memberId:','createdBy:','privateOwnerId:','storageKey:','thumbnailStorageKey:','name:','title:','description:','cookie:','token:']){
-  if(projection.includes(sensitive))fail(`response projection must not expose sensitive/internal field ${sensitive}`);
-}
+for(const sensitive of ['familyId:','memberId:','createdBy:','privateOwnerId:','storageKey:','thumbnailStorageKey:','name:','title:','description:','cookie:','token:'])if(projection.includes(sensitive))fail(`response projection must not expose sensitive/internal field ${sensitive}`);
 if(/storage_key|thumbnail_storage_key|visibility_scope|private_owner_id|created_by|family_id|member_id/.test(projection))fail('raw persistence/private scope fields must not enter browser projection');
 
-for(const needle of [
-  'calendarStampOptionsApi',
-  'calendarStampPlacementApi',
-  "request.method!=='POST'&&request.method!=='DELETE'",
-  "csrf!==expectedCsrf",
-  'createCalendarStampPlacement',
-  'deleteCalendarStampPlacement',
-  "calendarStampAssetUrl(asset,'thumbnail')",
-  "request.method==='DELETE'",
-  "json({ok:false,error:'PLACEMENT_NOT_FOUND'},404)",
-])if(!placementApi.includes(needle))fail(`Calendar stamp picker/placement API boundary missing: ${needle}`);
-for(const needle of [
-  'export async function deleteCalendarStampPlacement',
-  'WHERE id=? AND family_id=? AND created_by=?',
-])if(!actions.includes(needle))fail(`Calendar stamp creator-only placement deletion action missing: ${needle}`);
+for(const needle of ['calendarStampOptionsApi','calendarStampPlacementApi',"request.method!=='POST'&&request.method!=='DELETE'","request.method!=='PATCH'","csrf!==expectedCsrf",'createCalendarStampPlacement','updateCalendarStampPlacement','deleteCalendarStampPlacement',"calendarStampAssetUrl(asset,'thumbnail')","request.method==='PATCH'","request.method==='DELETE'","body.visibilityScope==null||body.sortOrder==null","json({ok:false,error:'PLACEMENT_NOT_FOUND'},404)"])if(!placementApi.includes(needle))fail(`Calendar stamp picker/placement API boundary missing: ${needle}`);
+for(const needle of ['export async function updateCalendarStampPlacement','export async function deleteCalendarStampPlacement','WHERE id=? AND family_id=? AND created_by=?'])if(!actions.includes(needle))fail(`Calendar stamp creator-only placement mutation action missing: ${needle}`);
 
 if(!shell.includes('<script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}"></script>'))fail('Calendar shell must load the stamp renderer only through the Calendar asset bundle');
-for(const needle of [
-  "fetch('/api/calendar-stamps?from='",
-  "const firstByDate=new Map()",
-  "image.className='calendar-stamp-thumb'",
-  "viewer.className='calendar-stamp-viewer'",
-  "calendar-stamp-viewer-delete",
-  "const normalizedFrames=stamp=>",
-  "frames.length>=2",
-  "viewerTimer=setTimeout(play,frame.durationMs)",
-  "prefers-reduced-motion: reduce",
-  "stampByPlacement.set(placementId,stamp)",
-  "url.searchParams.set('stamp_play',String(Date.now()))",
-  "new MutationObserver",
-  "event.stopImmediatePropagation()",
-  "u.origin===location.origin",
-  "fetch('/api/calendar-stamp-options'",
-  "fetch('/api/calendar-stamp-placement'",
-  "JSON.stringify({csrf,assetId,stampDate,visibilityScope})",
-  "method:'DELETE'",
-  "JSON.stringify({csrf,placementId})",
-  "pickerButton.textContent='スタンプ'",
-  "selectedModalDate=()=>",
-  "visibilityScope=String(pickerScope?.value||'FAMILY')",
-  "await renderStamps()",
-])if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
+for(const needle of ["fetch('/api/calendar-stamps?from='","const firstByDate=new Map()","image.className='calendar-stamp-thumb'","viewer.className='calendar-stamp-viewer'","calendar-stamp-viewer-delete","const normalizedFrames=stamp=>","frames.length>=2","viewerTimer=setTimeout(play,frame.durationMs)","prefers-reduced-motion: reduce","stampByPlacement.set(placementId,stamp)","url.searchParams.set('stamp_play',String(Date.now()))","new MutationObserver","event.stopImmediatePropagation()","u.origin===location.origin","fetch('/api/calendar-stamp-options'","fetch('/api/calendar-stamp-placement'","JSON.stringify({csrf,assetId,stampDate,visibilityScope})","method:'DELETE'","JSON.stringify({csrf,placementId})","pickerButton.textContent='スタンプ'","selectedModalDate=()=>","visibilityScope=String(pickerScope?.value||'FAMILY')","await renderStamps()"] )if(!ui.includes(needle))fail(`Calendar stamp browser consumer missing: ${needle}`);
 if(/family_id|member_id|private_owner_id|created_by|storage_key|thumbnail_storage_key|authorization|cookie/i.test(ui))fail('Calendar stamp browser consumer must not depend on internal identity/storage/session fields');
 
-console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, ASSETS/R2 safe storage resolution, malformed-sequence fail-closed behavior, picker/create/delete placement flow and legacy GIF/WebP fallback ok');
+console.log('calendar animated stamps read API + month-cell consumer contract: bounded sequential PNG playback, ASSETS/R2 safe storage resolution, malformed-sequence fail-closed behavior, picker/create/update/delete placement API flow and legacy GIF/WebP fallback ok');
