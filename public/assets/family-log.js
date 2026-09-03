@@ -73,8 +73,8 @@ try{
         if(matches.length!==1){
           // The retained server page may not expose a usable subject id on every legacy
           // overview section. Fall back only when exactly one eligible payload subject can
-          // produce the full heading and exactly one legacy section has it. Any name/icon
-          // collision preserves the fallback.
+          // produce the full heading and exactly one legacy section has it.
+          // Any name/icon collision preserves the fallback.
           const matchingSubjects=eligibleSubjects.filter(subject=>displayPrefix(subject)===authority.subjectPrefix);
           if(matchingSubjects.length!==1)continue;
           matches=legacySections.filter(section=>String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix);
