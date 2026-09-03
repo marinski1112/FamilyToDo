@@ -5,11 +5,19 @@
   if(!(form instanceof HTMLFormElement))return;
   const status=document.getElementById('calendarStampSequenceStatus');
   const submit=form.querySelector('button[type="submit"]');
+  const inventory=document.getElementById('calendarStampInventory');
+  const inventoryStatus=document.getElementById('calendarStampInventoryStatus');
   const text=value=>String(value??'').trim();
+  const csrf=()=>text(new FormData(form).get('csrf'));
   const setStatus=(message,ok=false)=>{
     if(!status)return;
     status.textContent=message;
     status.dataset.state=ok?'success':'error';
+  };
+  const setInventoryStatus=(message,ok=false)=>{
+    if(!inventoryStatus)return;
+    inventoryStatus.textContent=message;
+    inventoryStatus.dataset.state=ok?'success':'error';
   };
 
   const parseFrames=value=>{
@@ -31,7 +39,7 @@
     });
   };
 
-  const selectedFiles=data=>{
+  const selectedFiles=()=>{
     const input=form.elements.namedItem('pngFrames');
     if(!(input instanceof HTMLInputElement)||!input.files)return [];
     return Array.from(input.files);
@@ -46,14 +54,14 @@
     }
   };
 
-  const uploadFrames=async(files,csrf,durationMs)=>{
+  const uploadFrames=async(files,token,durationMs)=>{
     const frames=[];
     for(let index=0;index<files.length;index++){
       setStatus(`PNGをアップロードしています… ${index+1}/${files.length}`);
-      const response=await fetch('/api/calendar-stamp-media/upload',{
+      const response=await fetch('/api/calendar-stamp-admin/upload',{
         method:'POST',
         credentials:'same-origin',
-        headers:{'content-type':'image/png','x-csrf-token':csrf},
+        headers:{'content-type':'image/png','x-csrf-token':token},
         body:files[index],
       });
       let payload={};
@@ -70,13 +78,60 @@
     return frames;
   };
 
+  const renderInventory=assets=>{
+    if(!inventory)return;
+    inventory.replaceChildren();
+    if(!assets.length){
+      const empty=document.createElement('p');empty.className='small';empty.textContent='登録済みスタンプはありません。';inventory.append(empty);return;
+    }
+    for(const asset of assets){
+      const row=document.createElement('div');row.className='content-row';
+      const info=document.createElement('div');
+      if(asset.active&&text(asset.thumbnailUrl)){
+        const image=document.createElement('img');image.src=text(asset.thumbnailUrl);image.alt='';image.width=48;image.height=48;image.loading='lazy';image.style.objectFit='contain';image.style.marginRight='10px';image.style.verticalAlign='middle';info.append(image);
+      }
+      const name=document.createElement('strong');name.textContent=text(asset.name)||`スタンプ #${asset.id}`;info.append(name);
+      const meta=document.createElement('div');meta.className='meta';meta.textContent=`${asset.kind==='ANIMATED'?'アニメーション':'静止画'} / ${asset.active?'有効':'無効'}`;info.append(meta);
+      const button=document.createElement('button');button.type='button';button.className='btn gray small';button.textContent=asset.active?'無効化':'有効化';
+      button.addEventListener('click',async()=>{
+        button.disabled=true;setInventoryStatus(asset.active?'無効化しています…':'有効化しています…');
+        try{
+          const response=await fetch('/api/calendar-stamp-admin/assets',{
+            method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+            body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id),active:!asset.active}),
+          });
+          let payload={};try{payload=await response.json();}catch{}
+          if(!response.ok||payload?.ok!==true){
+            const code=text(payload?.error);
+            if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')throw new Error('操作権限を確認して、ページを再読み込みしてください。');
+            throw new Error('スタンプの状態変更に失敗しました。');
+          }
+          setInventoryStatus('更新しました。',true);await loadInventory();
+        }catch(error){setInventoryStatus(error instanceof Error?error.message:'通信に失敗しました。');button.disabled=false;}
+      });
+      row.append(info,button);inventory.append(row);
+    }
+  };
+
+  const loadInventory=async()=>{
+    if(!inventory)return;
+    try{
+      const response=await fetch('/api/calendar-stamp-admin/assets',{credentials:'same-origin'});
+      let payload={};try{payload=await response.json();}catch{}
+      if(!response.ok||payload?.ok!==true||!Array.isArray(payload.assets))throw new Error('登録済みスタンプを読み込めませんでした。');
+      renderInventory(payload.assets);setInventoryStatus('');
+    }catch(error){
+      inventory.replaceChildren();const p=document.createElement('p');p.className='small';p.textContent=error instanceof Error?error.message:'登録済みスタンプを読み込めませんでした。';inventory.append(p);
+    }
+  };
+
   form.addEventListener('submit',async event=>{
     event.preventDefault();
     const data=new FormData(form);
     const name=text(data.get('name'));
     if(!name){setStatus('スタンプ名を入力してください。');return;}
-    const csrf=text(data.get('csrf'));
-    const files=selectedFiles(data);
+    const token=text(data.get('csrf'));
+    const files=selectedFiles();
     const durationMs=Number(text(data.get('durationMs'))||120);
     if(!Number.isSafeInteger(durationMs)||durationMs<40||durationMs>2000){setStatus('表示時間は40〜2000msで指定してください。');return;}
     let frames=null,storageProvider='ASSETS';
@@ -92,37 +147,23 @@
     }
     if(submit instanceof HTMLButtonElement)submit.disabled=true;
     try{
-      if(storageProvider==='UPLOAD')frames=await uploadFrames(files,csrf,durationMs);
+      if(storageProvider==='UPLOAD')frames=await uploadFrames(files,token,durationMs);
       setStatus('スタンプとして登録しています…');
       const response=await fetch('/api/calendar-stamp-admin/png-sequence',{
-        method:'POST',
-        credentials:'same-origin',
-        headers:{'content-type':'application/json'},
-        body:JSON.stringify({
-          csrf,
-          name,
-          storageProvider,
-          frames,
-          thumbnailStorageKey:storageProvider==='ASSETS'?(text(data.get('thumbnailStorageKey'))||null):null,
-          width,
-          height,
-        }),
+        method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+        body:JSON.stringify({csrf:token,name,storageProvider,frames,thumbnailStorageKey:storageProvider==='ASSETS'?(text(data.get('thumbnailStorageKey'))||null):null,width,height}),
       });
-      let payload={};
-      try{payload=await response.json();}catch{}
+      let payload={};try{payload=await response.json();}catch{}
       if(response.ok&&payload&&payload.ok===true){
-        setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true);
-        form.reset();
-        return;
+        setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true);form.reset();await loadInventory();return;
       }
       const code=text(payload?.error);
       if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')setStatus('登録権限を確認して、ページを再読み込みしてください。');
       else if(response.status===400||code==='INVALID_BODY'||code==='INVALID_SEQUENCE')setStatus('入力内容を確認してください。');
       else setStatus('スタンプの登録に失敗しました。');
-    }catch(error){
-      setStatus(error instanceof Error?error.message:'通信に失敗しました。時間をおいて再試行してください。');
-    }finally{
-      if(submit instanceof HTMLButtonElement)submit.disabled=false;
-    }
+    }catch(error){setStatus(error instanceof Error?error.message:'通信に失敗しました。時間をおいて再試行してください。');}
+    finally{if(submit instanceof HTMLButtonElement)submit.disabled=false;}
   });
+
+  void loadInventory();
 })();
