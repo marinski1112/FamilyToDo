@@ -4,6 +4,7 @@ const page=fs.readFileSync('src/settings-content-page.ts','utf8');
 const meta=fs.readFileSync('src/family-log-type-meta.ts','utf8');
 const handlers=fs.readFileSync('src/settings-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
+const stampUi=fs.readFileSync('public/assets/settings-stamps.js','utf8');
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
@@ -26,6 +27,33 @@ for(const marker of [
   "layout('投稿管理',body,'/app/settings.php')",
 ]) if(!page.includes(marker)) throw new Error(`settings content page lost behavior marker: ${marker}`);
 if(page.includes("from './app'")) throw new Error('settings content page must not depend on app.ts');
+
+for(const marker of [
+  'const stampAdmin=admin?',
+  'id="calendarStampSequenceAdmin"',
+  'id="calendarStampSequenceForm"',
+  'name="csrf"',
+  'name="frames"',
+  '2〜48フレーム',
+  '現在はASSETS登録のみです。',
+  'アプリ管理メディア（UPLOAD）',
+  'src="/assets/settings-stamps.js"',
+]) if(!page.includes(marker)) throw new Error(`settings stamp administration marker missing: ${marker}`);
+if(/R2[^<]{0,80}(?:bucket|バケット)(?:名)?[^<]{0,80}(?:input|name=)/i.test(page))throw new Error('settings stamp UI must not request physical R2 bucket identity');
+
+for(const marker of [
+  "document.getElementById('calendarStampSequenceForm')",
+  "lines.length<2||lines.length>48",
+  'durationMs<40||durationMs>2000',
+  "fetch('/api/calendar-stamp-admin/png-sequence'",
+  "credentials:'same-origin'",
+  "headers:{'content-type':'application/json'}",
+  "csrf:text(data.get('csrf'))",
+  "thumbnailStorageKey:text(data.get('thumbnailStorageKey'))||null",
+  "setStatus('登録しました。カレンダーのスタンプ候補に表示されます。',true)",
+]) if(!stampUi.includes(marker)) throw new Error(`settings stamp client marker missing: ${marker}`);
+if(/console\.|authorization|cookie|family_id|member_id|storage_provider|bucket[_-]?name|signed[_-]?url/i.test(stampUi))throw new Error('settings stamp client must not handle/log internal identity, storage-provider, or credential details');
+if(/payload\?\.(?:message|detail)|error\.message/.test(stampUi))throw new Error('settings stamp UI must not surface raw server error detail');
 
 for(const marker of [
   "MILK:{icon:'🍼',label:'ミルク'}",
