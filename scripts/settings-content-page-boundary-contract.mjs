@@ -53,7 +53,7 @@ for(const marker of [
   "setStatus('登録しました。カレンダーのスタンプ候補に表示されます。',true)",
 ]) if(!stampUi.includes(marker)) throw new Error(`settings stamp client marker missing: ${marker}`);
 if(/console\.|authorization|cookie|family_id|member_id|storage_provider|bucket[_-]?name|signed[_-]?url/i.test(stampUi))throw new Error('settings stamp client must not handle/log internal identity, storage-provider, or credential details');
-if(/payload\?\.(?:message|detail)|error\.message/.test(stampUi))throw new Error('settings stamp UI must not surface raw server error detail');
+if(/payload\?\.(?:message|detail)|payload\.(?:message|detail)|response\.text\(/.test(stampUi))throw new Error('settings stamp UI must not surface raw server error detail');
 
 for(const marker of [
   "MILK:{icon:'🍼',label:'ミルク'}",
