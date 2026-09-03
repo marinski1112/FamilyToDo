@@ -25,6 +25,7 @@ import { messages } from './messages-api';
 import { settings } from './settings-root';
 import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
+import { locationDeviceApi } from './location-device-api';
 
 export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/api/family/create') return await createFamily(request,context);
@@ -38,6 +39,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
   if(url.pathname==='/api/shopping-categories') return await shoppingCategoryApi(request,context);
+  if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);
   if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);
   if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);
   if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});
