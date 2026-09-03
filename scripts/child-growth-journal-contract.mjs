@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
+const familyLogMigration=fs.readFileSync(new URL('../migrations/0017_wave75_family_log.sql',import.meta.url),'utf8');
 const migration=fs.readFileSync(new URL('../migrations/0048_child_growth_journal.sql',import.meta.url),'utf8');
 const journal=fs.readFileSync(new URL('../src/child-journal.ts',import.meta.url),'utf8');
 const schema=fs.readFileSync(new URL('../src/child-journal-schema.ts',import.meta.url),'utf8');
@@ -16,6 +17,10 @@ for(const marker of [
 for(const marker of [
   "subject_kind IN ('BABY','CHILD')","detailCode='JOURNAL_MEMO'","detailCode=`JOURNAL_${milestone.code}`","detailCode='JOURNAL_HEIGHT'","detailCode='JOURNAL_WEIGHT'","INSERT INTO family_log_journal_entries","journal_kind,entry_kind,milestone_code,google_sync_enabled","logActivity(ctx,'CREATED','family_log',logId,{source:'child_journal',entry_kind:entryKind})",'📔 成長日記','立った','歩いた','最初の歯','身長','体重',
 ])if(!journal.includes(marker))throw new Error(`Child Journal implementation contract missing: ${marker}`);
+if(!familyLogMigration.includes('CREATE TABLE IF NOT EXISTS family_log_subjects'))throw new Error('Family Log subject schema must remain explicit');
+if(familyLogMigration.includes('sort_order'))throw new Error('Wave75 family_log_subjects schema does not define sort_order; Child Journal must not depend on it');
+if(!journal.includes("FROM family_log_subjects WHERE family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD') ORDER BY id"))throw new Error('Child Journal page must order subjects only by columns guaranteed by the retained Family Log schema');
+if(journal.includes('COALESCE(sort_order,9999)'))throw new Error('Child Journal page must not query nonexistent family_log_subjects.sort_order');
 if(!schema.includes("const FOUNDATION_TABLES = ['family_log_journal_entries'] as const"))throw new Error('Child Journal schema guard must use an allow-listed foundation table');
 if(!journal.includes('childJournalFoundationReady(ctx.env.DB)'))throw new Error('Child Journal writes must fail closed until migration 0048 is present');
 if(!journal.includes('データベース更新の反映待ちです。'))throw new Error('Child Journal page must remain usable while migration 0048 is pending');
@@ -32,4 +37,4 @@ if(!apiRoutes.includes("url.pathname==='/api/child-journal'"))throw new Error('W
 if(!pageRoutes.includes("url.pathname==='/app/child_journal.php'"))throw new Error('Worker must route the Child Journal page');
 if(!manifest.includes("['child-growth-journal','node scripts/child-growth-journal-contract.mjs']"))throw new Error('Child Journal regression contract must be active');
 for(const forbidden of ['CHILD_JOURNAL','googleCalendar','calendar_id'])if(journal.includes(forbidden))throw new Error(`Google Calendar journal sync is intentionally deferred from foundation: ${forbidden}`);
-console.log('child growth journal foundation contract ok');
+console.log('child growth journal foundation + page-open schema contract ok');
