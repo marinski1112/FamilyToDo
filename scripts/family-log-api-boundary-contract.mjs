@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const api=fs.readFileSync('src/family-log-api.ts','utf8');
+const boundary=fs.readFileSync('src/family-log-mutation-boundary.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 
 for(const marker of [
@@ -38,8 +39,19 @@ for(const marker of [
   "WHERE id=? AND family_id=?",
 ]) if(!api.includes(marker)) throw new Error(`Family Log retained API lost behavior marker: ${marker}`);
 
-if(!routes.includes("import { familyLogApi } from './family-log-api';")) throw new Error('context API dispatcher must import retained familyLogApi');
-if(!routes.includes("if(url.pathname==='/api/family-log') return await familyLogApi(request,context);")) throw new Error('Family Log API route must use retained familyLogApi');
+for(const marker of [
+  "import { familyLogApi } from './family-log-api';",
+  "export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{",
+  "request.clone()",
+  "String(body.action||'')!=='quick_action_disable'",
+  "const response=await familyLogApi(request,ctx);",
+  "if(!response.ok)return response;",
+  "SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1",
+  "json({ok:false,error:'クイック記録が見つかりません。'},404)",
+]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost quick-action tenant guard: ${marker}`);
+
+if(!routes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('context API dispatcher must import retained Family Log mutation boundary');
+if(!routes.includes("if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);")) throw new Error('Family Log API route must use retained mutation boundary');
 if(routes.includes("from './app'")) throw new Error('context API dispatcher must not depend on app.ts');
 if(!routes.includes("import { toggle } from './toggle-api';")) throw new Error('retained toggle API boundary missing from context dispatcher');
 
