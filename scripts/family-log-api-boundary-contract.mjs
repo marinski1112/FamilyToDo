@@ -44,11 +44,17 @@ for(const marker of [
   "export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{",
   "request.clone()",
   "String(body.action||'')!=='quick_action_disable'",
-  "const response=await familyLogApi(request,ctx);",
-  "if(!response.ok)return response;",
+  "const expectedCsrf=String(ctx.session?.csrfToken||''),csrf=String(body.csrf||'');",
+  "if(!expectedCsrf||!csrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF検証に失敗しました。'},403);",
+  "if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者のみ操作できます。'},403);",
   "SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1",
   "json({ok:false,error:'クイック記録が見つかりません。'},404)",
-]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost quick-action tenant guard: ${marker}`);
+  "return familyLogApi(request,ctx);",
+]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost pre-mutation quick-action tenant guard: ${marker}`);
+
+const guardQuery=boundary.indexOf('SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1');
+const mutationCall=boundary.lastIndexOf('return familyLogApi(request,ctx);');
+if(guardQuery<0||mutationCall<0||guardQuery>mutationCall)throw new Error('quick-action tenant validation must occur before canonical mutation/sync execution');
 
 if(!routes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('context API dispatcher must import retained Family Log mutation boundary');
 if(!routes.includes("if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);")) throw new Error('Family Log API route must use retained mutation boundary');
