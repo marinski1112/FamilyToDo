@@ -1,6 +1,6 @@
 import type {AppContext} from './app-context';
 import {calendarStampFramesForAssets} from './calendar-stamps';
-import {calendarStampAssetUrl,calendarStampStorageKeyUrl} from './calendar-stamp-asset-url';
+import {calendarStampAssetUrl,calendarStampFrameUrl} from './calendar-stamp-asset-url';
 import {bodyJson,RequestBodyParseError} from './request-body';
 
 type StampRow={
@@ -58,7 +58,7 @@ export async function messageStampApi(request:Request,context:AppContext):Promis
           if(invalidFrameAssets.has(row.asset_id))return [];
           const sequence=framesByAsset.get(row.asset_id)||[];
           if(sequence.length<2||sequence.some((frame,index)=>frame.frame_index!==index))return [];
-          frames=sequence.flatMap(frame=>{const url=calendarStampStorageKeyUrl(row.storage_provider,frame.storage_key);return url?[{url,durationMs:frame.duration_ms}]:[];});
+          frames=sequence.flatMap(frame=>{const url=calendarStampFrameUrl(row.storage_provider,row.asset_id,frame.frame_index,frame.storage_key);return url?[{url,durationMs:frame.duration_ms}]:[];});
           if(frames.length!==sequence.length)return [];
         }
         return [{messageId:Number(row.message_id),kind:row.asset_kind,mimeType:row.mime_type,thumbnailUrl,fullUrl,frames,width:row.width,height:row.height}];
