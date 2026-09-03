@@ -81,7 +81,7 @@ export const normalizeOwnTracksLocation=(
   }
 
   const tst=payload.tst;
-  if(!Number.isSafeInteger(tst)||typeof tst!=='number'||tst<=0){
+  if(typeof tst!=='number'||!Number.isSafeInteger(tst)||tst<=0){
     return {ok:false,code:'INVALID_TIMESTAMP'};
   }
   const recordedMs=tst*1000;
@@ -96,11 +96,11 @@ export const normalizeOwnTracksLocation=(
   const velocityKmh=finiteOptional(payload,'vel');
   const heading=finiteOptional(payload,'cog');
   const battery=finiteOptional(payload,'batt');
-  if(accuracy===null||accuracy!==undefined&&accuracy<0||
+  if(accuracy===null||(accuracy!==undefined&&accuracy<0)||
     altitude===null||
-    velocityKmh===null||velocityKmh!==undefined&&velocityKmh<0||
-    heading===null||heading!==undefined&&(heading<0||heading>360)||
-    battery===null||battery!==undefined&&battery!==-1&&(battery<0||battery>100)){
+    velocityKmh===null||(velocityKmh!==undefined&&velocityKmh<0)||
+    heading===null||(heading!==undefined&&(heading<0||heading>360))||
+    battery===null||(battery!==undefined&&battery!==-1&&(battery<0||battery>100))){
     return {ok:false,code:'INVALID_TELEMETRY'};
   }
 
