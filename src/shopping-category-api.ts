@@ -2,13 +2,13 @@ import type { AppContext } from './app-context';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { commitSession } from './session';
 import { json } from './response';
-import { isValidShoppingCategoryName, normalizeShoppingCategoryName } from './shopping-categories';
+import { DEFAULT_SHOPPING_CATEGORY_NAMES, isValidShoppingCategoryName, normalizeShoppingCategoryName, shoppingCategoryKey } from './shopping-categories';
 
 function bad(message:string):Response{
   return json({ok:false,error:message,code:'BAD_REQUEST'},400);
 }
 
-/** Register or re-enable one reusable Shopping category for the signed-in family. */
+/** Register/re-enable reusable Shopping categories, and let OWNER/ADMIN remove them from future selectors. */
 export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promise<Response>{
   const member=ctx.member;
   if(!member)return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
@@ -28,6 +28,20 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
 
   const name=normalizeShoppingCategoryName(body.name);
   if(!isValidShoppingCategoryName(name))return bad('カテゴリー名は1〜255文字で入力してください。');
+
+  if(body.action==='disable'){
+    const role=String(member.role||'').toUpperCase();
+    if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です。',code:'FORBIDDEN'},403);
+    const defaultKeys=new Set(DEFAULT_SHOPPING_CATEGORY_NAMES.map(shoppingCategoryKey));
+    const isCustom=defaultKeys.has(shoppingCategoryKey(name))?0:1;
+    await ctx.env.DB.batch([
+      ctx.env.DB.prepare(`INSERT OR IGNORE INTO shopping_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
+        VALUES(?,?,0,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).bind(member.family_id,name,isCustom,member.id),
+      ctx.env.DB.prepare(`UPDATE shopping_category_catalog SET enabled=0,updated_at=CURRENT_TIMESTAMP
+        WHERE family_id=? AND name=? COLLATE NOCASE`).bind(member.family_id,name),
+    ]);
+    return commitSession(json({ok:true,name,enabled:false}),ctx.session,ctx.env.APP_SECRET);
+  }
 
   await ctx.env.DB.batch([
     ctx.env.DB.prepare(`INSERT OR IGNORE INTO shopping_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
