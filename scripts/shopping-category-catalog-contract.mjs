@@ -8,6 +8,8 @@ const editPage=readFileSync(new URL('../src/shopping-edit-page.ts',import.meta.u
 const editJs=readFileSync(new URL('../public/assets/shopping-edit.js',import.meta.url),'utf8');
 const categoryApi=readFileSync(new URL('../src/shopping-category-api.ts',import.meta.url),'utf8');
 const contextRoutes=readFileSync(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
+const settingsContent=readFileSync(new URL('../src/settings-content-page.ts',import.meta.url),'utf8');
+const settingsCategoryJs=readFileSync(new URL('../public/assets/settings-shopping-categories.js',import.meta.url),'utf8');
 
 const requireMatch=(text,pattern,message)=>{
   if(!pattern.test(text))throw new Error(message);
@@ -88,9 +90,31 @@ for(const pattern of [
   /INSERT OR IGNORE INTO shopping_category_catalog\(family_id,name,enabled,is_custom,created_by_member_id/,
   /UPDATE shopping_category_catalog SET enabled=1,updated_at=CURRENT_TIMESTAMP[\s\S]*WHERE family_id=\? AND name=\? COLLATE NOCASE/,
 ]) requireMatch(categoryApi,pattern,'Shopping category registration API must be CSRF-protected, validated, family-scoped, duplicate-safe, and re-enable existing options');
+for(const pattern of [
+  /body\.action==='disable'/,
+  /role!=='OWNER'&&role!=='ADMIN'/,
+  /DEFAULT_SHOPPING_CATEGORY_NAMES\.map\(shoppingCategoryKey\)/,
+  /INSERT OR IGNORE INTO shopping_category_catalog[\s\S]*VALUES\(\?,\?,0,\?,\?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP\)/,
+  /UPDATE shopping_category_catalog SET enabled=0,updated_at=CURRENT_TIMESTAMP[\s\S]*WHERE family_id=\? AND name=\? COLLATE NOCASE/,
+]) requireMatch(categoryApi,pattern,'Shopping category deletion must be admin-only, family-scoped disablement that can suppress defaults');
 if(/UPDATE\s+shopping_items|DELETE\s+FROM\s+shopping_items/i.test(categoryApi)){
-  throw new Error('category registration API must not rewrite/delete historical shopping item category strings');
+  throw new Error('category API must not rewrite/delete historical shopping item category strings');
 }
-requireMatch(contextRoutes,/url\.pathname==='\/api\/shopping-categories'[\s\S]*shoppingCategoryApi\(request,context\)/,'Shopping category registration API must be reachable through the retained context router');
+requireMatch(contextRoutes,/url\.pathname==='\/api\/shopping-categories'[\s\S]*shoppingCategoryApi\(request,context\)/,'Shopping category API must be reachable through the retained context router');
+
+for(const pattern of [
+  /resolveShoppingCategoryOptions\(categoryCatalog\.results\)/,
+  /id="shoppingCategoryAdmin"/,
+  /買い物カテゴリ/,
+  /data-shopping-category-delete=/,
+  /削除しても、過去・既存の買い物に保存済みのカテゴリ名は変更されません/,
+  /settings-shopping-categories\.js/,
+]) requireMatch(settingsContent,pattern,'OWNER/ADMIN management must list effective Shopping categories with non-destructive delete controls');
+for(const pattern of [
+  /fetch\('\/api\/shopping-categories'/,
+  /action:'disable'/,
+  /csrf:payload\.csrf/,
+  /data-shopping-category-row/,
+]) requireMatch(settingsCategoryJs,pattern,'Shopping category management browser helper must call the protected disable action and remove only the selector row');
 
 console.log('shopping category catalog contract ok');
