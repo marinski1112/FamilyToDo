@@ -26,8 +26,10 @@ for(const marker of [
 ]) if(!editPage.includes(marker)) throw new Error(`shopping edit lost ${marker}`);
 for(const marker of [
   "const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;",
-  'if(showAllLabel)showAllLabel.textContent=`その他の未完了タスクも表示${hidden?`（${hidden}件）`:\'\'}`;',
-]) if(!taskLink.includes(marker)) throw new Error(`shopping task candidate count lost ${marker}`);
+  "if(showAllLabel)showAllLabel.textContent=query?`検索を解除すると候補表示を切り替えられます`:`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;",
+  "searchInput.id='shoppingTaskSearch';",
+  "const matches=query?sorted.filter(task=>normalizeSearch(task.title).includes(query)):[];",
+]) if(!taskLink.includes(marker)) throw new Error(`shopping task candidate count/search lost ${marker}`);
 for(const marker of [
   "export { shopping } from './shopping-root';",
   "export { shoppingNew } from './shopping-new-page';",
