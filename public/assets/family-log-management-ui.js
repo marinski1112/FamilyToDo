@@ -28,6 +28,7 @@ try{
   if(subjectKind instanceof HTMLElement){
     const label=subjectKind.previousElementSibling;
     hideLegacyControl(label);
+    subjectKind.hidden=true;
     hideLegacyControl(subjectKind);
   }
   const typeHead=subjectForm?.querySelector('.family-log-type-setting-head');
@@ -39,6 +40,7 @@ try{
   const overviewToggle=document.getElementById('familyLogShowOverview')?.closest('label');
   hideLegacyControl(overviewToggle);
   const overviewTypes=document.getElementById('familyLogOverviewTypes');
+  if(overviewTypes)overviewTypes.hidden=true;
   hideLegacyControl(overviewTypes);
 
   const originalOpen=document.getElementById('familyLogSubjectOpen');
