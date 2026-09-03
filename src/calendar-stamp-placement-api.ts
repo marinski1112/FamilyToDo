@@ -49,7 +49,8 @@ export async function calendarStampPlacementApi(request:Request,context:any):Pro
     }
   }
   if(request.method==='PATCH'){
-    const placementId=Number(body.placementId||0),stampDate=String(body.stampDate||''),visibilityScope=body.visibilityScope==null?'FAMILY':String(body.visibilityScope),sortOrder=body.sortOrder==null?0:Number(body.sortOrder);
+    if(body.visibilityScope==null||body.sortOrder==null)return json({ok:false,error:'INVALID_PLACEMENT'},400);
+    const placementId=Number(body.placementId||0),stampDate=String(body.stampDate||''),visibilityScope=String(body.visibilityScope),sortOrder=Number(body.sortOrder);
     if(!Number.isSafeInteger(placementId)||placementId<=0||!Number.isSafeInteger(sortOrder))return json({ok:false,error:'INVALID_PLACEMENT'},400);
     try{
       const updated=await updateCalendarStampPlacement(context.env,s.familyId,s.memberId,placementId,{stampDate,visibilityScope:visibilityScope as 'FAMILY'|'PRIVATE',sortOrder});
