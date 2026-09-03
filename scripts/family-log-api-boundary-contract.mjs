@@ -40,6 +40,7 @@ for(const marker of [
 ]) if(!api.includes(marker)) throw new Error(`Family Log retained API lost behavior marker: ${marker}`);
 
 for(const marker of [
+  "import { logActivity } from './activity-log';",
   "import { familyLogApi } from './family-log-api';",
   "export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{",
   "request.clone()",
@@ -47,14 +48,19 @@ for(const marker of [
   "const expectedCsrf=String(ctx.session?.csrfToken||''),csrf=String(body.csrf||'');",
   "if(!expectedCsrf||!csrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF検証に失敗しました。'},403);",
   "if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者のみ操作できます。'},403);",
-  "SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1",
+  "SELECT id,active,name FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1",
   "json({ok:false,error:'クイック記録が見つかりません。'},404)",
-  "return familyLogApi(request,ctx);",
-]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost pre-mutation quick-action tenant guard: ${marker}`);
+  "const wasActive=Number(row.active||0)===1;",
+  "const response=await familyLogApi(request,ctx);",
+  "if(response.ok&&wasActive)",
+  "logActivity(ctx,'DISABLED','family_log_quick_action',id",
+  "return response;",
+]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost pre-mutation quick-action tenant/audit guard: ${marker}`);
 
-const guardQuery=boundary.indexOf('SELECT id FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1');
-const mutationCall=boundary.lastIndexOf('return familyLogApi(request,ctx);');
-if(guardQuery<0||mutationCall<0||guardQuery>mutationCall)throw new Error('quick-action tenant validation must occur before canonical mutation/sync execution');
+const guardQuery=boundary.indexOf('SELECT id,active,name FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1');
+const mutationCall=boundary.indexOf('const response=await familyLogApi(request,ctx);');
+const auditCall=boundary.indexOf("logActivity(ctx,'DISABLED','family_log_quick_action',id");
+if(guardQuery<0||mutationCall<0||auditCall<0||guardQuery>mutationCall||mutationCall>auditCall)throw new Error('quick-action tenant validation must precede canonical mutation, and audit logging must follow successful canonical mutation');
 
 if(!routes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('context API dispatcher must import retained Family Log mutation boundary');
 if(!routes.includes("if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);")) throw new Error('Family Log API route must use retained mutation boundary');
