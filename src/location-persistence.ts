@@ -58,6 +58,10 @@ export async function buildLocationPointDedupeKey(point:NormalizedLocationPoint)
  * current device/member sharing state in D1, so revoke/disable/share-off fails
  * closed even if it changes after credential verification. History is replay-
  * safe and latest only moves forward by sensor time (then receipt time).
+ *
+ * The boolean return means the device/member authorization was still valid at
+ * mutation time. A duplicate or older point may therefore return true without
+ * changing history/latest, while a revoked/share-off/inactive device returns false.
  */
 export async function persistAuthenticatedLocationPoint(
   db:D1Database,
@@ -90,8 +94,21 @@ export async function persistAuthenticatedLocationPoint(
       recorded_at,received_at
     )
     SELECT
-      d.family_id,d.member_id,d.id,d.provider,?,
-      ?,?,?,?,?,?,?,?, ?,?
+      d.family_id,
+      d.member_id,
+      d.id,
+      d.provider,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?
     FROM location_devices d
     JOIN members m
       ON m.id=d.member_id AND m.family_id=d.family_id AND m.active=1
@@ -111,8 +128,21 @@ export async function persistAuthenticatedLocationPoint(
       heading_degrees,battery_percent,trigger,recorded_at,received_at,updated_at
     )
     SELECT
-      d.member_id,d.family_id,d.id,d.provider,
-      ?,?,?,?,?,?,?,?, ?,?,CURRENT_TIMESTAMP
+      d.member_id,
+      d.family_id,
+      d.id,
+      d.provider,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      ?,
+      CURRENT_TIMESTAMP
     FROM location_devices d
     JOIN members m
       ON m.id=d.member_id AND m.family_id=d.family_id AND m.active=1
@@ -164,6 +194,7 @@ export async function persistAuthenticatedLocationPoint(
     device.id,device.publicId,device.familyId,device.memberId,device.provider,
   );
 
-  await db.batch([history,latest,deviceSeen]);
-  return true;
+  const results=await db.batch([history,latest,deviceSeen]);
+  const authorizedChanges=Number(results[2]?.meta?.changes??0);
+  return Number.isFinite(authorizedChanges)&&authorizedChanges>0;
 }
