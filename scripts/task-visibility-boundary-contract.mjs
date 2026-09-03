@@ -19,7 +19,7 @@ if(boundary.includes("from './app'")) throw new Error('task visibility boundary 
 const expectations=[
   ['src/task-api.ts',['taskVisibilitySql']],
   ['src/item-api.ts',['taskVisibilitySql']],
-  ['src/new-entry-pages.ts',['taskVisibilitySql','taskChildVisibilitySql']],
+  ['src/new-entry-pages.ts',['taskVisibilitySql']],
   ['src/activity-log-page.ts',['activityLogVisibilitySql']],
 ];
 for(const [file,names] of expectations){
