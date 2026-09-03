@@ -24,6 +24,7 @@ export const activeRegressionGroups=[
       ['message-new-page-boundary','node scripts/message-new-page-boundary-contract.mjs'],
       ['shopping-new-page-boundary','node scripts/shopping-new-page-boundary-contract.mjs'],
       ['shopping-domain-boundary','node scripts/shopping-domain-boundary-contract.mjs'],
+      ['shopping-task-link-effective-end','node scripts/shopping-task-link-effective-end-contract.mjs'],
       ['shopping-category-catalog','node scripts/shopping-category-catalog-contract.mjs'],
       ['messages-api-boundary','node scripts/messages-api-boundary-contract.mjs'],
       ['settings-root-boundary','node scripts/settings-root-boundary-contract.mjs'],
