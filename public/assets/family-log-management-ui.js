@@ -20,9 +20,34 @@ try{
   const quickManageNote=quickManage?.querySelector('p.small');
   if(quickManageNote)quickManageNote.textContent='ワンタッチ・入力して記録・睡眠開始/終了を、クイックタスクとして対象ごとに編集できます。';
 
+  // subject_kind / enabled_types / overview_quick_types remain compatibility metadata,
+  // but normal management no longer exposes the old baby/child/pet-specific record UI.
+  const subjectForm=document.getElementById('familyLogSubjectForm');
+  const hideLegacyControl=element=>{if(element instanceof HTMLElement){element.hidden=true;element.style.display='none';element.setAttribute('aria-hidden','true');}};
+  const subjectKind=subjectForm?.elements.namedItem('subject_kind');
+  if(subjectKind instanceof HTMLElement){
+    const label=subjectKind.previousElementSibling;
+    hideLegacyControl(label);
+    subjectKind.hidden=true;
+    hideLegacyControl(subjectKind);
+  }
+  const typeHead=subjectForm?.querySelector('.family-log-type-setting-head');
+  hideLegacyControl(typeHead);
+  const typeGrid=subjectForm?.querySelector('.choice-list.family-log-type-choice-grid');
+  hideLegacyControl(typeGrid);
+  const subjectGuide=document.getElementById('familyLogSubjectGuide');
+  hideLegacyControl(subjectGuide);
+  const overviewToggle=document.getElementById('familyLogShowOverview')?.closest('label');
+  hideLegacyControl(overviewToggle);
+  const overviewTypes=document.getElementById('familyLogOverviewTypes');
+  if(overviewTypes)overviewTypes.hidden=true;
+  hideLegacyControl(overviewTypes);
+
   const originalOpen=document.getElementById('familyLogSubjectOpen');
   const subjectRows=[...document.querySelectorAll('.family-log-management-row:not(.family-chore-management-row)')];
   const subjectCard=subjectRows[0]?.closest('.card')||null;
+  const subjectCardTitle=subjectCard?.querySelector('.section-head h2');
+  if(subjectCardTitle)subjectCardTitle.textContent='記録対象';
 
   if(subjectCard){
     const allQuickCard=document.createElement('div');
@@ -56,7 +81,7 @@ try{
   trigger.id='familyLogSubjectOpen';
   trigger.hidden=false;
   trigger.removeAttribute('aria-hidden');
-  trigger.textContent='＋ 対象・項目';
+  trigger.textContent='＋ 対象';
   originalOpen.parentElement?.insertBefore(trigger,originalOpen);
 
   const style=document.createElement('style');
@@ -78,7 +103,7 @@ try{
     .family-log-subject-manager-list .family-log-management-row:last-child{border-bottom:0!important}
     .family-log-subject-manager-list .family-log-management-row::after{content:'›';justify-self:end;color:#64748b;font-size:24px;line-height:1}
     .family-log-subject-manager-list .family-log-management-row>span{min-width:0!important}
-    .family-log-subject-manager-list .family-log-management-row small{display:inline!important;margin-left:7px!important}
+    .family-log-subject-manager-list .family-log-management-row small{display:none!important}
     .family-log-subject-manager-list .family-log-management-row .family-log-subject-edit{display:none!important}
     .family-log-subject-manager-actions{display:grid;gap:8px;margin-top:12px}
     .family-log-subject-manager-actions .btn{width:100%}
@@ -89,7 +114,7 @@ try{
   const overlay=document.createElement('div');
   overlay.className='family-log-subject-manager';
   overlay.setAttribute('aria-hidden','true');
-  overlay.innerHTML='<div class="family-log-subject-manager-panel" role="dialog" aria-modal="true" aria-labelledby="familyLogSubjectManagerTitle"><div class="family-log-subject-manager-head"><h2 id="familyLogSubjectManagerTitle">記録対象・表示項目</h2><button type="button" class="btn gray small" data-manager-close>閉じる</button></div><div class="family-log-subject-manager-list"></div><div class="family-log-subject-manager-actions"><button type="button" class="btn" data-manager-new>＋ 新しい対象を追加</button></div></div>';
+  overlay.innerHTML='<div class="family-log-subject-manager-panel" role="dialog" aria-modal="true" aria-labelledby="familyLogSubjectManagerTitle"><div class="family-log-subject-manager-head"><h2 id="familyLogSubjectManagerTitle">記録対象</h2><button type="button" class="btn gray small" data-manager-close>閉じる</button></div><div class="family-log-subject-manager-list"></div><div class="family-log-subject-manager-actions"><button type="button" class="btn" data-manager-new>＋ 新しい対象を追加</button></div></div>';
   document.body.appendChild(overlay);
   const list=overlay.querySelector('.family-log-subject-manager-list');
   subjectRows.forEach(row=>{

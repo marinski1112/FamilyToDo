@@ -112,9 +112,11 @@ assert.match(familyCore,/familyLogSubjectOpen/,'Family Log core must retain subj
 assert.match(familyUi,/if\(head\)\[\.\.\.head\.children\]\.forEach/,'Family Log management must inspect every header child rather than only one legacy action');
 assert.match(familyUi,/element\.tagName!=='H1'/,'Family Log management must preserve only the page heading in its header');
 assert.match(familyUi,/element\.remove\(\)/,'Family Log management must remove stale top-right header actions when present');
-assert.match(familyUi,/＋ 対象・項目/,'Family Log subject management must use one consolidated entry point');
+assert.match(familyUi,/trigger\.textContent='＋ 対象'/,'Family Log subject management must use one consolidated record-target entry point');
 assert.match(familyUi,/family-log-subject-manager-list/,'Family Log subject manager must expose existing rows inside the manager');
 assert.match(familyUi,/edit\?\.click\(\)/,'tapping an existing subject row must reuse the existing edit flow');
+assert.match(familyUi,/subjectKind\.hidden=true/,'legacy subject-kind selection must stay hidden in normal management');
+assert.match(familyUi,/overviewTypes\.hidden=true/,'legacy overview type selection must stay hidden in normal management');
 
 // Static cache lifecycle is a product-level invariant, not a Wave number.
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO static namespace');
