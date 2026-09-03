@@ -57,6 +57,9 @@ for(const [name,source] of [['message-new',compose],['messages',messages]]){
     'b.assetId=',
     "textarea.required=selectedStampId<=0",
     "credentials:'same-origin'",
+    'loaded=false',
+    'loaded=true',
+    'もう一度押すと再試行します。',
   ]) assert.ok(source.includes(token),`${name} shared stamp picker missing: ${token}`);
   assert.doesNotMatch(source,/storage_key|thumbnail_storage_key|authorization|cookie|signed[_-]?url/i,`${name} stamp UI must not depend on raw storage or credential details`);
 }
@@ -67,10 +70,10 @@ for(const token of [
   'frames.length>=2',
   "matchMedia('(prefers-reduced-motion: reduce)').matches",
   "url.searchParams.set('stamp_play',String(Date.now()))",
-  "row.querySelectorAll('.convert-shopping,.convert-task,.edit-message').forEach(button=>button.hidden=true)",
   "if(text&&text.textContent.trim()==='スタンプ')text.hidden=true",
   "image.className='message-stamp-attached'",
 ]) assert.ok(messages.includes(token),`Messages stamp rendering/playback missing: ${token}`);
 assert.ok(messages.includes('catch{/* stamp enhancement is optional; normal Messages stay usable */}'),'stamp read enhancement must fail closed without breaking normal Messages');
+assert.doesNotMatch(messages,/row\.querySelectorAll\('\.convert-shopping,\.convert-task,\.edit-message'\).*hidden=true/,'stamp enhancement must not create a client-only action restriction that can be bypassed while attachment state is loading');
 
-console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, compose, rendering and sequential-PNG playback semantics');
+console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, rendering and sequential-PNG playback semantics');
