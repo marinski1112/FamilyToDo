@@ -25,3 +25,12 @@ test "$(sqlite3 "$db" "SELECT dflt_value FROM pragma_table_info('family_log_sett
 echo 'wave92 settings migration smoke: ok'
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('google_home_authorization_codes','google_home_tokens','external_command_receipts')")" = 3
 echo 'wave96 google home migration smoke: ok'
+
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('location_devices','member_location_latest','member_location_history')")" = 3
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('location_devices') WHERE name IN ('public_id','family_id','member_id','provider','secret_hash','enabled','sharing_enabled','revoked_at')")" = 8
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('location_devices') WHERE lower(name) IN ('secret','token','authorization','raw_payload','payload')")" = 0
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('member_location_latest') WHERE name IN ('family_id','member_id','device_id','provider','latitude','longitude','recorded_at','received_at')")" = 8
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('member_location_history') WHERE name IN ('family_id','member_id','device_id','provider','dedupe_key','latitude','longitude','recorded_at','received_at')")" = 9
+sqlite3 "$db" "INSERT INTO location_devices(public_id,family_id,member_id,provider,secret_hash,enabled,sharing_enabled) VALUES('device-public-id-0001',1,1,'OWNTRACKS','0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',1,0);"
+test "$(sqlite3 "$db" "SELECT sharing_enabled FROM location_devices WHERE public_id='device-public-id-0001'")" = 0
+echo 'location persistence migration smoke: ok'
