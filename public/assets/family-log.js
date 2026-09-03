@@ -59,15 +59,26 @@ try{
     if(groups.length){
       let overview=document.querySelector('.family-log-overview-quick');
       if(!overview){overview=document.createElement('div');overview.className='family-log-overview-quick';document.querySelector('.family-log-date-head')?.insertAdjacentElement('afterend',overview);}
-      // The retained server page does not yet expose a stable subject id on legacy
-      // overview sections. Until it does, replace a legacy palette only when exactly
-      // one eligible payload subject can produce that full heading and exactly one
-      // legacy section has it. Any name/icon collision preserves the fallback.
       const legacySections=[...overview.querySelectorAll('.family-log-overview-group:not(.family-log-unified-quick-group)')];
+      // The server-rendered legacy buttons already carry data-subject-id. Prefer that
+      // stable identity so old baby/child/pet palettes disappear even when names/icons
+      // collide. Heading matching remains a conservative compatibility fallback for
+      // legacy sections that expose no usable subject id (for example sleep-only state).
+      const legacySubjectId=section=>{
+        const ids=[...new Set([...section.querySelectorAll('[data-subject-id]')].map(node=>Number(node.dataset.subjectId||0)).filter(Boolean))];
+        return ids.length===1?ids[0]:0;
+      };
       for(const authority of authoritativeSubjects){
-        const matchingSubjects=eligibleSubjects.filter(subject=>displayPrefix(subject)===authority.subjectPrefix);
-        if(matchingSubjects.length!==1)continue;
-        const matches=legacySections.filter(section=>String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix);
+        let matches=legacySections.filter(section=>legacySubjectId(section)===authority.subjectId);
+        if(matches.length!==1){
+          // The retained server page may not expose a usable subject id on every legacy
+          // overview section. Fall back only when exactly one eligible payload subject can
+          // produce the full heading and exactly one legacy section has it.
+          // Any name/icon collision preserves the fallback.
+          const matchingSubjects=eligibleSubjects.filter(subject=>displayPrefix(subject)===authority.subjectPrefix);
+          if(matchingSubjects.length!==1)continue;
+          matches=legacySections.filter(section=>String(section.querySelector('h2')?.textContent||'').trim()===authority.subjectPrefix);
+        }
         if(matches.length!==1)continue;
         const legacy=matches[0],grid=authority.section.querySelector('.family-log-quick-grid');
         legacy.querySelectorAll('.family-log-sleep-start,.family-log-sleep-stop').forEach(control=>grid?.appendChild(control));
