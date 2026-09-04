@@ -10,6 +10,7 @@ const calendarApi=fs.readFileSync('src/calendar-stamp-api.ts','utf8');
 const messageApi=fs.readFileSync('src/message-stamp-api.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const settings=fs.readFileSync('public/assets/settings-stamps.js','utf8');
+const calendarUi=fs.readFileSync('public/assets/calendar-stamp-ui.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
 
@@ -79,6 +80,10 @@ for(const token of [
   'return file;',
 ]) assert.ok(settings.includes(token),`Stamp client upload normalization missing: ${token}`);
 
+assert.match(calendarUi,/image\.src=thumbnailUrl/,'Calendar month/list stamp rendering must request the thumbnail projection');
+assert.match(calendarUi,/if\(frames\.length>=2\)[\s\S]*frames\.forEach\(frame=>\{const preload=new Image\(\);preload\.src=frame\.url;\}\)[\s\S]*viewer\.classList\.add\('open'\);play\(\);/,'Animation frames must preload only inside viewer-open playback setup');
+assert.doesNotMatch(calendarUi,/preloadVisibleStamps|preloadStampMedia|requestIdleCallback/,'Calendar month/list rendering must not eagerly preload full stamp frames');
+
 assert.match(admin,/body\.storageProvider==='UPLOAD'\?'UPLOAD':'ASSETS'/,'admin sequence registration must allow the R2-backed logical UPLOAD provider while preserving ASSETS');
 assert.match(calendarApi,/calendarStampFrameUrl\(placement\.storage_provider,placement\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Calendar read projection must route UPLOAD frames through the authenticated media endpoint');
 assert.match(messageApi,/calendarStampFrameUrl\(row\.storage_provider,row\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Message read projection must route UPLOAD frames through the authenticated media endpoint');
@@ -97,4 +102,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, lazy viewer-only animation frame loading, and backend-neutral metadata');
