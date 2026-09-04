@@ -15,7 +15,7 @@ const phase1Ready=new Set(['owntracks','latest','history']);
 /**
  * Location landing surface. It never requests browser geolocation. The live
  * family projection is loaded by /assets/location.js from the authenticated,
- * family-scoped /api/location/latest boundary.
+ * family-scoped latest-location API boundary.
  */
 export async function locationPage(_request:Request,ctx:AppContext):Promise<Response>{
   const memberName=esc(ctx.member?.name||'');
