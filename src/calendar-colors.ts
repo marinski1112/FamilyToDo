@@ -9,6 +9,12 @@ export const CALENDAR_COLOR_OPTIONS=[
   {value:'#db2777',label:'ピンク'},
   {value:'#0891b2',label:'水色'},
   {value:'#64748b',label:'灰'},
+  {value:'#f35f8c',label:'ローズピンク（TimeTree）'},
+  {value:'#2ecc87',label:'エメラルド（TimeTree）'},
+  {value:'#47b2f7',label:'スカイブルー（TimeTree）'},
+  {value:'#b38bdc',label:'ラベンダー（TimeTree）'},
+  {value:'#fdc02d',label:'アンバー（TimeTree）'},
+  {value:'#fb7f77',label:'コーラル（TimeTree）'},
 ] as const;
 
 const CALENDAR_COLOR_PATTERN=/^#[0-9a-f]{6}$/i;
