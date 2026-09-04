@@ -12,11 +12,19 @@ for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';",
+  "const phase1Ready=new Set(['owntracks','latest','history']);",
   "export async function locationPage(_request:Request,ctx:AppContext):Promise<Response>{",
   "return html(layout('位置情報',body,'/app/location.php'));",
-  '位置共有: ${privacy.sharingEnabled?\'ON\':\'OFF\'}',
-  '位置情報は送信・保存しません',
+  '位置共有の既定値: ${privacy.sharingEnabled?\'ON\':\'OFF\'}',
+  '登録した端末も最初は共有OFFです。',
+  '共有ONの登録端末から認証済みの位置情報が届いた場合にだけ',
+  '共有OFFまたは失効済みの端末は位置送信・参照の対象外になります。',
 ])if(!page.includes(marker))throw new Error(`Location page boundary marker missing: ${marker}`);
+
+for(const stale of [
+  'この初期画面では端末位置を取得せず、FamilyToDo側にも最新位置・履歴を保存しません。',
+  '次段階で OwnTracks ingress、端末ごとのsecret、latest/history/place/distance を個別に設計',
+])if(page.includes(stale))throw new Error(`Location page must not describe implemented Phase 1 foundations as future work: ${stale}`);
 
 for(const marker of [
   'sharingEnabled:false',
@@ -44,7 +52,7 @@ for(const marker of [
 ])if(!providers.includes(marker))throw new Error(`Location provider boundary marker missing: ${marker}`);
 
 for(const forbidden of ['ctx.env.DB','DB.prepare','navigator.geolocation','fetch(','/api/location']){
-  if(page.includes(forbidden)||domain.includes(forbidden)||providers.includes(forbidden))throw new Error(`Location shell/boundaries must not activate persistence/ingress yet: ${forbidden}`);
+  if(page.includes(forbidden)||domain.includes(forbidden)||providers.includes(forbidden))throw new Error(`Location page/domain/provider-neutral boundaries must not directly perform Location persistence or ingress: ${forbidden}`);
 }
 for(const providerSpecific of ['googleapis.com','maps.googleapis.com','owntracks','LINE_ACCESS_TOKEN','GOOGLE_']){
   if(providers.toLowerCase().includes(providerSpecific.toLowerCase()))throw new Error(`Location provider-neutral boundary must not embed a provider implementation: ${providerSpecific}`);
@@ -56,4 +64,4 @@ if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Erro
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: privacy-first shell, provider-neutral service boundaries, retained Shopping management route and Location navigation ok');
+console.log('location-page-boundary: privacy-first Phase 1 status, provider-neutral service boundaries, retained Shopping management route and Location navigation ok');
