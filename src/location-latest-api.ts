@@ -9,8 +9,10 @@ type FamilyMemberRow=Readonly<{
 }>;
 
 type LocationFreshness='FRESH'|'AGING'|'STALE'|'NO_LOCATION'|'SHARING_OFF';
+type CoordinatePoint=Readonly<{latitude:number;longitude:number}>;
 
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
+const toRadians=(degrees:number):number=>degrees*Math.PI/180;
 
 function fail(status:number,code:string,message:string):Response{
   return json({ok:false,error:message,code},status,{'cache-control':'no-store'});
@@ -25,6 +27,20 @@ function freshness(recordedAt:string|null,sharingEnabled:boolean,nowMs:number):R
   if(ageMinutes<=5)return {state:'FRESH',ageMinutes};
   if(ageMinutes<=30)return {state:'AGING',ageMinutes};
   return {state:'STALE',ageMinutes};
+}
+
+function straightLineDistanceMeters(from:CoordinatePoint,to:CoordinatePoint):number|null{
+  const values=[from.latitude,from.longitude,to.latitude,to.longitude];
+  if(values.some((value)=>!Number.isFinite(value)))return null;
+  if(Math.abs(from.latitude)>90||Math.abs(to.latitude)>90||Math.abs(from.longitude)>180||Math.abs(to.longitude)>180)return null;
+  const earthRadiusMeters=6371000;
+  const latitudeDelta=toRadians(to.latitude-from.latitude);
+  const longitudeDelta=toRadians(to.longitude-from.longitude);
+  const fromLatitude=toRadians(from.latitude);
+  const toLatitude=toRadians(to.latitude);
+  const haversine=Math.sin(latitudeDelta/2)**2+Math.cos(fromLatitude)*Math.cos(toLatitude)*Math.sin(longitudeDelta/2)**2;
+  const angularDistance=2*Math.atan2(Math.sqrt(haversine),Math.sqrt(Math.max(0,1-haversine)));
+  return Math.round(earthRadiusMeters*angularDistance);
 }
 
 /**
@@ -63,22 +79,34 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
 
   const service=new D1LocationQueryService(ctx.env.DB);
   const nowMs=Date.now();
+  const requesterRow=rows.results.find((row)=>Number(row.id)===requesterMemberId);
+  const requesterSharingEnabled=Number(requesterRow?.sharing_enabled)===1;
+  const requesterPoint=requesterSharingEnabled?await service.latest({
+    scope:{familyId,requesterMemberId},
+    subjectMemberId:requesterMemberId,
+  }):null;
   const members=[];
 
   for(const row of rows.results){
     const subjectMemberId=Number(row.id);
     if(!isPositiveId(subjectMemberId))continue;
     const sharingEnabled=Number(row.sharing_enabled)===1;
-    const point=sharingEnabled?await service.latest({
-      scope:{familyId,requesterMemberId},
-      subjectMemberId,
-    }):null;
+    const point=sharingEnabled
+      ?(subjectMemberId===requesterMemberId?requesterPoint:await service.latest({
+        scope:{familyId,requesterMemberId},
+        subjectMemberId,
+      }))
+      :null;
     const safeFreshness=freshness(point?.recordedAt??null,sharingEnabled,nowMs);
+    const distanceMetersFromViewer=subjectMemberId!==requesterMemberId&&requesterPoint&&point
+      ?straightLineDistanceMeters(requesterPoint,point)
+      :null;
     members.push({
       name:String(row.name??''),
       sharingEnabled,
       state:safeFreshness.state,
       ageMinutes:safeFreshness.ageMinutes,
+      distanceMetersFromViewer,
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,
