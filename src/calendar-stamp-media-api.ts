@@ -30,6 +30,14 @@ function positiveId(value:string|null):number|null{
   return Number.isSafeInteger(id)&&id>0?id:null;
 }
 
+function matchesIfNoneMatch(value:string|null,etag:string):boolean{
+  if(!value||!etag)return false;
+  return value.split(',').some(candidate=>{
+    const token=candidate.trim();
+    return token==='*'||token===etag;
+  });
+}
+
 async function referencedUploadKey(env:Env,familyId:number,assetId:number,url:URL):Promise<string|null>{
   const frameRaw=url.searchParams.get('frame');
   if(frameRaw!==null){
@@ -68,7 +76,9 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
     const headers=new Headers({'content-type':'image/png','cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
     const contentType=String(object.httpMetadata?.contentType||'');
     if(contentType==='image/png')headers.set('content-type',contentType);
-    if(object.etag)headers.set('etag',String(object.etag));
+    const etag=object.etag?String(object.etag):'';
+    if(etag)headers.set('etag',etag);
+    if(etag&&matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});
     return new Response(object.body,{status:200,headers});
   }catch{
     return json({ok:false,error:'MEDIA_READ_FAILED'},500);
