@@ -18,6 +18,12 @@ const expected=[
   ['#db2777','ピンク'],
   ['#0891b2','水色'],
   ['#64748b','灰'],
+  ['#f35f8c','ローズピンク（TimeTree）'],
+  ['#2ecc87','エメラルド（TimeTree）'],
+  ['#47b2f7','スカイブルー（TimeTree）'],
+  ['#b38bdc','ラベンダー（TimeTree）'],
+  ['#fdc02d','アンバー（TimeTree）'],
+  ['#fb7f77','コーラル（TimeTree）'],
 ];
 for(const [value,label] of expected){
   if(!colors.includes(`{value:'${value}',label:'${label}'}`)) throw new Error(`calendar color contract lost ${label} ${value}`);
