@@ -19,6 +19,9 @@ for(const marker of [
   'data-location-live',
   'data-location-map-state',
   'data-location-list',
+  'data-location-refresh',
+  'type="button"',
+  'aria-label="家族の最新位置を更新"',
   'この画面は端末の現在地を自動取得しません。',
   '位置が古い場合は「現在地」と断定せず',
   '位置共有の既定値: ${privacy.sharingEnabled?\'ON\':\'OFF\'}',
@@ -57,9 +60,19 @@ for(const marker of [
   "mapLink.target='_blank';",
   "mapLink.rel='noopener noreferrer';",
   "mapLink.textContent='Google Mapsで開く';",
+  "const refreshEl=root.querySelector('[data-location-refresh]');",
+  'let loading=false;',
+  'let hasRendered=false;',
+  'if(loading)return;',
+  'setRefreshBusy(true);',
+  "setStatus(hasRendered?'最新位置を更新しています…':'最新位置を確認しています…');",
+  "setStatus('最新位置を更新できませんでした ・ 表示は前回取得分です');",
+  'setRefreshBusy(false);',
+  "if(refreshEl)refreshEl.addEventListener('click',()=>void load());",
 ])if(!client.includes(marker))throw new Error(`Location client fallback marker missing: ${marker}`);
 for(const forbidden of [
   'navigator.geolocation',
+  'setInterval(',
   'console.log',
   'console.error',
   'Authorization',
@@ -110,4 +123,4 @@ if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/lo
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: Phase 2D safe latest projection with viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials, provider-neutral service boundaries ok');
+console.log('location-page-boundary: Phase 2E safe latest projection with manual refresh, viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials/auto polling, provider-neutral service boundaries ok');
