@@ -209,6 +209,10 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
     const text=String(b.text??'').trim();
     const target=Number(b.target_member_id??0)||null;
     if(!text)return bad('伝言を入力してください。');
+    if(target){
+      const tm=await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(target,m.family_id).first<Row>();
+      if(!tm)return bad('宛先のメンバーが見つかりません。');
+    }
     const reminderRaw=String(b.reminder_at??'').trim();
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
     if(reminderRaw&&!reminderAt)return bad('通知日時が不正です。');
@@ -225,7 +229,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
   }
 
   const [rows,members,tasks]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT msg.*,s.name sender_name,r.name recipient_name,sh.name shopping_name,t.title task_title FROM messages msg LEFT JOIN members s ON s.id=msg.sender_id LEFT JOIN members r ON r.id=msg.target_member_id LEFT JOIN shopping_items sh ON sh.id=msg.converted_to_shopping_id LEFT JOIN tasks t ON t.id=msg.converted_to_task_id AND (t.visibility_scope='FAMILY' OR t.private_owner_id=?) WHERE msg.family_id=? ORDER BY msg.created_at DESC,msg.id DESC LIMIT 100`).bind(m.id,m.family_id).all<Row>(),
+    ctx.env.DB.prepare(`SELECT msg.*,s.name sender_name,r.name recipient_name,sh.name shopping_name,t.title task_title FROM messages msg LEFT JOIN members s ON s.id=msg.sender_id LEFT JOIN members r ON r.id=msg.target_member_id AND r.family_id=msg.family_id LEFT JOIN shopping_items sh ON sh.id=msg.converted_to_shopping_id LEFT JOIN tasks t ON t.id=msg.converted_to_task_id AND (t.visibility_scope='FAMILY' OR t.private_owner_id=?) WHERE msg.family_id=? ORDER BY msg.created_at DESC,msg.id DESC LIMIT 100`).bind(m.id,m.family_id).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
     ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) ORDER BY COALESCE(start_at,due_at),id DESC LIMIT 200").bind(m.family_id).all<Row>(),
   ]);
