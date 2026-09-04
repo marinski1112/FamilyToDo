@@ -7,6 +7,7 @@ const handlers=fs.readFileSync('src/shopping-page-handlers.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
 const taskLink=fs.readFileSync('public/assets/shopping-task-link.js','utf8');
+const newJs=fs.readFileSync('public/assets/shopping-new.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
 const pkg=fs.readFileSync('package.json','utf8');
 
@@ -51,6 +52,23 @@ for(const marker of [
   'id="shoppingNewPayload"',
   '/assets/shopping-new.js?v=${APP_VERSION}',
 ]) if(!newPage.includes(marker)) throw new Error(`Shopping new page lost behavior marker: ${marker}`);
+
+for(const marker of [
+  "const categoryRegisterControl=categoryRegister.closest('label')||categoryRegister.parentElement;",
+  "categoryRegisterToggle.type='button';",
+  "categoryRegisterToggle.setAttribute('aria-expanded','false');",
+  "categoryRegisterToggle.textContent='＋ カテゴリを登録';",
+  "categoryRegisterToggle.setAttribute('aria-controls',categoryRegisterControl.id);",
+  'categoryRegisterControl.hidden=true;',
+  "categoryRegisterToggle.addEventListener('click',()=>{",
+  "if(open)categoryRegister.focus();",
+  'if(!custom)categoryRegister.checked=false;',
+  'if(categoryRegisterControl)categoryRegisterControl.hidden=true;',
+  "if(categoryRegisterToggle)categoryRegisterToggle.setAttribute('aria-expanded','false');",
+  "const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;",
+  "fetch('/api/shopping-categories'",
+  "const body={action:'add_batch'",
+]) if(!newJs.includes(marker)) throw new Error(`Shopping new category disclosure lost behavior marker: ${marker}`);
 
 for(const marker of [
   "import { archiveShoppingCompletionStatements } from './lifecycle';",
