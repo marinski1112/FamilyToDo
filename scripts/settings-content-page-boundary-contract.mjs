@@ -57,7 +57,7 @@ for(const marker of [
   "lines.length<2||lines.length>48",
   'durationMs<40||durationMs>2000',
   "files.length<2||files.length>48",
-  "file.size>4*1024*1024",
+  'const MAX_UPLOAD_BYTES=4*1024*1024',
   "fetch('/api/calendar-stamp-admin/upload'",
   "'x-csrf-token':token",
   "storageProvider='UPLOAD'",

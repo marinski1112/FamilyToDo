@@ -9,6 +9,8 @@
   const inventoryStatus=document.getElementById('calendarStampInventoryStatus');
   const text=value=>String(value??'').trim();
   const csrf=()=>text(new FormData(form).get('csrf'));
+  const MAX_UPLOAD_EDGE=512;
+  const MAX_UPLOAD_BYTES=4*1024*1024;
   const setStatus=(message,ok=false)=>{
     if(!status)return;
     status.textContent=message;
@@ -50,19 +52,46 @@
     for(let index=0;index<files.length;index++){
       const file=files[index];
       if(!(file instanceof File)||file.type!=='image/png'||!/\.png$/i.test(file.name))throw new Error(`${index+1}枚目はPNGファイルを選択してください。`);
-      if(file.size<=0||file.size>4*1024*1024)throw new Error(`${index+1}枚目は4MiB以下にしてください。`);
+      if(file.size<=0||file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目は4MiB以下にしてください。`);
+    }
+  };
+
+  const normalizeUploadFile=async file=>{
+    if(typeof createImageBitmap!=='function')return file;
+    let bitmap=null;
+    try{
+      bitmap=await createImageBitmap(file);
+      const sourceWidth=Number(bitmap.width),sourceHeight=Number(bitmap.height);
+      if(!Number.isFinite(sourceWidth)||!Number.isFinite(sourceHeight)||sourceWidth<=0||sourceHeight<=0)return file;
+      const longEdge=Math.max(sourceWidth,sourceHeight);
+      if(longEdge<=MAX_UPLOAD_EDGE)return file;
+      const scale=MAX_UPLOAD_EDGE/longEdge;
+      const targetWidth=Math.max(1,Math.round(sourceWidth*scale)),targetHeight=Math.max(1,Math.round(sourceHeight*scale));
+      const canvas=document.createElement('canvas');canvas.width=targetWidth;canvas.height=targetHeight;
+      const context=canvas.getContext('2d',{alpha:true});
+      if(!context||typeof canvas.toBlob!=='function')return file;
+      context.clearRect(0,0,targetWidth,targetHeight);
+      context.drawImage(bitmap,0,0,targetWidth,targetHeight);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(!(blob instanceof Blob)||blob.size<=0||blob.size>MAX_UPLOAD_BYTES)return file;
+      return new File([blob],file.name,{type:'image/png',lastModified:file.lastModified});
+    }catch{
+      return file;
+    }finally{
+      try{bitmap?.close?.();}catch{}
     }
   };
 
   const uploadFrames=async(files,token,durationMs)=>{
     const frames=[];
     for(let index=0;index<files.length;index++){
-      setStatus(`PNGをアップロードしています… ${index+1}/${files.length}`);
+      setStatus(`PNGを最適化・アップロードしています… ${index+1}/${files.length}`);
+      const uploadFile=await normalizeUploadFile(files[index]);
       const response=await fetch('/api/calendar-stamp-admin/upload',{
         method:'POST',
         credentials:'same-origin',
         headers:{'content-type':'image/png','x-csrf-token':token},
-        body:files[index],
+        body:uploadFile,
       });
       let payload={};
       try{payload=await response.json();}catch{}
