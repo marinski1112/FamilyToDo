@@ -9,8 +9,11 @@ import { calendarWatchNotificationOnly } from './google-calendar-one-way';
 import { googleTasksCallback } from './google-tasks';
 import { liffDispatcher, lineGoogleHomeStart, lineGoogleHomeCallback, resumeGoogleHome } from './oauth-continuation';
 import { ownTracksLocationIngress } from './location-owntracks-ingress';
+import { privacyPage, termsPage } from './legal-pages';
 
 export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{
+  if(url.pathname==='/privacy') return privacyPage();
+  if(url.pathname==='/terms') return termsPage();
   if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
   if(url.pathname==='/__cf/secrets-health') return json({ok:true,service:'familytodo-secrets'});
   if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}
