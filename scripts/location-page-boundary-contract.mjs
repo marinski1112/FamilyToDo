@@ -45,6 +45,14 @@ for(const marker of [
   'textContent=name',
   'replaceChildren()',
   '精度 ±${Math.round(accuracy)}m',
+  'const googleMapsUrl=(latest)=>{',
+  'latitude < -90||latitude > 90',
+  'longitude < -180||longitude > 180',
+  'https://www.google.com/maps/search/?api=1&query=',
+  'const mapUrl=member.sharingEnabled?googleMapsUrl(member.latest):null;',
+  "mapLink.target='_blank';",
+  "mapLink.rel='noopener noreferrer';",
+  "mapLink.textContent='Google Mapsで開く';",
 ])if(!client.includes(marker))throw new Error(`Location client fallback marker missing: ${marker}`);
 for(const forbidden of [
   'navigator.geolocation',
@@ -98,4 +106,4 @@ if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/lo
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: Phase 2B latest projection shell/list fallback, no browser geolocation/provider credentials, provider-neutral service boundaries ok');
+console.log('location-page-boundary: Phase 2C safe latest projection with explicit Google Maps deep links, no browser geolocation/provider credentials, provider-neutral service boundaries ok');
