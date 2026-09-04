@@ -29,6 +29,14 @@ for(const marker of [
   "return html(layout('伝言',body,'/app/messages.php'));",
 ]) if(!handler.includes(marker)) throw new Error(`Messages handler lost behavior marker: ${marker}`);
 
+const targetLookup='SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1';
+if(handler.split(targetLookup).length-1<2) throw new Error('Messages create/edit must validate recipients within the active authenticated family');
+const createStart=handler.lastIndexOf("const text=String(b.text??'').trim();");
+const createTargetCheck=handler.indexOf(targetLookup,createStart);
+const createInsert=handler.indexOf('INSERT INTO messages(family_id,sender_id,target_member_id',createStart);
+if(createStart<0||createTargetCheck<0||createInsert<0||createTargetCheck>createInsert) throw new Error('Messages create must validate target_member_id before INSERT');
+if(!handler.includes('LEFT JOIN members r ON r.id=msg.target_member_id AND r.family_id=msg.family_id')) throw new Error('Messages recipient display JOIN must remain family-scoped');
+
 if(handler.includes("from './app'")) throw new Error('Messages retained handler must not depend on app.ts');
 if(!routes.includes("import { messages } from './messages-api';")) throw new Error('context API dispatcher must import retained messages handler');
 if(!routes.includes("if(url.pathname==='/api/messages') return await messages(request,context);")) throw new Error('/api/messages route wiring changed');
