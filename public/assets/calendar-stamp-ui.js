@@ -19,8 +19,6 @@ try{
   let viewerTimer=0,viewerRun=0,currentViewerStamp=null,deleting=false,updating=false;
   const closeViewer=()=>{if(deleting||updating)return;viewerRun+=1;clearTimeout(viewerTimer);viewerTimer=0;currentViewerStamp=null;viewer.classList.remove('open');if(viewerImage)viewerImage.removeAttribute('src');if(viewerStatus)viewerStatus.textContent='';};
   const normalizedFrames=stamp=>Array.isArray(stamp?.frames)?stamp.frames.map(frame=>({url:safeAssetPath(frame?.url),durationMs:Number(frame?.durationMs)})).filter(frame=>frame.url&&Number.isInteger(frame.durationMs)&&frame.durationMs>=40&&frame.durationMs<=2000):[];
-  const preloadStampMedia=stamp=>{const frames=normalizedFrames(stamp);if(frames.length>=2){for(const frame of frames){const image=new Image();image.src=frame.url;}return;}const fullUrl=safeAssetPath(stamp?.fullUrl);if(fullUrl){const image=new Image();image.src=fullUrl;}};
-  const preloadVisibleStamps=stamps=>{const list=[...stamps].slice(0,6);const run=()=>{for(const stamp of list)preloadStampMedia(stamp);};if(typeof window.requestIdleCallback==='function')window.requestIdleCallback(run,{timeout:1200});else setTimeout(run,120);};
   const setViewerControls=stamp=>{const visibilityScope=String(stamp?.visibilityScope||''),sortOrder=Number(stamp?.sortOrder);if(viewerDate instanceof HTMLInputElement)viewerDate.value=safeDate(stamp?.date)?String(stamp.date):'';if(viewerScope instanceof HTMLSelectElement)viewerScope.value=['FAMILY','PRIVATE'].includes(visibilityScope)?visibilityScope:'FAMILY';if(viewerSort instanceof HTMLInputElement)viewerSort.value=Number.isSafeInteger(sortOrder)?String(sortOrder):'0';};
   const setViewerBusy=busy=>{for(const control of [viewerSave,viewerDelete,viewerDate,viewerScope,viewerSort])if(control instanceof HTMLButtonElement||control instanceof HTMLInputElement||control instanceof HTMLSelectElement)control.disabled=busy;};
   const openViewer=stamp=>{
@@ -133,7 +131,6 @@ try{
         const date=String(stamp?.date||''),placementId=Number(stamp?.placementId||0);if(!safeDate(date)||!Number.isSafeInteger(placementId)||placementId<=0)continue;
         stampByPlacement.set(placementId,stamp);const list=stampsByDate.get(date)||[];list.push(stamp);stampsByDate.set(date,list);
       }
-      const visibleStamps=[];for(const stamps of stampsByDate.values())visibleStamps.push(...stamps.slice(0,MAX_VISIBLE_STAMPS_PER_DATE));preloadVisibleStamps(visibleStamps);
       for(const cell of cells){
         cell.querySelectorAll('.calendar-stamp-stack,.calendar-stamp-thumb,.calendar-stamp-overflow').forEach(node=>node.remove());cell.classList.remove('has-calendar-stamp');
         const stamps=stampsByDate.get(String(cell.dataset.date||''))||[];if(!stamps.length)continue;
