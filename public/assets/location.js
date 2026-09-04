@@ -66,7 +66,7 @@
     pieces.push(stateText[member.state]||'状態不明');
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
-    const distance=distanceText(Number(member.distanceMetersFromViewer));
+    const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
     if(distance)pieces.push(distance);
     const accuracy=Number(member.latest?.accuracyMeters);
     if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
