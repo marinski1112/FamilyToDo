@@ -53,8 +53,8 @@
   const syncCategory=()=>{
     const custom=String(categorySelect.value||'')==='__custom__';
     categoryCustomWrap.hidden=!custom;
+    if(!custom)categoryRegister.checked=false;
     if(!custom){
-      categoryRegister.checked=false;
       if(categoryRegisterControl)categoryRegisterControl.hidden=true;
       if(categoryRegisterToggle)categoryRegisterToggle.setAttribute('aria-expanded','false');
     }
