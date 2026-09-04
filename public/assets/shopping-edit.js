@@ -7,6 +7,28 @@
   const categoryValue=document.getElementById('shoppingEditCategoryValue');
   if(!form||!categorySelect||!categoryCustomWrap||!categoryCustom||!categoryRegister||!categoryValue)return;
 
+  const urlInput=form.querySelector('input[name="url"]');
+  const urlLabel=urlInput?[...form.querySelectorAll('label')].find(label=>label.nextElementSibling===urlInput):null;
+  if(urlInput&&urlLabel){
+    const toggle=document.createElement('button');
+    const wrap=document.createElement('div');
+    toggle.type='button';
+    toggle.className='btn gray small shopping-edit-url-toggle';
+    toggle.setAttribute('aria-expanded','false');
+    toggle.textContent='🔗 商品URL';
+    wrap.className='shopping-edit-url-disclosure';
+    wrap.hidden=true;
+    urlLabel.parentNode?.insertBefore(toggle,urlLabel);
+    wrap.append(urlLabel,urlInput);
+    toggle.after(wrap);
+    toggle.addEventListener('click',()=>{
+      const open=wrap.hidden;
+      wrap.hidden=!open;
+      toggle.setAttribute('aria-expanded',open?'true':'false');
+      if(open)urlInput.focus();
+    });
+  }
+
   const MAX_CATEGORY_UNITS=255;
   const syncCategory=()=>{
     const custom=String(categorySelect.value||'')==='__custom__';
