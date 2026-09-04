@@ -47,10 +47,12 @@ const historyLimit=(value:number|undefined):number|null=>{
  * D1-backed provider-neutral Location reads.
  *
  * Every query proves that both requester and subject are active members of the
- * supplied family. Cross-family rows therefore fail closed even when a caller
- * accidentally supplies a foreign subject ID. History returns the newest
- * bounded points in the requested interval, re-sorted chronologically for map
- * rendering; no unbounded raw history is exposed.
+ * supplied family and that each returned coordinate still belongs to an
+ * enabled, explicitly sharing, non-revoked source device. Cross-family rows and
+ * retained coordinates from paused/revoked devices therefore fail closed.
+ * History returns the newest bounded points in the requested interval,
+ * re-sorted chronologically for map rendering; no unbounded raw history is
+ * exposed.
  */
 export class D1LocationQueryService implements LocationQueryService{
   constructor(private readonly db:D1Database){}
@@ -67,6 +69,13 @@ export class D1LocationQueryService implements LocationQueryService{
         ON subject.id=l.member_id
         AND subject.family_id=l.family_id
         AND subject.active=1
+      JOIN location_devices device
+        ON device.id=l.device_id
+        AND device.family_id=l.family_id
+        AND device.member_id=l.member_id
+        AND device.enabled=1
+        AND device.sharing_enabled=1
+        AND device.revoked_at IS NULL
       WHERE l.family_id=? AND l.member_id=?
         AND EXISTS (
           SELECT 1 FROM members requester
@@ -96,6 +105,13 @@ export class D1LocationQueryService implements LocationQueryService{
           ON subject.id=h.member_id
           AND subject.family_id=h.family_id
           AND subject.active=1
+        JOIN location_devices device
+          ON device.id=h.device_id
+          AND device.family_id=h.family_id
+          AND device.member_id=h.member_id
+          AND device.enabled=1
+          AND device.sharing_enabled=1
+          AND device.revoked_at IS NULL
         WHERE h.family_id=? AND h.member_id=?
           AND h.recorded_at>=? AND h.recorded_at<=?
           AND EXISTS (
