@@ -9,6 +9,7 @@ const admin=fs.readFileSync('src/calendar-stamp-admin-api.ts','utf8');
 const calendarApi=fs.readFileSync('src/calendar-stamp-api.ts','utf8');
 const messageApi=fs.readFileSync('src/message-stamp-api.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
+const settings=fs.readFileSync('public/assets/settings-stamps.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
 
@@ -64,6 +65,22 @@ assert.match(media,/frame\.family_id=\?[\s\S]*frame\.asset_id=\?[\s\S]*asset\.ac
 assert.match(media,/WHERE id=\? AND family_id=\? AND active=1 AND storage_provider='UPLOAD'/,'asset reads must be tenant-scoped and limited to active UPLOAD assets');
 assert.doesNotMatch(media,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID|https?:\/\//i,'R2 transport must use the Worker binding without embedded credentials or remote URLs');
 
+for(const token of [
+  'const MAX_UPLOAD_EDGE=512',
+  'const MAX_UPLOAD_BYTES=4*1024*1024',
+  "typeof createImageBitmap!=='function'",
+  'bitmap=await createImageBitmap(file)',
+  'if(longEdge<=MAX_UPLOAD_EDGE)return file',
+  "canvas.getContext('2d',{alpha:true})",
+  "canvas.toBlob(resolve,'image/png')",
+  "return new File([blob],file.name,{type:'image/png',lastModified:file.lastModified})",
+  'const uploadFile=await normalizeUploadFile(files[index])',
+  'body:uploadFile',
+]) assert.ok(settings.includes(token),`Stamp client upload normalization missing: ${token}`);
+assert.match(settings,/for\(let index=0;index<files\.length;index\+\+\)[\s\S]*normalizeUploadFile\(files\[index\]\)[\s\S]*frames\.push/,'stamp frame normalization/upload must preserve selected frame order');
+assert.match(settings,/catch\{\s*return file;\s*\}finally/,'stamp decode/re-encode failures must fall back to the already validated original PNG');
+assert.doesNotMatch(settings,/image\/jpeg|image\/webp/,'stamp client normalization must preserve PNG/alpha transport semantics');
+
 assert.match(admin,/body\.storageProvider==='UPLOAD'\?'UPLOAD':'ASSETS'/,'admin sequence registration must allow the R2-backed logical UPLOAD provider while preserving ASSETS');
 assert.match(calendarApi,/calendarStampFrameUrl\(placement\.storage_provider,placement\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Calendar read projection must route UPLOAD frames through the authenticated media endpoint');
 assert.match(messageApi,/calendarStampFrameUrl\(row\.storage_provider,row\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Message read projection must route UPLOAD frames through the authenticated media endpoint');
@@ -82,4 +99,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, and backend-neutral metadata');
