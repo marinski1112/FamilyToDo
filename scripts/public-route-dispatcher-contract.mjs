@@ -3,11 +3,16 @@ import fs from 'node:fs';
 const index=fs.readFileSync('src/index.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
+const legalPages=fs.readFileSync('src/legal-pages.ts','utf8');
+const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 if(!index.includes("import { dispatchPublicRoute } from './public-routes';")) throw new Error('index.ts must import public dispatcher');
 if(!index.includes('const publicResponse=await dispatchPublicRoute(request,env,ctx,url);')) throw new Error('index.ts must invoke public dispatcher before context routing');
 if(!index.includes('if(publicResponse) return publicResponse;')) throw new Error('index.ts must return matched public response');
+if(index.indexOf('const publicResponse=await dispatchPublicRoute(request,env,ctx,url);')>index.indexOf('const context=await makeContext(request,env,ctx);')) throw new Error('public routes must execute before authenticated context');
 if(!publicRoutes.includes('export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{')) throw new Error('public dispatcher export missing');
 const routeLines=[
+  "if(url.pathname==='/privacy') return privacyPage();",
+  "if(url.pathname==='/terms') return termsPage();",
   "if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});",
   "if(url.pathname==='/__cf/secrets-health') return json({ok:true,service:'familytodo-secrets'});",
   "if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}",
@@ -30,6 +35,14 @@ for(const route of routeLines){
   if(!publicRoutes.includes(route)) throw new Error(`public dispatcher route missing: ${route}`);
   if(index.split('\n').some(line=>line.trim()===route)) throw new Error(`public route must not remain in index.ts: ${route}`);
 }
+for(const required of [
+  "import { privacyPage, termsPage } from './legal-pages';",
+  "if(url.pathname==='/privacy') return privacyPage();",
+  "if(url.pathname==='/terms') return termsPage();",
+]) if(!publicRoutes.includes(required)) throw new Error(`public legal route missing: ${required}`);
+for(const required of ['export function privacyPage():Response{','export function termsPage():Response{','Google OAuth','Google Calendar','Google Tasks','OwnTracks','Cloudflare R2']) if(!legalPages.includes(required)) throw new Error(`legal page disclosure missing: ${required}`);
+for(const forbidden of ['/login.php','AuthRequired','makeContext(']) if(legalPages.includes(forbidden)) throw new Error(`legal pages must stay unauthenticated: ${forbidden}`);
+for(const route of ['"/privacy"','"/terms"']) if(!wrangler.includes(route)) throw new Error(`legal route must run Worker-first: ${route}`);
 for(const required of [
   "if(url.pathname==='/oauth/google/authorize') {",
   "if(url.pathname==='/webhook'||url.pathname==='/app/api/webhook'||url.pathname==='/app/api/webhook.php') return await webhook(request,env);",
