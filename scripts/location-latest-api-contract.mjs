@@ -15,11 +15,17 @@ assert.match(source,/state:'NO_LOCATION'/,'projection must distinguish sharing-o
 assert.match(source,/if\(ageMinutes<=5\)return \{state:'FRESH'/,'0–5 minute points must be classified fresh');
 assert.match(source,/if\(ageMinutes<=30\)return \{state:'AGING'/,'5–30 minute points must expose their age state');
 assert.match(source,/return \{state:'STALE'/,'30+ minute points must be explicitly stale');
+assert.match(source,/function straightLineDistanceMeters\(from:CoordinatePoint,to:CoordinatePoint\):number\|null/,'latest API must derive straight-line distance in a bounded helper');
+assert.match(source,/earthRadiusMeters=6371000/,'straight-line distance must use an explicit Earth radius for Haversine calculation');
+assert.match(source,/Math\.sin\(latitudeDelta\/2\)\*\*2[\s\S]*Math\.cos\(fromLatitude\)\*Math\.cos\(toLatitude\)[\s\S]*Math\.sin\(longitudeDelta\/2\)\*\*2/,'straight-line distance must use Haversine latitude/longitude deltas');
+assert.match(source,/requesterPoint=requesterSharingEnabled\?await service\.latest\([\s\S]*subjectMemberId:requesterMemberId/,'distance origin must come from the authenticated member’s reported LocationQueryService point');
+assert.match(source,/subjectMemberId!==requesterMemberId&&requesterPoint&&point[\s\S]*straightLineDistanceMeters\(requesterPoint,point\)/,'distance must only be derived for another member when both scoped reported points exist');
+assert.match(source,/distanceMetersFromViewer,/,'projection must expose only the derived viewer-relative straight-line distance, not another identifier');
 assert.match(source,/latest:point\?\{[\s\S]*latitude:point\.latitude[\s\S]*longitude:point\.longitude[\s\S]*recordedAt:point\.recordedAt/,'projection must expose only map-required point fields');
 assert.match(source,/'cache-control':'no-store'/,'location coordinates must not be stored in shared HTTP caches');
 assert.doesNotMatch(source,/SELECT \*/,'latest API must project only required member/device state');
 assert.doesNotMatch(source,/secret_hash|public_id|device_id|raw_payload|authorization|console\.(?:log|info|warn|error)/i,'latest API must not expose or log device credentials, identifiers, raw provider payloads, or authorization data');
-assert.doesNotMatch(source,/navigator\.geolocation|GOOGLE_MAPS_|Routes API/i,'Phase 2A projection must not invent browser geolocation or unconfigured Maps/Routes bindings');
+assert.doesNotMatch(source,/navigator\.geolocation|GOOGLE_MAPS_|Routes API/i,'Phase 2 projection must not invent browser geolocation or unconfigured Maps/Routes bindings');
 assert.match(routes,/import \{ locationLatestApi \} from '\.\/location-latest-api';/,'context API dispatcher must retain the latest-location boundary');
 assert.match(routes,/url\.pathname==='\/api\/location\/latest'\) return await locationLatestApi\(request,context\)/,'authenticated context routing must expose the latest projection endpoint');
 

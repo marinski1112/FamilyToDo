@@ -24,6 +24,13 @@
     return `${hours}時間以上前`;
   };
 
+  const distanceText=(meters)=>{
+    if(!Number.isFinite(meters)||meters<0)return '';
+    if(meters<1000)return `直線 約${Math.round(meters)}m`;
+    const kilometers=meters/1000;
+    return `直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km`;
+  };
+
   const googleMapsUrl=(latest)=>{
     const latitude=Number(latest?.latitude);
     const longitude=Number(latest?.longitude);
@@ -59,6 +66,8 @@
     pieces.push(stateText[member.state]||'状態不明');
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
+    const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
+    if(distance)pieces.push(distance);
     const accuracy=Number(member.latest?.accuracyMeters);
     if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
     meta.textContent=pieces.join(' ・ ');
