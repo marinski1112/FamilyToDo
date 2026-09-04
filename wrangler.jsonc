@@ -12,6 +12,8 @@
     "run_worker_first": [
       "/",
       "/index.php",
+      "/privacy",
+      "/terms",
       "/api/*",
       "/oauth/*",
       "/app/calendar.php",
