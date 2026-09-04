@@ -28,7 +28,8 @@ export function layout(title: string, body: string, active = ''): string {
   const nav = `<nav class="bottom-nav"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"><span>${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
   const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}">`:'';
-  const extra=calendarExtra+familyLogExtra;
+  const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}"></script>`:'';
+  const extra=calendarExtra+familyLogExtra+locationExtra;
   // Every server-rendered native temporal control passes through one component.
   // Keeping padding/border on the shell avoids WebKit 301648's width:100% + padding bug.
   const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`);
