@@ -24,6 +24,14 @@
     return `${hours}時間以上前`;
   };
 
+  const googleMapsUrl=(latest)=>{
+    const latitude=Number(latest?.latitude);
+    const longitude=Number(latest?.longitude);
+    if(!Number.isFinite(latitude)||latitude < -90||latitude > 90)return null;
+    if(!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+  };
+
   const setStatus=(text)=>{
     if(statusEl)statusEl.textContent=text;
   };
@@ -55,6 +63,17 @@
     if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
     meta.textContent=pieces.join(' ・ ');
     main.append(title,meta);
+
+    const mapUrl=member.sharingEnabled?googleMapsUrl(member.latest):null;
+    if(mapUrl){
+      const mapLink=document.createElement('a');
+      mapLink.className='location-member-map-link';
+      mapLink.href=mapUrl;
+      mapLink.target='_blank';
+      mapLink.rel='noopener noreferrer';
+      mapLink.textContent='Google Mapsで開く';
+      main.append(mapLink);
+    }
 
     const badge=document.createElement('span');
     badge.className='location-state-badge';
