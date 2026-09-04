@@ -20,6 +20,8 @@ for(const marker of [
   "action==='revoke'",
   'SELECT id,used_at,family_log_subject_id FROM family_invitations WHERE id=? AND family_id=? LIMIT 1',
   'UPDATE family_invitations SET expires_at=? WHERE id=? AND family_id=? AND used_at IS NULL',
+  'Number(revoked.meta.changes||0)!==1',
+  "code:'CONFLICT'",
   "logActivity(ctx,'REVOKED','family_invitation'",
   'SELECT id,name,subject_kind,member_id FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 LIMIT 1',
   "['BABY','CHILD','ADULT'].includes(familyLogSubjectKind(subject.subject_kind))",
@@ -39,6 +41,14 @@ for(const marker of [
 if(api.includes("from './app'")) throw new Error('family invite API must not depend on app.ts');
 if(api.includes('logInviteActivity')) throw new Error('family invite API must not keep a duplicate activity log writer');
 if(api.includes('console.error')) throw new Error('family invite API must not emit raw activity-log exceptions');
+
+const revokeUpdate=api.indexOf("const revoked=await ctx.env.DB.prepare('UPDATE family_invitations SET expires_at=? WHERE id=? AND family_id=? AND used_at IS NULL')");
+const revokeGuard=api.indexOf('if(Number(revoked.meta.changes||0)!==1)');
+const revokeLog=api.indexOf("await logActivity(ctx,'REVOKED','family_invitation'");
+const revokeSuccess=api.indexOf('return json({ok:true,id});',revokeLog);
+if(revokeUpdate<0||revokeGuard<0||revokeLog<0||revokeSuccess<0||!(revokeUpdate<revokeGuard&&revokeGuard<revokeLog&&revokeLog<revokeSuccess)){
+  throw new Error('family invite revoke must confirm the atomic used_at-guarded UPDATE before logging or returning success');
+}
 
 if(!routes.includes("import { inviteCreate } from './family-invite-api';")) throw new Error('context API dispatcher must import retained inviteCreate');
 if(!routes.includes("if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);")) throw new Error('family invite route wiring changed');
