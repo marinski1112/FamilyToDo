@@ -29,11 +29,35 @@
     });
   }
 
+  const categoryRegisterControl=categoryRegister.closest('label')||categoryRegister.parentElement;
+  let categoryRegisterToggle=null;
+  if(categoryRegisterControl&&categoryRegisterControl.parentNode){
+    categoryRegisterToggle=document.createElement('button');
+    categoryRegisterToggle.type='button';
+    categoryRegisterToggle.className='btn gray small shopping-edit-category-register-toggle';
+    categoryRegisterToggle.setAttribute('aria-expanded','false');
+    categoryRegisterToggle.textContent='＋ カテゴリを登録';
+    categoryRegisterControl.id=categoryRegisterControl.id||'shoppingEditCategoryRegisterControl';
+    categoryRegisterToggle.setAttribute('aria-controls',categoryRegisterControl.id);
+    categoryRegisterControl.hidden=true;
+    categoryRegisterControl.parentNode.insertBefore(categoryRegisterToggle,categoryRegisterControl);
+    categoryRegisterToggle.addEventListener('click',()=>{
+      const open=categoryRegisterControl.hidden;
+      categoryRegisterControl.hidden=!open;
+      categoryRegisterToggle.setAttribute('aria-expanded',open?'true':'false');
+      if(open)categoryRegister.focus();
+    });
+  }
+
   const MAX_CATEGORY_UNITS=255;
   const syncCategory=()=>{
     const custom=String(categorySelect.value||'')==='__custom__';
     categoryCustomWrap.hidden=!custom;
-    if(!custom)categoryRegister.checked=false;
+    if(!custom){
+      categoryRegister.checked=false;
+      if(categoryRegisterControl)categoryRegisterControl.hidden=true;
+      if(categoryRegisterToggle)categoryRegisterToggle.setAttribute('aria-expanded','false');
+    }
     categoryValue.value=custom?String(categoryCustom.value||'').trim():String(categorySelect.value||'').trim();
     return categoryValue.value;
   };
