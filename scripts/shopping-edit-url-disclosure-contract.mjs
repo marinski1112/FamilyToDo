@@ -17,7 +17,8 @@ for(const [pattern,message] of [
   [/categoryRegisterToggle\.setAttribute\('aria-controls',categoryRegisterControl\.id\)/,'Shopping edit category registration disclosure must identify its controlled element'],
   [/categoryRegisterToggle\.setAttribute\('aria-expanded',open\?'true':'false'\)/,'Shopping edit category registration disclosure must keep aria-expanded in sync'],
   [/if\(open\)categoryRegister\.focus\(\)/,'Opening Shopping edit category registration disclosure must move focus to the checkbox'],
-  [/if\(!custom\)\{\s*categoryRegister\.checked=false;\s*if\(categoryRegisterControl\)categoryRegisterControl\.hidden=true;/,'Leaving custom category mode must clear and collapse reusable-category registration'],
+  [/if\(!custom\)categoryRegister\.checked=false/,'Leaving custom category mode must clear reusable-category registration'],
+  [/if\(!custom\)\{\s*if\(categoryRegisterControl\)categoryRegisterControl\.hidden=true;\s*if\(categoryRegisterToggle\)categoryRegisterToggle\.setAttribute\('aria-expanded','false'\);/,'Leaving custom category mode must collapse reusable-category registration'],
   [/const registerCategory=categorySelect\.value==='__custom__'&&categoryRegister\.checked/,'Shopping edit must preserve explicit opt-in reusable-category registration semantics'],
   [/fetch\('\/api\/shopping-categories'/,'Shopping edit must preserve the canonical category registration API'],
 ]){
