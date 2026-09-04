@@ -64,6 +64,12 @@ for(const token of [
 ]) assert.ok(media.includes(token),`R2 stamp media transport missing: ${token}`);
 assert.match(media,/frame\.family_id=\?[\s\S]*frame\.asset_id=\?[\s\S]*asset\.active=1[\s\S]*asset\.storage_provider='UPLOAD'/,'frame reads must be tenant-scoped and limited to active UPLOAD assets');
 assert.match(media,/WHERE id=\? AND family_id=\? AND active=1 AND storage_provider='UPLOAD'/,'asset reads must be tenant-scoped and limited to active UPLOAD assets');
+assert.match(media,/cache-control':'private, max-age=300'[\s\S]*const etag=object\.etag\?String\(object\.etag\):''[\s\S]*headers\.set\('etag',etag\)[\s\S]*matchesIfNoneMatch\(request\.headers\.get\('if-none-match'\),etag\)[\s\S]*new Response\(null,\{status:304,headers\}\)/,'private stamp media must support authenticated ETag revalidation without sending PNG bytes again');
+const authIndex=media.indexOf('await activeMember(context.env,s.familyId,s.memberId)');
+const familyLookupIndex=media.indexOf('await referencedUploadKey(context.env,s.familyId,assetId,url)');
+const objectReadIndex=media.indexOf('await context.env.MEDIA.get(objectKey)');
+const conditionalIndex=media.indexOf("request.headers.get('if-none-match')");
+assert.ok(authIndex>=0&&familyLookupIndex>authIndex&&objectReadIndex>familyLookupIndex&&conditionalIndex>objectReadIndex,'ETag revalidation must happen only after session/member, family/asset, and private R2 authorization checks');
 assert.doesNotMatch(media,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID|https?:\/\//i,'R2 transport must use the Worker binding without embedded credentials or remote URLs');
 
 for(const token of [
@@ -102,4 +108,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, lazy viewer-only animation frame loading, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, lazy viewer-only animation frame loading, private ETag revalidation, and backend-neutral metadata');
