@@ -8,6 +8,7 @@ const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
 if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task classification must use the selected checklist date, not runtime today');
+if(page.includes('<details class="card expired-shopping" open>'))throw new Error('overdue Shopping must stay collapsed by default to preserve Checklist information density');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
@@ -43,7 +44,7 @@ for(const marker of [
   "const mainHtml=isEvent?",
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
-  "期限切れ買い物 ${data.expiredShopping.length}件",
+  "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
   "選択日が期限、またはこの日の予定に紐付く買い物",
   "/app/shopping_new.php?date=",
   "href=\"/app/shopping.php\">一覧・管理</a>",
@@ -71,4 +72,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact completed tasks, privacy, bounded D1 linkage, selected-date overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact overdue/completed content, privacy, bounded D1 linkage, selected-date overdue classification and completion transport ok');
