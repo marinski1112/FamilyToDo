@@ -45,6 +45,10 @@ for(const marker of [
   'textContent=name',
   'replaceChildren()',
   '精度 ±${Math.round(accuracy)}m',
+  'const distanceText=(meters)=>{',
+  '直線 約${Math.round(meters)}m',
+  '直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km',
+  "member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer))",
   'const googleMapsUrl=(latest)=>{',
   'latitude < -90||latitude > 90',
   'longitude < -180||longitude > 180',
@@ -106,4 +110,4 @@ if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/lo
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: Phase 2C safe latest projection with explicit Google Maps deep links, no browser geolocation/provider credentials, provider-neutral service boundaries ok');
+console.log('location-page-boundary: Phase 2D safe latest projection with viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials, provider-neutral service boundaries ok');
