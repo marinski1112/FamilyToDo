@@ -48,6 +48,11 @@ for(const marker of [
   'textContent=name',
   'replaceChildren()',
   '精度 ±${Math.round(accuracy)}m',
+  'const lastUpdatedText=(recordedAt)=>{',
+  "new Intl.DateTimeFormat('ja-JP'",
+  'return `最終更新 ${formatted}`;',
+  'const lastUpdated=lastUpdatedText(member.latest?.recordedAt);',
+  "if(lastUpdated&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(lastUpdated);",
   'const distanceText=(meters)=>{',
   '直線 約${Math.round(meters)}m',
   '直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km',
@@ -123,4 +128,4 @@ if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/lo
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: Phase 2E safe latest projection with manual refresh, viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials/auto polling, provider-neutral service boundaries ok');
+console.log('location-page-boundary: Phase 2F safe latest projection with absolute last-updated time, manual refresh, viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials/auto polling, provider-neutral service boundaries ok');
