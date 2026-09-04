@@ -44,7 +44,8 @@ export async function inviteCreate(request:Request,ctx:AppContext):Promise<Respo
     if(!inv)return json({ok:false,error:'招待が見つかりません。'},404);
     if(inv.used_at)return json({ok:false,error:'使用済みの招待は取り消せません。'},400);
     const now=nowJst();
-    await ctx.env.DB.prepare('UPDATE family_invitations SET expires_at=? WHERE id=? AND family_id=? AND used_at IS NULL').bind(now,id,m.family_id).run();
+    const revoked=await ctx.env.DB.prepare('UPDATE family_invitations SET expires_at=? WHERE id=? AND family_id=? AND used_at IS NULL').bind(now,id,m.family_id).run();
+    if(Number(revoked.meta.changes||0)!==1)return json({ok:false,error:'招待はすでに使用済みか、状態が変更されています。',code:'CONFLICT'},409);
     await logActivity(ctx,'REVOKED','family_invitation',id,{family_log_subject_id:Number(inv.family_log_subject_id||0)||null});
     return json({ok:true,id});
   }
