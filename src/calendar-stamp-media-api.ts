@@ -76,7 +76,7 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
     const headers=new Headers({'content-type':'image/png','cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
     const contentType=String(object.httpMetadata?.contentType||'');
     if(contentType==='image/png')headers.set('content-type',contentType);
-    const etag=object.etag?String(object.etag):'';
+    const etag=object.httpEtag?String(object.httpEtag):'';
     if(etag)headers.set('etag',etag);
     if(etag&&matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});
     return new Response(object.body,{status:200,headers});
