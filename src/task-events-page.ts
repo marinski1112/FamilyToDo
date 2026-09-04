@@ -26,16 +26,15 @@ const compareShoppingRows=(a:Row,b:Row)=>{
   return Number(a.id||0)-Number(b.id||0);
 };
 
-async function expiredTasksFor(ctx:AppContext):Promise<Row[]>{
+async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
-  const todayJst=dateOnly();
   return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,
       (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
     FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
       AND (t.task_kind IS NULL OR lower(t.task_kind)='task')
       AND COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL
       AND date(COALESCE(t.end_at,t.due_at,t.start_at)) < date(?)
-    ORDER BY COALESCE(t.end_at,t.due_at,t.start_at),t.id`).bind(member.family_id,member.id,todayJst).all<Row>()).results;
+    ORDER BY COALESCE(t.end_at,t.due_at,t.start_at),t.id`).bind(member.family_id,member.id,date).all<Row>()).results;
 }
 
 async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]>{
@@ -64,7 +63,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
             OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
           ))
           OR (lower(COALESCE(t.task_kind,''))<>'event' AND (
-            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
+            (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?))
             OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
           ))
         )
@@ -75,7 +74,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
     recurringForDate(ctx,date),
-    expiredTasksFor(ctx),
+    expiredTasksFor(ctx,date),
     ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
       (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
