@@ -27,6 +27,19 @@
     return `${hours}時間以上前`;
   };
 
+  const lastUpdatedText=(recordedAt)=>{
+    if(typeof recordedAt!=='string'||!recordedAt)return '';
+    const date=new Date(recordedAt);
+    if(!Number.isFinite(date.getTime()))return '';
+    const formatted=new Intl.DateTimeFormat('ja-JP',{
+      month:'numeric',
+      day:'numeric',
+      hour:'2-digit',
+      minute:'2-digit',
+    }).format(date);
+    return `最終更新 ${formatted}`;
+  };
+
   const distanceText=(meters)=>{
     if(!Number.isFinite(meters)||meters<0)return '';
     if(meters<1000)return `直線 約${Math.round(meters)}m`;
@@ -75,6 +88,8 @@
     pieces.push(stateText[member.state]||'状態不明');
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
+    const lastUpdated=lastUpdatedText(member.latest?.recordedAt);
+    if(lastUpdated&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(lastUpdated);
     const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
     if(distance)pieces.push(distance);
     const accuracy=Number(member.latest?.accuracyMeters);
