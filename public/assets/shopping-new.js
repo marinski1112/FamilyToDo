@@ -26,10 +26,33 @@ try {
   const safeEntityId=value=>{const id=Number(value);return Number.isSafeInteger(id)&&id>0?id:0};
   const safeProductUrl=value=>{const raw=String(value??'').trim();if(!raw)return '';if(raw.length>2048)return null;try{const parsed=new URL(raw);if(parsed.username||parsed.password)return null;return parsed.protocol==='http:'||parsed.protocol==='https:'?raw:null;}catch{return null;}};
   const safeDueDate=value=>{const raw=String(value??'').trim();if(!raw)return '';if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const date=new Date(`${raw}T00:00:00Z`);return Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==raw?null:raw;};
+  const categoryRegisterControl=categoryRegister.closest('label')||categoryRegister.parentElement;
+  let categoryRegisterToggle=null;
+  if(categoryRegisterControl&&categoryRegisterControl.parentNode){
+    categoryRegisterToggle=document.createElement('button');
+    categoryRegisterToggle.type='button';
+    categoryRegisterToggle.className='btn gray small shopping-new-category-register-toggle';
+    categoryRegisterToggle.setAttribute('aria-expanded','false');
+    categoryRegisterToggle.textContent='＋ カテゴリを登録';
+    categoryRegisterControl.id=categoryRegisterControl.id||'shoppingCategoryRegisterControl';
+    categoryRegisterToggle.setAttribute('aria-controls',categoryRegisterControl.id);
+    categoryRegisterControl.hidden=true;
+    categoryRegisterControl.parentNode.insertBefore(categoryRegisterToggle,categoryRegisterControl);
+    categoryRegisterToggle.addEventListener('click',()=>{
+      const open=categoryRegisterControl.hidden;
+      categoryRegisterControl.hidden=!open;
+      categoryRegisterToggle.setAttribute('aria-expanded',open?'true':'false');
+      if(open)categoryRegister.focus();
+    });
+  }
   const syncCategory=()=>{
     const custom=String(categorySelect.value||'')==='__custom__';
     categoryCustomWrap.hidden=!custom;
     if(!custom)categoryRegister.checked=false;
+    if(!custom){
+      if(categoryRegisterControl)categoryRegisterControl.hidden=true;
+      if(categoryRegisterToggle)categoryRegisterToggle.setAttribute('aria-expanded','false');
+    }
     categoryValue.value=custom?String(categoryCustom.value||'').trim():String(categorySelect.value||'').trim();
     return categoryValue.value;
   };
