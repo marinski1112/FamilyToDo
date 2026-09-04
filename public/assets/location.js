@@ -7,6 +7,9 @@
   const statusEl=root.querySelector('[data-location-status]');
   const listEl=root.querySelector('[data-location-list]');
   const mapStateEl=root.querySelector('[data-location-map-state]');
+  const refreshEl=root.querySelector('[data-location-refresh]');
+  let loading=false;
+  let hasRendered=false;
 
   const stateText={
     FRESH:'最新',
@@ -41,6 +44,12 @@
 
   const setStatus=(text)=>{
     if(statusEl)statusEl.textContent=text;
+  };
+
+  const setRefreshBusy=(busy)=>{
+    if(!refreshEl)return;
+    refreshEl.disabled=busy;
+    refreshEl.setAttribute('aria-busy',busy?'true':'false');
   };
 
   const makeMemberRow=(member)=>{
@@ -112,11 +121,15 @@
         ? `共有中 ${located.length}人の位置を受信しています。地図プロバイダー設定後、この領域に家族マーカーを表示します。`
         : '共有中の最新位置がまだありません。地図は位置送信後に表示対象になります。';
     }
+    hasRendered=true;
     setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人`);
   };
 
   const load=async()=>{
-    setStatus('最新位置を確認しています…');
+    if(loading)return;
+    loading=true;
+    setRefreshBusy(true);
+    setStatus(hasRendered?'最新位置を更新しています…':'最新位置を確認しています…');
     try{
       const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
       if(!response.ok)throw new Error('location latest unavailable');
@@ -124,17 +137,25 @@
       if(!payload?.ok)throw new Error('location latest rejected');
       render(payload);
     }catch(_error){
-      setStatus('最新位置を取得できませんでした');
-      if(mapStateEl)mapStateEl.textContent='地図を表示できない場合も、位置情報の共有設定や端末側の送信状態は変更されません。';
-      if(listEl){
-        listEl.replaceChildren();
-        const error=document.createElement('div');
-        error.className='location-empty';
-        error.textContent='家族の位置一覧を読み込めませんでした。通信状態を確認して再読み込みしてください。';
-        listEl.append(error);
+      if(hasRendered){
+        setStatus('最新位置を更新できませんでした ・ 表示は前回取得分です');
+      }else{
+        setStatus('最新位置を取得できませんでした');
+        if(mapStateEl)mapStateEl.textContent='地図を表示できない場合も、位置情報の共有設定や端末側の送信状態は変更されません。';
+        if(listEl){
+          listEl.replaceChildren();
+          const error=document.createElement('div');
+          error.className='location-empty';
+          error.textContent='家族の位置一覧を読み込めませんでした。通信状態を確認して更新してください。';
+          listEl.append(error);
+        }
       }
+    }finally{
+      loading=false;
+      setRefreshBusy(false);
     }
   };
 
+  if(refreshEl)refreshEl.addEventListener('click',()=>void load());
   void load();
 })();
