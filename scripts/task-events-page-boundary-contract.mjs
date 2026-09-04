@@ -7,14 +7,18 @@ const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
+if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task classification must use the selected checklist date, not runtime today');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "import { recurringForDate } from './recurrence-projection';",
   "import { taskVisibilitySql } from './task-visibility';",
   "export async function taskEvents(_request:Request,ctx:AppContext,targetDate:string):Promise<Response>{",
+  "async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{",
   "t.status IN ('pending','completed')",
   "lower(COALESCE(t.task_kind,''))='event'",
+  "date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)",
+  "expiredTasksFor(ctx,date)",
   "recurringForDate(ctx,date)",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
   "const LINKED_SHOPPING_TASK_CHUNK_SIZE=80;",
@@ -67,4 +71,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact completed tasks, privacy, bounded D1 linkage, overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact completed tasks, privacy, bounded D1 linkage, selected-date overdue classification and completion transport ok');
