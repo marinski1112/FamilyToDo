@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const page=fs.readFileSync('src/liff-entry-page.ts','utf8');
 const oauth=fs.readFileSync('src/oauth-continuation.ts','utf8');
+const target=fs.readFileSync('src/liff-target.ts','utf8');
 
 for(const marker of [
   "from './app-shell'",
@@ -16,6 +17,22 @@ for(const marker of [
   if(!page.includes(marker)) throw new Error(`retained LIFF entry page lost behavior marker: ${marker}`);
 }
 if(page.includes("from './app'")) throw new Error('retained LIFF entry page must not depend on app.ts');
+
+for(const marker of [
+  "tasks: '/app/tasks.php'",
+  "calendar: '/app/calendar.php'",
+  "shopping: '/app/shopping.php'",
+  "'family-log': '/app/family_log.php'",
+  "messages: '/app/messages.php'",
+  "settings: '/app/settings.php'",
+  "location: '/app/location.php'",
+  "if (alias && LIFF_PATH_ALIASES[alias]) return LIFF_PATH_ALIASES[alias];",
+  "if (stateAlias && LIFF_PATH_ALIASES[stateAlias]) return LIFF_PATH_ALIASES[stateAlias];",
+  "if (path.startsWith('/oauth/')) return GOOGLE_CONTINUE.test(path) ? path : null;",
+  "const explicit = validateLiffNext(url.searchParams.get('next'));",
+]){
+  if(!target.includes(marker)) throw new Error(`retained LIFF target lost alias/validation marker: ${marker}`);
+}
 
 for(const marker of [
   "import { makeContext } from './app-context';",
