@@ -80,8 +80,11 @@ if(!admin.includes('catch{\n    // 0054 may not be deployed yet.'))throw new Err
 
 for(const marker of [
   'const MAX_UPLOAD_EDGE=384',
-  'const MAX_SOURCE_BYTES=8*1024*1024',
+  'const MAX_UPLOAD_BYTES=4*1024*1024',
+  'const MAX_SOURCE_FILE_BYTES=32*1024*1024',
+  'const MAX_SOURCE_BYTES=128*1024*1024',
   'const MAX_NORMALIZED_BYTES=1024*1024',
+  'file.size<=0||file.size>MAX_SOURCE_FILE_BYTES',
   'if(sourceBytes>MAX_SOURCE_BYTES)',
   'const imageElementForFile=file=>',
   'return imageElementForFile(file);',
@@ -106,11 +109,12 @@ if(/typeof createImageBitmap[^\n]*return file|catch\s*\{\s*return file;\s*\}/.te
 if(/SHARED_STAMPS_SERVICE_TOKEN|Authorization:\s*Bearer|authorization|storage_key|thumbnail_storage_key|family_id|member_id|console\./i.test(ui))throw new Error('settings browser bundle must stay free of shared credentials/private persistence fields/logging');
 
 for(const marker of [
-  "const SETTINGS_STAMPS_UI_REVISION='shared-publish-2';",
+  "const SETTINGS_STAMPS_UI_REVISION='shared-publish-3';",
   'settings-stamps.js?v=${APP_VERSION}-${SETTINGS_STAMPS_UI_REVISION}',
   'みてにゃでも利用できる共有スタンプとして公開します',
-  '長辺384px以下へ縮小',
-  '全フレーム合計が1MiBを超える場合',
+  '元画像は1枚32MiB・合計128MiBまで選択でき',
+  'ブラウザ内で長辺384px以下へ圧縮してからアップロードします',
+  '圧縮後も全フレーム合計が1MiBを超える場合',
   'アニメーションを保ったまま全フレームを同率でさらに自動縮小します',
 ]) if(!page.includes(marker))throw new Error(`shared publish settings page marker missing: ${marker}`);
 
@@ -121,4 +125,4 @@ for(const marker of ['SHARED_STAMPS_SERVICE_URL?:string','SHARED_STAMPS_SERVICE_
 if(!wrangler.includes('"SHARED_STAMPS_SERVICE_URL": "https://family-shared-stamps.marinski1112.workers.dev"'))throw new Error('FamilyToDo shared service public URL config missing');
 if(wrangler.includes('SHARED_STAMPS_SERVICE_TOKEN'))throw new Error('shared service token must remain a Worker secret, never plaintext wrangler config');
 
-console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, verified 384px + 1MiB dimensions/bytes, progressive browser normalization, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
+console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, large-source browser compression into verified 384px + 1MiB normalized output, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
