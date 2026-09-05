@@ -9,7 +9,6 @@ type Row=Record<string,unknown>;
 
 type TaskEventsData={tasks:Row[];items:Row[];shopping:Row[];expiredTasks:Row[];expiredShopping:Row[]};
 
-const LINKED_SHOPPING_TASK_CHUNK_SIZE=80;
 const esc=(v:unknown)=>String(v??'')
   .replaceAll('&','&amp;')
   .replaceAll('<','&lt;')
@@ -85,25 +84,25 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       .bind(member.family_id,member.id,date).all<Row>(),
   ]);
   const taskRows=[...tasks.results,...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at)));
-  const baseTaskIds=[...new Set(taskRows.map(row=>Number(row.id)<0?Number(row.task_id||0):Number(row.id||0)).filter(id=>Number.isSafeInteger(id)&&id>0))];
   const baseShopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
       (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
       WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
-        AND ((s.due_date IS NOT NULL AND s.due_date=?) OR (s.due_date IS NULL AND s.task_id IS NULL))
+        AND (
+          (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)=date(?))
+          OR (s.task_id IS NULL AND s.due_date IS NULL)
+          OR (
+            s.task_id IS NOT NULL
+            AND COALESCE(t.start_at,t.due_at,t.end_at) IS NOT NULL
+            AND date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)
+            AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)
+          )
+        )
       ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`)
-    .bind(member.family_id,member.id,date).all<Row>();
-  const linkedShoppingResults=await Promise.all(Array.from({length:Math.ceil(baseTaskIds.length/LINKED_SHOPPING_TASK_CHUNK_SIZE)},(_,index)=>{
-    const chunk=baseTaskIds.slice(index*LINKED_SHOPPING_TASK_CHUNK_SIZE,(index+1)*LINKED_SHOPPING_TASK_CHUNK_SIZE);
-    return ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
-        (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
-      FROM shopping_items s JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
-      WHERE s.family_id=? AND ${taskVisibilitySql('t')} AND s.task_id IN (${chunk.map(()=>'?').join(',')})`)
-      .bind(member.family_id,member.id,...chunk).all<Row>();
-  }));
+    .bind(member.family_id,member.id,date,date,date).all<Row>();
   const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));
   const shoppingById=new Map<string,Row>();
-  for(const row of [...baseShopping.results,...linkedShoppingResults.flatMap(result=>result.results)])if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);
+  for(const row of baseShopping.results)if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);
   const shopping=[...shoppingById.values()].sort(compareShoppingRows);
   return {tasks:taskRows,items:items.results,shopping,expiredTasks,expiredShopping:expiredShopping.results};
 }
@@ -159,7 +158,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const eventCount=data.tasks.filter(task=>String(task.task_kind||'').toLowerCase()==='event').length;
   const checkableTaskCount=data.tasks.length-eventCount;
   const summary=`<div class="task-event-summary meta">タスク ${checkableTaskCount}${eventCount?` ・ イベント ${eventCount}`:''} ・ 買い物 ${data.shopping.length}</div>`;
-  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2><div class="meta">選択日が期限、またはこの日の予定に紐付く買い物</div></div><div><a class="btn small" href="/app/shopping_new.php?date=${encodeURIComponent(date)}">＋ 追加</a> <a class="btn small secondary" href="/app/shopping.php">一覧・管理</a></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}</div>`;
+  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2><div class="meta">関連タスクの日から期限まで、または選択日が期限の買い物</div></div><div><a class="btn small" href="/app/shopping_new.php?date=${encodeURIComponent(date)}">＋ 追加</a> <a class="btn small secondary" href="/app/shopping.php">一覧・管理</a></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}</div>`;
   const body=`<div class="daily-head"><div><h1>✅ チェックリスト</h1><div class="date-title">${esc(date)}</div>${summary}</div><div class="date-nav"><a class="btn gray" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" href="/app/tasks.php?date=${next}">›</a></div></div><div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2><a class="btn small" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks">＋ 追加</a></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>${shoppingSection}${expiredShoppingHtml}${unorganizedHtml}${expiredHtml}<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2><a class="btn small" href="/item/new.php?date=${encodeURIComponent(date)}">＋ 追加</a></div>${itemRows||'<p class="empty">対象日の持ち物はありません。</p>'}</div><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
