@@ -1,6 +1,7 @@
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
 import { familyLogApi } from './family-log-api';
+import { cleanupFamilyLogMediaForLog, reconcileFamilyLogMediaForLog } from './family-log-media-api';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
@@ -17,6 +18,23 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
   try{body=await bodyJson(request.clone());}catch(error){
     if(error instanceof RequestBodyParseError)return familyLogApi(request,ctx);
     throw error;
+  }
+  const action=String(body.action||'');
+  if(action==='delete'){
+    const familyId=Number(ctx.member?.family_id||0),logId=Number(body.id||0);
+    const deleteResponse=await familyLogApi(request,ctx);
+    if(Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(logId)&&logId>0){
+      await cleanupFamilyLogMediaForLog(ctx.env,familyId,logId).catch(()=>{});
+    }
+    return deleteResponse;
+  }
+  if(action==='save'){
+    const familyId=Number(ctx.member?.family_id||0),logId=Number(body.id||0);
+    const saveResponse=await familyLogApi(request,ctx);
+    if(saveResponse.ok&&Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(logId)&&logId>0){
+      await reconcileFamilyLogMediaForLog(ctx.env,familyId,logId).catch(()=>{});
+    }
+    return saveResponse;
   }
   if(String(body.action||'')!=='quick_action_disable')return familyLogApi(request,ctx);
 
