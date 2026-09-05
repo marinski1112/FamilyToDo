@@ -28,7 +28,7 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
     }
     return response;
   }
-  if(action!=='quick_action_disable')return familyLogApi(request,ctx);
+  if(String(body.action||'')!=='quick_action_disable')return familyLogApi(request,ctx);
 
   const member=ctx.member;
   if(!member)return familyLogApi(request,ctx);
