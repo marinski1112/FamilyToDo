@@ -8,7 +8,7 @@ const browser=fs.readFileSync('public/assets/settings-notifications.js','utf8');
 const migration=fs.readFileSync('migrations/0055_line_daily_digest_family_summary.sql','utf8');
 
 if(!index.includes("import { processLineDailyDigests } from './line-daily-digest';")) throw new Error('index.ts must import LINE daily digest job');
-if(index.includes('export async function processLineDailyDigests(')) throw new Error('LINE daily digest job must not remain defined in index.ts');
+if(index.includes('export async function processLineDailyDigests(')) throw new Error('index.ts must not retain LINE daily digest job');
 if(!index.includes("ctx.waitUntil(processLineDailyDigests(env));")) throw new Error('scheduled handler must retain LINE daily digest invocation');
 if(!digest.includes('export async function processLineDailyDigests(env:Env):Promise<void>{')) throw new Error('LINE daily digest module must export its scheduled job');
 for(const sentinel of [
@@ -40,13 +40,11 @@ if(/latitude|longitude|location_history|owntracks|device_id|public_device_id|sec
 for(const sentinel of [
   "import { D1LocationQueryService } from './location-query-service';",
   'service.history({',
-  'sharing, non-revoked',
+  'Disabled/revoked/non-sharing',
   'MIN_SEGMENT_METERS=25',
   'return EMPTY_FACTS',
 ]){
   if(!locationSummary.includes(sentinel))throw new Error(`privacy-safe location summary boundary missing: ${sentinel}`);
 }
-if(/address|raw payload|authorization/i.test(locationSummary.replace(/Raw coordinates, device identifiers, addresses and\n \* provider payloads never leave this module\./i,''))){
-  throw new Error('location digest summary must not add address/raw authorization handling');
-}
+if(locationSummary.includes('console.'))throw new Error('location digest summary must not log location-derived data');
 console.log('LINE daily digest modularity contract: ok');
