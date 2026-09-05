@@ -21,6 +21,8 @@ for(const sentinel of [
   "visibility_scope='PRIVATE' AND private_owner_id=?",
   "familyAiProvider(env)!=='GEMINI'",
   'renderDeterministicFacts',
+  'buildDeterministicAdvice',
+  '【今日のヒント】',
   'FAMILY_LOG_TYPE_META',
   "COALESCE(ds.enabled,1)=1",
   "Number(receipt.attempt_count)>=3",
@@ -52,10 +54,15 @@ const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptG
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
   throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
 }
-const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】'];
+const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
 if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
-  throw new Error('authoritative Family Log/schedule/task sections must render before optional Location enrichment');
+  throw new Error('authoritative Family Log/schedule/task/advice sections must render before optional Location enrichment');
+}
+const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction renderDeterministicFacts(',adviceStart);
+const adviceBody=adviceStart>=0&&adviceEnd>adviceStart?digest.slice(adviceStart,adviceEnd):'';
+if(!adviceBody||/familyLog|\.location|MILK|BREASTFEED|DIAPER|TEMPERATURE|WEIGHT|HEIGHT|MEDICINE/i.test(adviceBody)){
+  throw new Error('morning advice must remain bounded to task/schedule planning facts, not health/body/location inference');
 }
 for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT']){
   if(!settings.includes(sentinel)||!browser.includes(sentinel)) throw new Error(`digest settings control missing: ${sentinel}`);

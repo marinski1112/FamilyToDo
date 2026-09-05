@@ -108,6 +108,22 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
   return {localDate,previousDate,today:{events,tasks,completed,incomplete,overdue},familyLog:{previous,today},location};
 }
 
+function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
+  const advice:string[]=[];
+  if(payload.today.overdue>0){
+    advice.push(`期限切れが${payload.today.overdue}件あります。まず1件だけ優先するものを決めると、今日の整理を始めやすそうです。`);
+  }
+  const timedEvents=payload.today.events.map(x=>x.match(/^(\d{2}:\d{2})\s+/)?.[1]).filter((x):x is string=>Boolean(x));
+  if(payload.today.events.length>=3){
+    advice.push(`今日は予定が${payload.today.events.length}件あります。移動や準備に使う時間を少し先に見ておくと安心です。`);
+  }else if(timedEvents.length){
+    advice.push(`最初の時刻付き予定は${timedEvents[0]}です。必要な持ち物や出発前の準備だけ先に確認しておくとスムーズです。`);
+  }else if(payload.today.incomplete>=5){
+    advice.push(`今日の未完了タスクは${payload.today.incomplete}件です。全部を一度に片づけず、先に優先度を決めておくのがおすすめです。`);
+  }
+  return advice.slice(0,2);
+}
+
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
@@ -115,6 +131,8 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
   if(payload.today.tasks.length){lines.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
   if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
+  const advice=buildDeterministicAdvice(payload);
+  if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
   if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
   if(lines.length===2)lines.push('昨日の記録・今日の予定はありません。');
