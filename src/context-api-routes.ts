@@ -11,6 +11,7 @@ import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-st
 import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
 import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';
 import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';
+import { calendarSharedStampPublishAdminApi } from './calendar-shared-stamp-publish-api';
 import { messageStampApi } from './message-stamp-api';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAction } from './google-tasks';
@@ -51,6 +52,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);
+  if(url.pathname==='/api/calendar-stamp-admin/shared-publish') return await calendarSharedStampPublishAdminApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/png-sequence') return await calendarStampPngSequenceAdminApi(request,context);
   if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);
