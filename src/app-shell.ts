@@ -14,7 +14,7 @@ const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
 body{padding-bottom:0}
 .wrap{padding-left:var(--nav-safe-left)!important;padding-right:var(--nav-safe-right)!important;padding-bottom:calc(var(--nav-box-h) + 30px)!important}
 .bottom-nav{height:var(--nav-box-h)!important;min-height:var(--nav-box-h)!important;padding-left:calc(8px + var(--nav-safe-left))!important;padding-right:calc(8px + var(--nav-safe-right))!important;padding-bottom:calc(7px + var(--nav-safe-bottom))!important;transform:none!important;-webkit-transform:none!important;will-change:auto!important}
-.fab{bottom:calc(var(--nav-box-h) + 14px)!important}
+.fab{right:calc(16px + var(--nav-safe-right))!important;bottom:calc(var(--nav-box-h) + 14px)!important}
 </style>`;
 
 /**
