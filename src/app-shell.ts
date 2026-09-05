@@ -9,6 +9,14 @@ const esc = (v: unknown) => String(v ?? '')
 
 const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 
+const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
+:root{--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
+body{padding-bottom:var(--nav-box-h)}
+.wrap{padding-bottom:calc(var(--nav-box-h) + 30px)}
+.bottom-nav{height:var(--nav-box-h);padding-bottom:calc(8px + var(--nav-safe-bottom));transform:none;-webkit-transform:none;will-change:auto}
+.fab{bottom:calc(var(--nav-box-h) + 14px)}
+</style>`;
+
 /**
  * Canonical shell for retained server-rendered pages.
  *
@@ -33,5 +41,5 @@ export function layout(title: string, body: string, active = ''): string {
   // Every server-rendered native temporal control passes through one component.
   // Keeping padding/border on the shell avoids WebKit 301648's width:100% + padding bug.
   const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`);
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=${APP_VERSION}">${extra}</head><body><div class="wrap">${compactBody}</div>${nav}<script src="/assets/pwa.js?v=${APP_VERSION}"></script></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=${APP_VERSION}">${extra}${BOTTOM_NAV_VIEWPORT_FIX}</head><body><div class="wrap">${compactBody}</div>${nav}<script src="/assets/pwa.js?v=${APP_VERSION}"></script></body></html>`;
 }
