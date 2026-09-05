@@ -32,6 +32,7 @@ export const activeRegressionGroups=[
       ['shopping-category-catalog','node scripts/shopping-category-catalog-contract.mjs'],
       ['messages-api-boundary','node scripts/messages-api-boundary-contract.mjs'],
       ['settings-root-boundary','node scripts/settings-root-boundary-contract.mjs'],
+      ['settings-location-page-boundary','node scripts/settings-location-page-boundary-contract.mjs'],
       ['settings-members-page-boundary','node scripts/settings-members-page-boundary-contract.mjs'],
       ['settings-content-page-boundary','node scripts/settings-content-page-boundary-contract.mjs'],
       ['settings-notifications-page-boundary','node scripts/settings-notifications-page-boundary-contract.mjs'],
