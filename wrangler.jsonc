@@ -39,6 +39,12 @@
       "bucket_name": "familytodo"
     }
   ],
+  "services": [
+    {
+      "binding": "SHARED_STAMPS_SERVICE",
+      "service": "family-shared-stamps"
+    }
+  ],
   "ai": {
     "binding": "AI"
   },
