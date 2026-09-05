@@ -10,9 +10,9 @@ const esc = (v: unknown) => String(v ?? '')
 const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 
 const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
-:root{--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
+:root{--nav-safe-top:env(safe-area-inset-top,0px);--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
 body{padding-bottom:0}
-.wrap{padding-left:var(--nav-safe-left)!important;padding-right:var(--nav-safe-right)!important;padding-bottom:calc(var(--nav-box-h) + 30px)!important}
+.wrap{padding-top:calc(18px + var(--nav-safe-top))!important;padding-left:var(--nav-safe-left)!important;padding-right:var(--nav-safe-right)!important;padding-bottom:calc(var(--nav-box-h) + 30px)!important}
 .bottom-nav{height:var(--nav-box-h)!important;min-height:var(--nav-box-h)!important;padding-left:calc(8px + var(--nav-safe-left))!important;padding-right:calc(8px + var(--nav-safe-right))!important;padding-bottom:calc(7px + var(--nav-safe-bottom))!important;transform:none!important;-webkit-transform:none!important;will-change:auto!important}
 .fab{right:calc(16px + var(--nav-safe-right))!important;bottom:calc(var(--nav-box-h) + 14px)!important}
 </style>`;
