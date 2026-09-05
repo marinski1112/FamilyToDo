@@ -41,6 +41,7 @@ export type FamilySharedStampManifest={
 export type FamilySharedStampRegistryConfig={baseUrl:string;token:string};
 
 const SHARED_ID_RE=/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
+const PUBLIC_STAMP_PATH_RE=/^\/v1\/stamps\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)\/versions\/([1-9]\d*)\/(content|thumbnail|frames(?:\/(?:0|[1-3]?\d|4[0-7]))?)$/u;
 
 function normalizeBaseUrl(raw:unknown):string{
   const value=String(raw??'').trim().replace(/\/+$/u,'');
@@ -52,9 +53,8 @@ function normalizeBaseUrl(raw:unknown):string{
 }
 
 function positiveInt(value:unknown):value is number{return Number.isSafeInteger(value)&&Number(value)>0;}
-function safePath(value:unknown):value is string|null{
-  if(value===null)return true;
-  return typeof value==='string'&&value.startsWith('/v1/stamps/')&&!value.includes('://')&&!value.includes('?')&&!value.includes('#');
+function safePublicPath(value:unknown):value is string|null{
+  return value===null||(typeof value==='string'&&PUBLIC_STAMP_PATH_RE.test(value));
 }
 
 function parseCatalogItem(value:unknown):FamilySharedStampCatalogItem{
@@ -69,10 +69,14 @@ function parseCatalogItem(value:unknown):FamilySharedStampCatalogItem{
   if(!['image/png','image/webp','image/gif','image/jpeg'].includes(String(item.mimeType)))throw new TypeError('invalid shared stamp mime type');
   if(!positiveInt(item.width)||!positiveInt(item.height)||Math.max(Number(item.width),Number(item.height))>FAMILY_SHARED_STAMP_MAX_EDGE)throw new TypeError('invalid shared stamp dimensions');
   if(!positiveInt(item.normalizedByteSize)||Number(item.normalizedByteSize)>FAMILY_SHARED_STAMP_MAX_NORMALIZED_BYTES)throw new TypeError('invalid shared stamp byte size');
-  if(!safePath(item.contentPath)||!safePath(item.thumbnailPath)||!safePath(item.framesPath))throw new TypeError('invalid shared stamp content path');
+  if(!safePublicPath(item.contentPath)||!safePublicPath(item.thumbnailPath)||!safePublicPath(item.framesPath))throw new TypeError('invalid shared stamp content path');
   if(!Number.isSafeInteger(item.updatedAt)||Number(item.updatedAt)<0)throw new TypeError('invalid shared stamp updated time');
-  if(item.representation==='SINGLE_FILE'&&!item.contentPath)throw new TypeError('shared single-file stamp requires content path');
-  if(item.representation==='FRAME_SEQUENCE'&&!item.framesPath)throw new TypeError('shared frame sequence requires frames path');
+
+  const prefix=`/v1/stamps/${item.sharedId}/versions/${item.currentVersion}`;
+  const expectedContent=item.representation==='SINGLE_FILE'?`${prefix}/content`:null;
+  const expectedFrames=item.representation==='FRAME_SEQUENCE'?`${prefix}/frames`:null;
+  if(item.contentPath!==expectedContent||item.framesPath!==expectedFrames)throw new TypeError('shared stamp catalog path mismatch');
+  if(item.thumbnailPath!==null&&item.thumbnailPath!==`${prefix}/thumbnail`)throw new TypeError('shared stamp thumbnail path mismatch');
   return item as FamilySharedStampCatalogItem;
 }
 
@@ -118,7 +122,7 @@ export function createFamilySharedStampRegistryClient(config:FamilySharedStampRe
       return (body as {stamps:unknown[]}).stamps.map(parseCatalogItem);
     },
     publicUrl(path:string):string{
-      if(!safePath(path)||path===null)throw new TypeError('invalid shared stamp content path');
+      if(!PUBLIC_STAMP_PATH_RE.test(path))throw new TypeError('invalid shared stamp content path');
       return `${baseUrl}${path}`;
     },
     create(manifest:FamilySharedStampManifest,parts:{content?:File;thumbnail?:File;frames?:File[]}){
