@@ -31,7 +31,7 @@ for(const marker of [
   'transform:none!important',
   '-webkit-transform:none!important',
   'will-change:auto!important',
-  '.fab{bottom:calc(var(--nav-box-h) + 14px)!important}',
+  '.fab{right:calc(16px + var(--nav-safe-right))!important;bottom:calc(var(--nav-box-h) + 14px)!important}',
 ]){
   if(!shell.includes(marker)) throw new Error(`app shell lost behavior marker: ${marker}`);
 }
