@@ -1,5 +1,6 @@
 import { json } from './response';
 import { taskVisibilitySql } from './task-visibility';
+import { validateTaskParentLink } from './task-hierarchy';
 import { normalizeCalendarColor } from './calendar-colors';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation, wakeCalendarOutbox } from './google-calendar';
@@ -82,6 +83,19 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     if(Object.prototype.hasOwnProperty.call(v||{},'category')&&String(v?.category??'').trim().length>255)return json({ok:false,error:'買い物カテゴリーが長すぎます。'},400);
   }
   const now=nowJst();const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
+  const parentRaw=b.parent_task_id;
+  const parentTaskId=parentRaw===undefined||parentRaw===null||String(parentRaw).trim()===''?null:Number(parentRaw);
+  if(parentTaskId!==null&&(!Number.isInteger(parentTaskId)||parentTaskId<=0))return json({ok:false,error:'親タスクが不正です。'},400);
+  if(parentTaskId!==null&&isEvent)return json({ok:false,error:'子タスクはタスクとして作成してください。'},400);
+  if(parentTaskId!==null){
+    const parent=await ctx.env.DB.prepare(`SELECT id,family_id,parent_task_id,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(parentTaskId,m.family_id,m.id).first();
+    if(!parent)return json({ok:false,error:'親タスクが見つかりません。'},404);
+    const link=validateTaskParentLink(
+      {id:0,familyId:Number(m.family_id),parentTaskId:null,hasChildren:false,visibilityScope:isPrivate?'PRIVATE':'FAMILY',privateOwnerId:isPrivate?Number(m.id):null},
+      {id:Number(parent.id),familyId:Number(parent.family_id),parentTaskId:parent.parent_task_id===null?null:Number(parent.parent_task_id),hasChildren:false,visibilityScope:String(parent.visibility_scope)==='PRIVATE'?'PRIVATE':'FAMILY',privateOwnerId:parent.private_owner_id===null?null:Number(parent.private_owner_id)},
+    );
+    if(!link.ok)return json({ok:false,error:link.reason==='MAX_DEPTH'?'子タスクの下に子タスクは作成できません。':'親タスクと公開範囲が一致しません。'},400);
+  }
   const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
   const ids=isPrivate?[m.id]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))];
@@ -92,7 +106,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   }
   let id=0;
   try {
-    const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,visibility_scope,private_owner_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(m.family_id,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarVisibleFlag(b),calendarColor,isEvent?'EVENT':'TASK',0,reminderAt,isPrivate?'PRIVATE':'FAMILY',isPrivate?m.id:null).run();
+    const r=await ctx.env.DB.prepare('INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,visibility_scope,private_owner_id,parent_task_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(m.family_id,title,String(b.description??'')||null,dueValue,'pending',completionMode,m.id,now,now,start,end,String(b.location??'')||null,allDay?1:0,calendarVisibleFlag(b),calendarColor,isEvent?'EVENT':'TASK',0,reminderAt,isPrivate?'PRIVATE':'FAMILY',isPrivate?m.id:null,parentTaskId).run();
     id=Number(r.meta.last_row_id);
     if(ids.length) await ctx.env.DB.batch(ids.map((mid:number)=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
     const now2=nowJst();
