@@ -15,6 +15,16 @@ for(const marker of [
   'native-control-shell',
   '/assets/family.css?v=${APP_VERSION}',
   '/assets/pwa.js?v=${APP_VERSION}',
+  'viewport-fit=cover',
+  'data-bottom-nav-viewport-fix="1"',
+  '--nav-safe-bottom:env(safe-area-inset-bottom,0px)',
+  '--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))',
+  'padding-bottom:calc(8px + var(--nav-safe-bottom))',
+  'transform:none',
+  '-webkit-transform:none',
+  'will-change:auto',
+  '.wrap{padding-bottom:calc(var(--nav-box-h) + 30px)}',
+  '.fab{bottom:calc(var(--nav-box-h) + 14px)}',
 ]){
   if(!shell.includes(marker)) throw new Error(`app shell lost behavior marker: ${marker}`);
 }
