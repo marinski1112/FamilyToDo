@@ -61,7 +61,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
       WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))
       AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<?))
-      ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 20`)
+      ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 12`)
       .bind(familyId,memberId,localDate,localDate,localDate).all<Row>(),
     env.DB.prepare(`SELECT
         SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND date(COALESCE(start_at,due_at))=? AND lower(COALESCE(status,''))='completed' THEN 1 ELSE 0 END) completed,
