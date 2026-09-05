@@ -86,8 +86,8 @@
       const sourceWidth=Number(decoded.width),sourceHeight=Number(decoded.height);
       if(!Number.isSafeInteger(sourceWidth)||!Number.isSafeInteger(sourceHeight)||sourceWidth<=0||sourceHeight<=0)throw new Error('PNGの画像サイズを確認できませんでした。');
       const longEdge=Math.max(sourceWidth,sourceHeight);
-      if(longEdge<=maxEdge)return {file,width:sourceWidth,height:sourceHeight};
-      const scale=maxEdge/longEdge;
+      if(longEdge<=maxEdge&&file.size<=MAX_UPLOAD_BYTES)return {file,width:sourceWidth,height:sourceHeight};
+      const scale=Math.min(1,maxEdge/longEdge);
       const targetWidth=Math.max(1,Math.round(sourceWidth*scale)),targetHeight=Math.max(1,Math.round(sourceHeight*scale));
       const canvas=document.createElement('canvas');canvas.width=targetWidth;canvas.height=targetHeight;
       const context=canvas.getContext('2d',{alpha:true});
