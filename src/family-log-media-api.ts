@@ -6,6 +6,7 @@ type FamilyLogImageMime='image/jpeg'|'image/png'|'image/webp';
 type Scope={familyId:number;memberId:number};
 type MediaRow={id:number;log_id:number;subject_id:number;storage_key:string;mime_type:string;byte_size:number;reconcile_pending?:number};
 type ParentRow={id:number;subject_id:number;deleted_at:string|null;log_type:string;detail_code:string|null;subject_kind:string};
+type CleanupPurpose='ORPHAN'|'DELETE';
 
 function scope(context:AppContext):Scope|null{
   const familyId=Number(context.member?.family_id||0),memberId=Number(context.member?.id||0);
@@ -104,12 +105,22 @@ function publicMetadata(row:MediaRow){
   return {id:Number(row.id),logId:Number(row.log_id),subjectId:Number(row.subject_id),mimeType:String(row.mime_type),bytes:Number(row.byte_size),url:`/api/family-log-media?media=${Number(row.id)}`};
 }
 
-async function queueObjectCleanup(env:Env,familyId:number,storageKey:string):Promise<void>{
-  await env.DB.prepare(`INSERT OR IGNORE INTO family_log_media_cleanup_queue(family_id,storage_key,created_at,attempts,last_attempt_at)
-    VALUES(?,?,?,0,NULL)`).bind(familyId,storageKey,new Date().toISOString()).run();
+async function queueObjectCleanup(env:Env,familyId:number,storageKey:string,purpose:CleanupPurpose):Promise<void>{
+  await env.DB.prepare(`INSERT INTO family_log_media_cleanup_queue(family_id,storage_key,purpose,created_at,attempts,last_attempt_at)
+    VALUES(?,?,?,?,0,NULL)
+    ON CONFLICT(storage_key) DO UPDATE SET purpose=excluded.purpose`).bind(familyId,storageKey,purpose,new Date().toISOString()).run();
 }
 
 async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Promise<boolean>{
+  const queued=await env.DB.prepare('SELECT purpose FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first<{purpose:string}>();
+  if(!queued)return true;
+  if(String(queued.purpose)==='ORPHAN'){
+    const linked=await env.DB.prepare('SELECT id FROM family_log_media WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first();
+    if(linked){
+      await env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
+      return true;
+    }
+  }
   try{
     await env.MEDIA.delete(storageKey);
     await env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
@@ -122,7 +133,7 @@ async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Pro
 
 async function cleanupMediaRow(env:Env,familyId:number,row:MediaRow):Promise<boolean>{
   const key=String(row.storage_key);
-  await queueObjectCleanup(env,familyId,key);
+  await queueObjectCleanup(env,familyId,key,'DELETE');
   if(!(await deleteQueuedObject(env,familyId,key))){
     await env.DB.prepare('UPDATE family_log_media SET reconcile_pending=1 WHERE id=? AND family_id=?').bind(Number(row.id),familyId).run().catch(()=>{});
     return false;
@@ -211,7 +222,7 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
       const bytes=new Uint8Array(buffer);
       if(!hasValidSignature(bytes,mime))return json({ok:false,error:'INVALID_IMAGE'},400);
       const objectKey=`families/${s.familyId}/family-log/subjects/${Number(parent.subject_id)}/logs/${logId}/${crypto.randomUUID()}.${extensionFor(mime)}`;
-      await queueObjectCleanup(context.env,s.familyId,objectKey);
+      await queueObjectCleanup(context.env,s.familyId,objectKey,'ORPHAN');
       try{
         await context.env.MEDIA.put(objectKey,buffer,{httpMetadata:{contentType:mime}});
         const result=await context.env.DB.prepare(`INSERT INTO family_log_media(family_id,log_id,subject_id,storage_key,mime_type,byte_size,created_by,created_at,reconcile_pending)
