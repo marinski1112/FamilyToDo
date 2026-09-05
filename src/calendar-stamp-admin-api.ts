@@ -33,8 +33,9 @@ async function sharedPublishProjection(context:any,familyId:number,assetIds:numb
     const placeholders=assetIds.map(()=>'?').join(',');
     const rows=await context.env.DB.prepare(`SELECT asset_id FROM calendar_shared_stamp_refs
       WHERE family_id=? AND asset_id IN (${placeholders})`)
-      .bind(familyId,...assetIds).all<{asset_id:number}>();
-    return {ready:configured,published:new Set(rows.results.map(row=>Number(row.asset_id)).filter(Number.isSafeInteger))};
+      .bind(familyId,...assetIds).all();
+    const publishedRows=(rows.results??[]) as Array<{asset_id:number}>;
+    return {ready:configured,published:new Set(publishedRows.map((row:{asset_id:number})=>Number(row.asset_id)).filter(Number.isSafeInteger))};
   }catch{
     // 0054 may not be deployed yet. Existing local stamp management remains usable
     // and publication stays hidden/fail-closed until the projection table exists.
