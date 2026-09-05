@@ -8,7 +8,7 @@ const migration=fs.readFileSync('migrations/0057_family_log_baby_food_media.sql'
 
 const checks=[
   [routes.includes("url.pathname==='/api/family-log-media'"),'Family Log media route is missing'],
-  [routes.includes("familyLogImportMediaBoundary")&&routes.includes("url.pathname==='/api/family-log-import'"),'Family Log import reconciliation boundary is missing'],
+  [routes.includes("familyLogImportMediaBoundary as familyLogImportApi")&&routes.includes("if(url.pathname==='/api/family-log-import') return await familyLogImportApi(request,context);"),'Family Log import reconciliation boundary must preserve canonical dispatcher contract'],
   [api.includes("family_id=?")&&api.includes("active=1")&&api.includes("deleted_at IS NULL"),'active same-family member gate is missing'],
   [api.includes("x-csrf-token")&&api.includes("CSRF_FAILED"),'mutation CSRF gate is missing'],
   [api.includes("l.log_type='MEAL'")&&api.includes("l.detail_code='BABY_FOOD'")&&api.includes("s.subject_kind IN ('BABY','CHILD')"),'BABY_FOOD BABY/CHILD parent restriction is missing'],
@@ -22,6 +22,8 @@ const checks=[
   [boundary.includes("action==='save'")&&boundary.includes('reconcileFamilyLogMediaForLog'),'Family Log edit lifecycle reconciliation hook is missing'],
   [importBoundary.includes('familyLogImportApi(request,context)')&&importBoundary.includes('reconcilePendingFamilyLogMedia'),'import rollback reconciliation must wrap the canonical importer'],
   [migration.includes('family_log_media_cleanup_queue')&&migration.includes('reconcile_pending'),'durable R2 cleanup/reconciliation state is missing'],
+  [migration.includes("purpose TEXT NOT NULL CHECK (purpose IN ('ORPHAN','DELETE'))")&&api.includes("queueObjectCleanup(context.env,s.familyId,objectKey,'ORPHAN')")&&api.includes("queueObjectCleanup(env,familyId,key,'DELETE')"),'cleanup queue must distinguish orphan-upload compensation from intentional deletion'],
+  [api.includes("String(queued.purpose)==='ORPHAN'")&&api.includes('SELECT id FROM family_log_media WHERE family_id=? AND storage_key=? LIMIT 1'),'orphan retry must not delete an object already linked to valid metadata'],
   [migration.includes('trg_family_log_media_parent_reconcile')&&migration.includes('AFTER UPDATE OF deleted_at,subject_id,log_type,detail_code ON family_logs'),'parent mutation reconciliation trigger is missing'],
   [migration.includes('trg_family_log_media_subject_reconcile')&&migration.includes('AFTER UPDATE OF subject_kind ON family_log_subjects'),'subject-kind reconciliation trigger is missing'],
   [api.includes('queueObjectCleanup')&&api.includes('deleteQueuedObject')&&api.includes('attempts=attempts+1'),'failed R2 cleanup must remain retryable'],
