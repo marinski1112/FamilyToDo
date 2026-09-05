@@ -118,7 +118,7 @@ const queueBabyFoodSync=()=>queueMicrotask(syncBabyFoodFields);
 document.addEventListener('click',event=>{
   const target=event.target instanceof Element?event.target:null;
   if(target?.closest('.family-log-form-action[data-detail="BABY_FOOD"],.family-log-edit,#familyLogDetailChoices [data-detail]'))queueBabyFoodSync();
-});
+},true);
 document.addEventListener('change',event=>{
   const target=event.target;
   if(target instanceof HTMLSelectElement&&['log_type','detail_code'].includes(target.name))queueBabyFoodSync();
