@@ -44,7 +44,7 @@ function matchesIfNoneMatch(value:string|null,etag:string):boolean{
   });
 }
 
-async function referencedUpload(env:Env,familyId:number,assetId:number,url:URL):Promise<ReferencedUpload|null>{
+async function referencedUploadKey(env:Env,familyId:number,assetId:number,url:URL):Promise<ReferencedUpload|null>{
   const frameRaw=url.searchParams.get('frame');
   if(frameRaw!==null){
     const frameIndex=Number(frameRaw);
@@ -76,7 +76,7 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
   const url=new URL(request.url),assetId=positiveId(url.searchParams.get('asset'));
   if(!assetId)return json({ok:false,error:'INVALID_MEDIA'},400);
   try{
-    const referenced=await referencedUpload(context.env,s.familyId,assetId,url);
+    const referenced=await referencedUploadKey(context.env,s.familyId,assetId,url);
     if(!referenced)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
     const objectKey=calendarStampManagedUploadObjectKey(s.familyId,referenced.storageKey);
     const object=await context.env.MEDIA.get(objectKey);
