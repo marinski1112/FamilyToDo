@@ -4,6 +4,7 @@ export type TaskHierarchyNode = {
   id: number;
   familyId: number;
   parentTaskId: number | null;
+  hasChildren: boolean;
   visibilityScope: TaskVisibilityScope;
   privateOwnerId: number | null;
 };
@@ -25,7 +26,9 @@ export function validateTaskParentLink(
 ): TaskParentLinkResult {
   if (child.id === parent.id) return { ok: false, reason: 'SELF_PARENT' };
   if (child.familyId !== parent.familyId) return { ok: false, reason: 'CROSS_FAMILY' };
-  if (parent.parentTaskId !== null) return { ok: false, reason: 'MAX_DEPTH' };
+  if (parent.parentTaskId !== null || child.hasChildren) {
+    return { ok: false, reason: 'MAX_DEPTH' };
+  }
   if (child.visibilityScope !== parent.visibilityScope) {
     return { ok: false, reason: 'VISIBILITY_MISMATCH' };
   }
