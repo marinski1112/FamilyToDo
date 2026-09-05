@@ -100,12 +100,12 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
-  if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
-  if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
   if(payload.today.tasks.length){lines.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
   if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
+  if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
+  if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
   if(lines.length===2)lines.push('昨日の記録・今日の予定はありません。');
   lines.push(frame.closing);
   return lines.join('\n').slice(0,1000);
