@@ -38,7 +38,7 @@ export type FamilySharedStampManifest={
   frames:Array<{storageKey:string;durationMs:number;width:number;height:number}>;
 };
 
-export type FamilySharedStampRegistryConfig={baseUrl:string;token:string};
+export type FamilySharedStampRegistryConfig={baseUrl:string;token:string;fetchImpl?:typeof fetch};
 
 const SHARED_ID_RE=/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
 const PUBLIC_STAMP_PATH_RE=/^\/v1\/stamps\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)\/versions\/([1-9]\d*)\/(content|thumbnail|frames(?:\/(?:0|[1-3]?\d|4[0-7]))?)$/u;
@@ -98,15 +98,20 @@ function multipart(manifest:FamilySharedStampManifest,parts:{content?:File;thumb
 export function familySharedStampRegistryConfigFromEnv(env:{
   SHARED_STAMPS_SERVICE_URL?:string;
   SHARED_STAMPS_SERVICE_TOKEN?:string;
+  SHARED_STAMPS_SERVICE?:{fetch(request:Request):Promise<Response>};
 }):FamilySharedStampRegistryConfig|null{
   const baseUrl=env.SHARED_STAMPS_SERVICE_URL?.trim()??'';
   const token=env.SHARED_STAMPS_SERVICE_TOKEN?.trim()??'';
   if(!baseUrl&&!token)return null;
   if(!baseUrl||!token)throw new TypeError('shared stamp service configuration is incomplete');
-  return {baseUrl,token};
+  const service=env.SHARED_STAMPS_SERVICE;
+  const fetchImpl=service
+    ? (((input:any,init?:RequestInit)=>service.fetch(new Request(input,init))) as typeof fetch)
+    : undefined;
+  return fetchImpl?{baseUrl,token,fetchImpl}:{baseUrl,token};
 }
 
-export function createFamilySharedStampRegistryClient(config:FamilySharedStampRegistryConfig,fetchImpl:typeof fetch=fetch){
+export function createFamilySharedStampRegistryClient(config:FamilySharedStampRegistryConfig,fetchImpl:typeof fetch=config.fetchImpl??fetch){
   const baseUrl=normalizeBaseUrl(config.baseUrl);
   const token=config.token.trim();
   if(!token)throw new TypeError('shared stamp service token is required');
