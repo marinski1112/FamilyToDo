@@ -108,13 +108,14 @@ function publicMetadata(row:MediaRow){
 async function queueObjectCleanup(env:Env,familyId:number,storageKey:string,purpose:CleanupPurpose):Promise<void>{
   await env.DB.prepare(`INSERT INTO family_log_media_cleanup_queue(family_id,storage_key,purpose,created_at,attempts,last_attempt_at)
     VALUES(?,?,?,?,0,NULL)
-    ON CONFLICT(storage_key) DO UPDATE SET purpose=excluded.purpose`).bind(familyId,storageKey,purpose,new Date().toISOString()).run();
+    ON CONFLICT(storage_key) DO UPDATE SET purpose=excluded.purpose,created_at=excluded.created_at`).bind(familyId,storageKey,purpose,new Date().toISOString()).run();
 }
 
 async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Promise<boolean>{
   const queued=await env.DB.prepare('SELECT purpose FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first<{purpose:string}>();
   if(!queued)return true;
-  if(String(queued.purpose)==='ORPHAN'){
+  const purpose=String(queued.purpose);
+  if(purpose==='ORPHAN'){
     const linked=await env.DB.prepare('SELECT id FROM family_log_media WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first();
     if(linked){
       await env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
@@ -123,6 +124,9 @@ async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Pro
   }
   try{
     await env.MEDIA.delete(storageKey);
+    if(purpose==='DELETE'){
+      await env.DB.prepare('DELETE FROM family_log_media WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
+    }
     await env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
     return true;
   }catch{
@@ -138,7 +142,6 @@ async function cleanupMediaRow(env:Env,familyId:number,row:MediaRow):Promise<boo
     await env.DB.prepare('UPDATE family_log_media SET reconcile_pending=1 WHERE id=? AND family_id=?').bind(Number(row.id),familyId).run().catch(()=>{});
     return false;
   }
-  await env.DB.prepare('DELETE FROM family_log_media WHERE id=? AND family_id=?').bind(Number(row.id),familyId).run();
   return true;
 }
 
@@ -153,14 +156,33 @@ export async function reconcileFamilyLogMediaForLog(env:Env,familyId:number,logI
   if(Number(row.reconcile_pending||0)!==0)await env.DB.prepare('UPDATE family_log_media SET reconcile_pending=0 WHERE id=? AND family_id=?').bind(Number(row.id),familyId).run();
 }
 
-/** Best-effort bounded retry for durable cleanup/reconciliation markers. */
+/** Best-effort bounded retry for durable cleanup/reconciliation markers. Fresh ORPHAN rows are held briefly so an in-flight upload cannot be reclaimed. */
 export async function reconcilePendingFamilyLogMedia(env:Env,familyId:number,limit=8):Promise<void>{
   if(!Number.isSafeInteger(familyId)||familyId<=0)return;
   const cap=Math.max(1,Math.min(24,Math.trunc(limit)||8));
-  const queued=await env.DB.prepare('SELECT storage_key FROM family_log_media_cleanup_queue WHERE family_id=? ORDER BY id LIMIT ?').bind(familyId,cap).all<{storage_key:string}>();
+  const queued=await env.DB.prepare(`SELECT storage_key FROM family_log_media_cleanup_queue
+    WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))
+    ORDER BY id LIMIT ?`).bind(familyId,cap).all<{storage_key:string}>();
   for(const item of queued.results||[])await deleteQueuedObject(env,familyId,String(item.storage_key));
   const pending=await env.DB.prepare('SELECT log_id FROM family_log_media WHERE family_id=? AND reconcile_pending=1 ORDER BY id LIMIT ?').bind(familyId,cap).all<{log_id:number}>();
   for(const item of pending.results||[])await reconcileFamilyLogMediaForLog(env,familyId,Number(item.log_id));
+}
+
+/** Drain all immediately actionable reconciliation work in batches; transient R2 failures remain durably queued. */
+export async function drainPendingFamilyLogMedia(env:Env,familyId:number):Promise<void>{
+  if(!Number.isSafeInteger(familyId)||familyId<=0)return;
+  for(let batch=0;batch<128;batch++){
+    const before=await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM family_log_media WHERE family_id=? AND reconcile_pending=1) +
+      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
+    const count=Number(before?.count||0);
+    if(count<=0)return;
+    await reconcilePendingFamilyLogMedia(env,familyId,24);
+    const after=await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM family_log_media WHERE family_id=? AND reconcile_pending=1) +
+      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
+    if(Number(after?.count||0)>=count)return;
+  }
 }
 
 /** Remove the private object and metadata after a canonical Family Log soft-delete, preserving retry state on transient R2 failure. */
@@ -231,7 +253,10 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
         const row:MediaRow={id:Number(result.meta.last_row_id),log_id:logId,subject_id:Number(parent.subject_id),storage_key:objectKey,mime_type:mime,byte_size:buffer.byteLength,reconcile_pending:0};
         return json({ok:true,media:publicMetadata(row)},201);
       }catch(error){
-        await deleteQueuedObject(context.env,s.familyId,objectKey);
+        try{
+          await context.env.MEDIA.delete(objectKey);
+          await context.env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(s.familyId,objectKey).run();
+        }catch{}
         if(await mediaByLog(context.env,s.familyId,logId))return json({ok:false,error:'PHOTO_ALREADY_EXISTS'},409);
         throw error;
       }
