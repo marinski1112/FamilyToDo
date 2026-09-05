@@ -12,6 +12,18 @@ type DeviceRow=Readonly<{
   sharing_enabled:unknown;
   revoked_at:unknown;
 }>;
+type DeviceListRow=Readonly<{
+  id:unknown;
+  public_id:unknown;
+  member_id:unknown;
+  member_name:unknown;
+  provider:unknown;
+  enabled:unknown;
+  sharing_enabled:unknown;
+  revoked_at:unknown;
+  last_seen_at:unknown;
+  created_at:unknown;
+}>;
 
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 const isAdminRole=(value:unknown):boolean=>{
@@ -36,6 +48,41 @@ function fail(status:number,code:string,message:string):Response{
 export async function locationDeviceApi(request:Request,ctx:AppContext):Promise<Response>{
   const member=ctx.member;
   if(!member)return fail(401,'AUTH_REQUIRED','ログインが必要です。');
+
+  const familyId=Number(member.family_id);
+  const actorMemberId=Number(member.id);
+  if(!isPositiveId(familyId)||!isPositiveId(actorMemberId))return fail(403,'FORBIDDEN','操作できません。');
+
+  if(request.method==='GET'){
+    const admin=isAdminRole(member.role);
+    const sql=`
+      SELECT d.id,d.public_id,d.member_id,m.name AS member_name,d.provider,d.enabled,d.sharing_enabled,d.revoked_at,d.last_seen_at,d.created_at
+      FROM location_devices d
+      JOIN members m ON m.id=d.member_id AND m.family_id=d.family_id
+      WHERE d.family_id=?${admin?'':' AND d.member_id=?'}
+      ORDER BY d.revoked_at IS NOT NULL,d.enabled DESC,d.id DESC
+    `;
+    const statement=ctx.env.DB.prepare(sql);
+    const result=admin
+      ?await statement.bind(familyId).all<DeviceListRow>()
+      :await statement.bind(familyId,actorMemberId).all<DeviceListRow>();
+    return json({
+      ok:true,
+      devices:result.results.map(row=>({
+        id:Number(row.id),
+        publicId:String(row.public_id??''),
+        memberId:Number(row.member_id),
+        memberName:String(row.member_name??''),
+        provider:String(row.provider??''),
+        enabled:Number(row.enabled)===1,
+        sharingEnabled:Number(row.sharing_enabled)===1,
+        revokedAt:row.revoked_at===null||row.revoked_at===undefined?null:String(row.revoked_at),
+        lastSeenAt:row.last_seen_at===null||row.last_seen_at===undefined?null:String(row.last_seen_at),
+        createdAt:row.created_at===null||row.created_at===undefined?null:String(row.created_at),
+      })),
+    },200,{'cache-control':'no-store'});
+  }
+
   if(request.method!=='POST')return fail(405,'METHOD_NOT_ALLOWED','Method Not Allowed');
 
   let body:Record<string,unknown>;
@@ -49,10 +96,6 @@ export async function locationDeviceApi(request:Request,ctx:AppContext):Promise<
   if(typeof body.csrf!=='string'||body.csrf!==ctx.session.csrfToken){
     return fail(403,'FORBIDDEN','CSRF検証に失敗しました。');
   }
-
-  const familyId=Number(member.family_id);
-  const actorMemberId=Number(member.id);
-  if(!isPositiveId(familyId)||!isPositiveId(actorMemberId))return fail(403,'FORBIDDEN','操作できません。');
 
   if(body.action==='provision'){
     const targetMemberId=body.member_id===undefined?actorMemberId:Number(body.member_id);
