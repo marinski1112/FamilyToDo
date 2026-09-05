@@ -33,6 +33,8 @@ requireText(hierarchy,"child.id === parent.id","self-parent rejection");
 requireText(hierarchy,"child.familyId !== parent.familyId","cross-family rejection");
 requireText(hierarchy,"parent.parentTaskId !== null || child.hasChildren","one-level hierarchy rejection in both directions");
 requireText(hierarchy,"child.visibilityScope !== parent.visibilityScope","visibility-scope parity");
+requireText(hierarchy,"child.privateOwnerId === null",'PRIVATE child owner required');
+requireText(hierarchy,"parent.privateOwnerId === null",'PRIVATE parent owner required');
 requireText(hierarchy,"child.privateOwnerId !== parent.privateOwnerId","PRIVATE owner parity");
 
 // Existing independent state and linkage contracts remain explicit rather than inherited from parent.
