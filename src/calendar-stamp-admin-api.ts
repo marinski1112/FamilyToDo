@@ -2,6 +2,11 @@ import { calendarStampAssetUrl } from './calendar-stamp-asset-url';
 import { calendarStampAssetsForAdmin } from './calendar-stamp-admin-inventory';
 import { setCalendarStampAssetActive } from './calendar-stamp-actions';
 import { registerCalendarStampPngSequence } from './calendar-stamp-png-sequence-actions';
+import {
+  createFamilySharedStampRegistryClient,
+  familySharedStampRegistryConfigFromEnv,
+} from './calendar-shared-stamp-registry';
+import { publishCalendarStampToShared } from './calendar-shared-stamp-publish';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
@@ -17,12 +22,33 @@ function adminError(error:unknown):Response{
   return json({ok:false,error:'STAMP_ADMIN_FAILED'},500);
 }
 
+async function sharedPublishProjection(context:any,familyId:number,assetIds:number[]):Promise<{
+  ready:boolean;
+  published:Set<number>;
+}>{
+  let configured=false;
+  try{configured=familySharedStampRegistryConfigFromEnv(context.env)!==null;}catch{configured=false;}
+  if(!assetIds.length)return {ready:false,published:new Set()};
+  try{
+    const placeholders=assetIds.map(()=>'?').join(',');
+    const rows=await context.env.DB.prepare(`SELECT asset_id FROM calendar_shared_stamp_refs
+      WHERE family_id=? AND asset_id IN (${placeholders})`)
+      .bind(familyId,...assetIds).all<{asset_id:number}>();
+    return {ready:configured,published:new Set(rows.results.map(row=>Number(row.asset_id)).filter(Number.isSafeInteger))};
+  }catch{
+    // 0054 may not be deployed yet. Existing local stamp management remains usable
+    // and publication stays hidden/fail-closed until the projection table exists.
+    return {ready:false,published:new Set()};
+  }
+}
+
 export async function calendarStampAdminAssetsApi(request:Request,context:any):Promise<Response>{
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   if(request.method==='GET'){
     try{
       const assets=await calendarStampAssetsForAdmin(context.env,s.familyId,s.memberId);
-      return json({ok:true,assets:assets.map(asset=>({
+      const shared=await sharedPublishProjection(context,s.familyId,assets.map(asset=>Number(asset.id)));
+      return json({ok:true,sharedPublishingReady:shared.ready,assets:assets.map(asset=>({
         id:Number(asset.id),
         name:String(asset.name||''),
         kind:asset.asset_kind,
@@ -31,6 +57,13 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
         thumbnailUrl:asset.active===1?calendarStampAssetUrl(asset,'thumbnail'):null,
         width:asset.width==null?null:Number(asset.width),
         height:asset.height==null?null:Number(asset.height),
+        sharedPublished:shared.published.has(Number(asset.id)),
+        canPublishShared:shared.ready
+          &&!shared.published.has(Number(asset.id))
+          &&asset.active===1
+          &&asset.asset_kind==='ANIMATED'
+          &&asset.mime_type==='image/png'
+          &&asset.storage_provider==='UPLOAD',
       }))},200,{'cache-control':'private, no-store'});
     }catch(error){return adminError(error);}
   }
@@ -66,7 +99,22 @@ export async function calendarStampPngSequenceAdminApi(request:Request,context:a
       width:body.width==null?null:Number(body.width),
       height:body.height==null?null:Number(body.height),
     });
-    return json({ok:true,assetId},201);
+    let sharedPublished=false;
+    if(storageProvider==='UPLOAD'){
+      try{
+        const config=familySharedStampRegistryConfigFromEnv(context.env);
+        if(config){
+          const client=createFamilySharedStampRegistryClient(config);
+          await publishCalendarStampToShared(context.env,s.familyId,s.memberId,assetId,client);
+          sharedPublished=true;
+        }
+      }catch{
+        // Local registration is durable even when shared infrastructure/config is
+        // temporarily unavailable. The inventory exposes a retry action once ready.
+        sharedPublished=false;
+      }
+    }
+    return json({ok:true,assetId,sharedPublished},201);
   }catch(error){
     const message=String((error as {message?:unknown})?.message||'');
     if(message.includes('admin required'))return json({ok:false,error:'ADMIN_REQUIRED'},403);
