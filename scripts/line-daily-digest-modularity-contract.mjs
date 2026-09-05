@@ -2,6 +2,9 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const digest=fs.readFileSync('src/line-daily-digest.ts','utf8');
+const settings=fs.readFileSync('src/settings-notifications-page.ts','utf8');
+const browser=fs.readFileSync('public/assets/settings-notifications.js','utf8');
+const migration=fs.readFileSync('migrations/0055_line_daily_digest_family_summary.sql','utf8');
 
 if(!index.includes("import { processLineDailyDigests } from './line-daily-digest';")) throw new Error('index.ts must import LINE daily digest job');
 if(index.includes('export async function processLineDailyDigests(')) throw new Error('LINE daily digest job must not remain defined in index.ts');
@@ -11,12 +14,22 @@ for(const sentinel of [
   'line_daily_digest_settings',
   'line_daily_digest_recipients',
   'line_daily_digest_receipts',
+  'line_daily_digest_subject_settings',
   "current<target||current>target+29",
   "visibility_scope='PRIVATE' AND private_owner_id=?",
-  'LIMIT 12',
+  "familyAiProvider(env)!=='GEMINI'",
+  'renderDeterministicFacts',
+  'FAMILY_LOG_TYPE_META',
+  "COALESCE(ds.enabled,1)=1",
   "Number(receipt.attempt_count)>=3",
-  "lines.join('\\n').slice(0,1000)",
+  "message=renderDeterministicFacts",
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
+for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT','line_daily_digest_subject_settings']){
+  if(!settings.includes(sentinel)||!browser.includes(sentinel)) throw new Error(`digest settings control missing: ${sentinel}`);
+}
+if(!migration.includes("DEFAULT 'FRIENDLY_LIGHT'"))throw new Error('digest tone must default to friendly/light humor');
+if(!migration.includes('enabled INTEGER NOT NULL DEFAULT 1'))throw new Error('digest subject inclusion must default ON');
+if(/latitude|longitude|location_history|owntracks/i.test(digest))throw new Error('morning digest must not read raw location/GPS sources');
 console.log('LINE daily digest modularity contract: ok');
