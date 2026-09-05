@@ -51,7 +51,7 @@ export async function settingsLocation(_request:Request,ctx:AppContext):Promise<
     <div class="credential-row"><strong>URL</strong><div class="credential-value" id="ownTracksUrl"></div><button class="btn gray small credential-copy" type="button" data-copy="ownTracksUrl">コピー</button></div>
     <div class="credential-row"><strong>Username</strong><div class="credential-value" id="ownTracksUsername"></div><button class="btn gray small credential-copy" type="button" data-copy="ownTracksUsername">コピー</button></div>
     <div class="credential-row"><strong>Password</strong><div class="credential-value" id="ownTracksPassword"></div><button class="btn gray small credential-copy" type="button" data-copy="ownTracksPassword">コピー</button></div>
-    <ol class="setup-steps"><li>OwnTracksを開き、接続方式をHTTPにします。</li><li>上のURL / Username / Passwordを入力します。</li><li>OwnTracksから現在地を1件送信します。</li><li>このページで位置共有をONにして、位置情報ページの「更新」で反映を確認します。</li></ol>
+    <ol class="setup-steps"><li>OwnTracksを開き、接続方式をHTTPにします。</li><li>上のURL / Username / Passwordを入力します。</li><li>登録済み端末で「位置共有をON」にします。</li><li>OwnTracksから現在地を1件送信し、位置情報ページの「更新」で反映を確認します。</li></ol>
     <p class="small">認証情報をURLのクエリ文字列へ追加しないでください。</p>
   </div>
   <div class="card">
