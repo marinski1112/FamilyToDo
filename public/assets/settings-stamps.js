@@ -119,9 +119,10 @@
       if(normalizedBytes<=MAX_NORMALIZED_BYTES){
         return {files:prepared,width:commonWidth,height:commonHeight,normalizedBytes};
       }
-      if(targetEdge<=1)break;
+      const renderedEdge=Math.max(commonWidth,commonHeight);
+      if(renderedEdge<=1)break;
       const ratio=Math.sqrt(MAX_NORMALIZED_BYTES/normalizedBytes)*0.92;
-      const nextEdge=Math.max(1,Math.min(targetEdge-1,Math.floor(targetEdge*Math.min(0.9,ratio))));
+      const nextEdge=Math.max(1,Math.min(renderedEdge-1,Math.floor(renderedEdge*Math.min(0.9,ratio))));
       targetEdge=nextEdge;
       setStatus(`1MiBを超えたため、全フレームをさらに自動縮小しています…（最大${targetEdge}px）`);
     }
