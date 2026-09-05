@@ -4,6 +4,8 @@ import {json} from './response';
 
 const MAX_PNG_BYTES=4*1024*1024;
 const PNG_SIGNATURE=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a] as const;
+type CalendarStampMediaMime='image/png'|'image/gif'|'image/webp';
+type ReferencedUpload={storageKey:string;mimeType:CalendarStampMediaMime};
 
 function scope(context:AppContext):{familyId:number;memberId:number}|null{
   const familyId=Number(context.member?.family_id||0),memberId=Number(context.member?.id||0);
@@ -30,6 +32,10 @@ function positiveId(value:string|null):number|null{
   return Number.isSafeInteger(id)&&id>0?id:null;
 }
 
+function mediaMime(value:unknown):CalendarStampMediaMime|null{
+  return value==='image/png'||value==='image/gif'||value==='image/webp'?value:null;
+}
+
 function matchesIfNoneMatch(value:string|null,etag:string):boolean{
   if(!value||!etag)return false;
   return value.split(',').some(candidate=>{
@@ -38,27 +44,29 @@ function matchesIfNoneMatch(value:string|null,etag:string):boolean{
   });
 }
 
-async function referencedUploadKey(env:Env,familyId:number,assetId:number,url:URL):Promise<string|null>{
+async function referencedUploadKey(env:Env,familyId:number,assetId:number,url:URL):Promise<ReferencedUpload|null>{
   const frameRaw=url.searchParams.get('frame');
   if(frameRaw!==null){
     const frameIndex=Number(frameRaw);
     if(!Number.isSafeInteger(frameIndex)||frameIndex<0||frameIndex>=48)return null;
-    const row=await env.DB.prepare(`SELECT frame.storage_key
+    const row=await env.DB.prepare(`SELECT frame.storage_key,asset.mime_type
       FROM calendar_stamp_asset_frames frame
       JOIN calendar_stamp_assets asset ON asset.id=frame.asset_id AND asset.family_id=frame.family_id
       WHERE frame.family_id=? AND frame.asset_id=? AND frame.frame_index=?
         AND asset.active=1 AND asset.storage_provider='UPLOAD'
-      LIMIT 1`).bind(familyId,assetId,frameIndex).first<{storage_key:string}>();
-    return row?normalizeCalendarStampStorageKey(row.storage_key,'calendar stamp media key'):null;
+      LIMIT 1`).bind(familyId,assetId,frameIndex).first<{storage_key:string;mime_type:string}>();
+    const mimeType=mediaMime(row?.mime_type);
+    return row&&mimeType?{storageKey:normalizeCalendarStampStorageKey(row.storage_key,'calendar stamp media key'),mimeType}:null;
   }
   const variant=url.searchParams.get('variant')==='thumbnail'?'thumbnail':'full';
-  const row=await env.DB.prepare(`SELECT storage_key,thumbnail_storage_key
+  const row=await env.DB.prepare(`SELECT storage_key,thumbnail_storage_key,mime_type
     FROM calendar_stamp_assets
     WHERE id=? AND family_id=? AND active=1 AND storage_provider='UPLOAD'
-    LIMIT 1`).bind(assetId,familyId).first<{storage_key:string;thumbnail_storage_key:string|null}>();
-  if(!row)return null;
+    LIMIT 1`).bind(assetId,familyId).first<{storage_key:string;thumbnail_storage_key:string|null;mime_type:string}>();
+  const mimeType=mediaMime(row?.mime_type);
+  if(!row||!mimeType)return null;
   const key=variant==='thumbnail'&&row.thumbnail_storage_key?row.thumbnail_storage_key:row.storage_key;
-  return normalizeCalendarStampStorageKey(key,'calendar stamp media key');
+  return {storageKey:normalizeCalendarStampStorageKey(key,'calendar stamp media key'),mimeType};
 }
 
 /** Authenticated same-family read proxy for R2-backed canonical stamp media. */
@@ -68,14 +76,12 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
   const url=new URL(request.url),assetId=positiveId(url.searchParams.get('asset'));
   if(!assetId)return json({ok:false,error:'INVALID_MEDIA'},400);
   try{
-    const storageKey=await referencedUploadKey(context.env,s.familyId,assetId,url);
-    if(!storageKey)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
-    const objectKey=calendarStampManagedUploadObjectKey(s.familyId,storageKey);
+    const referenced=await referencedUploadKey(context.env,s.familyId,assetId,url);
+    if(!referenced)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
+    const objectKey=calendarStampManagedUploadObjectKey(s.familyId,referenced.storageKey);
     const object=await context.env.MEDIA.get(objectKey);
     if(!object)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
-    const headers=new Headers({'content-type':'image/png','cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
-    const contentType=String(object.httpMetadata?.contentType||'');
-    if(contentType==='image/png')headers.set('content-type',contentType);
+    const headers=new Headers({'content-type':referenced.mimeType,'cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
     const etag=object.httpEtag?String(object.httpEtag):'';
     if(etag)headers.set('etag',etag);
     if(etag&&matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});

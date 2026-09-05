@@ -2,6 +2,8 @@ import {
   createFamilySharedStampRegistryClient,
   familySharedStampRegistryConfigFromEnv,
 } from './calendar-shared-stamp-registry';
+import { materializeCalendarSharedStamp } from './calendar-shared-stamp-import';
+import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
 function scope(context:any):{familyId:number;memberId:number}|null{
@@ -19,13 +21,37 @@ function hasQuery(request:Request):boolean{
   return new URL(request.url).search!=='';
 }
 
+function importError(error:unknown):Response{
+  const message=String((error as {message?:unknown})?.message||'');
+  if(message.includes('admin required'))return json({ok:false,error:'ADMIN_REQUIRED'},403);
+  if(message.includes('projection disabled'))return json({ok:false,error:'SHARED_STAMP_DISABLED'},409);
+  if(message.includes('mime unsupported')||message.includes('frame mime unsupported'))return json({ok:false,error:'SHARED_STAMP_UNSUPPORTED'},415);
+  if(message.includes('unavailable'))return json({ok:false,error:'SHARED_STAMP_NOT_FOUND'},404);
+  if(message.startsWith('invalid '))return json({ok:false,error:'INVALID_REQUEST'},400);
+  if(message.includes('upstream')||message.includes('byte size mismatch')||message.includes('bounds invalid')||message.includes('frame budget')||message.includes('frame count')||message.includes('frame dimensions')||message.includes('frames response'))return json({ok:false,error:'SHARED_STAMPS_UPSTREAM_FAILED'},502);
+  return json({ok:false,error:'SHARED_STAMP_IMPORT_FAILED'},500);
+}
+
+async function localProjectionMap(env:Env,familyId:number):Promise<Map<string,{assetId:number;active:boolean}>>{
+  const rows=await env.DB.prepare(`SELECT ref.shared_stamp_id,ref.shared_version,ref.asset_id,asset.active
+    FROM calendar_shared_stamp_refs ref
+    JOIN calendar_stamp_assets asset ON asset.id=ref.asset_id AND asset.family_id=ref.family_id
+    WHERE ref.family_id=?`).bind(familyId).all<{shared_stamp_id:string;shared_version:number;asset_id:number;active:number}>();
+  return new Map(rows.results.map(row=>[
+    `${row.shared_stamp_id}:${Number(row.shared_version)}`,
+    {assetId:Number(row.asset_id),active:Number(row.active)===1},
+  ]));
+}
+
 /**
- * FamilyToDo-local authenticated projection of the reusable shared stamp catalog.
- * The shared registry credential stays server-side; browser DTOs contain only
- * validated service public paths and the public shared-service base URL.
+ * Admin-only FamilyToDo projection of the reusable shared stamp catalog.
+ * GET exposes only validated public shared-service paths plus local mapping state.
+ * POST materializes one immutable shared version into the existing private MEDIA
+ * transport, then attaches the 0054 mapping. Shared writer credentials never cross
+ * the browser boundary.
  */
 export async function calendarSharedStampCatalogAdminApi(request:Request,context:any):Promise<Response>{
-  if(request.method!=='GET')return json({ok:false,error:'GET_ONLY'},405);
+  if(request.method!=='GET'&&request.method!=='POST')return json({ok:false,error:'GET_OR_POST_ONLY'},405);
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   if(hasQuery(request))return json({ok:false,error:'INVALID_REQUEST'},400);
 
@@ -44,10 +70,37 @@ export async function calendarSharedStampCatalogAdminApi(request:Request,context
     return json({ok:false,error:'SHARED_STAMPS_UNAVAILABLE'},503);
   }
 
+  if(request.method==='GET'){
+    try{
+      const [stamps,localRefs]=await Promise.all([client.list(),localProjectionMap(context.env,s.familyId)]);
+      const projected=stamps.map(stamp=>{
+        const local=localRefs.get(`${stamp.sharedId}:${stamp.currentVersion}`)??null;
+        return {...stamp,localAssetId:local?.assetId??null,localActive:local?.active??null};
+      });
+      return json({ok:true,serviceUrl:client.baseUrl,stamps:projected},200,{'cache-control':'private, no-store'});
+    }catch{
+      return json({ok:false,error:'SHARED_STAMPS_UPSTREAM_FAILED'},502);
+    }
+  }
+
+  let body:Record<string,unknown>;
+  try{body=await bodyJson(request);}catch(error){
+    if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);
+    throw error;
+  }
+  const csrf=String(body.csrf||''),expected=String(context.session?.csrfToken||'');
+  if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);
   try{
-    const stamps=await client.list();
-    return json({ok:true,serviceUrl:client.baseUrl,stamps},200,{'cache-control':'private, no-store'});
-  }catch{
-    return json({ok:false,error:'SHARED_STAMPS_UPSTREAM_FAILED'},502);
+    const result=await materializeCalendarSharedStamp(
+      context.env,
+      s.familyId,
+      s.memberId,
+      client,
+      body.sharedStampId,
+      body.sharedVersion,
+    );
+    return json({ok:true,...result},result.reused?200:201,{'cache-control':'private, no-store'});
+  }catch(error){
+    return importError(error);
   }
 }
