@@ -27,7 +27,13 @@ async function sharedPublishProjection(context:any,familyId:number,assetIds:numb
   published:Set<number>;
 }>{
   let configured=false;
-  try{configured=familySharedStampRegistryConfigFromEnv(context.env)!==null;}catch{configured=false;}
+  try{
+    const config=familySharedStampRegistryConfigFromEnv(context.env);
+    if(config){
+      createFamilySharedStampRegistryClient(config);
+      configured=true;
+    }
+  }catch{configured=false;}
   if(!assetIds.length)return {ready:false,published:new Set()};
   try{
     const placeholders=assetIds.map(()=>'?').join(',');
