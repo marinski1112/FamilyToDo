@@ -28,8 +28,6 @@ type PublishAsset={
   asset_kind:string;
   mime_type:string;
   storage_provider:string;
-  width:number|null;
-  height:number|null;
   active:number;
 };
 
@@ -141,7 +139,9 @@ function result(assetId:number,sharedStampId:string,reused:boolean):CalendarShar
  * Publishes one existing FamilyToDo-managed PNG sequence to the cross-app registry.
  * The browser never receives the registry write token or private MEDIA keys. Source
  * bytes are re-read from the authenticated family namespace and validated against
- * the 384px / 1MiB shared contract before any remote write occurs.
+ * the 384px / 1MiB shared contract before any remote write occurs. Actual PNG IHDR
+ * dimensions are authoritative, so stale optional local display metadata cannot
+ * permanently block a valid normalized upload from being shared.
  */
 export async function publishCalendarStampToShared(
   env:Env,
@@ -164,7 +164,7 @@ export async function publishCalendarStampToShared(
     return result(assetId,existingRef.shared_stamp_id,true);
   }
 
-  const asset=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,width,height,active
+  const asset=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,active
     FROM calendar_stamp_assets WHERE id=? AND family_id=? LIMIT 1`)
     .bind(assetId,familyId).first<PublishAsset>();
   if(!asset)return Promise.reject(new Error('calendar shared stamp asset unavailable'));
@@ -177,7 +177,6 @@ export async function publishCalendarStampToShared(
     .bind(familyId,assetId).all<PublishFrame>();
   const frames=await prepareFrames(env,familyId,frameRows.results);
   const width=frames[0]!.width,height=frames[0]!.height;
-  if((asset.width!==null&&Number(asset.width)!==width)||(asset.height!==null&&Number(asset.height)!==height))throw new CalendarSharedStampPublishIncompatibleError();
   const normalizedByteSize=frames.reduce((sum,frame)=>sum+frame.bytes.byteLength,0);
   const sharedStampId=await sequenceSharedId(frames);
   const expected={sharedId:sharedStampId,width,height,normalizedByteSize};
