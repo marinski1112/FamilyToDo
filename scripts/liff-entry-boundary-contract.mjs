@@ -3,6 +3,8 @@ import fs from 'node:fs';
 const page=fs.readFileSync('src/liff-entry-page.ts','utf8');
 const oauth=fs.readFileSync('src/oauth-continuation.ts','utf8');
 const target=fs.readFileSync('src/liff-target.ts','utf8');
+const browser=fs.readFileSync('public/assets/liff-auth.js','utf8');
+const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
 
 for(const marker of [
   "from './app-shell'",
@@ -32,6 +34,22 @@ for(const marker of [
   "const explicit = validateLiffNext(url.searchParams.get('next'));",
 ]){
   if(!target.includes(marker)) throw new Error(`retained LIFF target lost alias/validation marker: ${marker}`);
+}
+
+for(const marker of [
+  "location:'/app/location.php'",
+  "const loginPath=`/liff?next=${encodeURIComponent(current)}`",
+  "window.liff.login({redirectUri:liffRedirect(loginPath)})",
+  "fetch('/app/api/liff_login.php'",
+]){
+  if(!browser.includes(marker)) throw new Error(`browser LIFF routing lost location/session marker: ${marker}`);
+}
+
+for(const marker of [
+  '"/liff",',
+  '"/liff/*"',
+]){
+  if(!wrangler.includes(marker)) throw new Error(`Wrangler LIFF route must remain Worker-first: ${marker}`);
 }
 
 for(const marker of [
