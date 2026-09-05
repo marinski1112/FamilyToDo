@@ -12,10 +12,13 @@ const rangeStart=recurrenceSource.indexOf('export async function recurringForRan
 const rangeEnd=recurrenceSource.indexOf('\nexport async function recurringForDate',rangeStart);
 if(rangeStart<0||rangeEnd<0)throw new Error('recurringForRange() source not found');
 const range=recurrenceSource.slice(rangeStart,rangeEnd);
-const required=['export async function recurringForRange(ctx:AppContext,from:string,to:string):Promise<Row[]>','const recurRows=await recurringForRange(ctx,from,to);','recurringForRange(ctx,date,date)','FROM recurrence_occurrences WHERE family_id=? AND occurrence_date BETWEEN ? AND ?','await ctx.env.DB.batch(chunk);','GROUP BY ta.task_id','GROUP BY c.occurrence_id'];
+const required=['export async function recurringForRange(ctx:AppContext,from:string,to:string):Promise<Row[]>','const recurRows=await recurringForRange(ctx,from,to);','recurringForRange(ctx,date,date)','FROM recurrence_occurrences WHERE family_id=? AND occurrence_date BETWEEN ? AND ?','await ctx.env.DB.batch(chunk);','GROUP BY ta.task_id','GROUP BY c.occurrence_id','calendarRangeOffsetDays(rule.start_at,rule.end_at)','anchorFrom=shiftCalendarDateOnly(from,-spanDays)','const occurrenceFrom=projected.reduce','bind(fid,occurrenceFrom,to)','matchesRecurrence(rule,date)'];
 for(const needle of required)if(!source.includes(needle))throw new Error(`missing batched recurrence contract: ${needle}`);
+for(const type of ["type==='MONTHLY_DAY'","type==='MONTHLY_WEEKDAY'"])if(!recurrenceSource.includes(type))throw new Error(`monthly recurrence matcher changed unexpectedly: ${type}`);
 if(/for\s*\([^)]*from[^)]*to[^)]*\)[\s\S]{0,400}recurringForDate\s*\(/.test(calendar))throw new Error('calendar() must not call recurringForDate once per rendered date');
 if((calendar.match(/recurringForDate\s*\(/g)||[]).length>0)throw new Error('calendar() must project recurrence through recurringForRange only');
 if((range.match(/SELECT r\.\*,t\.title/g)||[]).length!==1)throw new Error('recurringForRange() must load recurrence rules exactly once');
 if(range.includes('recurrence_rule_id=? AND occurrence_date=? LIMIT 1'))throw new Error('recurringForRange() must not restore per-occurrence lookup queries');
+if(!range.includes("String(occ.status||'').toLowerCase()==='excluded'||occ.exception_task_id"))throw new Error('overlap projection must preserve exclusion and exception handling');
+if(!range.includes("completedByOccurrence.get(Number(occ.id))"))throw new Error('overlap projection must preserve occurrence completion identity');
 console.log('calendar recurrence range performance contract ok');

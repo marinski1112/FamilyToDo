@@ -78,3 +78,17 @@ export function safeCalendarDateRange(startLike:unknown,endLike:unknown):SafeCal
   const end=new Date(endMs).toISOString().slice(0,10);
   return {start,end,startMs,endMs,spanDays:Math.floor((endMs-startMs)/86_400_000)+1};
 }
+
+/** Number of calendar days after the start covered by a persisted task range. */
+export function calendarRangeOffsetDays(startLike:unknown,endLike:unknown):number{
+  const range=safeCalendarDateRange(startLike,endLike);
+  return range?Math.max(0,range.spanDays-1):0;
+}
+
+/** Shift a validated calendar date without local-time / DST effects. */
+export function shiftCalendarDateOnly(date:string,deltaDays:number):string{
+  const ms=dateOnlyMs(date);
+  if(ms===null)return date;
+  const delta=Number.isFinite(deltaDays)?Math.trunc(deltaDays):0;
+  return new Date(ms+delta*86_400_000).toISOString().slice(0,10);
+}
