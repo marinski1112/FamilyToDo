@@ -6,6 +6,7 @@ const locationSummary=fs.readFileSync('src/location-day-summary.ts','utf8');
 const settings=fs.readFileSync('src/settings-notifications-page.ts','utf8');
 const browser=fs.readFileSync('public/assets/settings-notifications.js','utf8');
 const migration=fs.readFileSync('migrations/0055_line_daily_digest_family_summary.sql','utf8');
+const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
 
 if(!index.includes("import { processLineDailyDigests } from './line-daily-digest';")) throw new Error('index.ts must import LINE daily digest job');
 if(index.includes('export async function processLineDailyDigests(')) throw new Error('index.ts must not retain LINE daily digest job');
@@ -30,6 +31,22 @@ for(const sentinel of [
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
+for(const sentinel of [
+  "MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT='gemini-3.8-flash'",
+  "MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT='gemini-3.5-flash'",
+  'env.MORNING_DIGEST_GEMINI_MODEL_PRIMARY',
+  'env.MORNING_DIGEST_GEMINI_MODEL_FALLBACK',
+  'env.MORNING_DIGEST_AI_ENABLED',
+  'for(const model of morningDigestModels(env))',
+  'return options[0];',
+]){
+  if(!digest.includes(sentinel)) throw new Error(`dedicated morning Gemini route missing: ${sentinel}`);
+}
+for(const sentinel of ['MORNING_DIGEST_AI_ENABLED?:string','MORNING_DIGEST_GEMINI_MODEL_PRIMARY?:string','MORNING_DIGEST_GEMINI_MODEL_FALLBACK?:string']){
+  if(!workerTypes.includes(sentinel)) throw new Error(`morning digest server config typing missing: ${sentinel}`);
+}
+if(digest.includes('resolveFamilyGeminiModel'))throw new Error('morning digest must not inherit FamilyAI/global family model selection');
+if((digest.match(/await geminiFetch\(/g)||[]).length!==1)throw new Error('morning digest source must keep one bounded model-call site');
 const receiptGate=digest.indexOf("Number(receipt.attempt_count)>=3)continue");
 const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptGate);
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
