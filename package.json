@@ -27,8 +27,9 @@
     "check:regression": "node scripts/regression-suite.mjs",
     "check:location-device-api": "node scripts/location-device-api-contract.mjs",
     "check:location-query-service": "node scripts/location-query-service-contract.mjs",
+    "check:family-log-media": "node scripts/family-log-media-contract.mjs",
     "check:legacy-regression": "node scripts/regression-legacy.mjs",
-    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:location-device-api && npm run check:location-query-service && npm run check:regression",
+    "test": "npm run typecheck && npm run check:browser-js && npm run check:migrations && npm run check:static-assets && npm run check:location-device-api && npm run check:location-query-service && npm run check:family-log-media && npm run check:regression",
     "test:legacy": "npm run check:legacy-regression"
   },
   "devDependencies": {
