@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS family_log_media_cleanup_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     family_id INTEGER NOT NULL,
     storage_key TEXT NOT NULL,
+    purpose TEXT NOT NULL CHECK (purpose IN ('ORPHAN','DELETE')),
     created_at TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TEXT NULL,
