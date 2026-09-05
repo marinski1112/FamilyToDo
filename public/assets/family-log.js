@@ -1,6 +1,15 @@
 (()=>{
 'use strict';
 const load=(src,onload)=>{const s=document.createElement('script');s.src=src;s.defer=true;if(onload)s.addEventListener('load',onload,{once:true});s.addEventListener('error',()=>console.error('[Family TODO] asset load failed',src),{once:true});document.head.appendChild(s);};
+// BABY_FOOD already uses the canonical MEAL/BABY_FOOD Family Log model, but the
+// historical default quick action records an empty row immediately. Keep that
+// stored action compatible while routing it through the existing authenticated
+// record form so parents can optionally add what was eaten and a note.
+document.querySelectorAll('.family-log-quick-action[data-detail="BABY_FOOD"]').forEach(button=>{
+  button.classList.remove('family-log-quick-action');
+  button.classList.add('family-log-form-action');
+  button.dataset.logType='MEAL';
+});
 // QUICK actions use their dedicated execute_quick_action handler. Remove the generic
 // data-log-type route before the core enhancer binds it so one-tap recording never
 // opens the detailed record sheet first.
@@ -46,10 +55,12 @@ try{
       const title=document.createElement('h2');title.textContent=`${subjectPrefix} クイック`;section.appendChild(title);
       const grid=document.createElement('div');grid.className='family-log-quick-grid';
       for(const action of subjectActions){
-        const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${String(action.mode||'QUICK')==='QUICK'?'family-log-quick-action':'family-log-form-action'}`;
+        const babyFood=String(action.log_type||'').toUpperCase()==='MEAL'&&String(action.detail_code||'').toUpperCase()==='BABY_FOOD';
+        const effectiveMode=babyFood?'FORM':String(action.mode||'QUICK');
+        const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${String(effectiveMode||'QUICK')==='QUICK'?'family-log-quick-action':'family-log-form-action'}`;
         button.dataset.quickActionId=String(Number(action.id||0));button.dataset.subjectId=String(Number(subject.id));
         button.dataset.detail=String(action.detail_code||'');button.dataset.amount=action.amount==null?'':String(action.amount);button.dataset.unit=String(action.unit||'');button.dataset.valueText=String(action.value_text||'');
-        if(String(action.mode||'QUICK')!=='QUICK')button.dataset.logType=String(action.log_type||'MEMO');
+        if(String(effectiveMode||'QUICK')!=='QUICK')button.dataset.logType=String(action.log_type||'MEMO');
         const icon=document.createElement('span');icon.textContent=String(action.icon||'＋');const label=document.createElement('strong');label.textContent=String(action.name||'記録');
         if(Array.from(label.textContent||'').length===4)label.classList.add('family-log-label-nowrap');
         button.append(icon,label);grid.appendChild(button);
@@ -88,5 +99,33 @@ try{
     }
   }
 }catch(_error){/* retain the server-rendered Family Log overview on enhancement failure */}
-load('/assets/family-log-core.js?v=wave128-fix18',()=>load('/assets/family-log-management-ui.js?v=wave128-fix18'));
+
+const syncBabyFoodFields=()=>{
+  const form=document.getElementById('familyLogForm');
+  if(!(form instanceof HTMLFormElement))return;
+  const type=form.elements.namedItem('log_type');
+  const detail=form.elements.namedItem('detail_code');
+  if(!(type instanceof HTMLSelectElement)||!(detail instanceof HTMLSelectElement)||type.value!=='MEAL')return;
+  const wrap=document.getElementById('familyLogTextWrap');
+  const label=document.getElementById('familyLogTextLabel');
+  const input=form.elements.namedItem('value_text');
+  const babyFood=detail.value==='BABY_FOOD';
+  if(wrap)wrap.style.display=babyFood?'':'none';
+  if(label)label.textContent=babyFood?'食べたもの（任意）':'内容';
+  if(input instanceof HTMLInputElement)input.placeholder=babyFood?'例：10倍がゆ、にんじん':'';
+};
+const queueBabyFoodSync=()=>queueMicrotask(syncBabyFoodFields);
+document.addEventListener('click',event=>{
+  const target=event.target instanceof Element?event.target:null;
+  if(target?.closest('.family-log-form-action[data-detail="BABY_FOOD"],.family-log-edit,#familyLogDetailChoices [data-detail]'))queueBabyFoodSync();
+},true);
+document.addEventListener('change',event=>{
+  const target=event.target;
+  if(target instanceof HTMLSelectElement&&['log_type','detail_code'].includes(target.name))queueBabyFoodSync();
+});
+
+load('/assets/family-log-core.js?v=wave128-fix18',()=>{
+  syncBabyFoodFields();
+  load('/assets/family-log-management-ui.js?v=wave128-fix18');
+});
 })();
