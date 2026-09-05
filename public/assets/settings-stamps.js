@@ -9,8 +9,10 @@
   const inventoryStatus=document.getElementById('calendarStampInventoryStatus');
   const text=value=>String(value??'').trim();
   const csrf=()=>text(new FormData(form).get('csrf'));
-  const MAX_UPLOAD_EDGE=512;
+  const MAX_UPLOAD_EDGE=384;
   const MAX_UPLOAD_BYTES=4*1024*1024;
+  const MAX_SOURCE_BYTES=8*1024*1024;
+  const MAX_NORMALIZED_BYTES=1024*1024;
   const setStatus=(message,ok=false)=>{
     if(!status)return;
     status.textContent=message;
@@ -49,10 +51,13 @@
 
   const validateUploadFiles=files=>{
     if(files.length<2||files.length>48)throw new Error('PNGファイルは2〜48枚選択してください。');
+    let sourceBytes=0;
     for(let index=0;index<files.length;index++){
       const file=files[index];
       if(!(file instanceof File)||file.type!=='image/png'||!/\.png$/i.test(file.name))throw new Error(`${index+1}枚目はPNGファイルを選択してください。`);
       if(file.size<=0||file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目は4MiB以下にしてください。`);
+      sourceBytes+=file.size;
+      if(sourceBytes>MAX_SOURCE_BYTES)throw new Error('選択したPNGの合計は8MiB以下にしてください。');
     }
   };
 
@@ -82,11 +87,25 @@
     }
   };
 
+  const prepareUploadFiles=async files=>{
+    const prepared=[];
+    let normalizedBytes=0;
+    for(let index=0;index<files.length;index++){
+      setStatus(`共有用にPNGを最適化しています… ${index+1}/${files.length}`);
+      const normalized=await normalizeUploadFile(files[index]);
+      if(!(normalized instanceof File)||normalized.size<=0||normalized.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目のPNGを最適化できませんでした。`);
+      normalizedBytes+=normalized.size;
+      if(normalizedBytes>MAX_NORMALIZED_BYTES)throw new Error('最適化後のPNG合計が1MiBを超えています。フレーム数や画像内容を調整してください。');
+      prepared.push(normalized);
+    }
+    return prepared;
+  };
+
   const uploadFrames=async(files,token,durationMs)=>{
     const frames=[];
     for(let index=0;index<files.length;index++){
-      setStatus(`PNGを最適化・アップロードしています… ${index+1}/${files.length}`);
-      const uploadFile=await normalizeUploadFile(files[index]);
+      setStatus(`PNGをアップロードしています… ${index+1}/${files.length}`);
+      const uploadFile=files[index];
       const response=await fetch('/api/calendar-stamp-admin/upload',{
         method:'POST',
         credentials:'same-origin',
@@ -107,7 +126,27 @@
     return frames;
   };
 
-  const renderInventory=assets=>{
+  const publishAsset=async(asset,button)=>{
+    button.disabled=true;setInventoryStatus('みてにゃと共有しています…');
+    try{
+      const response=await fetch('/api/calendar-stamp-admin/shared-publish',{
+        method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+        body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id)}),
+      });
+      let payload={};try{payload=await response.json();}catch{}
+      if(!response.ok||payload?.ok!==true||payload?.sharedPublished!==true){
+        const code=text(payload?.error);
+        if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')throw new Error('共有権限を確認して、ページを再読み込みしてください。');
+        if(response.status===422||code==='SHARED_STAMP_INCOMPATIBLE')throw new Error('共有用サイズ条件（長辺384px・合計1MiB以下）を満たしていません。');
+        if(response.status===503||code==='SHARED_STAMPS_UNAVAILABLE')throw new Error('共有スタンプ設定がまだ完了していません。');
+        if(response.status===502||code==='SHARED_STAMPS_UPSTREAM_FAILED')throw new Error('共有サービスへ送信できませんでした。時間をおいて再試行してください。');
+        throw new Error('スタンプを共有できませんでした。');
+      }
+      setInventoryStatus('共有しました。みてにゃでも利用できます。',true);await loadInventory();
+    }catch(error){setInventoryStatus(error instanceof Error?error.message:'共有に失敗しました。');button.disabled=false;}
+  };
+
+  const renderInventory=(assets,sharedPublishingReady)=>{
     if(!inventory)return;
     inventory.replaceChildren();
     if(!assets.length){
@@ -120,7 +159,16 @@
         const image=document.createElement('img');image.src=text(asset.thumbnailUrl);image.alt='';image.width=48;image.height=48;image.loading='lazy';image.style.objectFit='contain';image.style.marginRight='10px';image.style.verticalAlign='middle';info.append(image);
       }
       const name=document.createElement('strong');name.textContent=text(asset.name)||`スタンプ #${asset.id}`;info.append(name);
-      const meta=document.createElement('div');meta.className='meta';meta.textContent=`${asset.kind==='ANIMATED'?'アニメーション':'静止画'} / ${asset.active?'有効':'無効'}`;info.append(meta);
+      const metaParts=[asset.kind==='ANIMATED'?'アニメーション':'静止画',asset.active?'有効':'無効'];
+      if(asset.sharedPublished===true)metaParts.push('共有済み');
+      else if(asset.sharedPublishCandidate===true)metaParts.push(sharedPublishingReady?'共有可能':'共有設定待ち');
+      const meta=document.createElement('div');meta.className='meta';meta.textContent=metaParts.join(' / ');info.append(meta);
+
+      const actions=document.createElement('div');actions.style.display='flex';actions.style.gap='6px';actions.style.flexWrap='wrap';actions.style.justifyContent='flex-end';
+      if(asset.canPublishShared===true){
+        const publish=document.createElement('button');publish.type='button';publish.className='btn small';publish.textContent='みてにゃと共有';
+        publish.addEventListener('click',()=>{void publishAsset(asset,publish);});actions.append(publish);
+      }
       const button=document.createElement('button');button.type='button';button.className='btn gray small';button.textContent=asset.active?'無効化':'有効化';
       button.addEventListener('click',async()=>{
         button.disabled=true;setInventoryStatus(asset.active?'無効化しています…':'有効化しています…');
@@ -138,7 +186,7 @@
           setInventoryStatus('更新しました。',true);await loadInventory();
         }catch(error){setInventoryStatus(error instanceof Error?error.message:'通信に失敗しました。');button.disabled=false;}
       });
-      row.append(info,button);inventory.append(row);
+      actions.append(button);row.append(info,actions);inventory.append(row);
     }
   };
 
@@ -148,7 +196,7 @@
       const response=await fetch('/api/calendar-stamp-admin/assets',{credentials:'same-origin'});
       let payload={};try{payload=await response.json();}catch{}
       if(!response.ok||payload?.ok!==true||!Array.isArray(payload.assets))throw new Error('登録済みスタンプを読み込めませんでした。');
-      renderInventory(payload.assets);setInventoryStatus('');
+      renderInventory(payload.assets,payload.sharedPublishingReady===true);setInventoryStatus('');
     }catch(error){
       inventory.replaceChildren();const p=document.createElement('p');p.className='small';p.textContent=error instanceof Error?error.message:'登録済みスタンプを読み込めませんでした。';inventory.append(p);
     }
@@ -163,9 +211,9 @@
     const files=selectedFiles();
     const durationMs=Number(text(data.get('durationMs'))||120);
     if(!Number.isSafeInteger(durationMs)||durationMs<40||durationMs>2000){setStatus('表示時間は40〜2000msで指定してください。');return;}
-    let frames=null,storageProvider='ASSETS';
+    let frames=null,storageProvider='ASSETS',preparedFiles=null;
     try{
-      if(files.length){validateUploadFiles(files);storageProvider='UPLOAD';}
+      if(files.length){validateUploadFiles(files);storageProvider='UPLOAD';preparedFiles=await prepareUploadFiles(files);}
       else frames=parseFrames(data.get('frames'));
     }catch(error){setStatus(error instanceof Error?error.message:'フレームを確認してください。');return;}
     const widthRaw=text(data.get('width')),heightRaw=text(data.get('height'));
@@ -176,7 +224,7 @@
     }
     if(submit instanceof HTMLButtonElement)submit.disabled=true;
     try{
-      if(storageProvider==='UPLOAD')frames=await uploadFrames(files,token,durationMs);
+      if(storageProvider==='UPLOAD')frames=await uploadFrames(preparedFiles,token,durationMs);
       setStatus('スタンプとして登録しています…');
       const response=await fetch('/api/calendar-stamp-admin/png-sequence',{
         method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
@@ -184,7 +232,9 @@
       });
       let payload={};try{payload=await response.json();}catch{}
       if(response.ok&&payload&&payload.ok===true){
-        setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true);form.reset();await loadInventory();return;
+        if(payload.sharedPublished===true)setStatus('登録しました。FamilyToDoとみてにゃで共有できます。',true);
+        else setStatus('登録しました。共有設定が完了している場合は、一覧の「みてにゃと共有」から再試行できます。',true);
+        form.reset();await loadInventory();return;
       }
       const code=text(payload?.error);
       if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')setStatus('登録権限を確認して、ページを再読み込みしてください。');
