@@ -26,9 +26,10 @@ for(const sentinel of [
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
-for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT','line_daily_digest_subject_settings']){
+for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT']){
   if(!settings.includes(sentinel)||!browser.includes(sentinel)) throw new Error(`digest settings control missing: ${sentinel}`);
 }
+if(!settings.includes('line_daily_digest_subject_settings'))throw new Error('digest settings must persist subject inclusion server-side');
 if(!migration.includes("DEFAULT 'FRIENDLY_LIGHT'"))throw new Error('digest tone must default to friendly/light humor');
 if(!migration.includes('enabled INTEGER NOT NULL DEFAULT 1'))throw new Error('digest subject inclusion must default ON');
 if(/latitude|longitude|location_history|owntracks/i.test(digest))throw new Error('morning digest must not read raw location/GPS sources');
