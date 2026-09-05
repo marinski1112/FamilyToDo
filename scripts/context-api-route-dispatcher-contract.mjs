@@ -12,6 +12,7 @@ if(!apiRoutes.includes("import { calendarStampReadApi } from './calendar-stamp-a
 if(!apiRoutes.includes("import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';")) throw new Error('calendar stamp placement adapter import missing');
 if(!apiRoutes.includes("import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';")) throw new Error('calendar stamp admin adapter import missing');
 if(!apiRoutes.includes("import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';")) throw new Error('calendar stamp media adapter import missing');
+if(!apiRoutes.includes("import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';")) throw new Error('calendar shared stamp catalog adapter import missing');
 if(!apiRoutes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('Family Log retained mutation boundary import missing');
 const routeLines=[
   "if(url.pathname==='/api/family/create') return await createFamily(request,context);",
@@ -30,6 +31,7 @@ const routeLines=[
   "if(url.pathname==='/api/calendar-stamp-placement') return await calendarStampPlacementApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);",
+  "if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/png-sequence') return await calendarStampPngSequenceAdminApi(request,context);",
   "if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);",
