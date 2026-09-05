@@ -22,11 +22,11 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
   const action=String(body.action||'');
   if(action==='delete'){
     const familyId=Number(ctx.member?.family_id||0),logId=Number(body.id||0);
-    const response=await familyLogApi(request,ctx);
-    if(response.ok&&Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(logId)&&logId>0){
+    const deleteResponse=await familyLogApi(request,ctx);
+    if(deleteResponse.ok&&Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(logId)&&logId>0){
       await cleanupFamilyLogMediaForLog(ctx.env,familyId,logId).catch(()=>{});
     }
-    return response;
+    return deleteResponse;
   }
   if(String(body.action||'')!=='quick_action_disable')return familyLogApi(request,ctx);
 
