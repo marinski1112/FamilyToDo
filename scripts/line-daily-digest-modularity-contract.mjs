@@ -30,6 +30,11 @@ for(const sentinel of [
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
+const receiptGate=digest.indexOf("Number(receipt.attempt_count)>=3)continue");
+const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptGate);
+if(receiptGate<0||locationRead<0||locationRead<receiptGate){
+  throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
+}
 const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
 if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
