@@ -118,22 +118,24 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
     const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
     const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
     let frame:Frame|undefined;
-    let locationFacts:LocationDigestDayFacts=EMPTY_LOCATION_FACTS;
-    const firstRequester=Number(recipients.results[0]?.id||0);
-    if(Number.isSafeInteger(firstRequester)&&firstRequester>0){
-      locationFacts=await buildLocationDigestDayFacts({
-        db:env.DB,
-        familyId:Number(setting.family_id),
-        requesterMemberId:firstRequester,
-        previousDate:dateBefore(localDate),
-        localDate,
-        timeZone:timezone,
-      });
-    }
+    let locationFacts:LocationDigestDayFacts|undefined;
     for(const member of recipients.results){
       const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
       const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
       try{
+        if(!locationFacts){
+          const requesterMemberId=Number(member.id);
+          locationFacts=Number.isSafeInteger(requesterMemberId)&&requesterMemberId>0
+            ?await buildLocationDigestDayFacts({
+              db:env.DB,
+              familyId:Number(setting.family_id),
+              requesterMemberId,
+              previousDate:dateBefore(localDate),
+              localDate,
+              timeZone:timezone,
+            })
+            :EMPTY_LOCATION_FACTS;
+        }
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
         frame??=await chooseFrame(env,Number(setting.family_id),toneLevel(setting.tone_level));
         const message=renderDeterministicFacts(facts,frame);
