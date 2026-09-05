@@ -19,6 +19,7 @@ function failure(error:unknown):Response{
   if(error instanceof CalendarSharedStampPublishIncompatibleError)return json({ok:false,error:'SHARED_STAMP_INCOMPATIBLE'},422);
   if(error instanceof CalendarSharedStampPublishUpstreamError)return json({ok:false,error:'SHARED_STAMPS_UPSTREAM_FAILED'},502);
   const message=String((error as {message?:unknown})?.message||'');
+  if(message.includes('shared stamp service configuration')||message.includes('shared stamp service token'))return json({ok:false,error:'SHARED_STAMPS_UNAVAILABLE'},503);
   if(message.includes('admin required'))return json({ok:false,error:'ADMIN_REQUIRED'},403);
   if(message.includes('asset unavailable'))return json({ok:false,error:'ASSET_NOT_FOUND'},404);
   if(message.startsWith('invalid '))return json({ok:false,error:'INVALID_REQUEST'},400);
