@@ -56,11 +56,11 @@ try{
       const grid=document.createElement('div');grid.className='family-log-quick-grid';
       for(const action of subjectActions){
         const babyFood=String(action.log_type||'').toUpperCase()==='MEAL'&&String(action.detail_code||'').toUpperCase()==='BABY_FOOD';
-        const formAction=babyFood||String(action.mode||'QUICK')!=='QUICK';
-        const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${formAction?'family-log-form-action':'family-log-quick-action'}`;
+        const effectiveMode=babyFood?'FORM':String(action.mode||'QUICK');
+        const button=document.createElement('button');button.type='button';button.className=`family-log-quick ${String(effectiveMode||'QUICK')==='QUICK'?'family-log-quick-action':'family-log-form-action'}`;
         button.dataset.quickActionId=String(Number(action.id||0));button.dataset.subjectId=String(Number(subject.id));
         button.dataset.detail=String(action.detail_code||'');button.dataset.amount=action.amount==null?'':String(action.amount);button.dataset.unit=String(action.unit||'');button.dataset.valueText=String(action.value_text||'');
-        if(formAction)button.dataset.logType=String(action.log_type||'MEMO');
+        if(String(effectiveMode||'QUICK')!=='QUICK')button.dataset.logType=String(action.log_type||'MEMO');
         const icon=document.createElement('span');icon.textContent=String(action.icon||'＋');const label=document.createElement('strong');label.textContent=String(action.name||'記録');
         if(Array.from(label.textContent||'').length===4)label.classList.add('family-log-label-nowrap');
         button.append(icon,label);grid.appendChild(button);
