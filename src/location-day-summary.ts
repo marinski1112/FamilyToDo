@@ -49,11 +49,23 @@ const haversineMeters=(a:LocationPoint,b:LocationPoint):number=>{
   return earth*2*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
 };
 
+const accuracyRadiusMeters=(point:LocationPoint):number=>{
+  const accuracy=Number(point.accuracyMeters);
+  return Number.isFinite(accuracy)&&accuracy>0?accuracy:0;
+};
+
 const movementMeters=(points:readonly LocationPoint[]):number=>{
   let total=0;
   for(let i=1;i<points.length;i+=1){
-    const segment=haversineMeters(points[i-1],points[i]);
-    if(Number.isFinite(segment)&&segment>=MIN_SEGMENT_METERS)total+=segment;
+    const previous=points[i-1];
+    const current=points[i];
+    const centerDistance=haversineMeters(previous,current);
+    if(!Number.isFinite(centerDistance))continue;
+    // Treat each reported accuracy as a radius around the sample. Only the
+    // distance that remains outside both uncertainty envelopes contributes to
+    // digest movement, so ordinary GPS jitter is not presented as travel.
+    const segment=Math.max(0,centerDistance-accuracyRadiusMeters(previous)-accuracyRadiusMeters(current));
+    if(segment>=MIN_SEGMENT_METERS)total+=segment;
   }
   return total;
 };
