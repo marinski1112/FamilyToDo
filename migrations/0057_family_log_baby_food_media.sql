@@ -88,7 +88,7 @@ BEGIN
     ) THEN RAISE(ABORT, 'family_log_media creator scope mismatch') END;
 END;
 
--- Any parent edit/soft-delete becomes a durable reconciliation request even when the mutation happens outside the normal Family Log API (for example import rollback).
+-- Parent edits/soft-deletes become durable reconciliation requests even when the mutation happens outside the normal Family Log API (for example import rollback).
 CREATE TRIGGER IF NOT EXISTS trg_family_log_media_parent_reconcile
 AFTER UPDATE OF deleted_at,subject_id,log_type,detail_code ON family_logs
 FOR EACH ROW
@@ -100,4 +100,15 @@ BEGIN
     UPDATE family_log_media
        SET reconcile_pending=1
      WHERE family_id=NEW.family_id AND log_id=NEW.id;
+END;
+
+-- Subject-kind changes can make an existing BABY_FOOD attachment ineligible without touching the parent log row.
+CREATE TRIGGER IF NOT EXISTS trg_family_log_media_subject_reconcile
+AFTER UPDATE OF subject_kind ON family_log_subjects
+FOR EACH ROW
+WHEN OLD.subject_kind IS NOT NEW.subject_kind
+BEGIN
+    UPDATE family_log_media
+       SET reconcile_pending=1
+     WHERE family_id=NEW.family_id AND subject_id=NEW.id;
 END;
