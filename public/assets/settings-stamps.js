@@ -61,44 +61,61 @@
     }
   };
 
+  const imageElementForFile=file=>new Promise((resolve,reject)=>{
+    const objectUrl=URL.createObjectURL(file),image=new Image();
+    image.onload=()=>resolve({drawable:image,width:Number(image.naturalWidth),height:Number(image.naturalHeight),cleanup:()=>URL.revokeObjectURL(objectUrl)});
+    image.onerror=()=>{URL.revokeObjectURL(objectUrl);reject(new Error('PNGを読み込めませんでした。'));};
+    image.src=objectUrl;
+  });
+
+  const decodedImage=async file=>{
+    if(typeof createImageBitmap==='function'){
+      try{
+        const bitmap=await createImageBitmap(file);
+        return {drawable:bitmap,width:Number(bitmap.width),height:Number(bitmap.height),cleanup:()=>{try{bitmap.close();}catch{}}};
+      }catch{/* fall through to the HTMLImageElement decoder */}
+    }
+    return imageElementForFile(file);
+  };
+
   const normalizeUploadFile=async file=>{
-    if(typeof createImageBitmap!=='function')return file;
-    let bitmap=null;
+    let decoded=null;
     try{
-      bitmap=await createImageBitmap(file);
-      const sourceWidth=Number(bitmap.width),sourceHeight=Number(bitmap.height);
-      if(!Number.isFinite(sourceWidth)||!Number.isFinite(sourceHeight)||sourceWidth<=0||sourceHeight<=0)return file;
+      decoded=await decodedImage(file);
+      const sourceWidth=Number(decoded.width),sourceHeight=Number(decoded.height);
+      if(!Number.isSafeInteger(sourceWidth)||!Number.isSafeInteger(sourceHeight)||sourceWidth<=0||sourceHeight<=0)throw new Error('PNGの画像サイズを確認できませんでした。');
       const longEdge=Math.max(sourceWidth,sourceHeight);
-      if(longEdge<=MAX_UPLOAD_EDGE)return file;
+      if(longEdge<=MAX_UPLOAD_EDGE)return {file,width:sourceWidth,height:sourceHeight};
       const scale=MAX_UPLOAD_EDGE/longEdge;
       const targetWidth=Math.max(1,Math.round(sourceWidth*scale)),targetHeight=Math.max(1,Math.round(sourceHeight*scale));
       const canvas=document.createElement('canvas');canvas.width=targetWidth;canvas.height=targetHeight;
       const context=canvas.getContext('2d',{alpha:true});
-      if(!context||typeof canvas.toBlob!=='function')return file;
+      if(!context||typeof canvas.toBlob!=='function')throw new Error('このブラウザではPNGを共有用サイズへ変換できません。');
       context.clearRect(0,0,targetWidth,targetHeight);
-      context.drawImage(bitmap,0,0,targetWidth,targetHeight);
+      context.drawImage(decoded.drawable,0,0,targetWidth,targetHeight);
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-      if(!(blob instanceof Blob)||blob.size<=0||blob.size>MAX_UPLOAD_BYTES)return file;
-      return new File([blob],file.name,{type:'image/png',lastModified:file.lastModified});
-    }catch{
-      return file;
+      if(!(blob instanceof Blob)||blob.size<=0||blob.size>MAX_UPLOAD_BYTES)throw new Error('PNGを共有用サイズへ変換できませんでした。');
+      return {file:new File([blob],file.name,{type:'image/png',lastModified:file.lastModified}),width:targetWidth,height:targetHeight};
     }finally{
-      try{bitmap?.close?.();}catch{}
+      try{decoded?.cleanup?.();}catch{}
     }
   };
 
   const prepareUploadFiles=async files=>{
     const prepared=[];
-    let normalizedBytes=0;
+    let normalizedBytes=0,commonWidth=0,commonHeight=0;
     for(let index=0;index<files.length;index++){
       setStatus(`共有用にPNGを最適化しています… ${index+1}/${files.length}`);
       const normalized=await normalizeUploadFile(files[index]);
-      if(!(normalized instanceof File)||normalized.size<=0||normalized.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目のPNGを最適化できませんでした。`);
-      normalizedBytes+=normalized.size;
+      if(!(normalized?.file instanceof File)||normalized.file.size<=0||normalized.file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目のPNGを最適化できませんでした。`);
+      if(!Number.isSafeInteger(normalized.width)||!Number.isSafeInteger(normalized.height)||Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE)throw new Error(`${index+1}枚目の画像サイズを共有用に変換できませんでした。`);
+      if(index===0){commonWidth=normalized.width;commonHeight=normalized.height;}
+      else if(normalized.width!==commonWidth||normalized.height!==commonHeight)throw new Error('全フレームの画像サイズを揃えてください。');
+      normalizedBytes+=normalized.file.size;
       if(normalizedBytes>MAX_NORMALIZED_BYTES)throw new Error('最適化後のPNG合計が1MiBを超えています。フレーム数や画像内容を調整してください。');
-      prepared.push(normalized);
+      prepared.push(normalized.file);
     }
-    return prepared;
+    return {files:prepared,width:commonWidth,height:commonHeight};
   };
 
   const uploadFrames=async(files,token,durationMs)=>{
@@ -211,20 +228,21 @@
     const files=selectedFiles();
     const durationMs=Number(text(data.get('durationMs'))||120);
     if(!Number.isSafeInteger(durationMs)||durationMs<40||durationMs>2000){setStatus('表示時間は40〜2000msで指定してください。');return;}
-    let frames=null,storageProvider='ASSETS',preparedFiles=null;
+    let frames=null,storageProvider='ASSETS',preparedUpload=null,width=null,height=null;
     try{
-      if(files.length){validateUploadFiles(files);storageProvider='UPLOAD';preparedFiles=await prepareUploadFiles(files);}
-      else frames=parseFrames(data.get('frames'));
+      if(files.length){
+        validateUploadFiles(files);storageProvider='UPLOAD';preparedUpload=await prepareUploadFiles(files);width=preparedUpload.width;height=preparedUpload.height;
+      }else{
+        frames=parseFrames(data.get('frames'));
+        const widthRaw=text(data.get('width')),heightRaw=text(data.get('height'));
+        if(Boolean(widthRaw)!==Boolean(heightRaw))throw new Error('幅と高さは両方入力するか、両方空欄にしてください。');
+        width=widthRaw?Number(widthRaw):null;height=heightRaw?Number(heightRaw):null;
+        if((width!==null&&(!Number.isSafeInteger(width)||width<1||width>4096))||(height!==null&&(!Number.isSafeInteger(height)||height<1||height>4096)))throw new Error('幅と高さは1〜4096の整数で指定してください。');
+      }
     }catch(error){setStatus(error instanceof Error?error.message:'フレームを確認してください。');return;}
-    const widthRaw=text(data.get('width')),heightRaw=text(data.get('height'));
-    if(Boolean(widthRaw)!==Boolean(heightRaw)){setStatus('幅と高さは両方入力するか、両方空欄にしてください。');return;}
-    const width=widthRaw?Number(widthRaw):null,height=heightRaw?Number(heightRaw):null;
-    if((width!==null&&(!Number.isSafeInteger(width)||width<1||width>4096))||(height!==null&&(!Number.isSafeInteger(height)||height<1||height>4096))){
-      setStatus('幅と高さは1〜4096の整数で指定してください。');return;
-    }
     if(submit instanceof HTMLButtonElement)submit.disabled=true;
     try{
-      if(storageProvider==='UPLOAD')frames=await uploadFrames(preparedFiles,token,durationMs);
+      if(storageProvider==='UPLOAD')frames=await uploadFrames(preparedUpload.files,token,durationMs);
       setStatus('スタンプとして登録しています…');
       const response=await fetch('/api/calendar-stamp-admin/png-sequence',{
         method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
