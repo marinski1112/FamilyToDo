@@ -1,10 +1,20 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
-import { html, redirect } from './response';
+import { html, json, redirect } from './response';
 import { APP_VERSION } from './version';
 import { webPushConfigured, webPushPublicKey } from './webpush';
 
 type Row = Record<string, unknown>;
+
+type NotificationSettingsBody = {
+  csrf?: unknown;
+  enabled?: unknown;
+  enabled_members?: unknown;
+  notification_channel?: unknown;
+  digest_enabled?: unknown;
+  digest_time?: unknown;
+  digest_members?: unknown;
+};
 
 const esc = (v: unknown) => String(v ?? '')
   .replaceAll('&','&amp;')
@@ -13,11 +23,65 @@ const esc = (v: unknown) => String(v ?? '')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
 
-/** Canonical read-only notification settings page. Mutations remain in existing APIs/browser actions. */
-export async function settingsNotifications(_request:Request,ctx:AppContext):Promise<Response>{
+const boolValue=(value:unknown)=>value===true||value===1||value==='1'||value==='true'||value==='on';
+const numberIds=(value:unknown)=>Array.isArray(value)?[...new Set(value.map(Number).filter(Number.isInteger).filter(x=>x>0))]:[];
+const validTime=(value:string)=>{const m=/^(\d{2}):(\d{2})$/.exec(value);return Boolean(m&&Number(m[1])<24&&Number(m[2])<60);};
+
+async function saveNotificationSettings(request:Request,ctx:AppContext,isAdmin:boolean):Promise<Response>{
+  let body:NotificationSettingsBody;
+  try{body=await request.json() as NotificationSettingsBody;}catch{return json({ok:false,error:'リクエスト形式が正しくありません。'},400);}
+  const expectedCsrf=String(ctx.session.csrfToken||''),receivedCsrf=String(body.csrf||'');
+  if(!expectedCsrf||receivedCsrf!==expectedCsrf)return json({ok:false,error:'セッションの有効期限が切れました。画面を再読み込みしてください。'},403);
+
+  const m=ctx.member!;
+  const channel=String(body.notification_channel||'WEB_PUSH').toUpperCase();
+  if(channel!=='WEB_PUSH'&&channel!=='LINE')return json({ok:false,error:'通知方法が正しくありません。'},400);
+
+  const now=new Date().toISOString();
+  const statements=[];
+  if(isAdmin){
+    const requested=numberIds(body.enabled_members);
+    const familyMembers=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND deleted_at IS NULL').bind(m.family_id).all<Row>();
+    const allowed=new Set(familyMembers.results.map(x=>Number(x.id)));
+    const enabledIds=requested.filter(id=>allowed.has(id));
+    statements.push(ctx.env.DB.prepare('UPDATE members SET notification_enabled=0 WHERE family_id=? AND deleted_at IS NULL').bind(m.family_id));
+    for(const id of enabledIds)statements.push(ctx.env.DB.prepare('UPDATE members SET notification_enabled=1 WHERE family_id=? AND id=? AND deleted_at IS NULL').bind(m.family_id,id));
+  }else{
+    statements.push(ctx.env.DB.prepare('UPDATE members SET notification_enabled=? WHERE family_id=? AND id=? AND deleted_at IS NULL').bind(boolValue(body.enabled)?1:0,m.family_id,m.id));
+  }
+  statements.push(ctx.env.DB.prepare('UPDATE members SET notification_channel=? WHERE family_id=? AND id=? AND deleted_at IS NULL').bind(channel,m.family_id,m.id));
+
+  if(isAdmin){
+    const digestTime=String(body.digest_time||'07:00');
+    if(!validTime(digestTime))return json({ok:false,error:'LINE朝まとめの送信時刻が正しくありません。'},400);
+    const requestedRecipients=numberIds(body.digest_members);
+    const activeMembers=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL').bind(m.family_id).all<Row>();
+    const allowedRecipients=new Set(activeMembers.results.map(x=>Number(x.id)));
+    const recipientIds=requestedRecipients.filter(id=>allowedRecipients.has(id));
+    statements.push(ctx.env.DB.prepare(`INSERT INTO line_daily_digest_settings(family_id,enabled,send_time,updated_by,created_at,updated_at)
+      VALUES(?,?,?,?,?,?)
+      ON CONFLICT(family_id) DO UPDATE SET enabled=excluded.enabled,send_time=excluded.send_time,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
+      .bind(m.family_id,boolValue(body.digest_enabled)?1:0,digestTime,m.id,now,now));
+    statements.push(ctx.env.DB.prepare('UPDATE line_daily_digest_recipients SET enabled=0,updated_at=? WHERE family_id=?').bind(now,m.family_id));
+    for(const id of recipientIds){
+      statements.push(ctx.env.DB.prepare(`INSERT INTO line_daily_digest_recipients(family_id,member_id,enabled,created_at,updated_at)
+        VALUES(?,?,1,?,?)
+        ON CONFLICT(family_id,member_id) DO UPDATE SET enabled=1,updated_at=excluded.updated_at`).bind(m.family_id,id,now,now));
+    }
+  }
+
+  await ctx.env.DB.batch(statements);
+  return json({ok:true});
+}
+
+/** Canonical notification settings page and its same-origin settings mutation. */
+export async function settingsNotifications(request:Request,ctx:AppContext):Promise<Response>{
   const m=ctx.member;
-  if(!m)return redirect('/login.php?next=%2Fapp%2Fsettings_notifications.php');
+  if(!m)return request.method==='POST'?json({ok:false,error:'ログインが必要です。'},401):redirect('/login.php?next=%2Fapp%2Fsettings_notifications.php');
   const role=String(m.role||'').toUpperCase(),isAdmin=role==='OWNER'||role==='ADMIN';
+  if(request.method==='POST')return saveNotificationSettings(request,ctx,isAdmin);
+  if(request.method!=='GET'&&request.method!=='HEAD')return json({ok:false,error:'Method Not Allowed'},405,{Allow:'GET, HEAD, POST'});
+
   const members=await ctx.env.DB.prepare("SELECT id,name,role,active,notification_enabled,COALESCE(notification_channel,'LINE') notification_channel FROM members WHERE family_id=? AND deleted_at IS NULL ORDER BY id").bind(m.family_id).all<Row>();
   const digestSetting=await ctx.env.DB.prepare("SELECT enabled,send_time FROM line_daily_digest_settings WHERE family_id=?").bind(m.family_id).first<Row>();
   const digestRecipients=await ctx.env.DB.prepare("SELECT member_id FROM line_daily_digest_recipients WHERE family_id=? AND enabled=1").bind(m.family_id).all<Row>();
