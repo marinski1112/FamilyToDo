@@ -30,6 +30,11 @@ for(const sentinel of [
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
+const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】'];
+const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
+if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
+  throw new Error('authoritative Family Log/schedule/task sections must render before optional Location enrichment');
+}
 for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT']){
   if(!settings.includes(sentinel)||!browser.includes(sentinel)) throw new Error(`digest settings control missing: ${sentinel}`);
 }
