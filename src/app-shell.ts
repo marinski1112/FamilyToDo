@@ -10,11 +10,11 @@ const esc = (v: unknown) => String(v ?? '')
 const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 
 const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
-:root{--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
-body{padding-bottom:var(--nav-box-h)}
-.wrap{padding-bottom:calc(var(--nav-box-h) + 30px)}
-.bottom-nav{height:var(--nav-box-h);padding-bottom:calc(8px + var(--nav-safe-bottom));transform:none;-webkit-transform:none;will-change:auto}
-.fab{bottom:calc(var(--nav-box-h) + 14px)}
+:root{--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
+body{padding-bottom:0}
+.wrap{padding-left:var(--nav-safe-left);padding-right:var(--nav-safe-right);padding-bottom:calc(var(--nav-box-h) + 30px)}
+.bottom-nav{height:var(--nav-box-h)!important;min-height:var(--nav-box-h)!important;padding-left:calc(8px + var(--nav-safe-left))!important;padding-right:calc(8px + var(--nav-safe-right))!important;padding-bottom:calc(7px + var(--nav-safe-bottom))!important;transform:none!important;-webkit-transform:none!important;will-change:auto!important}
+.fab{bottom:calc(var(--nav-box-h) + 14px)!important}
 </style>`;
 
 /**
