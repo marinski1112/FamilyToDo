@@ -16,7 +16,7 @@ async function activeAdmin(env:Env,familyId:number,memberId:number):Promise<bool
 }
 
 function hasQuery(request:Request):boolean{
-  return [...new URL(request.url).searchParams.keys()].length>0;
+  return new URL(request.url).search!=='';
 }
 
 /**
