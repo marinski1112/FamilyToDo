@@ -48,23 +48,26 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
     try{
       const assets=await calendarStampAssetsForAdmin(context.env,s.familyId,s.memberId);
       const shared=await sharedPublishProjection(context,s.familyId,assets.map(asset=>Number(asset.id)));
-      return json({ok:true,sharedPublishingReady:shared.ready,assets:assets.map(asset=>({
-        id:Number(asset.id),
-        name:String(asset.name||''),
-        kind:asset.asset_kind,
-        mimeType:asset.mime_type,
-        active:asset.active===1,
-        thumbnailUrl:asset.active===1?calendarStampAssetUrl(asset,'thumbnail'):null,
-        width:asset.width==null?null:Number(asset.width),
-        height:asset.height==null?null:Number(asset.height),
-        sharedPublished:shared.published.has(Number(asset.id)),
-        canPublishShared:shared.ready
-          &&!shared.published.has(Number(asset.id))
-          &&asset.active===1
+      return json({ok:true,sharedPublishingReady:shared.ready,assets:assets.map(asset=>{
+        const sharedPublished=shared.published.has(Number(asset.id));
+        const sharedPublishCandidate=asset.active===1
           &&asset.asset_kind==='ANIMATED'
           &&asset.mime_type==='image/png'
-          &&asset.storage_provider==='UPLOAD',
-      }))},200,{'cache-control':'private, no-store'});
+          &&asset.storage_provider==='UPLOAD';
+        return {
+          id:Number(asset.id),
+          name:String(asset.name||''),
+          kind:asset.asset_kind,
+          mimeType:asset.mime_type,
+          active:asset.active===1,
+          thumbnailUrl:asset.active===1?calendarStampAssetUrl(asset,'thumbnail'):null,
+          width:asset.width==null?null:Number(asset.width),
+          height:asset.height==null?null:Number(asset.height),
+          sharedPublished,
+          sharedPublishCandidate,
+          canPublishShared:shared.ready&&!sharedPublished&&sharedPublishCandidate,
+        };
+      })},200,{'cache-control':'private, no-store'});
     }catch(error){return adminError(error);}
   }
   if(request.method!=='POST')return json({ok:false,error:'GET or POST only'},405);
