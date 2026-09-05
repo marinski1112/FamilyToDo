@@ -5,6 +5,7 @@ const importer=fs.readFileSync('src/calendar-shared-stamp-import.ts','utf8');
 const registry=fs.readFileSync('src/calendar-shared-stamp-registry.ts','utf8');
 const media=fs.readFileSync('src/calendar-stamp-media-api.ts','utf8');
 const ui=fs.readFileSync('public/assets/calendar-stamp-ui.js','utf8');
+const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 
@@ -65,6 +66,9 @@ for(const marker of requiredUi){
   if(!ui.includes(marker))throw new Error(`shared stamp Calendar picker wiring missing: ${marker}`);
 }
 if(/SHARED_STAMPS_SERVICE_TOKEN|Authorization:\s*Bearer|authorization/i.test(ui))throw new Error('Calendar browser bundle must never receive shared writer credentials');
+
+if(!shell.includes("const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';"))throw new Error('shared stamp picker change must rotate Calendar stamp UI cache revision');
+if(!shell.includes('calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}'))throw new Error('Calendar stamp UI must be served through the dedicated revisioned asset URL');
 
 for(const mime of ["'image/png'|'image/gif'|'image/webp'","value==='image/png'||value==='image/gif'||value==='image/webp'"]){
   if(!media.includes(mime))throw new Error(`calendar private media proxy animated MIME support missing: ${mime}`);
