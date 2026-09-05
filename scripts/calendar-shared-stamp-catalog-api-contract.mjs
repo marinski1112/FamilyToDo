@@ -85,4 +85,5 @@ if(!routes.includes("import { calendarSharedStampCatalogAdminApi } from './calen
 if(!routes.includes("if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);"))throw new Error('shared stamp catalog route dispatch missing');
 if(!String(pkg.scripts?.['check:browser-js']||'').includes('node --check public/assets/calendar-stamp-ui.js'))throw new Error('calendar-stamp-ui.js must be syntax checked in ordinary test');
 
+await import('./calendar-shared-stamp-publish-contract.mjs');
 console.log('calendar shared stamp catalog/import/picker contract: ok');

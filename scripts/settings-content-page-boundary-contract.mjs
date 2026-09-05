@@ -11,8 +11,10 @@ const contextRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
+  "import { APP_VERSION } from './version';",
   "import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';",
   "import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';",
+  "const SETTINGS_STAMPS_UI_REVISION='shared-publish-1';",
   'export async function settingsContent(ctx:AppContext):Promise<Response>{',
   "redirect('/login.php?next=%2Fapp%2Fsettings_content.php')",
   "taskVisibilitySql('t')",
@@ -41,13 +43,17 @@ for(const marker of [
   'multiple',
   '2〜48枚',
   '1枚4MiBまで',
+  '元画像合計8MiBまで',
+  '長辺384px以下',
+  '全フレーム合計は1MiB以下',
   'name="durationMs"',
   'name="frames"',
   '既存ASSETSのPNGパスから登録',
+  'ASSETS登録はFamilyToDo内のみ',
   'id="calendarStampInventoryAdmin"',
   'id="calendarStampInventory"',
   '履歴・配置・R2画像は削除しません',
-  'src="/assets/settings-stamps.js"',
+  'settings-stamps.js?v=${APP_VERSION}-${SETTINGS_STAMPS_UI_REVISION}',
 ]) if(!page.includes(marker)) throw new Error(`settings stamp administration marker missing: ${marker}`);
 if(/R2[^<]{0,80}(?:bucket|バケット)(?:名)?[^<]{0,80}(?:input|name=)/i.test(page))throw new Error('settings stamp UI must not request physical R2 bucket identity');
 
@@ -57,18 +63,27 @@ for(const marker of [
   "lines.length<2||lines.length>48",
   'durationMs<40||durationMs>2000',
   "files.length<2||files.length>48",
+  'const MAX_UPLOAD_EDGE=384',
   'const MAX_UPLOAD_BYTES=4*1024*1024',
+  'const MAX_SOURCE_BYTES=8*1024*1024',
+  'const MAX_NORMALIZED_BYTES=1024*1024',
+  'if(sourceBytes>MAX_SOURCE_BYTES)',
+  'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
+  'const prepareUploadFiles=async files=>',
   "fetch('/api/calendar-stamp-admin/upload'",
   "'x-csrf-token':token",
   "storageProvider='UPLOAD'",
   "fetch('/api/calendar-stamp-admin/png-sequence'",
   "fetch('/api/calendar-stamp-admin/assets'",
+  "fetch('/api/calendar-stamp-admin/shared-publish'",
+  "body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id)})",
   "body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id),active:!asset.active})",
   "credentials:'same-origin'",
   'storageProvider,',
   "thumbnailStorageKey:storageProvider==='ASSETS'",
-  "setStatus('登録しました。カレンダーと伝言のスタンプ候補に表示されます。',true)",
+  "payload.sharedPublished===true",
   "button.textContent=asset.active?'無効化':'有効化'",
+  "publish.textContent='みてにゃと共有'",
   'await loadInventory()',
 ]) if(!stampUi.includes(marker)) throw new Error(`settings stamp client marker missing: ${marker}`);
 if(/console\.|authorization|cookie|family_id|member_id|bucket[_-]?name|signed[_-]?url/i.test(stampUi))throw new Error('settings stamp client must not handle/log internal identity, physical storage identity, or credential details');
@@ -77,19 +92,26 @@ if(/payload\?\.(?:message|detail)|payload\.(?:message|detail)|response\.text\(/.
 for(const marker of [
   "import { calendarStampAssetsForAdmin } from './calendar-stamp-admin-inventory';",
   "import { setCalendarStampAssetActive } from './calendar-stamp-actions';",
+  "import { publishCalendarStampToShared } from './calendar-shared-stamp-publish';",
   'export async function calendarStampAdminAssetsApi',
   'calendarStampAssetsForAdmin(context.env,s.familyId,s.memberId)',
   "thumbnailUrl:asset.active===1?calendarStampAssetUrl(asset,'thumbnail'):null",
+  'sharedPublishingReady:shared.ready',
+  'sharedPublished,',
+  'sharedPublishCandidate,',
+  'canPublishShared:shared.ready&&!sharedPublished&&sharedPublishCandidate',
   'setCalendarStampAssetActive(context.env,s.familyId,s.memberId,assetId,active)',
   "'cache-control':'private, no-store'",
+  'await publishCalendarStampToShared(context.env,s.familyId,s.memberId,assetId,client);',
 ]) if(!stampAdminApi.includes(marker)) throw new Error(`settings stamp admin API marker missing: ${marker}`);
 for(const sensitive of ['storageKey:','thumbnailStorageKey:','storage_key:','thumbnail_storage_key:','familyId:','memberId:']){
-  const projectionStart=stampAdminApi.indexOf('assets:assets.map(asset=>({');
-  const projectionEnd=projectionStart>=0?stampAdminApi.indexOf('}))}',projectionStart):-1;
+  const projectionStart=stampAdminApi.indexOf('return {\n          id:Number(asset.id)');
+  const projectionEnd=projectionStart>=0?stampAdminApi.indexOf('};',projectionStart):-1;
   if(projectionStart<0||projectionEnd<0)throw new Error('settings stamp admin API projection marker missing');
   if(stampAdminApi.slice(projectionStart,projectionEnd).includes(sensitive))throw new Error(`settings stamp admin API exposes internal field ${sensitive}`);
 }
 if(!contextRoutes.includes("if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);"))throw new Error('settings stamp admin assets route missing');
+if(!contextRoutes.includes("if(url.pathname==='/api/calendar-stamp-admin/shared-publish') return await calendarSharedStampPublishAdminApi(request,context);"))throw new Error('settings shared stamp publish route missing');
 
 for(const marker of [
   "MILK:{icon:'🍼',label:'ミルク'}",
@@ -98,7 +120,7 @@ for(const marker of [
   "MEMO:{icon:'📝',label:'メモ'}",
 ]) if(!meta.includes(marker)) throw new Error(`Family Log display metadata lost marker: ${marker}`);
 
-if(!handlers.includes("export { settingsContent } from './settings-content-page';")) throw new Error('settings page handlers must export retained settingsContent');
+if(!handlers.includes("export { settingsContent } from './settings-content-page';")) throw new Error('settings content page handlers must export retained settingsContent');
 if(!handlers.includes("export { settings } from './settings-root';")) throw new Error('top-level settings retained boundary regressed');
 if(handlers.includes("from './app'")) throw new Error('settings page handlers must not depend on app.ts after recurring extraction');
 if(!handlers.includes("export { recurring } from './recurring-page';")) throw new Error('recurring retained boundary missing');

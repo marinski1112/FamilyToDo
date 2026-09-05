@@ -73,18 +73,29 @@ assert.ok(authIndex>=0&&familyLookupIndex>authIndex&&objectReadIndex>familyLooku
 assert.doesNotMatch(media,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID|https?:\/\//i,'R2 transport must use the Worker binding without embedded credentials or remote URLs');
 
 for(const token of [
-  'const MAX_UPLOAD_EDGE=512',
+  'const MAX_UPLOAD_EDGE=384',
   'const MAX_UPLOAD_BYTES=4*1024*1024',
-  "typeof createImageBitmap!=='function'",
-  'bitmap=await createImageBitmap(file)',
-  'if(longEdge<=MAX_UPLOAD_EDGE)return file',
+  'const MAX_SOURCE_BYTES=8*1024*1024',
+  'const MAX_NORMALIZED_BYTES=1024*1024',
+  "if(typeof createImageBitmap==='function')",
+  'const bitmap=await createImageBitmap(file)',
+  'return imageElementForFile(file);',
+  'if(longEdge<=MAX_UPLOAD_EDGE)return {file,width:sourceWidth,height:sourceHeight};',
   "canvas.getContext('2d',{alpha:true})",
   "canvas.toBlob(resolve,'image/png')",
-  "return new File([blob],file.name,{type:'image/png',lastModified:file.lastModified})",
-  'const uploadFile=await normalizeUploadFile(files[index])',
+  "return {file:new File([blob],file.name,{type:'image/png',lastModified:file.lastModified}),width:targetWidth,height:targetHeight};",
+  'if(sourceBytes>MAX_SOURCE_BYTES)',
+  'const prepareUploadFiles=async files=>',
+  'const normalized=await normalizeUploadFile(files[index])',
+  'Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE',
+  "else if(normalized.width!==commonWidth||normalized.height!==commonHeight)",
+  'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
+  'return {files:prepared,width:commonWidth,height:commonHeight};',
+  'preparedUpload=await prepareUploadFiles(files);width=preparedUpload.width;height=preparedUpload.height;',
+  'uploadFrames(preparedUpload.files,token,durationMs)',
   'body:uploadFile',
-  'return file;',
 ]) assert.ok(settings.includes(token),`Stamp client upload normalization missing: ${token}`);
+assert.doesNotMatch(settings,/typeof createImageBitmap[^\n]*return file|catch\s*\{\s*return file;\s*\}/,'upload normalization must not silently accept unverifiable original dimensions');
 
 assert.match(calendarUi,/image\.src=thumbnailUrl/,'Calendar month/list stamp rendering must request the thumbnail projection');
 assert.match(calendarUi,/if\(frames\.length>=2\)[\s\S]*frames\.forEach\(frame=>\{const preload=new Image\(\);preload\.src=frame\.url;\}\)[\s\S]*viewer\.classList\.add\('open'\);play\(\);/,'Animation frames must preload only inside viewer-open playback setup');
@@ -108,4 +119,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, verified shared 384px/8MiB-source/1MiB-normalized client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');

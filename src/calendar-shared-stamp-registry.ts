@@ -121,6 +121,12 @@ export function createFamilySharedStampRegistryClient(config:FamilySharedStampRe
       if(!body||typeof body!=='object'||!Array.isArray((body as {stamps?:unknown}).stamps))throw new TypeError('invalid shared stamp catalog response');
       return (body as {stamps:unknown[]}).stamps.map(parseCatalogItem);
     },
+    async get(sharedId:string):Promise<FamilySharedStampCatalogItem|null>{
+      if(!SHARED_ID_RE.test(sharedId))throw new TypeError('invalid shared stamp id');
+      const response=await fetchImpl(`${baseUrl}/v1/stamps/${encodeURIComponent(sharedId)}`,{headers:{accept:'application/json'}});
+      if(response.status===404)return null;
+      return parseCatalogItem(await parseJson(response));
+    },
     publicUrl(path:string):string{
       if(!PUBLIC_STAMP_PATH_RE.test(path))throw new TypeError('invalid shared stamp content path');
       return `${baseUrl}${path}`;
