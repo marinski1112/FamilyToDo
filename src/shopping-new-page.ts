@@ -75,7 +75,7 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
     </form>
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
-  ${privateContext?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-1"></script>`}
+  ${privateContext?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-2"></script>`}
   <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-register-1"></script>`;
 }
 
@@ -89,7 +89,7 @@ export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):
   }
   const d=date&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
   const [tasks,members,catalog]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT id,title,start_at,end_at,due_at,visibility_scope FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY coalesce(start_at,due_at),id LIMIT 200`).bind(m.family_id,selectedTaskId,m.id).all<Row>(),
+    ctx.env.DB.prepare(`SELECT id,title,start_at,end_at,due_at,visibility_scope,created_at FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY CASE WHEN id=? THEN 0 ELSE 1 END, COALESCE(start_at,due_at,created_at) DESC,id DESC LIMIT 200`).bind(m.family_id,selectedTaskId,m.id,selectedTaskId).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
     ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE,id').bind(m.family_id).all<Row>(),
   ]);
