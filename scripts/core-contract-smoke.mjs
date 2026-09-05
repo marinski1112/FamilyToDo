@@ -5,6 +5,7 @@ import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 const app=retainedAppContractSource();
 const lifecycle=fs.readFileSync('src/lifecycle.ts','utf8');
 const schema=fs.readFileSync('database/schema.d1.sql','utf8');
+const checklistDraft=fs.readFileSync('src/checklist-input-draft.ts','utf8');
 
 assert.ok(app.includes('export function taskVisibilitySql'),'current task visibility predicate must remain centralized');
 assert.ok(app.includes("visibility_scope,'FAMILY'")&&app.includes("visibility_scope='PRIVATE'"),'FAMILY/PRIVATE visibility contract must remain explicit');
@@ -15,4 +16,17 @@ assert.ok(lifecycle.includes('deleted_completion_history'),'completion lifecycle
 assert.ok(schema.includes('CREATE TABLE IF NOT EXISTS tasks')||schema.includes('CREATE TABLE tasks'),'tasks must remain the canonical scheduled entity table');
 assert.ok(schema.includes('recurrence_rules'),'recurrence schema must remain present');
 
-console.log('core contract smoke: visibility, task/event, recurrence, and lifecycle contracts ok');
+for(const marker of [
+  'CHECKLIST_INPUT_MAX_CHARS=4000',
+  'CHECKLIST_INPUT_MAX_ITEMS=20',
+  'additionalProperties:false',
+  'requiresConfirmation:true',
+  "source:'deterministic'",
+  "'INPUT_TOO_LONG'|'TOO_MANY_ITEMS'|'INVALID_DRAFT'",
+  "intent:ChecklistDraftIntent='unknown'",
+  "category:null,dueDate:null,dueTime:null,groupHint:null",
+])assert.ok(checklistDraft.includes(marker),`checklist rough-input safety contract missing: ${marker}`);
+assert.ok(!/(INSERT|UPDATE|DELETE)\s+/i.test(checklistDraft),'checklist draft parser must not persist model or local parser output');
+assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(checklistDraft),'deterministic draft contract must not call Gemini');
+
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, and checklist draft safety contracts ok');
