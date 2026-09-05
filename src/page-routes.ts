@@ -5,7 +5,7 @@ import { messages, messageNew } from './message-page-handlers';
 import { shopping, shoppingNew, shoppingEdit } from './shopping-page-handlers';
 import { locationPage } from './location-page';
 import { familyLog } from './family-log-page-handler';
-import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, recurring } from './settings-page-handlers';
+import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, settingsLocation, recurring } from './settings-page-handlers';
 import { childJournalPage } from './child-journal';
 import { familyLogImportPage } from './family-log-import';
 import { googleTasksSettings } from './google-tasks';
@@ -36,6 +36,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/family_log_import.php') return await familyLogImportPage(context);
   if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
   if(url.pathname==='/app/settings.php') return await settings(request,context);
+  if(url.pathname==='/app/settings_location.php') return await settingsLocation(request,context);
   if(url.pathname==='/app/settings_google_tasks.php') return await googleTasksSettings(request,context);
   if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettings(request,context);
   if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
