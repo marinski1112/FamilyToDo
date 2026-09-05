@@ -13,6 +13,7 @@ type DigestFactPayload={
 
 type Frame={opener:string;closing:string};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
+const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
   PLAIN:[{opener:'朝のまとめです。',closing:'今日の予定を確認しておきましょう。'}],
   FRIENDLY:[
@@ -50,27 +51,34 @@ function logFact(row:Row):string{
   const type=String(row.log_type||'').toUpperCase(),meta=FAMILY_LOG_TYPE_META[type]||{icon:'📝',label:type||'記録'};
   const subject=clean(row.subject_name)||clean(row.member_name)||'家族';
   const count=Math.max(0,Number(row.count||0)),amount=Number(row.amount_sum),unit=clean(row.unit,16);
-  if(Number.isFinite(amount)&&amount>0&&unit)return `${meta.icon} ${subject} ${meta.label} ${amount}${unit}（${count}回）`;
+  if(ADDITIVE_LOG_TYPES.has(type)&&Number.isFinite(amount)&&amount>0&&unit)return `${meta.icon} ${subject} ${meta.label} ${amount}${unit}（${count}回）`;
   return `${meta.icon} ${subject} ${meta.label} ${count}回`;
 }
 
 async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string):Promise<DigestFactPayload>{
   const previousDate=dateBefore(localDate);
-  const taskRows=await env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
-    WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))
-    AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<?))
-    ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 20`)
-    .bind(familyId,memberId,localDate,localDate,localDate).all<Row>();
+  const [taskRows,taskCounts]=await Promise.all([
+    env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
+      WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))
+      AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<?))
+      ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 20`)
+      .bind(familyId,memberId,localDate,localDate,localDate).all<Row>(),
+    env.DB.prepare(`SELECT
+        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND date(COALESCE(start_at,due_at))=? AND lower(COALESCE(status,''))='completed' THEN 1 ELSE 0 END) completed,
+        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND date(COALESCE(start_at,due_at))=? AND lower(COALESCE(status,''))<>'completed' THEN 1 ELSE 0 END) incomplete,
+        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<? THEN 1 ELSE 0 END) overdue
+      FROM tasks WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))`)
+      .bind(localDate,localDate,localDate,familyId,memberId).first<Row>(),
+  ]);
   const todayRows=taskRows.results.filter(x=>String(x.at).slice(0,10)===localDate);
   const eventRows=todayRows.filter(x=>String(x.task_kind).toUpperCase()==='EVENT');
   const taskOnly=todayRows.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK');
   const events=eventRows.slice(0,5).map(x=>`${localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
   const tasks=taskOnly.slice(0,6).map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.title)}`);
-  const overdue=taskRows.results.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK'&&String(x.at).slice(0,10)<localDate).length;
-  const completed=taskOnly.filter(x=>String(x.status).toLowerCase()==='completed').length;
-  const incomplete=taskOnly.length-completed;
+  const completed=Math.max(0,Number(taskCounts?.completed||0)),incomplete=Math.max(0,Number(taskCounts?.incomplete||0)),overdue=Math.max(0,Number(taskCounts?.overdue||0));
 
-  const logRows=await env.DB.prepare(`SELECT substr(l.occurred_at,1,10) local_date,l.log_type,s.name subject_name,m.name member_name,l.unit,
+  const logRows=await env.DB.prepare(`SELECT substr(l.occurred_at,1,10) local_date,l.log_type,s.name subject_name,
+      CASE WHEN l.subject_id IS NULL THEN m.name ELSE NULL END member_name,l.unit,
       COUNT(*) count,SUM(CASE WHEN l.amount IS NOT NULL THEN l.amount ELSE 0 END) amount_sum
     FROM family_logs l
     LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
@@ -78,8 +86,9 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     LEFT JOIN members m ON m.id=l.created_by AND m.family_id=l.family_id
     WHERE l.family_id=? AND l.deleted_at IS NULL AND substr(l.occurred_at,1,10) IN (?,?)
       AND (l.subject_id IS NULL OR (s.active=1 AND COALESCE(ds.enabled,1)=1))
-    GROUP BY local_date,l.log_type,l.subject_id,l.created_by,l.unit,s.name,m.name
-    ORDER BY local_date,l.subject_id,l.log_type,l.created_by LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
+    GROUP BY local_date,l.log_type,l.subject_id,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE NULL END,l.unit,s.name,
+      CASE WHEN l.subject_id IS NULL THEN m.name ELSE NULL END
+    ORDER BY local_date,l.subject_id,l.log_type,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE 0 END LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
   const previous=logRows.results.filter(x=>x.local_date===previousDate).slice(0,12).map(logFact);
   const today=logRows.results.filter(x=>x.local_date===localDate).slice(0,8).map(logFact);
   return {localDate,previousDate,today:{events,tasks,completed,incomplete,overdue},familyLog:{previous,today}};
@@ -103,12 +112,13 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
     const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
     const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
+    let frame:Frame|undefined;
     for(const member of recipients.results){
       const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
       const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
       try{
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate);
-        const frame=await chooseFrame(env,Number(setting.family_id),toneLevel(setting.tone_level));
+        frame??=await chooseFrame(env,Number(setting.family_id),toneLevel(setting.tone_level));
         const message=renderDeterministicFacts(facts,frame);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message);
         await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
