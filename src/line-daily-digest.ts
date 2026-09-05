@@ -1,4 +1,4 @@
-import { familyAiProvider, geminiFetch, resolveFamilyGeminiModel } from './family-ai';
+import { familyAiProvider, geminiFetch } from './family-ai';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { buildLocationDigestDayFacts, type LocationDigestDayFacts } from './location-day-summary';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
@@ -17,6 +17,8 @@ type Frame={opener:string;closing:string};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
+export const MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT='gemini-3.8-flash';
+export const MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT='gemini-3.5-flash';
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
   PLAIN:[{opener:'朝のまとめです。',closing:'今日の予定を確認しておきましょう。'}],
   FRIENDLY:[
@@ -34,20 +36,29 @@ const dateBefore=(value:string)=>{const d=new Date(`${value}T00:00:00Z`);d.setUT
 const localClock=(value:unknown)=>{const m=String(value||'').match(/\b(\d{2}:\d{2})(?::\d{2})?\b/);return m?.[1]||'';};
 const clean=(value:unknown,max=80)=>String(value??'').replace(/[\r\n]+/g,' ').trim().slice(0,max);
 const toneLevel=(value:unknown):ToneLevel=>TONE_LEVELS.has(String(value) as ToneLevel)?String(value) as ToneLevel:'FRIENDLY_LIGHT';
+const modelName=(value:unknown,fallback:string)=>clean(value,120).replace(/^models\//,'')||fallback;
+const morningDigestAiEnabled=(env:Env)=>!['0','false','off','disabled'].includes(String(env.MORNING_DIGEST_AI_ENABLED||'1').trim().toLowerCase());
+const morningDigestModels=(env:Env)=>{
+  const primary=modelName(env.MORNING_DIGEST_GEMINI_MODEL_PRIMARY,MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT);
+  const fallback=modelName(env.MORNING_DIGEST_GEMINI_MODEL_FALLBACK,MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT);
+  return primary===fallback?[primary]:[primary,fallback];
+};
 
-async function chooseFrame(env:Env,familyId:number,tone:ToneLevel):Promise<Frame>{
+async function chooseFrame(env:Env,tone:ToneLevel):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
-  if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY)return options[0];
-  try{
-    const {model}=await resolveFamilyGeminiModel(env.DB,familyId,env);
-    const response=await geminiFetch(env,model,{contents:[{role:'user',parts:[{text:`LINE朝まとめの文体を選びます。返答はJSONだけ。{"opener":0,"closing":0} の整数indexだけを返してください。事実・名前・数字・予定・健康状態・天気を新しく文章化しないでください。tone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}`}]}],generationConfig:{temperature:0.4,responseMimeType:'application/json'}});
-    if(!response.ok)return options[0];
-    const data=await response.json() as any;
-    const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-    const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing);
-    if(!Number.isInteger(oi)||!Number.isInteger(ci)||!options[oi]||!options[ci])return options[0];
-    return {opener:options[oi].opener,closing:options[ci].closing};
-  }catch{return options[0];}
+  if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return options[0];
+  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体を選びます。返答はJSONだけ。{"opener":0,"closing":0} の整数indexだけを返してください。事実・名前・数字・予定・健康状態・天気を新しく文章化しないでください。tone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:80}};
+  for(const model of morningDigestModels(env)){
+    try{
+      const response=await geminiFetch(env,model,body);
+      if(!response.ok)continue;
+      const data=await response.json() as any;
+      const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
+      const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing);
+      if(Number.isInteger(oi)&&Number.isInteger(ci)&&options[oi]&&options[ci])return {opener:options[oi].opener,closing:options[ci].closing};
+    }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
+  }
+  return options[0];
 }
 
 function logFact(row:Row):string{
@@ -137,7 +148,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
             :EMPTY_LOCATION_FACTS;
         }
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
-        frame??=await chooseFrame(env,Number(setting.family_id),toneLevel(setting.tone_level));
+        frame??=await chooseFrame(env,toneLevel(setting.tone_level));
         const message=renderDeterministicFacts(facts,frame);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message);
         await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
