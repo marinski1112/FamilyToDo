@@ -1,5 +1,6 @@
 import { familyAiProvider, geminiFetch, resolveFamilyGeminiModel } from './family-ai';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
+import { buildLocationDigestDayFacts, type LocationDigestDayFacts } from './location-day-summary';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
 
 type Row=Record<string,unknown>;
@@ -9,11 +10,13 @@ type DigestFactPayload={
   previousDate:string;
   today:{events:string[];tasks:string[];completed:number;incomplete:number;overdue:number};
   familyLog:{previous:string[];today:string[]};
+  location:LocationDigestDayFacts;
 };
 
 type Frame={opener:string;closing:string};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
+const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
   PLAIN:[{opener:'朝のまとめです。',closing:'今日の予定を確認しておきましょう。'}],
   FRIENDLY:[
@@ -55,7 +58,7 @@ function logFact(row:Row):string{
   return `${meta.icon} ${subject} ${meta.label} ${count}回`;
 }
 
-async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string):Promise<DigestFactPayload>{
+async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string,location:LocationDigestDayFacts):Promise<DigestFactPayload>{
   const previousDate=dateBefore(localDate);
   const [taskRows,taskCounts]=await Promise.all([
     env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
@@ -91,13 +94,15 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     ORDER BY local_date,l.subject_id,l.log_type,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE 0 END LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
   const previous=logRows.results.filter(x=>x.local_date===previousDate).slice(0,12).map(logFact);
   const today=logRows.results.filter(x=>x.local_date===localDate).slice(0,8).map(logFact);
-  return {localDate,previousDate,today:{events,tasks,completed,incomplete,overdue},familyLog:{previous,today}};
+  return {localDate,previousDate,today:{events,tasks,completed,incomplete,overdue},familyLog:{previous,today},location};
 }
 
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
+  if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
+  if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
   if(payload.today.tasks.length){lines.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
   if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
@@ -113,11 +118,23 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
     const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
     const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
     let frame:Frame|undefined;
+    let locationFacts:LocationDigestDayFacts=EMPTY_LOCATION_FACTS;
+    const firstRequester=Number(recipients.results[0]?.id||0);
+    if(Number.isSafeInteger(firstRequester)&&firstRequester>0){
+      locationFacts=await buildLocationDigestDayFacts({
+        db:env.DB,
+        familyId:Number(setting.family_id),
+        requesterMemberId:firstRequester,
+        previousDate:dateBefore(localDate),
+        localDate,
+        timeZone:timezone,
+      });
+    }
     for(const member of recipients.results){
       const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
       const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
       try{
-        const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate);
+        const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
         frame??=await chooseFrame(env,Number(setting.family_id),toneLevel(setting.tone_level));
         const message=renderDeterministicFacts(facts,frame);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message);
