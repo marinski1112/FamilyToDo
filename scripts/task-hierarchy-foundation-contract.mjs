@@ -31,7 +31,7 @@ forbidText(migration,'items SET','item relink side effect');
 requireText(hierarchy,"reason: 'SELF_PARENT' | 'CROSS_FAMILY' | 'MAX_DEPTH' | 'VISIBILITY_MISMATCH'",'bounded rejection reasons');
 requireText(hierarchy,"child.id === parent.id","self-parent rejection");
 requireText(hierarchy,"child.familyId !== parent.familyId","cross-family rejection");
-requireText(hierarchy,"parent.parentTaskId !== null","one-level hierarchy rejection");
+requireText(hierarchy,"parent.parentTaskId !== null || child.hasChildren","one-level hierarchy rejection in both directions");
 requireText(hierarchy,"child.visibilityScope !== parent.visibilityScope","visibility-scope parity");
 requireText(hierarchy,"child.privateOwnerId !== parent.privateOwnerId","PRIVATE owner parity");
 
