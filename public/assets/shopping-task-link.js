@@ -18,6 +18,7 @@ const tasks=Array.isArray(payload.tasks)?payload.tasks.map(task=>({
 })).filter(task=>Number.isSafeInteger(task.id)&&task.id>0&&task.title):[];
 const initialSelected=Number(payload.selectedTaskId||0)||0;
 const DEFAULT_VISIBLE_LIMIT=12;
+let hydrated=false;
 const searchInput=document.createElement('input');
 searchInput.type='search';
 searchInput.id='shoppingTaskSearch';
@@ -35,6 +36,8 @@ const distance=(task,date)=>{
   return Math.abs(Date.parse(`${d}T00:00:00Z`)-Date.parse(`${date}T00:00:00Z`));
 };
 const sortForDate=(date)=>[...tasks].sort((a,b)=>{
+  if(a.id===initialSelected&&b.id!==initialSelected)return -1;
+  if(b.id===initialSelected&&a.id!==initialSelected)return 1;
   const am=overlaps(a,date)?0:1,bm=overlaps(b,date)?0:1;if(am!==bm)return am-bm;
   const ad=dateOf(a),bd=dateOf(b);
   const af=ad>=date?0:ad?2:1,bf=bd>=date?0:bd?2:1;if(af!==bf)return af-bf;
@@ -50,7 +53,8 @@ const normalizeSearch=value=>String(value||'').trim().toLowerCase();
 function render(){
   const date=String(dueInput.value||'');
   const referenceDate=date||todayJst();
-  const current=Number(select.value||initialSelected||0)||0;
+  const rawCurrent=Number(select.value||0)||0;
+  const current=hydrated?rawCurrent:(rawCurrent||initialSelected||0);
   const showAll=Boolean(showAllInput.checked);
   const query=normalizeSearch(searchInput.value);
   const sorted=sortForDate(referenceDate);
@@ -58,17 +62,18 @@ function render(){
   const defaults=(overlapsForDate.length?overlapsForDate:sorted).slice(0,DEFAULT_VISIBLE_LIMIT);
   const defaultIds=new Set(defaults.map(task=>task.id));
   if(current)defaultIds.add(current);
-  if(initialSelected)defaultIds.add(initialSelected);
+  if(!hydrated&&initialSelected)defaultIds.add(initialSelected);
   const matches=query?sorted.filter(task=>normalizeSearch(task.title).includes(query)):[];
   const matchIds=new Set(matches.map(task=>task.id));
   if(query&&current)matchIds.add(current);
-  if(query&&initialSelected)matchIds.add(initialSelected);
+  if(query&&!hydrated&&initialSelected)matchIds.add(initialSelected);
   const visible=query?sorted.filter(task=>matchIds.has(task.id)):(showAll?sorted:sorted.filter(task=>defaultIds.has(task.id)));
   const fragment=document.createDocumentFragment();
   const none=document.createElement('option');none.value='0';none.textContent='タスクなし';fragment.appendChild(none);
   for(const task of visible){const option=document.createElement('option');option.value=String(task.id);option.textContent=label(task);if(task.id===current)option.selected=true;fragment.appendChild(option);}
   select.replaceChildren(fragment);
-  if(current&&!visible.some(task=>task.id===current))select.value='0';
+  if(current&&visible.some(task=>task.id===current))select.value=String(current);else select.value='0';
+  hydrated=true;
   const sameDay=overlapsForDate.length;
   const hidden=Math.max(0,tasks.length-visible.length);
   if(showAllLabel)showAllLabel.textContent=query?`検索を解除すると候補表示を切り替えられます`:`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;
@@ -76,7 +81,8 @@ function render(){
     if(query){
       const preserved=visible.length-matches.length;
       hint.textContent=matches.length?`タスク名の検索結果 ${matches.length}件${preserved>0?'。選択中のタスクは検索条件に関係なく保持しています。':''}`:'一致するタスクはありません。選択中のタスクがある場合はその候補だけ保持します。';
-    }else if(date&&sameDay)hint.textContent=`期限日に重なる未完了タスク ${sameDay}件を優先表示中${sameDay>DEFAULT_VISIBLE_LIMIT?'（先頭12件）':''}${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
+    }else if(initialSelected&&current===initialSelected)hint.textContent='このタスクから追加したため、関連タスクとして選択済みです。';
+    else if(date&&sameDay)hint.textContent=`期限日に重なる未完了タスク ${sameDay}件を優先表示中${sameDay>DEFAULT_VISIBLE_LIMIT?'（先頭12件）':''}${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
     else if(date)hint.textContent=`期限日に重なるタスクがないため、近い未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
     else hint.textContent=`未完了タスクを最大${DEFAULT_VISIBLE_LIMIT}件表示中。期限を指定すると、その日に重なるタスクを優先します${hidden?`。その他 ${hidden}件はチェックで表示できます。`:''}`;
   }

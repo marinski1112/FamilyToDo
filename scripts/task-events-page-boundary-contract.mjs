@@ -22,11 +22,12 @@ for(const marker of [
   "expiredTasksFor(ctx,date)",
   "recurringForDate(ctx,date)",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
-  "const LINKED_SHOPPING_TASK_CHUNK_SIZE=80;",
-  "Math.ceil(baseTaskIds.length/LINKED_SHOPPING_TASK_CHUNK_SIZE)",
-  "baseTaskIds.slice(index*LINKED_SHOPPING_TASK_CHUNK_SIZE,(index+1)*LINKED_SHOPPING_TASK_CHUNK_SIZE)",
-  "s.task_id IN (${chunk.map(()=>'?').join(',')})",
-  ".bind(member.family_id,member.id,...chunk).all<Row>()",
+  "s.task_id IS NOT NULL",
+  "NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
+  "date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)",
+  "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)",
+  "EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
+  "date(s.due_date)=date(?)",
   "const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));",
   "COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL",
   "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at)) < date(?)",
@@ -45,7 +46,7 @@ for(const marker of [
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
   "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
-  "選択日が期限、またはこの日の予定に紐付く買い物",
+  "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
   "/app/shopping_new.php?date=",
   "href=\"/app/shopping.php\">一覧・管理</a>",
   "<h1>✅ チェックリスト</h1>",
@@ -54,6 +55,7 @@ for(const marker of [
 
 if(page.includes("item.task_title?'予定 '+item.task_title:''"))throw new Error('Shopping rows must not repeat linked task title in every item metadata row');
 if(page.includes("effectiveDue?'期限 '+effectiveDue:''"))throw new Error('Shopping rows must not repeat the shared effective date in every item metadata row');
+if(page.includes('LINKED_SHOPPING_TASK_CHUNK_SIZE'))throw new Error('linked Shopping daily-window query must not depend on the selected-day task-id chunk list');
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskEvents } from './task-events-page';"))throw new Error('taskEvents must route through retained unified checklist page');
@@ -72,4 +74,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, compact overdue/completed content, privacy, bounded D1 linkage, selected-date overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
