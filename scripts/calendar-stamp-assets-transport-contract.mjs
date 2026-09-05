@@ -73,15 +73,21 @@ assert.ok(authIndex>=0&&familyLookupIndex>authIndex&&objectReadIndex>familyLooku
 assert.doesNotMatch(media,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID|https?:\/\//i,'R2 transport must use the Worker binding without embedded credentials or remote URLs');
 
 for(const token of [
-  'const MAX_UPLOAD_EDGE=512',
+  'const MAX_UPLOAD_EDGE=384',
   'const MAX_UPLOAD_BYTES=4*1024*1024',
+  'const MAX_SOURCE_BYTES=8*1024*1024',
+  'const MAX_NORMALIZED_BYTES=1024*1024',
   "typeof createImageBitmap!=='function'",
   'bitmap=await createImageBitmap(file)',
   'if(longEdge<=MAX_UPLOAD_EDGE)return file',
   "canvas.getContext('2d',{alpha:true})",
   "canvas.toBlob(resolve,'image/png')",
   "return new File([blob],file.name,{type:'image/png',lastModified:file.lastModified})",
-  'const uploadFile=await normalizeUploadFile(files[index])',
+  'if(sourceBytes>MAX_SOURCE_BYTES)',
+  'const prepareUploadFiles=async files=>',
+  'const normalized=await normalizeUploadFile(files[index])',
+  'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
+  'preparedFiles=await prepareUploadFiles(files)',
   'body:uploadFile',
   'return file;',
 ]) assert.ok(settings.includes(token),`Stamp client upload normalization missing: ${token}`);
@@ -108,4 +114,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, mobile-size client normalization, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, shared 384px/8MiB-source/1MiB-normalized client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
