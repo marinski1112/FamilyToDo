@@ -11,7 +11,8 @@
   const csrf=()=>text(new FormData(form).get('csrf'));
   const MAX_UPLOAD_EDGE=384;
   const MAX_UPLOAD_BYTES=4*1024*1024;
-  const MAX_SOURCE_BYTES=8*1024*1024;
+  const MAX_SOURCE_FILE_BYTES=32*1024*1024;
+  const MAX_SOURCE_BYTES=128*1024*1024;
   const MAX_NORMALIZED_BYTES=1024*1024;
   const setStatus=(message,ok=false)=>{
     if(!status)return;
@@ -55,9 +56,9 @@
     for(let index=0;index<files.length;index++){
       const file=files[index];
       if(!(file instanceof File)||file.type!=='image/png'||!/\.png$/i.test(file.name))throw new Error(`${index+1}枚目はPNGファイルを選択してください。`);
-      if(file.size<=0||file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目は4MiB以下にしてください。`);
+      if(file.size<=0||file.size>MAX_SOURCE_FILE_BYTES)throw new Error(`${index+1}枚目の元画像は32MiB以下にしてください。`);
       sourceBytes+=file.size;
-      if(sourceBytes>MAX_SOURCE_BYTES)throw new Error('選択したPNGの合計は8MiB以下にしてください。');
+      if(sourceBytes>MAX_SOURCE_BYTES)throw new Error('選択した元画像の合計は128MiB以下にしてください。');
     }
   };
 
@@ -144,7 +145,7 @@
       try{payload=await response.json();}catch{}
       if(!response.ok||payload?.ok!==true||!text(payload?.storageKey)){
         const code=text(payload?.error);
-        if(response.status===413||code==='FILE_TOO_LARGE')throw new Error(`${index+1}枚目が大きすぎます。1枚4MiB以下にしてください。`);
+        if(response.status===413||code==='FILE_TOO_LARGE')throw new Error(`${index+1}枚目の圧縮後PNGが大きすぎます。再度お試しください。`);
         if(response.status===415||code==='PNG_REQUIRED'||code==='INVALID_PNG')throw new Error(`${index+1}枚目のPNGを確認してください。`);
         if(response.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')throw new Error('登録権限を確認して、ページを再読み込みしてください。');
         throw new Error(`${index+1}枚目のアップロードに失敗しました。`);
