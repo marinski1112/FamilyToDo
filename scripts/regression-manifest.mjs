@@ -51,6 +51,7 @@ export const activeRegressionGroups=[
       ['app-context-boundary','node scripts/app-context-boundary-contract.mjs'],
       ['api-me-boundary','node scripts/api-me-boundary-contract.mjs'],
       ['task-visibility-boundary','node scripts/task-visibility-boundary-contract.mjs'],
+      ['task-hierarchy-foundation','node scripts/task-hierarchy-foundation-contract.mjs'],
       ['task-view-page-boundary','node scripts/task-view-page-boundary-contract.mjs'],
       ['task-events-page-boundary','node scripts/task-events-page-boundary-contract.mjs'],
       ['daily-task-page-boundary','node scripts/daily-task-page-boundary-contract.mjs'],
