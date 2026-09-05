@@ -75,7 +75,8 @@ assert.doesNotMatch(media,/R2_ACCESS|ACCESS_KEY|SECRET_KEY|ACCOUNT_ID|https?:\/\
 for(const token of [
   'const MAX_UPLOAD_EDGE=384',
   'const MAX_UPLOAD_BYTES=4*1024*1024',
-  'const MAX_SOURCE_BYTES=8*1024*1024',
+  'const MAX_SOURCE_FILE_BYTES=32*1024*1024',
+  'const MAX_SOURCE_BYTES=128*1024*1024',
   'const MAX_NORMALIZED_BYTES=1024*1024',
   "if(typeof createImageBitmap==='function')",
   'const bitmap=await createImageBitmap(file)',
@@ -85,6 +86,7 @@ for(const token of [
   "canvas.getContext('2d',{alpha:true})",
   "canvas.toBlob(resolve,'image/png')",
   "return {file:new File([blob],file.name,{type:'image/png',lastModified:file.lastModified}),width:targetWidth,height:targetHeight};",
+  'file.size<=0||file.size>MAX_SOURCE_FILE_BYTES',
   'if(sourceBytes>MAX_SOURCE_BYTES)',
   'const prepareUploadFiles=async files=>',
   'for(let pass=0;pass<10;pass++)',
@@ -123,4 +125,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, verified shared 384px/8MiB-source/1MiB-normalized progressive client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only compressed PNG upload, large 32MiB-per-frame/128MiB-total source bounds, verified shared 384px/1MiB normalized progressive client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
