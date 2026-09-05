@@ -23,8 +23,11 @@ for(const marker of [
   "recurringForDate(ctx,date)",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
   "s.task_id IS NOT NULL",
+  "NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
   "date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)",
   "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)",
+  "EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
+  "date(s.due_date)=date(?)",
   "const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));",
   "COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL",
   "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at)) < date(?)",
@@ -43,7 +46,7 @@ for(const marker of [
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
   "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
-  "関連タスクの日から期限まで、または選択日が期限の買い物",
+  "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
   "/app/shopping_new.php?date=",
   "href=\"/app/shopping.php\">一覧・管理</a>",
   "<h1>✅ チェックリスト</h1>",
@@ -71,4 +74,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, linked daily shopping window, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
