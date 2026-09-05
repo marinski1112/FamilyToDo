@@ -21,7 +21,7 @@ const MAX_FRAME_DURATION_MS=2000;
 const LOCAL_SINGLE_FILE_MIME_TYPES=new Set<FamilySharedStampMimeType>(['image/png','image/webp','image/gif']);
 
 type RegistryClient=ReturnType<typeof createFamilySharedStampRegistryClient>;
-type ExistingProjection={asset_id:number;active:number};
+type ExistingProjection={asset_id:number;active:number;representation:FamilySharedStampRepresentation};
 type SharedFrame={frameIndex:number;durationMs:number;width:number;height:number;byteSize:number;contentPath:string};
 
 type MaterializedSharedStamp={
@@ -44,7 +44,7 @@ async function assertActiveAdmin(env:Env,familyId:number,memberId:number):Promis
 }
 
 async function existingProjection(env:Env,familyId:number,sharedStampId:string,sharedVersion:number):Promise<ExistingProjection|null>{
-  const row=await env.DB.prepare(`SELECT ref.asset_id,asset.active
+  const row=await env.DB.prepare(`SELECT ref.asset_id,asset.active,ref.representation
     FROM calendar_shared_stamp_refs ref
     JOIN calendar_stamp_assets asset ON asset.id=ref.asset_id AND asset.family_id=ref.family_id
     WHERE ref.family_id=? AND ref.shared_stamp_id=? AND ref.shared_version=?
@@ -198,7 +198,7 @@ export async function materializeCalendarSharedStamp(
   const existing=await existingProjection(env,familyId,sharedStampId,sharedVersion);
   if(existing){
     if(Number(existing.active)!==1)throw new Error('calendar shared stamp projection disabled');
-    return {assetId:Number(existing.asset_id),sharedStampId,sharedVersion,representation:'SINGLE_FILE',reused:true};
+    return {assetId:Number(existing.asset_id),sharedStampId,sharedVersion,representation:existing.representation,reused:true};
   }
 
   const catalog=await client.list();
@@ -218,7 +218,7 @@ export async function materializeCalendarSharedStamp(
   }catch(error){
     const raced=await existingProjection(env,familyId,sharedStampId,sharedVersion);
     if(!raced||Number(raced.active)!==1)throw error;
-    return {assetId:Number(raced.asset_id),sharedStampId,sharedVersion,representation:item.representation,reused:true};
+    return {assetId:Number(raced.asset_id),sharedStampId,sharedVersion,representation:raced.representation,reused:true};
   }
   return {assetId,sharedStampId,sharedVersion,representation:item.representation,reused:false};
 }
