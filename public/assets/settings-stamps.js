@@ -78,15 +78,15 @@
     return imageElementForFile(file);
   };
 
-  const normalizeUploadFile=async file=>{
+  const normalizeUploadFile=async(file,maxEdge=MAX_UPLOAD_EDGE)=>{
     let decoded=null;
     try{
       decoded=await decodedImage(file);
       const sourceWidth=Number(decoded.width),sourceHeight=Number(decoded.height);
       if(!Number.isSafeInteger(sourceWidth)||!Number.isSafeInteger(sourceHeight)||sourceWidth<=0||sourceHeight<=0)throw new Error('PNGの画像サイズを確認できませんでした。');
       const longEdge=Math.max(sourceWidth,sourceHeight);
-      if(longEdge<=MAX_UPLOAD_EDGE)return {file,width:sourceWidth,height:sourceHeight};
-      const scale=MAX_UPLOAD_EDGE/longEdge;
+      if(longEdge<=maxEdge)return {file,width:sourceWidth,height:sourceHeight};
+      const scale=maxEdge/longEdge;
       const targetWidth=Math.max(1,Math.round(sourceWidth*scale)),targetHeight=Math.max(1,Math.round(sourceHeight*scale));
       const canvas=document.createElement('canvas');canvas.width=targetWidth;canvas.height=targetHeight;
       const context=canvas.getContext('2d',{alpha:true});
@@ -102,20 +102,30 @@
   };
 
   const prepareUploadFiles=async files=>{
-    const prepared=[];
-    let normalizedBytes=0,commonWidth=0,commonHeight=0;
-    for(let index=0;index<files.length;index++){
-      setStatus(`共有用にPNGを最適化しています… ${index+1}/${files.length}`);
-      const normalized=await normalizeUploadFile(files[index]);
-      if(!(normalized?.file instanceof File)||normalized.file.size<=0||normalized.file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目のPNGを最適化できませんでした。`);
-      if(!Number.isSafeInteger(normalized.width)||!Number.isSafeInteger(normalized.height)||Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE)throw new Error(`${index+1}枚目の画像サイズを共有用に変換できませんでした。`);
-      if(index===0){commonWidth=normalized.width;commonHeight=normalized.height;}
-      else if(normalized.width!==commonWidth||normalized.height!==commonHeight)throw new Error('全フレームの画像サイズを揃えてください。');
-      normalizedBytes+=normalized.file.size;
-      if(normalizedBytes>MAX_NORMALIZED_BYTES)throw new Error('最適化後のPNG合計が1MiBを超えています。フレーム数や画像内容を調整してください。');
-      prepared.push(normalized.file);
+    let targetEdge=MAX_UPLOAD_EDGE;
+    for(let pass=0;pass<10;pass++){
+      const prepared=[];
+      let normalizedBytes=0,commonWidth=0,commonHeight=0;
+      for(let index=0;index<files.length;index++){
+        setStatus(`共有用にPNGを最適化しています… ${index+1}/${files.length}（最大${targetEdge}px）`);
+        const normalized=await normalizeUploadFile(files[index],targetEdge);
+        if(!(normalized?.file instanceof File)||normalized.file.size<=0||normalized.file.size>MAX_UPLOAD_BYTES)throw new Error(`${index+1}枚目のPNGを最適化できませんでした。`);
+        if(!Number.isSafeInteger(normalized.width)||!Number.isSafeInteger(normalized.height)||Math.max(normalized.width,normalized.height)>targetEdge)throw new Error(`${index+1}枚目の画像サイズを共有用に変換できませんでした。`);
+        if(index===0){commonWidth=normalized.width;commonHeight=normalized.height;}
+        else if(normalized.width!==commonWidth||normalized.height!==commonHeight)throw new Error('全フレームの画像サイズを揃えてください。');
+        normalizedBytes+=normalized.file.size;
+        prepared.push(normalized.file);
+      }
+      if(normalizedBytes<=MAX_NORMALIZED_BYTES){
+        return {files:prepared,width:commonWidth,height:commonHeight,normalizedBytes};
+      }
+      if(targetEdge<=1)break;
+      const ratio=Math.sqrt(MAX_NORMALIZED_BYTES/normalizedBytes)*0.92;
+      const nextEdge=Math.max(1,Math.min(targetEdge-1,Math.floor(targetEdge*Math.min(0.9,ratio))));
+      targetEdge=nextEdge;
+      setStatus(`1MiBを超えたため、全フレームをさらに自動縮小しています…（最大${targetEdge}px）`);
     }
-    return {files:prepared,width:commonWidth,height:commonHeight};
+    throw new Error('自動最適化してもPNG合計を1MiB以下にできませんでした。フレーム数や画像内容を調整してください。');
   };
 
   const uploadFrames=async(files,token,durationMs)=>{
