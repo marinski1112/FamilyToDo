@@ -34,7 +34,11 @@ export function validateTaskParentLink(
   }
   if (
     child.visibilityScope === 'PRIVATE'
-    && child.privateOwnerId !== parent.privateOwnerId
+    && (
+      child.privateOwnerId === null
+      || parent.privateOwnerId === null
+      || child.privateOwnerId !== parent.privateOwnerId
+    )
   ) {
     return { ok: false, reason: 'VISIBILITY_MISMATCH' };
   }
