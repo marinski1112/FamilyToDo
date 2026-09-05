@@ -22,7 +22,7 @@ for(const marker of [
   '--nav-safe-right:env(safe-area-inset-right,0px)',
   '--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))',
   'body{padding-bottom:0}',
-  '.wrap{padding-left:var(--nav-safe-left);padding-right:var(--nav-safe-right);padding-bottom:calc(var(--nav-box-h) + 30px)}',
+  '.wrap{padding-left:var(--nav-safe-left)!important;padding-right:var(--nav-safe-right)!important;padding-bottom:calc(var(--nav-box-h) + 30px)!important}',
   'height:var(--nav-box-h)!important',
   'min-height:var(--nav-box-h)!important',
   'padding-left:calc(8px + var(--nav-safe-left))!important',
