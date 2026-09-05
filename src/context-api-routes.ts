@@ -19,6 +19,7 @@ import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './goo
 import { calendarSyncOutboundOnly } from './google-calendar-one-way';
 import { familyLogImportApi } from './family-log-import';
 import { familyLogMutationBoundary } from './family-log-mutation-boundary';
+import { familyLogMediaApi } from './family-log-media-api';
 import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
 import { settingsDiagnosticsDetail } from './settings-diagnostics';
@@ -45,6 +46,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);
   if(url.pathname==='/api/location/latest') return await locationLatestApi(request,context);
   if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);
+  if(url.pathname==='/api/family-log-media') return await familyLogMediaApi(request,context);
   if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);
   if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});
   if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);
