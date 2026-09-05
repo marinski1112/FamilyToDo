@@ -2,7 +2,7 @@
   'use strict';
   const root=document.documentElement,payloadEl=document.getElementById('liffAuthPayload');
   const status=document.getElementById('status'),error=document.getElementById('error'),retry=document.getElementById('retry');
-  const aliases={tasks:'/app/tasks.php',calendar:'/app/calendar.php',shopping:'/app/shopping.php','family-log':'/app/family_log.php',messages:'/app/messages.php',settings:'/app/settings.php'};
+  const aliases={tasks:'/app/tasks.php',calendar:'/app/calendar.php',shopping:'/app/shopping.php','family-log':'/app/family_log.php',messages:'/app/messages.php',settings:'/app/settings.php',location:'/app/location.php'};
   const parsePayload=()=>{try{return payloadEl?JSON.parse(payloadEl.textContent||'{}'):{};}catch{return {};}};const payload=parsePayload();
   const valid=value=>{const path=String(value||'');return path.length>0&&path.length<=2048&&/^\/(?!\/)[^\r\n\\]*$/.test(path)&&!path.startsWith('/oauth/')?path:null;};
   const resolve=()=>{const url=new URL(location.href),alias=url.pathname.match(/^\/liff\/([^/]+)\/?$/)?.[1];if(alias&&aliases[alias])return aliases[alias];const explicit=valid(url.searchParams.get('next'));if(explicit)return explicit;const state=url.searchParams.get('liff.state');if(state&&state.length<=2048){const stateAlias=state.match(/^\/([^/?#]+)\/?$/)?.[1];if(stateAlias&&aliases[stateAlias])return aliases[stateAlias];if(state.startsWith('?')){const next=valid(new URLSearchParams(state.slice(1)).get('next'));if(next)return next;}}return valid(payload.next);};
