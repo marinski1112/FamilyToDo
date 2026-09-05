@@ -1,6 +1,7 @@
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
 import { familyLogApi } from './family-log-api';
+import { cleanupFamilyLogMediaForLog } from './family-log-media-api';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
@@ -18,7 +19,16 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
     if(error instanceof RequestBodyParseError)return familyLogApi(request,ctx);
     throw error;
   }
-  if(String(body.action||'')!=='quick_action_disable')return familyLogApi(request,ctx);
+  const action=String(body.action||'');
+  if(action==='delete'){
+    const familyId=Number(ctx.member?.family_id||0),logId=Number(body.id||0);
+    const response=await familyLogApi(request,ctx);
+    if(response.ok&&Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(logId)&&logId>0){
+      await cleanupFamilyLogMediaForLog(ctx.env,familyId,logId).catch(()=>{});
+    }
+    return response;
+  }
+  if(action!=='quick_action_disable')return familyLogApi(request,ctx);
 
   const member=ctx.member;
   if(!member)return familyLogApi(request,ctx);
