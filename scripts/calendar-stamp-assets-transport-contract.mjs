@@ -80,17 +80,21 @@ for(const token of [
   "if(typeof createImageBitmap==='function')",
   'const bitmap=await createImageBitmap(file)',
   'return imageElementForFile(file);',
-  'if(longEdge<=MAX_UPLOAD_EDGE)return {file,width:sourceWidth,height:sourceHeight};',
+  'const normalizeUploadFile=async(file,maxEdge=MAX_UPLOAD_EDGE)=>',
+  'if(longEdge<=maxEdge)return {file,width:sourceWidth,height:sourceHeight};',
   "canvas.getContext('2d',{alpha:true})",
   "canvas.toBlob(resolve,'image/png')",
   "return {file:new File([blob],file.name,{type:'image/png',lastModified:file.lastModified}),width:targetWidth,height:targetHeight};",
   'if(sourceBytes>MAX_SOURCE_BYTES)',
   'const prepareUploadFiles=async files=>',
-  'const normalized=await normalizeUploadFile(files[index])',
-  'Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE',
+  'for(let pass=0;pass<10;pass++)',
+  'const normalized=await normalizeUploadFile(files[index],targetEdge)',
+  'Math.max(normalized.width,normalized.height)>targetEdge',
   "else if(normalized.width!==commonWidth||normalized.height!==commonHeight)",
-  'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
-  'return {files:prepared,width:commonWidth,height:commonHeight};',
+  'if(normalizedBytes<=MAX_NORMALIZED_BYTES)',
+  'Math.sqrt(MAX_NORMALIZED_BYTES/normalizedBytes)*0.92',
+  'targetEdge=nextEdge',
+  'return {files:prepared,width:commonWidth,height:commonHeight,normalizedBytes};',
   'preparedUpload=await prepareUploadFiles(files);width=preparedUpload.width;height=preparedUpload.height;',
   'uploadFrames(preparedUpload.files,token,durationMs)',
   'body:uploadFile',
@@ -119,4 +123,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, verified shared 384px/8MiB-source/1MiB-normalized client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only PNG upload, verified shared 384px/8MiB-source/1MiB-normalized progressive client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');

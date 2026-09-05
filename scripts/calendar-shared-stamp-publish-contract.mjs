@@ -83,13 +83,18 @@ for(const marker of [
   'const MAX_SOURCE_BYTES=8*1024*1024',
   'const MAX_NORMALIZED_BYTES=1024*1024',
   'if(sourceBytes>MAX_SOURCE_BYTES)',
-  'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
   'const imageElementForFile=file=>',
   'return imageElementForFile(file);',
+  'const normalizeUploadFile=async(file,maxEdge=MAX_UPLOAD_EDGE)=>',
   'const prepareUploadFiles=async files=>',
-  'Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE',
+  'for(let pass=0;pass<10;pass++)',
+  'normalizedBytes<=MAX_NORMALIZED_BYTES',
+  'Math.sqrt(MAX_NORMALIZED_BYTES/normalizedBytes)*0.92',
+  'targetEdge=nextEdge',
+  '全フレームをさらに自動縮小しています',
+  'Math.max(normalized.width,normalized.height)>targetEdge',
   "else if(normalized.width!==commonWidth||normalized.height!==commonHeight)",
-  'return {files:prepared,width:commonWidth,height:commonHeight};',
+  'return {files:prepared,width:commonWidth,height:commonHeight,normalizedBytes};',
   'preparedUpload=await prepareUploadFiles(files);width=preparedUpload.width;height=preparedUpload.height;',
   'uploadFrames(preparedUpload.files,token,durationMs)',
   "fetch('/api/calendar-stamp-admin/shared-publish'",
@@ -101,11 +106,12 @@ if(/typeof createImageBitmap[^\n]*return file|catch\s*\{\s*return file;\s*\}/.te
 if(/SHARED_STAMPS_SERVICE_TOKEN|Authorization:\s*Bearer|authorization|storage_key|thumbnail_storage_key|family_id|member_id|console\./i.test(ui))throw new Error('settings browser bundle must stay free of shared credentials/private persistence fields/logging');
 
 for(const marker of [
-  "const SETTINGS_STAMPS_UI_REVISION='shared-publish-1';",
+  "const SETTINGS_STAMPS_UI_REVISION='shared-publish-2';",
   'settings-stamps.js?v=${APP_VERSION}-${SETTINGS_STAMPS_UI_REVISION}',
   'みてにゃでも利用できる共有スタンプとして公開します',
-  '長辺384px以下',
-  '全フレーム合計は1MiB以下',
+  '長辺384px以下へ縮小',
+  '全フレーム合計が1MiBを超える場合',
+  'アニメーションを保ったまま全フレームを同率でさらに自動縮小します',
 ]) if(!page.includes(marker))throw new Error(`shared publish settings page marker missing: ${marker}`);
 
 if(!routes.includes("import { calendarSharedStampPublishAdminApi } from './calendar-shared-stamp-publish-api';"))throw new Error('shared publish route import missing');
@@ -115,4 +121,4 @@ for(const marker of ['SHARED_STAMPS_SERVICE_URL?:string','SHARED_STAMPS_SERVICE_
 if(!wrangler.includes('"SHARED_STAMPS_SERVICE_URL": "https://family-shared-stamps.marinski1112.workers.dev"'))throw new Error('FamilyToDo shared service public URL config missing');
 if(wrangler.includes('SHARED_STAMPS_SERVICE_TOKEN'))throw new Error('shared service token must remain a Worker secret, never plaintext wrangler config');
 
-console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, verified 384px + 1MiB dimensions/bytes, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
+console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, verified 384px + 1MiB dimensions/bytes, progressive browser normalization, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
