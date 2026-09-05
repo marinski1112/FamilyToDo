@@ -21,6 +21,8 @@ for(const marker of [
   'if(totalBytes>FAMILY_SHARED_STAMP_MAX_NORMALIZED_BYTES)',
   'Math.max(width,height)>FAMILY_SHARED_STAMP_MAX_EDGE',
   "data[12]!==0x49||data[13]!==0x48||data[14]!==0x44||data[15]!==0x52",
+  "SELECT id,name,asset_kind,mime_type,storage_provider,active",
+  'const width=frames[0]!.width,height=frames[0]!.height;',
   "return `ft-${digest.slice(0,40)}`;",
   "representation:'FRAME_SEQUENCE'",
   "mimeType:'image/png'",
@@ -30,6 +32,7 @@ for(const marker of [
   'remote=await client.get(sharedStampId);',
   'await attachCalendarSharedStampRef(env,familyId,memberId,assetId,{',
 ]) if(!publish.includes(marker))throw new Error(`shared publish source boundary missing: ${marker}`);
+if(/asset\.width|asset\.height/.test(publish))throw new Error('validated PNG IHDR dimensions must be authoritative over stale optional local display metadata');
 
 const preflight=publish.indexOf('const existingRef=await calendarSharedStampRefForAsset');
 const remoteCreate=publish.indexOf('await client.create(manifest,{frames:files});');
@@ -80,13 +83,20 @@ for(const marker of [
   'const MAX_NORMALIZED_BYTES=1024*1024',
   'if(sourceBytes>MAX_SOURCE_BYTES)',
   'if(normalizedBytes>MAX_NORMALIZED_BYTES)',
+  'const imageElementForFile=file=>',
+  'return imageElementForFile(file);',
   'const prepareUploadFiles=async files=>',
-  'preparedFiles=await prepareUploadFiles(files)',
+  'Math.max(normalized.width,normalized.height)>MAX_UPLOAD_EDGE',
+  "else if(normalized.width!==commonWidth||normalized.height!==commonHeight)",
+  'return {files:prepared,width:commonWidth,height:commonHeight};',
+  'preparedUpload=await prepareUploadFiles(files);width=preparedUpload.width;height=preparedUpload.height;',
+  'uploadFrames(preparedUpload.files,token,durationMs)',
   "fetch('/api/calendar-stamp-admin/shared-publish'",
   "body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id)})",
   "publish.textContent='みてにゃと共有'",
   "payload.sharedPublished===true",
 ]) if(!ui.includes(marker))throw new Error(`settings shared publish client marker missing: ${marker}`);
+if(/typeof createImageBitmap[^\n]*return file|catch\s*\{\s*return file;\s*\}/.test(ui))throw new Error('unverifiable source dimensions must never silently bypass shared normalization');
 if(/SHARED_STAMPS_SERVICE_TOKEN|Authorization:\s*Bearer|authorization|storage_key|thumbnail_storage_key|family_id|member_id|console\./i.test(ui))throw new Error('settings browser bundle must stay free of shared credentials/private persistence fields/logging');
 
 for(const marker of [
@@ -104,4 +114,4 @@ for(const marker of ['SHARED_STAMPS_SERVICE_URL?:string','SHARED_STAMPS_SERVICE_
 if(!wrangler.includes('"SHARED_STAMPS_SERVICE_URL": "https://family-shared-stamps.marinski1112.workers.dev"'))throw new Error('FamilyToDo shared service public URL config missing');
 if(wrangler.includes('SHARED_STAMPS_SERVICE_TOKEN'))throw new Error('shared service token must remain a Worker secret, never plaintext wrangler config');
 
-console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, 384px + 1MiB bounds, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
+console.log('calendar shared stamp publish contract: admin/CSRF/tenant-safe private MEDIA source, verified 384px + 1MiB dimensions/bytes, deterministic privacy-safe identity, server-only Bearer write, idempotent 0054 projection, auto-publish + retry UI, and secret-free browser/config boundaries ok');
