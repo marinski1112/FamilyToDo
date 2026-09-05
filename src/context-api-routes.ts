@@ -17,7 +17,7 @@ import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, f
 import { googleTasksAction } from './google-tasks';
 import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
 import { calendarSyncOutboundOnly } from './google-calendar-one-way';
-import { familyLogImportApi } from './family-log-import';
+import { familyLogImportMediaBoundary } from './family-log-import-media-boundary';
 import { familyLogMutationBoundary } from './family-log-mutation-boundary';
 import { familyLogMediaApi } from './family-log-media-api';
 import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';
@@ -72,7 +72,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
   if(url.pathname==='/api/google-calendar/disconnect') return await calendarDisconnect(request,context);
   if(url.pathname==='/api/google-calendar/retry-failed') return await calendarRetryFailed(request,context);
-  if(url.pathname==='/api/family-log-import') return await familyLogImportApi(request,context);
+  if(url.pathname==='/api/family-log-import') return await familyLogImportMediaBoundary(request,context);
   if(url.pathname==='/api/calendar-import/preview') return await calendarImportPreview(request,context);
   if(url.pathname==='/api/calendar-import/normalization-preview') return await calendarImportNormalizationPreview(request,context);
   if(url.pathname==='/api/calendar-import/prepare') return await calendarImportPrepare(request,context);
