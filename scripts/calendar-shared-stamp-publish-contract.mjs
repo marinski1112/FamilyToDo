@@ -46,6 +46,7 @@ for(const marker of [
   "if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);",
   'familySharedStampRegistryConfigFromEnv(context.env)',
   "if(!config)return json({ok:false,error:'SHARED_STAMPS_UNAVAILABLE'},503);",
+  "message.includes('shared stamp service configuration')||message.includes('shared stamp service token')",
   'publishCalendarStampToShared(context.env,s.familyId,s.memberId,assetId,client)',
   "error:'SHARED_STAMP_INCOMPATIBLE'",
   "error:'SHARED_STAMPS_UPSTREAM_FAILED'",
