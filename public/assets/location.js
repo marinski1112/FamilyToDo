@@ -9,6 +9,8 @@
   const mapEl=root.querySelector('[data-location-map]');
   const mapStateEl=root.querySelector('[data-location-map-state]');
   const refreshEl=root.querySelector('[data-location-refresh]');
+  const homeEtaEl=root.querySelector('[data-location-home-eta]');
+  const homeEtaResultEl=root.querySelector('[data-location-home-eta-result]');
   const mapsKey=String(root.getAttribute('data-google-maps-key')||'').trim();
   const mapsMapId=String(root.getAttribute('data-google-maps-map-id')||'').trim();
   const csrf=String(root.getAttribute('data-location-csrf')||'').trim();
@@ -83,29 +85,42 @@
     refreshEl.setAttribute('aria-busy',busy?'true':'false');
   };
 
+  const etaRequest=async(body)=>{
+    const response=await fetch('/api/location/eta',{
+      method:'POST',
+      headers:{accept:'application/json','content-type':'application/json','x-csrf-token':csrf},
+      credentials:'same-origin',
+      cache:'no-store',
+      body:JSON.stringify(body),
+    });
+    const payload=await response.json().catch(()=>null);
+    if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'経路時間を取得できませんでした。');
+    return payload;
+  };
+
+  const renderEtaResult=(payload)=>{
+    const duration=durationText(Number(payload?.durationSeconds));
+    const distance=distanceText(Number(payload?.distanceMeters));
+    return [duration,distance].filter(Boolean).join(' ・ ')||'経路時間を取得できませんでした。';
+  };
+
   const requestEta=async(member,button,result)=>{
     const targetMemberId=Number(member?.memberId);
     if(!Number.isSafeInteger(targetMemberId)||targetMemberId<=0||!csrf)return;
     button.disabled=true;
     result.textContent='経路時間を確認しています…';
-    try{
-      const response=await fetch('/api/location/eta',{
-        method:'POST',
-        headers:{accept:'application/json','content-type':'application/json','x-csrf-token':csrf},
-        credentials:'same-origin',
-        cache:'no-store',
-        body:JSON.stringify({targetMemberId}),
-      });
-      const payload=await response.json().catch(()=>null);
-      if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'経路時間を取得できませんでした。');
-      const duration=durationText(Number(payload.durationSeconds));
-      const distance=distanceText(Number(payload.distanceMeters));
-      result.textContent=[duration,distance].filter(Boolean).join(' ・ ')||'経路時間を取得できませんでした。';
-    }catch(error){
-      result.textContent=error instanceof Error&&error.message?error.message:'経路時間を取得できませんでした。';
-    }finally{
-      button.disabled=false;
-    }
+    try{result.textContent=renderEtaResult(await etaRequest({targetMemberId}));}
+    catch(error){result.textContent=error instanceof Error&&error.message?error.message:'経路時間を取得できませんでした。';}
+    finally{button.disabled=false;}
+  };
+
+  const requestHomeEta=async()=>{
+    if(!homeEtaEl||!homeEtaResultEl||!csrf)return;
+    homeEtaEl.disabled=true;
+    homeEtaResultEl.textContent='家までの時間を確認しています…';
+    try{homeEtaResultEl.textContent=renderEtaResult(await etaRequest({destinationKind:'HOME'}));}
+    catch(error){homeEtaResultEl.textContent=error instanceof Error&&error.message?error.message:'家までの時間を取得できませんでした。';}
+    finally{homeEtaEl.disabled=false;}
   };
 
   const makeMemberRow=(member)=>{
@@ -296,5 +311,6 @@
   };
 
   if(refreshEl)refreshEl.addEventListener('click',()=>void load());
+  if(homeEtaEl)homeEtaEl.addEventListener('click',()=>void requestHomeEta());
   void load();
 })();
