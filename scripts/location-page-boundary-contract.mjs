@@ -19,7 +19,7 @@ for(const marker of [
   "import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';",
   "const phase1Ready=new Set(['owntracks','latest','history','places','distance']);",
   "export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{",
-  "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_KEY||'');",
+  "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');",
   "const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');",
   "const csrf=esc(ctx.session.csrfToken||'');",
   "return html(layout('家族の場所',body,'/app/location.php'));",
@@ -125,7 +125,8 @@ for(const forbidden of ['ctx.env.DB','DB.prepare','navigator.geolocation','fetch
 for(const providerSpecific of ['googleapis.com','maps.googleapis.com','owntracks','LINE_ACCESS_TOKEN','GOOGLE_']){
   if(providers.toLowerCase().includes(providerSpecific.toLowerCase()))throw new Error(`Location provider-neutral boundary must not embed a provider implementation: ${providerSpecific}`);
 }
-if(!workerConfig.includes('GOOGLE_MAPS_BROWSER_KEY?:string;')||!workerConfig.includes('GOOGLE_MAPS_MAP_ID?:string;'))throw new Error('Google Maps browser settings must remain optional typed environment fields');
+if(!workerConfig.includes('GOOGLE_MAPS_BROWSER_API_KEY?:string;')||!workerConfig.includes('GOOGLE_MAPS_MAP_ID?:string;'))throw new Error('Google Maps browser settings must remain optional typed environment fields');
+if(workerConfig.includes('GOOGLE_MAPS_BROWSER_KEY?:string;')||page.includes('GOOGLE_MAPS_BROWSER_KEY'))throw new Error('Legacy Maps browser key name must not drift from canonical GOOGLE_MAPS_BROWSER_API_KEY');
 if(!routes.includes("import { locationPage } from './location-page';"))throw new Error('Location page import missing');
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
@@ -135,4 +136,4 @@ if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/lo
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: authenticated family map plus explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
+console.log('location-page-boundary: authenticated family map uses canonical GOOGLE_MAPS_BROWSER_API_KEY while explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
