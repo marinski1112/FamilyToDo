@@ -8,6 +8,7 @@ const schema=fs.readFileSync('database/schema.d1.sql','utf8');
 const checklistDraft=fs.readFileSync('src/checklist-input-draft.ts','utf8');
 const roughInputApi=fs.readFileSync('src/task-rough-input-api.ts','utf8');
 const roughInputUi=fs.readFileSync('public/assets/task-rough-input-ai.js','utf8');
+const roughInputSave=fs.readFileSync('public/assets/task-rough-input-save.js','utf8');
 const appShell=fs.readFileSync('src/app-shell.ts','utf8');
 
 assert.ok(app.includes('export function taskVisibilitySql'),'current task visibility predicate must remain centralized');
@@ -54,14 +55,9 @@ assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must 
 
 for(const marker of [
   "fetch('/api/task-rough-input'",
-  "if(typeof fallbackPreview==='function')fallbackPreview.call(button)",
-  'const fields=fieldPayload(),requestSnapshot=snapshot(fields)',
-  'if(snapshot(fieldPayload())!==requestSnapshot)return;',
   'firstHttpUrl(item.originalText)',
   'class="rough-draft-category"',
   '<details class="rough-advanced"><summary>詳細設定</summary>',
-  '<details class="rough-row-details"><summary>詳細設定</summary>',
-  '<details class="rough-row-details"><summary>期限など</summary>',
   'class="rough-main-calendar-visible"',
   'class="rough-main-calendar-color"',
   'class="rough-main-completion"',
@@ -69,14 +65,34 @@ for(const marker of [
   'class="rough-main-private"',
   'class="rough-main-start-date"',
   'class="rough-main-end-date"',
+  'class="rough-main-description"',
+  'class="rough-child-completion"',
+  'rough-child-assignees',
+  'rough-item-assignees',
   'class="rough-draft-url"',
   '必要な項目だけ確認し、間違いがあれば修正してください。詳細設定は必要なときだけ開けます。',
 ])assert.ok(roughInputUi.includes(marker),`rough-input progressive confirmation marker missing: ${marker}`);
-assert.ok(!roughInputUi.includes("fetch('/api/task',"),'confirmation-only UI must not persist tasks');
-assert.ok(!roughInputUi.includes("fetch('/api/shopping',"),'confirmation-only UI must not persist Shopping');
-assert.ok(!roughInputUi.includes("fetch('/api/item',"),'confirmation-only UI must not persist Items');
 assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
-assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input AI companion must be scoped to the server-rendered task-new marker');
-assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-confirm-ui1'),'rough-input confirmation UI asset must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, checklist draft, bounded Gemini analysis, and progressive confirmation UI contracts ok');
+for(const marker of [
+  "id=\"roughConfirmSave\"",
+  'AIの下書きは、このボタンを押すまで登録されません。',
+  'if(!confirm(',
+  "postJson('/api/task'",
+  "postJson('/api/shopping'",
+  "postJson('/api/item'",
+  "method:'DELETE'",
+  "headers:{'x-csrf':csrf()}",
+  'parent_task_id:parentTaskId',
+  "if(roots.length>1&&related.length)",
+  'rollbackTasks(createdTaskIds)',
+  "action:'add'",
+  "task_id:taskId||0",
+])assert.ok(roughInputSave.includes(marker),`rough-input explicit save guard missing: ${marker}`);
+assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(roughInputSave),'save companion must never call Gemini directly');
+assert.ok(roughInputSave.indexOf('if(!confirm(')<roughInputSave.indexOf('saveRows(rows)'),'explicit user confirmation must occur before save orchestration');
+assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input companions must be scoped to the server-rendered task-new marker');
+assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
+assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
+
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, progressive confirmation, and explicit save boundaries ok');
