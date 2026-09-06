@@ -23,6 +23,7 @@ const validDate=(value:string|null)=>{
 const validTime=(value:string|null)=>value===null||/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const destinationOk=(value:unknown):value is Destination=>DESTINATIONS.includes(String(value) as Destination);
 const metadataPrefix=/^(?:説明|メモ|備考|note|url|リンク|数量|個数|カテゴリー|カテゴリ|期限|締切)\s*[:：]/iu;
+const descriptionPrefix=/^(?:説明|メモ|備考|note)\s*[:：]\s*(.*)$/iu;
 const explicitQuantityPrefix=/^(?:数量|個数)\s*[:：]?\s*\d/iu;
 const httpUrlOnly=/^https?:\/\/\S+$/iu;
 
@@ -48,7 +49,14 @@ function explicitQuantity(block:RoughBlock):string|null{
 
 function continuationDescription(block:RoughBlock,destination:Destination):string|null{
   if(destination!=='task'&&destination!=='event')return null;
-  const description=block.lines.slice(1).filter(line=>!metadataPrefix.test(line)&&!explicitQuantityPrefix.test(line)&&!httpUrlOnly.test(line)).join('\n').trim();
+  const parts:string[]=[];
+  for(const line of block.lines.slice(1)){
+    const labeled=line.match(descriptionPrefix);
+    if(labeled){if(labeled[1]?.trim())parts.push(labeled[1].trim());continue;}
+    if(metadataPrefix.test(line)||explicitQuantityPrefix.test(line)||httpUrlOnly.test(line))continue;
+    parts.push(line);
+  }
+  const description=parts.join('\n').trim();
   return description?description.slice(0,1000):null;
 }
 
