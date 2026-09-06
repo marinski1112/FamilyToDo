@@ -42,7 +42,7 @@ async function sync(){
   wrap.hidden=false;const id=logId();
   if(!id){existingMedia=null;loadedLogId=0;render();return;}
   if(id===loadedLogId){render();return;}
-  const token=++loadToken;status.textContent='写真を確認しています…';const media=await fetchMedia(id);if(token!==loadToken)return;loadedLogId=id;existingMedia=media;status.textContent='';render();
+  const token=++loadToken;status.textContent='写真を確認しています…';picker.hidden=true;const media=await fetchMedia(id);if(token!==loadToken)return;loadedLogId=id;existingMedia=media;status.textContent='';render();
 }
 
 function canvasBlob(canvas,quality){return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('ENCODE_FAILED')),'image/jpeg',quality));}
@@ -81,7 +81,7 @@ document.addEventListener('submit',async e=>{
   if(e.target!==form||!pendingBlob||!isBabyFood())return;
   e.preventDefault();e.stopImmediatePropagation();
   const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;status.textContent='記録と写真を保存しています…';
-  try{const fd=new FormData(form),saved=await saveLog(fd),id=Number(saved?.id||0);if(!id)throw new Error('LOG_SAVE_FAILED');field('id').value=String(id);try{await uploadPhoto(id,pendingBlob);}catch(err){loadedLogId=id;status.textContent=`記録は保存しましたが、${fixedMediaError(err?.message)} そのまま「保存する」をもう一度押すと写真だけ再試行できます。`;return;}location.reload();}
+  try{const fd=new FormData(form),saved=await saveLog(fd),id=Number(saved?.id||0);if(!id)throw new Error('LOG_SAVE_FAILED');field('id').value=String(id);if(saved?.linked_completion?.ok===false&&saved.linked_completion.message)alert(saved.linked_completion.message);try{await uploadPhoto(id,pendingBlob);}catch(err){loadedLogId=id;status.textContent=`記録は保存しましたが、${fixedMediaError(err?.message)} そのまま「保存する」をもう一度押すと写真だけ再試行できます。`;return;}location.reload();}
   catch{status.textContent='記録を保存できませんでした。入力内容を確認してもう一度お試しください。';}
   finally{if(submit)submit.disabled=false;}
 },true);
