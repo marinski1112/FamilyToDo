@@ -6,10 +6,16 @@
 
   const statusEl=root.querySelector('[data-location-status]');
   const listEl=root.querySelector('[data-location-list]');
+  const mapEl=root.querySelector('[data-location-map]');
   const mapStateEl=root.querySelector('[data-location-map-state]');
   const refreshEl=root.querySelector('[data-location-refresh]');
+  const mapsKey=String(root.getAttribute('data-google-maps-key')||'').trim();
+  const mapsMapId=String(root.getAttribute('data-google-maps-map-id')||'').trim();
   let loading=false;
   let hasRendered=false;
+  let mapsPromise=null;
+  let map=null;
+  let markers=[];
 
   const stateText={
     FRESH:'最新',
@@ -47,12 +53,15 @@
     return `直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km`;
   };
 
+  const validPoint=(latest)=>{
+    const lat=Number(latest?.latitude),lng=Number(latest?.longitude);
+    return Number.isFinite(lat)&&lat>=-90&&lat<=90&&Number.isFinite(lng)&&lng>=-180&&lng<=180?{lat,lng}:null;
+  };
+
   const googleMapsUrl=(latest)=>{
-    const latitude=Number(latest?.latitude);
-    const longitude=Number(latest?.longitude);
-    if(!Number.isFinite(latitude)||latitude < -90||latitude > 90)return null;
-    if(!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+    const point=validPoint(latest);
+    if(!point)return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
   };
 
   const setStatus=(text)=>{
@@ -116,6 +125,75 @@
     return row;
   };
 
+  const loadGoogleMaps=()=>{
+    if(window.google?.maps)return Promise.resolve(window.google.maps);
+    if(mapsPromise)return mapsPromise;
+    if(!mapsKey)return Promise.reject(new Error('MAPS_NOT_CONFIGURED'));
+    mapsPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      const params=new URLSearchParams({key:mapsKey,loading:'async'});
+      if(mapsMapId)params.set('libraries','marker');
+      script.src=`https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+      script.async=true;
+      script.defer=true;
+      script.addEventListener('load',()=>window.google?.maps?resolve(window.google.maps):reject(new Error('MAPS_LOAD_FAILED')),{once:true});
+      script.addEventListener('error',()=>reject(new Error('MAPS_LOAD_FAILED')),{once:true});
+      document.head.appendChild(script);
+    });
+    return mapsPromise;
+  };
+
+  const clearMarkers=()=>{
+    for(const marker of markers){
+      if('map'in marker)marker.map=null;
+      if(typeof marker.setMap==='function')marker.setMap(null);
+    }
+    markers=[];
+  };
+
+  const renderMap=async(located)=>{
+    if(!mapEl||!mapStateEl)return;
+    if(!located.length){
+      mapEl.hidden=true;
+      mapStateEl.hidden=false;
+      mapStateEl.textContent='共有中の最新位置がまだありません。地図は位置送信後に表示対象になります。';
+      clearMarkers();
+      return;
+    }
+    if(!mapsKey){
+      mapEl.hidden=true;
+      mapStateEl.hidden=false;
+      mapStateEl.textContent=`共有中 ${located.length}人の位置を受信しています。Google Maps表示には管理側のブラウザ用Mapsキー設定が必要です。`;
+      clearMarkers();
+      return;
+    }
+    try{
+      const maps=await loadGoogleMaps();
+      const points=located.map(member=>({member,point:validPoint(member.latest)})).filter(item=>item.point);
+      if(!points.length)return;
+      mapStateEl.hidden=true;
+      mapEl.hidden=false;
+      map=map||new maps.Map(mapEl,{center:points[0].point,zoom:14,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,...(mapsMapId?{mapId:mapsMapId}:{})});
+      clearMarkers();
+      const bounds=new maps.LatLngBounds();
+      for(const {member,point} of points){
+        bounds.extend(point);
+        const title=String(member.name||'家族');
+        if(mapsMapId&&maps.marker?.AdvancedMarkerElement){
+          markers.push(new maps.marker.AdvancedMarkerElement({map,position:point,title}));
+        }else{
+          markers.push(new maps.Marker({map,position:point,title}));
+        }
+      }
+      if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,48);}
+    }catch(_error){
+      mapEl.hidden=true;
+      mapStateEl.hidden=false;
+      mapStateEl.textContent='Google Mapsを読み込めませんでした。家族の位置一覧と「Google Mapsで開く」は引き続き利用できます。';
+      clearMarkers();
+    }
+  };
+
   const render=(payload)=>{
     const members=Array.isArray(payload?.members)?payload.members:[];
     if(listEl){
@@ -130,12 +208,8 @@
       }
     }
 
-    const located=members.filter((member)=>member?.latest&&member?.sharingEnabled);
-    if(mapStateEl){
-      mapStateEl.textContent=located.length>0
-        ? `共有中 ${located.length}人の位置を受信しています。地図プロバイダー設定後、この領域に家族マーカーを表示します。`
-        : '共有中の最新位置がまだありません。地図は位置送信後に表示対象になります。';
-    }
+    const located=members.filter((member)=>member?.latest&&member?.sharingEnabled&&validPoint(member.latest));
+    void renderMap(located);
     hasRendered=true;
     setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人`);
   };
@@ -157,6 +231,7 @@
       }else{
         setStatus('最新位置を取得できませんでした');
         if(mapStateEl)mapStateEl.textContent='地図を表示できない場合も、位置情報の共有設定や端末側の送信状態は変更されません。';
+        if(mapEl)mapEl.hidden=true;
         if(listEl){
           listEl.replaceChildren();
           const error=document.createElement('div');
