@@ -5,6 +5,7 @@ const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const boundary=fs.readFileSync('src/family-log-mutation-boundary.ts','utf8');
 const importBoundary=fs.readFileSync('src/family-log-import-media-boundary.ts','utf8');
 const migration=fs.readFileSync('migrations/0057_family_log_baby_food_media.sql','utf8');
+const migrationSql=migration.replace(/^\s*--.*$/gm,'');
 
 const checks=[
   [routes.includes("url.pathname==='/api/family-log-media'"),'Family Log media route is missing'],
@@ -28,8 +29,8 @@ const checks=[
   [api.includes("if(purpose==='DELETE')")&&api.includes('DELETE FROM family_log_media WHERE family_id=? AND storage_key=?'),'successful queued DELETE must remove stale metadata'],
   [api.includes('export async function drainPendingFamilyLogMedia')&&api.includes('for(let batch=0;batch<128;batch++)'),'import cleanup must drain across bounded batches'],
   [api.includes('await context.env.MEDIA.delete(objectKey)')&&api.includes("DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?"),'failed metadata insert must compensate without racing fresh ORPHAN reconciliation'],
-  [!migration.includes('CREATE TRIGGER'),'0057 must remain free of CREATE TRIGGER bodies so remote Wrangler/D1 statement splitting cannot fail with incomplete input'],
-  [migration.includes('DROP TRIGGER IF EXISTS trg_family_log_media_insert_scope')&&migration.includes('DROP TRIGGER IF EXISTS trg_family_log_media_subject_reconcile'),'0057 must defensively remove any trigger left by a partial failed remote attempt'],
+  [!migrationSql.includes('CREATE TRIGGER'),'0057 executable SQL must remain free of CREATE TRIGGER bodies so remote Wrangler/D1 statement splitting cannot fail with incomplete input'],
+  [migrationSql.includes('DROP TRIGGER IF EXISTS trg_family_log_media_insert_scope')&&migrationSql.includes('DROP TRIGGER IF EXISTS trg_family_log_media_subject_reconcile'),'0057 must defensively remove any trigger left by a partial failed remote attempt'],
   [api.includes('queueObjectCleanup')&&api.includes('deleteQueuedObject')&&api.includes('attempts=attempts+1'),'failed R2 cleanup must remain retryable'],
   [migration.includes('UNIQUE (log_id)')&&migration.includes('UNIQUE (storage_key)'),'one-photo/internal-key uniqueness is missing'],
   [api.includes('babyFoodParent')&&api.includes('Number(parent.subject_id)')&&api.includes('created_by,created_at,reconcile_pending'),'application insert path must retain validated parent/subject/member metadata'],
