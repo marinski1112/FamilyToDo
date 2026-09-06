@@ -13,7 +13,7 @@ const esc=(value:unknown)=>String(value??'')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
 
-/** Authenticated OwnTracks provisioning and device-control surface. */
+/** Authenticated OwnTracks provisioning, device control and family HOME setup. */
 export async function settingsLocation(_request:Request,ctx:AppContext):Promise<Response>{
   const member=ctx.member;
   if(!member)return redirect('/login.php?next=%2Fapp%2Fsettings_location.php');
@@ -34,10 +34,22 @@ export async function settingsLocation(_request:Request,ctx:AppContext):Promise<
     isAdmin,
   }).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
 
+  const homeCard=isAdmin?`<div class="card location-settings-grid" id="homePlaceCard">
+    <div><h2>🏠 自宅地点</h2><p class="small">共有ONのメンバーの最新位置を、家族共通の「自宅」として固定保存します。ブラウザの現在地は取得せず、住所や逆ジオコーディングも使用しません。</p></div>
+    <div class="location-provision-row">
+      <label>取得元メンバー<select id="homeSourceMember">${memberOptions}</select></label>
+      <button class="btn" id="captureHomePlace" type="button">この最新位置を自宅に設定</button>
+    </div>
+    <div class="home-place-status" id="homePlaceStatus">自宅地点を確認しています…</div>
+    <div><button class="btn danger small" id="deleteHomePlace" type="button" hidden>自宅地点を解除</button></div>
+    <p class="small">設定後は位置情報ページの「家まで何分？」から、現在の共有位置→自宅の車移動時間を必要な時だけ計算できます。</p>
+  </div>`:'';
+
   const body=`<style>
-    .location-settings-grid{display:grid;gap:14px}.location-provision-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}.location-provision-row label{margin:0}.owntracks-secret{border:2px solid #f59e0b;background:#fffbeb}.owntracks-secret[hidden]{display:none}.credential-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:9px}.credential-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#fff;border:1px solid #dbe2ea;border-radius:9px;padding:9px 10px}.device-list{display:grid;gap:10px}.device-card{border:1px solid #e2e8f0;border-radius:12px;padding:12px}.device-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.device-title{min-width:0}.device-title strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.device-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.device-status{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;background:#f1f5f9}.device-status.on{background:#dcfce7;color:#166534}.device-status.revoked{background:#fee2e2;color:#991b1b}.setup-steps{margin:10px 0 0;padding-left:22px}.setup-steps li{margin:5px 0}.location-empty{color:#64748b;padding:8px 0}@media(max-width:560px){.location-provision-row{grid-template-columns:1fr}.credential-row{grid-template-columns:1fr auto}.credential-row>strong{grid-column:1/-1}.credential-value{min-width:0}.device-head{display:block}.device-status{margin-top:6px}}
+    .location-settings-grid{display:grid;gap:14px}.location-provision-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}.location-provision-row label{margin:0}.owntracks-secret{border:2px solid #f59e0b;background:#fffbeb}.owntracks-secret[hidden]{display:none}.credential-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:9px}.credential-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#fff;border:1px solid #dbe2ea;border-radius:9px;padding:9px 10px}.device-list{display:grid;gap:10px}.device-card{border:1px solid #e2e8f0;border-radius:12px;padding:12px}.device-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.device-title{min-width:0}.device-title strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.device-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.device-status{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;background:#f1f5f9}.device-status.on{background:#dcfce7;color:#166534}.device-status.revoked{background:#fee2e2;color:#991b1b}.setup-steps{margin:10px 0 0;padding-left:22px}.setup-steps li{margin:5px 0}.location-empty{color:#64748b;padding:8px 0}.home-place-status{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#f8fafc;color:#475569}@media(max-width:560px){.location-provision-row{grid-template-columns:1fr}.credential-row{grid-template-columns:1fr auto}.credential-row>strong{grid-column:1/-1}.credential-value{min-width:0}.device-head{display:block}.device-status{margin-top:6px}}
   </style>
   <div class="page-head"><div><div class="eyebrow">管理</div><h1>📍 位置情報・OwnTracks</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div>
+  ${homeCard}
   <div class="card location-settings-grid">
     <div><h2>OwnTracks端末を追加</h2><p class="small">iPhoneのOwnTracksからFamilyToDoへ位置情報を送信するための専用端末を発行します。端末は最初は共有OFFです。</p></div>
     <div class="location-provision-row">
@@ -60,6 +72,6 @@ export async function settingsLocation(_request:Request,ctx:AppContext):Promise<
   </div>
   <div class="card"><div class="section-link"><div><h2>家族の場所を確認</h2><p class="small">共有ONの端末から届いた最新位置を家族の場所で確認します。</p></div><a class="btn gray" href="/app/location.php">位置情報を開く</a></div></div>
   <script type="application/json" id="settingsLocationPayload">${payload}</script>
-  <script src="/assets/settings-location.js?v=${APP_VERSION}"></script>`;
+  <script src="/assets/settings-location.js?v=${APP_VERSION}-home1"></script>`;
   return commitSession(html(layout('位置情報・OwnTracks',body,'/app/settings.php')),ctx.session,ctx.env.APP_SECRET);
 }
