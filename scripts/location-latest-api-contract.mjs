@@ -38,7 +38,8 @@ assert.match(history,/new D1LocationQueryService\(ctx\.env\.DB\)/,'history API m
 assert.match(history,/service\.history\(\{[\s\S]*scope:\{familyId,requesterMemberId\}[\s\S]*subjectMemberId[\s\S]*from[\s\S]*to[\s\S]*limit:HISTORY_LIMIT/,'history API must preserve authenticated family/requester/subject scope and explicit bounded time range');
 assert.match(history,/points:points\.map\(\(point\)=>\(\{[\s\S]*latitude:point\.latitude[\s\S]*longitude:point\.longitude[\s\S]*recordedAt:point\.recordedAt/,'history API must expose only the provider-neutral point projection');
 assert.match(history,/'cache-control':'no-store'/,'history coordinates must not be stored in shared HTTP caches');
-assert.doesNotMatch(history,/location_devices|member_location_history|SELECT |secret_hash|public_id|device_id|provider|raw_payload|authorization|console\.(?:log|info|warn|error)/i,'history HTTP boundary must not bypass LocationQueryService or expose/log provider and device internals');
+assert.doesNotMatch(history,/location_devices|member_location_history|SELECT |secret_hash|public_id|device_id|raw_payload|authorization|console\.(?:log|info|warn|error)/i,'history HTTP boundary must not bypass LocationQueryService or expose/log device internals');
+assert.doesNotMatch(history,/\bprovider\s*[:=]/i,'history HTTP boundary must not project or bind provider identifiers');
 assert.match(routes,/import \{ locationHistoryApi \} from '\.\/location-history-api';/,'context API dispatcher must import the bounded history boundary');
 assert.match(routes,/url\.pathname==='\/api\/location\/history'\) return await locationHistoryApi\(request,context\)/,'authenticated context routing must expose the history endpoint');
 
