@@ -88,6 +88,8 @@ for(const marker of [
   'rollbackTasks(createdTaskIds)',
   "action:'add'",
   "task_id:taskId||0",
+  "const structuredPreview=preview.querySelector('.rough-advanced,.rough-row-details')",
+  'if(preview.hidden||!rows.length||!structuredPreview)return;',
 ])assert.ok(roughInputSave.includes(marker),`rough-input explicit save guard missing: ${marker}`);
 assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(roughInputSave),'save companion must never call Gemini directly');
 assert.ok(roughInputSave.indexOf('if(!confirm(')<roughInputSave.indexOf('saveRows(rows)'),'explicit user confirmation must occur before save orchestration');
