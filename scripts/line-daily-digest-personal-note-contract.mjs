@@ -20,7 +20,7 @@ for(const marker of [
   'const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0]',
   "if(frame.personalNote)lines.push('【家族のひとこと】",
   'function buildPreviousFamilyRecap(payload:DigestFactPayload):string[]',
-  'const movement=payload.location.previous.length>0',
+  'const hasLocationRecord=payload.location.previous.length>0',
   "if(recap.length)lines.push('【昨日の家族まとめ】'",
   'function buildEvidencePraise(payload:DigestFactPayload):string[]',
   'payload.familyLog.previous.length',
@@ -41,12 +41,18 @@ if(!digest.includes('決定論的な予定・記録の事実を変更しない�
 const recapStart=digest.indexOf('function buildPreviousFamilyRecap('),recapEnd=digest.indexOf('\nfunction buildEvidencePraise(',recapStart);
 const recapBody=recapStart>=0&&recapEnd>recapStart?digest.slice(recapStart,recapEnd):'';
 if(!recapBody||/(geminiFetch|fetch\(|Routes|Maps|latitude|longitude)/.test(recapBody))throw new Error('previous family recap must remain deterministic, privacy-safe and local');
+if(/みんなそれぞれ動|家族みんな.*場所|全員.*移動/.test(recapBody))throw new Error('location-record presence must not be inflated into family-wide movement claims');
 const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
 const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';
 if(!praiseBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(praiseBody))throw new Error('evidence praise must remain deterministic and local');
 const noteStart=digest.indexOf('function morningPersonalNoteOptions('),noteEnd=digest.indexOf('\nfunction persistedMorningFrame(',noteStart);
 const noteBody=noteStart>=0&&noteEnd>noteStart?digest.slice(noteStart,noteEnd):'';
 if(!noteBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(noteBody))throw new Error('memo-guided note candidates must remain deterministic and local');
+const renderStart=digest.indexOf('function renderDeterministicFacts('),renderEnd=digest.indexOf('\nexport async function processLineDailyDigests(',renderStart);
+const renderBody=renderStart>=0&&renderEnd>renderStart?digest.slice(renderStart,renderEnd):'';
+for(const authoritative of ['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】']){
+  if(renderBody.indexOf(authoritative)<0||renderBody.indexOf(authoritative)>renderBody.indexOf('【昨日の家族まとめ】'))throw new Error(`authoritative section must stay ahead of optional recap: ${authoritative}`);
+}
 
 await import('./line-daily-digest-weather-contract.mjs');
-console.log('line-daily-digest-personal-note-contract: memo candidates vary by date; previous-day recap and up-to-three evidence praise lines stay deterministic/local; AI selects indexes only');
+console.log('line-daily-digest-personal-note-contract: memo candidates vary by date; authoritative facts precede optional recap/praise; location presence claims stay conservative; AI selects indexes only');
