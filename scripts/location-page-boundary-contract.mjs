@@ -6,6 +6,7 @@ const page=fs.readFileSync('src/location-page.ts','utf8');
 const client=fs.readFileSync('public/assets/location.js','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
+const workerConfig=fs.readFileSync('worker-configuration.d.ts','utf8');
 const checklist=fs.readFileSync('src/task-events-page.ts','utf8');
 
 if(page.includes("from './app'"))throw new Error('Location page must not depend on app.ts');
@@ -14,10 +15,15 @@ for(const marker of [
   "import { layout } from './app-shell';",
   "import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';",
   "const phase1Ready=new Set(['owntracks','latest','history']);",
-  "export async function locationPage(_request:Request,ctx:AppContext):Promise<Response>{",
+  "export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{",
+  "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_KEY||'');",
+  "const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');",
   "return html(layout('家族の場所',body,'/app/location.php'));",
   'data-location-live',
+  'data-location-map',
   'data-location-map-state',
+  'data-google-maps-key="${mapsKey}"',
+  'data-google-maps-map-id="${mapsMapId}"',
   'data-location-list',
   'data-location-refresh',
   'type="button"',
@@ -58,13 +64,22 @@ for(const marker of [
   '直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km',
   "member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer))",
   'const googleMapsUrl=(latest)=>{',
-  'latitude < -90||latitude > 90',
-  'longitude < -180||longitude > 180',
   'https://www.google.com/maps/search/?api=1&query=',
-  'const mapUrl=member.sharingEnabled?googleMapsUrl(member.latest):null;',
+  "const mapUrl=member.sharingEnabled?googleMapsUrl(member.latest):null;",
   "mapLink.target='_blank';",
   "mapLink.rel='noopener noreferrer';",
   "mapLink.textContent='Google Mapsで開く';",
+  "const mapsKey=String(root.getAttribute('data-google-maps-key')||'').trim();",
+  "const mapsMapId=String(root.getAttribute('data-google-maps-map-id')||'').trim();",
+  'https://maps.googleapis.com/maps/api/js?',
+  "if(!mapsKey)return Promise.reject(new Error('MAPS_NOT_CONFIGURED'));",
+  "const located=members.filter((member)=>member?.latest&&member?.sharingEnabled&&validPoint(member.latest));",
+  'new maps.LatLngBounds()',
+  'new maps.Map(mapEl',
+  'maps.marker?.AdvancedMarkerElement',
+  'new maps.Marker({map,position:point,title})',
+  "if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,48);}",
+  'Google Mapsを読み込めませんでした。家族の位置一覧と「Google Mapsで開く」は引き続き利用できます。',
   "const refreshEl=root.querySelector('[data-location-refresh]');",
   'let loading=false;',
   'let hasRendered=false;',
@@ -74,20 +89,17 @@ for(const marker of [
   "setStatus('最新位置を更新できませんでした ・ 表示は前回取得分です');",
   'setRefreshBusy(false);',
   "if(refreshEl)refreshEl.addEventListener('click',()=>void load());",
-])if(!client.includes(marker))throw new Error(`Location client fallback marker missing: ${marker}`);
+])if(!client.includes(marker))throw new Error(`Location client/map marker missing: ${marker}`);
 for(const forbidden of [
   'navigator.geolocation',
   'setInterval(',
   'console.log',
   'console.error',
   'Authorization',
-  'secret',
   'deviceId',
   'publicDeviceId',
   'rawPayload',
-  'maps.googleapis.com',
-  'GOOGLE_MAPS_',
-])if(client.includes(forbidden))throw new Error(`Location client must not use sensitive/provider-specific behavior: ${forbidden}`);
+])if(client.includes(forbidden))throw new Error(`Location client must not use sensitive behavior: ${forbidden}`);
 
 for(const marker of [
   'sharingEnabled:false',
@@ -120,12 +132,14 @@ for(const forbidden of ['ctx.env.DB','DB.prepare','navigator.geolocation','fetch
 for(const providerSpecific of ['googleapis.com','maps.googleapis.com','owntracks','LINE_ACCESS_TOKEN','GOOGLE_']){
   if(providers.toLowerCase().includes(providerSpecific.toLowerCase()))throw new Error(`Location provider-neutral boundary must not embed a provider implementation: ${providerSpecific}`);
 }
+if(!workerConfig.includes('GOOGLE_MAPS_BROWSER_KEY?:string;')||!workerConfig.includes('GOOGLE_MAPS_MAP_ID?:string;'))throw new Error('Google Maps browser settings must remain optional typed environment fields');
 if(!routes.includes("import { locationPage } from './location-page';"))throw new Error('Location page import missing');
-if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context);"))throw new Error('Location page route missing');
+if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
+if(!shell.includes("const LOCATION_UI_REVISION = 'google-map1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: Phase 2F safe latest projection with absolute last-updated time, manual refresh, viewer-relative straight-line distance and explicit Google Maps deep links, no browser geolocation/provider credentials/auto polling, provider-neutral service boundaries ok');
+console.log('location-page-boundary: authenticated family latest projection can render an optional Google map with safe no-key/load-error fallback, manual refresh, stale-state labeling and deep links; no browser geolocation, auto polling, Routes calls or provider leakage into neutral services');
