@@ -43,7 +43,7 @@ for(const sentinel of [
   'env.MORNING_DIGEST_GEMINI_MODEL_FALLBACK',
   'env.MORNING_DIGEST_AI_ENABLED',
   'for(let attempt=0;attempt<models.length;attempt++)',
-  'return options[0];',
+  'return fallbackFrame;',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`dedicated morning Gemini route missing: ${sentinel}`);
 }
@@ -53,7 +53,7 @@ for(const sentinel of [
   'reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)',
   'response.status===429',
   'await blockMorningDigestAiAfter429(env.DB,localDate)',
-  'await finalizeFrameSafely(env,familyId,localDate,options[0])',
+  'await finalizeFrameSafely(env,familyId,localDate,fallbackFrame)',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`morning Gemini persistent cost guard missing: ${sentinel}`);
 }
@@ -119,16 +119,16 @@ const liveGemini=chooseFrameBody.indexOf('await geminiFetch(env,model,body)');
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
   throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
 }
-if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||persistedGuardRead<0||profileLoader<0||aiEligibilityGuard<0||persistedGuardRead<aiEligibilityGuard||profileLoader<persistedGuardRead){
-  throw new Error('optional AI profile context must be reached only after receipt gating, Gemini eligibility and persisted daily guard');
+if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||persistedGuardRead<0||profileLoader<0||aiEligibilityGuard<0){
+  throw new Error('morning frame must retain persisted daily guard, consent-filtered profile projection, and explicit Gemini eligibility');
 }
-if(reservation<0||liveGemini<0||reservation>liveGemini)throw new Error('every morning Gemini live call must reserve bounded daily budget first');
+if(reservation<0||liveGemini<0||reservation>liveGemini||reservation<persistedGuardRead||reservation<profileLoader||reservation<aiEligibilityGuard)throw new Error('every morning Gemini live call must follow persisted/profile/eligibility checks and reserve bounded daily budget first');
 const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
 if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
   throw new Error('authoritative Family Log/schedule/task/advice sections must render before optional Location enrichment');
 }
-const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction morningVariant(',adviceStart);
+const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction buildEvidencePraise(',adviceStart);
 const adviceBody=adviceStart>=0&&adviceEnd>adviceStart?digest.slice(adviceStart,adviceEnd):'';
 if(!adviceBody||/familyLog|\.location|MILK|BREASTFEED|DIAPER|TEMPERATURE|WEIGHT|HEIGHT|MEDICINE/i.test(adviceBody)){
   throw new Error('morning advice must remain bounded to task/schedule planning facts, not health/body/location inference');
