@@ -4,6 +4,7 @@ import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from 
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { buildLocationDigestDayFacts, type LocationDigestDayFacts } from './location-day-summary';
 import { blockMorningDigestAiAfter429, finalizeMorningDigestFrame, readFinalizedMorningDigestFrame, reserveMorningDigestAiRequest } from './line-daily-digest-ai-guard';
+import { formatMorningWeather, loadMorningWeatherFact, type MorningWeatherFact } from './line-daily-digest-weather';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
 
 type Row=Record<string,unknown>;
@@ -74,9 +75,30 @@ function morningProfilePromptContext(profiles:FamilyAiSafeProfileContext[]):stri
   return Array.from(JSON.stringify(minimized)).slice(0,MAX_MORNING_PROFILE_CONTEXT_CHARS).join('');
 }
 
-function morningPersonalNoteOptions(profiles:FamilyAiSafeProfileContext[]):string[]{
+function morningVariant(localDate:string,offset:number,size:number):number{
+  let hash=offset>>>0;
+  for(const ch of localDate)hash=((hash*33)^ch.charCodeAt(0))>>>0;
+  return size?hash%size:0;
+}
+
+function morningPersonalNoteOptions(profiles:FamilyAiSafeProfileContext[],localDate:string):string[]{
+  const options:string[]=[];
+  const memoProfiles=profiles.filter(profile=>clean(profile.personality_note,72)).slice(0,3);
+  if(memoProfiles.length){
+    const start=morningVariant(localDate,53,memoProfiles.length);
+    for(let offset=0;offset<memoProfiles.length;offset++){
+      const profile=memoProfiles[(start+offset)%memoProfiles.length];
+      const name=clean(profile.display_name,24),memo=clean(profile.personality_note,72);
+      const variants=[
+        `家族メモから${name}の「${memo}」をひとつ。今日はこの話をきっかけに、のんびり話せたらよさそうです。`,
+        `${name}のメモには「${memo}」。そんな一面を思い出しつつ、今日も家族でゆるくいきましょう。`,
+        `今朝は${name}の「${memo}」というメモから。いつもの一日にも、小さな話題がひとつあるといいですね。`,
+      ];
+      options.push(variants[morningVariant(localDate,71+offset,variants.length)]);
+    }
+  }
   const names=profiles.map(profile=>clean(profile.display_name,24)).filter(Boolean).slice(0,3);
-  const options=['今日も家族それぞれのペースで、できることからひとつずつ。'];
+  if(!options.length)options.push('今日も家族それぞれのペースで、できることからひとつずつ。');
   for(const name of names)options.push(`${name}も家族のみんなも、今日をそれぞれのペースで。`);
   return options.slice(0,MAX_MORNING_PERSONAL_NOTE_OPTIONS);
 }
@@ -98,25 +120,27 @@ async function finalizeFrameSafely(env:Env,familyId:number,localDate:string,fram
 
 async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
-  if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return options[0];
+  if(tone==='PLAIN')return options[0];
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
     if(persisted){return persistedMorningFrame(persisted,options)||options[0];}
-  }catch{return options[0];/* Missing/unavailable guard storage fails closed to deterministic prose. */}
+  }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   let profiles:FamilyAiSafeProfileContext[]=[];
   let profileContext='[]';
   try{
     profiles=await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate);
     profileContext=morningProfilePromptContext(profiles);
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
-  const noteOptions=morningPersonalNoteOptions(profiles);
+  const noteOptions=morningPersonalNoteOptions(profiles,localDate);
+  const fallbackFrame:Frame={...options[0],personalNote:noteOptions[0]};
+  if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
   const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体と家族向け短文を選びます。返答はJSONだけ。{"opener":0,"closing":0,"note":0} の整数indexだけを返してください。自由文は生成しないでください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。候補選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; note_candidates=${JSON.stringify(noteOptions)}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:100}};
   const models=morningDigestModels(env);
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];
     let reserved=false;
-    try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return options[0];}
-    if(!reserved){await finalizeFrameSafely(env,familyId,localDate,options[0]);return options[0];}
+    try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return fallbackFrame;}
+    if(!reserved){await finalizeFrameSafely(env,familyId,localDate,fallbackFrame);return fallbackFrame;}
     try{
       const response=await geminiFetch(env,model,body);
       if(response.status===429){try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{/* The current bounded fallback may proceed even if circuit persistence fails. */}}
@@ -132,8 +156,8 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
       }
     }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
   }
-  await finalizeFrameSafely(env,familyId,localDate,options[0]);
-  return options[0];
+  await finalizeFrameSafely(env,familyId,localDate,fallbackFrame);
+  return fallbackFrame;
 }
 
 function logFact(row:Row):string{
@@ -205,12 +229,6 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
   return advice.slice(0,2);
 }
 
-function morningVariant(localDate:string,offset:number,size:number):number{
-  let hash=offset>>>0;
-  for(const ch of localDate)hash=((hash*33)^ch.charCodeAt(0))>>>0;
-  return size?hash%size:0;
-}
-
 function buildEvidencePraise(payload:DigestFactPayload):string[]{
   const praise:string[]=[];
   if(payload.familyLog.previous.length){
@@ -257,8 +275,9 @@ function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
   return [...kept,...requiredSuffix].join('\n').slice(0,MAX_MORNING_DIGEST_CHARS);
 }
 
-function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
+function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:MorningWeatherFact|null):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
+  if(weather)lines.push('【今日の天気】',formatMorningWeather(weather));
   if(frame.personalNote)lines.push('【家族のひとこと】',`💬 ${frame.personalNote}`);
   const praise=buildEvidencePraise(payload);
   if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
@@ -286,10 +305,12 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
     const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
     let frame:Frame|undefined;
     let locationFacts:LocationDigestDayFacts|undefined;
+    let weatherFact:MorningWeatherFact|null|undefined;
     for(const member of recipients.results){
       const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
       const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
       try{
+        if(weatherFact===undefined)weatherFact=await loadMorningWeatherFact(env.DB,Number(setting.family_id),localDate,timezone);
         if(!locationFacts){
           const requesterMemberId=Number(member.id);
           locationFacts=Number.isSafeInteger(requesterMemberId)&&requesterMemberId>0
@@ -305,7 +326,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
         }
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
         frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate);
-        const message=renderDeterministicFacts(facts,frame);
+        const message=renderDeterministicFacts(facts,frame,weatherFact);
         const retryKey=await morningDigestRetryKey(Number(setting.family_id),Number(member.id),localDate);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message,{retryKey});
         await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
