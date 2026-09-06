@@ -56,6 +56,7 @@ assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must 
 for(const marker of [
   "fetch('/api/task-rough-input'",
   'firstHttpUrl(item.originalText)',
+  "!u.username&&!u.password",
   'class="rough-draft-category"',
   '<details class="rough-advanced"><summary>詳細設定</summary>',
   'class="rough-main-calendar-visible"',
@@ -70,6 +71,9 @@ for(const marker of [
   'rough-child-assignees',
   'rough-item-assignees',
   'class="rough-draft-url"',
+  "item.dueTime?false:",
+  "selectedRowAssignees",
+  "syncItemFromRow(item,row)",
   '必要な項目だけ確認し、間違いがあれば修正してください。詳細設定は必要なときだけ開けます。',
 ])assert.ok(roughInputUi.includes(marker),`rough-input progressive confirmation marker missing: ${marker}`);
 assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
@@ -90,9 +94,11 @@ for(const marker of [
   "task_id:taskId||0",
   "const structuredPreview=preview.querySelector('.rough-advanced,.rough-row-details')",
   'if(preview.hidden||!rows.length||!structuredPreview)return;',
+  "response.status>=500||!data||response.ok",
+  "!u.username&&!u.password",
 ])assert.ok(roughInputSave.includes(marker),`rough-input explicit save guard missing: ${marker}`);
 assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(roughInputSave),'save companion must never call Gemini directly');
-assert.ok(roughInputSave.indexOf('if(!confirm(')<roughInputSave.indexOf('saveRows(rows)'),'explicit user confirmation must occur before save orchestration');
+assert.ok(roughInputSave.indexOf('if(!confirm(')<roughInputSave.indexOf('try{const result=await saveRows(rows)'),'explicit user confirmation must occur before save orchestration');
 assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input companions must be scoped to the server-rendered task-new marker');
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
