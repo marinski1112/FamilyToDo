@@ -34,8 +34,12 @@ if(!digest.includes("if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!
 if(!digest.includes('Optional personalization context must never block the deterministic morning digest'))throw new Error('profile lookup failure must remain non-blocking');
 if(!digest.includes("血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください"))throw new Error('sensitive-attribute anti-inference prompt guard missing');
 if(!digest.includes('決定論的な予定・記録の事実を変更しないでください'))throw new Error('deterministic fact authority guard missing');
-if(/buildEvidencePraise[\s\S]{0,1800}(geminiFetch|fetch\(|Routes|Maps)/.test(digest))throw new Error('evidence praise must remain deterministic and local');
-if(/morningPersonalNoteOptions[\s\S]{0,2200}(geminiFetch|fetch\(|Routes|Maps)/.test(digest))throw new Error('memo-guided note candidates must remain deterministic and local');
+const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
+const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';
+if(!praiseBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(praiseBody))throw new Error('evidence praise must remain deterministic and local');
+const noteStart=digest.indexOf('function morningPersonalNoteOptions('),noteEnd=digest.indexOf('\nfunction persistedMorningFrame(',noteStart);
+const noteBody=noteStart>=0&&noteEnd>noteStart?digest.slice(noteStart,noteEnd):'';
+if(!noteBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(noteBody))throw new Error('memo-guided note candidates must remain deterministic and local');
 
 await import('./line-daily-digest-weather-contract.mjs');
 console.log('line-daily-digest-personal-note-contract: consent-filtered memo candidates vary by local date; AI selects indexes only; deterministic fallback remains useful');
