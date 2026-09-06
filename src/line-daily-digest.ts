@@ -229,6 +229,30 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
   return advice.slice(0,2);
 }
 
+function buildPreviousFamilyRecap(payload:DigestFactPayload):string[]{
+  const logs=payload.familyLog.previous.length;
+  const movement=payload.location.previous.length>0;
+  if(!logs&&!movement)return [];
+  const variants:string[]=[];
+  if(logs&&movement){
+    variants.push(
+      `昨日は家族ログが${logs}項目、移動の記録も残りました。家族みんな、それぞれの一日をしっかり積み重ねられています。`,
+      `昨日は${logs}項目の家族記録に加えて移動の記録もありました。みんなそれぞれ動いた一日、おつかれさまでした。`,
+    );
+  }else if(logs){
+    variants.push(
+      `昨日は家族ログが${logs}項目残りました。何気ない一日も、こうして記録が積み上がっているのがいいですね。`,
+      `昨日の家族記録は${logs}項目。ひとつひとつ残せていて、家族の一日がちゃんと見える形になっています。`,
+    );
+  }else{
+    variants.push(
+      '昨日は移動の記録が残りました。家族みんな、それぞれの場所で一日おつかれさまでした。',
+      '昨日の移動記録も確認できました。みんなそれぞれ動いた一日、本当におつかれさまでした。',
+    );
+  }
+  return [variants[morningVariant(payload.localDate,91,variants.length)]];
+}
+
 function buildEvidencePraise(payload:DigestFactPayload):string[]{
   const praise:string[]=[];
   if(payload.familyLog.previous.length){
@@ -255,10 +279,10 @@ function buildEvidencePraise(payload:DigestFactPayload):string[]{
     ];
     praise.push(variants[morningVariant(payload.localDate,37,variants.length)]);
   }
-  if(!praise.length&&payload.location.previous.length){
-    praise.push('昨日の移動記録も残っています。家族みんな、一日おつかれさまでした。');
+  if(payload.location.previous.length&&praise.length<3){
+    praise.push('昨日の移動記録も残っています。家族みんな、それぞれの一日をしっかり過ごせました。');
   }
-  return praise.slice(0,2);
+  return praise.slice(0,3);
 }
 
 function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
@@ -279,6 +303,8 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(weather)lines.push('【今日の天気】',formatMorningWeather(weather));
   if(frame.personalNote)lines.push('【家族のひとこと】',`💬 ${frame.personalNote}`);
+  const recap=buildPreviousFamilyRecap(payload);
+  if(recap.length)lines.push('【昨日の家族まとめ】',...recap.map(x=>`✨ ${x}`));
   const praise=buildEvidencePraise(payload);
   if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
