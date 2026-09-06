@@ -81,6 +81,56 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
   };
 
+  const markerInitial=(name)=>Array.from(String(name||'家族').trim())[0]||'家';
+
+  const makeFamilyMarkerContent=(member)=>{
+    const name=String(member?.name||'家族').trim()||'家族';
+    const wrap=document.createElement('div');
+    wrap.className='location-family-map-marker';
+    wrap.dataset.state=String(member?.state||'NO_LOCATION');
+    wrap.dataset.viewer=member?.isViewer?'true':'false';
+    wrap.style.display='grid';
+    wrap.style.justifyItems='center';
+    wrap.style.gap='3px';
+    wrap.style.opacity=member?.state==='STALE'?'0.72':'1';
+    wrap.style.fontFamily='-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+    wrap.style.pointerEvents='none';
+
+    const bubble=document.createElement('div');
+    bubble.className='location-family-map-marker-bubble';
+    bubble.textContent=markerInitial(name);
+    bubble.style.width='44px';
+    bubble.style.height='44px';
+    bubble.style.borderRadius='50%';
+    bubble.style.display='grid';
+    bubble.style.placeItems='center';
+    bubble.style.background=member?.isViewer?'#0f766e':'#4f46e5';
+    bubble.style.color='#fff';
+    bubble.style.border='3px solid #fff';
+    bubble.style.boxShadow=member?.isViewer?'0 0 0 3px rgba(15,118,110,.28),0 4px 12px rgba(15,23,42,.28)':'0 4px 12px rgba(15,23,42,.28)';
+    bubble.style.fontSize='18px';
+    bubble.style.fontWeight='800';
+    bubble.style.lineHeight='1';
+
+    const label=document.createElement('div');
+    label.className='location-family-map-marker-label';
+    label.textContent=name;
+    label.style.maxWidth='112px';
+    label.style.overflow='hidden';
+    label.style.textOverflow='ellipsis';
+    label.style.whiteSpace='nowrap';
+    label.style.padding='3px 8px';
+    label.style.borderRadius='999px';
+    label.style.background='rgba(255,255,255,.96)';
+    label.style.border='1px solid rgba(226,232,240,.96)';
+    label.style.boxShadow='0 2px 8px rgba(15,23,42,.18)';
+    label.style.color='#1e293b';
+    label.style.fontSize='11px';
+    label.style.fontWeight='700';
+    wrap.append(bubble,label);
+    return wrap;
+  };
+
   const setStatus=(text)=>{
     if(statusEl)statusEl.textContent=text;
   };
@@ -264,9 +314,9 @@
         bounds.extend(point);
         const title=String(member.name||'家族');
         if(mapsMapId&&maps.marker?.AdvancedMarkerElement){
-          markers.push(new maps.marker.AdvancedMarkerElement({map,position:point,title}));
+          markers.push(new maps.marker.AdvancedMarkerElement({map,position:point,title,content:makeFamilyMarkerContent(member)}));
         }else{
-          markers.push(new maps.Marker({map,position:point,title}));
+          markers.push(new maps.Marker({map,position:point,title,label:{text:markerInitial(title),color:'#fff',fontWeight:'700'}}));
         }
       }
       if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}

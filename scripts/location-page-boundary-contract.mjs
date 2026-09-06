@@ -74,6 +74,13 @@ for(const marker of [
   'new maps.Map(mapEl',
   'fullscreenControlOptions:{position:maps.ControlPosition.RIGHT_CENTER}',
   'map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56})',
+  'const markerInitial=(name)=>Array.from(String(name||\'家族\').trim())[0]||\'家\';',
+  'const makeFamilyMarkerContent=(member)=>{',
+  "wrap.className='location-family-map-marker';",
+  "bubble.className='location-family-map-marker-bubble';",
+  "label.className='location-family-map-marker-label';",
+  'content:makeFamilyMarkerContent(member)',
+  "label:{text:markerInitial(title),color:'#fff',fontWeight:'700'}",
   'maps.marker?.AdvancedMarkerElement',
   "etaButton.textContent='車で何分？';",
   "fetch('/api/location/eta'",
@@ -137,7 +144,7 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'maps-hero-inset1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
