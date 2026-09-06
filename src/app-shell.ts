@@ -41,8 +41,7 @@ export function layout(title: string, body: string, active = ''): string {
   const extra=calendarExtra+familyLogExtra+locationExtra;
   // Every server-rendered native temporal control passes through one component.
   // Keeping padding/border on the shell avoids WebKit 301648's width:100% + padding bug.
-  const compactBody=body
-    .replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`)
+  const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`)
     .replace(/\/assets\/task-edit\.js\?v=[^"'<>\s]+/g,`/assets/task-edit.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`)
     .replace(/\/assets\/task-view\.js\?v=[^"'<>\s]+/g,`/assets/task-view.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`);
   const roughInputExtra=compactBody.includes('id="taskNewPayload"')?`<script src="/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1"></script><script src="/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1"></script>`:'';
