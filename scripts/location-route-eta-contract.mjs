@@ -17,8 +17,11 @@ for(const marker of [
   'service.latest({scope,subjectMemberId:requesterMemberId})',
   'service.latest({scope,subjectMemberId:targetMemberId})',
   'MAX_LOCATION_AGE_MS=30*60*1000',
-  'GOOGLE_MAPS_ROUTES_API_KEY||ctx.env.GOOGLE_MAPS_ROUTE_API_KEY',
+  "destinationKind==='HOME'",
+  "WHERE family_id=? AND kind='HOME'",
+  "HOME_NOT_CONFIGURED",
   "mode:'drive'",
+  'GOOGLE_MAPS_ROUTES_API_KEY||ctx.env.GOOGLE_MAPS_ROUTE_API_KEY',
   "'cache-control':'no-store'",
 ])assert.ok(api.includes(marker),`ETA API boundary missing: ${marker}`);
 
@@ -36,6 +39,8 @@ for(const marker of [
 assert.ok(latest.includes('memberId:subjectMemberId')&&latest.includes('isViewer:subjectMemberId===requesterMemberId'),'browser projection must expose only scoped member identity needed for explicit ETA actions');
 assert.ok(routes.includes("import { locationRouteEtaApi } from './location-route-api';")&&routes.includes("if(url.pathname==='/api/location/eta') return await locationRouteEtaApi(request,context);"),'authenticated ETA route must be wired');
 assert.ok(worker.includes('GOOGLE_MAPS_ROUTES_API_KEY?:string;')&&worker.includes('GOOGLE_MAPS_ROUTE_API_KEY?:string;'),'expected Routes secret naming variants must be typed');
+assert.ok(api.includes("hasHomeDestination?{destinationKind:'HOME'}:{targetMemberId}"),'HOME ETA response must identify a static HOME destination without exposing coordinates');
+assert.ok(!api.includes('body.latitude')&&!api.includes('body.longitude'),'ETA browser payload must never accept arbitrary coordinates');
 
 for(const source of [api,provider]){
   assert.ok(!source.includes('console.log')&&!source.includes('console.error'),'route path must not log coordinates or provider failures');
