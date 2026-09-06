@@ -45,11 +45,16 @@ for(const marker of [
   'deterministicItems(parsed.fields)',
   'sourceIndex',
   "field.lines.includes(originalText)",
+  'observed=new Map<string,number>()',
+  'required=new Map<string,number>()',
+  "if((observed.get(key)||0)<count)return null",
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
 assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must not inherit arbitrary family-selected Gemini models');
 assert.ok(roughInputUi.includes("fetch('/api/task-rough-input'"),'rough-input UI must call the bounded analysis endpoint');
 assert.ok(roughInputUi.includes("if(typeof fallbackPreview==='function')fallbackPreview.call(button)"),'rough-input UI must retain deterministic local fallback');
+assert.ok(roughInputUi.includes('const fields=fieldPayload(),requestSnapshot=snapshot(fields)'),'rough-input UI must snapshot the submitted controls');
+assert.ok(roughInputUi.includes('if(snapshot(fieldPayload())!==requestSnapshot)return;'),'rough-input UI must discard responses for stale inputs');
 assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input AI companion must be scoped to the server-rendered task-new marker');
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-gemini-draft1'),'rough-input AI companion asset must be cache-versioned');
 
