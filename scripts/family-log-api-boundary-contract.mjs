@@ -44,6 +44,9 @@ for(const marker of [
   "import { familyLogApi } from './family-log-api';",
   "export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{",
   "request.clone()",
+  "action==='subject_update'",
+  "UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND subject_id=?",
+  "drainPendingFamilyLogMedia(ctx.env,familyId)",
   "String(body.action||'')!=='quick_action_disable'",
   "const expectedCsrf=String(ctx.session?.csrfToken||''),csrf=String(body.csrf||'');",
   "if(!expectedCsrf||!csrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF検証に失敗しました。'},403);",
@@ -58,8 +61,8 @@ for(const marker of [
 ]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost pre-mutation quick-action tenant/audit guard: ${marker}`);
 
 const guardQuery=boundary.indexOf('SELECT id,active,name FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1');
-const mutationCall=boundary.indexOf('const response=await familyLogApi(request,ctx);');
-const auditCall=boundary.indexOf("logActivity(ctx,'DISABLED','family_log_quick_action',id");
+const mutationCall=guardQuery<0?-1:boundary.indexOf('const response=await familyLogApi(request,ctx);',guardQuery);
+const auditCall=boundary.indexOf("logActivity(ctx,'DISABLED','family_log_quick_action',id",Math.max(0,mutationCall));
 if(guardQuery<0||mutationCall<0||auditCall<0||guardQuery>mutationCall||mutationCall>auditCall)throw new Error('quick-action tenant validation must precede canonical mutation, and audit logging must follow successful canonical mutation');
 
 if(!routes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('context API dispatcher must import retained Family Log mutation boundary');

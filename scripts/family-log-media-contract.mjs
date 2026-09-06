@@ -5,6 +5,7 @@ const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const boundary=fs.readFileSync('src/family-log-mutation-boundary.ts','utf8');
 const importBoundary=fs.readFileSync('src/family-log-import-media-boundary.ts','utf8');
 const migration=fs.readFileSync('migrations/0057_family_log_baby_food_media.sql','utf8');
+const migrationSql=migration.replace(/^\s*--.*$/gm,'');
 
 const checks=[
   [routes.includes("url.pathname==='/api/family-log-media'"),'Family Log media route is missing'],
@@ -20,19 +21,21 @@ const checks=[
   [api.includes("JOIN family_logs l ON l.id=m.log_id AND l.family_id=m.family_id AND l.subject_id=m.subject_id"),'media reads must retain parent family/subject scope'],
   [boundary.includes("action==='delete'")&&boundary.includes('cleanupFamilyLogMediaForLog'),'Family Log delete lifecycle cleanup hook is missing'],
   [boundary.includes("action==='save'")&&boundary.includes('reconcileFamilyLogMediaForLog'),'Family Log edit lifecycle reconciliation hook is missing'],
-  [importBoundary.includes('familyLogImportApi(request,context)')&&importBoundary.includes('drainPendingFamilyLogMedia'),'import rollback reconciliation must drain immediately actionable work'],
+  [boundary.includes("action==='subject_update'")&&boundary.includes("UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND subject_id=?")&&boundary.includes('drainPendingFamilyLogMedia'),'subject-kind changes must explicitly mark and drain affected media without relying on D1 triggers'],
+  [importBoundary.includes('familyLogImportApi(request,context)')&&importBoundary.includes("UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=?")&&importBoundary.includes('drainPendingFamilyLogMedia'),'import reconciliation must explicitly mark and drain family media without relying on D1 triggers'],
   [migration.includes('family_log_media_cleanup_queue')&&migration.includes('reconcile_pending'),'durable R2 cleanup/reconciliation state is missing'],
   [migration.includes("purpose TEXT NOT NULL CHECK (purpose IN ('ORPHAN','DELETE'))")&&api.includes("queueObjectCleanup(context.env,s.familyId,objectKey,'ORPHAN')")&&api.includes("queueObjectCleanup(env,familyId,key,'DELETE')"),'cleanup queue must distinguish orphan-upload compensation from intentional deletion'],
   [api.includes("purpose==='ORPHAN'")&&api.includes('SELECT id FROM family_log_media WHERE family_id=? AND storage_key=? LIMIT 1'),'orphan retry must not delete an object already linked to valid metadata'],
   [api.includes("datetime(created_at)<=datetime('now','-5 minutes')"),'fresh ORPHAN cleanup must have an in-flight upload grace window'],
   [api.includes("if(purpose==='DELETE')")&&api.includes('DELETE FROM family_log_media WHERE family_id=? AND storage_key=?'),'successful queued DELETE must remove stale metadata'],
-  [api.includes('export async function drainPendingFamilyLogMedia')&&api.includes('for(let batch=0;batch<128;batch++)'),'import rollback cleanup must drain across bounded batches'],
+  [api.includes('export async function drainPendingFamilyLogMedia')&&api.includes('for(let batch=0;batch<128;batch++)'),'import cleanup must drain across bounded batches'],
   [api.includes('await context.env.MEDIA.delete(objectKey)')&&api.includes("DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?"),'failed metadata insert must compensate without racing fresh ORPHAN reconciliation'],
-  [migration.includes('trg_family_log_media_parent_reconcile')&&migration.includes('AFTER UPDATE OF deleted_at,subject_id,log_type,detail_code ON family_logs'),'parent mutation reconciliation trigger is missing'],
-  [migration.includes('trg_family_log_media_subject_reconcile')&&migration.includes('AFTER UPDATE OF subject_kind ON family_log_subjects'),'subject-kind reconciliation trigger is missing'],
+  [api.includes('VALUES(?,?,?,?,?,?,?,?,1)')&&api.includes('await reconcileFamilyLogMediaForLog(context.env,s.familyId,logId)')&&api.includes("BABY_FOOD_LOG_CHANGED"),'upload commit must remain pending until immediate parent revalidation closes edit/upload races'],
+  [!migrationSql.includes('CREATE TRIGGER'),'0057 executable SQL must remain free of CREATE TRIGGER bodies so remote Wrangler/D1 statement splitting cannot fail with incomplete input'],
+  [migrationSql.includes('DROP TRIGGER IF EXISTS trg_family_log_media_insert_scope')&&migrationSql.includes('DROP TRIGGER IF EXISTS trg_family_log_media_subject_reconcile'),'0057 must defensively remove any trigger left by a partial failed remote attempt'],
   [api.includes('queueObjectCleanup')&&api.includes('deleteQueuedObject')&&api.includes('attempts=attempts+1'),'failed R2 cleanup must remain retryable'],
   [migration.includes('UNIQUE (log_id)')&&migration.includes('UNIQUE (storage_key)'),'one-photo/internal-key uniqueness is missing'],
-  [migration.includes("RAISE(ABORT, 'family_log_media parent scope mismatch')")&&migration.includes("l.detail_code = 'BABY_FOOD'")&&migration.includes("s.subject_kind IN ('BABY','CHILD')"),'D1 parent tenant/subject guard is missing'],
+  [api.includes('babyFoodParent')&&api.includes('Number(parent.subject_id)')&&api.includes('created_by,created_at,reconcile_pending'),'application insert path must retain validated parent/subject/member metadata'],
   [!api.includes('console.log')&&!api.includes('console.error'),'media API must not log private media identifiers or content'],
 ];
 

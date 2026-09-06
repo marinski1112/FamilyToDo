@@ -248,14 +248,19 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
       try{
         await context.env.MEDIA.put(objectKey,buffer,{httpMetadata:{contentType:mime}});
         const result=await context.env.DB.prepare(`INSERT INTO family_log_media(family_id,log_id,subject_id,storage_key,mime_type,byte_size,created_by,created_at,reconcile_pending)
-          VALUES(?,?,?,?,?,?,?,?,0)`).bind(s.familyId,logId,Number(parent.subject_id),objectKey,mime,buffer.byteLength,s.memberId,new Date().toISOString()).run();
+          VALUES(?,?,?,?,?,?,?,?,1)`).bind(s.familyId,logId,Number(parent.subject_id),objectKey,mime,buffer.byteLength,s.memberId,new Date().toISOString()).run();
         await context.env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(s.familyId,objectKey).run();
-        const row:MediaRow={id:Number(result.meta.last_row_id),log_id:logId,subject_id:Number(parent.subject_id),storage_key:objectKey,mime_type:mime,byte_size:buffer.byteLength,reconcile_pending:0};
-        return json({ok:true,media:publicMetadata(row)},201);
+        await reconcileFamilyLogMediaForLog(context.env,s.familyId,logId);
+        const committed=await mediaByLog(context.env,s.familyId,logId);
+        if(!committed||Number(committed.id)!==Number(result.meta.last_row_id))return json({ok:false,error:'BABY_FOOD_LOG_CHANGED'},409);
+        return json({ok:true,media:publicMetadata(committed)},201);
       }catch(error){
         try{
-          await context.env.MEDIA.delete(objectKey);
-          await context.env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(s.familyId,objectKey).run();
+          const row=await mediaRowByLog(context.env,s.familyId,logId);
+          if(!row||String(row.storage_key)===objectKey){
+            await context.env.MEDIA.delete(objectKey);
+            await context.env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(s.familyId,objectKey).run();
+          }
         }catch{}
         if(await mediaByLog(context.env,s.familyId,logId))return json({ok:false,error:'PHOTO_ALREADY_EXISTS'},409);
         throw error;
