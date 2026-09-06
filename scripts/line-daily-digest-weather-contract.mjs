@@ -28,4 +28,6 @@ for(const marker of [
   "authoritative.push('【今日の天気】',formatMorningWeather(weather))",
 ])if(!digest.includes(marker))throw new Error(`morning weather wiring missing: ${marker}`);
 
+await import('./line-daily-digest-destination-contract.mjs');
+await import('./line-periodic-digest-contract.mjs');
 console.log('line-daily-digest-weather-contract: one claimed family/date fetch, coarse HOME coordinates, timeout/fail-open, no coordinate logging');

@@ -28,7 +28,7 @@ for(const sentinel of [
   '【今日のヒント】',
   'FAMILY_LOG_TYPE_META',
   "COALESCE(ds.enabled,1)=1",
-  "Number(receipt.attempt_count)>=3",
+  'receipts.filter(receipt=>Number(receipt.attempt_count)<3)',
   "message=renderDeterministicFacts",
   'buildLocationDigestDayFacts',
   '【昨日の移動】',
@@ -105,7 +105,7 @@ for(const sentinel of ['MORNING_DIGEST_AI_ENABLED?:string','MORNING_DIGEST_GEMIN
 }
 if(digest.includes('resolveFamilyGeminiModel'))throw new Error('morning digest must not inherit FamilyAI/global family model selection');
 if((digest.match(/await geminiFetch\(/g)||[]).length!==1)throw new Error('morning digest source must keep one bounded model-call site');
-const receiptGate=digest.indexOf("Number(receipt.attempt_count)>=3)continue");
+const receiptGate=digest.indexOf('const pending=receipts.filter(receipt=>Number(receipt.attempt_count)<3)');
 const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptGate);
 const frameInvocation=digest.indexOf('frame??=await chooseFrame(',receiptGate);
 const chooseFrameStart=digest.indexOf('async function chooseFrame(');
@@ -117,7 +117,7 @@ const profileLoader=chooseFrameBody.indexOf('await loadSafeFamilyAiProfileContex
 const reservation=chooseFrameBody.indexOf('reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)');
 const liveGemini=chooseFrameBody.indexOf('await geminiFetch(env,model,body)');
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
-  throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
+  throw new Error('optional Location history must be deferred until after destination receipt SENT/retry gating');
 }
 if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||persistedGuardRead<0||profileLoader<0||aiEligibilityGuard<0){
   throw new Error('morning frame must retain persisted daily guard, consent-filtered profile projection, and explicit Gemini eligibility');
@@ -152,4 +152,4 @@ for(const sentinel of [
 }
 if(locationSummary.includes('service.history({'))throw new Error('family-wide Location summaries must not regress to one D1 history statement per member');
 if(locationSummary.includes('console.'))throw new Error('location digest summary must not log location-derived data');
-console.log('LINE daily digest modularity contract: ok');
+console.log('LINE daily digest modularity contract: destination-group receipt gating and privacy-safe digest invariants ok');

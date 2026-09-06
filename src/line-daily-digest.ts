@@ -53,8 +53,8 @@ const morningDigestModels=(env:Env)=>{
   return primary===fallback?[primary]:[primary,fallback];
 };
 
-async function morningDigestRetryKey(familyId:number,memberId:number,localDate:string):Promise<string>{
-  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`familytodo:morning-digest:v1:${familyId}:${memberId}:${localDate}`)));
+async function morningDigestRetryKey(familyId:number,lineUserId:string,localDate:string):Promise<string>{
+  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`familytodo:morning-digest:v2:${familyId}:${lineUserId}:${localDate}`)));
   bytes[6]=(bytes[6]&0x0f)|0x80;
   bytes[8]=(bytes[8]&0x3f)|0x80;
   const hex=Array.from(bytes.slice(0,16),byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -344,37 +344,42 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
   for(const setting of settings.results){
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
     const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
-    const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
+    const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL ORDER BY m.id").bind(setting.family_id).all<Row>();
+    const destinations=new Map<string,Row[]>();
+    for(const member of recipients.results){const lineUserId=String(member.line_user_id||'');if(!lineUserId)continue;const group=destinations.get(lineUserId)||[];group.push(member);destinations.set(lineUserId,group);}
     let frame:Frame|undefined;
     let sharedAiFacts:DigestFactPayload|undefined;
-    let locationFacts:LocationDigestDayFacts|undefined;
     let weatherFact:MorningWeatherFact|null|undefined;
-    for(const member of recipients.results){
-      const n=utcNow();await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
-      const receipt=await env.DB.prepare("SELECT * FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
+    for(const [lineUserId,members] of destinations){
+      const n=utcNow(),receipts:Row[]=[];
+      for(const member of members){
+        await env.DB.prepare("INSERT OR IGNORE INTO line_daily_digest_receipts(family_id,member_id,local_date,status,attempt_count,created_at,updated_at) VALUES(?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,localDate,n,n).run();
+        const receipt=await env.DB.prepare("SELECT id,status,attempt_count FROM line_daily_digest_receipts WHERE family_id=? AND member_id=? AND local_date=?").bind(setting.family_id,member.id,localDate).first<Row>();if(receipt)receipts.push(receipt);
+      }
+      if(receipts.some(receipt=>String(receipt.status)==='SENT')){
+        for(const receipt of receipts.filter(receipt=>String(receipt.status)!=='SENT'))await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',last_error=NULL,updated_at=? WHERE id=?").bind(n,receipt.id).run();
+        continue;
+      }
+      const pending=receipts.filter(receipt=>Number(receipt.attempt_count)<3);if(!pending.length)continue;
       try{
         if(weatherFact===undefined)weatherFact=await loadMorningWeatherFact(env.DB,Number(setting.family_id),localDate,timezone);
         if(!sharedAiFacts)sharedAiFacts=await buildFactPayload(env,Number(setting.family_id),0,localDate,EMPTY_LOCATION_FACTS);
         frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate,sharedAiFacts,weatherFact);
-        if(!locationFacts){
-          const requesterMemberId=Number(member.id);
-          locationFacts=Number.isSafeInteger(requesterMemberId)&&requesterMemberId>0
-            ?await buildLocationDigestDayFacts({
-              db:env.DB,
-              familyId:Number(setting.family_id),
-              requesterMemberId,
-              previousDate:dateBefore(localDate),
-              localDate,
-              timeZone:timezone,
-            })
+        let facts:DigestFactPayload;
+        if(members.length===1){
+          const requesterMemberId=Number(members[0].id);
+          const locationFacts=Number.isSafeInteger(requesterMemberId)&&requesterMemberId>0
+            ?await buildLocationDigestDayFacts({db:env.DB,familyId:Number(setting.family_id),requesterMemberId,previousDate:dateBefore(localDate),localDate,timeZone:timezone})
             :EMPTY_LOCATION_FACTS;
+          facts=await buildFactPayload(env,Number(setting.family_id),requesterMemberId,localDate,locationFacts);
+        }else{
+          facts=sharedAiFacts;
         }
-        const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
         const message=renderDeterministicFacts(facts,frame,weatherFact);
-        const retryKey=await morningDigestRetryKey(Number(setting.family_id),Number(member.id),localDate);
-        const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message,{retryKey});
-        await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
-      }catch(error){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),n,receipt.id).run();}
+        const retryKey=await morningDigestRetryKey(Number(setting.family_id),lineUserId,localDate);
+        const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,lineUserId,message,{retryKey});
+        for(const receipt of pending)await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
+      }catch(error){for(const receipt of pending)await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),n,receipt.id).run();}
     }
   }
 }
