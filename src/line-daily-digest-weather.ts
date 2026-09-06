@@ -25,7 +25,7 @@ function weatherSummary(code:number):string{
   return '天気情報';
 }
 
-function parseFact(raw:unknown):MorningWeatherFact|null{
+function parseProviderFact(raw:unknown):MorningWeatherFact|null{
   const daily=(raw as any)?.daily;
   const code=finite(daily?.weather_code?.[0]);
   const high=finite(daily?.temperature_2m_max?.[0]);
@@ -42,7 +42,13 @@ function parseFact(raw:unknown):MorningWeatherFact|null{
 
 function cachedFact(payload:unknown):MorningWeatherFact|null{
   if(typeof payload!=='string'||!payload)return null;
-  try{return parseFact(JSON.parse(payload));}catch{return null;}
+  try{
+    const value=JSON.parse(payload) as Record<string,unknown>;
+    const low=finite(value.lowC),high=finite(value.highC),rain=finite(value.precipitationProbability);
+    const summary=String(value.summary||'').trim().slice(0,20);
+    if(!summary||low===null||high===null)return null;
+    return {summary,lowC:round1(low),highC:round1(high),...(rain===null?{}:{precipitationProbability:Math.max(0,Math.min(100,Math.round(rain)))})};
+  }catch{return null;}
 }
 
 export async function loadMorningWeatherFact(db:D1Database,familyId:number,localDate:string,timeZone:string):Promise<MorningWeatherFact|null>{
@@ -73,9 +79,9 @@ export async function loadMorningWeatherFact(db:D1Database,familyId:number,local
     let response:Response;
     try{response=await fetch(`${WEATHER_ENDPOINT}?${params}`,{signal:controller.signal});}finally{clearTimeout(timeout);}
     if(!response.ok)throw new Error(`WEATHER_HTTP_${response.status}`);
-    const fact=parseFact(await response.json());
+    const fact=parseProviderFact(await response.json());
     if(!fact)throw new Error('WEATHER_INVALID_RESPONSE');
-    await db.prepare("UPDATE line_daily_digest_weather_cache SET status='READY',payload_json=?,updated_at=? WHERE family_id=? AND local_date=?").bind(JSON.stringify({daily:{weather_code:[Object.entries({'晴れ':0,'晴れ時々くもり':1,'くもり':3,'霧':45,'雨':61,'雪':71,'にわか雨':80,'にわか雪':85,'雷雨':95,'天気情報':-1}).find(([label])=>label===fact.summary)?.[1]??-1],temperature_2m_max:[fact.highC],temperature_2m_min:[fact.lowC],precipitation_probability_max:[fact.precipitationProbability??null]}}),new Date().toISOString(),familyId,localDate).run();
+    await db.prepare("UPDATE line_daily_digest_weather_cache SET status='READY',payload_json=?,updated_at=? WHERE family_id=? AND local_date=?").bind(JSON.stringify(fact),new Date().toISOString(),familyId,localDate).run();
     return fact;
   }catch{
     await db.prepare("UPDATE line_daily_digest_weather_cache SET status='FAILED',payload_json=NULL,updated_at=? WHERE family_id=? AND local_date=?").bind(new Date().toISOString(),familyId,localDate).run();
