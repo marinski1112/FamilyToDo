@@ -15,6 +15,23 @@
   };
   let failure='';
   let showingFailure=false;
+  let mapsScripts=0;
+  let scriptLoads=0;
+  let scriptErrors=0;
+  let authFailures=0;
+  let mapEverVisible=Boolean(mapEl&&!mapEl.hidden);
+  let authAfterVisible=false;
+  let googleMapsAtAuth=false;
+  let firstKey='';
+  let keysDiffer=false;
+
+  const diagnosticText=()=>{
+    const visibility=mapEverVisible?'地図表示成功あり':'地図表示成功なし';
+    const authTiming=authFailures?(authAfterVisible?'表示後にauth failure':'表示前にauth failure'):'auth failureなし';
+    const googleState=authFailures?(googleMapsAtAuth?'auth時 google.mapsあり':'auth時 google.mapsなし'):'auth時状態なし';
+    const keyState=mapsScripts>1?(keysDiffer?'複数scriptでキー差異あり':'複数scriptは同一キー'):'Maps script単一';
+    return `診断: Maps script ${mapsScripts}回 / load ${scriptLoads}回 / script error ${scriptErrors}回 / ${visibility} / auth ${authFailures}回・${authTiming} / ${googleState} / ${keyState}`;
+  };
 
   const showFailure=()=>{
     const message=messages[failure];
@@ -22,12 +39,38 @@
     showingFailure=true;
     if(mapEl&&!mapEl.hidden)mapEl.hidden=true;
     if(mapStateEl.hidden)mapStateEl.hidden=false;
-    if(mapStateEl.textContent!==message)mapStateEl.textContent=message;
+    const text=`${message}\n${diagnosticText()}`;
+    if(mapStateEl.textContent!==text)mapStateEl.textContent=text;
     queueMicrotask(()=>{showingFailure=false;});
   };
 
+  const trackMapsScript=(script)=>{
+    if(!(script instanceof HTMLScriptElement)||!script.src.startsWith('https://maps.googleapis.com/maps/api/js?'))return;
+    mapsScripts+=1;
+    try{
+      const key=new URL(script.src).searchParams.get('key')||'';
+      if(mapsScripts===1)firstKey=key;
+      else if(key!==firstKey)keysDiffer=true;
+    }catch(_error){}
+    script.addEventListener('load',()=>{scriptLoads+=1;if(failure)showFailure();},{once:true});
+    script.addEventListener('error',()=>{scriptErrors+=1;failure='SCRIPT';setTimeout(showFailure,0);},{once:true});
+  };
+
+  document.querySelectorAll('script[src^="https://maps.googleapis.com/maps/api/js?"]').forEach(trackMapsScript);
+  const scriptObserver=new MutationObserver((records)=>{
+    for(const record of records){
+      for(const node of record.addedNodes){
+        if(node instanceof HTMLScriptElement)trackMapsScript(node);
+      }
+    }
+  });
+  scriptObserver.observe(document.head||document.documentElement,{childList:true,subtree:true});
+
   const previousAuthFailure=window.gm_authFailure;
   window.gm_authFailure=()=>{
+    authFailures+=1;
+    authAfterVisible=mapEverVisible;
+    googleMapsAtAuth=Boolean(window.google?.maps);
     failure='AUTH';
     if(typeof previousAuthFailure==='function'){
       try{previousAuthFailure();}catch(_error){}
@@ -45,6 +88,13 @@
     }
   },true);
 
+  if(mapEl){
+    const mapObserver=new MutationObserver(()=>{
+      if(!mapEl.hidden)mapEverVisible=true;
+    });
+    mapObserver.observe(mapEl,{attributes:true,attributeFilter:['hidden']});
+  }
+
   const observer=new MutationObserver(()=>{
     if(showingFailure)return;
     const text=mapStateEl.textContent||'';
@@ -53,7 +103,7 @@
       showFailure();
       return;
     }
-    if(failure&&!Object.values(messages).includes(text))failure='';
+    if(failure&&!Object.values(messages).some(message=>text.startsWith(message)))failure='';
   });
   observer.observe(mapStateEl,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['hidden']});
 })();
