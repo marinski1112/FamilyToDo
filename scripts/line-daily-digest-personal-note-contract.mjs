@@ -19,13 +19,17 @@ for(const marker of [
   'const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing),ni=Number(parsed?.note)',
   'const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0]',
   "if(frame.personalNote)lines.push('【家族のひとこと】",
+  'function buildPreviousFamilyRecap(payload:DigestFactPayload):string[]',
+  'const movement=payload.location.previous.length>0',
+  "if(recap.length)lines.push('【昨日の家族まとめ】'",
   'function buildEvidencePraise(payload:DigestFactPayload):string[]',
   'payload.familyLog.previous.length',
   'payload.today.completed>0',
   "payload.today.bringItems.filter(item=>item.startsWith('✓ ')).length",
-  'return praise.slice(0,2)',
+  'payload.location.previous.length&&praise.length<3',
+  'return praise.slice(0,3)',
   "if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`))",
-])if(!digest.includes(marker))throw new Error(`morning personal note/praise marker missing: ${marker}`);
+])if(!digest.includes(marker))throw new Error(`morning personal note/recap/praise marker missing: ${marker}`);
 
 if((digest.match(/geminiFetch\(env,model,body\)/g)||[]).length!==1)throw new Error('morning digest must retain one Gemini call site');
 if(/chooseFrame\([^)]*facts|chooseFrame\([^)]*payload/.test(digest))throw new Error('recipient-specific deterministic facts must not be sent into the shared family frame/note selector');
@@ -34,6 +38,9 @@ if(!digest.includes("if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!
 if(!digest.includes('Optional personalization context must never block the deterministic morning digest'))throw new Error('profile lookup failure must remain non-blocking');
 if(!digest.includes("血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください"))throw new Error('sensitive-attribute anti-inference prompt guard missing');
 if(!digest.includes('決定論的な予定・記録の事実を変更しないでください'))throw new Error('deterministic fact authority guard missing');
+const recapStart=digest.indexOf('function buildPreviousFamilyRecap('),recapEnd=digest.indexOf('\nfunction buildEvidencePraise(',recapStart);
+const recapBody=recapStart>=0&&recapEnd>recapStart?digest.slice(recapStart,recapEnd):'';
+if(!recapBody||/(geminiFetch|fetch\(|Routes|Maps|latitude|longitude)/.test(recapBody))throw new Error('previous family recap must remain deterministic, privacy-safe and local');
 const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
 const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';
 if(!praiseBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(praiseBody))throw new Error('evidence praise must remain deterministic and local');
@@ -42,4 +49,4 @@ const noteBody=noteStart>=0&&noteEnd>noteStart?digest.slice(noteStart,noteEnd):'
 if(!noteBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(noteBody))throw new Error('memo-guided note candidates must remain deterministic and local');
 
 await import('./line-daily-digest-weather-contract.mjs');
-console.log('line-daily-digest-personal-note-contract: consent-filtered memo candidates vary by local date; AI selects indexes only; deterministic fallback remains useful');
+console.log('line-daily-digest-personal-note-contract: memo candidates vary by date; previous-day recap and up-to-three evidence praise lines stay deterministic/local; AI selects indexes only');
