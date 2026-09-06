@@ -27,7 +27,7 @@ const isLastDayOfMonth=(date:string)=>shiftDate(date,1).slice(0,7)!==date.slice(
 const monthLabel=(date:string)=>`${Number(date.slice(5,7))}月`;
 
 function weeklyPeriod(endDate:string):Period{return {reportType:'WEEKLY',periodKey:`W:${endDate}`,startDate:shiftDate(endDate,-6),endDate,label:`${shiftDate(endDate,-6)}〜${endDate}`};}
-function monthlyPeriod(endDate:string):Period{return {reportType:'MONTHLY',periodKey:`M:${endDate.slice(0,7)}`,startDate:`${endDate.slice(0,7)}-01`,endDate,label:`${monthLabel(endDate)}まとめ`};}
+function monthlyPeriod(endDate:string):Period{const startDate=`${endDate.slice(0,7)}-01`;return {reportType:'MONTHLY',periodKey:`M:${endDate.slice(0,7)}`,startDate,endDate,label:`${startDate}〜${endDate}`};}
 
 function duePeriods(localDate:string,localTime:string,setting:Row):Period[]{
   const now=minutes(localTime),out:Period[]=[];
@@ -99,7 +99,7 @@ function fallbackNarrative(facts:PeriodFacts):string{
   return 'この期間は記録が少なめでした。忙しい日も含めて一区切り。次の期間も、できることからゆっくり進めていきましょう。';
 }
 
-function evidence(facts:PeriodFacts):string{return JSON.stringify({report_type:facts.period.reportType,period_start:facts.period.startDate,period_end:facts.period.endDate,family_log:facts.logLines,event_count:facts.eventCount,task_completed:facts.taskCompleted,task_incomplete:facts.taskIncomplete,item_completed:facts.itemCompleted,item_incomplete:facts.itemIncomplete,samples:facts.samples});}
+function evidence(facts:PeriodFacts):string{return JSON.stringify({report_type:facts.period.reportType,period_start:facts.period.startDate,period_end:facts.period.endDate,family_log:facts.logLines,event_count:facts.eventCount,period_tasks_currently_completed:facts.taskCompleted,period_tasks_currently_incomplete:facts.taskIncomplete,period_items_currently_completed:facts.itemCompleted,period_items_currently_incomplete:facts.itemIncomplete,samples:facts.samples});}
 
 async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promise<string>{
   let profiles:FamilyAiSafeProfileContext[]=[];
@@ -107,7 +107,7 @@ async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promis
   const fallback=fallbackNarrative(facts);
   try{const stored=await readFinalizedPeriodicDigestFrame(env.DB,familyId,facts.period.reportType,facts.period.periodKey);if(stored){const parsed=JSON.parse(stored) as PeriodFrame;if(parsed.version===1&&safeGeneratedNarrative(clean(parsed.narrative,MAX_NARRATIVE_CHARS),profiles))return clean(parsed.narrative,MAX_NARRATIVE_CHARS);return fallback;}}catch{/* fallback */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!aiEnabled(env))return fallback;
-  const prompt=`あなたは家族向けLINEの${facts.period.reportType==='WEEKLY'?'週末':'月末'}便を書く編集者です。期間中の事実を読み、家族みんなが少しうれしくなる自然な統括を作ってください。毎回、構成・着眼点・言い回しは変わって構いません。記録から確認できる積み重ねを具体的に認め、次の期間へやさしくつないでください。返答はJSONだけで {"narrative":"..."}。narrativeは${MAX_NARRATIVE_CHARS}文字以内、三〜五文程度。事実はevidenceだけを根拠にし、出来事・感情・成果を捏造しないでください。プロフィール文脈はAI利用が許可された最小情報で、personality_noteは話題や言葉選びの背景としてのみ使えます。原文を引用・要約・列挙せず、プロフィールやメモを読んだことも明かさないでください。健康・性格・能力などを推測しないでください。PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください。正確な数字・件数・日付は後段の決定論的一覧が担当するので、本文には算用数字・漢数字を含む数値表現を書かないでください。profile_context=${safeProfileContext(profiles)}; evidence=${evidence(facts)}`;
+  const prompt=`あなたは家族向けLINEの${facts.period.reportType==='WEEKLY'?'週末':'月末'}便を書く編集者です。期間中の事実を読み、家族みんなが少しうれしくなる自然な統括を作ってください。毎回、構成・着眼点・言い回しは変わって構いません。記録から確認できる積み重ねを具体的に認め、次の期間へやさしくつないでください。返答はJSONだけで {"narrative":"..."}。narrativeは${MAX_NARRATIVE_CHARS}文字以内、三〜五文程度。事実はevidenceだけを根拠にし、出来事・感情・成果を捏造しないでください。期間内タスク・持ち物の完了数は完了日時の集計ではなく、その期間に予定・期限がある項目の現在状態です。「この期間に完了した」と言い換えないでください。プロフィール文脈はAI利用が許可された最小情報で、personality_noteは話題や言葉選びの背景としてのみ使えます。原文を引用・要約・列挙せず、プロフィールやメモを読んだことも明かさないでください。健康・性格・能力などを推測しないでください。PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください。正確な数字・件数・日付は後段の決定論的一覧が担当するので、本文には算用数字・漢数字を含む数値表現を書かないでください。profile_context=${safeProfileContext(profiles)}; evidence=${evidence(facts)}`;
   const body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:420}};
   for(let attempt=0;attempt<models(env).length;attempt++){
     let reserved=false;try{reserved=await reservePeriodicDigestAiRequest(env.DB,familyId,facts.period.reportType,facts.period.periodKey,attempt>0);}catch{return fallback;}
@@ -131,10 +131,13 @@ function renderReport(facts:PeriodFacts,narrative:string):string{
   const extras:string[]=[];
   if(facts.logLines.length)extras.push('【家族の記録】',...facts.logLines);
   if(facts.samples.length)extras.push('【期間の予定・タスク】',...facts.samples);
-  let base=[...required.slice(0,2),...extras,...required.slice(2)].join('\n');
-  if(base.length>MAX_LINE_CHARS){base=required.join('\n').slice(0,MAX_LINE_CHARS);}
-  const available=MAX_LINE_CHARS-base.length-1;if(available<16)return base;
-  return [...required.slice(0,2),`💬 ${narrative}`.slice(0,available),...extras,...required.slice(2)].join('\n').slice(0,MAX_LINE_CHARS);
+  let includedExtras=extras;
+  let authoritative=[...required.slice(0,2),...includedExtras,...required.slice(2)];
+  if(authoritative.join('\n').length>MAX_LINE_CHARS){includedExtras=[];authoritative=[...required];}
+  const authoritativeText=authoritative.join('\n');
+  const available=MAX_LINE_CHARS-authoritativeText.length-1;
+  if(available<16)return authoritativeText;
+  return [...required.slice(0,2),`💬 ${narrative}`.slice(0,available),...includedExtras,...required.slice(2)].join('\n');
 }
 
 async function retryKey(familyId:number,memberId:number,period:Period):Promise<string>{
