@@ -5,6 +5,7 @@ const reconciliation=fs.readFileSync('src/task-completion-reconciliation.ts','ut
 const handlers=fs.readFileSync('src/task-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-edit.js','utf8');
+const hierarchyGuard=fs.readFileSync('src/task-edit-hierarchy-guard.ts','utf8');
 
 if(page.includes("from './app'"))throw new Error('task edit page must not depend on app.ts');
 for(const marker of [
@@ -62,7 +63,20 @@ for(const marker of [
 if(handlers.includes("from './app'"))throw new Error('task page handlers must not depend on app.ts after task edit extraction');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('taskEdit must route through retained task edit page');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary regressed');
-if(!routes.includes("if(url.pathname==='/task/edit.php') return await taskEdit(request,context,Number(url.searchParams.get('id')||0));"))throw new Error('task edit route changed');
+for(const marker of [
+  "if(url.pathname==='/task/edit.php'){",
+  'validateTaskEditRequestHierarchy(request,context,taskId)',
+  'return await taskEdit(request,context,taskId);',
+])if(!routes.includes(marker))throw new Error(`task edit guarded route missing: ${marker}`);
+for(const marker of [
+  'export async function validateTaskEditRequestHierarchy(',
+  "if(request.method!=='POST')return {ok:true};",
+  'request.clone()',
+  "if(requestedEvent)return {ok:false,status:400,message:'子タスクはイベントに変更できません。'};",
+  "if(requestedScope!==parentScope)return {ok:false,status:400,message:'親タスクと子タスクの公開範囲は一致している必要があります。'};",
+  "SELECT COUNT(*) c FROM tasks WHERE family_id=? AND parent_task_id=?",
+  "子タスクがあるため、公開範囲は変更できません。",
+])if(!hierarchyGuard.includes(marker))throw new Error(`task edit hierarchy mutation guard missing: ${marker}`);
 for(const marker of [
   "const f=document.getElementById('taskEditForm')",
   "fetch(location.href,{method:'POST'",
@@ -70,4 +84,4 @@ for(const marker of [
   "items:[...f.querySelectorAll('[name=\"item_name[]\"]')].map",
 ])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
 
-console.log('task-edit-page-boundary: retained Task/Event edit ownership, canonical task completion reconciliation, PRIVATE conversion, child lifecycle and projection semantics ok');
+console.log('task-edit-page-boundary: retained Task/Event edit ownership, canonical completion reconciliation, server hierarchy guard, PRIVATE conversion, child lifecycle and projection semantics ok');
