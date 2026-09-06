@@ -35,6 +35,7 @@ export const activeRegressionGroups=[
       ['settings-location-page-boundary','node scripts/settings-location-page-boundary-contract.mjs'],
       ['settings-members-page-boundary','node scripts/settings-members-page-boundary-contract.mjs'],
       ['member-profile-foundation','node scripts/member-profile-foundation-contract.mjs'],
+      ['family-ai-profile-context','node scripts/family-ai-profile-context-contract.mjs'],
       ['settings-content-page-boundary','node scripts/settings-content-page-boundary-contract.mjs'],
       ['settings-notifications-page-boundary','node scripts/settings-notifications-page-boundary-contract.mjs'],
       ['settings-diagnostics','node scripts/settings-diagnostics-contract.mjs'],
