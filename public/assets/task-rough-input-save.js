@@ -10,7 +10,7 @@ try{
   const checked=(row,selector)=>Boolean(row.querySelector(selector)?.checked);
   const selectedIds=(row,selector)=>[...row.querySelectorAll(selector)].filter(x=>x.checked).map(x=>Number(x.value)).filter(n=>Number.isInteger(n)&&n>0);
   const categoryValue=row=>{const select=row.querySelector('.rough-draft-category'),custom=row.querySelector('.rough-draft-category-custom');return select?.value==='__custom__'?String(custom?.value||'').trim():String(select?.value||'').trim();};
-  const validUrl=url=>{if(!url)return true;try{return ['http:','https:'].includes(new URL(url).protocol);}catch{return false;}};
+  const validUrl=url=>{if(!url)return true;try{const u=new URL(url);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password;}catch{return false;}};
   const validDate=date=>!date||/^\d{4}-\d{2}-\d{2}$/.test(date);
   const errorMessage=(data,fallback)=>String(data?.error||fallback||'保存に失敗しました。');
   class SaveRequestError extends Error{constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
@@ -49,8 +49,9 @@ try{
     let response;
     try{response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});}catch{throw new SaveRequestError('通信が途切れました。保存済みの可能性があるため、再試行する前に一覧を確認してください。',true);}
     const data=await response.json().catch(()=>null);
-    if(!response.ok||!data?.ok)throw new SaveRequestError(errorMessage(data),false);
-    return data;
+    if(response.ok&&data?.ok)return data;
+    if(response.status>=500||!data||response.ok)throw new SaveRequestError('保存結果を確認できませんでした。保存済みの可能性があるため、再試行する前に一覧を確認してください。',true);
+    throw new SaveRequestError(errorMessage(data),false);
   }
   async function deleteTask(id){
     if(!id)return;
@@ -95,7 +96,7 @@ try{
     }
     let saved=0;
     try{for(const item of shopping){await saveShopping(item);saved++;}for(const item of items){await saveItem(item);saved++;}}
-    catch(error){if(saved)throw new SaveRequestError(`${saved}件は保存済みです。残りの保存に失敗しました。重複を避けるため、再試行する前に一覧を確認してください。`,true);throw error;}
+    catch(error){if(saved||error?.uncertain)throw new SaveRequestError(saved?`${saved}件は保存済みです。残りの保存に失敗しました。重複を避けるため、再試行する前に一覧を確認してください。`:String(error?.message||'保存結果を確認できませんでした。'),true);throw error;}
     return {saved,date:'',kind:primary()};
   }
 
