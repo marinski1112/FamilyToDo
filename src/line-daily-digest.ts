@@ -2,6 +2,7 @@ import { familyAiProvider, geminiFetch } from './family-ai';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { buildLocationDigestDayFacts, type LocationDigestDayFacts } from './location-day-summary';
+import { blockMorningDigestAiAfter429, finalizeMorningDigestFrame, readFinalizedMorningDigestFrame, reserveMorningDigestAiRequest } from './line-daily-digest-ai-guard';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
 
 type Row=Record<string,unknown>;
@@ -69,9 +70,28 @@ function morningPersonalNoteOptions(profiles:FamilyAiSafeProfileContext[]):strin
   return options.slice(0,MAX_MORNING_PERSONAL_NOTE_OPTIONS);
 }
 
+function persistedMorningFrame(raw:string|null,options:Frame[]):Frame|null{
+  if(!raw)return null;
+  try{
+    const value=JSON.parse(raw) as Record<string,unknown>;
+    const opener=String(value.opener||''),closing=String(value.closing||'');
+    if(!options.some(option=>option.opener===opener)||!options.some(option=>option.closing===closing))return null;
+    const personalNote=clean(value.personalNote,120);
+    return {opener,closing,...(personalNote?{personalNote}:{})};
+  }catch{return null;}
+}
+
+async function finalizeFrameSafely(env:Env,familyId:number,localDate:string,frame:Frame):Promise<void>{
+  try{await finalizeMorningDigestFrame(env.DB,familyId,localDate,JSON.stringify(frame));}catch{/* Cost guard persistence must not block deterministic LINE delivery. */}
+}
+
 async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
   if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return options[0];
+  try{
+    const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
+    if(persisted){return persistedMorningFrame(persisted,options)||options[0];}
+  }catch{return options[0];/* Missing/unavailable guard storage fails closed to deterministic prose. */}
   let profiles:FamilyAiSafeProfileContext[]=[];
   let profileContext='[]';
   try{
@@ -80,19 +100,28 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
   const noteOptions=morningPersonalNoteOptions(profiles);
   const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体と家族向け短文を選びます。返答はJSONだけ。{"opener":0,"closing":0,"note":0} の整数indexだけを返してください。自由文は生成しないでください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。候補選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; note_candidates=${JSON.stringify(noteOptions)}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:100}};
-  for(const model of morningDigestModels(env)){
+  const models=morningDigestModels(env);
+  for(let attempt=0;attempt<models.length;attempt++){
+    const model=models[attempt];
+    let reserved=false;
+    try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return options[0];}
+    if(!reserved){await finalizeFrameSafely(env,familyId,localDate,options[0]);return options[0];}
     try{
       const response=await geminiFetch(env,model,body);
+      if(response.status===429){try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{/* The current bounded fallback may proceed even if circuit persistence fails. */}}
       if(!response.ok)continue;
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
       const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing),ni=Number(parsed?.note);
       if(Number.isInteger(oi)&&Number.isInteger(ci)&&options[oi]&&options[ci]){
         const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0];
-        return {opener:options[oi].opener,closing:options[ci].closing,personalNote};
+        const frame={opener:options[oi].opener,closing:options[ci].closing,personalNote};
+        await finalizeFrameSafely(env,familyId,localDate,frame);
+        return frame;
       }
     }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
   }
+  await finalizeFrameSafely(env,familyId,localDate,options[0]);
   return options[0];
 }
 

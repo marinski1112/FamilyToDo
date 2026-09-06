@@ -2,11 +2,13 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const digest=fs.readFileSync('src/line-daily-digest.ts','utf8');
+const aiGuard=fs.readFileSync('src/line-daily-digest-ai-guard.ts','utf8');
 const profileContext=fs.readFileSync('src/family-ai-profile-context.ts','utf8');
 const locationSummary=fs.readFileSync('src/location-day-summary.ts','utf8');
 const settings=fs.readFileSync('src/settings-notifications-page.ts','utf8');
 const browser=fs.readFileSync('public/assets/settings-notifications.js','utf8');
 const migration=fs.readFileSync('migrations/0055_line_daily_digest_family_summary.sql','utf8');
+const aiGuardMigration=fs.readFileSync('migrations/0061_line_daily_digest_ai_cost_guard.sql','utf8');
 const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
 
 if(!index.includes("import { processLineDailyDigests } from './line-daily-digest';")) throw new Error('index.ts must import LINE daily digest job');
@@ -40,11 +42,44 @@ for(const sentinel of [
   'env.MORNING_DIGEST_GEMINI_MODEL_PRIMARY',
   'env.MORNING_DIGEST_GEMINI_MODEL_FALLBACK',
   'env.MORNING_DIGEST_AI_ENABLED',
-  'for(const model of morningDigestModels(env))',
+  'for(let attempt=0;attempt<models.length;attempt++)',
   'return options[0];',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`dedicated morning Gemini route missing: ${sentinel}`);
 }
+for(const sentinel of [
+  "import { blockMorningDigestAiAfter429, finalizeMorningDigestFrame, readFinalizedMorningDigestFrame, reserveMorningDigestAiRequest } from './line-daily-digest-ai-guard';",
+  'await readFinalizedMorningDigestFrame(env.DB,familyId,localDate)',
+  'reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)',
+  'response.status===429',
+  'await blockMorningDigestAiAfter429(env.DB,localDate)',
+  'await finalizeFrameSafely(env,familyId,localDate,options[0])',
+]){
+  if(!digest.includes(sentinel)) throw new Error(`morning Gemini persistent cost guard missing: ${sentinel}`);
+}
+for(const sentinel of [
+  'MAX_MORNING_AI_REQUESTS_PER_FAMILY_DAY=2',
+  'MAX_MORNING_AI_REQUESTS_GLOBAL_DAY=120',
+  'MORNING_AI_429_BACKOFF_MINUTES=15',
+  'line_daily_digest_ai_family_daily',
+  'line_daily_digest_ai_global_daily',
+  'request_count=request_count+1',
+  'finalized=0 AND request_count<?',
+  'blocked_until',
+]){
+  if(!aiGuard.includes(sentinel)) throw new Error(`morning Gemini cost guard implementation missing: ${sentinel}`);
+}
+for(const sentinel of [
+  'CREATE TABLE IF NOT EXISTS line_daily_digest_ai_family_daily',
+  'CHECK(request_count BETWEEN 0 AND 2)',
+  'PRIMARY KEY(family_id, local_date)',
+  'CREATE TABLE IF NOT EXISTS line_daily_digest_ai_global_daily',
+  'local_date TEXT PRIMARY KEY',
+  'blocked_until TEXT',
+]){
+  if(!aiGuardMigration.includes(sentinel)) throw new Error(`morning Gemini cost guard schema missing: ${sentinel}`);
+}
+if(/generativelanguage|geminiFetch|fetch\(/.test(aiGuard))throw new Error('AI budget guard must never call Gemini or another live external API');
 for(const sentinel of [
   "import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';",
   'MAX_MORNING_PROFILE_SUBJECTS=8',
@@ -77,13 +112,17 @@ const chooseFrameStart=digest.indexOf('async function chooseFrame(');
 const chooseFrameEnd=digest.indexOf('\nfunction logFact(',chooseFrameStart);
 const chooseFrameBody=chooseFrameStart>=0&&chooseFrameEnd>chooseFrameStart?digest.slice(chooseFrameStart,chooseFrameEnd):'';
 const aiEligibilityGuard=chooseFrameBody.indexOf("familyAiProvider(env)!=='GEMINI'");
+const persistedGuardRead=chooseFrameBody.indexOf('await readFinalizedMorningDigestFrame(env.DB,familyId,localDate)');
 const profileLoader=chooseFrameBody.indexOf('await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)');
+const reservation=chooseFrameBody.indexOf('reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)');
+const liveGemini=chooseFrameBody.indexOf('await geminiFetch(env,model,body)');
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
   throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
 }
-if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||profileLoader<0||aiEligibilityGuard<0||profileLoader<aiEligibilityGuard){
-  throw new Error('optional AI profile context must be reached only after receipt gating and the morning Gemini eligibility guard');
+if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||persistedGuardRead<0||profileLoader<0||aiEligibilityGuard<0||persistedGuardRead<aiEligibilityGuard||profileLoader<persistedGuardRead){
+  throw new Error('optional AI profile context must be reached only after receipt gating, Gemini eligibility and persisted daily guard');
 }
+if(reservation<0||liveGemini<0||reservation>liveGemini)throw new Error('every morning Gemini live call must reserve bounded daily budget first');
 const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
 if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
