@@ -44,12 +44,22 @@ for(const marker of [
   "familyAiProvider(env)!=='GEMINI'",
   "requiresConfirmation:true",
   'deterministicItems(parsed.fields)',
+  'function semanticBlocks(text:string)',
+  "originalText:lines.join('\\n')",
+  '/^\\s/.test(line.raw)',
+  'metadataPrefix.test(line.trimmed)',
+  'httpUrlOnly.test(line.trimmed)',
+  'function explicitQuantity(block:RoughBlock)',
+  'function continuationDescription(block:RoughBlock,destination:Destination)',
+  'totalLines>MAX_ITEMS',
   'sourceIndex',
-  "field.lines.includes(originalText)",
+  'field.blocks.some(block=>block.originalText===originalText)',
   'observed=new Map<string,number>()',
   'required=new Map<string,number>()',
   "if((observed.get(key)||0)<count)return null",
+  "if(description!==null&&field.destination!=='task'&&field.destination!=='event')return null;",
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
+assert.ok(!roughInputApi.includes('fields.flatMap(field=>field.lines.map('),'rough-input deterministic fallback must not regress to one-line=one-item parsing');
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
 assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must not inherit arbitrary family-selected Gemini models');
 
@@ -107,4 +117,4 @@ assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'ro
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, progressive confirmation, and explicit save boundaries ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, semantic rough-input blocks, progressive confirmation, and explicit save boundaries ok');
