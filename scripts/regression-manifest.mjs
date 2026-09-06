@@ -70,6 +70,7 @@ export const activeRegressionGroups=[
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
       ['line-daily-digest-ai-guard-atomicity','node scripts/line-daily-digest-ai-guard-atomicity-contract.mjs'],
       ['line-daily-digest-personal-note','node scripts/line-daily-digest-personal-note-contract.mjs'],
+      ['line-periodic-digest','node scripts/line-periodic-digest-contract.mjs'],
       ['line-webhook-modularity','node scripts/line-webhook-modularity-contract.mjs'],
       ['item-api-modularity','node scripts/item-api-modularity-contract.mjs'],
       ['task-api-modularity','node scripts/task-api-modularity-contract.mjs'],
