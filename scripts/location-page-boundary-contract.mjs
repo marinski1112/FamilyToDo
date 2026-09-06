@@ -66,6 +66,9 @@ for(const marker of [
   "const csrf=String(root.getAttribute('data-location-csrf')||'').trim();",
   'https://maps.googleapis.com/maps/api/js?',
   "if(!mapsKey)return Promise.reject(new Error('MAPS_NOT_CONFIGURED'));",
+  "const callbackName='__familyTodoLocationMapsReady';",
+  'window[callbackName]=()=>{',
+  "new URLSearchParams({key:mapsKey,loading:'async',callback:callbackName})",
   "const located=members.filter((member)=>member?.latest&&member?.sharingEnabled&&validPoint(member.latest));",
   'new maps.LatLngBounds()',
   'new maps.Map(mapEl',
@@ -92,6 +95,7 @@ for(const forbidden of [
   'rawPayload',
   'GOOGLE_MAPS_ROUTES_API_KEY',
   'GOOGLE_MAPS_ROUTE_API_KEY',
+  "script.addEventListener('load'",
 ])if(client.includes(forbidden))throw new Error(`Location client must not use sensitive behavior: ${forbidden}`);
 
 for(const marker of [
@@ -131,9 +135,9 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'home-presence1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'maps-callback1';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: authenticated family map uses canonical GOOGLE_MAPS_BROWSER_API_KEY while explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
+console.log('location-page-boundary: authenticated family map uses canonical GOOGLE_MAPS_BROWSER_API_KEY with callback-based async Maps readiness while explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
