@@ -37,4 +37,5 @@ if(!digest.includes('決定論的な予定・記録の事実を変更しない�
 if(/buildEvidencePraise[\s\S]{0,1800}(geminiFetch|fetch\(|Routes|Maps)/.test(digest))throw new Error('evidence praise must remain deterministic and local');
 if(/morningPersonalNoteOptions[\s\S]{0,2200}(geminiFetch|fetch\(|Routes|Maps)/.test(digest))throw new Error('memo-guided note candidates must remain deterministic and local');
 
+await import('./line-daily-digest-weather-contract.mjs');
 console.log('line-daily-digest-personal-note-contract: consent-filtered memo candidates vary by local date; AI selects indexes only; deterministic fallback remains useful');
