@@ -23,7 +23,7 @@ const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 const toRadians=(degrees:number):number=>degrees*Math.PI/180;
 
 function fail(status:number,code:string,message:string):Response{
-  return json({ok:false,error:message,code},{status,headers:{'cache-control':'no-store'}} as any);
+  return json({ok:false,error:message,code},status,{'cache-control':'no-store'});
 }
 
 function freshness(recordedAt:string|null,sharingEnabled:boolean,nowMs:number):Readonly<{state:LocationFreshness;ageMinutes:number|null}>{
