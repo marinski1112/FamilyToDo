@@ -1,4 +1,5 @@
 import './location-route-eta-contract.mjs';
+import './location-home-place-contract.mjs';
 import fs from 'node:fs';
 
 const domain=fs.readFileSync('src/location-domain.ts','utf8');
@@ -15,7 +16,7 @@ for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';",
-  "const phase1Ready=new Set(['owntracks','latest','history']);",
+  "const phase1Ready=new Set(['owntracks','latest','history','places','distance']);",
   "export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{",
   "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_KEY||'');",
   "const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');",
@@ -29,15 +30,16 @@ for(const marker of [
   'data-location-csrf="${csrf}"',
   'data-location-list',
   'data-location-refresh',
-  'type="button"',
+  'data-location-home-eta',
+  'data-location-home-eta-result',
   'aria-label="家族の最新位置を更新"',
   'この画面は端末の現在地を自動取得しません。',
   '位置が古い場合は「現在地」と断定せず',
-  'ボタンを押した時だけRoutes APIへ問い合わせます。',
+  '「車で何分？」または「家まで何分？」を押した時だけRoutes APIへ問い合わせます。',
   '位置共有の既定値: ${privacy.sharingEnabled?\'ON\':\'OFF\'}',
   '登録した端末も最初は共有OFFです。',
-  '共有ONの登録端末から認証済みの位置情報が届いた場合にだけ',
-  '共有OFFまたは失効済みの端末は位置送信・参照の対象外になります。',
+  'OWNER / ADMIN が「管理 → 位置情報・OwnTracks」で',
+  '自宅地点も明示的な管理操作でのみ設定され',
 ])if(!page.includes(marker))throw new Error(`Location page boundary marker missing: ${marker}`);
 
 for(const marker of [
@@ -71,8 +73,11 @@ for(const marker of [
   "fetch('/api/location/eta'",
   "method:'POST'",
   "'x-csrf-token':csrf",
-  'body:JSON.stringify({targetMemberId})',
+  'body:JSON.stringify(body)',
+  "etaRequest({targetMemberId})",
+  "etaRequest({destinationKind:'HOME'})",
   "const canRoute=!member.isViewer&&(member.state==='FRESH'||member.state==='AGING')",
+  "if(homeEtaEl)homeEtaEl.addEventListener('click',()=>void requestHomeEta());",
   "if(refreshEl)refreshEl.addEventListener('click',()=>void load());",
 ])if(!client.includes(marker))throw new Error(`Location client/map/ETA marker missing: ${marker}`);
 for(const forbidden of [
@@ -124,9 +129,9 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'route-eta1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'home-eta1';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: authenticated family map plus explicit CSRF-protected member ETA action remains no-geolocation/no-auto-polling and keeps provider secrets server-side');
+console.log('location-page-boundary: authenticated family map plus explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
