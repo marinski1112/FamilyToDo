@@ -1,7 +1,7 @@
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
 import { familyLogApi } from './family-log-api';
-import { cleanupFamilyLogMediaForLog, reconcileFamilyLogMediaForLog } from './family-log-media-api';
+import { cleanupFamilyLogMediaForLog, drainPendingFamilyLogMedia, reconcileFamilyLogMediaForLog } from './family-log-media-api';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
@@ -35,6 +35,15 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
       await reconcileFamilyLogMediaForLog(ctx.env,familyId,logId).catch(()=>{});
     }
     return saveResponse;
+  }
+  if(action==='subject_update'){
+    const familyId=Number(ctx.member?.family_id||0),subjectId=Number(body.id||0);
+    const response=await familyLogApi(request,ctx);
+    if(response.ok&&Number.isSafeInteger(familyId)&&familyId>0&&Number.isSafeInteger(subjectId)&&subjectId>0){
+      await ctx.env.DB.prepare('UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND subject_id=?').bind(familyId,subjectId).run().catch(()=>{});
+      await drainPendingFamilyLogMedia(ctx.env,familyId).catch(()=>{});
+    }
+    return response;
   }
   if(String(body.action||'')!=='quick_action_disable')return familyLogApi(request,ctx);
 
