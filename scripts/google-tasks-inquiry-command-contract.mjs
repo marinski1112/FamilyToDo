@@ -5,6 +5,8 @@ const source=fs.readFileSync('src/google-tasks-inquiry-command.ts','utf8');
 const delivery=fs.readFileSync('src/google-voice-inquiry-delivery.ts','utf8');
 const movement=fs.readFileSync('src/google-voice-movement-inquiry.ts','utf8');
 const movementSummary=fs.readFileSync('src/location-day-summary.ts','utf8');
+const queryService=fs.readFileSync('src/location-query-service.ts','utf8');
+const tasksSync=fs.readFileSync('src/google-tasks.ts','utf8');
 
 for(const token of [
   'extractMarkedGoogleVoiceInquiryBody',
@@ -62,8 +64,16 @@ assert.match(movement,/sendMemberWebPush\(env,familyId,memberId,payload\)/,'move
 assert.match(movement,/url:'\/app\/location\.php'/,'movement push must link only to the authenticated Location page');
 assert.ok(!/classifyMarkedGoogleVoiceInquiryWithGemini|geminiFetch|familyAiProvider/.test(movement),'privacy-sensitive movement inquiry must not use Gemini classification');
 assert.ok(!/console\.|latitude|longitude|device_id|provider_payload|owntracks|authorization|api[_-]?key/i.test(movement),'movement inquiry must not log or expose raw location/provider credentials');
-assert.match(movementSummary,/export async function buildLocationMovementDayLines/,'strict one-day provider-neutral movement projection is required');
-assert.match(movementSummary,/scope:\{familyId,requesterMemberId\},subjectMemberId,from,to,limit:HISTORY_LIMIT/,'movement projection must preserve LocationQueryService requester scope and bounded history');
-assert.match(movementSummary,/centerDistance-accuracyRadiusMeters\(previous\)-accuracyRadiusMeters\(current\)/,'movement distance must preserve GPS-accuracy uncertainty subtraction');
 
-console.log('google-tasks-inquiry-command-contract: marked inquiry envelope, exactly-once ledger, deterministic non-Gemini yesterday movement, scoped coarse Location projection, member-scoped delivery, safe retries, and generic canonical resolver boundaries remain enforced');
+assert.match(movementSummary,/export async function buildLocationMovementDayLines/,'strict one-day provider-neutral movement projection is required');
+assert.match(movementSummary,/historyForSubjects\(\{[\s\S]*scope:\{familyId,requesterMemberId\}[\s\S]*subjectMemberIds:members\.map\(member=>member\.id\)[\s\S]*limitPerSubject:HISTORY_LIMIT/,'movement projection must use one bounded batched family history read with requester scope');
+assert.doesNotMatch(movementSummary,/for\s*\([^)]*member[^)]*\)[\s\S]{0,300}service\.history\(/,'movement projection must not issue one D1 history statement per member');
+assert.match(queryService,/ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY h\.member_id/,'batch history must preserve a separate newest-point cap per member');
+assert.match(queryService,/WHERE member_rank<=\?/,'batch history must enforce the per-member history limit');
+assert.match(queryService,/device\.enabled=1[\s\S]*device\.sharing_enabled=1[\s\S]*device\.revoked_at IS NULL/,'batch history must preserve enabled/share-on/non-revoked device filtering');
+assert.match(queryService,/requester\.id=\? AND requester\.family_id=\? AND requester\.active=1/,'batch history must preserve active same-family requester proof');
+assert.match(movementSummary,/centerDistance-accuracyRadiusMeters\(previous\)-accuracyRadiusMeters\(current\)/,'movement distance must preserve GPS-accuracy uncertainty subtraction');
+assert.match(tasksSync,/export const MAX_D1_QUERY_BUDGET=40;/,'Google Tasks sync must retain its explicit D1 query budget');
+assert.match(tasksSync,/export const MAX_TASKS_PER_INVOCATION=3;/,'Google Tasks sync page cap must remain explicit');
+
+console.log('google-tasks-inquiry-command-contract: exactly-once movement inquiry uses one bounded family history statement per requested day, preserving tenant/privacy boundaries and the Google Tasks D1 query budget');
