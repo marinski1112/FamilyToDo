@@ -4,16 +4,22 @@ import type {
   LocationHistoryQuery,
   LocationPoint,
   LocationQueryService,
+  LocationScope,
 } from './location-providers';
 
 const DEFAULT_HISTORY_LIMIT=250;
 const MAX_HISTORY_LIMIT=500;
+const MAX_BATCH_SUBJECTS=12;
 
 type LocationRow=Readonly<{
   latitude:number;
   longitude:number;
   recorded_at:string;
   accuracy_meters:number|null;
+}>;
+type BatchedLocationRow=LocationRow&Readonly<{
+  member_id:number;
+  id:number;
 }>;
 
 const validPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
@@ -133,5 +139,73 @@ export class D1LocationQueryService implements LocationQueryService{
       if(point)points.push(point);
     }
     return points;
+  }
+
+  /**
+   * Read several family members' bounded histories in one D1 statement.
+   * This is intended for family-wide summaries where issuing one history()
+   * statement per member would exceed an outer workflow's query budget.
+   */
+  async historyForSubjects(query:Readonly<{
+    scope:LocationScope;
+    subjectMemberIds:readonly number[];
+    from:string;
+    to:string;
+    limitPerSubject?:number;
+  }>):Promise<ReadonlyMap<number,readonly LocationPoint[]>>{
+    const {familyId,requesterMemberId}=query.scope;
+    const limit=historyLimit(query.limitPerSubject);
+    const subjectMemberIds=[...new Set(query.subjectMemberIds.map(Number))];
+    const empty=new Map<number,readonly LocationPoint[]>();
+    if(!validPositiveId(familyId)||!validPositiveId(requesterMemberId)||limit===null)return empty;
+    if(subjectMemberIds.length===0||subjectMemberIds.length>MAX_BATCH_SUBJECTS||subjectMemberIds.some(id=>!validPositiveId(id)))return empty;
+    if(!canonicalIso(query.from)||!canonicalIso(query.to)||query.from>query.to)return empty;
+    for(const id of subjectMemberIds)empty.set(id,[]);
+
+    const placeholders=subjectMemberIds.map(()=>'?').join(',');
+    const result=await this.db.prepare(`
+      SELECT member_id,id,latitude,longitude,recorded_at,accuracy_meters
+      FROM (
+        SELECT h.member_id,h.id,h.latitude,h.longitude,h.recorded_at,h.accuracy_meters,
+          ROW_NUMBER() OVER (
+            PARTITION BY h.member_id
+            ORDER BY h.recorded_at DESC,h.id DESC
+          ) AS member_rank
+        FROM member_location_history h
+        JOIN members subject
+          ON subject.id=h.member_id
+          AND subject.family_id=h.family_id
+          AND subject.active=1
+        JOIN location_devices device
+          ON device.id=h.device_id
+          AND device.family_id=h.family_id
+          AND device.member_id=h.member_id
+          AND device.enabled=1
+          AND device.sharing_enabled=1
+          AND device.revoked_at IS NULL
+        WHERE h.family_id=? AND h.member_id IN (${placeholders})
+          AND h.recorded_at>=? AND h.recorded_at<=?
+          AND EXISTS (
+            SELECT 1 FROM members requester
+            WHERE requester.id=? AND requester.family_id=? AND requester.active=1
+          )
+      ) bounded
+      WHERE member_rank<=?
+      ORDER BY member_id ASC,recorded_at ASC,id ASC
+    `).bind(
+      familyId,...subjectMemberIds,query.from,query.to,
+      requesterMemberId,familyId,limit,
+    ).all<BatchedLocationRow>();
+
+    const grouped=new Map<number,LocationPoint[]>();
+    for(const id of subjectMemberIds)grouped.set(id,[]);
+    for(const row of result.results){
+      const memberId=Number(row.member_id);
+      const points=grouped.get(memberId);
+      if(!points)continue;
+      const point=toLocationPoint(row);
+      if(point)points.push(point);
+    }
+    return grouped;
   }
 }
