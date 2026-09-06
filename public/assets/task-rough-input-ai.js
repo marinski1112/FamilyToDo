@@ -4,7 +4,7 @@ try{
   const form=document.getElementById('taskForm'),button=document.getElementById('roughPreviewButton'),preview=document.getElementById('roughPreview');
   if(!form||!button||!preview)return;
   const fallbackPreview=button.onclick;
-  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const primary=()=>String(form.querySelector('[name=rough_primary_type]:checked')?.value||'task');
   const label=v=>({task:'タスク',event:'イベント',shopping:'買い物',item:'持ち物',child_task:'子タスク'}[v]||v);
   const fieldList=()=>{
@@ -16,6 +16,8 @@ try{
     }
     return out;
   };
+  const fieldPayload=()=>fieldList().map(x=>({destination:x.destination,text:String(x.element?.value||'')}));
+  const snapshot=fields=>JSON.stringify({primaryType:primary(),fields});
   const nonblankLines=text=>String(text||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
   const destinations=()=>fieldList().map(x=>({value:x.destination,label:label(x.destination)}));
   const render=(items,source)=>{
@@ -24,7 +26,7 @@ try{
     preview.hidden=false;preview.scrollIntoView({block:'nearest'});
   };
   button.onclick=async()=>{
-    const fields=fieldList().map(x=>({destination:x.destination,text:String(x.element?.value||'')}));
+    const fields=fieldPayload(),requestSnapshot=snapshot(fields);
     const totalChars=fields.reduce((n,x)=>n+x.text.length,0),totalLines=fields.reduce((n,x)=>n+nonblankLines(x.text).length,0);
     if(totalChars>4000){alert('ざっくり入力は全入力欄を合計して4,000文字以内にしてください。');return;}
     if(totalLines<1){alert('ざっくり入力を入力してください。');document.getElementById('roughMainInput')?.focus();return;}
@@ -34,9 +36,11 @@ try{
     try{
       const response=await fetch('/api/task-rough-input',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,primaryType:primary(),fields})});
       const data=await response.json().catch(()=>null);
+      if(snapshot(fieldPayload())!==requestSnapshot)return;
       if(!response.ok||!data?.ok||!Array.isArray(data.items))throw new Error('rough-input analysis failed');
       render(data.items,data.source);
     }catch{
+      if(snapshot(fieldPayload())!==requestSnapshot)return;
       if(typeof fallbackPreview==='function')fallbackPreview.call(button);
     }finally{button.disabled=false;button.textContent=oldText;}
   };
