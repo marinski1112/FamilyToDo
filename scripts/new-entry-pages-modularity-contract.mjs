@@ -15,7 +15,7 @@ for(const marker of [
   'shopping_category_catalog',
   'resolveShoppingCategoryOptions',
   "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
-  '/assets/task-new.js?v=12.147.0-wave128-shopping-categories1',
+  '/assets/task-new.js?v=12.147.0-wave128-rough-input1',
   '/assets/item-new.js?v=12.93-wave74',
   'taskVisibilitySql',
   "import { layout } from './app-shell';",
@@ -34,4 +34,17 @@ for(const marker of [
   "location.href=b.noDate?'/app/tasks.php':'/app/tasks.php?date='",
 ]) if(!taskNewJs.includes(marker)) throw new Error(`task-new calendar return contract changed: ${marker}`);
 if(taskNewJs.includes("payload.returnTo==='calendar'&&!b.noDate&&savedDate")) throw new Error('calendar-origin no-date tasks must not fall back to Tasks');
+for(const marker of [
+  'AIざっくり入力',
+  'name="rough_primary_type" value="task"',
+  'name="rough_primary_type" value="event"',
+  'name="rough_primary_type" value="shopping"',
+  'name="rough_primary_type" value="item"',
+  'roughAllowChildTask',
+  'roughAllowShopping',
+  'roughAllowItem',
+  "out.push({value:'unknown',label:'要確認'})",
+  'このプレビューからはまだ登録されません。',
+]) if(!taskNewJs.includes(marker)) throw new Error(`rough-input safety marker missing: ${marker}`);
+if(taskNewJs.includes("fetch('/api/task-rough-input'")) throw new Error('visible rough-input preview must remain proposal-only in this bounded stage');
 console.log('new entry pages modularity contract ok');
