@@ -82,34 +82,43 @@ function morningVariant(localDate:string,offset:number,size:number):number{
 }
 
 function morningPersonalNoteOptions(profiles:FamilyAiSafeProfileContext[],localDate:string):string[]{
-  const options:string[]=[];
   const memoProfiles=profiles.filter(profile=>clean(profile.personality_note,72)).slice(0,3);
-  if(memoProfiles.length){
-    const start=morningVariant(localDate,53,memoProfiles.length);
-    for(let offset=0;offset<memoProfiles.length;offset++){
-      const profile=memoProfiles[(start+offset)%memoProfiles.length];
-      const name=clean(profile.display_name,24),memo=clean(profile.personality_note,72);
-      const variants=[
-        `家族メモから${name}の「${memo}」をひとつ。今日はこの話をきっかけに、のんびり話せたらよさそうです。`,
-        `${name}のメモには「${memo}」。そんな一面を思い出しつつ、今日も家族でゆるくいきましょう。`,
-        `今朝は${name}の「${memo}」というメモから。いつもの一日にも、小さな話題がひとつあるといいですね。`,
-      ];
-      options.push(variants[morningVariant(localDate,71+offset,variants.length)]);
-    }
-  }
-  const names=profiles.map(profile=>clean(profile.display_name,24)).filter(Boolean).slice(0,3);
-  if(!options.length)options.push('今日も家族それぞれのペースで、できることからひとつずつ。');
-  for(const name of names)options.push(`${name}も家族のみんなも、今日をそれぞれのペースで。`);
-  return options.slice(0,MAX_MORNING_PERSONAL_NOTE_OPTIONS);
+  const focusProfiles=memoProfiles.length?memoProfiles:profiles;
+  const focusName=focusProfiles.length?clean(focusProfiles[morningVariant(localDate,53,focusProfiles.length)]?.display_name,24):'';
+  const who=focusName||'家族みんな';
+  const themedVariants=[
+    [
+      `${who}には、今日はひとこと「おつかれさま」を。ねぎらいから始める朝もよさそうです。`,
+      `${who}のことを思い浮かべつつ、今朝は少しだけねぎらい多めで。無理しすぎずいきましょう。`,
+      `今朝は${who}に、いつもの頑張りへひとこと。短い「おつかれさま」だけでも十分です。`,
+    ],
+    [
+      `${who}が気になっていることや好きなものを、今朝の雑談のきっかけにしてみるのもよさそうです。`,
+      `今朝は${who}に「最近なにが気になる？」と聞いてみるのもよさそうです。そこから軽く雑談を。`,
+      `${who}の好きな話題をひとつ拾って、家族で少しだけ話す朝もよさそうです。`,
+    ],
+    [
+      `${who}も、今日は気分がちょっと上がることをひとつ選べる日に。小さなことで十分です。`,
+      `今日は${who}が「これ好き」と思えるものをひとつ大事にする日にしてみるのもよさそうです。`,
+      `${who}にとって気分転換になることを、今日はひとつだけ入れてみてもよさそうです。`,
+    ],
+    [
+      `今朝は${who}に「今日はどんな感じ？」とひとこと。短い近況トークから始めるのもよさそうです。`,
+      `${who}の今の気分を、短いひとことだけ聞いてみる朝もよさそうです。`,
+      `今日は${who}と、いま気になっていることをひとつだけ話すところから始めてみましょう。`,
+    ],
+  ];
+  return themedVariants.map((variants,index)=>variants[morningVariant(localDate,71+index,variants.length)]).slice(0,MAX_MORNING_PERSONAL_NOTE_OPTIONS);
 }
 
-function persistedMorningFrame(raw:string|null,options:Frame[]):Frame|null{
+function persistedMorningFrame(raw:string|null,options:Frame[],noteOptions:string[]):Frame|null{
   if(!raw)return null;
   try{
     const value=JSON.parse(raw) as Record<string,unknown>;
     const opener=String(value.opener||''),closing=String(value.closing||'');
     if(!options.some(option=>option.opener===opener)||!options.some(option=>option.closing===closing))return null;
     const personalNote=clean(value.personalNote,120);
+    if(personalNote&&!noteOptions.includes(personalNote))return null;
     return {opener,closing,...(personalNote?{personalNote}:{})};
   }catch{return null;}
 }
@@ -121,10 +130,6 @@ async function finalizeFrameSafely(env:Env,familyId:number,localDate:string,fram
 async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
   if(tone==='PLAIN')return options[0];
-  try{
-    const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
-    if(persisted){return persistedMorningFrame(persisted,options)||options[0];}
-  }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   let profiles:FamilyAiSafeProfileContext[]=[];
   let profileContext='[]';
   try{
@@ -133,8 +138,12 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
   const noteOptions=morningPersonalNoteOptions(profiles,localDate);
   const fallbackFrame:Frame={...options[0],personalNote:noteOptions[0]};
+  try{
+    const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
+    if(persisted){return persistedMorningFrame(persisted,options,noteOptions)||fallbackFrame;}
+  }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
-  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体と家族向け短文を選びます。返答はJSONだけ。{"opener":0,"closing":0,"note":0} の整数indexだけを返してください。自由文は生成しないでください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。候補選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; note_candidates=${JSON.stringify(noteOptions)}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:100}};
+  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体と家族向け短文を選びます。返答はJSONだけ。{"opener":0,"closing":0,"note":0} の整数indexだけを返してください。自由文は生成しないでください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。personality_noteは、どの候補が自然かを選ぶためだけの内部判断材料です。内容をそのまま引用・転記・要約・列挙して表示しないでください。候補本文にないプロフィール属性を追加・説明しないでください。明示されたメモは、ねぎらい・興味や雑談・気分転換・近況確認のどの方向が自然かを選ぶ参考にだけ使ってください。事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください。同じプロフィールでも、自然に合う範囲で毎日同じ方向へ固定しないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; note_candidates=${JSON.stringify(noteOptions)}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:100}};
   const models=morningDigestModels(env);
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];
