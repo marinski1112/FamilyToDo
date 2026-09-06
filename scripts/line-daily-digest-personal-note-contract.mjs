@@ -16,7 +16,7 @@ for(const marker of [
   'noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください',
   'const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing),ni=Number(parsed?.note)',
   'const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0]',
-  "if(frame.personalNote)lines.push('【家族のひとこと】", 
+  "if(frame.personalNote)lines.push('【家族のひとこと】",
 ])if(!digest.includes(marker))throw new Error(`morning personal note marker missing: ${marker}`);
 
 if((digest.match(/geminiFetch\(env,model,body\)/g)||[]).length!==1)throw new Error('morning digest must retain one Gemini call site');
