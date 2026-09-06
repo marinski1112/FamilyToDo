@@ -128,7 +128,7 @@ const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'
 if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
   throw new Error('authoritative Family Log/schedule/task/advice sections must render before optional Location enrichment');
 }
-const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction renderDeterministicFacts(',adviceStart);
+const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction morningVariant(',adviceStart);
 const adviceBody=adviceStart>=0&&adviceEnd>adviceStart?digest.slice(adviceStart,adviceEnd):'';
 if(!adviceBody||/familyLog|\.location|MILK|BREASTFEED|DIAPER|TEMPERATURE|WEIGHT|HEIGHT|MEDICINE/i.test(adviceBody)){
   throw new Error('morning advice must remain bounded to task/schedule planning facts, not health/body/location inference');

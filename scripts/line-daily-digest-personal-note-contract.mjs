@@ -17,7 +17,13 @@ for(const marker of [
   'const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing),ni=Number(parsed?.note)',
   'const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0]',
   "if(frame.personalNote)lines.push('【家族のひとこと】",
-])if(!digest.includes(marker))throw new Error(`morning personal note marker missing: ${marker}`);
+  'function buildEvidencePraise(payload:DigestFactPayload):string[]',
+  'payload.familyLog.previous.length',
+  'payload.today.completed>0',
+  "payload.today.bringItems.filter(item=>item.startsWith('✓ ')).length",
+  'return praise.slice(0,2)',
+  "if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`))",
+])if(!digest.includes(marker))throw new Error(`morning personal note/praise marker missing: ${marker}`);
 
 if((digest.match(/geminiFetch\(env,model,body\)/g)||[]).length!==1)throw new Error('morning digest must retain one Gemini call site');
 if(/chooseFrame\([^)]*facts|chooseFrame\([^)]*payload/.test(digest))throw new Error('recipient-specific deterministic facts must not be sent into the shared family frame/note selector');
@@ -25,5 +31,6 @@ if(!digest.includes("if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.G
 if(!digest.includes('Optional personalization context must never block the deterministic morning digest'))throw new Error('profile lookup failure must remain non-blocking');
 if(!digest.includes("血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください"))throw new Error('sensitive-attribute anti-inference prompt guard missing');
 if(!digest.includes('決定論的な予定・記録の事実を変更しないでください'))throw new Error('deterministic fact authority guard missing');
+if(/buildEvidencePraise[\s\S]{0,1800}(geminiFetch|fetch\(|Routes|Maps)/.test(digest))throw new Error('evidence praise must remain deterministic and local');
 
-console.log('line-daily-digest-personal-note-contract: predefined-note index selection only; no recipient facts enter shared AI selector; deterministic fallback preserved');
+console.log('line-daily-digest-personal-note-contract: predefined-note index selection only; deterministic evidence praise is local/bounded; no recipient facts enter shared AI selector');
