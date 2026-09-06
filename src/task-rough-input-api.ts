@@ -47,6 +47,14 @@ function explicitQuantity(block:RoughBlock):string|null{
   return inline?.[1]?clean(inline[1],40)||null:null;
 }
 
+function deterministicTitle(block:RoughBlock,destination:Destination,quantity:string|null):string{
+  if(destination!=='shopping'||!quantity)return block.titleSeed.slice(0,200);
+  const index=block.titleSeed.lastIndexOf(quantity);
+  if(index<0)return block.titleSeed.slice(0,200);
+  const stripped=`${block.titleSeed.slice(0,index)} ${block.titleSeed.slice(index+quantity.length)}`.replace(/\s+/g,' ').trim();
+  return (stripped||block.titleSeed).slice(0,200);
+}
+
 function continuationDescription(block:RoughBlock,destination:Destination):string|null{
   if(destination!=='task'&&destination!=='event')return null;
   const parts:string[]=[];
@@ -83,7 +91,10 @@ function parseRequestBody(value:unknown):{primaryType:Destination;fields:RoughFi
 }
 
 function deterministicItems(fields:RoughField[]):RoughItem[]{
-  return fields.flatMap(field=>field.blocks.map(block=>({destination:field.destination,originalText:block.originalText,title:block.titleSeed.slice(0,200),quantity:field.destination==='shopping'?explicitQuantity(block):null,category:null,dueDate:null,dueTime:null,description:continuationDescription(block,field.destination)}))).slice(0,MAX_ITEMS);
+  return fields.flatMap(field=>field.blocks.map(block=>{
+    const quantity=field.destination==='shopping'?explicitQuantity(block):null;
+    return {destination:field.destination,originalText:block.originalText,title:deterministicTitle(block,field.destination,quantity),quantity,category:null,dueDate:null,dueTime:null,description:continuationDescription(block,field.destination)};
+  })).slice(0,MAX_ITEMS);
 }
 
 function validateGeminiItems(value:unknown,fields:RoughField[]):RoughItem[]|null{
