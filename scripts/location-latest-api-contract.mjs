@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const source=await readFile(new URL('../src/location-latest-api.ts',import.meta.url),'utf8');
+const history=await readFile(new URL('../src/location-history-api.ts',import.meta.url),'utf8');
 const routes=await readFile(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
 
 assert.match(source,/new D1LocationQueryService\(ctx\.env\.DB\)/,'latest API must reuse the provider-neutral LocationQueryService');
@@ -29,4 +30,17 @@ assert.doesNotMatch(source,/navigator\.geolocation|GOOGLE_MAPS_|Routes API/i,'Ph
 assert.match(routes,/import \{ locationLatestApi \} from '\.\/location-latest-api';/,'context API dispatcher must retain the latest-location boundary');
 assert.match(routes,/url\.pathname==='\/api\/location\/latest'\) return await locationLatestApi\(request,context\)/,'authenticated context routing must expose the latest projection endpoint');
 
-console.log('location-latest-api-contract: ok');
+assert.match(history,/const HISTORY_LIMIT=250;/,'history API must keep a fixed bounded point count');
+assert.match(history,/const MAX_HISTORY_WINDOW_MS=48\*60\*60\*1000;/,'history API must bound each request to 48 hours');
+assert.match(history,/if\(!requester\)return fail\(401,'AUTH_REQUIRED'/,'history API must require an authenticated member');
+assert.match(history,/request\.method!=='GET'/,'history API must be read-only');
+assert.match(history,/new D1LocationQueryService\(ctx\.env\.DB\)/,'history API must reuse the provider-neutral LocationQueryService');
+assert.match(history,/service\.history\(\{[\s\S]*scope:\{familyId,requesterMemberId\}[\s\S]*subjectMemberId[\s\S]*from[\s\S]*to[\s\S]*limit:HISTORY_LIMIT/,'history API must preserve authenticated family/requester/subject scope and explicit bounded time range');
+assert.match(history,/points:points\.map\(\(point\)=>\(\{[\s\S]*latitude:point\.latitude[\s\S]*longitude:point\.longitude[\s\S]*recordedAt:point\.recordedAt/,'history API must expose only the provider-neutral point projection');
+assert.match(history,/'cache-control':'no-store'/,'history coordinates must not be stored in shared HTTP caches');
+assert.doesNotMatch(history,/location_devices|member_location_history|SELECT |secret_hash|public_id|device_id|raw_payload|authorization|console\.(?:log|info|warn|error)/i,'history HTTP boundary must not bypass LocationQueryService or expose/log device internals');
+assert.doesNotMatch(history,/\bprovider\s*[:=]/i,'history HTTP boundary must not project or bind provider identifiers');
+assert.match(routes,/import \{ locationHistoryApi \} from '\.\/location-history-api';/,'context API dispatcher must import the bounded history boundary');
+assert.match(routes,/url\.pathname==='\/api\/location\/history'\) return await locationHistoryApi\(request,context\)/,'authenticated context routing must expose the history endpoint');
+
+console.log('location-latest-api-contract: latest + bounded history ok');
