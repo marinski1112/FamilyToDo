@@ -8,6 +8,7 @@ import { logRequestFailure } from './observability/errors';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
 import { processNotifications } from './notification-delivery';
 import { processLineDailyDigests } from './line-daily-digest';
+import { processLinePeriodicDigests } from './line-periodic-digest';
 import { dispatchPageRoute } from './page-routes';
 import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
@@ -52,6 +53,7 @@ export default {
     if(controller.cron==='*/5 * * * *'){
       ctx.waitUntil(processNotifications(env));
       ctx.waitUntil(processLineDailyDigests(env));
+      ctx.waitUntil(processLinePeriodicDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
       ctx.waitUntil(processChildJournalCalendarOutbox(env));
     }
