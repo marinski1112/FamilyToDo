@@ -18,13 +18,20 @@ for(const marker of [
   '原文を引用・羅列せず、プロフィールを読んだことも明かさないでください',
   '事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください',
   'PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください',
-  'const parsed=JSON.parse(text),opener=clean(parsed?.opener,80),personalNote=clean(parsed?.narrative,MAX_MORNING_NARRATIVE_CHARS),closing=clean(parsed?.closing,80)',
+  'function profileLeakFragments(profiles:FamilyAiSafeProfileContext[]):string[]',
+  'function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileContext[],evidence:string):boolean',
+  'if(profileLeakFragments(profiles).some(fragment=>normalized.includes(fragment)))return false',
+  'if(!generatedFramePassesSafety(frame,profiles,evidence))continue',
+  'persistedMorningFrame(persisted,profiles,evidence)',
+  'const allowedNumbers=new Set((evidence.match(/\\d+(?:\\.\\d+)?/g)||[]).map(String))',
   'narrativeVersion:2',
   'if(Number(value.narrativeVersion)!==2)return null',
   'if(!sharedAiFacts)sharedAiFacts=await buildFactPayload(env,Number(setting.family_id),0,localDate,EMPTY_LOCATION_FACTS)',
   'frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate,sharedAiFacts,weatherFact)',
   'function buildEvidencePraise(payload:DigestFactPayload):string[]',
-  "if(frame.personalNote)lines.push(`💬 ${frame.personalNote}`)",
+  'const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)',
+  'const fullAuthoritativeLength=[...authoritative,...requiredSuffix].join',
+  'if(available<8)return authoritativeText',
 ])if(!digest.includes(marker))throw new Error(`morning natural narrative marker missing: ${marker}`);
 
 if((digest.match(/geminiFetch\(env,model,body\)/g)||[]).length!==1)throw new Error('morning digest must retain exactly one Gemini call site');
@@ -38,20 +45,32 @@ const evidenceBody=evidenceStart>=0&&evidenceEnd>evidenceStart?digest.slice(evid
 if(!evidenceBody)throw new Error('shared AI evidence builder missing');
 if(/location|latitude|longitude|private_owner_id/i.test(evidenceBody))throw new Error('AI narrative evidence must not include location/raw GPS/private-owner fields');
 
+const safetyStart=digest.indexOf('function generatedFramePassesSafety('),safetyEnd=digest.indexOf('\nfunction persistedMorningFrame(',safetyStart);
+const safetyBody=safetyStart>=0&&safetyEnd>safetyStart?digest.slice(safetyStart,safetyEnd):'';
+if(!safetyBody.includes('profileLeakFragments(profiles)'))throw new Error('server-side profile leak validator missing');
+if(!/https\?:\\\/\\\/|www/.test(safetyBody))throw new Error('generated output URL rejection missing');
+if(!safetyBody.includes('allowedNumbers'))throw new Error('generated numeric grounding validator missing');
+
 const chooseStart=digest.indexOf('async function chooseFrame('),chooseEnd=digest.indexOf('\nfunction logFact(',chooseStart);
 const chooseBody=chooseStart>=0&&chooseEnd>chooseStart?digest.slice(chooseStart,chooseEnd):'';
 if(!chooseBody||/(Routes|Maps|Search grounding)/.test(chooseBody))throw new Error('morning narrative must not add Maps/Routes/Search providers');
 if(!chooseBody.includes('maxOutputTokens:360'))throw new Error('bounded Gemini output token limit missing');
 if(/SELECT |INSERT |UPDATE |DELETE /i.test(chooseBody))throw new Error('Gemini narrative function must not perform arbitrary DB fact queries');
+if(!chooseBody.includes('generatedFramePassesSafety(frame,profiles,evidence)'))throw new Error('Gemini output must pass server-side validation before persistence/broadcast');
 
 const processStart=digest.indexOf('export async function processLineDailyDigests(');
 const processBody=processStart>=0?digest.slice(processStart):'';
 if(!processBody.includes('buildFactPayload(env,Number(setting.family_id),0,localDate,EMPTY_LOCATION_FACTS)'))throw new Error('shared Gemini facts must be built with FAMILY-only task visibility');
 if((processBody.match(/chooseFrame\(/g)||[]).length!==1)throw new Error('frame/narrative must be generated once and reused across recipients');
 
+const renderStart=digest.indexOf('function renderDeterministicFacts('),renderEnd=digest.indexOf('\nexport async function processLineDailyDigests(',renderStart);
+const renderBody=renderStart>=0&&renderEnd>renderStart?digest.slice(renderStart,renderEnd):'';
+if(renderBody.indexOf('const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)')>renderBody.indexOf('const narrative='))throw new Error('authoritative sections must be budgeted before optional narrative');
+if(!renderBody.includes('MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength'))throw new Error('narrative must use only capacity left after authoritative sections');
+
 const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
 const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';
 if(!praiseBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(praiseBody))throw new Error('evidence praise must remain deterministic and local');
 
 await import('./line-daily-digest-weather-contract.mjs');
-console.log('line-daily-digest-personal-note-contract: one bounded Gemini call synthesizes a natural grounded morning narrative from FAMILY-only evidence; deterministic fallback/privacy guards remain');
+console.log('line-daily-digest-personal-note-contract: one bounded Gemini call may synthesize a natural morning narrative, but server-side leak/grounding checks and authoritative-section budgeting gate broadcast');
