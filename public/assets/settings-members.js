@@ -6,10 +6,11 @@ document.querySelectorAll('.member-profile-form').forEach(form=>form.addEventLis
   event.preventDefault();
   if(!(form instanceof HTMLFormElement))return;
   const status=form.querySelector('.member-profile-status'),button=form.querySelector('button[type="submit"]'),fd=new FormData(form),memberId=Number(form.dataset.id||0);
+  const aiProfilePermissions=[...form.querySelectorAll('input[name="ai_profile_permissions"]:checked')].map(x=>x.value);
   if(button)button.disabled=true;
   if(status)status.textContent='保存しています…';
   try{
-    const response=await fetch('/app/settings_members.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({action:'profile_update',member_id:memberId,birth_date:String(fd.get('birth_date')||''),sex_gender:String(fd.get('sex_gender')||''),birthplace:String(fd.get('birthplace')||''),blood_type:String(fd.get('blood_type')||''),personality_note:String(fd.get('personality_note')||''),ai_personalization_enabled:fd.get('ai_personalization_enabled')==='on',csrf})});
+    const response=await fetch('/app/settings_members.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({action:'profile_update',member_id:memberId,birth_date:String(fd.get('birth_date')||''),sex_gender:String(fd.get('sex_gender')||''),birthplace:String(fd.get('birthplace')||''),blood_type:String(fd.get('blood_type')||''),personality_note:String(fd.get('personality_note')||''),ai_personalization_enabled:fd.get('ai_personalization_enabled')==='on',ai_profile_permissions:aiProfilePermissions,csrf})});
     const data=await response.json().catch(()=>null);
     if(!response.ok||!data?.ok)throw new Error(typeof data?.error==='string'?data.error:'プロフィールを保存できませんでした。');
     if(status)status.textContent='保存しました。';
