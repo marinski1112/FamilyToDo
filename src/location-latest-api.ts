@@ -102,6 +102,8 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       ?straightLineDistanceMeters(requesterPoint,point)
       :null;
     members.push({
+      memberId:subjectMemberId,
+      isViewer:subjectMemberId===requesterMemberId,
       name:String(row.name??''),
       sharingEnabled,
       state:safeFreshness.state,
