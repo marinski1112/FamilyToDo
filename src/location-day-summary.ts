@@ -81,6 +81,38 @@ const movementText=(name:string,points:readonly LocationPoint[]):string=>{
 };
 
 /**
+ * Build one strict, digest-safe family movement projection for a calendar day.
+ * Unlike the optional morning-digest wrapper below, read failures are allowed to
+ * propagate so an explicit user inquiry can be retried instead of being reported
+ * as an empty day. Raw coordinates never leave this module.
+ */
+export async function buildLocationMovementDayLines(input:Readonly<{
+  db:D1Database;
+  familyId:number;
+  requesterMemberId:number;
+  localDate:string;
+  timeZone:string;
+}>):Promise<readonly string[]>{
+  const {db,familyId,requesterMemberId,localDate,timeZone}=input;
+  if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(requesterMemberId)||requesterMemberId<=0)throw new Error('invalid location movement scope');
+  const members=await db.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT ?`)
+    .bind(familyId,MAX_MEMBERS).all<MemberRow>();
+  const service=new D1LocationQueryService(db);
+  const from=zonedMidnightUtc(localDate,timeZone);
+  const next=zonedMidnightUtc(dateShift(localDate,1),timeZone);
+  const to=new Date(Date.parse(next)-1).toISOString();
+  const lines:string[]=[];
+  for(const member of members.results){
+    const subjectMemberId=Number(member.id);
+    if(!Number.isSafeInteger(subjectMemberId)||subjectMemberId<=0)continue;
+    const points=await service.history({scope:{familyId,requesterMemberId},subjectMemberId,from,to,limit:HISTORY_LIMIT});
+    const line=movementText(cleanName(member.name),points);
+    if(line)lines.push(line);
+  }
+  return lines;
+}
+
+/**
  * Build a digest-safe family movement projection from the provider-neutral
  * LocationQueryService. Raw coordinates, device identifiers, addresses and
  * provider payloads never leave this module. Disabled/revoked/non-sharing
