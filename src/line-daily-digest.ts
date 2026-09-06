@@ -1,3 +1,4 @@
+import { dailyFortune, type DailyFortune } from './daily-fortune';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
@@ -13,6 +14,7 @@ type DigestFactPayload={
   today:{events:string[];tasks:string[];bringItems:string[];completed:number;incomplete:number;overdue:number};
   familyLog:{previous:string[];today:string[]};
   location:LocationDigestDayFacts;
+  fortune:DailyFortune;
 };
 
 type Frame={opener:string;closing:string;personalNote?:string};
@@ -183,7 +185,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     ORDER BY local_date,l.subject_id,l.log_type,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE 0 END LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
   const previous=logRows.results.filter(x=>x.local_date===previousDate).slice(0,12).map(logFact);
   const today=logRows.results.filter(x=>x.local_date===localDate).slice(0,8).map(logFact);
-  return {localDate,previousDate,today:{events,tasks,bringItems,completed,incomplete,overdue},familyLog:{previous,today},location};
+  return {localDate,previousDate,today:{events,tasks,bringItems,completed,incomplete,overdue},familyLog:{previous,today},location,fortune:dailyFortune(familyId,memberId,localDate)};
 }
 
 function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
@@ -215,7 +217,9 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
   if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
-  if(lines.length===(frame.personalNote?4:2))lines.push('昨日の記録・今日の予定はありません。');
+  const stars='★'.repeat(payload.fortune.stars)+'☆'.repeat(Math.max(0,5-payload.fortune.stars));
+  lines.push('【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`);
+  if(lines.length===(frame.personalNote?7:5))lines.push('昨日の記録・今日の予定はありません。');
   lines.push(frame.closing);
   return lines.join('\n').slice(0,1000);
 }
