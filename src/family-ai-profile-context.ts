@@ -45,7 +45,7 @@ export function parseAiProfilePermissions(value:unknown):Set<AiProfilePermission
  * boundary only when their allowlisted field permission is also present. Raw birth date/year is
  * never returned; a permitted birth date is reduced to deterministic age + zodiac only so the
  * complete birth date cannot be reconstructed from this projection.
- * This helper is intentionally not wired into Gemini/digest callers yet.
+ * AI callers must consume this projection instead of reading raw profile columns directly.
  */
 export async function loadSafeFamilyAiProfileContext(db:D1Database,familyId:number,today?:string):Promise<FamilyAiSafeProfileContext[]>{
   if(!Number.isSafeInteger(familyId)||familyId<=0)return [];

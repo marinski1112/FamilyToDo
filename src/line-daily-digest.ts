@@ -1,4 +1,5 @@
 import { familyAiProvider, geminiFetch } from './family-ai';
+import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { buildLocationDigestDayFacts, type LocationDigestDayFacts } from './location-day-summary';
 import { DEFAULT_FAMILY_TIMEZONE, utcNow } from './timezone';
@@ -17,6 +18,8 @@ type Frame={opener:string;closing:string};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
+const MAX_MORNING_PROFILE_SUBJECTS=8;
+const MAX_MORNING_PROFILE_CONTEXT_CHARS=2400;
 export const MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT='gemini-3.8-flash';
 export const MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT='gemini-3.5-flash';
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
@@ -44,10 +47,28 @@ const morningDigestModels=(env:Env)=>{
   return primary===fallback?[primary]:[primary,fallback];
 };
 
-async function chooseFrame(env:Env,tone:ToneLevel):Promise<Frame>{
+function morningProfilePromptContext(profiles:FamilyAiSafeProfileContext[]):string{
+  const minimized=profiles.slice(0,MAX_MORNING_PROFILE_SUBJECTS).map(profile=>({
+    subject_ref:profile.subject_ref,
+    display_name:profile.display_name,
+    subject_kind:profile.subject_kind,
+    ...(profile.personality_note?{personality_note:profile.personality_note}:{}),
+    ...(profile.birth_facts?{birth_facts:profile.birth_facts}:{}),
+    ...(profile.birthplace?{birthplace:profile.birthplace}:{}),
+    ...(profile.sex_gender?{sex_gender:profile.sex_gender}:{}),
+    ...(profile.blood_type?{blood_type:profile.blood_type}:{}),
+  }));
+  return Array.from(JSON.stringify(minimized)).slice(0,MAX_MORNING_PROFILE_CONTEXT_CHARS).join('');
+}
+
+async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
   if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return options[0];
-  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体を選びます。返答はJSONだけ。{"opener":0,"closing":0} の整数indexだけを返してください。事実・名前・数字・予定・健康状態・天気を新しく文章化しないでください。tone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:80}};
+  let profileContext='[]';
+  try{
+    profileContext=morningProfilePromptContext(await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate));
+  }catch{/* Optional personalization context must never block the deterministic morning digest. */}
+  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体を選びます。返答はJSONだけ。{"opener":0,"closing":0} の整数indexだけを返してください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。文体選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:80}};
   for(const model of morningDigestModels(env)){
     try{
       const response=await geminiFetch(env,model,body);
@@ -166,7 +187,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
             :EMPTY_LOCATION_FACTS;
         }
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
-        frame??=await chooseFrame(env,toneLevel(setting.tone_level));
+        frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate);
         const message=renderDeterministicFacts(facts,frame);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message);
         await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
