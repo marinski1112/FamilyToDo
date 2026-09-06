@@ -31,7 +31,7 @@ for(const marker of [
 assert.ok(taskNew.includes("fetch('/api/shopping-categories'"),'task-new must opt-in register custom categories through the canonical family category API');
 assert.ok(!taskNewPage.includes('datalist id="taskShopCategories"'),'task-new must not derive category suggestions from historical Shopping rows');
 assert.ok(!taskNewPage.includes('<select name="shopping_category">'),'task-new must not collapse linked shopping rows into one shared category selector');
-assert.ok(taskNewPage.includes('<script src="/assets/task-new.js?v=12.147.0-wave128-rough-input1"></script>'),'task-new page must use the cache-rotated rough-input asset revision');
+assert.ok(taskNewPage.includes('<script src="/assets/task-new.js?v=12.147.0-wave128-rough-input2"></script>'),'task-new page must use the cache-rotated split rough-input asset revision');
 assert.ok(!taskNewPage.includes('/assets/task-new.js?v=12.147.0-wave128-calendar-return1'),'task-new page must not reuse the pre-category-selector cache key');
 
 for(const value of [
