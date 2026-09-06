@@ -107,7 +107,9 @@ try{
   };
 
   const ensureSaveAction=()=>{
-    if(preview.hidden||!preview.querySelector('.rough-draft-row'))return;
+    const rows=preview.querySelectorAll('.rough-draft-row');
+    const structuredPreview=preview.querySelector('.rough-advanced,.rough-row-details');
+    if(preview.hidden||!rows.length||!structuredPreview)return;
     for(const row of preview.querySelectorAll('.rough-draft-row[data-destination="shopping"],.rough-draft-row[data-destination="item"]'))row.querySelector('.rough-draft-due-time')?.closest('label')?.remove();
     let actions=preview.querySelector('.rough-save-actions');
     if(!actions){
