@@ -72,12 +72,17 @@ if(digest.includes('resolveFamilyGeminiModel'))throw new Error('morning digest m
 if((digest.match(/await geminiFetch\(/g)||[]).length!==1)throw new Error('morning digest source must keep one bounded model-call site');
 const receiptGate=digest.indexOf("Number(receipt.attempt_count)>=3)continue");
 const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptGate);
-const profileRead=digest.indexOf('await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)',receiptGate);
+const frameInvocation=digest.indexOf('frame??=await chooseFrame(',receiptGate);
+const chooseFrameStart=digest.indexOf('async function chooseFrame(');
+const chooseFrameEnd=digest.indexOf('\nfunction logFact(',chooseFrameStart);
+const chooseFrameBody=chooseFrameStart>=0&&chooseFrameEnd>chooseFrameStart?digest.slice(chooseFrameStart,chooseFrameEnd):'';
+const aiEligibilityGuard=chooseFrameBody.indexOf("familyAiProvider(env)!=='GEMINI'");
+const profileLoader=chooseFrameBody.indexOf('await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)');
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
   throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
 }
-if(receiptGate<0||profileRead<0||profileRead<receiptGate){
-  throw new Error('optional AI profile context must be deferred until after receipt SENT/retry gating');
+if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||profileLoader<0||aiEligibilityGuard<0||profileLoader<aiEligibilityGuard){
+  throw new Error('optional AI profile context must be reached only after receipt gating and the morning Gemini eligibility guard');
 }
 const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
