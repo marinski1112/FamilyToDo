@@ -24,7 +24,7 @@ for(const marker of [
   'id="invite"',
   'id="settingsMembersPayload"',
   "JSON.stringify({csrf:ctx.session.csrfToken||''})",
-  '/assets/settings-members.js?v=${APP_VERSION}-member-profile1',
+  '/assets/settings-members.js?v=${APP_VERSION}-member-profile-permissions1',
   "layout('家族メンバー',body,'/app/settings.php')",
 ]) if(!page.includes(marker)) throw new Error(`settings members page lost behavior marker: ${marker}`);
 if(page.includes("from './app'")) throw new Error('settings members page must not depend on app.ts');
