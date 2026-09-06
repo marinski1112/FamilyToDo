@@ -103,12 +103,13 @@ if(!migration.includes('enabled INTEGER NOT NULL DEFAULT 1'))throw new Error('di
 if(/latitude|longitude|location_history|owntracks|device_id|public_device_id|secret/i.test(digest))throw new Error('morning digest must not read or expose raw location/device sources');
 for(const sentinel of [
   "import { D1LocationQueryService } from './location-query-service';",
-  'service.history({',
+  'service.historyForSubjects({',
   'Disabled/revoked/non-sharing',
   'MIN_SEGMENT_METERS=25',
   'return EMPTY_FACTS',
 ]){
   if(!locationSummary.includes(sentinel))throw new Error(`privacy-safe location summary boundary missing: ${sentinel}`);
 }
+if(locationSummary.includes('service.history({'))throw new Error('family-wide Location summaries must not regress to one D1 history statement per member');
 if(locationSummary.includes('console.'))throw new Error('location digest summary must not log location-derived data');
 console.log('LINE daily digest modularity contract: ok');
