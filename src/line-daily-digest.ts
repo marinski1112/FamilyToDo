@@ -10,7 +10,7 @@ type ToneLevel='PLAIN'|'FRIENDLY'|'FRIENDLY_LIGHT';
 type DigestFactPayload={
   localDate:string;
   previousDate:string;
-  today:{events:string[];tasks:string[];completed:number;incomplete:number;overdue:number};
+  today:{events:string[];tasks:string[];bringItems:string[];completed:number;incomplete:number;overdue:number};
   familyLog:{previous:string[];today:string[]};
   location:LocationDigestDayFacts;
 };
@@ -143,7 +143,7 @@ function logFact(row:Row):string{
 
 async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string,location:LocationDigestDayFacts):Promise<DigestFactPayload>{
   const previousDate=dateBefore(localDate);
-  const [taskRows,taskCounts]=await Promise.all([
+  const [taskRows,taskCounts,bringItemRows]=await Promise.all([
     env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
       WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))
       AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<?))
@@ -155,12 +155,18 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
         SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<? THEN 1 ELSE 0 END) overdue
       FROM tasks WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))`)
       .bind(localDate,localDate,localDate,familyId,memberId).first<Row>(),
+    env.DB.prepare(`SELECT i.name,i.status
+      FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
+      WHERE i.family_id=? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND (pt.visibility_scope='FAMILY' OR (pt.visibility_scope='PRIVATE' AND pt.private_owner_id=?))))
+        AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
+      ORDER BY i.due_at,i.status,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
   ]);
   const todayRows=taskRows.results.filter(x=>String(x.at).slice(0,10)===localDate);
   const eventRows=todayRows.filter(x=>String(x.task_kind).toUpperCase()==='EVENT');
   const taskOnly=todayRows.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK');
   const events=eventRows.slice(0,5).map(x=>`${localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
   const tasks=taskOnly.slice(0,6).map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.title)}`);
+  const bringItems=bringItemRows.results.map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.name)}`).filter(x=>x.length>2);
   const completed=Math.max(0,Number(taskCounts?.completed||0)),incomplete=Math.max(0,Number(taskCounts?.incomplete||0)),overdue=Math.max(0,Number(taskCounts?.overdue||0));
 
   const logRows=await env.DB.prepare(`SELECT substr(l.occurred_at,1,10) local_date,l.log_type,s.name subject_name,
@@ -177,7 +183,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     ORDER BY local_date,l.subject_id,l.log_type,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE 0 END LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
   const previous=logRows.results.filter(x=>x.local_date===previousDate).slice(0,12).map(logFact);
   const today=logRows.results.filter(x=>x.local_date===localDate).slice(0,8).map(logFact);
-  return {localDate,previousDate,today:{events,tasks,completed,incomplete,overdue},familyLog:{previous,today},location};
+  return {localDate,previousDate,today:{events,tasks,bringItems,completed,incomplete,overdue},familyLog:{previous,today},location};
 }
 
 function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
@@ -203,6 +209,7 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
   if(payload.today.tasks.length){lines.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
+  if(payload.today.bringItems.length){lines.push('【今日の持ち物】',...payload.today.bringItems.map(x=>`🎒 ${x}`));}
   if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
   const advice=buildDeterministicAdvice(payload);
   if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
