@@ -24,13 +24,15 @@
   let googleMapsAtAuth=false;
   let firstKey='';
   let keysDiffer=false;
+  let mapsErrorCode='';
 
   const diagnosticText=()=>{
     const visibility=mapEverVisible?'地図表示成功あり':'地図表示成功なし';
     const authTiming=authFailures?(authAfterVisible?'表示後にauth failure':'表示前にauth failure'):'auth failureなし';
     const googleState=authFailures?(googleMapsAtAuth?'auth時 google.mapsあり':'auth時 google.mapsなし'):'auth時状態なし';
     const keyState=mapsScripts>1?(keysDiffer?'複数scriptでキー差異あり':'複数scriptは同一キー'):'Maps script単一';
-    return `診断: Maps script ${mapsScripts}回 / load ${scriptLoads}回 / script error ${scriptErrors}回 / ${visibility} / auth ${authFailures}回・${authTiming} / ${googleState} / ${keyState}`;
+    const errorCodeState=mapsErrorCode?`Google error ${mapsErrorCode}`:'Google error code未取得';
+    return `診断: Maps script ${mapsScripts}回 / load ${scriptLoads}回 / script error ${scriptErrors}回 / ${visibility} / auth ${authFailures}回・${authTiming} / ${googleState} / ${keyState} / ${errorCodeState}`;
   };
 
   const showFailure=()=>{
@@ -43,6 +45,30 @@
     if(mapStateEl.textContent!==text)mapStateEl.textContent=text;
     queueMicrotask(()=>{showingFailure=false;});
   };
+
+  const captureMapsErrorCode=(values)=>{
+    if(mapsErrorCode)return;
+    const parts=[];
+    for(const value of values){
+      if(typeof value==='string')parts.push(value);
+      else if(value instanceof Error&&typeof value.message==='string')parts.push(value.message);
+      if(parts.length>=8)break;
+    }
+    const text=parts.join(' ');
+    if(!text.includes('Google Maps JavaScript API'))return;
+    const match=text.match(/\b([A-Za-z][A-Za-z0-9]*MapError)\b/);
+    if(!match)return;
+    mapsErrorCode=match[1];
+    if(failure)queueMicrotask(showFailure);
+  };
+
+  const previousConsoleError=console.error;
+  try{
+    console.error=function(...args){
+      captureMapsErrorCode(args);
+      return previousConsoleError.apply(this,args);
+    };
+  }catch(_error){}
 
   const trackMapsScript=(script)=>{
     if(!(script instanceof HTMLScriptElement)||!script.src.startsWith('https://maps.googleapis.com/maps/api/js?'))return;
@@ -81,6 +107,7 @@
   };
 
   window.addEventListener('error',(event)=>{
+    captureMapsErrorCode([event.message,event.error]);
     const target=event.target;
     if(target instanceof HTMLScriptElement&&target.src.startsWith('https://maps.googleapis.com/maps/api/js?')){
       failure='SCRIPT';
