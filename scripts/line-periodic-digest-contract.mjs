@@ -25,7 +25,13 @@ for(const marker of [
 ])if(!source.includes(marker))throw new Error(`periodic digest marker missing: ${marker}`);
 
 if((source.match(/geminiFetch\(env,/g)||[]).length!==1)throw new Error('periodic digest must have exactly one bounded Gemini call site');
-if(/buildLocationDigestDayFacts|location_history|owntracks|latitude|longitude/.test(source.replace(/raw GPS,座標、位置履歴/g,'')))throw new Error('periodic digest must not read Location/raw GPS sources');
+const rawLocationReads=[
+  /buildLocationDigestDayFacts\s*\(/,
+  /\b(?:FROM|JOIN)\s+(?:member_)?location_(?:history|devices?)\b/i,
+  /\bowntracks\b.*\b(?:SELECT|FROM|JOIN|prepare)\b/i,
+  /\b(?:latitude|longitude|public_device_id|device_id)\b\s*(?:,|FROM|JOIN|WHERE|=\?)/i,
+];
+if(rawLocationReads.some(pattern=>pattern.test(source)))throw new Error('periodic digest must not read Location/raw GPS sources');
 if(/Open-Meteo|loadMorningWeatherFact|Routes|Maps|Search grounding/.test(source))throw new Error('periodic digest must not fan out to weather/maps/routes/search');
 
 for(const marker of [
@@ -61,4 +67,7 @@ for(const marker of [
 const sharedFacts=source.indexOf('const facts=await loadPeriodFacts('),narrative=source.indexOf('narrative=await chooseNarrative(',sharedFacts),recipientLoop=source.indexOf('for(const member of recipients.results)',sharedFacts);
 if(sharedFacts<0||narrative<sharedFacts||recipientLoop<narrative)throw new Error('periodic facts/narrative must be generated once per family/report before recipient fan-out');
 
-console.log('line-periodic-digest-contract: weekly/month-end boundaries, recovery, idempotency, FAMILY-only evidence, bounded shared AI and no external fan-out ok');
+const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart),renderBody=renderStart>=0&&renderEnd>renderStart?source.slice(renderStart,renderEnd):'';
+for(const marker of ['let includedExtras=extras','includedExtras=[]','const authoritative=[...required.slice(0,2),...includedExtras,...required.slice(2)]','MAX_LINE_CHARS-authoritativeText.length-1'])if(!renderBody.includes(marker))throw new Error(`periodic authoritative-first rendering marker missing: ${marker}`);
+
+console.log('line-periodic-digest-contract: weekly/month-end boundaries, recovery, idempotency, FAMILY-only evidence, authoritative-first rendering, bounded shared AI and no external fan-out ok');
