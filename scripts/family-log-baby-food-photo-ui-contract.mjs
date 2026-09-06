@@ -22,7 +22,7 @@ const checks=[
   [asset.includes('linked_completion?.ok===false')&&asset.includes('saved.linked_completion.message'),'photo save path must preserve canonical linked-completion warning behavior'],
   [asset.includes("credentials:'same-origin'")&&!asset.includes('https://')&&!asset.includes('http://'),'photo browser flow must remain same-origin only'],
   [!asset.includes('navigator.geolocation')&&!asset.toLowerCase().includes('gemini')&&!asset.includes('console.log'),'photo UI must not add location, AI analysis, or private console logging'],
-  [shell.includes("FAMILY_LOG_UI_REVISION = 'baby-food-photo1'")&&shell.includes('/assets\\/family-log\\.js'),'outer Family Log asset cache revision is missing'],
+  [shell.includes("FAMILY_LOG_UI_REVISION = 'baby-food-photo1'")&&shell.includes('family-log.js?v=${APP_VERSION}-${FAMILY_LOG_UI_REVISION}'),'outer Family Log asset cache revision is missing'],
   [String(pkg.scripts?.['check:browser-js']||'').includes('family-log-baby-food-media.js')&&String(pkg.scripts?.['check:family-log-js']||'').includes('family-log-baby-food-media.js'),'new browser asset must be syntax checked'],
 ];
 
