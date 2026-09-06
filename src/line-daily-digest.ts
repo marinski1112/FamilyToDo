@@ -231,13 +231,13 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
 
 function buildPreviousFamilyRecap(payload:DigestFactPayload):string[]{
   const logs=payload.familyLog.previous.length;
-  const movement=payload.location.previous.length>0;
-  if(!logs&&!movement)return [];
+  const hasLocationRecord=payload.location.previous.length>0;
+  if(!logs&&!hasLocationRecord)return [];
   const variants:string[]=[];
-  if(logs&&movement){
+  if(logs&&hasLocationRecord){
     variants.push(
-      `昨日は家族ログが${logs}項目、移動の記録も残りました。家族みんな、それぞれの一日をしっかり積み重ねられています。`,
-      `昨日は${logs}項目の家族記録に加えて移動の記録もありました。みんなそれぞれ動いた一日、おつかれさまでした。`,
+      `昨日は家族ログが${logs}項目残り、位置の記録も確認できました。記録が少しずつ積み上がっています。`,
+      `昨日の家族記録は${logs}項目。位置の記録もあり、一日の記録がしっかり残っています。`,
     );
   }else if(logs){
     variants.push(
@@ -246,8 +246,8 @@ function buildPreviousFamilyRecap(payload:DigestFactPayload):string[]{
     );
   }else{
     variants.push(
-      '昨日は移動の記録が残りました。家族みんな、それぞれの場所で一日おつかれさまでした。',
-      '昨日の移動記録も確認できました。みんなそれぞれ動いた一日、本当におつかれさまでした。',
+      '昨日は位置の記録が残りました。記録を続けられていていいですね。',
+      '昨日の位置記録も確認できました。記録がひとつ積み上がりました。',
     );
   }
   return [variants[morningVariant(payload.localDate,91,variants.length)]];
@@ -280,7 +280,7 @@ function buildEvidencePraise(payload:DigestFactPayload):string[]{
     praise.push(variants[morningVariant(payload.localDate,37,variants.length)]);
   }
   if(payload.location.previous.length&&praise.length<3){
-    praise.push('昨日の移動記録も残っています。家族みんな、それぞれの一日をしっかり過ごせました。');
+    praise.push('昨日の位置記録も残っています。記録を続けられていていいですね。');
   }
   return praise.slice(0,3);
 }
@@ -303,10 +303,6 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(weather)lines.push('【今日の天気】',formatMorningWeather(weather));
   if(frame.personalNote)lines.push('【家族のひとこと】',`💬 ${frame.personalNote}`);
-  const recap=buildPreviousFamilyRecap(payload);
-  if(recap.length)lines.push('【昨日の家族まとめ】',...recap.map(x=>`✨ ${x}`));
-  const praise=buildEvidencePraise(payload);
-  if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
   if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
@@ -315,6 +311,10 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:
   if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
   const advice=buildDeterministicAdvice(payload);
   if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
+  const recap=buildPreviousFamilyRecap(payload);
+  if(recap.length)lines.push('【昨日の家族まとめ】',...recap.map(x=>`✨ ${x}`));
+  const praise=buildEvidencePraise(payload);
+  if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
   if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
   if(lines.length===(frame.personalNote?4:2))lines.push('昨日の記録・今日の予定はありません。');
