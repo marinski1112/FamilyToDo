@@ -139,7 +139,8 @@ for(const sentinel of ['digest_tone','digest_subjects','FRIENDLY_LIGHT']){
 if(!settings.includes('line_daily_digest_subject_settings'))throw new Error('digest settings must persist subject inclusion server-side');
 if(!migration.includes("DEFAULT 'FRIENDLY_LIGHT'"))throw new Error('digest tone must default to friendly/light humor');
 if(!migration.includes('enabled INTEGER NOT NULL DEFAULT 1'))throw new Error('digest subject inclusion must default ON');
-if(/latitude|longitude|location_history|owntracks|device_id|public_device_id|secret/i.test(digest))throw new Error('morning digest must not read or expose raw location/device sources');
+const rawDataAccessPatterns=[/\b(?:FROM|JOIN)\s+(?:member_)?location_(?:history|devices?)\b/i,/\bowntracks\b.*\b(?:SELECT|FROM|JOIN|prepare)\b/i,/\b(?:latitude|longitude|public_device_id|device_id)\b\s*(?:,|FROM|JOIN|WHERE|=\?)/i];
+if(rawDataAccessPatterns.some(pattern=>pattern.test(digest)))throw new Error('morning digest must not directly read raw location/device sources');
 for(const sentinel of [
   "import { D1LocationQueryService } from './location-query-service';",
   'service.historyForSubjects({',

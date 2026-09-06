@@ -93,14 +93,46 @@ function deterministicPersonalNote(profiles:FamilyAiSafeProfileContext[],localDa
   return variants[morningVariant(localDate,71,variants.length)];
 }
 
-function persistedMorningFrame(raw:string|null,options:Frame[]):Frame|null{
+const normalizedForLeakCheck=(value:unknown)=>Array.from(String(value??'').normalize('NFKC').toLowerCase()).filter(ch=>!/\s|[、。,.!！?？「」『』()（）\[\]{}:：;；/\\_-]/u.test(ch)).join('');
+function profileLeakFragments(profiles:FamilyAiSafeProfileContext[]):string[]{
+  const fragments=new Set<string>();
+  const add=(value:unknown)=>{
+    const normalized=normalizedForLeakCheck(value);
+    if(!normalized)return;
+    const chars=Array.from(normalized);
+    if(chars.length<=8){if(chars.length>=2)fragments.add(normalized);return;}
+    fragments.add(normalized);
+    for(let i=0;i<=chars.length-8;i++)fragments.add(chars.slice(i,i+8).join(''));
+  };
+  for(const profile of profiles){
+    add(profile.personality_note);
+    add(profile.birthplace);
+    add(profile.sex_gender);
+    if(profile.birth_facts?.zodiac)add(profile.birth_facts.zodiac);
+    if(profile.blood_type){add(`血液型${profile.blood_type}`);add(`${profile.blood_type}型`);}
+  }
+  return [...fragments];
+}
+
+function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileContext[]):boolean{
+  const combined=[frame.opener,frame.personalNote,frame.closing].filter(Boolean).join(' ');
+  if(!combined||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(combined))return false;
+  if(/https?:\/\/|www\.|```|personality_note|system\s*prompt|システムプロンプト|プロフィール(?:文脈|情報)|メモには|raw\s*gps|latitude|longitude|緯度|経度/iu.test(combined))return false;
+  if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(combined))return false;
+  const normalized=normalizedForLeakCheck(combined);
+  if(profileLeakFragments(profiles).some(fragment=>normalized.includes(fragment)))return false;
+  return true;
+}
+
+function persistedMorningFrame(raw:string|null,profiles:FamilyAiSafeProfileContext[]):Frame|null{
   if(!raw)return null;
   try{
     const value=JSON.parse(raw) as Record<string,unknown>;
     if(Number(value.narrativeVersion)!==2)return null;
     const opener=clean(value.opener,80),closing=clean(value.closing,80),personalNote=clean(value.personalNote,MAX_MORNING_NARRATIVE_CHARS);
     if(!opener||!closing||!personalNote)return null;
-    return {opener,closing,personalNote,narrativeVersion:2};
+    const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
+    return generatedFramePassesSafety(frame,profiles)?frame:null;
   }catch{return null;}
 }
 
@@ -133,13 +165,13 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   const fallbackBase=options[morningVariant(localDate,17,options.length)]||options[0];
   const fallbackFrame:Frame={...fallbackBase,personalNote:deterministicPersonalNote(profiles,localDate),narrativeVersion:2};
   if(tone==='PLAIN')return fallbackFrame;
+  const evidence=morningNarrativeEvidence(sharedFacts,weather);
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
-    if(persisted){return persistedMorningFrame(persisted,options)||fallbackFrame;}
+    if(persisted){return persistedMorningFrame(persisted,profiles)||fallbackFrame;}
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
-  const evidence=morningNarrativeEvidence(sharedFacts,weather);
-  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"opener":"...","narrative":"...","closing":"..."}。openerは45文字以内、narrativeは${MAX_MORNING_NARRATIVE_CHARS}文字以内、closingは45文字以内。narrativeは2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地を性格・健康・能力の因果根拠にしないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な1〜3点をつないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
+  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"opener":"...","narrative":"...","closing":"..."}。openerは45文字以内、narrativeは${MAX_MORNING_NARRATIVE_CHARS}文字以内、closingは45文字以内。narrativeは2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、opener/narrative/closingには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
   const models=morningDigestModels(env);
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];
@@ -155,6 +187,7 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
       const parsed=JSON.parse(text),opener=clean(parsed?.opener,80),personalNote=clean(parsed?.narrative,MAX_MORNING_NARRATIVE_CHARS),closing=clean(parsed?.closing,80);
       if(opener&&personalNote&&closing){
         const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
+        if(!generatedFramePassesSafety(frame,profiles))continue;
         await finalizeFrameSafely(env,familyId,localDate,frame);
         return frame;
       }
@@ -280,25 +313,30 @@ function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
 }
 
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:MorningWeatherFact|null):string{
-  const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
-  if(frame.personalNote)lines.push(`💬 ${frame.personalNote}`);
-  if(weather)lines.push('【今日の天気】',formatMorningWeather(weather));
+  const authoritative=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
+  if(weather)authoritative.push('【今日の天気】',formatMorningWeather(weather));
   const praise=buildEvidencePraise(payload);
-  if(praise.length)lines.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
-  if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
-  if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
-  if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
-  if(payload.today.tasks.length){lines.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
-  if(payload.today.bringItems.length){lines.push('【今日の持ち物】',...payload.today.bringItems.map(x=>`🎒 ${x}`));}
-  if(payload.today.overdue)lines.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
+  if(praise.length)authoritative.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
+  if(payload.familyLog.previous.length){authoritative.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
+  if(payload.familyLog.today.length){authoritative.push('【今日の記録】',...payload.familyLog.today);}
+  if(payload.today.events.length){authoritative.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
+  if(payload.today.tasks.length){authoritative.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
+  if(payload.today.bringItems.length){authoritative.push('【今日の持ち物】',...payload.today.bringItems.map(x=>`🎒 ${x}`));}
+  if(payload.today.overdue)authoritative.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
   const advice=buildDeterministicAdvice(payload);
-  if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
-  if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
-  if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
-  if(lines.length===(frame.personalNote?3:2))lines.push('昨日の記録・今日の予定はありません。');
+  if(advice.length)authoritative.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
+  if(payload.location.previous.length){authoritative.push('【昨日の移動】',...payload.location.previous);}
+  if(payload.location.today.length){authoritative.push('【今日の移動】',...payload.location.today);}
+  if(authoritative.length===2)authoritative.push('昨日の記録・今日の予定はありません。');
   const stars='★'.repeat(payload.fortune.stars)+'☆'.repeat(Math.max(0,5-payload.fortune.stars));
   const requiredSuffix=['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
-  return fitMorningDigest(lines,requiredSuffix);
+  const authoritativeText=fitMorningDigest(authoritative,requiredSuffix);
+  if(!frame.personalNote)return authoritativeText;
+  const fullAuthoritativeLength=[...authoritative,...requiredSuffix].join('\n').length;
+  const available=Math.max(0,MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength-1);
+  if(available<8)return authoritativeText;
+  const narrative=`💬 ${frame.personalNote}`.slice(0,available);
+  return fitMorningDigest([authoritative[0],authoritative[1],narrative,...authoritative.slice(2)],requiredSuffix);
 }
 
 export async function processLineDailyDigests(env:Env):Promise<void>{

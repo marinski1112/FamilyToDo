@@ -25,7 +25,7 @@ for(const marker of [
   "import { formatMorningWeather, loadMorningWeatherFact, type MorningWeatherFact } from './line-daily-digest-weather'",
   'let weatherFact:MorningWeatherFact|null|undefined',
   'loadMorningWeatherFact(env.DB,Number(setting.family_id),localDate,timezone)',
-  "lines.push('【今日の天気】',formatMorningWeather(weather))",
+  "authoritative.push('【今日の天気】',formatMorningWeather(weather))",
 ])if(!digest.includes(marker))throw new Error(`morning weather wiring missing: ${marker}`);
 
 console.log('line-daily-digest-weather-contract: one claimed family/date fetch, coarse HOME coordinates, timeout/fail-open, no coordinate logging');
