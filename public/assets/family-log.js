@@ -124,8 +124,13 @@ document.addEventListener('change',event=>{
   if(target instanceof HTMLSelectElement&&['log_type','detail_code'].includes(target.name))queueBabyFoodSync();
 });
 
-load('/assets/family-log-core.js?v=wave128-fix18',()=>{
-  syncBabyFoodFields();
-  load('/assets/family-log-management-ui.js?v=wave128-fix18');
+// Load the photo enhancer first so its capture-phase save hook is registered before
+// the canonical Family Log core attaches its ordinary submit handler. When no photo
+// is pending, the core remains the sole owner of the save flow.
+load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',()=>{
+  load('/assets/family-log-core.js?v=wave128-fix19',()=>{
+    syncBabyFoodFields();
+    load('/assets/family-log-management-ui.js?v=wave128-fix19');
+  });
 });
 })();
