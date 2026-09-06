@@ -15,7 +15,7 @@ for(const marker of [
   'shopping_category_catalog',
   'resolveShoppingCategoryOptions',
   "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
-  '/assets/task-new.js?v=12.147.0-wave128-rough-input1',
+  '/assets/task-new.js?v=12.147.0-wave128-rough-input2',
   '/assets/item-new.js?v=12.93-wave74',
   'taskVisibilitySql',
   "import { layout } from './app-shell';",
@@ -40,11 +40,14 @@ for(const marker of [
   'name="rough_primary_type" value="event"',
   'name="rough_primary_type" value="shopping"',
   'name="rough_primary_type" value="item"',
-  'roughAllowChildTask',
-  'roughAllowShopping',
-  'roughAllowItem',
-  "out.push({value:'unknown',label:'要確認'})",
+  'roughMainInput',
+  'roughChildTaskInput',
+  'roughShoppingInput',
+  'roughItemInput',
+  '入力欄そのものが登録先を決めます。',
+  '全入力欄を合計して最大4,000文字・20行',
   'このプレビューからはまだ登録されません。',
-]) if(!taskNewJs.includes(marker)) throw new Error(`rough-input safety marker missing: ${marker}`);
+]) if(!taskNewJs.includes(marker)) throw new Error(`rough-input split-field safety marker missing: ${marker}`);
+for(const oldPrefix of ['子タスク：猫ホテルに連絡','買い物：旅行用シャンプー','持ち物：パスポート','prefixRules']) if(taskNewJs.includes(oldPrefix)) throw new Error(`rough-input must not require type prefixes: ${oldPrefix}`);
 if(taskNewJs.includes("fetch('/api/task-rough-input'")) throw new Error('visible rough-input preview must remain proposal-only in this bounded stage');
 console.log('new entry pages modularity contract ok');
