@@ -1,5 +1,6 @@
 import './location-route-eta-contract.mjs';
 import './location-home-place-contract.mjs';
+import './location-home-presence-contract.mjs';
 import fs from 'node:fs';
 
 const domain=fs.readFileSync('src/location-domain.ts','utf8');
@@ -129,7 +130,7 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'home-eta1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'home-presence1';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
