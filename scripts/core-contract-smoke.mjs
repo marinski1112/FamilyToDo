@@ -51,11 +51,32 @@ for(const marker of [
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
 assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must not inherit arbitrary family-selected Gemini models');
-assert.ok(roughInputUi.includes("fetch('/api/task-rough-input'"),'rough-input UI must call the bounded analysis endpoint');
-assert.ok(roughInputUi.includes("if(typeof fallbackPreview==='function')fallbackPreview.call(button)"),'rough-input UI must retain deterministic local fallback');
-assert.ok(roughInputUi.includes('const fields=fieldPayload(),requestSnapshot=snapshot(fields)'),'rough-input UI must snapshot the submitted controls');
-assert.ok(roughInputUi.includes('if(snapshot(fieldPayload())!==requestSnapshot)return;'),'rough-input UI must discard responses for stale inputs');
-assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input AI companion must be scoped to the server-rendered task-new marker');
-assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-gemini-draft1'),'rough-input AI companion asset must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, checklist draft, and bounded rough-input Gemini safety contracts ok');
+for(const marker of [
+  "fetch('/api/task-rough-input'",
+  "if(typeof fallbackPreview==='function')fallbackPreview.call(button)",
+  'const fields=fieldPayload(),requestSnapshot=snapshot(fields)',
+  'if(snapshot(fieldPayload())!==requestSnapshot)return;',
+  'firstHttpUrl(item.originalText)',
+  'class="rough-draft-category"',
+  '<details class="rough-advanced"><summary>詳細設定</summary>',
+  '<details class="rough-row-details"><summary>詳細設定</summary>',
+  '<details class="rough-row-details"><summary>期限など</summary>',
+  'class="rough-main-calendar-visible"',
+  'class="rough-main-calendar-color"',
+  'class="rough-main-completion"',
+  'class="rough-main-assignees"',
+  'class="rough-main-private"',
+  'class="rough-main-start-date"',
+  'class="rough-main-end-date"',
+  'class="rough-draft-url"',
+  '必要な項目だけ確認し、間違いがあれば修正してください。詳細設定は必要なときだけ開けます。',
+])assert.ok(roughInputUi.includes(marker),`rough-input progressive confirmation marker missing: ${marker}`);
+assert.ok(!roughInputUi.includes("fetch('/api/task',"),'confirmation-only UI must not persist tasks');
+assert.ok(!roughInputUi.includes("fetch('/api/shopping',"),'confirmation-only UI must not persist Shopping');
+assert.ok(!roughInputUi.includes("fetch('/api/item',"),'confirmation-only UI must not persist Items');
+assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
+assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input AI companion must be scoped to the server-rendered task-new marker');
+assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-confirm-ui1'),'rough-input confirmation UI asset must be cache-versioned');
+
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, checklist draft, bounded Gemini analysis, and progressive confirmation UI contracts ok');
