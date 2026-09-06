@@ -11,6 +11,7 @@
   const refreshEl=root.querySelector('[data-location-refresh]');
   const mapsKey=String(root.getAttribute('data-google-maps-key')||'').trim();
   const mapsMapId=String(root.getAttribute('data-google-maps-map-id')||'').trim();
+  const csrf=String(root.getAttribute('data-location-csrf')||'').trim();
   let loading=false;
   let hasRendered=false;
   let mapsPromise=null;
@@ -48,9 +49,17 @@
 
   const distanceText=(meters)=>{
     if(!Number.isFinite(meters)||meters<0)return '';
-    if(meters<1000)return `直線 約${Math.round(meters)}m`;
+    if(meters<1000)return `約${Math.round(meters)}m`;
     const kilometers=meters/1000;
-    return `直線 約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km`;
+    return `約${kilometers<10?kilometers.toFixed(1):Math.round(kilometers)}km`;
+  };
+
+  const durationText=(seconds)=>{
+    if(!Number.isFinite(seconds)||seconds<0)return '';
+    const minutes=Math.max(1,Math.round(seconds/60));
+    if(minutes<60)return `約${minutes}分`;
+    const hours=Math.floor(minutes/60),rest=minutes%60;
+    return rest?`約${hours}時間${rest}分`:`約${hours}時間`;
   };
 
   const validPoint=(latest)=>{
@@ -72,6 +81,31 @@
     if(!refreshEl)return;
     refreshEl.disabled=busy;
     refreshEl.setAttribute('aria-busy',busy?'true':'false');
+  };
+
+  const requestEta=async(member,button,result)=>{
+    const targetMemberId=Number(member?.memberId);
+    if(!Number.isSafeInteger(targetMemberId)||targetMemberId<=0||!csrf)return;
+    button.disabled=true;
+    result.textContent='経路時間を確認しています…';
+    try{
+      const response=await fetch('/api/location/eta',{
+        method:'POST',
+        headers:{accept:'application/json','content-type':'application/json','x-csrf-token':csrf},
+        credentials:'same-origin',
+        cache:'no-store',
+        body:JSON.stringify({targetMemberId}),
+      });
+      const payload=await response.json().catch(()=>null);
+      if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'経路時間を取得できませんでした。');
+      const duration=durationText(Number(payload.durationSeconds));
+      const distance=distanceText(Number(payload.distanceMeters));
+      result.textContent=[duration,distance].filter(Boolean).join(' ・ ')||'経路時間を取得できませんでした。';
+    }catch(error){
+      result.textContent=error instanceof Error&&error.message?error.message:'経路時間を取得できませんでした。';
+    }finally{
+      button.disabled=false;
+    }
   };
 
   const makeMemberRow=(member)=>{
@@ -100,12 +134,14 @@
     const lastUpdated=lastUpdatedText(member.latest?.recordedAt);
     if(lastUpdated&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(lastUpdated);
     const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
-    if(distance)pieces.push(distance);
+    if(distance)pieces.push(`直線 ${distance}`);
     const accuracy=Number(member.latest?.accuracyMeters);
     if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
     meta.textContent=pieces.join(' ・ ');
     main.append(title,meta);
 
+    const actions=document.createElement('div');
+    actions.className='location-member-actions';
     const mapUrl=member.sharingEnabled?googleMapsUrl(member.latest):null;
     if(mapUrl){
       const mapLink=document.createElement('a');
@@ -114,8 +150,21 @@
       mapLink.target='_blank';
       mapLink.rel='noopener noreferrer';
       mapLink.textContent='Google Mapsで開く';
-      main.append(mapLink);
+      actions.append(mapLink);
     }
+    const canRoute=!member.isViewer&&(member.state==='FRESH'||member.state==='AGING')&&Number.isSafeInteger(Number(member.memberId))&&csrf;
+    if(canRoute){
+      const etaButton=document.createElement('button');
+      etaButton.type='button';
+      etaButton.className='btn gray small';
+      etaButton.textContent='車で何分？';
+      const etaResult=document.createElement('span');
+      etaResult.className='location-eta-result';
+      etaResult.setAttribute('aria-live','polite');
+      etaButton.addEventListener('click',()=>void requestEta(member,etaButton,etaResult));
+      actions.append(etaButton,etaResult);
+    }
+    if(actions.childNodes.length)main.append(actions);
 
     const badge=document.createElement('span');
     badge.className='location-state-badge';
