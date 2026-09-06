@@ -8,6 +8,7 @@ const schema=fs.readFileSync('database/schema.d1.sql','utf8');
 const checklistDraft=fs.readFileSync('src/checklist-input-draft.ts','utf8');
 const roughInputApi=fs.readFileSync('src/task-rough-input-api.ts','utf8');
 const roughInputUi=fs.readFileSync('public/assets/task-rough-input-ai.js','utf8');
+const appShell=fs.readFileSync('src/app-shell.ts','utf8');
 
 assert.ok(app.includes('export function taskVisibilitySql'),'current task visibility predicate must remain centralized');
 assert.ok(app.includes("visibility_scope,'FAMILY'")&&app.includes("visibility_scope='PRIVATE'"),'FAMILY/PRIVATE visibility contract must remain explicit');
@@ -45,9 +46,11 @@ for(const marker of [
   'sourceIndex',
   "field.lines.includes(originalText)",
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
-assert.ok(!/(INSERT|UPDATE|DELETE)\s+INTO?/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
+assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
 assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must not inherit arbitrary family-selected Gemini models');
 assert.ok(roughInputUi.includes("fetch('/api/task-rough-input'"),'rough-input UI must call the bounded analysis endpoint');
 assert.ok(roughInputUi.includes("if(typeof fallbackPreview==='function')fallbackPreview.call(button)"),'rough-input UI must retain deterministic local fallback');
+assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input AI companion must be scoped to the server-rendered task-new marker');
+assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-gemini-draft1'),'rough-input AI companion asset must be cache-versioned');
 
 console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, checklist draft, and bounded rough-input Gemini safety contracts ok');
