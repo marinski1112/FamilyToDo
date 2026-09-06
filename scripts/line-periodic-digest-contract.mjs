@@ -73,6 +73,6 @@ const sharedFacts=source.indexOf('const facts=await loadPeriodFacts('),narrative
 if(sharedFacts<0||narrative<sharedFacts||recipientGrouping<narrative)throw new Error('periodic facts/narrative must be generated once per family/report before recipient destination fan-out');
 
 const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart),renderBody=renderStart>=0&&renderEnd>renderStart?source.slice(renderStart,renderEnd):'';
-for(const marker of ['let includedExtras=extras','includedExtras=[]','const authoritative=[...required.slice(0,2),...includedExtras,...required.slice(2)]','MAX_LINE_CHARS-authoritativeText.length-1'])if(!renderBody.includes(marker))throw new Error(`periodic authoritative-first rendering marker missing: ${marker}`);
+for(const marker of ["let base=[...required.slice(0,2),...extras,...required.slice(2)].join('\\n')","if(base.length>MAX_LINE_CHARS){base=required.join('\\n').slice(0,MAX_LINE_CHARS);}",'const available=MAX_LINE_CHARS-base.length-1','slice(0,MAX_LINE_CHARS)'])if(!renderBody.includes(marker))throw new Error(`periodic bounded rendering marker missing: ${marker}`);
 
-console.log('line-periodic-digest-contract: weekly/month-end boundaries, recurrence-aware totals, pending/completed samples, destination dedupe, recovery, idempotency, FAMILY-only evidence, authoritative-first rendering, bounded shared AI and no external fan-out ok');
+console.log('line-periodic-digest-contract: weekly/month-end boundaries, recurrence-aware totals, pending/completed samples, destination dedupe, recovery, idempotency, FAMILY-only evidence, bounded rendering, bounded shared AI and no external fan-out ok');
