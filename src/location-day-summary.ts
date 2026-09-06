@@ -80,11 +80,46 @@ const movementText=(name:string,points:readonly LocationPoint[]):string=>{
   return `📍 ${cleanName(name)} 移動記録 約${kilometers.toFixed(kilometers<10?1:0)}km`;
 };
 
+const validMembers=(members:readonly MemberRow[]):ReadonlyArray<Readonly<{id:number;name:string}>>=>members
+  .map(member=>({id:Number(member.id),name:cleanName(member.name)}))
+  .filter(member=>Number.isSafeInteger(member.id)&&member.id>0);
+
+async function summarizeMovementDate(input:Readonly<{
+  service:D1LocationQueryService;
+  familyId:number;
+  requesterMemberId:number;
+  members:readonly MemberRow[];
+  localDate:string;
+  timeZone:string;
+}>):Promise<string[]>{
+  const {service,familyId,requesterMemberId,localDate,timeZone}=input;
+  const members=validMembers(input.members);
+  if(!members.length)return [];
+  const from=zonedMidnightUtc(localDate,timeZone);
+  const next=zonedMidnightUtc(dateShift(localDate,1),timeZone);
+  const to=new Date(Date.parse(next)-1).toISOString();
+  const histories=await service.historyForSubjects({
+    scope:{familyId,requesterMemberId},
+    subjectMemberIds:members.map(member=>member.id),
+    from,
+    to,
+    limitPerSubject:HISTORY_LIMIT,
+  });
+  const lines:string[]=[];
+  for(const member of members){
+    const line=movementText(member.name,histories.get(member.id)||[]);
+    if(line)lines.push(line);
+  }
+  return lines;
+}
+
 /**
  * Build one strict, digest-safe family movement projection for a calendar day.
  * Unlike the optional morning-digest wrapper below, read failures are allowed to
  * propagate so an explicit user inquiry can be retried instead of being reported
- * as an empty day. Raw coordinates never leave this module.
+ * as an empty day. Raw coordinates never leave this module. Family-wide history
+ * is read in one bounded statement so Google Tasks inquiry processing stays
+ * within its outer D1 statement budget even at the 12-member cap.
  */
 export async function buildLocationMovementDayLines(input:Readonly<{
   db:D1Database;
@@ -97,19 +132,14 @@ export async function buildLocationMovementDayLines(input:Readonly<{
   if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(requesterMemberId)||requesterMemberId<=0)throw new Error('invalid location movement scope');
   const members=await db.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT ?`)
     .bind(familyId,MAX_MEMBERS).all<MemberRow>();
-  const service=new D1LocationQueryService(db);
-  const from=zonedMidnightUtc(localDate,timeZone);
-  const next=zonedMidnightUtc(dateShift(localDate,1),timeZone);
-  const to=new Date(Date.parse(next)-1).toISOString();
-  const lines:string[]=[];
-  for(const member of members.results){
-    const subjectMemberId=Number(member.id);
-    if(!Number.isSafeInteger(subjectMemberId)||subjectMemberId<=0)continue;
-    const points=await service.history({scope:{familyId,requesterMemberId},subjectMemberId,from,to,limit:HISTORY_LIMIT});
-    const line=movementText(cleanName(member.name),points);
-    if(line)lines.push(line);
-  }
-  return lines;
+  return summarizeMovementDate({
+    service:new D1LocationQueryService(db),
+    familyId,
+    requesterMemberId,
+    members:members.results,
+    localDate,
+    timeZone,
+  });
 }
 
 /**
@@ -132,23 +162,10 @@ export async function buildLocationDigestDayFacts(input:Readonly<{
     const members=await db.prepare(`SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT ?`)
       .bind(familyId,MAX_MEMBERS).all<MemberRow>();
     const service=new D1LocationQueryService(db);
-    const summarizeDate=async(date:string):Promise<string[]>=>{
-      const from=zonedMidnightUtc(date,timeZone);
-      const next=zonedMidnightUtc(dateShift(date,1),timeZone);
-      const to=new Date(Date.parse(next)-1).toISOString();
-      const lines:string[]=[];
-      for(const member of members.results){
-        const subjectMemberId=Number(member.id);
-        if(!Number.isSafeInteger(subjectMemberId)||subjectMemberId<=0)continue;
-        const points=await service.history({
-          scope:{familyId,requesterMemberId},subjectMemberId,from,to,limit:HISTORY_LIMIT,
-        });
-        const line=movementText(cleanName(member.name),points);
-        if(line)lines.push(line);
-      }
-      return lines;
-    };
-    const [previous,today]=await Promise.all([summarizeDate(previousDate),summarizeDate(localDate)]);
+    const [previous,today]=await Promise.all([
+      summarizeMovementDate({service,familyId,requesterMemberId,members:members.results,localDate:previousDate,timeZone}),
+      summarizeMovementDate({service,familyId,requesterMemberId,members:members.results,localDate,timeZone}),
+    ]);
     return {previous,today};
   }catch{
     // Location is optional enrichment. A schema/provider/read failure must not
