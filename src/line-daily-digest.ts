@@ -14,12 +14,13 @@ type DigestFactPayload={
   location:LocationDigestDayFacts;
 };
 
-type Frame={opener:string;closing:string};
+type Frame={opener:string;closing:string;personalNote?:string};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
 const MAX_MORNING_PROFILE_SUBJECTS=8;
 const MAX_MORNING_PROFILE_CONTEXT_CHARS=2400;
+const MAX_MORNING_PERSONAL_NOTE_OPTIONS=4;
 export const MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT='gemini-3.8-flash';
 export const MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT='gemini-3.5-flash';
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
@@ -61,22 +62,35 @@ function morningProfilePromptContext(profiles:FamilyAiSafeProfileContext[]):stri
   return Array.from(JSON.stringify(minimized)).slice(0,MAX_MORNING_PROFILE_CONTEXT_CHARS).join('');
 }
 
+function morningPersonalNoteOptions(profiles:FamilyAiSafeProfileContext[]):string[]{
+  const names=profiles.map(profile=>clean(profile.display_name,24)).filter(Boolean).slice(0,3);
+  const options=['今日も家族それぞれのペースで、できることからひとつずつ。'];
+  for(const name of names)options.push(`${name}も家族のみんなも、今日をそれぞれのペースで。`);
+  return options.slice(0,MAX_MORNING_PERSONAL_NOTE_OPTIONS);
+}
+
 async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
   if(tone==='PLAIN'||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return options[0];
+  let profiles:FamilyAiSafeProfileContext[]=[];
   let profileContext='[]';
   try{
-    profileContext=morningProfilePromptContext(await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate));
+    profiles=await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate);
+    profileContext=morningProfilePromptContext(profiles);
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
-  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体を選びます。返答はJSONだけ。{"opener":0,"closing":0} の整数indexだけを返してください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。文体選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:80}};
+  const noteOptions=morningPersonalNoteOptions(profiles);
+  const body={contents:[{role:'user',parts:[{text:`LINE朝まとめの文体と家族向け短文を選びます。返答はJSONだけ。{"opener":0,"closing":0,"note":0} の整数indexだけを返してください。自由文は生成しないでください。\nプロフィール文脈は、管理者がAI利用を明示許可した項目だけをサーバー側で最小化した補助情報です。候補選択の軽い参考にだけ使い、事実・名前・数字・予定・健康状態・妊娠状態・性格診断・能力・属性を新しく推測または文章化しないでください。血液型・性別/ジェンダー・出身地を、性格・健康・能力その他の因果根拠として扱わないでください。プロフィール文脈に無い属性を推測しないでください。決定論的な予定・記録の事実を変更しないでください。noteは必ず提示された候補のindexだけを選び、候補本文を書き換えないでください。\ntone=${tone}; opener候補数=${options.length}; closing候補数=${options.length}; note_candidates=${JSON.stringify(noteOptions)}; profile_context=${profileContext}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:100}};
   for(const model of morningDigestModels(env)){
     try{
       const response=await geminiFetch(env,model,body);
       if(!response.ok)continue;
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing);
-      if(Number.isInteger(oi)&&Number.isInteger(ci)&&options[oi]&&options[ci])return {opener:options[oi].opener,closing:options[ci].closing};
+      const parsed=JSON.parse(text),oi=Number(parsed?.opener),ci=Number(parsed?.closing),ni=Number(parsed?.note);
+      if(Number.isInteger(oi)&&Number.isInteger(ci)&&options[oi]&&options[ci]){
+        const personalNote=Number.isInteger(ni)&&noteOptions[ni]?noteOptions[ni]:noteOptions[0];
+        return {opener:options[oi].opener,closing:options[ci].closing,personalNote};
+      }
     }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
   }
   return options[0];
@@ -147,6 +161,7 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
 
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
+  if(frame.personalNote)lines.push('【家族のひとこと】',`💬 ${frame.personalNote}`);
   if(payload.familyLog.previous.length){lines.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
   if(payload.familyLog.today.length){lines.push('【今日の記録】',...payload.familyLog.today);}
   if(payload.today.events.length){lines.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
@@ -156,7 +171,7 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
   if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
-  if(lines.length===2)lines.push('昨日の記録・今日の予定はありません。');
+  if(lines.length===(frame.personalNote?4:2))lines.push('昨日の記録・今日の予定はありません。');
   lines.push(frame.closing);
   return lines.join('\n').slice(0,1000);
 }
