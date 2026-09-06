@@ -66,12 +66,14 @@
     membersLoaded=true;
   };
 
-  const renderLinks=(points)=>{
+  const renderLinks=(points,truncated)=>{
     if(!linksEl)return;
     linksEl.replaceChildren();
     if(!points.length)return;
     const firstUrl=mapsLink(points[0]),lastUrl=mapsLink(points[points.length-1]);
-    for(const [label,url] of [['開始地点をGoogle Mapsで開く',firstUrl],['終了地点をGoogle Mapsで開く',lastUrl]]){
+    const firstLabel=truncated?'取得範囲の開始地点をGoogle Mapsで開く':'開始地点をGoogle Mapsで開く';
+    const lastLabel=truncated?'取得範囲の終了地点をGoogle Mapsで開く':'終了地点をGoogle Mapsで開く';
+    for(const [label,url] of [[firstLabel,firstUrl],[lastLabel,lastUrl]]){
       if(!url)continue;
       const link=document.createElement('a');
       link.className='btn gray small';
@@ -88,30 +90,43 @@
     loadEl.disabled=true;
     if(summaryEl)summaryEl.textContent='';
     if(linksEl)linksEl.replaceChildren();
+    let selectorLocked=false;
     try{
       setStatus('昨日の移動を確認しています…');
       await loadMembers();
       const memberId=Number(memberEl.value);
+      const memberName=String(memberEl.selectedOptions?.[0]?.textContent||'家族');
       if(!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('家族を選択してください。');
+      memberEl.disabled=true;
+      selectorLocked=true;
       const range=yesterdayRangeJst();
       const params=new URLSearchParams({memberId:String(memberId),from:range.from,to:range.to});
       const response=await fetch(`/api/location/history?${params.toString()}`,{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
       const payload=await response.json().catch(()=>null);
       if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'昨日の移動を取得できませんでした。');
+      if(Number(memberEl.value)!==memberId)throw new Error('選択した家族が変更されたため、もう一度確認してください。');
       const points=Array.isArray(payload.points)?payload.points:[];
       if(!points.length){
-        setStatus('昨日の位置履歴はありません。');
+        setStatus(`${memberName}・昨日の位置履歴はありません。`);
         return;
       }
+      const limit=Number(payload.limit);
+      const truncated=Number.isSafeInteger(limit)&&limit>0&&points.length>=limit;
       let meters=0;
       for(let i=1;i<points.length;i+=1)meters+=distanceMeters(points[i-1],points[i]);
       const start=formatTime(points[0]?.recordedAt),end=formatTime(points[points.length-1]?.recordedAt);
-      setStatus(`昨日の記録 ${points.length}件${start&&end?` ・ ${start}〜${end}`:''}`);
-      if(summaryEl)summaryEl.textContent=`記録点間の直線距離合計 ${distanceText(meters)}。GPS誤差を含むため実際の移動距離とは異なる場合があります。`;
-      renderLinks(points);
+      const countText=truncated?`${points.length}件以上（最新${points.length}件のみ表示）`:`${points.length}件`;
+      setStatus(`${memberName}・昨日の記録 ${countText}${start&&end?` ・ ${start}〜${end}`:''}`);
+      if(summaryEl){
+        summaryEl.textContent=truncated
+          ?`取得できた最新${points.length}件の記録点間の直線距離合計 ${distanceText(meters)}。上限に達したため昨日1日全体の距離・開始地点とは限りません。GPS誤差も含みます。`
+          :`記録点間の直線距離合計 ${distanceText(meters)}。GPS誤差を含むため実際の移動距離とは異なる場合があります。`;
+      }
+      renderLinks(points,truncated);
     }catch(error){
       setStatus(error instanceof Error&&error.message?error.message:'昨日の移動を取得できませんでした。');
     }finally{
+      if(selectorLocked&&membersLoaded)memberEl.disabled=false;
       loadEl.disabled=false;
     }
   };
