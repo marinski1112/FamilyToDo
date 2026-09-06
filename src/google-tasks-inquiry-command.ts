@@ -2,6 +2,7 @@ import { extractMarkedGoogleVoiceInquiryBody } from './google-voice-inquiry';
 import { GoogleVoiceInquiryDeliveryError } from './google-voice-inquiry-delivery';
 import { executeMarkedGoogleVoiceInquiry } from './google-voice-inquiry-runtime';
 import type { GoogleVoiceInquiryLineResolver } from './google-voice-inquiry-delivery';
+import { executeGoogleVoiceYesterdayMovementInquiry } from './google-voice-movement-inquiry';
 import { utcNow } from './timezone';
 
 export type GoogleTasksInquiryAccount = {
@@ -104,6 +105,8 @@ async function persistInquiryLedger(
  * Domain reads are deliberately injected via resolveLines. This adapter must not
  * duplicate task/recurrence/shopping queries; the eventual caller supplies the
  * same canonical visibility-aware projection used by the application views.
+ * Privacy-sensitive movement reads use a separate deterministic adapter and are
+ * never disclosed to the Gemini fallback classifier.
  *
  * The externally supplied account envelope is revalidated against the persisted
  * active account and active member before any ledger read, push delivery or write.
@@ -140,16 +143,27 @@ export async function executeGoogleTasksInquiryCommand(
   }
 
   try {
-    const result = await executeMarkedGoogleVoiceInquiry(
+    const movement = await executeGoogleVoiceYesterdayMovementInquiry(
       env,
       account.familyId,
       account.memberId,
       item.title,
-      resolveLines,
     );
-    if (!result.handled) return 'not-inquiry';
+    const push = movement.handled
+      ? movement.push
+      : await (async () => {
+          const result = await executeMarkedGoogleVoiceInquiry(
+            env,
+            account.familyId,
+            account.memberId,
+            item.title,
+            resolveLines,
+          );
+          return result.handled ? result.push : null;
+        })();
+    if (!push) return 'not-inquiry';
 
-    const errorCode = inquiryDeliveryError(result.push.ok, result.push);
+    const errorCode = inquiryDeliveryError(push.ok, push);
     const status = errorCode ? 'ERROR' : 'EXECUTED';
     await persistInquiryLedger(env, account, item, status, errorCode);
     return errorCode ? 'error' : 'executed';
