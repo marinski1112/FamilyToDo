@@ -24,6 +24,7 @@ const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
 const MAX_MORNING_PROFILE_SUBJECTS=8;
 const MAX_MORNING_PROFILE_CONTEXT_CHARS=2400;
 const MAX_MORNING_PERSONAL_NOTE_OPTIONS=4;
+const MAX_MORNING_DIGEST_CHARS=1000;
 export const MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT='gemini-3.8-flash';
 export const MORNING_DIGEST_GEMINI_MODEL_FALLBACK_DEFAULT='gemini-3.5-flash';
 const FRAME_OPTIONS:Record<ToneLevel,Frame[]>={
@@ -204,6 +205,20 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
   return advice.slice(0,2);
 }
 
+function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
+  const suffixText=requiredSuffix.join('\n');
+  const available=Math.max(0,MAX_MORNING_DIGEST_CHARS-suffixText.length-(prefix.length?1:0));
+  const kept:string[]=[];
+  let used=0;
+  for(const line of prefix){
+    const needed=(kept.length?1:0)+line.length;
+    if(used+needed>available)break;
+    kept.push(line);
+    used+=needed;
+  }
+  return [...kept,...requiredSuffix].join('\n').slice(0,MAX_MORNING_DIGEST_CHARS);
+}
+
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   const lines=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(frame.personalNote)lines.push('【家族のひとこと】',`💬 ${frame.personalNote}`);
@@ -217,11 +232,10 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame):string{
   if(advice.length)lines.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
   if(payload.location.previous.length){lines.push('【昨日の移動】',...payload.location.previous);}
   if(payload.location.today.length){lines.push('【今日の移動】',...payload.location.today);}
+  if(lines.length===(frame.personalNote?4:2))lines.push('昨日の記録・今日の予定はありません。');
   const stars='★'.repeat(payload.fortune.stars)+'☆'.repeat(Math.max(0,5-payload.fortune.stars));
-  lines.push('【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`);
-  if(lines.length===(frame.personalNote?7:5))lines.push('昨日の記録・今日の予定はありません。');
-  lines.push(frame.closing);
-  return lines.join('\n').slice(0,1000);
+  const requiredSuffix=['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
+  return fitMorningDigest(lines,requiredSuffix);
 }
 
 export async function processLineDailyDigests(env:Env):Promise<void>{
