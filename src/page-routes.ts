@@ -31,7 +31,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
   if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
   if(url.pathname==='/app/messages.php') return await messages(request,context);
-  if(url.pathname==='/app/location.php') return await locationPage(request,context);
+  if(url.pathname==='/app/location.php') return await locationPage(request,context,env);
   if(url.pathname==='/app/shopping.php') return await shopping(request,context);
   if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
   if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);
