@@ -17,8 +17,6 @@ export async function taskChildrenApi(request:Request,ctx:any):Promise<Response>
 
   const role=String(member.role||'').toUpperCase();
   const canManageParent=role==='OWNER'||role==='ADMIN'||Number(parent.created_by)===Number(member.id);
-  if(!canManageParent)return json({ok:false,error:'編集権限がありません。'},403);
-
   const children=await ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.completion_mode,t.created_by,t.start_at,t.due_at,t.calendar_visible,
       COALESCE((SELECT GROUP_CONCAT(am.id) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id),'') assignee_ids,
       COALESCE((SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id),'') assignees
@@ -36,7 +34,7 @@ export async function taskChildrenApi(request:Request,ctx:any):Promise<Response>
       isChild:parent.parent_task_id!==null,
       kind:String(parent.task_kind||'TASK').toUpperCase()==='EVENT'?'EVENT':'TASK',
     },
-    canAddChildren:parent.parent_task_id===null,
+    canAddChildren:canManageParent&&parent.parent_task_id===null,
     children:children.results.map(row=>{
       const start=String(row.start_at||row.due_at||'');
       const assigneeIds=String(row.assignee_ids||'').split(',').map(Number).filter(id=>Number.isInteger(id)&&id>0);
