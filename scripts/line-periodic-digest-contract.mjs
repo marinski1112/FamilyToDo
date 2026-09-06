@@ -11,16 +11,21 @@ for(const marker of [
   "monthlyPeriod(localDate)",
   "weekday(localDate)===1&&now<360",
   "localDate.endsWith('-01')&&now<360",
-  "COALESCE(visibility_scope,'FAMILY')='FAMILY'",
+  "COALESCE(t.visibility_scope,'FAMILY')='FAMILY'",
   'line_daily_digest_subject_settings',
   'loadSafeFamilyAiProfileContext',
   'PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください',
   'if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(value))return false',
   'reservePeriodicDigestAiRequest',
   'line_periodic_digest_receipts',
-  "String(receipt.status)==='SENT'",
-  'Number(receipt.attempt_count)>=3',
-  'familytodo:periodic-digest:v1:',
+  'recurrence_occurrences o',
+  'COALESCE(et.status,o.status)',
+  "NOT EXISTS (SELECT 1 FROM recurrence_rules rr WHERE rr.family_id=t.family_id AND rr.task_id=t.id)",
+  "String(row.status).toLowerCase()==='completed'?'✓':'□'",
+  'const destinations=new Map<string,Row[]>()',
+  "receipts.some(receipt=>String(receipt.status)==='SENT')",
+  'receipts.filter(receipt=>Number(receipt.attempt_count)<3)',
+  'familytodo:periodic-digest:v2:',
   'MAX_LINE_CHARS=1000',
 ])if(!source.includes(marker))throw new Error(`periodic digest marker missing: ${marker}`);
 
@@ -64,10 +69,10 @@ for(const marker of [
   'PRIMARY KEY(family_id,report_type,period_key)',
 ])if(!migration.includes(marker))throw new Error(`periodic migration marker missing: ${marker}`);
 
-const sharedFacts=source.indexOf('const facts=await loadPeriodFacts('),narrative=source.indexOf('narrative=await chooseNarrative(',sharedFacts),recipientLoop=source.indexOf('for(const member of recipients.results)',sharedFacts);
-if(sharedFacts<0||narrative<sharedFacts||recipientLoop<narrative)throw new Error('periodic facts/narrative must be generated once per family/report before recipient fan-out');
+const sharedFacts=source.indexOf('const facts=await loadPeriodFacts('),narrative=source.indexOf('narrative=await chooseNarrative(',sharedFacts),recipientGrouping=source.indexOf('const destinations=new Map<string,Row[]>()',sharedFacts);
+if(sharedFacts<0||narrative<sharedFacts||recipientGrouping<narrative)throw new Error('periodic facts/narrative must be generated once per family/report before recipient destination fan-out');
 
 const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart),renderBody=renderStart>=0&&renderEnd>renderStart?source.slice(renderStart,renderEnd):'';
 for(const marker of ['let includedExtras=extras','includedExtras=[]','const authoritative=[...required.slice(0,2),...includedExtras,...required.slice(2)]','MAX_LINE_CHARS-authoritativeText.length-1'])if(!renderBody.includes(marker))throw new Error(`periodic authoritative-first rendering marker missing: ${marker}`);
 
-console.log('line-periodic-digest-contract: weekly/month-end boundaries, recovery, idempotency, FAMILY-only evidence, authoritative-first rendering, bounded shared AI and no external fan-out ok');
+console.log('line-periodic-digest-contract: weekly/month-end boundaries, recurrence-aware totals, pending/completed samples, destination dedupe, recovery, idempotency, FAMILY-only evidence, authoritative-first rendering, bounded shared AI and no external fan-out ok');
