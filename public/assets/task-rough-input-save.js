@@ -13,6 +13,7 @@ try{
   const validUrl=url=>{if(!url)return true;try{return ['http:','https:'].includes(new URL(url).protocol);}catch{return false;}};
   const validDate=date=>!date||/^\d{4}-\d{2}-\d{2}$/.test(date);
   const errorMessage=(data,fallback)=>String(data?.error||fallback||'保存に失敗しました。');
+  class SaveRequestError extends Error{constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
 
   const readRow=row=>{
     const destination=value(row,'.rough-draft-destination'),title=value(row,'.rough-draft-title');
@@ -34,6 +35,7 @@ try{
         if(!validDate(item.dueDate))return `「${item.title}」の期限が不正です。`;
       }
       if((item.destination==='item'||item.destination==='child_task')&&!validDate(item.dueDate))return `「${item.title}」の日付が不正です。`;
+      if(item.destination==='child_task'&&item.dueTime&&!item.dueDate)return `子タスク「${item.title}」で時刻を指定する場合は日付も指定してください。`;
       if((item.destination==='task'||item.destination==='event')&&(!validDate(item.startDate)||!validDate(item.endDate)))return `「${item.title}」の日付が不正です。`;
       if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;
     }
@@ -44,13 +46,15 @@ try{
   };
 
   async function postJson(url,body){
-    const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),data=await response.json().catch(()=>null);
-    if(!response.ok||!data?.ok)throw new Error(errorMessage(data));
+    let response;
+    try{response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});}catch{throw new SaveRequestError('通信が途切れました。保存済みの可能性があるため、再試行する前に一覧を確認してください。',true);}
+    const data=await response.json().catch(()=>null);
+    if(!response.ok||!data?.ok)throw new SaveRequestError(errorMessage(data),false);
     return data;
   }
   async function deleteTask(id){
     if(!id)return;
-    const response=await fetch(`/api/task?id=${encodeURIComponent(id)}`,{method:'DELETE',headers:{'x-csrf':csrf()}});
+    let response;try{response=await fetch(`/api/task?id=${encodeURIComponent(id)}`,{method:'DELETE',headers:{'x-csrf':csrf()}});}catch{throw new Error('作成途中のタスクを元に戻せませんでした。');}
     if(!response.ok)throw new Error('作成途中のタスクを元に戻せませんでした。');
   }
   async function rollbackTasks(ids){
@@ -77,6 +81,7 @@ try{
         for(const item of items)await saveItem(item,parentId);
         for(const child of children){const result=await saveTask(child,parentId,Boolean(parent.isPrivate));createdTaskIds.push(Number(result.id));}
       }catch(error){
+        if(error?.uncertain)throw error;
         const rolledBack=await rollbackTasks(createdTaskIds);
         if(!rolledBack)throw new Error(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`);
         throw error;
@@ -85,12 +90,12 @@ try{
     }
     if(roots.length>1){
       try{for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}}
-      catch(error){const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new Error(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`);throw error;}
+      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new Error(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`);throw error;}
       return {saved:roots.length,date:roots[0]?.startDate||'',kind:roots[0]?.destination||'task'};
     }
     let saved=0;
-    for(const item of shopping){await saveShopping(item);saved++;}
-    for(const item of items){await saveItem(item);saved++;}
+    try{for(const item of shopping){await saveShopping(item);saved++;}for(const item of items){await saveItem(item);saved++;}}
+    catch(error){if(saved)throw new SaveRequestError(`${saved}件は保存済みです。残りの保存に失敗しました。重複を避けるため、再試行する前に一覧を確認してください。`,true);throw error;}
     return {saved,date:'',kind:primary()};
   }
 
@@ -103,6 +108,7 @@ try{
 
   const ensureSaveAction=()=>{
     if(preview.hidden||!preview.querySelector('.rough-draft-row'))return;
+    for(const row of preview.querySelectorAll('.rough-draft-row[data-destination="shopping"],.rough-draft-row[data-destination="item"]'))row.querySelector('.rough-draft-due-time')?.closest('label')?.remove();
     let actions=preview.querySelector('.rough-save-actions');
     if(!actions){
       actions=document.createElement('div');actions.className='rough-save-actions';actions.innerHTML='<button type="button" class="btn" id="roughConfirmSave">この内容で保存</button><p class="small">保存前にもう一度確認します。AIの下書きは、このボタンを押すまで登録されません。</p>';preview.appendChild(actions);
