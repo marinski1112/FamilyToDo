@@ -128,9 +128,9 @@ document.addEventListener('change',event=>{
 // the canonical Family Log core attaches its ordinary submit handler. When no photo
 // is pending, the core remains the sole owner of the save flow.
 load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',()=>{
-  load('/assets/family-log-core.js?v=wave128-fix19',()=>{
+  load('/assets/family-log-core.js?v=wave128-fix18',()=>{
     syncBabyFoodFields();
-    load('/assets/family-log-management-ui.js?v=wave128-fix19');
+    load('/assets/family-log-management-ui.js?v=wave128-fix18');
   });
 });
 })();
