@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
 const digest=fs.readFileSync('src/line-daily-digest.ts','utf8');
+const profileContext=fs.readFileSync('src/family-ai-profile-context.ts','utf8');
 const locationSummary=fs.readFileSync('src/location-day-summary.ts','utf8');
 const settings=fs.readFileSync('src/settings-notifications-page.ts','utf8');
 const browser=fs.readFileSync('public/assets/settings-notifications.js','utf8');
@@ -44,6 +45,26 @@ for(const sentinel of [
 ]){
   if(!digest.includes(sentinel)) throw new Error(`dedicated morning Gemini route missing: ${sentinel}`);
 }
+for(const sentinel of [
+  "import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';",
+  'MAX_MORNING_PROFILE_SUBJECTS=8',
+  'MAX_MORNING_PROFILE_CONTEXT_CHARS=2400',
+  'morningProfilePromptContext(',
+  'await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)',
+  'Optional personalization context must never block the deterministic morning digest',
+]){
+  if(!digest.includes(sentinel)) throw new Error(`privacy-safe morning profile context missing: ${sentinel}`);
+}
+for(const sentinel of [
+  'ai_personalization_enabled=1',
+  'parseAiProfilePermissions(row.ai_profile_permissions_json)',
+  "permissions.has('personality')",
+  "permissions.has('birth_facts')",
+  'return {age,zodiac};',
+]){
+  if(!profileContext.includes(sentinel)) throw new Error(`AI profile projection boundary missing: ${sentinel}`);
+}
+if(/FROM\s+family_log_subjects/i.test(digest))throw new Error('morning digest must not bypass the AI profile projection with direct profile-table reads');
 for(const sentinel of ['MORNING_DIGEST_AI_ENABLED?:string','MORNING_DIGEST_GEMINI_MODEL_PRIMARY?:string','MORNING_DIGEST_GEMINI_MODEL_FALLBACK?:string']){
   if(!workerTypes.includes(sentinel)) throw new Error(`morning digest server config typing missing: ${sentinel}`);
 }
@@ -51,8 +72,12 @@ if(digest.includes('resolveFamilyGeminiModel'))throw new Error('morning digest m
 if((digest.match(/await geminiFetch\(/g)||[]).length!==1)throw new Error('morning digest source must keep one bounded model-call site');
 const receiptGate=digest.indexOf("Number(receipt.attempt_count)>=3)continue");
 const locationRead=digest.indexOf('await buildLocationDigestDayFacts({',receiptGate);
+const profileRead=digest.indexOf('await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)',receiptGate);
 if(receiptGate<0||locationRead<0||locationRead<receiptGate){
   throw new Error('optional Location history must be deferred until after receipt SENT/retry gating');
+}
+if(receiptGate<0||profileRead<0||profileRead<receiptGate){
+  throw new Error('optional AI profile context must be deferred until after receipt SENT/retry gating');
 }
 const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
 const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
