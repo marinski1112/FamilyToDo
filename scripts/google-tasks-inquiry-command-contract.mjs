@@ -3,10 +3,13 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('src/google-tasks-inquiry-command.ts','utf8');
 const delivery=fs.readFileSync('src/google-voice-inquiry-delivery.ts','utf8');
+const movement=fs.readFileSync('src/google-voice-movement-inquiry.ts','utf8');
+const movementSummary=fs.readFileSync('src/location-day-summary.ts','utf8');
 
 for(const token of [
   'extractMarkedGoogleVoiceInquiryBody',
   'executeMarkedGoogleVoiceInquiry',
+  'executeGoogleVoiceYesterdayMovementInquiry',
   'GoogleVoiceInquiryLineResolver',
   'GoogleVoiceInquiryDeliveryError',
   'assertAccountTenantIntegrity',
@@ -43,10 +46,24 @@ assert.match(source,/validateAccount\(account\);/,'adapter must validate account
 assert.match(source,/FROM external_google_task_accounts a[\s\S]*?JOIN members m ON m\.id=a\.member_id AND m\.family_id=a\.family_id[\s\S]*?a\.id=\? AND a\.family_id=\? AND a\.member_id=\? AND a\.tasklist_id=\?[\s\S]*?a\.status IN \('ACTIVE','SYNCING'\)[\s\S]*?m\.active=1 AND m\.deleted_at IS NULL/,'adapter must revalidate the persisted active account, tenant, member and tasklist before processing');
 const tenantCheck=source.indexOf('await assertAccountTenantIntegrity(env, account);');
 const ledgerRead=source.indexOf('SELECT id,external_etag,status,error_code');
+const movementCall=source.indexOf('const movement = await executeGoogleVoiceYesterdayMovementInquiry(');
 const runtimeCall=source.indexOf('const result = await executeMarkedGoogleVoiceInquiry(');
-assert.ok(tenantCheck >= 0 && ledgerRead > tenantCheck && runtimeCall > tenantCheck,'tenant integrity validation must run before ledger reads and Web Push runtime execution');
+assert.ok(tenantCheck >= 0 && ledgerRead > tenantCheck && movementCall > ledgerRead && runtimeCall > movementCall,'tenant/ledger checks must precede deterministic movement and generic inquiry delivery');
 assert.ok(!/FROM\s+tasks\b|FROM\s+recurrence_rules\b|FROM\s+recurrence_occurrences\b|FROM\s+shopping_items\b/i.test(source),'adapter must not duplicate canonical task/recurrence/shopping domain reads');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(source),'adapter must not log or handle unrelated sensitive/location data');
 assert.ok(!/console\.|cookie|authorization|refresh_token|member_name|description|location|latitude|longitude|gps/i.test(delivery),'delivery adapter must not log or handle unrelated sensitive/location data');
 
-console.log('google-tasks-inquiry-command-contract: marked inquiry envelope, persisted account tenant integrity, member-scoped runtime reuse, safe pre-delivery retries, ambiguous outcome suppression, successful exactly-once suppression, nullable target, and injected canonical domain resolution remain enforced');
+for(const phrase of ['昨日の移動','昨日の移動は','昨日の移動を教えて','昨日の移動を教えてください'])assert.ok(movement.includes(phrase),`movement inquiry missing exact phrase ${phrase}`);
+assert.match(movement,/extractMarkedGoogleVoiceInquiryBody\(value\)/,'movement inquiry must reuse the bounded explicit FamilyToDo marker parser');
+assert.match(movement,/EXACT_YESTERDAY_MOVEMENT\.has\(body\)/,'movement inquiry must remain deterministic exact-match only');
+assert.match(movement,/buildLocationMovementDayLines\(/,'movement inquiry must reuse the provider-neutral coarse movement projection');
+assert.match(movement,/member\.family_id!==familyId/,'movement inquiry must revalidate member/family scope before location reads');
+assert.match(movement,/sendMemberWebPush\(env,familyId,memberId,payload\)/,'movement result must use member-scoped Web Push delivery');
+assert.match(movement,/url:'\/app\/location\.php'/,'movement push must link only to the authenticated Location page');
+assert.ok(!/classifyMarkedGoogleVoiceInquiryWithGemini|geminiFetch|familyAiProvider/.test(movement),'privacy-sensitive movement inquiry must not use Gemini classification');
+assert.ok(!/console\.|latitude|longitude|device_id|provider_payload|owntracks|authorization|api[_-]?key/i.test(movement),'movement inquiry must not log or expose raw location/provider credentials');
+assert.match(movementSummary,/export async function buildLocationMovementDayLines/,'strict one-day provider-neutral movement projection is required');
+assert.match(movementSummary,/scope:\{familyId,requesterMemberId\},subjectMemberId,from,to,limit:HISTORY_LIMIT/,'movement projection must preserve LocationQueryService requester scope and bounded history');
+assert.match(movementSummary,/centerDistance-accuracyRadiusMeters\(previous\)-accuracyRadiusMeters\(current\)/,'movement distance must preserve GPS-accuracy uncertainty subtraction');
+
+console.log('google-tasks-inquiry-command-contract: marked inquiry envelope, exactly-once ledger, deterministic non-Gemini yesterday movement, scoped coarse Location projection, member-scoped delivery, safe retries, and generic canonical resolver boundaries remain enforced');
