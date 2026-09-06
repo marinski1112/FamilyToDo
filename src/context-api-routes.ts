@@ -4,6 +4,7 @@ import { joinFamily } from './family-join-api';
 import { inviteCreate } from './family-invite-api';
 import { apiMe } from './api-me';
 import { taskApi } from './task-api';
+import { taskChildrenApi } from './task-children-api';
 import { taskRoughInputApi } from './task-rough-input-api';
 import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
@@ -39,6 +40,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/me') return await apiMe(context);
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
+  if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);
   if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(request,context);
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);

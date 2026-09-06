@@ -14,6 +14,8 @@ import { integrationsSettings } from './google-calendar';
 import { calendarImportPage } from './calendar-ics-import';
 import { logsPage } from './activity-log-page';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
+import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
+import { json } from './response';
 
 function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 
@@ -49,7 +51,12 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/settings_recurring.php') return await recurring(request,context);
   if(url.pathname==='/app/logs.php') return await logsPage(context);
   if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));
-  if(url.pathname==='/task/edit.php') return await taskEdit(request,context,Number(url.searchParams.get('id')||0));
+  if(url.pathname==='/task/edit.php'){
+    const taskId=Number(url.searchParams.get('id')||0);
+    const hierarchy=await validateTaskEditRequestHierarchy(request,context,taskId);
+    if(!hierarchy.ok)return json({ok:false,error:hierarchy.message,code:'BAD_REQUEST'},hierarchy.status);
+    return await taskEdit(request,context,taskId);
+  }
   if(url.pathname==='/item/edit.php') return await itemEdit(request,context,Number(url.searchParams.get('id')||0));
   if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));
   return null;
