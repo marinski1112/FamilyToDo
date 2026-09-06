@@ -20,7 +20,7 @@ const phase1Ready=new Set(['owntracks','latest','history','places','distance']);
 export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{
   const memberName=esc(ctx.member?.name||'');
   const privacy=LOCATION_PRIVACY_DEFAULTS;
-  const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_KEY||'');
+  const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');
   const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');
   const csrf=esc(ctx.session.csrfToken||'');
   const roadmap=LOCATION_ROADMAP.map(item=>{
