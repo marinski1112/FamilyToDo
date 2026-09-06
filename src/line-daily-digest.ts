@@ -159,7 +159,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
       WHERE i.family_id=? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND (COALESCE(pt.visibility_scope,'FAMILY')='FAMILY' OR (pt.visibility_scope='PRIVATE' AND pt.private_owner_id=?))))
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
-      ORDER BY i.due_at,i.status,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
+      ORDER BY CASE WHEN lower(COALESCE(i.status,''))='completed' THEN 1 ELSE 0 END,i.due_at,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
   ]);
   const todayRows=taskRows.results.filter(x=>String(x.at).slice(0,10)===localDate);
   const eventRows=todayRows.filter(x=>String(x.task_kind).toUpperCase()==='EVENT');
