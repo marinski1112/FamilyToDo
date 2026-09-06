@@ -7,9 +7,9 @@ const routes=fs.readFileSync('src/page-routes.ts','utf8');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
-  "import { html, redirect } from './response';",
+  "import { html, json, redirect } from './response';",
   "import { APP_VERSION } from './version';",
-  'export async function settingsMembers(_request:Request,ctx:AppContext):Promise<Response>{',
+  'export async function settingsMembers(request:Request,ctx:AppContext):Promise<Response>{',
   "redirect('/login.php?next=%2Fapp%2Fsettings_members.php')",
   "role!=='OWNER'&&role!=='ADMIN'",
   "new Response('管理者権限が必要です。',{status:403})",
@@ -24,7 +24,7 @@ for(const marker of [
   'id="invite"',
   'id="settingsMembersPayload"',
   "JSON.stringify({csrf:ctx.session.csrfToken||''})",
-  '/assets/settings-members.js?v=${APP_VERSION}',
+  '/assets/settings-members.js?v=${APP_VERSION}-member-profile1',
   "layout('家族メンバー',body,'/app/settings.php')",
 ]) if(!page.includes(marker)) throw new Error(`settings members page lost behavior marker: ${marker}`);
 if(page.includes("from './app'")) throw new Error('settings members page must not depend on app.ts');
