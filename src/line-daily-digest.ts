@@ -108,23 +108,23 @@ function profileLeakFragments(profiles:FamilyAiSafeProfileContext[]):string[]{
     add(profile.personality_note);
     add(profile.birthplace);
     add(profile.sex_gender);
-    if(profile.blood_type)add(`血液型${profile.blood_type}`);
+    if(profile.birth_facts?.zodiac)add(profile.birth_facts.zodiac);
+    if(profile.blood_type){add(`血液型${profile.blood_type}`);add(`${profile.blood_type}型`);}
   }
   return [...fragments];
 }
 
-function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileContext[],evidence:string):boolean{
+function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileContext[]):boolean{
   const combined=[frame.opener,frame.personalNote,frame.closing].filter(Boolean).join(' ');
   if(!combined||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(combined))return false;
   if(/https?:\/\/|www\.|```|personality_note|system\s*prompt|システムプロンプト|プロフィール(?:文脈|情報)|メモには|raw\s*gps|latitude|longitude|緯度|経度/iu.test(combined))return false;
+  if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(combined))return false;
   const normalized=normalizedForLeakCheck(combined);
   if(profileLeakFragments(profiles).some(fragment=>normalized.includes(fragment)))return false;
-  const allowedNumbers=new Set((evidence.match(/\d+(?:\.\d+)?/g)||[]).map(String));
-  for(const token of combined.match(/\d+(?:\.\d+)?/g)||[])if(!allowedNumbers.has(token))return false;
   return true;
 }
 
-function persistedMorningFrame(raw:string|null,profiles:FamilyAiSafeProfileContext[],evidence:string):Frame|null{
+function persistedMorningFrame(raw:string|null,profiles:FamilyAiSafeProfileContext[]):Frame|null{
   if(!raw)return null;
   try{
     const value=JSON.parse(raw) as Record<string,unknown>;
@@ -132,7 +132,7 @@ function persistedMorningFrame(raw:string|null,profiles:FamilyAiSafeProfileConte
     const opener=clean(value.opener,80),closing=clean(value.closing,80),personalNote=clean(value.personalNote,MAX_MORNING_NARRATIVE_CHARS);
     if(!opener||!closing||!personalNote)return null;
     const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
-    return generatedFramePassesSafety(frame,profiles,evidence)?frame:null;
+    return generatedFramePassesSafety(frame,profiles)?frame:null;
   }catch{return null;}
 }
 
@@ -168,10 +168,10 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   const evidence=morningNarrativeEvidence(sharedFacts,weather);
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
-    if(persisted){return persistedMorningFrame(persisted,profiles,evidence)||fallbackFrame;}
+    if(persisted){return persistedMorningFrame(persisted,profiles)||fallbackFrame;}
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
-  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"opener":"...","narrative":"...","closing":"..."}。openerは45文字以内、narrativeは${MAX_MORNING_NARRATIVE_CHARS}文字以内、closingは45文字以内。narrativeは2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地を性格・健康・能力の因果根拠にしないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な1〜3点をつないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
+  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"opener":"...","narrative":"...","closing":"..."}。openerは45文字以内、narrativeは${MAX_MORNING_NARRATIVE_CHARS}文字以内、closingは45文字以内。narrativeは2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、opener/narrative/closingには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
   const models=morningDigestModels(env);
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];
@@ -187,7 +187,7 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
       const parsed=JSON.parse(text),opener=clean(parsed?.opener,80),personalNote=clean(parsed?.narrative,MAX_MORNING_NARRATIVE_CHARS),closing=clean(parsed?.closing,80);
       if(opener&&personalNote&&closing){
         const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
-        if(!generatedFramePassesSafety(frame,profiles,evidence))continue;
+        if(!generatedFramePassesSafety(frame,profiles))continue;
         await finalizeFrameSafely(env,familyId,localDate,frame);
         return frame;
       }
