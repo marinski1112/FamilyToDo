@@ -27,6 +27,12 @@
     NO_LOCATION:'位置情報なし',
     SHARING_OFF:'共有OFF',
   };
+  const homePresenceText={
+    HOME:'🏠 自宅内',
+    AWAY:'外出中',
+    UNKNOWN:'自宅判定保留',
+    NO_HOME:'',
+  };
 
   const ageText=(minutes)=>{
     if(!Number.isFinite(minutes))return '';
@@ -144,6 +150,8 @@
 
     const pieces=[];
     pieces.push(stateText[member.state]||'状態不明');
+    const presence=homePresenceText[String(member.homePresence||'')]||'';
+    if(presence)pieces.push(presence);
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
     const lastUpdated=lastUpdatedText(member.latest?.recordedAt);
@@ -227,7 +235,7 @@
     if(!mapsKey){
       mapEl.hidden=true;
       mapStateEl.hidden=false;
-      mapStateEl.textContent=`共有中 ${located.length}人の位置を受信しています。Google Maps表示には管理側のブラウザ用Mapsキー設定が必要です。`;
+      mapStateEl.textContent=`共有中 ${located.length}人の最終位置を受信しています。位置の古さとは別に、Google Maps表示には管理側のブラウザ用Mapsキー設定が必要です。`;
       clearMarkers();
       return;
     }
@@ -275,7 +283,12 @@
     const located=members.filter((member)=>member?.latest&&member?.sharingEnabled&&validPoint(member.latest));
     void renderMap(located);
     hasRendered=true;
-    setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人`);
+    const atHome=members.filter((member)=>member?.homePresence==='HOME').length;
+    const presenceUnknown=members.filter((member)=>member?.homePresence==='UNKNOWN').length;
+    const presenceSummary=payload?.homeConfigured
+      ?` ・ 自宅内 ${atHome}人${presenceUnknown?` ・ 判定保留 ${presenceUnknown}人`:''}`
+      :'';
+    setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人${presenceSummary}`);
   };
 
   const load=async()=>{

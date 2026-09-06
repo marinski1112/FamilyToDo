@@ -7,10 +7,18 @@ type FamilyMemberRow=Readonly<{
   name:unknown;
   sharing_enabled:unknown;
 }>;
+type HomeRow=Readonly<{
+  latitude:unknown;
+  longitude:unknown;
+  accuracy_meters:unknown;
+}>;
 
 type LocationFreshness='FRESH'|'AGING'|'STALE'|'NO_LOCATION'|'SHARING_OFF';
+type HomePresence='HOME'|'AWAY'|'UNKNOWN'|'NO_HOME';
 type CoordinatePoint=Readonly<{latitude:number;longitude:number}>;
+type PresencePoint=CoordinatePoint&Readonly<{accuracyMeters?:number}>;
 
+const HOME_RADIUS_METERS=150;
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 const toRadians=(degrees:number):number=>degrees*Math.PI/180;
 
@@ -43,6 +51,31 @@ function straightLineDistanceMeters(from:CoordinatePoint,to:CoordinatePoint):num
   return Math.round(earthRadiusMeters*angularDistance);
 }
 
+function homePoint(row:HomeRow|null):PresencePoint|null{
+  if(!row)return null;
+  const latitude=Number(row.latitude),longitude=Number(row.longitude),accuracyMeters=Number(row.accuracy_meters);
+  if(!Number.isFinite(latitude)||Math.abs(latitude)>90||!Number.isFinite(longitude)||Math.abs(longitude)>180)return null;
+  return {
+    latitude,
+    longitude,
+    ...(row.accuracy_meters===null||row.accuracy_meters===undefined||!Number.isFinite(accuracyMeters)||accuracyMeters<0?{}:{accuracyMeters}),
+  };
+}
+
+function homePresence(point:PresencePoint|null,state:LocationFreshness,home:PresencePoint|null):HomePresence{
+  if(!home)return 'NO_HOME';
+  if(!point||(state!=='FRESH'&&state!=='AGING'))return 'UNKNOWN';
+  const pointAccuracy=point.accuracyMeters;
+  const homeAccuracy=home.accuracyMeters;
+  if(pointAccuracy===undefined||homeAccuracy===undefined||!Number.isFinite(pointAccuracy)||!Number.isFinite(homeAccuracy))return 'UNKNOWN';
+  const distance=straightLineDistanceMeters(point,home);
+  if(distance===null)return 'UNKNOWN';
+  const uncertainty=Math.max(0,pointAccuracy)+Math.max(0,homeAccuracy);
+  if(distance+uncertainty<=HOME_RADIUS_METERS)return 'HOME';
+  if(distance-uncertainty>HOME_RADIUS_METERS)return 'AWAY';
+  return 'UNKNOWN';
+}
+
 /**
  * Browser-safe authenticated Location projection for the family map surface.
  *
@@ -50,7 +83,8 @@ function straightLineDistanceMeters(from:CoordinatePoint,to:CoordinatePoint):num
  * provider-neutral D1LocationQueryService remains the only coordinate read
  * boundary, so disabled/share-off/revoked sources and cross-family rows fail
  * closed. Device IDs, provider payloads, credentials and other internal sensor
- * metadata never enter the response.
+ * metadata never enter the response. HOME presence is a deterministic derived
+ * projection only: stale/uncertain points never assert that someone is home.
  */
 export async function locationLatestApi(request:Request,ctx:AppContext):Promise<Response>{
   const requester=ctx.member;
@@ -76,6 +110,13 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     WHERE m.family_id=? AND m.active=1
     ORDER BY m.id ASC
   `).bind(familyId).all<FamilyMemberRow>();
+  const homeRow=await ctx.env.DB.prepare(`
+    SELECT latitude,longitude,accuracy_meters
+    FROM family_location_places
+    WHERE family_id=? AND kind='HOME'
+    LIMIT 1
+  `).bind(familyId).first<HomeRow>();
+  const home=homePoint(homeRow);
 
   const service=new D1LocationQueryService(ctx.env.DB);
   const nowMs=Date.now();
@@ -109,6 +150,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       state:safeFreshness.state,
       ageMinutes:safeFreshness.ageMinutes,
       distanceMetersFromViewer,
+      homePresence:homePresence(point,safeFreshness.state,home),
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,
@@ -118,5 +160,5 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     });
   }
 
-  return json({ok:true,members},200,{'cache-control':'no-store'});
+  return json({ok:true,homeConfigured:Boolean(home),homeRadiusMeters:HOME_RADIUS_METERS,members},200,{'cache-control':'no-store'});
 }
