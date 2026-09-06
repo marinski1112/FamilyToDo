@@ -14,13 +14,16 @@
     INIT:'Google Mapsの初期化に失敗しました。APIキーはページまで届いています。Map ID設定またはブラウザ互換性を確認してください。家族の位置一覧と「Google Mapsで開く」は引き続き利用できます。',
   };
   let failure='';
+  let showingFailure=false;
 
   const showFailure=()=>{
     const message=messages[failure];
     if(!message)return;
+    showingFailure=true;
     if(mapEl&&!mapEl.hidden)mapEl.hidden=true;
     if(mapStateEl.hidden)mapStateEl.hidden=false;
     if(mapStateEl.textContent!==message)mapStateEl.textContent=message;
+    queueMicrotask(()=>{showingFailure=false;});
   };
 
   const previousAuthFailure=window.gm_authFailure;
@@ -43,8 +46,14 @@
   },true);
 
   const observer=new MutationObserver(()=>{
-    if(!failure&&mapStateEl.textContent.includes('Google Mapsを読み込めませんでした'))failure='INIT';
-    if(failure)showFailure();
+    if(showingFailure)return;
+    const text=mapStateEl.textContent||'';
+    if(text.includes('Google Mapsを読み込めませんでした')){
+      failure='INIT';
+      showFailure();
+      return;
+    }
+    if(failure&&!Object.values(messages).includes(text))failure='';
   });
   observer.observe(mapStateEl,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['hidden']});
 })();
