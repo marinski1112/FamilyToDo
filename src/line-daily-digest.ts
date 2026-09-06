@@ -49,6 +49,12 @@ const morningDigestModels=(env:Env)=>{
   return primary===fallback?[primary]:[primary,fallback];
 };
 
+async function morningDigestRetryKey(familyId:number,memberId:number,localDate:string):Promise<string>{
+  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`familytodo:morning-digest:v1:${familyId}:${memberId}:${localDate}`)));
+  const hex=Array.from(bytes.slice(0,16),byte=>byte.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
+}
+
 function morningProfilePromptContext(profiles:FamilyAiSafeProfileContext[]):string{
   const minimized=profiles.slice(0,MAX_MORNING_PROFILE_SUBJECTS).map(profile=>({
     subject_ref:profile.subject_ref,
@@ -233,7 +239,8 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
         const facts=await buildFactPayload(env,Number(setting.family_id),Number(member.id),localDate,locationFacts);
         frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate);
         const message=renderDeterministicFacts(facts,frame);
-        const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message);
+        const retryKey=await morningDigestRetryKey(Number(setting.family_id),Number(member.id),localDate);
+        const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message,{retryKey});
         await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();
       }catch(error){await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),n,receipt.id).run();}
     }
