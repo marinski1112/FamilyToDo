@@ -203,13 +203,25 @@
     if(!mapsKey)return Promise.reject(new Error('MAPS_NOT_CONFIGURED'));
     mapsPromise=new Promise((resolve,reject)=>{
       const script=document.createElement('script');
-      const params=new URLSearchParams({key:mapsKey,loading:'async'});
+      const callbackName='__familyTodoLocationMapsReady';
+      let settled=false;
+      const fail=()=>{
+        if(settled)return;
+        settled=true;
+        reject(new Error('MAPS_LOAD_FAILED'));
+      };
+      window[callbackName]=()=>{
+        if(settled)return;
+        settled=true;
+        if(window.google?.maps)resolve(window.google.maps);
+        else reject(new Error('MAPS_LOAD_FAILED'));
+      };
+      const params=new URLSearchParams({key:mapsKey,loading:'async',callback:callbackName});
       if(mapsMapId)params.set('libraries','marker');
       script.src=`https://maps.googleapis.com/maps/api/js?${params.toString()}`;
       script.async=true;
       script.defer=true;
-      script.addEventListener('load',()=>window.google?.maps?resolve(window.google.maps):reject(new Error('MAPS_LOAD_FAILED')),{once:true});
-      script.addEventListener('error',()=>reject(new Error('MAPS_LOAD_FAILED')),{once:true});
+      script.addEventListener('error',fail,{once:true});
       document.head.appendChild(script);
     });
     return mapsPromise;
