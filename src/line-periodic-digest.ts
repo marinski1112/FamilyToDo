@@ -27,7 +27,7 @@ const isLastDayOfMonth=(date:string)=>shiftDate(date,1).slice(0,7)!==date.slice(
 const monthLabel=(date:string)=>`${Number(date.slice(5,7))}月`;
 
 function weeklyPeriod(endDate:string):Period{return {reportType:'WEEKLY',periodKey:`W:${endDate}`,startDate:shiftDate(endDate,-6),endDate,label:`${shiftDate(endDate,-6)}〜${endDate}`};}
-function monthlyPeriod(endDate:string):Period{const startDate=`${endDate.slice(0,7)}-01`;return {reportType:'MONTHLY',periodKey:`M:${endDate.slice(0,7)}`,startDate,endDate,label:`${startDate}〜${endDate}`};}
+function monthlyPeriod(endDate:string):Period{return {reportType:'MONTHLY',periodKey:`M:${endDate.slice(0,7)}`,startDate:`${endDate.slice(0,7)}-01`,endDate,label:`${monthLabel(endDate)}まとめ`};}
 
 function duePeriods(localDate:string,localTime:string,setting:Row):Period[]{
   const now=minutes(localTime),out:Period[]=[];
@@ -70,13 +70,43 @@ function aggregateLogLine(row:Row):string{
 }
 
 async function loadPeriodFacts(db:D1Database,familyId:number,period:Period):Promise<PeriodFacts>{
-  const [counts,samples,logs,items]=await Promise.all([
+  const [ordinaryCounts,recurringCounts,samples,logs,items]=await Promise.all([
     db.prepare(`SELECT
-      SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='EVENT' THEN 1 ELSE 0 END) event_count,
-      SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))='completed' THEN 1 ELSE 0 END) task_completed,
-      SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' THEN 1 ELSE 0 END) task_incomplete
-      FROM tasks WHERE family_id=? AND COALESCE(visibility_scope,'FAMILY')='FAMILY' AND date(COALESCE(start_at,due_at)) BETWEEN ? AND ?`).bind(familyId,period.startDate,period.endDate).first<Row>(),
-    db.prepare(`SELECT title,task_kind FROM tasks WHERE family_id=? AND COALESCE(visibility_scope,'FAMILY')='FAMILY' AND date(COALESCE(start_at,due_at)) BETWEEN ? AND ? ORDER BY COALESCE(start_at,due_at),id LIMIT 6`).bind(familyId,period.startDate,period.endDate).all<Row>(),
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='EVENT' THEN 1 ELSE 0 END) event_count,
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='TASK' AND lower(COALESCE(t.status,''))='completed' THEN 1 ELSE 0 END) task_completed,
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='TASK' AND lower(COALESCE(t.status,''))<>'completed' THEN 1 ELSE 0 END) task_incomplete
+      FROM tasks t WHERE t.family_id=? AND COALESCE(t.visibility_scope,'FAMILY')='FAMILY'
+        AND upper(COALESCE(t.task_kind,'TASK')) IN ('TASK','EVENT')
+        AND NOT EXISTS (SELECT 1 FROM recurrence_rules rr WHERE rr.family_id=t.family_id AND rr.task_id=t.id)
+        AND date(COALESCE(t.start_at,t.due_at)) BETWEEN ? AND ?`).bind(familyId,period.startDate,period.endDate).first<Row>(),
+    db.prepare(`SELECT
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='EVENT' THEN 1 ELSE 0 END) event_count,
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='TASK' AND lower(COALESCE(et.status,o.status,''))='completed' THEN 1 ELSE 0 END) task_completed,
+      SUM(CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='TASK' AND lower(COALESCE(et.status,o.status,''))<>'completed' THEN 1 ELSE 0 END) task_incomplete
+      FROM recurrence_occurrences o
+      JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id
+      JOIN tasks t ON t.id=r.task_id AND t.family_id=o.family_id
+      LEFT JOIN tasks et ON et.id=o.exception_task_id AND et.family_id=o.family_id
+      WHERE o.family_id=? AND COALESCE(t.visibility_scope,'FAMILY')='FAMILY'
+        AND (o.exception_task_id IS NULL OR (et.id IS NOT NULL AND COALESCE(et.visibility_scope,'FAMILY')='FAMILY'))
+        AND o.occurrence_date BETWEEN ? AND ?`).bind(familyId,period.startDate,period.endDate).first<Row>(),
+    db.prepare(`SELECT title,task_kind,status,at FROM (
+        SELECT t.title title,upper(COALESCE(t.task_kind,'TASK')) task_kind,t.status status,COALESCE(t.start_at,t.due_at) at,t.id sort_id
+        FROM tasks t
+        WHERE t.family_id=? AND COALESCE(t.visibility_scope,'FAMILY')='FAMILY'
+          AND upper(COALESCE(t.task_kind,'TASK')) IN ('TASK','EVENT')
+          AND NOT EXISTS (SELECT 1 FROM recurrence_rules rr WHERE rr.family_id=t.family_id AND rr.task_id=t.id)
+          AND date(COALESCE(t.start_at,t.due_at)) BETWEEN ? AND ?
+        UNION ALL
+        SELECT COALESCE(et.title,t.title) title,upper(COALESCE(t.task_kind,'TASK')) task_kind,COALESCE(et.status,o.status) status,o.occurrence_date at,o.id sort_id
+        FROM recurrence_occurrences o
+        JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id
+        JOIN tasks t ON t.id=r.task_id AND t.family_id=o.family_id
+        LEFT JOIN tasks et ON et.id=o.exception_task_id AND et.family_id=o.family_id
+        WHERE o.family_id=? AND COALESCE(t.visibility_scope,'FAMILY')='FAMILY'
+          AND (o.exception_task_id IS NULL OR (et.id IS NOT NULL AND COALESCE(et.visibility_scope,'FAMILY')='FAMILY'))
+          AND o.occurrence_date BETWEEN ? AND ?
+      ) ORDER BY at,sort_id LIMIT 6`).bind(familyId,period.startDate,period.endDate,familyId,period.startDate,period.endDate).all<Row>(),
     db.prepare(`SELECT l.log_type,s.name subject_name,CASE WHEN l.subject_id IS NULL THEN m.name ELSE NULL END member_name,l.unit,COUNT(*) count,SUM(CASE WHEN l.amount IS NOT NULL THEN l.amount ELSE 0 END) amount_sum
       FROM family_logs l
       LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
@@ -90,7 +120,10 @@ async function loadPeriodFacts(db:D1Database,familyId:number,period:Period):Prom
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
       WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN ? AND ? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND COALESCE(pt.visibility_scope,'FAMILY')='FAMILY'))`).bind(familyId,period.startDate,period.endDate).first<Row>(),
   ]);
-  return {period,logLines:logs.results.map(aggregateLogLine).slice(0,12),eventCount:Math.max(0,Number(counts?.event_count||0)),taskCompleted:Math.max(0,Number(counts?.task_completed||0)),taskIncomplete:Math.max(0,Number(counts?.task_incomplete||0)),itemCompleted:Math.max(0,Number(items?.completed||0)),itemIncomplete:Math.max(0,Number(items?.incomplete||0)),samples:samples.results.map(row=>`${String(row.task_kind).toUpperCase()==='EVENT'?'📌':'✓'} ${clean(row.title,60)}`).filter(x=>x.length>2)};
+  const eventCount=Math.max(0,Number(ordinaryCounts?.event_count||0))+Math.max(0,Number(recurringCounts?.event_count||0));
+  const taskCompleted=Math.max(0,Number(ordinaryCounts?.task_completed||0))+Math.max(0,Number(recurringCounts?.task_completed||0));
+  const taskIncomplete=Math.max(0,Number(ordinaryCounts?.task_incomplete||0))+Math.max(0,Number(recurringCounts?.task_incomplete||0));
+  return {period,logLines:logs.results.map(aggregateLogLine).slice(0,12),eventCount,taskCompleted,taskIncomplete,itemCompleted:Math.max(0,Number(items?.completed||0)),itemIncomplete:Math.max(0,Number(items?.incomplete||0)),samples:samples.results.map(row=>`${String(row.task_kind).toUpperCase()==='EVENT'?'📌':String(row.status).toLowerCase()==='completed'?'✓':'□'} ${clean(row.title,60)}`).filter(x=>x.length>2)};
 }
 
 function fallbackNarrative(facts:PeriodFacts):string{
@@ -99,7 +132,7 @@ function fallbackNarrative(facts:PeriodFacts):string{
   return 'この期間は記録が少なめでした。忙しい日も含めて一区切り。次の期間も、できることからゆっくり進めていきましょう。';
 }
 
-function evidence(facts:PeriodFacts):string{return JSON.stringify({report_type:facts.period.reportType,period_start:facts.period.startDate,period_end:facts.period.endDate,family_log:facts.logLines,event_count:facts.eventCount,period_tasks_currently_completed:facts.taskCompleted,period_tasks_currently_incomplete:facts.taskIncomplete,period_items_currently_completed:facts.itemCompleted,period_items_currently_incomplete:facts.itemIncomplete,samples:facts.samples});}
+function evidence(facts:PeriodFacts):string{return JSON.stringify({report_type:facts.period.reportType,period_start:facts.period.startDate,period_end:facts.period.endDate,family_log:facts.logLines,event_count:facts.eventCount,task_completed:facts.taskCompleted,task_incomplete:facts.taskIncomplete,item_completed:facts.itemCompleted,item_incomplete:facts.itemIncomplete,samples:facts.samples});}
 
 async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promise<string>{
   let profiles:FamilyAiSafeProfileContext[]=[];
@@ -107,7 +140,7 @@ async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promis
   const fallback=fallbackNarrative(facts);
   try{const stored=await readFinalizedPeriodicDigestFrame(env.DB,familyId,facts.period.reportType,facts.period.periodKey);if(stored){const parsed=JSON.parse(stored) as PeriodFrame;if(parsed.version===1&&safeGeneratedNarrative(clean(parsed.narrative,MAX_NARRATIVE_CHARS),profiles))return clean(parsed.narrative,MAX_NARRATIVE_CHARS);return fallback;}}catch{/* fallback */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!aiEnabled(env))return fallback;
-  const prompt=`あなたは家族向けLINEの${facts.period.reportType==='WEEKLY'?'週末':'月末'}便を書く編集者です。期間中の事実を読み、家族みんなが少しうれしくなる自然な統括を作ってください。毎回、構成・着眼点・言い回しは変わって構いません。記録から確認できる積み重ねを具体的に認め、次の期間へやさしくつないでください。返答はJSONだけで {"narrative":"..."}。narrativeは${MAX_NARRATIVE_CHARS}文字以内、三〜五文程度。事実はevidenceだけを根拠にし、出来事・感情・成果を捏造しないでください。期間内タスク・持ち物の完了数は完了日時の集計ではなく、その期間に予定・期限がある項目の現在状態です。「この期間に完了した」と言い換えないでください。プロフィール文脈はAI利用が許可された最小情報で、personality_noteは話題や言葉選びの背景としてのみ使えます。原文を引用・要約・列挙せず、プロフィールやメモを読んだことも明かさないでください。健康・性格・能力などを推測しないでください。PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください。正確な数字・件数・日付は後段の決定論的一覧が担当するので、本文には算用数字・漢数字を含む数値表現を書かないでください。profile_context=${safeProfileContext(profiles)}; evidence=${evidence(facts)}`;
+  const prompt=`あなたは家族向けLINEの${facts.period.reportType==='WEEKLY'?'週末':'月末'}便を書く編集者です。期間中の事実を読み、家族みんなが少しうれしくなる自然な統括を作ってください。毎回、構成・着眼点・言い回しは変わって構いません。記録から確認できる積み重ねを具体的に認め、次の期間へやさしくつないでください。返答はJSONだけで {"narrative":"..."}。narrativeは${MAX_NARRATIVE_CHARS}文字以内、三〜五文程度。事実はevidenceだけを根拠にし、出来事・感情・成果を捏造しないでください。プロフィール文脈はAI利用が許可された最小情報で、personality_noteは話題や言葉選びの背景としてのみ使えます。原文を引用・要約・列挙せず、プロフィールやメモを読んだことも明かさないでください。健康・性格・能力などを推測しないでください。PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください。正確な数字・件数・日付は後段の決定論的一覧が担当するので、本文には算用数字・漢数字を含む数値表現を書かないでください。profile_context=${safeProfileContext(profiles)}; evidence=${evidence(facts)}`;
   const body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:420}};
   for(let attempt=0;attempt<models(env).length;attempt++){
     let reserved=false;try{reserved=await reservePeriodicDigestAiRequest(env.DB,familyId,facts.period.reportType,facts.period.periodKey,attempt>0);}catch{return fallback;}
@@ -131,17 +164,14 @@ function renderReport(facts:PeriodFacts,narrative:string):string{
   const extras:string[]=[];
   if(facts.logLines.length)extras.push('【家族の記録】',...facts.logLines);
   if(facts.samples.length)extras.push('【期間の予定・タスク】',...facts.samples);
-  let includedExtras=extras;
-  let authoritative=[...required.slice(0,2),...includedExtras,...required.slice(2)];
-  if(authoritative.join('\n').length>MAX_LINE_CHARS){includedExtras=[];authoritative=[...required];}
-  const authoritativeText=authoritative.join('\n');
-  const available=MAX_LINE_CHARS-authoritativeText.length-1;
-  if(available<16)return authoritativeText;
-  return [...required.slice(0,2),`💬 ${narrative}`.slice(0,available),...includedExtras,...required.slice(2)].join('\n');
+  let base=[...required.slice(0,2),...extras,...required.slice(2)].join('\n');
+  if(base.length>MAX_LINE_CHARS){base=required.join('\n').slice(0,MAX_LINE_CHARS);}
+  const available=MAX_LINE_CHARS-base.length-1;if(available<16)return base;
+  return [...required.slice(0,2),`💬 ${narrative}`.slice(0,available),...extras,...required.slice(2)].join('\n').slice(0,MAX_LINE_CHARS);
 }
 
-async function retryKey(familyId:number,memberId:number,period:Period):Promise<string>{
-  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`familytodo:periodic-digest:v1:${period.reportType}:${period.periodKey}:${familyId}:${memberId}`)));
+async function retryKey(familyId:number,lineUserId:string,period:Period):Promise<string>{
+  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`familytodo:periodic-digest:v2:${period.reportType}:${period.periodKey}:${familyId}:${lineUserId}`)));
   bytes[6]=(bytes[6]&0x0f)|0x80;bytes[8]=(bytes[8]&0x3f)|0x80;const hex=Array.from(bytes.slice(0,16),b=>b.toString(16).padStart(2,'0')).join('');return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
 }
 
@@ -150,16 +180,27 @@ export async function processLinePeriodicDigests(env:Env):Promise<void>{
   for(const setting of settings.results){
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`;
     for(const period of duePeriods(localDate,localTime,setting)){
-      const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL").bind(setting.family_id).all<Row>();
+      const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL ORDER BY m.id").bind(setting.family_id).all<Row>();
       if(!recipients.results.length)continue;
       const facts=await loadPeriodFacts(env.DB,Number(setting.family_id),period),narrative=await chooseNarrative(env,Number(setting.family_id),facts),message=renderReport(facts,narrative);
-      for(const member of recipients.results){
-        const now=utcNow();
-        await env.DB.prepare("INSERT OR IGNORE INTO line_periodic_digest_receipts(family_id,member_id,report_type,period_key,status,attempt_count,created_at,updated_at) VALUES(?,?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,period.reportType,period.periodKey,now,now).run();
-        const receipt=await env.DB.prepare('SELECT id,status,attempt_count FROM line_periodic_digest_receipts WHERE family_id=? AND member_id=? AND report_type=? AND period_key=?').bind(setting.family_id,member.id,period.reportType,period.periodKey).first<Row>();
-        if(!receipt||String(receipt.status)==='SENT'||Number(receipt.attempt_count)>=3)continue;
-        try{const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,String(member.line_user_id),message,{retryKey:await retryKey(Number(setting.family_id),Number(member.id),period)});await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(now,now,receipt.id).run();}
-        catch(error){await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),now,receipt.id).run();}
+      const destinations=new Map<string,Row[]>();
+      for(const member of recipients.results){const lineUserId=String(member.line_user_id||'');if(!lineUserId)continue;const group=destinations.get(lineUserId)||[];group.push(member);destinations.set(lineUserId,group);}
+      for(const [lineUserId,members] of destinations){
+        const now=utcNow(),receipts:Row[]=[];
+        for(const member of members){
+          await env.DB.prepare("INSERT OR IGNORE INTO line_periodic_digest_receipts(family_id,member_id,report_type,period_key,status,attempt_count,created_at,updated_at) VALUES(?,?,?,?,'PENDING',0,?,?)").bind(setting.family_id,member.id,period.reportType,period.periodKey,now,now).run();
+          const receipt=await env.DB.prepare('SELECT id,status,attempt_count FROM line_periodic_digest_receipts WHERE family_id=? AND member_id=? AND report_type=? AND period_key=?').bind(setting.family_id,member.id,period.reportType,period.periodKey).first<Row>();
+          if(receipt)receipts.push(receipt);
+        }
+        if(receipts.some(receipt=>String(receipt.status)==='SENT')){
+          for(const receipt of receipts.filter(receipt=>String(receipt.status)!=='SENT'))await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='SENT',last_error=NULL,updated_at=? WHERE id=?").bind(now,receipt.id).run();
+          continue;
+        }
+        const pending=receipts.filter(receipt=>Number(receipt.attempt_count)<3);if(!pending.length)continue;
+        try{
+          const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,lineUserId,message,{retryKey:await retryKey(Number(setting.family_id),lineUserId,period)});
+          for(const receipt of pending)await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(now,now,receipt.id).run();
+        }catch(error){for(const receipt of pending)await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),now,receipt.id).run();}
       }
     }
   }
