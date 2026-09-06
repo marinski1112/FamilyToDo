@@ -1,3 +1,4 @@
+import './location-route-eta-contract.mjs';
 import fs from 'node:fs';
 
 const domain=fs.readFileSync('src/location-domain.ts','utf8');
