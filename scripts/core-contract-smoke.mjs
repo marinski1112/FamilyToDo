@@ -61,7 +61,7 @@ for(const marker of [
   'class="rough-main-calendar-visible"',
   'class="rough-main-calendar-color"',
   'class="rough-main-completion"',
-  'class="rough-main-assignees"',
+  'rough-main-assignees',
   'class="rough-main-private"',
   'class="rough-main-start-date"',
   'class="rough-main-end-date"',
