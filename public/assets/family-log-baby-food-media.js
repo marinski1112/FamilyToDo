@@ -6,7 +6,7 @@ if(!payloadNode||!(form instanceof HTMLFormElement))return;
 let payload={};try{payload=JSON.parse(payloadNode.textContent||'{}');}catch{return;}
 const csrf=String(payload.csrf||'');
 const MAX_SOURCE_BYTES=20*1024*1024;
-const MAX_EDGE=1600;
+const MAX_EDGE=800;
 const TARGET_BYTES=3600*1024;
 const mediaCache=new Map();
 let existingMedia=null,pendingBlob=null,pendingUrl='',loadedLogId=0,loadToken=0;
@@ -23,7 +23,7 @@ const viewer=document.createElement('div');viewer.className='family-log-media-vi
 const viewerImg=viewer.querySelector('img');const closeViewer=()=>{viewer.classList.remove('open');viewer.setAttribute('aria-hidden','true');viewerImg.removeAttribute('src');};viewer.querySelector('button').addEventListener('click',closeViewer);viewer.addEventListener('click',e=>{if(e.target===viewer)closeViewer();});
 const openViewer=url=>{if(!url)return;viewerImg.src=url;viewer.classList.add('open');viewer.setAttribute('aria-hidden','false');};
 
-const wrap=document.createElement('section');wrap.id='familyLogBabyFoodMedia';wrap.className='family-log-baby-food-media';wrap.hidden=true;wrap.innerHTML='<strong>📷 離乳食の写真（任意）</strong><div class="family-log-media-preview" id="familyLogMediaPreview"></div><label class="family-log-media-picker" id="familyLogMediaPicker"><span>写真を選ぶ / 撮る</span><input id="familyLogMediaInput" type="file" accept="image/*" capture="environment"></label><small class="family-log-media-note">端末内で縮小・JPEG再生成してから送信します。位置情報などのEXIFメタデータは引き継ぎません。1記録につき1枚です。</small><div class="family-log-media-status small" id="familyLogMediaStatus" aria-live="polite"></div>';
+const wrap=document.createElement('section');wrap.id='familyLogBabyFoodMedia';wrap.className='family-log-baby-food-media';wrap.hidden=true;wrap.innerHTML='<strong>📷 離乳食の写真（任意）</strong><div class="family-log-media-preview" id="familyLogMediaPreview"></div><label class="family-log-media-picker" id="familyLogMediaPicker"><span>写真を選ぶ / 撮る</span><input id="familyLogMediaInput" type="file" accept="image/*" capture="environment"></label><small class="family-log-media-note">端末内で最大辺800pxに縮小・JPEG再生成してから送信します。位置情報などのEXIFメタデータは引き継ぎません。1記録につき1枚です。</small><div class="family-log-media-status small" id="familyLogMediaStatus" aria-live="polite"></div>';
 const advanced=document.getElementById('familyLogAdvanced');advanced?.insertAdjacentElement('beforebegin',wrap);
 const preview=wrap.querySelector('#familyLogMediaPreview'),picker=wrap.querySelector('#familyLogMediaPicker'),input=wrap.querySelector('#familyLogMediaInput'),status=wrap.querySelector('#familyLogMediaStatus');
 
