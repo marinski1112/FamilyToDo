@@ -29,7 +29,7 @@ assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'),'n
 for(const retired of ['processCalendarInbound','calendarSyncNow','calendarWatchWebhook','applyInbound','inboundEventTimes','syncCalendarAccount'])assert.ok(!calendar.includes(retired),`normal Google inbound must stay removed: ${retired}`);
 for(const token of ['text-overflow:clip','-webkit-line-clamp:2','repeat(4'])assert.ok(familyCss.includes(token),token);
 assert.ok(!app.includes('その他のタイマー'),'obsolete timer section must remain removed');
-assert.ok(notificationDelivery.includes("const channel='WEB_PUSH'")&&!notificationDelivery.includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');
+assert.ok(notificationDelivery.includes('sendWebPush(env')&&!notificationDelivery.includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');
 for(const token of ['UNIQUE(family_id,member_id,local_date)','line_daily_digest_receipts','line_daily_digest_recipients'])assert.ok(migration.includes(token),token);
 assert.ok(digest.includes("visibility_scope='PRIVATE' AND private_owner_id=?")&&digest.includes('current>target+29'),'PRIVATE digest filtering and 30-minute target-time guard must remain intact');
 for(const token of ['active channel count','DB_SCHEMA_MIGRATION_REQUIRED'])assert.ok((calendar+index).includes(token),token);
