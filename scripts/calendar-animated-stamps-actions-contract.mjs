@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('src/calendar-stamp-actions.ts','utf8');
 const adminInventory=fs.readFileSync('src/calendar-stamp-admin-inventory.ts','utf8');
+const adminApi=fs.readFileSync('src/calendar-stamp-admin-api.ts','utf8');
 
 for(const token of [
   'calendarStampAssetsForPicker',
@@ -81,4 +82,9 @@ assert.doesNotMatch(adminInventory,/SELECT\s+\*/i,'admin inventory must not use 
 assert.doesNotMatch(adminInventory,/console\.(?:log|warn|error)|request|cookie|authorization|token|line_user_id|member_name|family_name/i,'admin inventory must not handle or log sensitive identity/session content');
 assert.doesNotMatch(adminInventory,/calendar\(|renderCalendarPage|calendar_perf/,'admin inventory must remain disconnected from the Calendar renderer while 1102 is being re-profiled');
 
-console.log('calendar animated stamps actions contract: bounded tenant-safe member-authorized picker, atomically authorized asset registry, paginated admin inventory and creator-owned placement mutations ok');
+assert.match(adminApi,/const rawStorageProvider=String\(body\.storageProvider\?\?''\)\.trim\(\);/,'PNG sequence admin boundary must normalize only an explicit provider string');
+assert.match(adminApi,/rawStorageProvider&&rawStorageProvider!=='ASSETS'&&rawStorageProvider!=='UPLOAD'[\s\S]*?INVALID_STORAGE_PROVIDER[\s\S]*?400/,'PNG sequence admin boundary must reject explicit unknown providers');
+assert.match(adminApi,/const storageProvider=\(rawStorageProvider\|\|'ASSETS'\) as 'ASSETS'\|'UPLOAD';/,'PNG sequence admin boundary must preserve the absent/empty ASSETS default and explicit UPLOAD');
+assert.doesNotMatch(adminApi,/body\.storageProvider==='UPLOAD'\?'UPLOAD':'ASSETS'/,'PNG sequence admin boundary must not silently coerce unknown providers to ASSETS');
+
+console.log('calendar animated stamps actions contract: bounded tenant-safe member-authorized picker, atomically authorized asset registry, paginated admin inventory, strict PNG provider boundary and creator-owned placement mutations ok');
