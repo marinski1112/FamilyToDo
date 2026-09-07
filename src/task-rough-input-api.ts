@@ -86,6 +86,7 @@ function explicitDueDate(block:RoughBlock):string|null{
       found=match[1];
       continue;
     }
+    if(httpUrlOnly.test(line))continue;
     if(dueIntentHint.test(line)||absoluteDateHint.test(line)||relativeDateHint.test(line)||weekdayHint.test(line)||explicitTimeHint.test(line))return null;
   }
   return found;
