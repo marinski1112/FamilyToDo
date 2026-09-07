@@ -1,0 +1,14 @@
+#taskForm .task-linked-row,#taskEditForm .task-linked-row{display:grid!important;grid-template-columns:minmax(0,1fr) 56px 44px!important;gap:6px!important;align-items:start;padding:8px 0;margin:0!important;border-bottom:1px solid #e2e8f0}
+#taskForm .task-linked-row.item-entry,#taskEditForm .task-linked-row.item-entry{grid-template-columns:minmax(0,1fr) 44px!important}
+#taskForm .task-linked-row>input:not([type=hidden]),#taskEditForm .task-linked-row>input:not([type=hidden]){width:100%!important;min-width:0!important;min-height:44px!important;height:44px!important;font-size:16px!important;margin:0!important;padding:8px!important}
+.task-linked-row>[name="shopping_name[]"],.task-linked-row>[name="item_name[]"]{grid-column:1;grid-row:1}.task-linked-row>[name="shopping_quantity[]"]{grid-column:2;grid-row:1;text-align:center}
+#taskForm [data-linked-remove],#taskEditForm [data-linked-remove]{grid-column:-2;grid-row:1;width:44px!important;height:44px!important;min-height:44px!important;margin:0!important;padding:0!important;align-self:start}
+.task-linked-options{grid-column:1/-1;min-width:0}.task-linked-options>summary{min-height:44px;box-sizing:border-box;padding:12px 2px;font-size:12px;color:#475569;cursor:pointer;overflow-wrap:anywhere}
+#taskForm .task-linked-options input,#taskEditForm .task-linked-options input,#taskForm .task-linked-options select,#taskEditForm .task-linked-options select{max-width:100%;font-size:16px!important;min-height:44px;margin:4px 0!important}
+#taskForm .task-shopping-category-custom[hidden],#taskEditForm [hidden]{display:none!important}
+#taskForm .sub-card:has(.task-linked-row),#taskEditForm .sub-card:has(.task-linked-row){padding:8px;margin:8px 0;background:#fff}
+#taskForm .sub-card>.section-button,#taskEditForm .sub-card>.section-button{min-height:44px;padding:9px 4px;border:0;border-radius:0;text-align:left;font-size:15px}
+#taskForm .sub-card>.section-button::after,#taskEditForm .sub-card>.section-button::after{content:'⌄';float:right}.sub-card>.section-button[aria-expanded="true"]::after{content:'⌃'!important}
+.task-edit-options{border-block:1px solid #e2e8f0;margin:8px 0;padding:0 4px}.task-edit-options>summary{min-height:48px;padding:13px 0;box-sizing:border-box;font-size:14px;font-weight:650;cursor:pointer}
+.task-edit-options input[type=color]{max-width:120px}.task-edit-options .small{line-height:1.5}
+#taskForm summary:focus-visible,#taskEditForm summary:focus-visible,#taskForm button:focus-visible,#taskEditForm button:focus-visible{outline:3px solid #6366f1;outline-offset:2px}

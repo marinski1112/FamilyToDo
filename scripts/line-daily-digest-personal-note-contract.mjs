@@ -20,7 +20,7 @@ const context=vm.createContext({
 });
 vm.runInContext(moduleCode('src/daily-fortune.ts')+'\n'+moduleCode('src/line-digest-generation.ts')+'\n'+moduleCode('src/line-daily-digest.ts'),context);
 for(const text of ['一緒に一息つきましょう。','千夏さんも、自分のペースで。','一人ひとりの頑張りに拍手。'])assert.equal(context.generatedRecapPassesSafety(text,[]),true,text);
-for(const text of ['三件完了です。','５回記録しました。','https://evil.example','緯度を確認しました。'])assert.equal(context.generatedRecapPassesSafety(text,[]),false,text);
+for(const text of ['三件完了です。','５回記録しました。','二つ済ませました。','三つ完了しました。','二本飲みました。','四枚片付けました。','https://evil.example','緯度を確認しました。'])assert.equal(context.generatedRecapPassesSafety(text,[]),false,text);
 assert.equal(context.generatedRecapPassesSafety('隠された趣味の秘密です。',[{personality_note:'隠された趣味の秘密'}]),false);
 const facts={localDate:'2026-09-08',previousDate:'2026-09-07',today:{events:[],tasks:[],bringItems:[],completed:3,incomplete:4,overdue:2},familyLog:{previous:Array(12).fill('記録'.repeat(100)),today:[]},location:{previous:[],today:[]},fortune:context.dailyFortune(42,1,'2026-09-08')};
 const recipients=[{id:1,name:'A'},{id:2,name:'B'}],env={DB:{},GEMINI_API_KEY:'synthetic'};
@@ -63,14 +63,18 @@ const sqlTest=spawnSync('python3',['-c',`
 import sqlite3,json,sys
 queries=json.load(sys.stdin)
 db=sqlite3.connect(':memory:');db.row_factory=sqlite3.Row
-db.executescript('CREATE TABLE tasks(id INTEGER,family_id INTEGER,title TEXT,task_kind TEXT,status TEXT,start_at TEXT,end_at TEXT,due_at TEXT,visibility_scope TEXT,private_owner_id INTEGER); CREATE TABLE recurrence_rules(family_id INTEGER,task_id INTEGER);')
+db.executescript('CREATE TABLE tasks(id INTEGER,family_id INTEGER,title TEXT,task_kind TEXT,status TEXT,start_at TEXT,end_at TEXT,due_at TEXT,visibility_scope TEXT,private_owner_id INTEGER); CREATE TABLE recurrence_rules(family_id INTEGER,task_id INTEGER,id INTEGER); CREATE TABLE recurrence_occurrences(family_id INTEGER,recurrence_rule_id INTEGER,exception_task_id INTEGER);')
 rows=[(1,42,'期間中','TASK','pending','2026-09-06','2026-09-09',None,'FAMILY',None),(2,42,'期限切れ','TASK','pending','2026-09-01','2026-09-07',None,'FAMILY',None),(3,42,'期間イベント','EVENT','pending','2026-09-06','2026-09-09',None,'FAMILY',None),(4,42,'他人の秘密','TASK','pending','2026-09-08',None,None,'PRIVATE',2),(5,42,'定期テンプレート','TASK','pending','2026-09-08',None,None,'FAMILY',None),(6,99,'別家族','TASK','pending','2026-09-08',None,None,'FAMILY',None),(7,42,'完了','TASK','completed','2026-09-08',None,None,'FAMILY',None)]
-db.executemany('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?)',rows);db.execute('ALTER TABLE tasks ADD COLUMN all_day INTEGER DEFAULT 0');db.execute('INSERT INTO recurrence_rules VALUES(42,5)')
+rows += [(8,42,'変更した定期タスク','OCCURRENCE','pending','2026-09-08',None,None,'FAMILY',None),(9,42,'変更した定期イベント','OCCURRENCE','pending','2026-09-08',None,None,'FAMILY',None),(10,42,'イベントの親','EVENT','pending','2026-09-01',None,None,'FAMILY',None),(11,42,'非公開の変換分','OCCURRENCE','pending','2026-09-08',None,None,'FAMILY',None),(12,42,'元がない変換分','OCCURRENCE','pending','2026-09-08',None,None,'FAMILY',None)]
+db.executemany('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?)',rows);db.execute('ALTER TABLE tasks ADD COLUMN all_day INTEGER DEFAULT 0')
+db.executemany('INSERT INTO recurrence_rules VALUES(?,?,?)',[(42,5,50),(42,10,51),(42,4,52)])
+db.executemany('INSERT INTO recurrence_occurrences VALUES(?,?,?)',[(42,50,8),(42,51,9),(42,52,11)])
 for q in queries:
  if q['sql'].startswith('SELECT t.title'):
-  assert {r['title'] for r in db.execute(q['sql'],q['args'])}=={'期間中','期間イベント','完了'}
+  actual={r['title']:r['task_kind'] for r in db.execute(q['sql'],q['args'])}
+  assert actual=={'期間中':'TASK','期間イベント':'EVENT','完了':'TASK','変更した定期タスク':'TASK','変更した定期イベント':'EVENT'},actual
  elif 'SUM(CASE WHEN date(COALESCE(t.start_at' in q['sql']:
-  row=db.execute(q['sql'],q['args']).fetchone();assert dict(row)=={'completed':1,'incomplete':1,'overdue':1},dict(row)
+  row=db.execute(q['sql'],q['args']).fetchone();assert dict(row)=={'completed':1,'incomplete':2,'overdue':1},dict(row)
 `],{input:JSON.stringify(captured),encoding:'utf8'});
 assert.equal(sqlTest.status,0,sqlTest.stderr);
 // Reuse the real recurrence completion projection (ALL, excluded, exception).
