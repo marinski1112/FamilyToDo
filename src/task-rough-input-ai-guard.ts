@@ -35,7 +35,7 @@ export async function reserveTaskRoughInputAiRequest(db:D1Database,familyId:numb
   return false;
 }
 
-export async function blockTaskRoughInputAiAfter429(db:D1Database,env:Env):Promise<void>{
-  const now=utcNow(),budgetDate=globalBudgetKey(now),blockedUntil=addWallClockMinutes(now,taskRoughInputAiLimits(env).backoffMinutes);
+export async function blockTaskRoughInputAiAfter429(db:D1Database,env?:Env):Promise<void>{
+  const now=utcNow(),budgetDate=globalBudgetKey(now),backoffMinutes=env?taskRoughInputAiLimits(env).backoffMinutes:DEFAULT_ROUGH_INPUT_AI_429_BACKOFF_MINUTES,blockedUntil=addWallClockMinutes(now,backoffMinutes);
   await db.prepare("INSERT INTO task_rough_input_ai_global_daily(budget_date,request_count,blocked_until,created_at,updated_at) VALUES(?,0,?,?,?) ON CONFLICT(budget_date) DO UPDATE SET blocked_until=CASE WHEN COALESCE(blocked_until,'')>excluded.blocked_until THEN blocked_until ELSE excluded.blocked_until END,updated_at=excluded.updated_at").bind(budgetDate,blockedUntil,now,now).run();
 }
