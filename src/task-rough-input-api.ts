@@ -33,6 +33,7 @@ const dueIntentHint=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/iu;
 const quantityIntentHint=/(?:^|[\s、,])(?:数量|個数)\s*[:：]?/iu;
 const multiplyQuantityHint=/(?:^|\s)[×xX]\s*\d+(?:\.\d+)?(?:\s|$)/u;
 const trailingMultiplierQuantity=/\s+×\s*(\d+(?:\.\d+)?)\s*$/u;
+const unspacedTrailingMultiplierQuantity=/×\s*(\d+(?:\.\d+)?)\s*$/u;
 const numericComponentBeforeMultiplier=/(?:^|\s)\d+(?:\.\d+)?\s*$/u;
 const absoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
 const relativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
@@ -51,10 +52,12 @@ function semanticBlocks(text:string):RoughBlock[]{
 }
 
 function explicitMultiplierQuantity(block:RoughBlock):{quantity:string;start:number}|null{
-  const match=block.titleSeed.match(trailingMultiplierQuantity);
+  const match=block.titleSeed.match(trailingMultiplierQuantity)??block.titleSeed.match(unspacedTrailingMultiplierQuantity);
   if(!match?.[1]||match.index===undefined)return null;
-  const prefix=block.titleSeed.slice(0,match.index).trimEnd();
-  if(numericComponentBeforeMultiplier.test(prefix))return null;
+  const rawPrefix=block.titleSeed.slice(0,match.index);
+  if(match[0].startsWith('×')&&/[0-9０-９]$/u.test(rawPrefix))return null;
+  const prefix=rawPrefix.trimEnd();
+  if(!prefix||numericComponentBeforeMultiplier.test(prefix))return null;
   const amount=Number(match[1]);
   if(!Number.isFinite(amount)||amount<=0)return null;
   const quantity=clean(match[1],40);
