@@ -89,7 +89,7 @@ assert.equal(parseExplicitDueFixture(['薬','締切：2026-09-11']),'2026-09-11'
 assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-02-30']),null,'invalid calendar date must remain model-eligible');
 assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10 18:00']),null,'due time on the due line must remain model-eligible');
 assert.equal(parseExplicitDueFixture(['会議','期限: 2026-09-10','18:00']),null,'separate continuation time must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 明日確認']),null,'other continuation temporal intent must remain model-eligible');
+assert.equal(parseExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 明日 確認']),null,'other continuation temporal intent must remain model-eligible');
 assert.equal(parseExplicitDueFixture(['牛乳 期限: 2026-09-10']),null,'inline/title due syntax must remain model-eligible');
 assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2026-09-11']),null,'conflicting due metadata must remain model-eligible');
 
