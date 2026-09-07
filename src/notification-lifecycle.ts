@@ -1,10 +1,14 @@
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 
+/**
+ * Low-frequency operational repair. This used to run before every five-minute
+ * notification delivery and made an empty notification tick scan many domain
+ * tables. Delivery now validates the rows it is about to send, so these
+ * cross-table repairs can safely run hourly without weakening send-time
+ * tenant/target checks.
+ */
 export async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   const now=nowJst();
-  // Operational activity audit is retained for 31 JST calendar days. Domain
-  // completion histories and Family Log are intentionally untouched.
-  await env.DB.prepare("DELETE FROM activity_logs WHERE occurred_at < datetime(?,'-31 days')").bind(now).run();
   // Disable pending work for members who opted out/deactivated, or whose family no longer matches the notification.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND (member_id IN (SELECT id FROM members WHERE active=0 OR notification_enabled=0) OR NOT EXISTS (SELECT 1 FROM members m WHERE m.id=notifications.member_id AND m.family_id=notifications.family_id))").bind(now).run();
   await env.DB.prepare("UPDATE web_push_subscriptions SET enabled=0,last_error='member inactive or deleted',updated_at=? WHERE enabled=1 AND (NOT EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND m.family_id=web_push_subscriptions.family_id) OR EXISTS(SELECT 1 FROM members m WHERE m.id=web_push_subscriptions.member_id AND (m.active=0 OR m.deleted_at IS NOT NULL)))").bind(now).run();
@@ -21,8 +25,20 @@ export async function cleanupNotificationLifecycle(env: Env): Promise<void> {
   await env.DB.prepare("UPDATE shopping_items SET task_id=NULL,updated_at=? WHERE task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=shopping_items.task_id AND t.family_id=shopping_items.family_id)").bind(now).run();
   await env.DB.prepare("UPDATE items SET task_id=NULL,updated_at=? WHERE task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id=items.task_id AND t.family_id=items.family_id)").bind(now).run();
 
-  // If legacy/import data somehow bypassed the partial unique index, keep the oldest active reminder and cancel the rest before send.
+  // If legacy/import data somehow bypassed the partial unique index, keep the oldest active reminder and cancel the rest before a future send tick sees it.
   await env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE status IN ('pending','retry') AND EXISTS (SELECT 1 FROM notifications keep WHERE keep.id<notifications.id AND keep.family_id=notifications.family_id AND keep.member_id=notifications.member_id AND keep.target_type=notifications.target_type AND COALESCE(keep.target_id,-1)=COALESCE(notifications.target_id,-1) AND keep.notify_at=notifications.notify_at AND keep.status IN ('pending','retry'))").bind(now).run();
+}
+
+/**
+ * Full integrity/retention maintenance. None of these COUNT/NOT EXISTS audits is
+ * needed to decide whether an individual notification is safe to deliver, so
+ * they run on a daily maintenance Cron rather than 288 times per day.
+ */
+export async function auditNotificationLifecycle(env: Env): Promise<void> {
+  const now=nowJst();
+  // Operational activity audit is retained for 31 JST calendar days. Domain
+  // completion histories and Family Log are intentionally untouched.
+  await env.DB.prepare("DELETE FROM activity_logs WHERE occurred_at < datetime(?,'-31 days')").bind(now).run();
 
   const [dup,orphan,orphanExceptions,orphanRules,staleMessageLinks,staleTaskChildren,orphanOperationalRows,archiveDuplicates,archiveMemberMismatch,familyLogLinkIssues,promotionInviteIssues,taskFamilyLogTemplateIssues]=await Promise.all([
     env.DB.prepare("SELECT COUNT(*) c FROM (SELECT family_id,member_id,target_type,target_id,notify_at,COUNT(*) n FROM notifications WHERE status IN ('pending','retry') GROUP BY family_id,member_id,target_type,target_id,notify_at HAVING COUNT(*)>1)").first<any>(),

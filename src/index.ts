@@ -7,6 +7,7 @@ import { validateLiffNext } from './liff-target';
 import { logRequestFailure } from './observability/errors';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
 import { processNotifications } from './notification-delivery';
+import { cleanupNotificationLifecycle, auditNotificationLifecycle } from './notification-lifecycle';
 import { processLineDailyDigests } from './line-daily-digest';
 import { processLinePeriodicDigests } from './line-periodic-digest';
 import { dispatchPageRoute } from './page-routes';
@@ -56,6 +57,15 @@ export default {
       ctx.waitUntil(processLinePeriodicDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
       ctx.waitUntil(processChildJournalCalendarOutbox(env));
+      return;
+    }
+    if(controller.cron==='17 * * * *'){
+      ctx.waitUntil(cleanupNotificationLifecycle(env));
+      return;
+    }
+    if(controller.cron==='29 18 * * *'){
+      ctx.waitUntil(auditNotificationLifecycle(env));
+      return;
     }
     if(controller.cron==='7,37 * * * *') ctx.waitUntil(renewCalendarWatches(env));
   }
