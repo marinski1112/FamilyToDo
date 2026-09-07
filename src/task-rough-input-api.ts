@@ -30,6 +30,7 @@ const explicitQuantityPrefix=/^(?:数量|個数)\s*[:：]?\s*\d/iu;
 const httpUrlOnly=/^https?:\/\/\S+$/iu;
 const categoryIntentHint=/(?:^|[\s、,])(?:カテゴリー|カテゴリ)\s*[:：]/iu;
 const dueIntentHint=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/iu;
+const explicitDueDateLine=/^(?:期限|締切)\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u;
 const quantityIntentHint=/(?:^|[\s、,])(?:数量|個数)\s*[:：]?/iu;
 const multiplyQuantityHint=/(?:^|\s)[×xX]\s*\d+(?:\.\d+)?(?:\s|$)/u;
 const trailingMultiplierQuantity=/\s+×\s*(\d+(?:\.\d+)?)\s*$/u;
@@ -73,6 +74,20 @@ function explicitQuantity(block:RoughBlock):string|null{
   if(multiplier)return multiplier.quantity;
   const inline=block.titleSeed.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:個|本|袋|箱|枚|セット|パック|kg|g|ml|mL|L))(?:\s|$)/u);
   return inline?.[1]?clean(inline[1],40)||null:null;
+}
+
+function explicitDueDate(block:RoughBlock):string|null{
+  let found:string|null=null;
+  for(let index=0;index<block.lines.length;index++){
+    const line=block.lines[index];
+    if(!dueIntentHint.test(line))continue;
+    if(index===0)return null;
+    const match=line.match(explicitDueDateLine);
+    if(!match?.[1]||!validDate(match[1]))return null;
+    if(found&&found!==match[1])return null;
+    found=match[1];
+  }
+  return found;
 }
 
 function deterministicTitle(block:RoughBlock,destination:Destination,quantity:string|null):string{
@@ -125,15 +140,15 @@ function parseRequestBody(value:unknown):{primaryType:Destination;fields:RoughFi
 
 function deterministicItems(fields:RoughField[]):RoughItem[]{
   return fields.flatMap(field=>field.blocks.map(block=>{
-    const quantity=field.destination==='shopping'?explicitQuantity(block):null;
-    return {destination:field.destination,originalText:block.originalText,title:deterministicTitle(block,field.destination,quantity),quantity,category:null,dueDate:null,dueTime:null,description:continuationDescription(block,field.destination)};
+    const quantity=field.destination==='shopping'?explicitQuantity(block):null,dueDate=explicitDueDate(block);
+    return {destination:field.destination,originalText:block.originalText,title:deterministicTitle(block,field.destination,quantity),quantity,category:null,dueDate,dueTime:null,description:continuationDescription(block,field.destination)};
   })).slice(0,MAX_ITEMS);
 }
 
 function needsModel(fields:RoughField[]):boolean{
   return fields.some(field=>field.blocks.some(block=>{
     const source=block.lines.join('\n');
-    if(dueIntentHint.test(source))return true;
+    if(dueIntentHint.test(source)&&!explicitDueDate(block))return true;
     if(field.destination==='shopping'&&categoryIntentHint.test(source))return true;
     if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return true;
     if(field.destination==='shopping'&&(quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed))&&!explicitQuantity(block))return true;
