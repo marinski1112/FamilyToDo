@@ -55,4 +55,10 @@ let release;context.loadGoogleMaps=()=>new Promise(resolve=>{release=()=>resolve
 const pending=root.emit('family-location-history',{detail:{memberId:1,points}});
 await root.emit('family-location-history',{detail:{memberId:0,points:[]}});release();await pending;
 assert.equal(lines.length,1,'clearing during Maps loading must not revive a trail');
+context.loadGoogleMaps=async()=>maps;
+await root.emit('family-location-members',{detail:{members:[{memberId:2,sharingEnabled:true}]}});
+await root.emit('family-location-history',{detail:{memberId:2,points}});
+assert.equal(lines.length,2,'history own member lookup must synchronize authorization before drawing');
+await root.emit('family-location-members',{detail:{members:[]}});
+assert.equal(context.historyMemberId,0,'sharing revocation still clears history');
 console.log('location sheet: drag/cancel/Escape, viewport, visible polling and shared-history race contracts passed');

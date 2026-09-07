@@ -8,6 +8,7 @@ import { commitSession } from './session';
 import { buildStoredTaskRange } from './task-range-safety';
 import { validateLiffNext } from './liff-target';
 import { APP_VERSION } from './version';
+import { messageAiDraft } from './message-ai-draft';
 
 type Row=Record<string,unknown>;
 
@@ -50,6 +51,8 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
     if(csrfFailure)return csrfFailure;
     const action=String(b.action||'create');
     const now=nowJst();
+
+    if(action==='ai_draft')return messageAiDraft(ctx,Number(b.id||0));
 
     if(action==='delete'){
       const id=Number(b.id||0);
@@ -100,6 +103,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       if(!msg)return json({ok:false,error:'伝言が見つかりません。'},404);
       if(action==='convert_shopping'&&msg.converted_to_shopping_id)return json({ok:true,id:Number(msg.converted_to_shopping_id),already:true});
       if(action==='convert_task'&&msg.converted_to_task_id)return json({ok:true,id:Number(msg.converted_to_task_id),already:true});
+      if((typeof b.message_updated_at==='string'&&b.message_updated_at!==String(msg.updated_at||''))||(typeof b.message_original_text==='string'&&b.message_original_text!==String(msg.text||'').trim()))return json({ok:false,error:'伝言が更新されました。下書きを作り直してください。'},409);
       const target=Number(msg.target_member_id||0)||null;
 
       if(action==='convert_shopping'){

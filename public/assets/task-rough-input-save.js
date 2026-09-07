@@ -88,14 +88,14 @@ try{
       }catch(error){
         if(error?.uncertain)throw error;
         const rolledBack=await rollbackTasks(createdTaskIds);
-        if(!rolledBack)throw new Error(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`);
+        if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`,true);
         throw error;
       }
       return {saved:1+children.length+shopping.length+items.length,date:parent.startDate||'',kind:parent.destination};
     }
     if(roots.length>1){
       try{for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}}
-      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new Error(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`);throw error;}
+      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`,true);throw error;}
       return {saved:roots.length,date:roots[0]?.startDate||'',kind:roots[0]?.destination||'task'};
     }
     let saved=0;
@@ -118,15 +118,21 @@ try{
     for(const row of preview.querySelectorAll('.rough-draft-row[data-destination="shopping"],.rough-draft-row[data-destination="item"]'))row.querySelector('.rough-draft-due-time')?.closest('label')?.remove();
     let actions=preview.querySelector('.rough-save-actions');
     if(!actions){
-      actions=document.createElement('div');actions.className='rough-save-actions';actions.innerHTML='<button type="button" class="btn" id="roughConfirmSave">この内容で保存</button><p class="small">保存前にもう一度確認します。AIの下書きは、このボタンを押すまで登録されません。</p>';preview.appendChild(actions);
+      actions=document.createElement('div');actions.className='rough-save-actions';actions.innerHTML='<button type="button" class="btn" id="roughConfirmSave">この内容で保存</button><p class="rough-save-status" role="status" aria-live="polite"></p>';preview.appendChild(actions);
       const saveButton=actions.querySelector('#roughConfirmSave');
       saveButton.addEventListener('click',async()=>{
+        if(preview.dataset.saving==='1')return;
+        const status=actions.querySelector('.rough-save-status');
         const rows=[...preview.querySelectorAll('.rough-draft-row')].map(readRow),validation=validateRows(rows);
-        if(validation){alert(validation);return;}
-        if(!confirm(`${rows.length}件の確認済み下書きを保存します。よろしいですか？`))return;
-        saveButton.disabled=true;const old=saveButton.textContent;saveButton.textContent='保存中…';
+        if(validation){status.textContent=validation;return;}
+        const controls=[...preview.querySelectorAll('input,select,textarea,button'),...form.querySelectorAll('.task-rough-input input,.task-rough-input textarea,#roughPreviewButton')],disabled=controls.map(control=>control.disabled);
+        preview.dataset.saving='1';controls.forEach(control=>control.disabled=true);status.textContent='保存しています…';const old=saveButton.textContent;saveButton.textContent='保存中…';
         try{const result=await saveRows(rows);saveButton.textContent='保存しました';setTimeout(()=>redirectAfterSave(result),200);}
-        catch(error){alert(String(error?.message||'保存に失敗しました。内容を確認して再度お試しください。'));saveButton.disabled=false;saveButton.textContent=old;}
+        catch(error){
+          status.textContent=String(error?.message||'保存に失敗しました。内容を確認して再度お試しください。');
+          if(error?.uncertain){saveButton.textContent='一覧で保存結果を確認してください';const link=document.createElement('a');link.href='/app/tasks.php';link.textContent='チェックリストを確認';link.className='btn gray';actions.append(link);}
+          else{preview.dataset.saving='0';controls.forEach((control,index)=>control.disabled=disabled[index]);saveButton.textContent=old;}
+        }
       });
     }
   };

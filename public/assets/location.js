@@ -420,6 +420,11 @@
   };
 
   const sheet=root.querySelector('[data-location-family-sheet]');
+  root.addEventListener('family-location-members',event=>{
+    const members=Array.isArray(event.detail?.members)?event.detail.members:[];
+    currentSharedMembers=new Set(members.filter(member=>member?.sharingEnabled).map(member=>Number(member.memberId)));
+    if(historyMemberId&&!currentSharedMembers.has(historyMemberId))clearHistory();
+  });
   const handle=sheet?.querySelector('summary');
   const syncSheet=()=>{if(handle)handle.setAttribute('aria-expanded',sheet.open?'true':'false');};
   if(sheet&&handle){

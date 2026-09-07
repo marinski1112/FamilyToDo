@@ -59,6 +59,9 @@
       const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
       payload=await response.json().catch(()=>null);
       if(!response.ok||!payload?.ok)throw new Error('家族一覧を取得できませんでした。');
+      // Let the map validate history when its initial latest request failed.
+      latestMembers=Array.isArray(payload.members)?payload.members:[];
+      liveRoot?.dispatchEvent(new CustomEvent('family-location-members',{detail:{members:latestMembers}}));
     }
     const selected=memberEl.value;
     const members=(Array.isArray(payload.members)?payload.members:[]).filter(member=>member?.sharingEnabled&&Number.isSafeInteger(Number(member?.memberId))&&Number(member.memberId)>0);
