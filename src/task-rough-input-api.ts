@@ -77,6 +77,7 @@ function explicitQuantity(block:RoughBlock):string|null{
 }
 
 function explicitDueDate(block:RoughBlock):string|null{
+  if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return null;
   let found:string|null=null;
   for(let index=0;index<block.lines.length;index++){
     const line=block.lines[index];
