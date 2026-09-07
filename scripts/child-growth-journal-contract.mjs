@@ -30,6 +30,8 @@ if(!journal.includes("l.family_id=j.family_id"))throw new Error('Child Journal r
 if(journal.includes('external_calendar_accounts')||journal.includes('calendar_sync_outbox'))throw new Error('Foundation must not reuse the schedule Google Calendar binding/outbox');
 if(journal.includes('location')||journal.includes('latitude')||journal.includes('longitude'))throw new Error('Child Journal foundation must not introduce location handling');
 if(/source:'child_journal'[^}]*note/.test(journal))throw new Error('Child Journal activity metadata must not include journal note content');
+if(!journal.includes('processChildJournalCalendarOutbox(ctx.env,5,member.family_id)'))throw new Error('Child Journal save boundary must retain dedicated calendar outbox processing');
+if(journal.includes('childJournalCalendarStatus')||journal.includes('📅 Google Calendar')||journal.includes('syncCard'))throw new Error('Child Journal page must not render the presentation-only Google Calendar status card');
 if(!app.includes('export async function logActivity('))throw new Error('Child Journal must reuse the canonical activity log boundary');
 if(!app.includes('href="/app/child_journal.php"'))throw new Error('Family Log must expose the Child Journal entry point');
 if(!pageRoutes.includes("from './child-journal'")||!apiRoutes.includes("from './child-journal'"))throw new Error('Child Journal page/API dispatchers must import the Child Journal module');
