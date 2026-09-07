@@ -41,8 +41,8 @@ for(const marker of [
   'frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate,sharedAiFacts,weatherFact)',
   'function buildEvidencePraise(payload:DigestFactPayload):string[]',
   'const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)',
-  'const fullAuthoritativeLength=[...authoritative,...requiredSuffix].join',
-  'if(available<8)return authoritativeText',
+  'const totals=',
+  '[totals,...requiredSuffix]',
 ])if(!digest.includes(marker))throw new Error(`morning freeform recap marker missing: ${marker}`);
 
 if(digest.includes('{"opener":"...","narrative":"...","closing":"..."}'))throw new Error('Gemini must not author the morning opener/closing frame');
@@ -98,7 +98,7 @@ if((processBody.match(/chooseFrame\(/g)||[]).length!==1)throw new Error('frame/r
 const renderStart=digest.indexOf('function renderDeterministicFacts('),renderEnd=digest.indexOf('\nexport async function processLineDailyDigests(',renderStart);
 const renderBody=renderStart>=0&&renderEnd>renderStart?digest.slice(renderStart,renderEnd):'';
 if(renderBody.indexOf('const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)')>renderBody.indexOf('const narrative='))throw new Error('authoritative sections must be budgeted before optional recap');
-if(!renderBody.includes('MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength'))throw new Error('recap must use only capacity left after authoritative sections');
+if(!renderBody.includes('clean(frame.personalNote,MAX_MORNING_NARRATIVE_CHARS)')||!renderBody.includes('[totals,...requiredSuffix]'))throw new Error('recap and authoritative totals must survive optional detail truncation');
 
 const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
 const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';

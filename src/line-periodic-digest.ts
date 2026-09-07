@@ -1,4 +1,5 @@
 import { familyAiProvider, geminiFetch } from './family-ai';
+import { dailyFortune } from './daily-fortune';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
 import { FAMILY_LOG_TYPE_META } from './family-log-type-meta';
 import { blockPeriodicDigestAiAfter429, finalizePeriodicDigestFrame, readFinalizedPeriodicDigestFrame, reservePeriodicDigestAiRequest } from './line-periodic-digest-ai-guard';
@@ -158,16 +159,22 @@ async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promis
   return fallback;
 }
 
-function renderReport(facts:PeriodFacts,narrative:string):string{
+function renderReport(facts:PeriodFacts,narrative:string,familyId:number):string{
   const title=facts.period.reportType==='WEEKLY'?'🌙 1週間まとめ':`🌙 ${monthLabel(facts.period.endDate)}まとめ`;
   const required=[title,facts.period.label,`【予定・タスク】 イベント${facts.eventCount}件／タスク 現在完了${facts.taskCompleted}・未完了${facts.taskIncomplete}`,`【持ち物】 現在完了${facts.itemCompleted}・未完了${facts.itemIncomplete}`,facts.period.reportType==='WEEKLY'?'今週もおつかれさまでした。':'今月もおつかれさまでした。'];
   const extras:string[]=[];
   if(facts.logLines.length)extras.push('【家族の記録】',...facts.logLines);
   if(facts.samples.length)extras.push('【期間の予定・タスク】',...facts.samples);
-  let base=[...required.slice(0,2),...extras,...required.slice(2)].join('\n');
-  if(base.length>MAX_LINE_CHARS){base=required.join('\n').slice(0,MAX_LINE_CHARS);}
-  const available=MAX_LINE_CHARS-base.length-1;if(available<16)return base;
-  return [...required.slice(0,2),`💬 ${narrative}`.slice(0,available),...extras,...required.slice(2)].join('\n').slice(0,MAX_LINE_CHARS);
+  const fortune=dailyFortune(familyId,0,facts.period.periodKey);
+  const suffix=[...required.slice(2),`【家族のお楽しみ占い】 🔮 ${fortune.headline}`,`ラッキーアクション: ${fortune.luckyAction}／カラー: ${fortune.luckyColor}`];
+  const prefix=[...required.slice(0,2),`💬 ${clean(narrative,MAX_NARRATIVE_CHARS)}`];
+  // Reserve the prose, accurate totals and fortune before admitting optional detail.
+  for(const line of extras){
+    if([...prefix,line,...suffix].join('\n').length>MAX_LINE_CHARS)break;
+    prefix.push(line);
+  }
+  if(prefix.at(-1)?.startsWith('【'))prefix.pop();
+  return [...prefix,...suffix].join('\n');
 }
 
 async function retryKey(familyId:number,lineUserId:string,period:Period):Promise<string>{
@@ -176,13 +183,14 @@ async function retryKey(familyId:number,lineUserId:string,period:Period):Promise
 }
 
 export async function processLinePeriodicDigests(env:Env):Promise<void>{
+  if(!String(env.LINE_ACCESS_TOKEN||'').trim())return;
   const settings=await env.DB.prepare("SELECT s.*,f.timezone FROM line_daily_digest_settings s JOIN families f ON f.id=s.family_id WHERE s.enabled=1").all<Row>();
   for(const setting of settings.results){
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`;
     for(const period of duePeriods(localDate,localTime,setting)){
       const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL ORDER BY m.id").bind(setting.family_id).all<Row>();
       if(!recipients.results.length)continue;
-      const facts=await loadPeriodFacts(env.DB,Number(setting.family_id),period),narrative=await chooseNarrative(env,Number(setting.family_id),facts),message=renderReport(facts,narrative);
+      let message:string|undefined;
       const destinations=new Map<string,Row[]>();
       for(const member of recipients.results){const lineUserId=String(member.line_user_id||'');if(!lineUserId)continue;const group=destinations.get(lineUserId)||[];group.push(member);destinations.set(lineUserId,group);}
       for(const [lineUserId,members] of destinations){
@@ -198,6 +206,10 @@ export async function processLinePeriodicDigests(env:Env):Promise<void>{
         }
         const pending=receipts.filter(receipt=>Number(receipt.attempt_count)<3);if(!pending.length)continue;
         try{
+          if(message===undefined){
+            const facts=await loadPeriodFacts(env.DB,Number(setting.family_id),period),narrative=await chooseNarrative(env,Number(setting.family_id),facts);
+            message=renderReport(facts,narrative,Number(setting.family_id));
+          }
           const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,lineUserId,message,{retryKey:await retryKey(Number(setting.family_id),lineUserId,period)});
           for(const receipt of pending)await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(now,now,receipt.id).run();
         }catch(error){for(const receipt of pending)await env.DB.prepare("UPDATE line_periodic_digest_receipts SET status='ERROR',attempt_count=attempt_count+1,last_error=?,updated_at=? WHERE id=?").bind(String(error).slice(0,500),now,receipt.id).run();}

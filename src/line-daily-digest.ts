@@ -332,14 +332,13 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:
   const requiredSuffix=['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
   const authoritativeText=fitMorningDigest(authoritative,requiredSuffix);
   if(!frame.personalNote)return authoritativeText;
-  const fullAuthoritativeLength=[...authoritative,...requiredSuffix].join('\n').length;
-  const available=Math.max(0,MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength-1);
-  if(available<8)return authoritativeText;
-  const narrative=`💬 ${frame.personalNote}`.slice(0,available);
-  return fitMorningDigest([authoritative[0],authoritative[1],narrative,...authoritative.slice(2)],requiredSuffix);
+  const narrative=`💬 ${clean(frame.personalNote,MAX_MORNING_NARRATIVE_CHARS)}`;
+  const totals=`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}／期限切れ${payload.today.overdue}件`;
+  return fitMorningDigest([authoritative[0],authoritative[1],narrative,...authoritative.slice(2)],[totals,...requiredSuffix]);
 }
 
 export async function processLineDailyDigests(env:Env):Promise<void>{
+  if(!String(env.LINE_ACCESS_TOKEN||'').trim())return;
   const settings=await env.DB.prepare("SELECT s.family_id,s.send_time,COALESCE(s.tone_level,'FRIENDLY_LIGHT') tone_level,f.timezone FROM line_daily_digest_settings s JOIN families f ON f.id=s.family_id WHERE s.enabled=1").all<Row>();
   for(const setting of settings.results){
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
