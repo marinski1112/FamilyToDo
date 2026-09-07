@@ -171,7 +171,7 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
     if(persisted){return persistedMorningFrame(persisted,profiles)||fallbackFrame;}
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
-  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"opener":"...","narrative":"...","closing":"..."}。openerは45文字以内、narrativeは${MAX_MORNING_NARRATIVE_CHARS}文字以内、closingは45文字以内。narrativeは2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、opener/narrative/closingには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
+  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"..."}。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
   const models=morningDigestModels(env);
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];
@@ -184,9 +184,9 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
       if(!response.ok)continue;
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const parsed=JSON.parse(text),opener=clean(parsed?.opener,80),personalNote=clean(parsed?.narrative,MAX_MORNING_NARRATIVE_CHARS),closing=clean(parsed?.closing,80);
-      if(opener&&personalNote&&closing){
-        const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
+      const parsed=JSON.parse(text),personalNote=clean(parsed?.recap,MAX_MORNING_NARRATIVE_CHARS);
+      if(personalNote){
+        const frame:Frame={...fallbackBase,personalNote,narrativeVersion:2};
         if(!generatedFramePassesSafety(frame,profiles))continue;
         await finalizeFrameSafely(env,familyId,localDate,frame);
         return frame;
