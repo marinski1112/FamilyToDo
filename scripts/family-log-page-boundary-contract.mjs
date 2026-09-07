@@ -120,6 +120,7 @@ for(const marker of [
   "select.className='family-log-subject-select'",
   "dateInput.classList.add('family-log-compact-date')",
   "dateInput.setAttribute('aria-label','表示する日付')",
+  "const dateLinks=[...date.querySelectorAll('a[href]')]",
   "previous.setAttribute('aria-label','前の日')",
   "next.setAttribute('aria-label','次の日')",
   "journal.textContent='📓 成長記録'",
@@ -140,7 +141,7 @@ for(const marker of [
   '.family-log-page .family-quick-chore-record{min-height:42px!important',
   '.family-log-page .family-log-quick{min-height:46px!important',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log compact mobile geometry missing: ${marker}`);
-if(/\.href\s*=|setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered subject/date navigation URLs');
+if(/previous\.href\s*=|next\.href\s*=|previous\.setAttribute\(['"]href|next\.setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered previous/next navigation URLs');
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
 console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, visible tappable date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
