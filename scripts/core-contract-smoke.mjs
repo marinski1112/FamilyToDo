@@ -93,9 +93,11 @@ assert.equal(parseMultiplierFixture('サイズ 2×3'),null,'dimension-like multi
 assert.equal(parseMultiplierFixture('型番X2'),null,'model-like X2 text must not be treated as an explicit quantity');
 assert.equal(parseMultiplierFixture('牛乳 ×0'),null,'non-positive multiplier quantity must remain unresolved');
 const deterministicGate=roughInputApi.indexOf("if(!needsModel(parsed.fields))return fallback();");
-const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
 const modelLoop=roughInputApi.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
-assert.ok(deterministicGate>=0&&deterministicGate<categoryRead&&categoryRead<modelLoop,'deterministic resolved drafts must exit before category D1 read and Gemini model loop');
+const reserveCall=roughInputApi.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
+const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
+const modelCall=roughInputApi.indexOf('const response=await geminiFetch(env,model,bodyForModel);');
+assert.ok(deterministicGate>=0&&deterministicGate<modelLoop&&modelLoop<reserveCall&&reserveCall<categoryRead&&categoryRead<modelCall,'deterministic resolved drafts must exit before the budgeted loop; each paid call must reserve before category D1 enrichment and Gemini');
 assert.equal((roughInputApi.match(/geminiFetch\(/g)||[]).length,1,'rough-input must keep one bounded Gemini call site inside the two-model loop');
 assert.ok(!roughInputApi.includes('fields.flatMap(field=>field.lines.map('),'rough-input deterministic fallback must not regress to one-line=one-item parsing');
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
