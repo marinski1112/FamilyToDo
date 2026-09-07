@@ -32,7 +32,7 @@
     }
     const task=row.querySelector('.convert-task'),shopping=row.querySelector('.convert-shopping');
     const extras=[shopping,...row.querySelectorAll('.edit-message,.delete-message')].filter(Boolean);
-    const details=document.createElement('details');details.className='message-more';const summary=document.createElement('summary');summary.textContent='その他の操作';const actions=document.createElement('div');actions.className='message-actions';details.append(summary,actions);extras.forEach(node=>actions.append(node));row.append(details);
+    if(extras.length){const details=document.createElement('details');details.className='message-more';const summary=document.createElement('summary');summary.textContent='その他の操作';const actions=document.createElement('div');actions.className='message-actions';details.append(summary,actions);extras.forEach(node=>actions.append(node));row.append(details);}
     row.querySelectorAll('.message-actions').forEach(node=>{if(!node.children.length)node.remove();});
     if(task)task.textContent='✨ AIでタスクに追加';
   }
