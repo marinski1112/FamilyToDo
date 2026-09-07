@@ -99,9 +99,8 @@ export async function calendarStampPngSequenceAdminApi(request:Request,context:a
   if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);
   const rawFrames=Array.isArray(body.frames)?body.frames:[];
   const frames=rawFrames.map((frame:any)=>({storageKey:String(frame?.storageKey||''),durationMs:frame?.durationMs==null?undefined:Number(frame.durationMs)}));
-  const storageProviderInput=body.storageProvider;
-  if(storageProviderInput!=null&&typeof storageProviderInput!=='string')return json({ok:false,error:'INVALID_STORAGE_PROVIDER'},400);
-  const rawStorageProvider=(storageProviderInput||'').trim();
+  if(body.storageProvider!=null&&typeof body.storageProvider!=='string')return json({ok:false,error:'INVALID_STORAGE_PROVIDER'},400);
+  const rawStorageProvider=String(body.storageProvider??'').trim();
   if(rawStorageProvider&&rawStorageProvider!=='ASSETS'&&rawStorageProvider!=='UPLOAD')return json({ok:false,error:'INVALID_STORAGE_PROVIDER'},400);
   const storageProvider=(rawStorageProvider||'ASSETS') as 'ASSETS'|'UPLOAD';
   try{
