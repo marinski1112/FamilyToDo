@@ -33,6 +33,7 @@ export async function processNotifications(env: Env): Promise<void> {
         OR (n.target_type='message' AND n.target_id IS NOT NULL AND EXISTS (
           SELECT 1 FROM messages x WHERE x.id=n.target_id AND x.family_id=n.family_id
         ))
+        OR n.target_type IS NULL
         OR n.target_type NOT IN ('task','message')
       )
     ORDER BY n.notify_at,n.id
