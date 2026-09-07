@@ -51,6 +51,15 @@ for(const marker of [
   'httpUrlOnly.test(line.trimmed)',
   'function explicitQuantity(block:RoughBlock)',
   'function continuationDescription(block:RoughBlock,destination:Destination)',
+  'function needsModel(fields:RoughField[]):boolean',
+  "if(!needsModel(parsed.fields))return fallback();",
+  'dueIntentHint.test(source)',
+  "field.destination==='shopping'&&categoryIntentHint.test(source)",
+  'absoluteDateHint.test(block.titleSeed)',
+  'relativeDateHint.test(block.titleSeed)',
+  'weekdayHint.test(block.titleSeed)',
+  'explicitTimeHint.test(block.titleSeed)',
+  'quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed)',
   'totalLines>MAX_ITEMS',
   'sourceIndex',
   'field.blocks.some(block=>block.originalText===originalText)',
@@ -65,6 +74,11 @@ for(const marker of [
   "field.destination==='shopping'&&categoryRaw!==null",
   'allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null',
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
+const deterministicGate=roughInputApi.indexOf("if(!needsModel(parsed.fields))return fallback();");
+const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
+const modelLoop=roughInputApi.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
+assert.ok(deterministicGate>=0&&deterministicGate<categoryRead&&categoryRead<modelLoop,'deterministic resolved drafts must exit before category D1 read and Gemini model loop');
+assert.equal((roughInputApi.match(/geminiFetch\(/g)||[]).length,1,'rough-input must keep one bounded Gemini call site inside the two-model loop');
 assert.ok(!roughInputApi.includes('fields.flatMap(field=>field.lines.map('),'rough-input deterministic fallback must not regress to one-line=one-item parsing');
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
 assert.ok(!roughInputApi.includes('resolveFamilyGeminiModel'),'rough-input must not inherit arbitrary family-selected Gemini models');
@@ -123,4 +137,4 @@ assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'ro
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, semantic rough-input blocks, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, semantic rough-input blocks, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
