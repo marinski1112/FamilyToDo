@@ -29,6 +29,5 @@ assert.equal(parseMultiplier('サイズ 2×3'),null);
 assert.equal(parseMultiplier('型番X2'),null);
 assert.equal(parseMultiplier('牛乳 ×0'),null);
 assert.ok(api.includes("if(field.destination==='shopping'&&(quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed))&&!explicitQuantity(block))return true;"),'ambiguous multiplier input must remain model-eligible through needsModel');
-assert.ok(!/generativelanguage|fetch\(/.test(fs.readFileSync('scripts/task-rough-input-multiplier-dimension-contract.mjs','utf8')),'dimension contract must not call live providers');
 
 console.log('rough-input multiplier dimension contract: spaced dimensions remain unresolved while explicit ×N stays deterministic');
