@@ -202,7 +202,7 @@ function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCa
     if((dueDate||dueTime)&&!temporalIntentHint(originalText)&&!continuationRelativeDateHint.test(originalText)&&!continuationWeekdayHint.test(originalText))return null;
     if(quantity!==null&&!/[0-9０-９一二三四五六七八九十百半]/u.test(originalText))return null;
     if(quantity!==null){
-      const sourceNumbers=originalText.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[],claimedNumbers=quantity.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[];
+      const sourceNumbers:string[]=originalText.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[],claimedNumbers:string[]=quantity.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[];
       if(sourceNumbers.length&&claimedNumbers.some(number=>!sourceNumbers.includes(number)))return null;
     }
     if(description!==null&&field.destination!=='task'&&field.destination!=='event')return null;

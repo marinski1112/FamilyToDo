@@ -84,7 +84,8 @@
       taskForm.elements.date.value=item.dueDate||'';taskForm.elements.end_date.value=item.dueDate||'';taskForm.elements.no_date.checked=!item.dueDate;taskForm.elements.start_time.value=item.dueTime||'';taskForm.elements.all_day.checked=!item.dueTime;
       taskForm.dataset.messageUpdatedAt=String(data.messageUpdatedAt||'');
       taskForm.dataset.messageOriginalText=String(data.originalText||'');
-      select.querySelector('optgroup[data-ai]')?.remove();
+      const previous=select.querySelector('optgroup[data-ai]');
+      if(previous){[...previous.children].forEach(option=>select.append(option));previous.remove();}
       const group=document.createElement('optgroup');group.label='近い用件の候補';group.dataset.ai='1';
       for(const candidate of data.suggestions||[]){
         let option=[...select.options].find(option=>Number(option.value)===candidate.id);if(!option)option=document.createElement('option');option.value=String(candidate.id);option.textContent=candidate.title+(candidate.date?' ・ '+candidate.date:'');group.append(option);
