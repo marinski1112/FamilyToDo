@@ -15,14 +15,19 @@ for(const marker of [
   'ROUGH_INPUT_AI_MAX_GLOBAL_REQUESTS_PER_DAY',
   'task_rough_input_ai_family_daily',
   'task_rough_input_ai_global_daily',
-  'request_count=request_count+1',
-  "COALESCE(blocked_until,'')<=?",
-  'request_count=request_count-1',
+  'ON CONFLICT(family_id,local_date) DO UPDATE SET request_count=task_rough_input_ai_family_daily.request_count+1',
+  'ON CONFLICT(budget_date) DO UPDATE SET request_count=task_rough_input_ai_global_daily.request_count+1',
+  "COALESCE(task_rough_input_ai_global_daily.blocked_until,'')<=?",
+  'UPDATE task_rough_input_ai_family_daily SET request_count=request_count-1',
   'addWallClockMinutes(now,ROUGH_INPUT_AI_429_BACKOFF_MINUTES)',
 ])assert.ok(guard.includes(marker),`rough-input AI guard marker missing: ${marker}`);
 
 assert.ok(guard.includes('`utc-v1:${now.slice(0,10)}`'),'global rough-input budget must use an infrastructure UTC-day key');
 assert.ok(!guard.includes('line_daily_digest_ai_'),'rough-input AI budget must stay independent from morning-digest accounting');
+const familyReservation=guard.indexOf('const familyReservation=');
+const globalReservation=guard.indexOf('const globalReservation=');
+assert.ok(familyReservation>=0&&globalReservation>familyReservation,'family budget must reserve before global budget');
+assert.ok(!/generativelanguage|geminiFetch|fetch\(/.test(guard),'rough-input AI guard must not make live external API calls');
 
 for(const marker of [
   'CREATE TABLE IF NOT EXISTS task_rough_input_ai_family_daily',
@@ -42,7 +47,7 @@ assert.ok(reserveCall<categoryRead&&categoryRead<modelCall,'paid-call reservatio
 assert.ok(api.includes('catch{return fallback();}'),'guard failures must fail closed to deterministic output');
 assert.ok(api.includes('if(!reserved)break;'),'exhausted family/global budget must stop paid calls');
 assert.ok(api.includes('if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);'),'429 responses must open the rough-input circuit');
-assert.ok(api.includes('fails. */}break;}'),'429 handling must stop fallback rather than create a retry storm');
+assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling must stop fallback rather than create a retry storm');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
 console.log('rough-input AI cost guard contract: deterministic-first, durable budgets, bounded overrides, and 429 circuit ok');
