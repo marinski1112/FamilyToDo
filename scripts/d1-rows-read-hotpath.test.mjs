@@ -20,6 +20,7 @@ test('five-minute notification path is bounded and does not run lifecycle mainte
   assert.match(delivery,/t\.private_owner_id=n\.member_id/);
   assert.match(delivery,/r\.active=1 AND r\.deleted_at IS NULL/);
   assert.match(delivery,/SELECT 1 FROM messages x WHERE x\.id=n\.target_id AND x\.family_id=n\.family_id/);
+  assert.match(delivery,/n\.target_type IS NULL/);
   assert.match(delivery,/web_push_subscriptions WHERE member_id=\? AND family_id=\? AND enabled=1/);
   assert.equal(delivery.includes('SELECT COALESCE(attempt_count,0) attempt_count'),false);
   assert.match(delivery,/attempt_count=COALESCE\(attempt_count,0\)\+1/);
