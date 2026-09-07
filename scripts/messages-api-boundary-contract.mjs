@@ -37,6 +37,12 @@ const createInsert=handler.indexOf('INSERT INTO messages(family_id,sender_id,tar
 if(createStart<0||createTargetCheck<0||createInsert<0||createTargetCheck>createInsert) throw new Error('Messages create must validate target_member_id before INSERT');
 if(!handler.includes('LEFT JOIN members r ON r.id=msg.target_member_id AND r.family_id=msg.family_id')) throw new Error('Messages recipient display JOIN must remain family-scoped');
 
+const manageHelper="const canManageMessage=(memberId:number,memberRole:unknown,senderId:unknown)=>{";
+if(!handler.includes(manageHelper)) throw new Error('Messages edit/delete authorization helper missing');
+if(handler.split('if(!canManageMessage(m.id,m.role,msg.sender_id))').length-1!==2) throw new Error('Messages edit/delete POST actions must share the canonical authorization helper');
+if(!handler.includes("canManageMessage(m.id,m.role,r.sender_id)?`<div class=\"message-actions\"><button class=\"btn gray small edit-message\"")) throw new Error('Messages list must hide edit/delete controls when the authenticated member cannot manage the message');
+if(!handler.includes("return Number(senderId)===memberId||role==='OWNER'||role==='ADMIN';")) throw new Error('Messages authorization must remain sender-or-OWNER/ADMIN');
+
 if(handler.includes("from './app'")) throw new Error('Messages retained handler must not depend on app.ts');
 if(!routes.includes("import { messages } from './messages-api';")) throw new Error('context API dispatcher must import retained messages handler');
 if(!routes.includes("if(url.pathname==='/api/messages') return await messages(request,context);")) throw new Error('/api/messages route wiring changed');
