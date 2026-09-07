@@ -44,6 +44,13 @@ assert.equal(validate([item('牛乳2本','牛乳',{dueTime:'12:00'})]),null,'tim
 assert.equal(validate([item('牛乳2本','牛乳'),item('牛乳2本','牛乳')]),null,'duplicated draft rows rejected');
 assert.equal(validate([item('牛乳2本','牛乳',{quantity:{value:2}})]),null,'non-scalar output rejected');
 assert.equal(validate([item('牛乳2本','牛乳',{quantity:'2本'})]).length,1);
+for(const phrase of ['3日後','３日後','2週間後','二日後','1ヶ月後']){
+  const original='提出\n期限: '+phrase;
+  const input=context.parseRequestBody({primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]}).fields;
+  assert.equal(context.needsModel(input),true,phrase+' must reach the model');
+  assert.equal(context.validateGeminiItems({items:[item(original,'提出',{dueDate:'2026-09-10'})]},input,new Map()).length,1,phrase+' must not reject a resolved date');
+}
+assert.equal(vm.runInContext("temporalIntentHint('牛乳3本')",context),false);
 budget=false;let count=calls;const fallback=await (await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]})).json();assert.equal(fallback.reason,'BUDGET');assert.equal(calls,count);
 budget=true;responseStatus=429;await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]});assert.equal(calls,count+1,'429 must stop the fallback model');
 responseStatus=200;modelResult={items:[]};count=calls;await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]});assert.equal(calls,count+2,'at most primary + fallback attempts');

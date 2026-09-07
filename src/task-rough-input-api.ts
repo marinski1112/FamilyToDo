@@ -44,7 +44,8 @@ const continuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|
 const weekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
 const continuationWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)/u;
 const explicitTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
-const temporalIntentHint=(value:string)=>absoluteDateHint.test(value)||relativeDateHint.test(value)||weekdayHint.test(value)||explicitTimeHint.test(value);
+const relativeOffsetHint=/(?:[0-9〇零一二三四五六七八九十百]+)\s*(?:日|週間?|か月|ヶ月|箇月|月|年)\s*(?:後|前)/u;
+const temporalIntentHint=(value:string)=>relativeOffsetHint.test(value.normalize('NFKC'))||absoluteDateHint.test(value)||relativeDateHint.test(value)||weekdayHint.test(value)||explicitTimeHint.test(value);
 
 function semanticBlocks(text:string):RoughBlock[]{
   const source=text.replace(/\r\n?/g,'\n').split('\n').map(raw=>({raw,trimmed:raw.trim()})).filter(x=>x.trimmed);
@@ -167,6 +168,7 @@ function deterministicItems(fields:RoughField[]):RoughItem[]{
 function needsModel(fields:RoughField[]):boolean{
   return fields.some(field=>field.blocks.some(block=>{
     const source=block.lines.join('\n'),dueDate=explicitDueDate(block);
+    if(relativeOffsetHint.test(source.normalize('NFKC')))return true;
     if(/(?:お願い|ください|しておいて|買って|持って|用意して|予約して|確認して|忘れず|までに|、|。)/u.test(block.titleSeed))return true;
     if(/(?:明日|明後日|来週|再来週|来月|週末)(?:は|に|も|買|持|行|帰|出|予|家|朝|昼|夜)/u.test(block.titleSeed))return true;
     if(dueIntentHint.test(source)&&!dueDate)return true;
