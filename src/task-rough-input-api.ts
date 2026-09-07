@@ -77,16 +77,17 @@ function explicitQuantity(block:RoughBlock):string|null{
 }
 
 function explicitDueDate(block:RoughBlock):string|null{
-  if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return null;
   let found:string|null=null;
   for(let index=0;index<block.lines.length;index++){
-    const line=block.lines[index];
-    if(!dueIntentHint.test(line))continue;
-    if(index===0)return null;
-    const match=line.match(explicitDueDateLine);
-    if(!match?.[1]||!validDate(match[1]))return null;
-    if(found&&found!==match[1])return null;
-    found=match[1];
+    const line=block.lines[index],match=line.match(explicitDueDateLine);
+    if(match?.[1]){
+      if(index===0||!validDate(match[1]))return null;
+      if(found&&found!==match[1])return null;
+      found=match[1];
+      continue;
+    }
+    if(httpUrlOnly.test(line))continue;
+    if(dueIntentHint.test(line)||absoluteDateHint.test(line)||relativeDateHint.test(line)||weekdayHint.test(line)||explicitTimeHint.test(line))return null;
   }
   return found;
 }
