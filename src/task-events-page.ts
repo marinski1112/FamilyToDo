@@ -165,7 +165,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const eventCount=data.tasks.filter(task=>String(task.task_kind||'').toLowerCase()==='event').length;
   const checkableTaskCount=data.tasks.length-eventCount;
   const summary=`<div class="task-event-summary meta">タスク ${checkableTaskCount}${eventCount?` ・ イベント ${eventCount}`:''} ・ 買い物 ${data.shopping.length}</div>`;
-  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div><div><a class="btn small gray" aria-label="買い物を追加" href="/app/shopping_new.php?date=${encodeURIComponent(date)}">＋ 追加</a></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>一覧・表示ルール</summary><a class="btn gray" href="/app/shopping.php">買い物一覧を開く</a><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
+  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div><div><a class="btn small gray" aria-label="買い物を追加" href="/app/shopping_new.php?date=${encodeURIComponent(date)}">＋ 追加</a></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>一覧・表示ルール</summary><a class="btn gray" href="/app/shopping.php">一覧・管理</a><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
   const checklistStyle=`<style>
 .checklist-page .section-card{padding:12px!important;margin-bottom:12px}
 .checklist-page .section-head{gap:8px;align-items:center;margin-bottom:6px}
