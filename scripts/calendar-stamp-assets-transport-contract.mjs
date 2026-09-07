@@ -108,7 +108,8 @@ assert.match(calendarUi,/image\.src=thumbnailUrl/,'Calendar month/list stamp ren
 assert.match(calendarUi,/if\(frames\.length>=2\)[\s\S]*frames\.forEach\(frame=>\{const preload=new Image\(\);preload\.src=frame\.url;\}\)[\s\S]*viewer\.classList\.add\('open'\);play\(\);/,'Animation frames must preload only inside viewer-open playback setup');
 assert.doesNotMatch(calendarUi,/preloadVisibleStamps|preloadStampMedia|requestIdleCallback/,'Calendar month/list rendering must not eagerly preload full stamp frames');
 
-assert.match(admin,/body\.storageProvider==='UPLOAD'\?'UPLOAD':'ASSETS'/,'admin sequence registration must allow the R2-backed logical UPLOAD provider while preserving ASSETS');
+assert.match(admin,/rawStorageProvider&&rawStorageProvider!=='ASSETS'&&rawStorageProvider!=='UPLOAD'/,'admin sequence registration must reject unknown storage providers instead of coercing them');
+assert.match(admin,/const storageProvider=\(rawStorageProvider\|\|'ASSETS'\) as 'ASSETS'\|'UPLOAD'/,'admin sequence registration must allow the R2-backed logical UPLOAD provider while preserving the absent ASSETS default');
 assert.match(calendarApi,/calendarStampFrameUrl\(placement\.storage_provider,placement\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Calendar read projection must route UPLOAD frames through the authenticated media endpoint');
 assert.match(messageApi,/calendarStampFrameUrl\(row\.storage_provider,row\.asset_id,frame\.frame_index,frame\.storage_key\)/,'Message read projection must route UPLOAD frames through the authenticated media endpoint');
 assert.match(routes,/\/api\/calendar-stamp-media/,'context API dispatcher must route authenticated stamp media reads');
@@ -126,4 +127,4 @@ assert.match(sequence,/normalizeCalendarStampStorageKey\(input\.thumbnailStorage
 assert.doesNotMatch(sequence,/https?:\/\//i,'PNG sequence metadata registration must not embed remote URLs');
 assert.doesNotMatch(sequence,/\benv\.[A-Za-z0-9_]*R2\b|\bR2Bucket\b/,'PNG sequence domain registration must not couple metadata to a physical R2 binding');
 
-console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only compressed PNG upload, large 32MiB-per-frame/128MiB-total source bounds, byte-heavy small-source re-encoding, verified shared 384px/1MiB normalized progressive client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
+console.log('calendar stamp storage contract: ASSETS remains same-origin; UPLOAD is served through authenticated tenant-scoped MEDIA R2 transport with admin-only compressed PNG upload, strict provider validation, large 32MiB-per-frame/128MiB-total source bounds, byte-heavy small-source re-encoding, verified shared 384px/1MiB normalized progressive client bounds, lazy viewer-only animation frame loading, HTTP-correct private ETag revalidation, and backend-neutral metadata');
