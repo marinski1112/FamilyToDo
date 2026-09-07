@@ -46,11 +46,17 @@ const buildToolbar=()=>{
   });
   select.addEventListener('change',()=>{if(select.value)location.href=select.value;});
   toolbar.appendChild(select);
+  const dateInput=date.querySelector('input[type="date"]');
+  if(dateInput instanceof HTMLInputElement){dateInput.classList.add('family-log-compact-date');dateInput.setAttribute('aria-label','表示する日付');dateInput.title='日付を選択';}
+  const dateLinks=[...date.querySelectorAll('a[href]')];
+  const previous=dateLinks[0],next=dateLinks.at(-1);
+  if(previous){previous.textContent='‹';previous.setAttribute('aria-label','前の日');previous.title='前の日';}
+  if(next&&next!==previous){next.textContent='›';next.setAttribute('aria-label','次の日');next.title='次の日';}
   toolbar.appendChild(date);
   const journal=head.querySelector('.family-log-journal-link');
-  if(journal){journal.textContent='成長記録';journal.classList.add('family-log-compact-link');toolbar.appendChild(journal);}
+  if(journal){journal.textContent='📓 成長記録';journal.classList.add('family-log-compact-link');toolbar.appendChild(journal);}
   const manage=head.querySelector('.family-log-gear');
-  if(manage){manage.textContent='管理';manage.classList.add('family-log-compact-link','family-log-manage-link');manage.setAttribute('aria-label','家族ログ管理');toolbar.appendChild(manage);}
+  if(manage){manage.textContent='⚙️';manage.classList.add('family-log-compact-link','family-log-manage-link');manage.setAttribute('aria-label','家族ログ管理');manage.title='家族ログ管理';toolbar.appendChild(manage);}
   head.replaceWith(toolbar);subjects.remove();
 };
 const enhance=()=>{renameHousework();compactQuickCards();constrainEditors();buildToolbar();};
