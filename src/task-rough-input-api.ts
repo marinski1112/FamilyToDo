@@ -1,6 +1,7 @@
 import { json } from './response';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
+import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from './task-rough-input-ai-guard';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
@@ -190,18 +191,25 @@ export async function taskRoughInputApi(request:Request,ctx:any):Promise<Respons
   const env=ctx.env as Env;
   if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim()||!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback();
   if(!needsModel(parsed.fields))return fallback();
-  let allowedShoppingCategories=new Map<string,string>();
-  if(parsed.fields.some(field=>field.destination==='shopping')){
-    try{
-      const categoryRows=await env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?').bind(member.family_id).all<ShoppingCategoryCatalogRow>();
-      allowedShoppingCategories=categoryMap(categoryRows.results);
-    }catch{/* Fail closed for model-suggested categories if the family catalog cannot be read. */}
-  }
   const timezone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),today=familyDate(timezone);
   const bodyForModel=modelBody(parsed.fields,today);
+  const hasShopping=parsed.fields.some(field=>field.destination==='shopping');
+  let allowedShoppingCategories=new Map<string,string>(),shoppingCategoryCatalogLoaded=false;
   for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK]){
+    let reserved=false;
+    try{reserved=await reserveTaskRoughInputAiRequest(env.DB,Number(member.family_id),today,env);}catch{return fallback();}
+    if(!reserved)break;
+    if(hasShopping&&!shoppingCategoryCatalogLoaded){
+      shoppingCategoryCatalogLoaded=true;
+      try{
+        const categoryRows=await env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?').bind(member.family_id).all<ShoppingCategoryCatalogRow>();
+        allowedShoppingCategories=categoryMap(categoryRows.results);
+      }catch{/* Fail closed for model-suggested categories if the family catalog cannot be read. */}
+    }
     try{
-      const response=await geminiFetch(env,model,bodyForModel);if(!response.ok)continue;
+      const response=await geminiFetch(env,model,bodyForModel);
+      if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);}catch{/* The current request still stops fallback even if circuit persistence fails. */}break;}
+      if(!response.ok)continue;
       const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
       const items=validateGeminiItems(JSON.parse(text),parsed.fields,allowedShoppingCategories);if(items)return json({ok:true,source:'gemini',model,requiresConfirmation:true,items});
     }catch{/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
