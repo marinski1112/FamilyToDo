@@ -50,7 +50,7 @@ assert.ok(!circuitMigration.includes('budget_date'),'429 circuit must not be key
 
 for(const marker of [
   'const explicitDueDateLine=/^(?:期限|締切)\\s*[:：]\\s*(\\d{4}-\\d{2}-\\d{2})\\s*$/u;',
-  'const continuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)/u;',
+  'const continuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|月末|来月末|週末)/u;',
   'const continuationWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)/u;',
   'function explicitDueDate(block:RoughBlock):string|null{',
   'function dueDateNeedsModel(block:RoughBlock):boolean{',
@@ -65,8 +65,8 @@ const fixtureDueIntent=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/u;
 const fixtureDueLine=/^(?:期限|締切)\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u;
 const fixtureHttpUrlOnly=/^https?:\/\/\S+$/u;
 const fixtureAbsoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
-const fixtureRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
-const fixtureContinuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)/u;
+const fixtureRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|月末|来月末|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
+const fixtureContinuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|月末|来月末|週末)/u;
 const fixtureWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
 const fixtureContinuationWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)/u;
 const fixtureTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
@@ -114,6 +114,10 @@ assert.equal(extractExplicitDueFixture(['会議','期限: 2026-09-10','メモ: �
 assert.equal(dueNeedsModelFixture(['会議','期限: 2026-09-10','メモ: 明日確認']),true,'concatenated Japanese continuation relative date must remain model-eligible');
 assert.equal(extractExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 月曜確認']),'2026-09-10','safe exact due date must survive fallback with weekday context');
 assert.equal(dueNeedsModelFixture(['会議','期限: 2026-09-10','メモ: 月曜確認']),true,'concatenated Japanese continuation weekday must remain model-eligible');
+assert.equal(temporalIntentFixture('月末'),true,'month-end intent must remain model-eligible rather than falling through as a simple undated input');
+assert.equal(temporalIntentFixture('来月末'),true,'next-month-end intent must remain model-eligible without deterministic date calculation');
+assert.equal(extractExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 来月末確認']),'2026-09-10','safe exact due date must survive fallback with month-end context');
+assert.equal(dueNeedsModelFixture(['会議','期限: 2026-09-10','メモ: 来月末確認']),true,'month-end continuation intent must remain model-eligible');
 assert.equal(extractExplicitDueFixture(['牛乳 期限: 2026-09-10']),null,'inline/title due syntax must not be extracted');
 assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2026-09-11']),null,'conflicting due metadata must not be extracted');
 assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','https://example.com/2025/12/31']),'2026-09-10','URL-only metadata must not affect safe due extraction');
@@ -132,5 +136,5 @@ assert.ok(api.includes('if(response.status===429){try{await blockTaskRoughInputA
 assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling must stop fallback rather than create a retry storm');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
-console.log('rough-input AI cost guard contract: safe ISO due fallback, continuation temporal model eligibility, URL metadata exclusion, durable budgets, date-independent 429 circuit, and bounded model calls ok');
+console.log('rough-input AI cost guard contract: safe ISO due fallback, month-end/continuation temporal model eligibility, URL metadata exclusion, durable budgets, date-independent 429 circuit, and bounded model calls ok');
 await import('./message-ai-draft-contract.mjs');
