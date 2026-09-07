@@ -26,7 +26,7 @@ export async function reserveTaskRoughInputAiRequest(db:D1Database,familyId:numb
   const familyReservation=await db.prepare('INSERT INTO task_rough_input_ai_family_daily(family_id,local_date,request_count,created_at,updated_at) VALUES(?,?,1,?,?) ON CONFLICT(family_id,local_date) DO UPDATE SET request_count=task_rough_input_ai_family_daily.request_count+1,updated_at=excluded.updated_at WHERE task_rough_input_ai_family_daily.request_count<? RETURNING request_count').bind(familyId,localDate,now,now,limits.family).first<Row>();
   const familySlot=Number(familyReservation?.request_count||0);
   if(!Number.isInteger(familySlot)||familySlot<1||familySlot>limits.family)return false;
-  const globalReservation=await db.prepare("INSERT INTO task_rough_input_ai_global_daily(budget_date,request_count,blocked_until,created_at,updated_at) VALUES(?,1,NULL,?,?) ON CONFLICT(budget_date) DO UPDATE SET request_count=task_rough_input_ai_global_daily.request_count+1,updated_at=excluded.updated_at WHERE task_rough_input_ai_global_daily.request_count<? AND COALESCE(task_rough_input_ai_global_daily.blocked_until,'')<=? RETURNING request_count").bind(budgetDate,now,now,limits.global,now).first<Row>();
+  const globalReservation=await db.prepare("INSERT INTO task_rough_input_ai_global_daily(budget_date,request_count,blocked_until,created_at,updated_at) SELECT ?,1,NULL,?,? WHERE NOT EXISTS (SELECT 1 FROM task_rough_input_ai_circuit WHERE singleton_id=1 AND blocked_until>?) ON CONFLICT(budget_date) DO UPDATE SET request_count=task_rough_input_ai_global_daily.request_count+1,updated_at=excluded.updated_at WHERE task_rough_input_ai_global_daily.request_count<? AND NOT EXISTS (SELECT 1 FROM task_rough_input_ai_circuit WHERE singleton_id=1 AND blocked_until>?) RETURNING request_count").bind(budgetDate,now,now,now,limits.global,now).first<Row>();
   const globalSlot=Number(globalReservation?.request_count||0);
   if(Number.isInteger(globalSlot)&&globalSlot>=1&&globalSlot<=limits.global)return true;
   await db.prepare('UPDATE task_rough_input_ai_family_daily SET request_count=request_count-1,updated_at=? WHERE family_id=? AND local_date=? AND request_count>0').bind(now,familyId,localDate).run();
@@ -34,6 +34,6 @@ export async function reserveTaskRoughInputAiRequest(db:D1Database,familyId:numb
 }
 
 export async function blockTaskRoughInputAiAfter429(db:D1Database):Promise<void>{
-  const now=utcNow(),budgetDate=globalBudgetKey(now),blockedUntil=addWallClockMinutes(now,ROUGH_INPUT_AI_429_BACKOFF_MINUTES);
-  await db.prepare("INSERT INTO task_rough_input_ai_global_daily(budget_date,request_count,blocked_until,created_at,updated_at) VALUES(?,0,?,?,?) ON CONFLICT(budget_date) DO UPDATE SET blocked_until=CASE WHEN COALESCE(blocked_until,'')>excluded.blocked_until THEN blocked_until ELSE excluded.blocked_until END,updated_at=excluded.updated_at").bind(budgetDate,blockedUntil,now,now).run();
+  const now=utcNow(),blockedUntil=addWallClockMinutes(now,ROUGH_INPUT_AI_429_BACKOFF_MINUTES);
+  await db.prepare("INSERT INTO task_rough_input_ai_circuit(singleton_id,blocked_until,created_at,updated_at) VALUES(1,?,?,?) ON CONFLICT(singleton_id) DO UPDATE SET blocked_until=CASE WHEN task_rough_input_ai_circuit.blocked_until>excluded.blocked_until THEN task_rough_input_ai_circuit.blocked_until ELSE excluded.blocked_until END,updated_at=excluded.updated_at").bind(blockedUntil,now,now).run();
 }
