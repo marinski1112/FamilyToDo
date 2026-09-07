@@ -53,7 +53,8 @@ for(const sentinel of [
   'reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)',
   'response.status===429',
   'await blockMorningDigestAiAfter429(env.DB,localDate)',
-  'await finalizeFrameSafely(env,familyId,localDate,fallbackFrame)',
+  'await finalizeRecapSafely(env,familyId,localDate,recap)',
+  'await finalizeRecapSafely(env,familyId,localDate,null)',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`morning Gemini persistent cost guard missing: ${sentinel}`);
 }
