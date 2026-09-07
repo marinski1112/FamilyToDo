@@ -18,7 +18,8 @@ type DigestFactPayload={
   fortune:DailyFortune;
 };
 
-type Frame={opener:string;closing:string;personalNote?:string;narrativeVersion?:2};
+type Frame={opener:string;closing:string;personalNote?:string;narrativeVersion?:3};
+type StoredMorningRecap={recap:string|null;narrativeVersion:3};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
@@ -114,8 +115,8 @@ function profileLeakFragments(profiles:FamilyAiSafeProfileContext[]):string[]{
   return [...fragments];
 }
 
-function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileContext[]):boolean{
-  const combined=[frame.opener,frame.personalNote,frame.closing].filter(Boolean).join(' ');
+function generatedRecapPassesSafety(recap:string,profiles:FamilyAiSafeProfileContext[]):boolean{
+  const combined=recap.trim();
   if(!combined||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(combined))return false;
   if(/https?:\/\/|www\.|```|personality_note|system\s*prompt|システムプロンプト|プロフィール(?:文脈|情報)|メモには|raw\s*gps|latitude|longitude|緯度|経度/iu.test(combined))return false;
   if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(combined))return false;
@@ -124,20 +125,21 @@ function generatedFramePassesSafety(frame:Frame,profiles:FamilyAiSafeProfileCont
   return true;
 }
 
-function persistedMorningFrame(raw:string|null,profiles:FamilyAiSafeProfileContext[]):Frame|null{
+function persistedMorningFrame(raw:string|null,fallbackFrame:Frame,profiles:FamilyAiSafeProfileContext[]):Frame|null{
   if(!raw)return null;
   try{
     const value=JSON.parse(raw) as Record<string,unknown>;
-    if(Number(value.narrativeVersion)!==2)return null;
-    const opener=clean(value.opener,80),closing=clean(value.closing,80),personalNote=clean(value.personalNote,MAX_MORNING_NARRATIVE_CHARS);
-    if(!opener||!closing||!personalNote)return null;
-    const frame:Frame={opener,closing,personalNote,narrativeVersion:2};
-    return generatedFramePassesSafety(frame,profiles)?frame:null;
+    if(Number(value.narrativeVersion)!==3)return null;
+    if(value.recap===null)return fallbackFrame;
+    const recap=clean(value.recap,MAX_MORNING_NARRATIVE_CHARS);
+    if(!recap||!generatedRecapPassesSafety(recap,profiles))return null;
+    return {...fallbackFrame,personalNote:recap,narrativeVersion:3};
   }catch{return null;}
 }
 
-async function finalizeFrameSafely(env:Env,familyId:number,localDate:string,frame:Frame):Promise<void>{
-  try{await finalizeMorningDigestFrame(env.DB,familyId,localDate,JSON.stringify(frame));}catch{/* Cost guard persistence must not block deterministic LINE delivery. */}
+async function finalizeRecapSafely(env:Env,familyId:number,localDate:string,recap:string|null):Promise<void>{
+  const stored:StoredMorningRecap={recap,narrativeVersion:3};
+  try{await finalizeMorningDigestFrame(env.DB,familyId,localDate,JSON.stringify(stored));}catch{/* Cost guard persistence must not block deterministic LINE delivery. */}
 }
 
 function morningNarrativeEvidence(payload:DigestFactPayload,weather:MorningWeatherFact|null):string{
@@ -163,12 +165,12 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
     profileContext=morningProfilePromptContext(profiles);
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
   const fallbackBase=options[morningVariant(localDate,17,options.length)]||options[0];
-  const fallbackFrame:Frame={...fallbackBase,personalNote:deterministicPersonalNote(profiles,localDate),narrativeVersion:2};
+  const fallbackFrame:Frame={...fallbackBase,personalNote:deterministicPersonalNote(profiles,localDate),narrativeVersion:3};
   if(tone==='PLAIN')return fallbackFrame;
   const evidence=morningNarrativeEvidence(sharedFacts,weather);
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
-    if(persisted){return persistedMorningFrame(persisted,profiles)||fallbackFrame;}
+    if(persisted){return persistedMorningFrame(persisted,fallbackFrame,profiles)||fallbackFrame;}
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
   const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"..."}。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
@@ -177,23 +179,22 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
     const model=models[attempt];
     let reserved=false;
     try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return fallbackFrame;}
-    if(!reserved){await finalizeFrameSafely(env,familyId,localDate,fallbackFrame);return fallbackFrame;}
+    if(!reserved){await finalizeRecapSafely(env,familyId,localDate,null);return fallbackFrame;}
     try{
       const response=await geminiFetch(env,model,body);
       if(response.status===429){try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{/* The current bounded fallback may proceed even if circuit persistence fails. */}}
       if(!response.ok)continue;
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const parsed=JSON.parse(text),personalNote=clean(parsed?.recap,MAX_MORNING_NARRATIVE_CHARS);
-      if(personalNote){
-        const frame:Frame={...fallbackBase,personalNote,narrativeVersion:2};
-        if(!generatedFramePassesSafety(frame,profiles))continue;
-        await finalizeFrameSafely(env,familyId,localDate,frame);
+      const parsed=JSON.parse(text),recap=clean(parsed?.recap,MAX_MORNING_NARRATIVE_CHARS);
+      if(recap&&generatedRecapPassesSafety(recap,profiles)){
+        const frame:Frame={...fallbackBase,personalNote:recap,narrativeVersion:3};
+        await finalizeRecapSafely(env,familyId,localDate,recap);
         return frame;
       }
     }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
   }
-  await finalizeFrameSafely(env,familyId,localDate,fallbackFrame);
+  await finalizeRecapSafely(env,familyId,localDate,null);
   return fallbackFrame;
 }
 
@@ -297,7 +298,6 @@ function buildEvidencePraise(payload:DigestFactPayload):string[]{
   }
   return praise.slice(0,2);
 }
-
 function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
   const suffixText=requiredSuffix.join('\n');
   const available=Math.max(0,MAX_MORNING_DIGEST_CHARS-suffixText.length-(prefix.length?1:0));
