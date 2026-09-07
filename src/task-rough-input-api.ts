@@ -1,5 +1,6 @@
 import { json } from './response';
 import { familyAiProvider, geminiFetch } from './family-ai';
+import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
@@ -97,7 +98,11 @@ function deterministicItems(fields:RoughField[]):RoughItem[]{
   })).slice(0,MAX_ITEMS);
 }
 
-function validateGeminiItems(value:unknown,fields:RoughField[]):RoughItem[]|null{
+function categoryMap(rows:ShoppingCategoryCatalogRow[]):Map<string,string>{
+  return new Map(resolveShoppingCategoryOptions(rows).map(name=>[shoppingCategoryKey(name),name]));
+}
+
+function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCategories:Map<string,string>):RoughItem[]|null{
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   const keys=Object.keys(value as Record<string,unknown>);if(keys.length!==1||keys[0]!=='items')return null;
   const items=(value as any).items;if(!Array.isArray(items)||items.length<1||items.length>MAX_ITEMS)return null;
@@ -109,9 +114,10 @@ function validateGeminiItems(value:unknown,fields:RoughField[]):RoughItem[]|null
     const sourceIndex=Number(raw.sourceIndex);if(!Number.isInteger(sourceIndex)||sourceIndex<0||sourceIndex>=fields.length)return null;
     const field=fields[sourceIndex],originalText=String(raw.originalText||'').trim(),title=String(raw.title||'').trim();
     if(!field.blocks.some(block=>block.originalText===originalText)||!title||title.length>200)return null;
-    const quantity=raw.quantity===null?null:clean(raw.quantity,40),category=raw.category===null?null:clean(raw.category,100),dueDate=raw.dueDate===null?null:String(raw.dueDate),dueTime=raw.dueTime===null?null:String(raw.dueTime),description=raw.description===null?null:String(raw.description).trim().slice(0,1000);
-    if((quantity!==null&&!quantity)||(category!==null&&!category)||(description!==null&&!description)||!validDate(dueDate)||!validTime(dueTime))return null;
+    const quantity=raw.quantity===null?null:clean(raw.quantity,40),categoryRaw=raw.category===null?null:clean(raw.category,SHOPPING_CATEGORY_MAX_LENGTH),dueDate=raw.dueDate===null?null:String(raw.dueDate),dueTime=raw.dueTime===null?null:String(raw.dueTime),description=raw.description===null?null:String(raw.description).trim().slice(0,1000);
+    if((quantity!==null&&!quantity)||(categoryRaw!==null&&!categoryRaw)||(description!==null&&!description)||!validDate(dueDate)||!validTime(dueTime))return null;
     if(description!==null&&field.destination!=='task'&&field.destination!=='event')return null;
+    const category=field.destination==='shopping'&&categoryRaw!==null?allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null:null;
     const provenanceKey=`${sourceIndex}\u0000${originalText}`;observed.set(provenanceKey,(observed.get(provenanceKey)||0)+1);
     out.push({destination:field.destination,originalText,title,quantity,category,dueDate,dueTime,description});
   }
@@ -147,13 +153,20 @@ export async function taskRoughInputApi(request:Request,ctx:any):Promise<Respons
   const fallback=()=>json({ok:true,source:'deterministic',requiresConfirmation:true,items:deterministicItems(parsed.fields)});
   const env=ctx.env as Env;
   if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim()||!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback();
+  let allowedShoppingCategories=new Map<string,string>();
+  if(parsed.fields.some(field=>field.destination==='shopping')){
+    try{
+      const categoryRows=await env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?').bind(member.family_id).all<ShoppingCategoryCatalogRow>();
+      allowedShoppingCategories=categoryMap(categoryRows.results);
+    }catch{/* Fail closed for model-suggested categories if the family catalog cannot be read. */}
+  }
   const timezone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),today=familyDate(timezone);
   const bodyForModel=modelBody(parsed.fields,today);
   for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK]){
     try{
       const response=await geminiFetch(env,model,bodyForModel);if(!response.ok)continue;
       const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const items=validateGeminiItems(JSON.parse(text),parsed.fields);if(items)return json({ok:true,source:'gemini',model,requiresConfirmation:true,items});
+      const items=validateGeminiItems(JSON.parse(text),parsed.fields,allowedShoppingCategories);if(items)return json({ok:true,source:'gemini',model,requiresConfirmation:true,items});
     }catch{/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
   }
   return fallback();
