@@ -48,6 +48,41 @@ for(const marker of [
 ])assert.ok(circuitMigration.includes(marker),`rough-input AI circuit migration marker missing: ${marker}`);
 assert.ok(!circuitMigration.includes('budget_date'),'429 circuit must not be keyed by a daily budget date');
 
+for(const marker of [
+  'const explicitDueDateLine=/^(?:期限|締切)\\s*[:：]\\s*(\\d{4}-\\d{2}-\\d{2})\\s*$/u;',
+  'function explicitDueDate(block:RoughBlock):string|null{',
+  'if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return null;',
+  "const quantity=field.destination==='shopping'?explicitQuantity(block):null,dueDate=explicitDueDate(block);",
+  'if(dueIntentHint.test(source)&&!explicitDueDate(block))return true;',
+])assert.ok(api.includes(marker),`rough-input deterministic due-date marker missing: ${marker}`);
+
+const fixtureDueIntent=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/u;
+const fixtureDueLine=/^(?:期限|締切)\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u;
+const fixtureValidDate=value=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const [y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d));
+  return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d;
+};
+const parseExplicitDueFixture=lines=>{
+  let found=null;
+  for(let index=0;index<lines.length;index++){
+    const line=lines[index];
+    if(!fixtureDueIntent.test(line))continue;
+    if(index===0)return null;
+    const match=line.match(fixtureDueLine);
+    if(!match?.[1]||!fixtureValidDate(match[1]))return null;
+    if(found&&found!==match[1])return null;
+    found=match[1];
+  }
+  return found;
+};
+assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10']),'2026-09-10','exact labeled ISO due date must be deterministic');
+assert.equal(parseExplicitDueFixture(['薬','締切：2026-09-11']),'2026-09-11','full-width colon must remain deterministic');
+assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-02-30']),null,'invalid calendar date must remain model-eligible');
+assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10 18:00']),null,'due time must remain model-eligible in this scope');
+assert.equal(parseExplicitDueFixture(['牛乳 期限: 2026-09-10']),null,'inline/title due syntax must remain model-eligible');
+assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2026-09-11']),null,'conflicting due metadata must remain model-eligible');
+
 const deterministicGate=api.indexOf("if(!needsModel(parsed.fields))return fallback();");
 const modelLoop=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
 const reserveCall=api.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
@@ -61,4 +96,4 @@ assert.ok(api.includes('if(response.status===429){try{await blockTaskRoughInputA
 assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling must stop fallback rather than create a retry storm');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
-console.log('rough-input AI cost guard contract: deterministic-first, durable budgets, date-independent 429 circuit, and bounded model calls ok');
+console.log('rough-input AI cost guard contract: deterministic-first, explicit ISO due dates, durable budgets, date-independent 429 circuit, and bounded model calls ok');
