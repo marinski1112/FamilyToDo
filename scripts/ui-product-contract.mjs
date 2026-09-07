@@ -70,7 +70,8 @@ assert.match(messages,/location\.reload\(\);\}catch\([^)]*\)\{alert\('投稿で�
 
 // LINE morning digest priority and scheduler-jitter resilience.
 assert.match(digest,/current<target\|\|current>target\+29/,'daily digest must tolerate a full 30-minute scheduler/retry window');
-assert.match(digest,/ORDER BY CASE WHEN date\(COALESCE\(start_at,due_at\)\)=\? THEN 0 ELSE 1 END,COALESCE\(start_at,due_at\),id LIMIT 12/,'today rows must be selected before old overdue tasks can consume the digest row budget');
+const morningRows=digest.slice(digest.indexOf('SELECT t.title,t.task_kind'),digest.indexOf('.all<Row>()',digest.indexOf('SELECT t.title,t.task_kind')));
+assert.ok(morningRows.includes('date(COALESCE(t.start_at,t.due_at))<=date(?)')&&morningRows.includes('date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)')&&morningRows.includes('LIMIT 12'),'today range must exclude overdue rows before the display budget');
 assert.match(digest,/INSERT OR IGNORE INTO line_daily_digest_receipts/,'daily digest retry tolerance must retain per-day idempotency receipts');
 assert.match(digest,/String\(receipt\.status\)==='SENT'/,'daily digest must not resend after a successful receipt');
 
