@@ -1,3 +1,5 @@
+import { recurringForFamilyRange } from './recurrence-projection';
+import { digestHasNumericClaim, type DigestGeneration } from './line-digest-generation';
 import { dailyFortune, type DailyFortune } from './daily-fortune';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
@@ -18,8 +20,9 @@ type DigestFactPayload={
   fortune:DailyFortune;
 };
 
-type Frame={opener:string;closing:string;personalNote?:string;narrativeVersion?:3};
-type StoredMorningRecap={recap:string|null;narrativeVersion:3};
+type MemberMorning={memberId:number;note:string;fortune:string};
+type Frame={opener:string;closing:string;personalNote?:string;narrativeVersion?:3;memberMorning?:MemberMorning[];generation?:DigestGeneration};
+type StoredMorningRecap={recap:string|null;narrativeVersion:3;memberMorning?:MemberMorning[];generation?:DigestGeneration};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
 const ADDITIVE_LOG_TYPES=new Set(['MILK','BREASTFEED','WATER']);
 const EMPTY_LOCATION_FACTS:LocationDigestDayFacts={previous:[],today:[]};
@@ -119,7 +122,7 @@ function generatedRecapPassesSafety(recap:string,profiles:FamilyAiSafeProfileCon
   const combined=recap.trim();
   if(!combined||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(combined))return false;
   if(/https?:\/\/|www\.|```|personality_note|system\s*prompt|システムプロンプト|プロフィール(?:文脈|情報)|メモには|raw\s*gps|latitude|longitude|緯度|経度/iu.test(combined))return false;
-  if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(combined))return false;
+  if(digestHasNumericClaim(combined))return false;
   const normalized=normalizedForLeakCheck(combined);
   if(profileLeakFragments(profiles).some(fragment=>normalized.includes(fragment)))return false;
   return true;
@@ -133,12 +136,13 @@ function persistedMorningFrame(raw:string|null,fallbackFrame:Frame,profiles:Fami
     if(value.recap===null)return fallbackFrame;
     const recap=clean(value.recap,MAX_MORNING_NARRATIVE_CHARS);
     if(!recap||!generatedRecapPassesSafety(recap,profiles))return null;
-    return {...fallbackFrame,personalNote:recap,narrativeVersion:3};
+    const memberMorning=Array.isArray(value.memberMorning)?value.memberMorning.filter((entry:any)=>Number.isSafeInteger(entry?.memberId)&&entry.memberId>0&&typeof entry.note==='string'&&entry.note.length<=80&&typeof entry.fortune==='string'&&entry.fortune.length<=120&&generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles)) as MemberMorning[]:[];
+    return {...fallbackFrame,personalNote:recap,narrativeVersion:3,memberMorning};
   }catch{return null;}
 }
 
-async function finalizeRecapSafely(env:Env,familyId:number,localDate:string,recap:string|null):Promise<void>{
-  const stored:StoredMorningRecap={recap,narrativeVersion:3};
+async function finalizeRecapSafely(env:Env,familyId:number,localDate:string,recap:string|null,memberMorning:MemberMorning[]=[],generation:DigestGeneration={status:'FALLBACK',reason:'LEGACY'}):Promise<void>{
+  const stored:StoredMorningRecap={recap,narrativeVersion:3,memberMorning,generation};
   try{await finalizeMorningDigestFrame(env.DB,familyId,localDate,JSON.stringify(stored));}catch{/* Cost guard persistence must not block deterministic LINE delivery. */}
 }
 
@@ -156,7 +160,7 @@ function morningNarrativeEvidence(payload:DigestFactPayload,weather:MorningWeath
   });
 }
 
-async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string,sharedFacts:DigestFactPayload,weather:MorningWeatherFact|null):Promise<Frame>{
+async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:string,sharedFacts:DigestFactPayload,weather:MorningWeatherFact|null,recipients:Row[]):Promise<Frame>{
   const options=FRAME_OPTIONS[tone];
   let profiles:FamilyAiSafeProfileContext[]=[];
   let profileContext='[]';
@@ -166,36 +170,44 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
   const fallbackBase=options[morningVariant(localDate,17,options.length)]||options[0];
   const fallbackFrame:Frame={...fallbackBase,personalNote:deterministicPersonalNote(profiles,localDate),narrativeVersion:3};
-  if(tone==='PLAIN')return fallbackFrame;
+  const fallback=async(reason:string,model?:string)=>{await finalizeRecapSafely(env,familyId,localDate,null,[],{status:'FALLBACK',reason,model});return fallbackFrame;};
   const evidence=morningNarrativeEvidence(sharedFacts,weather);
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
     if(persisted){return persistedMorningFrame(persisted,fallbackFrame,profiles)||fallbackFrame;}
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
-  if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame;
-  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"..."}。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:360}};
+  if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY)return fallback('NOT_CONFIGURED');
+  if(!morningDigestAiEnabled(env))return fallback('DISABLED');
+  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"...","members":[{"memberId":123,"note":"...","fortune":"..."}]}。membersにはrecipientsの全員をIDで一度ずつ含めてください。noteは本人へ話しかける自然な応援を80文字以内、fortuneは本人向けのお楽しみ占いを120文字以内。占いは娯楽の創作として明るい予感と気軽なラッキーアクションを毎回新しく考え、名前だけ差し替えた同文を避けてください。不吉な予言、健康・お金・安全の断定、属性からの決めつけは禁止です。個人の実際の行動はevidenceに本人との対応が明記されている場合以外は推測せず、共通の予定からの提案にしてください。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; recipients=${JSON.stringify(recipients.map(member=>({memberId:Number(member.id),name:clean(member.name,24)})))}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:Math.min(8192,600+recipients.length*350)}};
   const models=morningDigestModels(env);
+  let failureReason='UPSTREAM',lastModel:string|undefined;
   for(let attempt=0;attempt<models.length;attempt++){
-    const model=models[attempt];
+    const model=models[attempt];lastModel=model;
     let reserved=false;
-    try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return fallbackFrame;}
-    if(!reserved){await finalizeRecapSafely(env,familyId,localDate,null);return fallbackFrame;}
+    try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return fallback('STORAGE',model);}
+    if(!reserved)return fallback('BUDGET_OR_CIRCUIT',model);
     try{
       const response=await geminiFetch(env,model,body);
       if(response.status===429){try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{/* The current bounded fallback may proceed even if circuit persistence fails. */}}
-      if(!response.ok)continue;
+      if(!response.ok){failureReason=response.status===429?'RATE_LIMIT':'UPSTREAM';continue;}
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const parsed=JSON.parse(text),recap=clean(parsed?.recap,MAX_MORNING_NARRATIVE_CHARS);
-      if(recap&&generatedRecapPassesSafety(recap,profiles)){
-        const frame:Frame={...fallbackBase,personalNote:recap,narrativeVersion:3};
-        await finalizeRecapSafely(env,familyId,localDate,recap);
+      const parsed=JSON.parse(text),recap=typeof parsed?.recap==='string'?clean(parsed.recap,MAX_MORNING_NARRATIVE_CHARS):'';
+      const entries=Array.isArray(parsed?.members)?parsed.members:[];
+      const memberMorning:MemberMorning[]=recipients.map(member=>{
+        const matches=entries.filter((entry:any)=>entry?.memberId===Number(member.id));
+        const entry=matches.length===1?matches[0]:{};
+        return {memberId:Number(member.id),note:typeof entry.note==='string'?clean(entry.note,80):'',fortune:typeof entry.fortune==='string'?clean(entry.fortune,120):''};
+      });
+      if(recap&&generatedRecapPassesSafety(recap,profiles)&&memberMorning.every(entry=>generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles))){
+        const frame:Frame={...fallbackBase,personalNote:recap,narrativeVersion:3,memberMorning};
+        await finalizeRecapSafely(env,familyId,localDate,recap,memberMorning,{status:'AI',reason:'OK',model});
         return frame;
       }
-    }catch{/* One bounded fallback model attempt follows; deterministic frame remains final fallback. */}
+      failureReason='INVALID_OUTPUT';
+    }catch(error){failureReason=error instanceof SyntaxError?'INVALID_OUTPUT':'UPSTREAM';}
   }
-  await finalizeRecapSafely(env,familyId,localDate,null);
-  return fallbackFrame;
+  return fallback(failureReason,lastModel);
 }
 
 function logFact(row:Row):string{
@@ -208,31 +220,37 @@ function logFact(row:Row):string{
 
 async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string,location:LocationDigestDayFacts):Promise<DigestFactPayload>{
   const previousDate=dateBefore(localDate);
-  const [taskRows,taskCounts,bringItemRows]=await Promise.all([
-    env.DB.prepare(`SELECT title,task_kind,status,COALESCE(start_at,due_at) at FROM tasks t
-      WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))
-      AND (date(COALESCE(start_at,due_at))=? OR (upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<?))
-      ORDER BY CASE WHEN date(COALESCE(start_at,due_at))=? THEN 0 ELSE 1 END,COALESCE(start_at,due_at),id LIMIT 12`)
-      .bind(familyId,memberId,localDate,localDate,localDate).all<Row>(),
+  const [taskRows,taskCounts,recurringRows,bringItemRows]=await Promise.all([
+    env.DB.prepare(`SELECT t.title,t.task_kind,t.status,t.all_day,COALESCE(t.start_at,t.due_at) at FROM tasks t
+      WHERE t.family_id=? AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
+      AND upper(COALESCE(t.task_kind,'TASK')) IN ('TASK','EVENT')
+      AND NOT EXISTS (SELECT 1 FROM recurrence_rules r WHERE r.family_id=t.family_id AND r.task_id=t.id)
+      AND date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)
+      ORDER BY COALESCE(t.start_at,t.due_at),t.id LIMIT 12`)
+      .bind(familyId,memberId,localDate,localDate).all<Row>(),
     env.DB.prepare(`SELECT
-        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND date(COALESCE(start_at,due_at))=? AND lower(COALESCE(status,''))='completed' THEN 1 ELSE 0 END) completed,
-        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND date(COALESCE(start_at,due_at))=? AND lower(COALESCE(status,''))<>'completed' THEN 1 ELSE 0 END) incomplete,
-        SUM(CASE WHEN upper(COALESCE(task_kind,'TASK'))='TASK' AND lower(COALESCE(status,''))<>'completed' AND date(COALESCE(start_at,due_at))<? THEN 1 ELSE 0 END) overdue
-      FROM tasks WHERE family_id=? AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))`)
-      .bind(localDate,localDate,localDate,familyId,memberId).first<Row>(),
+        SUM(CASE WHEN date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?) AND lower(COALESCE(t.status,''))='completed' THEN 1 ELSE 0 END) completed,
+        SUM(CASE WHEN date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?) AND lower(COALESCE(t.status,''))<>'completed' THEN 1 ELSE 0 END) incomplete,
+        SUM(CASE WHEN lower(COALESCE(t.status,''))<>'completed' AND date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?) THEN 1 ELSE 0 END) overdue
+      FROM tasks t WHERE t.family_id=? AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
+      AND upper(COALESCE(t.task_kind,'TASK'))='TASK'
+      AND NOT EXISTS (SELECT 1 FROM recurrence_rules r WHERE r.family_id=t.family_id AND r.task_id=t.id)`)
+      .bind(localDate,localDate,localDate,localDate,localDate,familyId,memberId).first<Row>(),
+    recurringForFamilyRange(env.DB,familyId,memberId,localDate,localDate),
     env.DB.prepare(`SELECT i.name,i.status
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
       WHERE i.family_id=? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND (COALESCE(pt.visibility_scope,'FAMILY')='FAMILY' OR (pt.visibility_scope='PRIVATE' AND pt.private_owner_id=?))))
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY CASE WHEN lower(COALESCE(i.status,''))='completed' THEN 1 ELSE 0 END,i.due_at,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
   ]);
-  const todayRows=taskRows.results.filter(x=>String(x.at).slice(0,10)===localDate);
+  const recurringToday:Row[]=recurringRows.map(x=>({...x,task_kind:String(x.task_kind).toUpperCase()==='EVENT'?'EVENT':'TASK',at:x.start_at||x.due_at}));
+  const todayRows=[...taskRows.results,...recurringToday].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
   const eventRows=todayRows.filter(x=>String(x.task_kind).toUpperCase()==='EVENT');
   const taskOnly=todayRows.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK');
-  const events=eventRows.slice(0,5).map(x=>`${localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
+  const events=eventRows.slice(0,5).map(x=>`${String(x.at).slice(0,10)<localDate?'継続中 ':Number(x.all_day)!==1&&localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
   const tasks=taskOnly.slice(0,6).map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.title)}`);
   const bringItems=bringItemRows.results.map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.name)}`).filter(x=>x.length>2);
-  const completed=Math.max(0,Number(taskCounts?.completed||0)),incomplete=Math.max(0,Number(taskCounts?.incomplete||0)),overdue=Math.max(0,Number(taskCounts?.overdue||0));
+  const completed=Math.max(0,Number(taskCounts?.completed||0))+recurringToday.filter(x=>x.task_kind==='TASK'&&String(x.status).toLowerCase()==='completed').length,incomplete=Math.max(0,Number(taskCounts?.incomplete||0))+recurringToday.filter(x=>x.task_kind==='TASK'&&String(x.status).toLowerCase()!=='completed').length,overdue=Math.max(0,Number(taskCounts?.overdue||0));
 
   const logRows=await env.DB.prepare(`SELECT substr(l.occurred_at,1,10) local_date,l.log_type,s.name subject_name,
       CASE WHEN l.subject_id IS NULL THEN m.name ELSE NULL END member_name,l.unit,
@@ -258,7 +276,7 @@ function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
   }
   const timedEvents=payload.today.events.map(x=>x.match(/^(\d{2}:\d{2})\s+/)?.[1]).filter((x):x is string=>Boolean(x));
   if(payload.today.events.length>=3){
-    advice.push(`今日は予定が${payload.today.events.length}件あります。移動や準備に使う時間を少し先に見ておくと安心です。`);
+    advice.push('今日は予定が多めです。移動や準備に使う時間を少し先に見ておくと安心です。');
   }else if(timedEvents.length){
     advice.push(`最初の時刻付き予定は${timedEvents[0]}です。必要な持ち物や出発前の準備だけ先に確認しておくとスムーズです。`);
   }else if(payload.today.incomplete>=5){
@@ -280,7 +298,7 @@ function buildEvidencePraise(payload:DigestFactPayload):string[]{
   if(payload.today.completed>0){
     const count=payload.today.completed;
     const variants=[
-      `今日のタスク、もう${count}件完了しています。朝から進んでいていいスタートです。`,
+      `今日の対象タスクは${count}件チェック済みです。残りも無理なく進めていきましょう。`,
       `すでに${count}件チェック済み。ひとつずつ進められていていい感じです。`,
     ];
     praise.push(variants[morningVariant(payload.localDate,23,variants.length)]);
@@ -298,9 +316,9 @@ function buildEvidencePraise(payload:DigestFactPayload):string[]{
   }
   return praise.slice(0,2);
 }
-function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
+function fitMorningDigest(prefix:string[],requiredSuffix:string[],maxChars=MAX_MORNING_DIGEST_CHARS):string{
   const suffixText=requiredSuffix.join('\n');
-  const available=Math.max(0,MAX_MORNING_DIGEST_CHARS-suffixText.length-(prefix.length?1:0));
+  const available=Math.max(0,maxChars-suffixText.length-(prefix.length?1:0));
   const kept:string[]=[];
   let used=0;
   for(const line of prefix){
@@ -309,10 +327,10 @@ function fitMorningDigest(prefix:string[],requiredSuffix:string[]):string{
     kept.push(line);
     used+=needed;
   }
-  return [...kept,...requiredSuffix].join('\n').slice(0,MAX_MORNING_DIGEST_CHARS);
+  return [...kept,...requiredSuffix].join('\n').slice(0,maxChars);
 }
 
-function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:MorningWeatherFact|null):string{
+function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:MorningWeatherFact|null,members:Row[]=[]):string{
   const authoritative=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
   if(weather)authoritative.push('【今日の天気】',formatMorningWeather(weather));
   const praise=buildEvidencePraise(payload);
@@ -329,12 +347,19 @@ function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:
   if(payload.location.today.length){authoritative.push('【今日の移動】',...payload.location.today);}
   if(authoritative.length===2)authoritative.push('昨日の記録・今日の予定はありません。');
   const stars='★'.repeat(payload.fortune.stars)+'☆'.repeat(Math.max(0,5-payload.fortune.stars));
-  const requiredSuffix=['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
-  const authoritativeText=fitMorningDigest(authoritative,requiredSuffix);
+  const personalBudget=Math.floor(3500/Math.max(1,members.length));
+  const personalLines=members.map(member=>{
+    const entry=frame.memberMorning?.find(value=>value.memberId===Number(member.id));
+    const backup=dailyFortune(0,Number(member.id),payload.localDate);
+    return [`【${clean(member.name,24)||'メンバー'}さんへ】`,entry?.note||'今日も無理のないペースで。',`🔮 お楽しみ占い：${entry?.fortune||`${backup.headline} ${backup.luckyAction}`}`].join('\n').slice(0,Math.max(0,personalBudget-1));
+  });
+  const requiredSuffix=personalLines.length?[...personalLines,frame.closing]:['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
+  const maxChars=members.length?Math.min(5000,1000+requiredSuffix.join('\n').length):MAX_MORNING_DIGEST_CHARS;
+  const authoritativeText=fitMorningDigest(authoritative,requiredSuffix,maxChars);
   if(!frame.personalNote)return authoritativeText;
   const narrative=`💬 ${clean(frame.personalNote,MAX_MORNING_NARRATIVE_CHARS)}`;
   const totals=`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}／期限切れ${payload.today.overdue}件`;
-  return fitMorningDigest([authoritative[0],authoritative[1],narrative,...authoritative.slice(2)],[totals,...requiredSuffix]);
+  return fitMorningDigest([authoritative[0],authoritative[1],narrative,...authoritative.slice(2)],[totals,...requiredSuffix],maxChars);
 }
 
 export async function processLineDailyDigests(env:Env):Promise<void>{
@@ -343,7 +368,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
   for(const setting of settings.results){
     const timezone=String(setting.timezone||DEFAULT_FAMILY_TIMEZONE),parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()),part=(type:string)=>parts.find(x=>x.type===type)?.value||'',localDate=`${part('year')}-${part('month')}-${part('day')}`,localTime=`${part('hour')}:${part('minute')}`,sendTime=String(setting.send_time||'07:00');
     const current=Number(localTime.slice(0,2))*60+Number(localTime.slice(3)),target=Number(sendTime.slice(0,2))*60+Number(sendTime.slice(3));if(current<target||current>target+29)continue;
-    const recipients=await env.DB.prepare("SELECT m.id,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL ORDER BY m.id").bind(setting.family_id).all<Row>();
+    const recipients=await env.DB.prepare("SELECT m.id,m.name,m.line_user_id FROM line_daily_digest_recipients r JOIN members m ON m.id=r.member_id AND m.family_id=r.family_id WHERE r.family_id=? AND r.enabled=1 AND m.active=1 AND m.deleted_at IS NULL AND m.line_user_id IS NOT NULL ORDER BY m.id").bind(setting.family_id).all<Row>();
     const destinations=new Map<string,Row[]>();
     for(const member of recipients.results){const lineUserId=String(member.line_user_id||'');if(!lineUserId)continue;const group=destinations.get(lineUserId)||[];group.push(member);destinations.set(lineUserId,group);}
     let frame:Frame|undefined;
@@ -363,7 +388,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
       try{
         if(weatherFact===undefined)weatherFact=await loadMorningWeatherFact(env.DB,Number(setting.family_id),localDate,timezone);
         if(!sharedAiFacts)sharedAiFacts=await buildFactPayload(env,Number(setting.family_id),0,localDate,EMPTY_LOCATION_FACTS);
-        frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate,sharedAiFacts,weatherFact);
+        frame??=await chooseFrame(env,toneLevel(setting.tone_level),Number(setting.family_id),localDate,sharedAiFacts,weatherFact,recipients.results);
         let facts:DigestFactPayload;
         if(members.length===1){
           const requesterMemberId=Number(members[0].id);
@@ -374,7 +399,7 @@ export async function processLineDailyDigests(env:Env):Promise<void>{
         }else{
           facts=sharedAiFacts;
         }
-        const message=renderDeterministicFacts(facts,frame,weatherFact);
+        const message=renderDeterministicFacts(facts,frame,weatherFact,members);
         const retryKey=await morningDigestRetryKey(Number(setting.family_id),lineUserId,localDate);
         const {pushLineMessage}=await import('./line');await pushLineMessage(env.LINE_ACCESS_TOKEN,lineUserId,message,{retryKey});
         for(const receipt of pending)await env.DB.prepare("UPDATE line_daily_digest_receipts SET status='SENT',attempt_count=attempt_count+1,sent_at=?,last_error=NULL,updated_at=? WHERE id=?").bind(n,n,receipt.id).run();

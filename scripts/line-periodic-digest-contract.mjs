@@ -15,7 +15,7 @@ for(const marker of [
   'line_daily_digest_subject_settings',
   'loadSafeFamilyAiProfileContext',
   'PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください',
-  'if(/[0-9０-９〇零一二三四五六七八九十百千万億兆]/u.test(value))return false',
+  'if(digestHasNumericClaim(value))return false',
   'reservePeriodicDigestAiRequest',
   'line_periodic_digest_receipts',
   'recurrence_occurrences o',
@@ -82,14 +82,14 @@ catch{const {stripTypeScriptTypes}=await import('node:module');transpile=code=>s
 const vm=await import('node:vm');
 const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart);
 const fortuneSource=fs.readFileSync('src/daily-fortune.ts','utf8').replace(/export /g,'');
-const code=transpile(fortuneSource+'\nconst MAX_LINE_CHARS=1000,MAX_NARRATIVE_CHARS=360; const clean=(v,max)=>String(v??"").replace(/[\\r\\n]+/g," ").trim().slice(0,max); const monthLabel=d=>Number(d.slice(5,7))+"月";\n'+source.slice(renderStart,renderEnd));
+const code=transpile(fortuneSource+'\nconst MAX_LINE_CHARS=1000,MAX_NARRATIVE_CHARS=480; const clean=(v,max)=>String(v??"").replace(/[\\r\\n]+/g," ").trim().slice(0,max); const monthLabel=d=>Number(d.slice(5,7))+"月";\n'+source.slice(renderStart,renderEnd));
 const context=vm.createContext({});vm.runInContext(code,context);
 for(const reportType of ['WEEKLY','MONTHLY'])for(const size of [0,2,12]){
  const facts={period:{reportType,periodKey:reportType+':2026-09',endDate:'2026-09-30',label:'対象期間'},logLines:Array(size).fill('記録'.repeat(100)),samples:Array(size).fill('予定'.repeat(30)),eventCount:3,taskCompleted:5,taskIncomplete:7,itemCompleted:2,itemIncomplete:4};
  const prose='楽しい家族の振り返り。'.repeat(30);
  const message=context.renderReport(facts,prose,42);
- if(message.length>1000||!message.includes(prose.slice(0,360))||!message.includes('現在完了5・未完了7')||!message.includes('現在完了2・未完了4')||!message.includes('家族のお楽しみ占い')||!message.includes('カラー:'))throw new Error('report content lost under length pressure');
- if(message!==context.renderReport(facts,prose,42))throw new Error('retry must retain stable family fortune');
+ if(message.length>1000||!message.includes(prose.slice(0,360))||!message.includes('現在完了5・未完了7')||!message.includes('現在完了2・未完了4')||message.includes('お楽しみ占い'))throw new Error('report content lost under length pressure');
+ if(message!==context.renderReport(facts,prose,42))throw new Error('render must be stable');
 }
 
 const daily=fs.readFileSync('src/line-daily-digest.ts','utf8');
