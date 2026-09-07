@@ -45,3 +45,36 @@
   clip:auto;
   white-space:normal;
 }
+
+/* Daily mobile surface: keep long labels and charts inside their own containers. */
+.family-log-page{min-width:0}
+.family-log-page .family-log-quick strong br,.family-log-page .family-quick-chore-record strong br{display:none}
+.family-log-page .family-log-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.family-log-page .family-log-head h1{font-size:20px!important;margin:0;flex:1}
+.family-log-page .family-log-journal-link{font-size:13px;min-height:44px;display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap}
+.family-log-page .family-log-subjects{gap:6px;padding-bottom:8px}
+.family-log-page .family-log-subjects a{min-height:44px;box-sizing:border-box;display:inline-flex;align-items:center;padding:6px 10px}
+.family-log-page .family-log-date-head{margin:0 0 8px}
+.family-log-page .family-quick-chore-card{padding:10px;margin-bottom:10px}
+.family-log-page .family-quick-chore-card h2{font-size:17px!important;margin:0 0 8px}
+.family-log-page .family-quick-chore-record{background:#fff;color:#334155;border:1px solid #e2e8f0}
+.family-log-page .family-log-quick,.family-log-page .family-quick-chore-record{display:flex!important;flex-direction:column;justify-content:center;gap:3px!important;min-height:60px;padding:6px 3px}
+.family-log-page .family-log-quick strong,.family-log-page .family-quick-chore-record strong{grid-column:auto!important;font-size:13px;white-space:normal!important;overflow-wrap:anywhere!important;line-height:1.25!important;letter-spacing:0}
+.family-log-page .family-log-quick span,.family-log-page .family-quick-chore-record span{grid-column:auto!important;font-size:16px}
+.family-log-page .family-log-overview-group{padding:8px 0;margin:0}
+.family-log-page .family-log-timer-card,.family-log-page .family-log-dashboard,.family-log-page .family-log-timeline{padding:10px 12px!important;margin-bottom:10px;min-width:0}
+.family-log-page .family-log-dashboard>summary{flex-wrap:wrap;gap:4px 8px;font-size:16px}
+.family-log-page .family-log-dashboard>summary small{overflow-wrap:anywhere}
+.family-log-page .family-log-dashboard-grid,.family-log-page .family-log-chart{min-width:0;max-width:100%}
+.family-log-page .family-log-dashboard-card{min-width:0;padding:10px;overflow-wrap:anywhere}
+.family-log-page .family-log-range{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.family-log-page .family-log-range>*{min-width:0;max-width:100%;box-sizing:border-box}
+.family-log-page .family-log-range .native-control-shell{width:100%;max-width:none;height:44px;margin:0}
+.family-log-page .family-log-chart svg{max-width:100%;height:170px}
+.family-log-page .family-log-bars{box-sizing:border-box;max-width:100%;height:176px;padding:8px 8px 28px;gap:6px;overflow-x:auto;overscroll-behavior-x:contain}
+.family-log-page .family-log-bars>div{flex:0 0 38px;min-width:38px}
+.family-log-page .family-log-bars small{width:100%;font-size:10px;transform:none;text-align:center}
+.family-log-page .family-log-timeline>.section-head{flex-wrap:wrap;gap:8px}
+.family-log-page .family-log-history-filters{display:flex;flex-wrap:wrap;gap:6px;max-width:100%}
+.family-log-page .family-log-history-filters select{min-width:0;max-width:100%;font-size:16px;margin:0;flex:1 1 120px}
+@media(max-width:360px){.family-log-page .family-log-quick-grid,.family-log-page .family-quick-chore-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.family-log-page .family-log-dashboard-grid{grid-template-columns:1fr}.family-log-page .family-log-head{flex-wrap:wrap}.family-log-page .family-log-head h1{font-size:18px!important}}

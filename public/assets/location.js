@@ -210,7 +210,7 @@
     if(distance)pieces.push(`直線 ${distance}`);
     const accuracy=Number(member.latest?.accuracyMeters);
     if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
-    meta.textContent=pieces.join(' ・ ');
+    meta.textContent=[presence,(member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')?age:''].filter(Boolean).join(' ・ ');
     main.append(title,meta);
 
     const actions=document.createElement('div');
@@ -237,7 +237,10 @@
       etaButton.addEventListener('click',()=>void requestEta(member,etaButton,etaResult));
       actions.append(etaButton,etaResult);
     }
-    if(actions.childNodes.length)main.append(actions);
+    const details=document.createElement('details');details.className='location-member-details';
+    const disclosure=document.createElement('summary');disclosure.textContent='経路・詳細';
+    const detailText=document.createElement('p');detailText.className='meta';detailText.textContent=pieces.join(' ・ ');
+    details.append(disclosure,detailText,actions);main.append(details);
 
     const badge=document.createElement('span');
     badge.className='location-state-badge';

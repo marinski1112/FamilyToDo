@@ -11,7 +11,7 @@ const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 const TASK_CHILD_UI_REVISION = 'child-task1';
 const TASK_ENTRY_UI_REVISION = 'ai-first-ui1';
 const FAMILY_LOG_UI_REVISION = 'baby-food-photo1';
-const LOCATION_UI_REVISION = 'maps-family-markers1';
+const LOCATION_UI_REVISION = 'maps-family-markers1-mobile1';
 
 const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
 :root{--nav-safe-top:env(safe-area-inset-top,0px);--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
@@ -39,7 +39,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav" aria-label="メインメニュー"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"${active===href?' aria-current="page"':''}><span aria-hidden="true">${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
-  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}">`:'';
+  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1">`:'';
   const locationDiagnosticsExtra=active==='/app/location.php'?`<script defer src="/assets/location-maps-diagnostics.js?v=${APP_VERSION}-maps-diagnostics4"></script>`:'';
   const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}"></script>`:'';
   const extra=calendarExtra+familyLogExtra+locationDiagnosticsExtra+locationExtra;

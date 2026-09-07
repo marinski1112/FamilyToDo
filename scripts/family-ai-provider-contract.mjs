@@ -51,7 +51,8 @@ for(const marker of ['interface FamilyAiPlanner','class GeminiPlanner','class Wo
 assert.match(wrangler,/"ai"\s*:\s*\{\s*"binding"\s*:\s*"AI"/);
 assert.ok(!ai.includes('AUTO'));
 assert.match(ai,/if\(!authorizedAdmin\(ctx\)\)return json\(\{ok:false,error:'管理者権限が必要です。'\},403\)/);
-assert.ok(app.includes('!managementMode&&familyLogIsAdmin'));
+assert.ok(app.includes('const aiEntry=managementMode&&familyLogIsAdmin?'),'FamilyAI entry must be restricted to admin management');
+assert.ok(!app.includes('const aiEntry=!managementMode'),'FamilyAI entry must stay off the daily log page');
 
 for(const marker of ['model-compatibility','calendar.app.created',"visibility_scope='FAMILY'",'calendar_sync_outbox','familyTodoTaskId','processCalendarOutbox'])assert.ok(calendar.includes(marker),marker);
 assert.ok(oneWay.includes('received: 0')&&oneWay.includes('inbound_more: false'),'Family AI integration prerequisites must not depend on Google Calendar inbound');
