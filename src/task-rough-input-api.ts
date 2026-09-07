@@ -31,6 +31,7 @@ const categoryIntentHint=/(?:^|[\s、,])(?:カテゴリー|カテゴリ)\s*[:：
 const dueIntentHint=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/iu;
 const quantityIntentHint=/(?:^|[\s、,])(?:数量|個数)\s*[:：]?/iu;
 const multiplyQuantityHint=/(?:^|\s)[×xX]\s*\d+(?:\.\d+)?(?:\s|$)/u;
+const trailingMultiplierQuantity=/\s+×\s*(\d+(?:\.\d+)?)\s*$/u;
 const absoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
 const relativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
 const weekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
@@ -47,17 +48,33 @@ function semanticBlocks(text:string):RoughBlock[]{
   return groups.map(lines=>({originalText:lines.join('\n'),titleSeed:lines[0],lines}));
 }
 
+function explicitMultiplierQuantity(block:RoughBlock):{quantity:string;start:number}|null{
+  const match=block.titleSeed.match(trailingMultiplierQuantity);
+  if(!match?.[1]||match.index===undefined)return null;
+  const amount=Number(match[1]);
+  if(!Number.isFinite(amount)||amount<=0)return null;
+  const quantity=clean(match[1],40);
+  return quantity?{quantity,start:match.index}:null;
+}
+
 function explicitQuantity(block:RoughBlock):string|null{
   for(const line of block.lines){
     const prefixed=line.match(/^(?:数量|個数)\s*[:：]?\s*([^\s]+(?:\s*[^\s]+)?)/u);
     if(prefixed?.[1])return clean(prefixed[1],40)||null;
   }
+  const multiplier=explicitMultiplierQuantity(block);
+  if(multiplier)return multiplier.quantity;
   const inline=block.titleSeed.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:個|本|袋|箱|枚|セット|パック|kg|g|ml|mL|L))(?:\s|$)/u);
   return inline?.[1]?clean(inline[1],40)||null:null;
 }
 
 function deterministicTitle(block:RoughBlock,destination:Destination,quantity:string|null):string{
   if(destination!=='shopping'||!quantity)return block.titleSeed.slice(0,200);
+  const multiplier=explicitMultiplierQuantity(block);
+  if(multiplier?.quantity===quantity){
+    const stripped=block.titleSeed.slice(0,multiplier.start).trim();
+    if(stripped)return stripped.slice(0,200);
+  }
   const index=block.titleSeed.lastIndexOf(quantity);
   if(index<0)return block.titleSeed.slice(0,200);
   const stripped=`${block.titleSeed.slice(0,index)} ${block.titleSeed.slice(index+quantity.length)}`.replace(/\s+/g,' ').trim();
