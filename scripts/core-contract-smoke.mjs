@@ -49,7 +49,11 @@ for(const marker of [
   '/^\\s/.test(line.raw)',
   'metadataPrefix.test(line.trimmed)',
   'httpUrlOnly.test(line.trimmed)',
+  'const trailingMultiplierQuantity=/\\s+×\\s*(\\d+(?:\\.\\d+)?)\\s*$/u;',
+  'function explicitMultiplierQuantity(block:RoughBlock):{quantity:string;start:number}|null',
   'function explicitQuantity(block:RoughBlock)',
+  'const multiplier=explicitMultiplierQuantity(block);',
+  'block.titleSeed.slice(0,multiplier.start).trim()',
   'function continuationDescription(block:RoughBlock,destination:Destination)',
   'function needsModel(fields:RoughField[]):boolean',
   "if(!needsModel(parsed.fields))return fallback();",
@@ -74,6 +78,20 @@ for(const marker of [
   "field.destination==='shopping'&&categoryRaw!==null",
   'allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null',
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
+const multiplierFixturePattern=/\s+×\s*(\d+(?:\.\d+)?)\s*$/u;
+const parseMultiplierFixture=title=>{
+  const match=title.match(multiplierFixturePattern);
+  if(!match?.[1]||match.index===undefined)return null;
+  const amount=Number(match[1]);
+  if(!Number.isFinite(amount)||amount<=0)return null;
+  const stripped=title.slice(0,match.index).trim();
+  return stripped?{quantity:match[1],title:stripped}:null;
+};
+assert.deepEqual(parseMultiplierFixture('牛乳 ×2'),{quantity:'2',title:'牛乳'},'standalone trailing ×2 must be deterministic');
+assert.deepEqual(parseMultiplierFixture('おむつ　× 3'),{quantity:'3',title:'おむつ'},'full-width spacing before explicit multiplier must remain deterministic');
+assert.equal(parseMultiplierFixture('サイズ 2×3'),null,'dimension-like multiplication must remain unresolved');
+assert.equal(parseMultiplierFixture('型番X2'),null,'model-like X2 text must not be treated as an explicit quantity');
+assert.equal(parseMultiplierFixture('牛乳 ×0'),null,'non-positive multiplier quantity must remain unresolved');
 const deterministicGate=roughInputApi.indexOf("if(!needsModel(parsed.fields))return fallback();");
 const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
 const modelLoop=roughInputApi.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
@@ -137,4 +155,4 @@ assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'ro
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, semantic rough-input blocks, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, semantic rough-input blocks, deterministic multiplier quantity, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
