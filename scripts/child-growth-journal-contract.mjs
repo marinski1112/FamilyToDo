@@ -32,6 +32,12 @@ if(journal.includes('location')||journal.includes('latitude')||journal.includes(
 if(/source:'child_journal'[^}]*note/.test(journal))throw new Error('Child Journal activity metadata must not include journal note content');
 if(!journal.includes('processChildJournalCalendarOutbox(ctx.env,5,member.family_id)'))throw new Error('Child Journal save boundary must retain dedicated calendar outbox processing');
 if(journal.includes('childJournalCalendarStatus')||journal.includes('📅 Google Calendar')||journal.includes('syncCard'))throw new Error('Child Journal page must not render the presentation-only Google Calendar status card');
+if(!journal.includes('<input type="hidden" name="kind" value="MEMO">'))throw new Error('Primary Child Journal manual form must save through the retained MEMO/JOURNAL_MEMO path');
+if(!journal.includes('<label>タイトル</label><input type="text" name="title" maxlength="120" required'))throw new Error('Primary Child Journal manual form must require a title');
+if(!journal.includes('<label>メモ</label><textarea name="note" maxlength="2000"'))throw new Error('Primary Child Journal manual form must retain memo input');
+if(journal.includes('<select name="kind" required>')||journal.includes('<input type="number" name="value"'))throw new Error('Primary Child Journal manual form must not expose legacy kind/numeric controls');
+if(!journal.includes("else if(form.has('title')){if(!title)return new Response('タイトルを入力してください。',{status:400});valueText=title;}"))throw new Error('New manual title must be validated and persisted as family_logs.value_text');
+if(!journal.includes("else if(kind==='HEIGHT')")||!journal.includes("else if(kind==='WEIGHT')")||!journal.includes('if(MILESTONES[kind])'))throw new Error('Legacy structured Child Journal API compatibility must remain available');
 if(!app.includes('export async function logActivity('))throw new Error('Child Journal must reuse the canonical activity log boundary');
 if(!app.includes('href="/app/child_journal.php"'))throw new Error('Family Log must expose the Child Journal entry point');
 if(!pageRoutes.includes("from './child-journal'")||!apiRoutes.includes("from './child-journal'"))throw new Error('Child Journal page/API dispatchers must import the Child Journal module');
@@ -39,4 +45,4 @@ if(!apiRoutes.includes("url.pathname==='/api/child-journal'"))throw new Error('W
 if(!pageRoutes.includes("url.pathname==='/app/child_journal.php'"))throw new Error('Worker must route the Child Journal page');
 if(!manifest.includes("['child-growth-journal','node scripts/child-growth-journal-contract.mjs']"))throw new Error('Child Journal regression contract must be active');
 for(const forbidden of ['CHILD_JOURNAL','googleCalendar','calendar_id'])if(journal.includes(forbidden))throw new Error(`Google Calendar journal sync is intentionally deferred from foundation: ${forbidden}`);
-console.log('child growth journal foundation + page-open schema contract ok');
+console.log('child growth journal foundation + title/memo manual form contract ok');
