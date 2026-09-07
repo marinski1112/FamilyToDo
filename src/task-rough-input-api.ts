@@ -40,6 +40,7 @@ const absoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[
 const relativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
 const weekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
 const explicitTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
+const temporalIntentHint=(value:string)=>absoluteDateHint.test(value)||relativeDateHint.test(value)||weekdayHint.test(value)||explicitTimeHint.test(value);
 
 function semanticBlocks(text:string):RoughBlock[]{
   const source=text.replace(/\r\n?/g,'\n').split('\n').map(raw=>({raw,trimmed:raw.trim()})).filter(x=>x.trimmed);
@@ -77,16 +78,16 @@ function explicitQuantity(block:RoughBlock):string|null{
 }
 
 function explicitDueDate(block:RoughBlock):string|null{
-  if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return null;
   let found:string|null=null;
   for(let index=0;index<block.lines.length;index++){
-    const line=block.lines[index];
-    if(!dueIntentHint.test(line))continue;
-    if(index===0)return null;
-    const match=line.match(explicitDueDateLine);
-    if(!match?.[1]||!validDate(match[1]))return null;
-    if(found&&found!==match[1])return null;
-    found=match[1];
+    const line=block.lines[index],match=line.match(explicitDueDateLine);
+    if(index>0&&match?.[1]){
+      if(!validDate(match[1]))return null;
+      if(found&&found!==match[1])return null;
+      found=match[1];
+      continue;
+    }
+    if(dueIntentHint.test(line)||temporalIntentHint(line))return null;
   }
   return found;
 }
