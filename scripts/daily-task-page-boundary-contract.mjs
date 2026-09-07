@@ -33,6 +33,28 @@ for(const marker of [
 ])if(!daily.includes(marker))throw new Error(`retained daily behavior/privacy marker missing: ${marker}`);
 
 for(const marker of [
+  "const isRealDateOnly=(value:string)=>{",
+  "if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return false;",
+  "const parsed=new Date(`${value}T00:00:00Z`);",
+  "return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;",
+  "const safeDate=isRealDateOnly(targetDate)?targetDate:dateOnly();",
+])if(!daily.includes(marker))throw new Error(`daily real-date validation marker missing: ${marker}`);
+
+const realDateFixture=(value)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const parsed=new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
+};
+for(const [value,expected] of [
+  ['2024-02-29',true],
+  ['2026-02-29',false],
+  ['2026-02-31',false],
+  ['2026-99-99',false],
+  ['2026-12-31',true],
+  ['2027-01-01',true],
+])if(realDateFixture(value)!==expected)throw new Error(`daily real-date fixture failed: ${value}`);
+
+for(const marker of [
   "JOIN members cm ON cm.id=c.member_id AND cm.family_id=o.family_id AND cm.active=1",
   "NOT EXISTS(SELECT 1 FROM task_assignees ta0 JOIN members am0 ON am0.id=ta0.member_id AND am0.active=1 WHERE ta0.task_id=rr.task_id)",
   "EXISTS(SELECT 1 FROM task_assignees ta1 JOIN members am1 ON am1.id=ta1.member_id AND am1.active=1 WHERE ta1.task_id=rr.task_id AND ta1.member_id=c.member_id)",
@@ -50,4 +72,4 @@ for(const marker of [
 ])if(!routes.includes(marker))throw new Error(`daily page route changed: ${marker}`);
 for(const marker of ["el.matches('.toggle[data-type][data-id]')","fetch('/api/toggle'","occurrence_id:Number(el.dataset.occurrenceId||0)"])if(!browser.includes(marker))throw new Error(`daily completion transport missing: ${marker}`);
 
-console.log('daily-task-page-boundary: today/tomorrow retained outside app.ts with recurrence, unassigned completion fallback and PRIVATE visibility ok');
+console.log('daily-task-page-boundary: today/tomorrow retained outside app.ts with real-date validation, recurrence, unassigned completion fallback and PRIVATE visibility ok');

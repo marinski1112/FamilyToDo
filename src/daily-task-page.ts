@@ -17,6 +17,11 @@ const esc=(v:unknown)=>String(v??'')
 const dateOnly=(d=new Date())=>new Intl.DateTimeFormat('sv-SE',{
   timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',
 }).format(d);
+const isRealDateOnly=(value:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const parsed=new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
+};
 
 async function expiredTasksFor(ctx:AppContext):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
@@ -123,7 +128,7 @@ function renderDailyPage(ctx:AppContext,date:string,data:DailyData,tomorrow:bool
 
 async function dailyPage(request:Request,ctx:AppContext,targetDate:string,tomorrow:boolean):Promise<Response>{
   if(!ctx.member){const url=new URL(request.url);return redirect(`/login.php?next=${encodeURIComponent(url.pathname+url.search)}`);}
-  const safeDate=/^\d{4}-\d{2}-\d{2}$/.test(targetDate)?targetDate:dateOnly();
+  const safeDate=isRealDateOnly(targetDate)?targetDate:dateOnly();
   const [data,unorganized]=await Promise.all([makeDailyData(ctx,safeDate),unorganizedTasksFor(ctx)]);
   return html(renderDailyPage(ctx,safeDate,data,tomorrow,unorganized));
 }
