@@ -21,7 +21,7 @@ for(const sentinel of [
   'line_daily_digest_receipts',
   'line_daily_digest_subject_settings',
   "current<target||current>target+29",
-  "visibility_scope='PRIVATE' AND private_owner_id=?",
+  "t.visibility_scope='PRIVATE' AND t.private_owner_id=?",
   "familyAiProvider(env)!=='GEMINI'",
   'renderDeterministicFacts',
   'buildDeterministicAdvice',
@@ -53,8 +53,8 @@ for(const sentinel of [
   'reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0)',
   'response.status===429',
   'await blockMorningDigestAiAfter429(env.DB,localDate)',
-  'await finalizeRecapSafely(env,familyId,localDate,recap)',
-  'await finalizeRecapSafely(env,familyId,localDate,null)',
+  'await finalizeRecapSafely(env,familyId,localDate,recap,memberMorning,',
+  'await finalizeRecapSafely(env,familyId,localDate,null,[],',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`morning Gemini persistent cost guard missing: ${sentinel}`);
 }
