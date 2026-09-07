@@ -58,6 +58,12 @@ for(const marker of [
   'required=new Map<string,number>()',
   "if((observed.get(key)||0)<count)return null",
   "if(description!==null&&field.destination!=='task'&&field.destination!=='event')return null;",
+  'SHOPPING_CATEGORY_MAX_LENGTH',
+  'resolveShoppingCategoryOptions(rows)',
+  "parsed.fields.some(field=>field.destination==='shopping')",
+  "SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?",
+  "field.destination==='shopping'&&categoryRaw!==null",
+  'allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null',
 ])assert.ok(roughInputApi.includes(marker),`rough-input Gemini safety marker missing: ${marker}`);
 assert.ok(!roughInputApi.includes('fields.flatMap(field=>field.lines.map('),'rough-input deterministic fallback must not regress to one-line=one-item parsing');
 assert.ok(!/\b(?:INSERT|UPDATE|DELETE)\b/i.test(roughInputApi),'rough-input analysis endpoint must not persist model output');
@@ -117,4 +123,4 @@ assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'ro
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, semantic rough-input blocks, progressive confirmation, and explicit save boundaries ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, bounded Gemini analysis, semantic rough-input blocks, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
