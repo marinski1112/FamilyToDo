@@ -114,25 +114,35 @@ for(const marker of [
   "trigger.textContent='＋ 対象'",
   'compatibility metadata',
 ])if(!familyLogManagementUi.includes(marker))throw new Error(`Family Log all Quick Tasks management marker missing: ${marker}`);
-if(!familyLogManagementUi.includes("compactScript.src='/assets/family-log-compact-ui.js?v=compact1'"))throw new Error('Family Log compact UI enhancer is not loaded');
+if(!familyLogManagementUi.includes("compactScript.src='/assets/family-log-compact-ui.js?v=compact2'"))throw new Error('Family Log compact UI enhancer is not loaded at the current revision');
 for(const marker of [
   "text.replaceAll('ちょこっと家事','日常家事')",
   "select.className='family-log-subject-select'",
-  "journal.textContent='成長記録'",
-  "manage.textContent='管理'",
+  "dateInput.classList.add('family-log-compact-date')",
+  "dateInput.setAttribute('aria-label','表示する日付')",
+  "previous.setAttribute('aria-label','前の日')",
+  "next.setAttribute('aria-label','次の日')",
+  "journal.textContent='📓 成長記録'",
+  "manage.textContent='⚙️'",
+  "manage.setAttribute('aria-label','家族ログ管理')",
+  "manage.title='家族ログ管理'",
   "chore.maxLength=6",
   "input.maxLength=4",
   "button.querySelector(':scope > span')?.remove()",
 ])if(!familyLogCompactUi.includes(marker))throw new Error(`Family Log compact UI marker missing: ${marker}`);
 for(const marker of [
   '.family-log-page .family-log-compact-toolbar{',
-  'grid-template-columns:minmax(64px,.9fr) minmax(118px,1.55fr) auto auto',
+  'grid-template-columns:minmax(64px,.9fr) auto auto 36px',
+  'grid-template-columns:26px 96px 26px',
+  '-webkit-text-fill-color:#334155',
+  '.family-log-page .family-log-manage-link{width:36px',
   '.family-log-page .family-quick-chore-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important',
   '.family-log-page .family-quick-chore-record{min-height:42px!important',
   '.family-log-page .family-log-quick{min-height:46px!important',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log compact mobile geometry missing: ${marker}`);
+if(/\.href\s*=|setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered subject/date navigation URLs');
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, visible tappable date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
 
 for(const marker of ['.family-log-page .family-log-quick','.family-log-page .family-log-bars','flex:0 0 38px','max-width:100%','flex-direction:column'])if(!familyLogLayout.includes(marker))throw new Error(`mobile daily geometry missing: ${marker}`);
