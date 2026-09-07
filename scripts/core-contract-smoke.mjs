@@ -56,7 +56,7 @@ for(const marker of [
   'block.titleSeed.slice(0,multiplier.start).trim()',
   'function continuationDescription(block:RoughBlock,destination:Destination)',
   'function needsModel(fields:RoughField[]):boolean',
-  "if(!needsModel(parsed.fields))return fallback();",
+  "if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');",
   'dueIntentHint.test(source)',
   "field.destination==='shopping'&&categoryIntentHint.test(source)",
   'absoluteDateHint.test(block.titleSeed)',
@@ -92,7 +92,7 @@ assert.deepEqual(parseMultiplierFixture('おむつ　× 3'),{quantity:'3',title:
 assert.equal(parseMultiplierFixture('サイズ 2×3'),null,'dimension-like multiplication must remain unresolved');
 assert.equal(parseMultiplierFixture('型番X2'),null,'model-like X2 text must not be treated as an explicit quantity');
 assert.equal(parseMultiplierFixture('牛乳 ×0'),null,'non-positive multiplier quantity must remain unresolved');
-const deterministicGate=roughInputApi.indexOf("if(!needsModel(parsed.fields))return fallback();");
+const deterministicGate=roughInputApi.indexOf("if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');");
 const modelLoop=roughInputApi.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
 const reserveCall=roughInputApi.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
@@ -124,14 +124,14 @@ for(const marker of [
   "item.dueTime?false:",
   "selectedRowAssignees",
   "syncItemFromRow(item,row)",
-  '必要な項目だけ確認し、間違いがあれば修正してください。詳細設定は必要なときだけ開けます。',
+  '日付・数量を確認してください。',
 ])assert.ok(roughInputUi.includes(marker),`rough-input progressive confirmation marker missing: ${marker}`);
 assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
 
 for(const marker of [
   "id=\"roughConfirmSave\"",
-  'AIの下書きは、このボタンを押すまで登録されません。',
-  'if(!confirm(',
+  'この内容で保存',
+  "if(preview.dataset.saving==='1')return;",
   "postJson('/api/task'",
   "postJson('/api/shopping'",
   "postJson('/api/item'",
@@ -152,7 +152,8 @@ for(const marker of [
   "!u.username&&!u.password",
 ])assert.ok(roughInputSave.includes(marker),`rough-input explicit save guard missing: ${marker}`);
 assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(roughInputSave),'save companion must never call Gemini directly');
-assert.ok(roughInputSave.indexOf('if(!confirm(')<roughInputSave.indexOf('try{const result=await saveRows(rows)'),'explicit user confirmation must occur before save orchestration');
+const saveClick=roughInputSave.indexOf("saveButton.addEventListener('click',async()=>{");
+assert.ok(saveClick>=0&&saveClick<roughInputSave.indexOf('try{const result=await saveRows(rows)'),'save orchestration must remain behind the explicit save button');
 assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input companions must be scoped to the server-rendered task-new marker');
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');

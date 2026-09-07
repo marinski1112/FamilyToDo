@@ -119,17 +119,18 @@ assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2
 assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','https://example.com/2025/12/31']),'2026-09-10','URL-only metadata must not affect safe due extraction');
 assert.equal(dueNeedsModelFixture(['牛乳','期限: 2026-09-10','https://example.com/2025/12/31']),false,'URL-only date text must not trigger a paid model call');
 
-const deterministicGate=api.indexOf("if(!needsModel(parsed.fields))return fallback();");
+const deterministicGate=api.indexOf("if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');");
 const modelLoop=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
 const reserveCall=api.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=api.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
 const modelCall=api.indexOf('const response=await geminiFetch(env,model,bodyForModel);');
 assert.ok(deterministicGate>=0&&deterministicGate<modelLoop&&modelLoop<reserveCall,'deterministic drafts must exit before the budgeted model loop');
 assert.ok(reserveCall<categoryRead&&categoryRead<modelCall,'paid-call reservation must precede category D1 enrichment and Gemini');
-assert.ok(api.includes('catch{return fallback();}'),'guard failures must fail closed to deterministic output');
-assert.ok(api.includes('if(!reserved)break;'),'exhausted family/global budget must stop paid calls');
+assert.ok(api.includes("catch{return fallback('STORAGE');}"),'guard failures must fail closed to deterministic output');
+assert.ok(api.includes("if(!reserved)return fallback('BUDGET');"),'exhausted family/global budget must stop paid calls');
 assert.ok(api.includes('if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);'),'429 responses must open the rough-input circuit');
 assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling must stop fallback rather than create a retry storm');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
 console.log('rough-input AI cost guard contract: safe ISO due fallback, continuation temporal model eligibility, URL metadata exclusion, durable budgets, date-independent 429 circuit, and bounded model calls ok');
+await import('./message-ai-draft-contract.mjs');

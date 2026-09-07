@@ -41,7 +41,7 @@ assert.equal(parseMultiplier('牛乳x2'),null);
 assert.equal(parseMultiplier('×2'),null);
 assert.equal(parseMultiplier('牛乳 ×0'),null);
 assert.ok(api.includes("if(field.destination==='shopping'&&(quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed))&&!explicitQuantity(block))return true;"),'ambiguous multiplier input must remain model-eligible through needsModel');
-assert.ok(ui.includes("source==='gemini'?'AIが内容を整理しました。':'入力内容を下書きにしました。'"),'deterministic rough-input confirmation must use neutral copy rather than imply AI failure');
+assert.ok(ui.includes("reason==='SIMPLE_INPUT'?'入力をそのまま下書きにしました。'"),'simple deterministic inputs must use neutral copy; unavailable AI is reported separately');
 assert.ok(!ui.includes('AIを利用できなかったため、入力内容をそのまま下書きにしました。'),'normal deterministic confirmation must not be labeled as an AI failure');
 
 console.log('rough-input multiplier/confirmation contract: explicit ×N stays deterministic, dimensions stay unresolved, and deterministic confirmation copy stays neutral');
