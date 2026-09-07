@@ -322,6 +322,7 @@
       if(!points.length)return;
       mapStateEl.hidden=true;
       mapEl.hidden=false;
+      const refocusMap=!map||refocus;
       map=map||new maps.Map(mapEl,{center:points[0].point,zoom:14,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,fullscreenControlOptions:{position:maps.ControlPosition.RIGHT_CENTER},...(mapsMapId?{mapId:mapsMapId}:{})});
       clearMarkers();
       const bounds=new maps.LatLngBounds();
@@ -334,7 +335,7 @@
           markers.push(new maps.Marker({map,position:point,title,label:{text:markerInitial(title),color:'#fff',fontWeight:'700'}}));
         }
       }
-      if(!hasRendered||refocus){if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}}
+      if(refocusMap){if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}}
     }catch(_error){
       mapEl.hidden=true;
       mapStateEl.hidden=false;

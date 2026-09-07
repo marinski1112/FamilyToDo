@@ -43,6 +43,10 @@
     row?.remove();next?.querySelector('input:not([type="hidden"])')?.focus();
     if(section){updateCount(section);if(!next)section.box.querySelector('button')?.focus();}
   });
+  form.addEventListener('invalid',event=>{
+    for(const section of sections)if(section.box?.contains(event.target))setOpen(section,true);
+    for(let parent=event.target.parentElement;parent&&parent!==form;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+  },true);
   // Keep optional edit settings in native disclosures without disabling form values.
   if(form.id==='taskEditForm'){
     const moveFields=(title,selectors)=>{
@@ -63,6 +67,5 @@
     moveFields('共有・カレンダー・通知',['#editIsPrivate','#editCalendarVisible','#editCalendarColorWrap','[name="reminder_at"]']);
     const privacy=form.querySelector('#editIsPrivate'),privacySummary=privacy?.closest('details')?.querySelector('summary');
     const updatePrivacy=()=>{if(privacySummary)privacySummary.textContent=privacy.checked?'🔒 自分専用 · カレンダー・通知':'家族共有 · カレンダー・通知';};privacy?.addEventListener('change',updatePrivacy);updatePrivacy();
-    form.addEventListener('invalid',event=>{for(let parent=event.target.parentElement;parent&&parent!==form;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},true);
   }
 })();
