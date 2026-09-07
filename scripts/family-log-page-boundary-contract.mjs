@@ -44,7 +44,7 @@ for(const marker of [
   'recurrence_occurrence_id:Number(occ.id)',
 ])if(!recurrence.includes(marker))throw new Error(`retained recurrence projection marker missing: ${marker}`);
 if(!api.includes('export async function familyLogApi'))throw new Error('retained Family Log mutation API missing');
-if(!shell.includes("active==='/app/family_log.php'?`<link rel=\"stylesheet\" href=\"/assets/family-log-layout.css?v=${APP_VERSION}\">`:''"))throw new Error('Family Log scoped layout override is not loaded');
+if(!shell.includes("active==='/app/family_log.php'?`<link rel=\"stylesheet\" href=\"/assets/family-log-layout.css?v=${APP_VERSION}-mobile1\">`:''"))throw new Error('Family Log scoped layout override is not loaded');
 for(const marker of [
   '.family-log-quick-grid > .family-log-quick',
   'display:flex',
@@ -116,3 +116,5 @@ for(const marker of [
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
 console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, quick-label geometry, row-tap edit with visually hidden keyboard-accessible button, sleep preservation, subject-collision-safe overview quick actions, force-hidden legacy subject controls and all-Quick-Tasks management ok');
+
+for(const marker of ['.family-log-page .family-log-quick','.family-log-page .family-log-bars','flex:0 0 38px','max-width:100%','flex-direction:column'])if(!familyLogLayout.includes(marker))throw new Error(`mobile daily geometry missing: ${marker}`);
