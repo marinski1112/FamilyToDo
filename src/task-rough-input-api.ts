@@ -27,6 +27,14 @@ const metadataPrefix=/^(?:説明|メモ|備考|note|url|リンク|数量|個数|
 const descriptionPrefix=/^(?:説明|メモ|備考|note)\s*[:：]\s*(.*)$/iu;
 const explicitQuantityPrefix=/^(?:数量|個数)\s*[:：]?\s*\d/iu;
 const httpUrlOnly=/^https?:\/\/\S+$/iu;
+const categoryIntentHint=/(?:^|[\s、,])(?:カテゴリー|カテゴリ)\s*[:：]/iu;
+const dueIntentHint=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/iu;
+const quantityIntentHint=/(?:^|[\s、,])(?:数量|個数)\s*[:：]?/iu;
+const multiplyQuantityHint=/(?:^|\s)[×xX]\s*\d+(?:\.\d+)?(?:\s|$)/u;
+const absoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
+const relativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
+const weekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
+const explicitTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
 
 function semanticBlocks(text:string):RoughBlock[]{
   const source=text.replace(/\r\n?/g,'\n').split('\n').map(raw=>({raw,trimmed:raw.trim()})).filter(x=>x.trimmed);
@@ -98,6 +106,17 @@ function deterministicItems(fields:RoughField[]):RoughItem[]{
   })).slice(0,MAX_ITEMS);
 }
 
+function needsModel(fields:RoughField[]):boolean{
+  return fields.some(field=>field.blocks.some(block=>{
+    const source=block.lines.join('\n');
+    if(dueIntentHint.test(source))return true;
+    if(field.destination==='shopping'&&categoryIntentHint.test(source))return true;
+    if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return true;
+    if(field.destination==='shopping'&&(quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed))&&!explicitQuantity(block))return true;
+    return false;
+  }));
+}
+
 function categoryMap(rows:ShoppingCategoryCatalogRow[]):Map<string,string>{
   return new Map(resolveShoppingCategoryOptions(rows).map(name=>[shoppingCategoryKey(name),name]));
 }
@@ -153,6 +172,7 @@ export async function taskRoughInputApi(request:Request,ctx:any):Promise<Respons
   const fallback=()=>json({ok:true,source:'deterministic',requiresConfirmation:true,items:deterministicItems(parsed.fields)});
   const env=ctx.env as Env;
   if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim()||!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback();
+  if(!needsModel(parsed.fields))return fallback();
   let allowedShoppingCategories=new Map<string,string>();
   if(parsed.fields.some(field=>field.destination==='shopping')){
     try{
