@@ -91,7 +91,7 @@ for(const marker of [
   "etaRequest({destinationKind:'HOME'})",
   "const canRoute=!member.isViewer&&(member.state==='FRESH'||member.state==='AGING')",
   "if(homeEtaEl)homeEtaEl.addEventListener('click',()=>void requestHomeEta());",
-  "if(refreshEl)refreshEl.addEventListener('click',()=>void load());",
+  "if(refreshEl)refreshEl.addEventListener('click',()=>void load(true));",
 ])if(!client.includes(marker))throw new Error(`Location client/map/ETA marker missing: ${marker}`);
 for(const forbidden of [
   'navigator.geolocation',
@@ -144,9 +144,10 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-mobile1';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-sheet2';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
-console.log('location-page-boundary: authenticated family map uses canonical GOOGLE_MAPS_BROWSER_API_KEY with callback-based async Maps readiness while explicit member/HOME ETA actions remain no-geolocation/no-auto-polling and keep provider secrets server-side');
+await import('./location-sheet-behavior-contract.mjs');
+console.log('location-page-boundary: visible-page latest refresh with explicit history/ETA, no browser geolocation, and provider secrets server-side');

@@ -10,6 +10,18 @@
   const summaryEl=root.querySelector('[data-location-history-summary]');
   const linksEl=root.querySelector('[data-location-history-links]');
   let membersLoaded=false;
+  let latestMembers=null;
+  let loadingHistory=false;
+  let historyRequest=0,displayedMemberId=0;
+  const liveRoot=root.closest('[data-location-live]');
+  const emitHistory=(memberId=0,points=[])=>liveRoot?.dispatchEvent(new CustomEvent('family-location-history',{detail:{memberId,points}}));
+  const clearDisplay=()=>{historyRequest++;displayedMemberId=0;emitHistory();if(summaryEl)summaryEl.textContent='';linksEl?.replaceChildren();};
+  liveRoot?.addEventListener('family-location-latest',event=>{
+    latestMembers=event.detail?.members||[];membersLoaded=false;
+    if(displayedMemberId&&!latestMembers.some(member=>Number(member.memberId)===displayedMemberId&&member.sharingEnabled)){clearDisplay();setStatus('位置共有が停止されたため、履歴を非表示にしました。');}
+    if(!loadingHistory)void loadMembers().catch(()=>{});
+  });
+  root.querySelector('[data-location-history-clear]')?.addEventListener('click',()=>{clearDisplay();setStatus('地図の軌跡を消しました。');});
 
   const setStatus=(text)=>{if(statusEl)statusEl.textContent=text;};
   const formatTime=(value)=>{
@@ -42,9 +54,13 @@
 
   const loadMembers=async()=>{
     if(membersLoaded)return;
-    const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
-    const payload=await response.json().catch(()=>null);
-    if(!response.ok||!payload?.ok)throw new Error('家族一覧を取得できませんでした。');
+    let payload={ok:true,members:latestMembers};
+    if(!latestMembers){
+      const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
+      payload=await response.json().catch(()=>null);
+      if(!response.ok||!payload?.ok)throw new Error('家族一覧を取得できませんでした。');
+    }
+    const selected=memberEl.value;
     const members=(Array.isArray(payload.members)?payload.members:[]).filter(member=>member?.sharingEnabled&&Number.isSafeInteger(Number(member?.memberId))&&Number(member.memberId)>0);
     memberEl.replaceChildren();
     if(!members.length){
@@ -60,7 +76,7 @@
       option.value=String(member.memberId);
       option.textContent=String(member.name||'家族');
       memberEl.append(option);
-      if(member.isViewer)option.selected=true;
+      if(selected?String(member.memberId)===selected:member.isViewer)option.selected=true;
     }
     memberEl.disabled=false;
     membersLoaded=true;
@@ -86,14 +102,18 @@
   };
 
   const loadHistory=async()=>{
-    if(!loadEl||!memberEl)return;
+    if(!loadEl||!memberEl||loadingHistory)return;
+    loadingHistory=true;
+    const requestId=++historyRequest;
     loadEl.disabled=true;
+    emitHistory();
     if(summaryEl)summaryEl.textContent='';
     if(linksEl)linksEl.replaceChildren();
     let selectorLocked=false;
     try{
       setStatus('昨日の移動を確認しています…');
       await loadMembers();
+      if(requestId!==historyRequest)return;
       const memberId=Number(memberEl.value);
       const memberName=String(memberEl.selectedOptions?.[0]?.textContent||'家族');
       if(!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('家族を選択してください。');
@@ -101,9 +121,11 @@
       selectorLocked=true;
       const range=yesterdayRangeJst();
       const params=new URLSearchParams({memberId:String(memberId),from:range.from,to:range.to});
-      const response=await fetch(`/api/location/history?${params.toString()}`,{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
+      const response=await fetch(`/api/location/history?${params.toString()}`,{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
       const payload=await response.json().catch(()=>null);
+      if(requestId!==historyRequest)return;
       if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'昨日の移動を取得できませんでした。');
+      if(latestMembers&&!latestMembers.some(member=>Number(member.memberId)===memberId&&member.sharingEnabled))throw new Error('位置共有が停止されました。');
       if(Number(memberEl.value)!==memberId)throw new Error('選択した家族が変更されたため、もう一度確認してください。');
       const points=Array.isArray(payload.points)?payload.points:[];
       if(!points.length){
@@ -123,10 +145,14 @@
           :`記録点間の直線距離合計 ${distanceText(meters)}。GPS誤差を含むため実際の移動距離とは異なる場合があります。`;
       }
       renderLinks(points,truncated);
+      displayedMemberId=memberId;
+      emitHistory(memberId,points);
     }catch(error){
-      setStatus(error instanceof Error&&error.message?error.message:'昨日の移動を取得できませんでした。');
+      if(requestId===historyRequest)setStatus(error instanceof Error&&error.message?error.message:'昨日の移動を取得できませんでした。');
     }finally{
-      if(selectorLocked&&membersLoaded)memberEl.disabled=false;
+      loadingHistory=false;
+      if(selectorLocked)memberEl.disabled=false;
+      if(latestMembers&&!membersLoaded)void loadMembers().catch(()=>{});
       loadEl.disabled=false;
     }
   };

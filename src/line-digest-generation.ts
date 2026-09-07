@@ -3,7 +3,7 @@ export type DigestGeneration={status:'AI'|'FALLBACK';reason:string;model?:string
 // Count claims stay in deterministic facts; ordinary words/names are not numbers.
 export function digestHasNumericClaim(value:string):boolean{
   const text=value.normalize('NFKC').replace(/一人ひとり|一人一人|一緒|一息|一安心|一段落|一生懸命/g,'');
-  return /[0-9]|[〇零一二三四五六七八九十百千万億兆]+(?:件|回|人|個|歳|才|時|分|秒|円|倍|点|度|日間|週間|か月|ヶ月|年)|(?:^|[\s、。])(?:[〇零一二三四五六七八九十百千万億兆]+)(?=$|[\s、。])/u.test(text);
+  return /[0-9]|[〇零一二三四五六七八九十百千万億兆]+(?:件|回|人|個|つ|本|枚|台|匹|頭|羽|冊|杯|粒|袋|組|箇所|か所|ヶ所|歳|才|時|分|秒|円|倍|点|度|日間|週間|か月|ヶ月|年)|(?:^|[\s、。])(?:[〇零一二三四五六七八九十百千万億兆]+)(?=$|[\s、。])/u.test(text);
 }
 
 export const DIGEST_REASON_LABELS:Record<string,string>={

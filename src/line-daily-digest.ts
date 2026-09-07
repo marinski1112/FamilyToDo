@@ -220,22 +220,31 @@ function logFact(row:Row):string{
 
 async function buildFactPayload(env:Env,familyId:number,memberId:number,localDate:string,location:LocationDigestDayFacts):Promise<DigestFactPayload>{
   const previousDate=dateBefore(localDate);
+  // Converted occurrences replace the projected date; inherit the original kind
+  // only when the original task is also visible to this report recipient.
+  const effectiveKind=`CASE WHEN upper(COALESCE(t.task_kind,'TASK'))='OCCURRENCE' THEN
+    (SELECT upper(COALESCE(rt.task_kind,'TASK')) FROM recurrence_occurrences ro
+      JOIN recurrence_rules rr ON rr.id=ro.recurrence_rule_id AND rr.family_id=ro.family_id
+      JOIN tasks rt ON rt.id=rr.task_id AND rt.family_id=rr.family_id
+      WHERE ro.exception_task_id=t.id AND ro.family_id=t.family_id
+        AND (COALESCE(rt.visibility_scope,'FAMILY')='FAMILY' OR (rt.visibility_scope='PRIVATE' AND rt.private_owner_id=?)) LIMIT 1)
+    ELSE upper(COALESCE(t.task_kind,'TASK')) END`;
   const [taskRows,taskCounts,recurringRows,bringItemRows]=await Promise.all([
-    env.DB.prepare(`SELECT t.title,t.task_kind,t.status,t.all_day,COALESCE(t.start_at,t.due_at) at FROM tasks t
+    env.DB.prepare(`SELECT t.title,${effectiveKind} task_kind,t.status,t.all_day,COALESCE(t.start_at,t.due_at) at FROM tasks t
       WHERE t.family_id=? AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
-      AND upper(COALESCE(t.task_kind,'TASK')) IN ('TASK','EVENT')
+      AND ${effectiveKind} IN ('TASK','EVENT')
       AND NOT EXISTS (SELECT 1 FROM recurrence_rules r WHERE r.family_id=t.family_id AND r.task_id=t.id)
       AND date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)
       ORDER BY COALESCE(t.start_at,t.due_at),t.id LIMIT 12`)
-      .bind(familyId,memberId,localDate,localDate).all<Row>(),
+      .bind(memberId,familyId,memberId,memberId,localDate,localDate).all<Row>(),
     env.DB.prepare(`SELECT
         SUM(CASE WHEN date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?) AND lower(COALESCE(t.status,''))='completed' THEN 1 ELSE 0 END) completed,
         SUM(CASE WHEN date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?) AND lower(COALESCE(t.status,''))<>'completed' THEN 1 ELSE 0 END) incomplete,
         SUM(CASE WHEN lower(COALESCE(t.status,''))<>'completed' AND date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?) THEN 1 ELSE 0 END) overdue
       FROM tasks t WHERE t.family_id=? AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
-      AND upper(COALESCE(t.task_kind,'TASK'))='TASK'
+      AND ${effectiveKind}='TASK'
       AND NOT EXISTS (SELECT 1 FROM recurrence_rules r WHERE r.family_id=t.family_id AND r.task_id=t.id)`)
-      .bind(localDate,localDate,localDate,localDate,localDate,familyId,memberId).first<Row>(),
+      .bind(localDate,localDate,localDate,localDate,localDate,familyId,memberId,memberId).first<Row>(),
     recurringForFamilyRange(env.DB,familyId,memberId,localDate,localDate),
     env.DB.prepare(`SELECT i.name,i.status
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id

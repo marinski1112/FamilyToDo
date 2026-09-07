@@ -19,6 +19,12 @@
   let mapsPromise=null;
   let map=null;
   let markers=[];
+  let historyLines=[];
+  let historyMemberId=0;
+  let historyGeneration=0;
+  let currentSharedMembers=new Set();
+  let refreshTimer=null;
+  const clearHistory=()=>{historyGeneration++;historyLines.forEach(line=>line.setMap(null));historyLines=[];historyMemberId=0;};
 
   const stateText={
     FRESH:'最新',
@@ -183,6 +189,7 @@
     const row=document.createElement('article');
     row.className='location-member-row';
     row.dataset.state=String(member.state||'NO_LOCATION');
+    row.dataset.memberId=String(member.memberId||'');
 
     const avatar=document.createElement('div');
     avatar.className='location-avatar-fallback';
@@ -258,14 +265,18 @@
       const script=document.createElement('script');
       const callbackName='__familyTodoLocationMapsReady';
       let settled=false;
+      const timeout=setTimeout(()=>fail(),15000);
       const fail=()=>{
         if(settled)return;
         settled=true;
+        clearTimeout(timeout);
+        script.remove();
         reject(new Error('MAPS_LOAD_FAILED'));
       };
       window[callbackName]=()=>{
         if(settled)return;
         settled=true;
+        clearTimeout(timeout);
         if(window.google?.maps)resolve(window.google.maps);
         else reject(new Error('MAPS_LOAD_FAILED'));
       };
@@ -277,6 +288,7 @@
       script.addEventListener('error',fail,{once:true});
       document.head.appendChild(script);
     });
+    mapsPromise=mapsPromise.catch(error=>{mapsPromise=null;throw error;});
     return mapsPromise;
   };
 
@@ -288,7 +300,7 @@
     markers=[];
   };
 
-  const renderMap=async(located)=>{
+  const renderMap=async(located,refocus=false)=>{
     if(!mapEl||!mapStateEl)return;
     if(!located.length){
       mapEl.hidden=true;
@@ -310,6 +322,7 @@
       if(!points.length)return;
       mapStateEl.hidden=true;
       mapEl.hidden=false;
+      const refocusMap=!map||refocus;
       map=map||new maps.Map(mapEl,{center:points[0].point,zoom:14,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,fullscreenControlOptions:{position:maps.ControlPosition.RIGHT_CENTER},...(mapsMapId?{mapId:mapsMapId}:{})});
       clearMarkers();
       const bounds=new maps.LatLngBounds();
@@ -322,7 +335,7 @@
           markers.push(new maps.Marker({map,position:point,title,label:{text:markerInitial(title),color:'#fff',fontWeight:'700'}}));
         }
       }
-      if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}
+      if(refocusMap){if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}}
     }catch(_error){
       mapEl.hidden=true;
       mapStateEl.hidden=false;
@@ -331,22 +344,39 @@
     }
   };
 
-  const render=(payload)=>{
+  const render=async(payload,refocus=false)=>{
     const members=Array.isArray(payload?.members)?payload.members:[];
     if(listEl){
-      listEl.replaceChildren();
+      const previous=new Map(Array.from(listEl.querySelectorAll('.location-member-row')).map(row=>[row.dataset.memberId,row]));
+      listEl.querySelectorAll('.location-empty').forEach(node=>node.remove());
+      const ids=new Set(members.map(member=>String(member.memberId)));
+      previous.forEach((row,id)=>{if(!ids.has(id))row.remove();});
       if(members.length===0){
         const empty=document.createElement('div');
         empty.className='location-empty';
         empty.textContent='表示できる家族メンバーがいません。';
         listEl.append(empty);
       }else{
-        members.forEach((member)=>listEl.append(makeMemberRow(member||{})));
+        members.forEach((member)=>{
+          const row=makeMemberRow(member||{}),old=previous.get(row.dataset.memberId);
+          if(!old){listEl.append(row);return;}
+          old.dataset.state=row.dataset.state;
+          for(const selector of ['.location-avatar-fallback','.location-member-name','.location-member-meta','.location-state-badge'])old.querySelector(selector).textContent=row.querySelector(selector).textContent;
+          const before=old.querySelector('details'),after=row.querySelector('details');
+          if(Boolean(before.querySelector('button'))!==Boolean(after.querySelector('button'))||Boolean(before.querySelector('a'))!==Boolean(after.querySelector('a'))){after.open=before.open;before.replaceWith(after);}
+          else{
+            before.querySelector('p').textContent=after.querySelector('p').textContent;
+            const link=before.querySelector('a');if(link)link.href=after.querySelector('a').href;
+          }
+        });
       }
     }
 
     const located=members.filter((member)=>member?.latest&&member?.sharingEnabled&&validPoint(member.latest));
-    void renderMap(located);
+    currentSharedMembers=new Set(members.filter(member=>member?.sharingEnabled).map(member=>Number(member.memberId)));
+    if(historyMemberId&&!currentSharedMembers.has(historyMemberId))clearHistory();
+    root.dispatchEvent(new CustomEvent('family-location-latest',{detail:{members:members.map(member=>({memberId:member.memberId,name:member.name,sharingEnabled:member.sharingEnabled,isViewer:member.isViewer}))}}));
+    await renderMap(located,refocus);
     hasRendered=true;
     const atHome=members.filter((member)=>member?.homePresence==='HOME').length;
     const presenceUnknown=members.filter((member)=>member?.homePresence==='UNKNOWN').length;
@@ -356,17 +386,17 @@
     setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人${presenceSummary}`);
   };
 
-  const load=async()=>{
+  const load=async(refocus=false)=>{
     if(loading)return;
     loading=true;
     setRefreshBusy(true);
     setStatus(hasRendered?'最新位置を更新しています…':'最新位置を確認しています…');
     try{
-      const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
+      const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
       if(!response.ok)throw new Error('location latest unavailable');
       const payload=await response.json();
       if(!payload?.ok)throw new Error('location latest rejected');
-      render(payload);
+      await render(payload,refocus);
     }catch(_error){
       if(hasRendered){
         setStatus('最新位置を更新できませんでした ・ 表示は前回取得分です');
@@ -385,10 +415,86 @@
     }finally{
       loading=false;
       setRefreshBusy(false);
+      scheduleRefresh();
     }
   };
 
-  if(refreshEl)refreshEl.addEventListener('click',()=>void load());
+  const sheet=root.querySelector('[data-location-family-sheet]');
+  const handle=sheet?.querySelector('summary');
+  const syncSheet=()=>{if(handle)handle.setAttribute('aria-expanded',sheet.open?'true':'false');};
+  if(sheet&&handle){
+    let drag=null,suppressClick=false;
+    handle.addEventListener('pointerdown',event=>{
+      if(event.button!==0)return;
+      drag={id:event.pointerId,y:event.clientY,open:sheet.open,height:sheet.getBoundingClientRect().height};suppressClick=false;
+      handle.setPointerCapture?.(event.pointerId);
+    });
+    handle.addEventListener('pointermove',event=>{
+      if(!drag||event.pointerId!==drag.id)return;
+      const delta=event.clientY-drag.y;
+      if(Math.abs(delta)<8&&!suppressClick)return;
+      suppressClick=true;sheet.open=true;
+      const max=Math.max(handle.offsetHeight,Math.min(root.clientHeight*.78,root.clientHeight-110));
+      sheet.style.height=Math.max(handle.offsetHeight,Math.min(max,drag.height-delta))+'px';
+    });
+    handle.addEventListener('pointerup',event=>{
+      if(!drag||event.pointerId!==drag.id)return;
+      const delta=event.clientY-drag.y,wasOpen=drag.open;drag=null;sheet.style.height='';
+      if(suppressClick||Math.abs(delta)>24){sheet.open=Math.abs(delta)>24?delta<0:wasOpen;suppressClick=true;syncSheet();}
+    });
+    handle.addEventListener('pointercancel',()=>{if(drag)sheet.open=drag.open;drag=null;sheet.style.height='';suppressClick=false;syncSheet();});
+    handle.addEventListener('click',event=>{if(suppressClick){event.preventDefault();suppressClick=false;}});
+    sheet.addEventListener('toggle',syncSheet);
+    sheet.addEventListener('keydown',event=>{if(event.key==='Escape'){sheet.open=false;handle.focus();syncSheet();}});
+    syncSheet();
+  }
+  const fitViewport=()=>{
+    const viewport=window.visualViewport;
+    const bottom=viewport?viewport.offsetTop+viewport.height:window.innerHeight;
+    const nav=document.querySelector('.bottom-nav');
+    const available=Math.min(bottom,nav?.getBoundingClientRect().top??bottom)-root.getBoundingClientRect().top;
+    root.style.setProperty('--location-viewport-height',Math.max(260,available)+'px');
+  };
+  window.addEventListener('resize',fitViewport);
+  window.visualViewport?.addEventListener('resize',fitViewport);
+  fitViewport();
+
+  root.addEventListener('family-location-history',async event=>{
+    clearHistory();
+    const generation=historyGeneration;
+    const detail=event.detail||{},memberId=Number(detail.memberId);
+    if(!currentSharedMembers.has(memberId)||!Array.isArray(detail.points)||!mapsKey)return;
+    const points=detail.points.filter(point=>validPoint(point)&&Number.isFinite(Date.parse(point.recordedAt))).sort((a,b)=>Date.parse(a.recordedAt)-Date.parse(b.recordedAt)).slice(0,250);
+    if(!points.length)return;
+    try{
+      const maps=await loadGoogleMaps();
+      if(generation!==historyGeneration||!currentSharedMembers.has(memberId))return;
+      map=map||new maps.Map(mapEl,{center:validPoint(points[0]),zoom:14,mapTypeControl:false,streetViewControl:false,...(mapsMapId?{mapId:mapsMapId}:{})});
+      mapEl.hidden=false;mapStateEl.hidden=true;historyMemberId=memberId;
+      const segments=[[]];
+      for(let i=0;i<points.length;i++){
+        if(i&&Date.parse(points[i].recordedAt)-Date.parse(points[i-1].recordedAt)>3600000)segments.push([]);
+        segments.at(-1).push(validPoint(points[i]));
+      }
+      const bounds=new maps.LatLngBounds();
+      points.forEach(point=>bounds.extend(validPoint(point)));
+      historyLines=segments.filter(path=>path.length>1).map(path=>new maps.Polyline({map,path,strokeColor:'#7c3aed',strokeOpacity:.85,strokeWeight:4,clickable:false}));
+      map.fitBounds(bounds,{top:140,right:36,bottom:100,left:36});
+      if(sheet)sheet.open=false;
+    }catch{setStatus('移動の線を描画できませんでした。履歴の一覧をご確認ください。');}
+  });
+  let pageActive=true;
+  const scheduleRefresh=()=>{
+    if(refreshTimer)clearTimeout(refreshTimer);
+    refreshTimer=null;
+    if(pageActive&&!document.hidden&&navigator.onLine!==false)refreshTimer=setTimeout(()=>{refreshTimer=null;void load();},60000);
+  };
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=null;}else if(navigator.onLine!==false)void load();});
+  window.addEventListener('online',()=>{if(!document.hidden)void load();});
+  window.addEventListener('offline',()=>{if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=null;});
+  window.addEventListener('pagehide',()=>{pageActive=false;if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=null;clearHistory();});
+  window.addEventListener('pageshow',()=>{pageActive=true;fitViewport();scheduleRefresh();});
+  if(refreshEl)refreshEl.addEventListener('click',()=>void load(true));
   if(homeEtaEl)homeEtaEl.addEventListener('click',()=>void requestHomeEta());
   void load();
 })();

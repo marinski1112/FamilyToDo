@@ -8,10 +8,10 @@ const esc = (v: unknown) => String(v ?? '')
   .replaceAll("'",'&#39;');
 
 const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
-const TASK_CHILD_UI_REVISION = 'child-task1';
-const TASK_ENTRY_UI_REVISION = 'ai-first-ui1';
+const TASK_CHILD_UI_REVISION = 'child-task1-linked2';
+const TASK_ENTRY_UI_REVISION = 'ai-first-ui1-linked2';
 const FAMILY_LOG_UI_REVISION = 'baby-food-photo1';
-const LOCATION_UI_REVISION = 'maps-family-markers1-mobile1';
+const LOCATION_UI_REVISION = 'maps-family-markers1-sheet2';
 
 const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
 :root{--nav-safe-top:env(safe-area-inset-top,0px);--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
@@ -50,6 +50,7 @@ export function layout(title: string, body: string, active = ''): string {
     .replace(/\/assets\/task-edit\.js\?v=[^"'<>\s]+/g,`/assets/task-edit.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`)
     .replace(/\/assets\/task-view\.js\?v=[^"'<>\s]+/g,`/assets/task-view.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`)
     .replace(/\/assets\/family-log\.js\?v=[^"'<>\s]+/g,`/assets/family-log.js?v=${APP_VERSION}-${FAMILY_LOG_UI_REVISION}`);
+  const linkedEntryExtra=compactBody.includes('id="taskForm"')||compactBody.includes('id="taskEditForm"')?'<link rel="stylesheet" href="/assets/task-linked-items.css?v=linked2"><script defer src="/assets/task-linked-items-ui.js?v=linked2"></script>':'';
   const roughInputExtra=compactBody.includes('id="taskNewPayload"')?`<script src="/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1-${TASK_ENTRY_UI_REVISION}"></script><script src="/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1"></script>`:'';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=${APP_VERSION}-${TASK_ENTRY_UI_REVISION}">${extra}${BOTTOM_NAV_VIEWPORT_FIX}</head><body><div class="wrap" role="main">${compactBody}</div>${nav}<script src="/assets/pwa.js?v=${APP_VERSION}"></script>${roughInputExtra}</body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light"><meta name="theme-color" content="#4f46e5"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>${esc(title)} - Family TODO LINE</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><link rel="icon" href="/assets/pwa-192.png"><link rel="stylesheet" href="/assets/family.css?v=${APP_VERSION}-${TASK_ENTRY_UI_REVISION}">${extra}${linkedEntryExtra}${BOTTOM_NAV_VIEWPORT_FIX}</head><body><div class="wrap" role="main">${compactBody}</div>${nav}<script src="/assets/pwa.js?v=${APP_VERSION}"></script>${roughInputExtra}</body></html>`;
 }
