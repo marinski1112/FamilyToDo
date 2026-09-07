@@ -13,12 +13,16 @@ for(const marker of [
   'today_bring_items:payload.today.bringItems.slice(0,8)',
   'profiles=await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)',
   'personality_note',
-  '定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません',
+  '文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません',
+  '返答はJSONだけで {"recap":"..."}',
   '昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください',
+  '冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です',
   '原文を引用・羅列せず、プロフィールを読んだことも明かさないでください',
   '事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください',
   'PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください',
   '正確な数字・件数・時刻・日付は後段の一覧が担当するため',
+  'const parsed=JSON.parse(text),personalNote=clean(parsed?.recap,MAX_MORNING_NARRATIVE_CHARS)',
+  'const frame:Frame={...fallbackBase,personalNote,narrativeVersion:2}',
   'function profileLeakFragments(profiles:FamilyAiSafeProfileContext[]):string[]',
   'if(profile.birth_facts?.zodiac)add(profile.birth_facts.zodiac)',
   'add(`${profile.blood_type}型`)',
@@ -34,8 +38,9 @@ for(const marker of [
   'const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)',
   'const fullAuthoritativeLength=[...authoritative,...requiredSuffix].join',
   'if(available<8)return authoritativeText',
-])if(!digest.includes(marker))throw new Error(`morning natural narrative marker missing: ${marker}`);
+])if(!digest.includes(marker))throw new Error(`morning freeform recap marker missing: ${marker}`);
 
+if(digest.includes('{"opener":"...","narrative":"...","closing":"..."}'))throw new Error('Gemini must not author the morning opener/closing frame');
 if((digest.match(/geminiFetch\(env,model,body\)/g)||[]).length!==1)throw new Error('morning digest must retain exactly one Gemini call site');
 if(!digest.includes("if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY||!morningDigestAiEnabled(env))return fallbackFrame"))throw new Error('provider/config bypass must retain deterministic fallback');
 if(!digest.includes('Optional personalization context must never block the deterministic morning digest'))throw new Error('profile lookup failure must remain non-blocking');
@@ -51,7 +56,7 @@ const safetyStart=digest.indexOf('function generatedFramePassesSafety('),safetyE
 const safetyBody=safetyStart>=0&&safetyEnd>safetyStart?digest.slice(safetyStart,safetyEnd):'';
 if(!safetyBody.includes('profileLeakFragments(profiles)'))throw new Error('server-side profile leak validator missing');
 if(!/https\?:\\\/\\\/|www/.test(safetyBody))throw new Error('generated output URL rejection missing');
-if(!safetyBody.includes('[0-9０-９〇零一二三四五六七八九十百千万億兆]'))throw new Error('generated narrative must reject numeric claims and leave numbers to deterministic facts');
+if(!safetyBody.includes('[0-9０-９〇零一二三四五六七八九十百千万億兆]'))throw new Error('generated recap must reject numeric claims and leave numbers to deterministic facts');
 
 const profileLeakStart=digest.indexOf('function profileLeakFragments('),profileLeakEnd=digest.indexOf('\nfunction generatedFramePassesSafety(',profileLeakStart);
 const profileLeakBody=profileLeakStart>=0&&profileLeakEnd>profileLeakStart?digest.slice(profileLeakStart,profileLeakEnd):'';
@@ -59,24 +64,26 @@ if(!profileLeakBody.includes('profile.birth_facts?.zodiac')||!profileLeakBody.in
 
 const chooseStart=digest.indexOf('async function chooseFrame('),chooseEnd=digest.indexOf('\nfunction logFact(',chooseStart);
 const chooseBody=chooseStart>=0&&chooseEnd>chooseStart?digest.slice(chooseStart,chooseEnd):'';
-if(!chooseBody||/(Routes|Maps|Search grounding)/.test(chooseBody))throw new Error('morning narrative must not add Maps/Routes/Search providers');
+if(!chooseBody||/(Routes|Maps|Search grounding)/.test(chooseBody))throw new Error('morning recap must not add Maps/Routes/Search providers');
 if(!chooseBody.includes('maxOutputTokens:360'))throw new Error('bounded Gemini output token limit missing');
-if(/SELECT |INSERT |UPDATE |DELETE /i.test(chooseBody))throw new Error('Gemini narrative function must not perform arbitrary DB fact queries');
+if(/SELECT |INSERT |UPDATE |DELETE /i.test(chooseBody))throw new Error('Gemini recap function must not perform arbitrary DB fact queries');
 if(!chooseBody.includes('generatedFramePassesSafety(frame,profiles)'))throw new Error('Gemini output must pass server-side validation before persistence/broadcast');
+if(!chooseBody.includes('const frame:Frame={...fallbackBase,personalNote,narrativeVersion:2}'))throw new Error('server must own deterministic opener/closing around the Gemini recap');
+if(/parsed\?\.(?:opener|closing|narrative)/.test(chooseBody))throw new Error('Gemini response must be consumed only as one freeform recap block');
 
 const processStart=digest.indexOf('export async function processLineDailyDigests(');
 const processBody=processStart>=0?digest.slice(processStart):'';
 if(!processBody.includes('buildFactPayload(env,Number(setting.family_id),0,localDate,EMPTY_LOCATION_FACTS)'))throw new Error('shared Gemini facts must be built with FAMILY-only task visibility');
-if((processBody.match(/chooseFrame\(/g)||[]).length!==1)throw new Error('frame/narrative must be generated once and reused across recipients');
+if((processBody.match(/chooseFrame\(/g)||[]).length!==1)throw new Error('frame/recap must be generated once and reused across recipients');
 
 const renderStart=digest.indexOf('function renderDeterministicFacts('),renderEnd=digest.indexOf('\nexport async function processLineDailyDigests(',renderStart);
 const renderBody=renderStart>=0&&renderEnd>renderStart?digest.slice(renderStart,renderEnd):'';
-if(renderBody.indexOf('const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)')>renderBody.indexOf('const narrative='))throw new Error('authoritative sections must be budgeted before optional narrative');
-if(!renderBody.includes('MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength'))throw new Error('narrative must use only capacity left after authoritative sections');
+if(renderBody.indexOf('const authoritativeText=fitMorningDigest(authoritative,requiredSuffix)')>renderBody.indexOf('const narrative='))throw new Error('authoritative sections must be budgeted before optional recap');
+if(!renderBody.includes('MAX_MORNING_DIGEST_CHARS-fullAuthoritativeLength'))throw new Error('recap must use only capacity left after authoritative sections');
 
 const praiseStart=digest.indexOf('function buildEvidencePraise('),praiseEnd=digest.indexOf('\nfunction fitMorningDigest(',praiseStart);
 const praiseBody=praiseStart>=0&&praiseEnd>praiseStart?digest.slice(praiseStart,praiseEnd):'';
 if(!praiseBody||/(geminiFetch|fetch\(|Routes|Maps)/.test(praiseBody))throw new Error('evidence praise must remain deterministic and local');
 
 await import('./line-daily-digest-weather-contract.mjs');
-console.log('line-daily-digest-personal-note-contract: one bounded Gemini call may synthesize a natural morning narrative, while server-side hidden-profile/numeric-claim rejection and authoritative-section budgeting gate broadcast');
+console.log('line-daily-digest-personal-note-contract: one bounded Gemini call may synthesize one freeform evidence-grounded recap; the server owns opener/closing, hidden-profile/numeric-claim rejection, and authoritative-section budgeting');
