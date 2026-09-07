@@ -7,6 +7,25 @@ import { json } from './response';
 
 type Row=Record<string,unknown>;
 
+const DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME_RE=/^(\d{4}-\d{2}-\d{2})[ T]\d{2}:\d{2}(?::\d{2})?$/;
+
+function isRealCalendarDate(value:string):boolean{
+  if(!DATE_RE.test(value))return false;
+  const ms=Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===value;
+}
+
+function hasNonexistentCanonicalDateTime(value:unknown):boolean{
+  const match=DATE_TIME_RE.exec(String(value??'').trim());
+  return Boolean(match&&!isRealCalendarDate(match[1]));
+}
+
+function hasNonexistentCanonicalDate(value:unknown):boolean{
+  const raw=String(value??'').trim();
+  return Boolean(raw&&DATE_RE.test(raw)&&!isRealCalendarDate(raw));
+}
+
 /**
  * Retained HTTP boundary for Family Log mutations that need a stricter
  * request-level tenant check without duplicating the canonical mutation body.
@@ -20,6 +39,11 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
     throw error;
   }
   const action=String(body.action||'');
+  const expectedCsrf=String(ctx.session?.csrfToken||''),csrf=String(body.csrf||'');
+  if(ctx.member&&expectedCsrf&&csrf===expectedCsrf){
+    if(action==='save'&&hasNonexistentCanonicalDateTime(body.occurred_at))return json({ok:false,error:'記録日時が不正です。'},400);
+    if((action==='subject_create'||action==='subject_update')&&hasNonexistentCanonicalDate(body.birth_date))return json({ok:false,error:'生年月日が不正です。'},400);
+  }
   if(action==='delete'){
     const familyId=Number(ctx.member?.family_id||0),logId=Number(body.id||0);
     const deleteResponse=await familyLogApi(request,ctx);
@@ -49,7 +73,6 @@ export async function familyLogMutationBoundary(request:Request,ctx:AppContext):
 
   const member=ctx.member;
   if(!member)return familyLogApi(request,ctx);
-  const expectedCsrf=String(ctx.session?.csrfToken||''),csrf=String(body.csrf||'');
   if(!expectedCsrf||!csrf||csrf!==expectedCsrf)return json({ok:false,error:'CSRF検証に失敗しました。'},403);
   const role=String(member.role||'').toUpperCase();
   if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者のみ操作できます。'},403);
