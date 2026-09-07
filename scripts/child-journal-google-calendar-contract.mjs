@@ -33,8 +33,7 @@ for(const marker of [
 
 if(!schema.includes("'child_journal_calendar_outbox'"))throw new Error('Child Journal calendar schema guard must allow-list the dedicated outbox');
 if(!sync.includes('if(!(await childJournalCalendarReady(env.DB)))return result;'))throw new Error('Child Journal calendar cron must fail closed until migration 0049 is present');
-if(!sync.includes('schemaReady:false'))throw new Error('Child Journal calendar status must report pending schema without querying missing tables');
-if(!journal.includes("!calendarSync.schemaReady?'Google Calendar同期のDB更新待ち'"))throw new Error('Child Journal UI must expose migration-pending calendar state');
+if(!sync.includes('schemaReady:false'))throw new Error('Child Journal calendar status helper must remain safe while migration 0049 is pending');
 if(sync.includes("child_journal_calendar_accounts WHERE family_id=? AND status='ACTIVE'"))throw new Error('Retry must reuse the existing dedicated calendar even while its status is ERROR');
 for(const forbidden of [
   'external_calendar_links',
@@ -47,7 +46,7 @@ for(const forbidden of [
 ])if(sync.includes(forbidden))throw new Error(`Child Journal calendar must stay isolated from schedule/inbound projection: ${forbidden}`);
 
 if(!journal.includes("ctx.executionContext?.waitUntil(processChildJournalCalendarOutbox(ctx.env,5,member.family_id))"))throw new Error('Child Journal create must wake dedicated calendar outbox');
-if(!journal.includes('FamilyToDo → Googleの一方向で同期します'))throw new Error('Child Journal UI must disclose one-way sync semantics');
+if(journal.includes('childJournalCalendarStatus')||journal.includes('📅 Google Calendar')||journal.includes('FamilyToDo → Googleの一方向で同期します'))throw new Error('Child Journal page must not render the presentation-only Google Calendar status/explanatory card');
 if(!index.includes("import { processChildJournalCalendarOutbox } from './child-journal-calendar';"))throw new Error('Worker must import Child Journal calendar processor');
 if(!index.includes('ctx.waitUntil(processChildJournalCalendarOutbox(env));'))throw new Error('Worker cron must process Child Journal calendar outbox');
 if(!manifest.includes("['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs']"))throw new Error('Child Journal calendar regression contract must be active');
