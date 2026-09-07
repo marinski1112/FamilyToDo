@@ -44,6 +44,16 @@ for(const marker of [
   "import { familyLogApi } from './family-log-api';",
   "export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{",
   "request.clone()",
+  "const DATE_RE=/^\\d{4}-\\d{2}-\\d{2}$/;",
+  "function isRealCalendarDate(value:string):boolean{",
+  "function hasNonexistentCanonicalDateTime(value:unknown):boolean{",
+  "function hasNonexistentCanonicalDate(value:unknown):boolean{",
+  "if(ctx.member&&expectedCsrf&&csrf===expectedCsrf)",
+  "action==='save'&&hasNonexistentCanonicalDateTime(body.occurred_at)",
+  "action==='subject_create'||action==='subject_update'",
+  "hasNonexistentCanonicalDate(body.birth_date)",
+  "error:'記録日時が不正です。'",
+  "error:'生年月日が不正です。'",
   "action==='subject_update'",
   "UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND subject_id=?",
   "drainPendingFamilyLogMedia(ctx.env,familyId)",
@@ -58,7 +68,16 @@ for(const marker of [
   "if(response.ok&&wasActive)",
   "logActivity(ctx,'DISABLED','family_log_quick_action',id",
   "return response;",
-]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost pre-mutation quick-action tenant/audit guard: ${marker}`);
+]) if(!boundary.includes(marker)) throw new Error(`Family Log mutation boundary lost behavior marker: ${marker}`);
+
+const realDate=value=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const ms=Date.parse(`${value}T00:00:00Z`);return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===value;};
+for(const valid of ['2024-02-29','2026-01-01','2026-12-31'])if(!realDate(valid))throw new Error(`Family Log valid calendar fixture rejected: ${valid}`);
+for(const invalid of ['2026-02-29','2026-02-31','2026-13-01'])if(realDate(invalid))throw new Error(`Family Log non-existent calendar fixture accepted: ${invalid}`);
+
+const dateGuard=boundary.indexOf("if(ctx.member&&expectedCsrf&&csrf===expectedCsrf)");
+const saveBranch=boundary.indexOf("if(action==='save'){");
+const subjectUpdateBranch=boundary.indexOf("if(action==='subject_update'){");
+if(dateGuard<0||saveBranch<0||subjectUpdateBranch<0||dateGuard>saveBranch||dateGuard>subjectUpdateBranch)throw new Error('Family Log real-date guard must run before canonical save/subject mutation dispatch');
 
 const guardQuery=boundary.indexOf('SELECT id,active,name FROM family_log_quick_actions WHERE id=? AND family_id=? LIMIT 1');
 const mutationCall=guardQuery<0?-1:boundary.indexOf('const response=await familyLogApi(request,ctx);',guardQuery);
