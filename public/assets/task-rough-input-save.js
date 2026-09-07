@@ -130,7 +130,7 @@ try{
         try{const result=await saveRows(rows);saveButton.textContent='保存しました';setTimeout(()=>redirectAfterSave(result),200);}
         catch(error){
           status.textContent=String(error?.message||'保存に失敗しました。内容を確認して再度お試しください。');
-          if(error?.uncertain){saveButton.textContent='一覧で保存結果を確認してください';const link=document.createElement('a');link.href='/app/tasks.php';link.textContent='チェックリストを確認';link.className='btn gray';actions.append(link);}
+          if(error?.uncertain){saveButton.textContent='一覧で保存結果を確認してください';const link=document.createElement('a');const shoppingOnly=rows.every(item=>item.destination==='shopping');link.href=shoppingOnly?'/app/shopping.php':'/app/tasks.php';link.textContent=shoppingOnly?'買い物一覧を確認':'チェックリストを確認';link.className='btn gray';actions.append(link);}
           else{preview.dataset.saving='0';controls.forEach((control,index)=>control.disabled=disabled[index]);saveButton.textContent=old;}
         }
       });
