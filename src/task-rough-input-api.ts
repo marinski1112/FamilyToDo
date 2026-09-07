@@ -38,8 +38,11 @@ const unspacedTrailingMultiplierQuantity=/×\s*(\d+(?:\.\d+)?)\s*$/u;
 const numericComponentBeforeMultiplier=/(?:^|\s)\d+(?:\.\d+)?\s*$/u;
 const absoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
 const relativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
+const continuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)/u;
 const weekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
+const continuationWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)/u;
 const explicitTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
+const temporalIntentHint=(value:string)=>absoluteDateHint.test(value)||relativeDateHint.test(value)||weekdayHint.test(value)||explicitTimeHint.test(value);
 
 function semanticBlocks(text:string):RoughBlock[]{
   const source=text.replace(/\r\n?/g,'\n').split('\n').map(raw=>({raw,trimmed:raw.trim()})).filter(x=>x.trimmed);
@@ -86,10 +89,20 @@ function explicitDueDate(block:RoughBlock):string|null{
       found=match[1];
       continue;
     }
-    if(httpUrlOnly.test(line))continue;
-    if(dueIntentHint.test(line)||absoluteDateHint.test(line)||relativeDateHint.test(line)||weekdayHint.test(line)||explicitTimeHint.test(line))return null;
+    if(dueIntentHint.test(line))return null;
   }
   return found;
+}
+
+function dueDateNeedsModel(block:RoughBlock):boolean{
+  for(let index=0;index<block.lines.length;index++){
+    const line=block.lines[index],match=line.match(explicitDueDateLine);
+    if(index>0&&match?.[1])continue;
+    if(httpUrlOnly.test(line))continue;
+    if(temporalIntentHint(line))return true;
+    if(index>0&&(continuationRelativeDateHint.test(line)||continuationWeekdayHint.test(line)))return true;
+  }
+  return false;
 }
 
 function deterministicTitle(block:RoughBlock,destination:Destination,quantity:string|null):string{
@@ -149,8 +162,9 @@ function deterministicItems(fields:RoughField[]):RoughItem[]{
 
 function needsModel(fields:RoughField[]):boolean{
   return fields.some(field=>field.blocks.some(block=>{
-    const source=block.lines.join('\n');
-    if(dueIntentHint.test(source)&&!explicitDueDate(block))return true;
+    const source=block.lines.join('\n'),dueDate=explicitDueDate(block);
+    if(dueIntentHint.test(source)&&!dueDate)return true;
+    if(dueDate&&dueDateNeedsModel(block))return true;
     if(field.destination==='shopping'&&categoryIntentHint.test(source))return true;
     if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return true;
     if(field.destination==='shopping'&&(quantityIntentHint.test(source)||multiplyQuantityHint.test(block.titleSeed))&&!explicitQuantity(block))return true;
