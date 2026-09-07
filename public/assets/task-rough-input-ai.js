@@ -107,7 +107,7 @@ try{
   };
   const render=(items,source)=>{
     const dests=destinations();
-    preview.innerHTML=`<h3>下書き確認</h3><p class="small">${source==='gemini'?'AIが内容を整理しました。':'入力内容を下書きにしました。'} タイトルと数量・期限を確認してください。変更するときだけ詳細を開けます。</p>${items.map((item,index)=>`<div class="rough-draft-row" data-rough-index="${index}" data-destination="${esc(item.destination)}">${rowBody(item,index,dests)}</div>`).join('')}<p class="small">※ まだ登録されていません。内容を確認してから「この内容で保存」を押してください。</p>`;
+    preview.innerHTML=`<h3>下書き確認</h3><p class="small">${source==='gemini'?'AIが内容を整理しました。':'入力内容を下書きにしました。'} 必要な項目だけ確認し、間違いがあれば修正してください。詳細設定は必要なときだけ開けます。</p>${items.map((item,index)=>`<div class="rough-draft-row" data-rough-index="${index}" data-destination="${esc(item.destination)}">${rowBody(item,index,dests)}</div>`).join('')}<p class="small">※ まだ登録されていません。内容を確認してから「この内容で保存」を押してください。</p>`;
     [...preview.querySelectorAll('.rough-draft-row')].forEach((row,index)=>bindRow(row,items[index],index,dests));preview.hidden=false;preview.scrollIntoView({block:'nearest'});
   };
   button.onclick=async()=>{
