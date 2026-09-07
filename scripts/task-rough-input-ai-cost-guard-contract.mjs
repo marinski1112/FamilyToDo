@@ -51,6 +51,7 @@ assert.ok(!circuitMigration.includes('budget_date'),'429 circuit must not be key
 for(const marker of [
   'const explicitDueDateLine=/^(?:期限|締切)\\s*[:：]\\s*(\\d{4}-\\d{2}-\\d{2})\\s*$/u;',
   'function explicitDueDate(block:RoughBlock):string|null{',
+  'if(absoluteDateHint.test(block.titleSeed)||relativeDateHint.test(block.titleSeed)||weekdayHint.test(block.titleSeed)||explicitTimeHint.test(block.titleSeed))return null;',
   "const quantity=field.destination==='shopping'?explicitQuantity(block):null,dueDate=explicitDueDate(block);",
   'if(dueIntentHint.test(source)&&!explicitDueDate(block))return true;',
 ])assert.ok(api.includes(marker),`rough-input deterministic due-date marker missing: ${marker}`);
