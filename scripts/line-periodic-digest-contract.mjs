@@ -69,10 +69,34 @@ for(const marker of [
   'PRIMARY KEY(family_id,report_type,period_key)',
 ])if(!migration.includes(marker))throw new Error(`periodic migration marker missing: ${marker}`);
 
-const sharedFacts=source.indexOf('const facts=await loadPeriodFacts('),narrative=source.indexOf('narrative=await chooseNarrative(',sharedFacts),recipientGrouping=source.indexOf('const destinations=new Map<string,Row[]>()',sharedFacts);
-if(sharedFacts<0||narrative<sharedFacts||recipientGrouping<narrative)throw new Error('periodic facts/narrative must be generated once per family/report before recipient destination fan-out');
+const pending=source.indexOf('const pending=receipts.filter'),sharedFacts=source.indexOf('const facts=await loadPeriodFacts(');
+if(sharedFacts<pending||!source.includes('if(message===undefined)'))throw new Error('facts and shared narrative must be loaded lazily after pending receipts');
+if(!source.includes("if(!String(env.LINE_ACCESS_TOKEN||'').trim())return"))throw new Error('missing token must not consume receipts');
 
-const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart),renderBody=renderStart>=0&&renderEnd>renderStart?source.slice(renderStart,renderEnd):'';
-for(const marker of ["let base=[...required.slice(0,2),...extras,...required.slice(2)].join('\\n')","if(base.length>MAX_LINE_CHARS){base=required.join('\\n').slice(0,MAX_LINE_CHARS);}",'const available=MAX_LINE_CHARS-base.length-1','slice(0,MAX_LINE_CHARS)'])if(!renderBody.includes(marker))throw new Error(`periodic bounded rendering marker missing: ${marker}`);
+// Execute the real renderer: overflowing optional details must never drop prose/totals/fortune.
+const { createRequire }=await import('node:module');
+const require=createRequire(import.meta.url);
+let transpile;
+try{const ts=require('typescript');transpile=code=>ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;}
+catch{const {stripTypeScriptTypes}=await import('node:module');transpile=code=>stripTypeScriptTypes(code);}
+const vm=await import('node:vm');
+const renderStart=source.indexOf('function renderReport('),renderEnd=source.indexOf('\nasync function retryKey(',renderStart);
+const fortuneSource=fs.readFileSync('src/daily-fortune.ts','utf8').replace(/export /g,'');
+const code=transpile(fortuneSource+'\nconst MAX_LINE_CHARS=1000,MAX_NARRATIVE_CHARS=360; const clean=(v,max)=>String(v??"").replace(/[\\r\\n]+/g," ").trim().slice(0,max); const monthLabel=d=>Number(d.slice(5,7))+"月";\n'+source.slice(renderStart,renderEnd));
+const context=vm.createContext({});vm.runInContext(code,context);
+for(const reportType of ['WEEKLY','MONTHLY'])for(const size of [0,2,12]){
+ const facts={period:{reportType,periodKey:reportType+':2026-09',endDate:'2026-09-30',label:'対象期間'},logLines:Array(size).fill('記録'.repeat(100)),samples:Array(size).fill('予定'.repeat(30)),eventCount:3,taskCompleted:5,taskIncomplete:7,itemCompleted:2,itemIncomplete:4};
+ const prose='楽しい家族の振り返り。'.repeat(30);
+ const message=context.renderReport(facts,prose,42);
+ if(message.length>1000||!message.includes(prose.slice(0,360))||!message.includes('現在完了5・未完了7')||!message.includes('現在完了2・未完了4')||!message.includes('家族のお楽しみ占い')||!message.includes('カラー:'))throw new Error('report content lost under length pressure');
+ if(message!==context.renderReport(facts,prose,42))throw new Error('retry must retain stable family fortune');
+}
 
-console.log('line-periodic-digest-contract: weekly/month-end boundaries, recurrence-aware totals, pending/completed samples, destination dedupe, recovery, idempotency, FAMILY-only evidence, bounded rendering, bounded shared AI and no external fan-out ok');
+const daily=fs.readFileSync('src/line-daily-digest.ts','utf8');
+const dailyRender=daily.slice(daily.indexOf('function fitMorningDigest('),daily.indexOf('\nexport async function processLineDailyDigests('));
+vm.runInContext(transpile('const MAX_MORNING_DIGEST_CHARS=1000,MAX_MORNING_NARRATIVE_CHARS=320; const buildEvidencePraise=()=>[],buildDeterministicAdvice=()=>[];\n'+dailyRender),context);
+const payload={localDate:'2026-09-07',previousDate:'2026-09-06',familyLog:{previous:Array(12).fill('記録'.repeat(100)),today:[]},today:{events:[],tasks:[],bringItems:[],completed:3,incomplete:4,overdue:2},location:{previous:[],today:[]},fortune:context.dailyFortune(42,0,'2026-09-07')};
+const dailyMessage=context.renderDeterministicFacts(payload,{opener:'おはよう',closing:'またね',personalNote:'家族の自由な文章。'.repeat(30)},null);
+if(dailyMessage.length>1000||!dailyMessage.includes('家族の自由な文章。'.repeat(30))||!dailyMessage.includes('完了3・未完了4／期限切れ2件')||!dailyMessage.includes('お楽しみ占い')||!dailyMessage.endsWith('またね'))throw new Error('busy morning must retain recap, totals and fortune');
+if(!daily.includes("if(!String(env.LINE_ACCESS_TOKEN||'').trim())return"))throw new Error('daily missing token must not consume receipts');
+console.log('line-periodic-digest-contract: scheduling, privacy, dedupe, lazy shared generation, missing-token guards and daily/periodic overflow behavior ok');
