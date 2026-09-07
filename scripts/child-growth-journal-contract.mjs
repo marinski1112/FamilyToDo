@@ -38,6 +38,8 @@ if(!journal.includes('<label>メモ</label><textarea name="note" maxlength="2000
 if(journal.includes('<select name="kind" required>')||journal.includes('<input type="number" name="value"'))throw new Error('Primary Child Journal manual form must not expose legacy kind/numeric controls');
 if(!journal.includes("else if(form.has('title')){if(!title)return new Response('タイトルを入力してください。',{status:400});valueText=title;}"))throw new Error('New manual title must be validated and persisted as family_logs.value_text');
 if(!journal.includes("else if(kind==='HEIGHT')")||!journal.includes("else if(kind==='WEIGHT')")||!journal.includes('if(MILESTONES[kind])'))throw new Error('Legacy structured Child Journal API compatibility must remain available');
+if(!journal.includes('aria-label="前の月" title="前の月" href="/app/child_journal.php?month=${shiftMonth(month,-1)}${subjectId?`&subject_id=${subjectId}`:\'\'}">‹</a>'))throw new Error('Child Journal previous-month control must remain query-preserving and have an accessible name');
+if(!journal.includes('aria-label="次の月" title="次の月" href="/app/child_journal.php?month=${shiftMonth(month,1)}${subjectId?`&subject_id=${subjectId}`:\'\'}">›</a>'))throw new Error('Child Journal next-month control must remain query-preserving and have an accessible name');
 if(!app.includes('export async function logActivity('))throw new Error('Child Journal must reuse the canonical activity log boundary');
 if(!app.includes('href="/app/child_journal.php"'))throw new Error('Family Log must expose the Child Journal entry point');
 if(!pageRoutes.includes("from './child-journal'")||!apiRoutes.includes("from './child-journal'"))throw new Error('Child Journal page/API dispatchers must import the Child Journal module');
