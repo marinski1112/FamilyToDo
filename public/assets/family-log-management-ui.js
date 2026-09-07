@@ -1,5 +1,6 @@
 (()=>{
 'use strict';
+const compactScript=document.createElement('script');compactScript.src='/assets/family-log-compact-ui.js?v=compact1';compactScript.defer=true;document.head.appendChild(compactScript);
 try{
   if(location.pathname!=='/app/settings_family_log.php')return;
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
