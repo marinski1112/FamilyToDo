@@ -50,18 +50,20 @@ assert.ok(!circuitMigration.includes('budget_date'),'429 circuit must not be key
 
 for(const marker of [
   'const explicitDueDateLine=/^(?:期限|締切)\\s*[:：]\\s*(\\d{4}-\\d{2}-\\d{2})\\s*$/u;',
-  'const temporalIntentHint=(value:string)=>absoluteDateHint.test(value)||relativeDateHint.test(value)||weekdayHint.test(value)||explicitTimeHint.test(value);',
+  'const continuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)/u;',
   'function explicitDueDate(block:RoughBlock):string|null{',
-  'if(index>0&&match?.[1]){',
-  'if(dueIntentHint.test(line)||temporalIntentHint(line))return null;',
-  "const quantity=field.destination==='shopping'?explicitQuantity(block):null,dueDate=explicitDueDate(block);",
-  'if(dueIntentHint.test(source)&&!explicitDueDate(block))return true;',
+  'function dueDateNeedsModel(block:RoughBlock,dueDate:string):boolean{',
+  'if(temporalIntentHint(line)||(index>0&&continuationRelativeDateHint.test(line)))return true;',
+  "const source=block.lines.join('\\n'),dueDate=explicitDueDate(block);",
+  'if(dueIntentHint.test(source)&&!dueDate)return true;',
+  'if(dueDate&&dueDateNeedsModel(block,dueDate))return true;',
 ])assert.ok(api.includes(marker),`rough-input deterministic due-date marker missing: ${marker}`);
 
 const fixtureDueIntent=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/u;
 const fixtureDueLine=/^(?:期限|締切)\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u;
 const fixtureAbsoluteDateHint=/(?:^|[^\d])(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:$|[^\d])/u;
 const fixtureRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)(?=$|[\s、,。.!！?？]|(?:の|まで|中|午前|午後|朝|昼|夕方|夜|\d))/u;
+const fixtureContinuationRelativeDateHint=/(?:今日|本日|明日|あした|明後日|あさって|今週|来週|再来週|今月|来月|再来月|週末)/u;
 const fixtureWeekdayHint=/(?:月|火|水|木|金|土|日)(?:曜|曜日)(?=$|[\s、,。.!！?？]|(?:の|まで|午前|午後|朝|昼|夕方|夜|\d))/u;
 const fixtureTimeHint=/(?:^|[^\d])(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:$|[^\d])|(?:午前|午後)?\s*(?:[01]?\d|2[0-3])\s*時(?:\s*[0-5]?\d\s*分)?/u;
 const fixtureTemporalIntent=value=>fixtureAbsoluteDateHint.test(value)||fixtureRelativeDateHint.test(value)||fixtureWeekdayHint.test(value)||fixtureTimeHint.test(value);
@@ -70,7 +72,7 @@ const fixtureValidDate=value=>{
   const [y,m,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,m-1,d));
   return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d;
 };
-const parseExplicitDueFixture=lines=>{
+const extractExplicitDueFixture=lines=>{
   let found=null;
   for(let index=0;index<lines.length;index++){
     const line=lines[index],match=line.match(fixtureDueLine);
@@ -80,18 +82,31 @@ const parseExplicitDueFixture=lines=>{
       found=match[1];
       continue;
     }
-    if(fixtureDueIntent.test(line)||fixtureTemporalIntent(line))return null;
+    if(fixtureDueIntent.test(line))return null;
   }
   return found;
 };
-assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10']),'2026-09-10','exact labeled ISO due date must be deterministic');
-assert.equal(parseExplicitDueFixture(['薬','締切：2026-09-11']),'2026-09-11','full-width colon must remain deterministic');
-assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-02-30']),null,'invalid calendar date must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10 18:00']),null,'due time on the due line must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['会議','期限: 2026-09-10','18:00']),null,'separate continuation time must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 明日 確認']),null,'other continuation temporal intent must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['牛乳 期限: 2026-09-10']),null,'inline/title due syntax must remain model-eligible');
-assert.equal(parseExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2026-09-11']),null,'conflicting due metadata must remain model-eligible');
+const dueNeedsModelFixture=lines=>{
+  const due=extractExplicitDueFixture(lines);
+  if(!due)return fixtureDueIntent.test(lines.join('\n'));
+  for(let index=0;index<lines.length;index++){
+    const line=lines[index],match=line.match(fixtureDueLine);
+    if(index>0&&match?.[1])continue;
+    if(fixtureTemporalIntent(line)||(index>0&&fixtureContinuationRelativeDateHint.test(line)))return true;
+  }
+  return false;
+};
+assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10']),'2026-09-10','exact labeled ISO due date must be extractable');
+assert.equal(dueNeedsModelFixture(['牛乳','期限: 2026-09-10']),false,'exact due-only block must stay deterministic');
+assert.equal(extractExplicitDueFixture(['薬','締切：2026-09-11']),'2026-09-11','full-width colon must remain extractable');
+assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-02-30']),null,'invalid calendar date must not be extracted');
+assert.equal(dueNeedsModelFixture(['牛乳','期限: 2026-09-10 18:00']),true,'due time on the due line must remain model-eligible');
+assert.equal(extractExplicitDueFixture(['会議','期限: 2026-09-10','18:00']),'2026-09-10','safe exact due date must survive fallback with a separate time');
+assert.equal(dueNeedsModelFixture(['会議','期限: 2026-09-10','18:00']),true,'separate continuation time must remain model-eligible');
+assert.equal(extractExplicitDueFixture(['会議','期限: 2026-09-10','メモ: 明日確認']),'2026-09-10','safe exact due date must survive fallback with relative-date context');
+assert.equal(dueNeedsModelFixture(['会議','期限: 2026-09-10','メモ: 明日確認']),true,'Japanese continuation relative date must remain model-eligible');
+assert.equal(extractExplicitDueFixture(['牛乳 期限: 2026-09-10']),null,'inline/title due syntax must not be extracted');
+assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','締切: 2026-09-11']),null,'conflicting due metadata must not be extracted');
 
 const deterministicGate=api.indexOf("if(!needsModel(parsed.fields))return fallback();");
 const modelLoop=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
@@ -106,4 +121,4 @@ assert.ok(api.includes('if(response.status===429){try{await blockTaskRoughInputA
 assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling must stop fallback rather than create a retry storm');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
-console.log('rough-input AI cost guard contract: deterministic-first, explicit ISO due dates, continuation temporal guards, durable budgets, date-independent 429 circuit, and bounded model calls ok');
+console.log('rough-input AI cost guard contract: deterministic-first, safe ISO due extraction, continuation temporal eligibility, durable budgets, date-independent 429 circuit, and bounded model calls ok');
