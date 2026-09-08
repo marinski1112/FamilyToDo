@@ -29,6 +29,7 @@ const safeHttpStatus=(value:unknown):number|null=>{
   return Number.isInteger(status)&&status>=100&&status<=599?status:null;
 };
 const safeItemCount=(value:unknown):number|null=>{
+  if(value===null||value===undefined)return null;
   const count=Number(value);
   return Number.isInteger(count)&&count>=0&&count<=100?count:null;
 };
