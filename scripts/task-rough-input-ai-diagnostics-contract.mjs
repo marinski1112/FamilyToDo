@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const api=fs.readFileSync('src/task-rough-input-api.ts','utf8');
 const recorder=fs.readFileSync('src/ai-generation-diagnostics.ts','utf8');
 const migration=fs.readFileSync('migrations/0067_ai_generation_diagnostics.sql','utf8');
+const settings=fs.readFileSync('src/settings-diagnostics.ts','utf8');
 
 for(const marker of [
   'CREATE TABLE IF NOT EXISTS ai_generation_diagnostics',
@@ -64,4 +65,22 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
 
-console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention, sanitized attempts, nullable item counts, and zero raw payload persistence ok');
+for(const marker of [
+  'AI実行履歴',
+  '/api/settings/diagnostics-detail?issue=ai_generation',
+  "if(issue==='ai_generation')",
+  'SELECT feature,final_status,model,http_status,attempt_count,item_count,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20',
+  '.bind(m.family_id).all<Row>()',
+  'final_status:String(x.final_status||\'\')',
+  'item_count:x.item_count==null?null:Number(x.item_count)',
+  'limited:20',
+])assert.ok(settings.includes(marker),`AI diagnostics reader marker missing: ${marker}`);
+const aiReader=settings.match(/if\(issue==='ai_generation'\)\{([\s\S]*?)\n  \}/)?.[1]||'';
+assert.ok(aiReader,'AI diagnostics reader must remain an explicit bounded detail path');
+for(const forbidden of ['attempts_json','raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content']){
+  assert.ok(!aiReader.toLowerCase().includes(forbidden.toLowerCase()),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
+}
+assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
+assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
+
+console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
