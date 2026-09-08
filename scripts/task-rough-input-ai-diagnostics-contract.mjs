@@ -25,9 +25,13 @@ for(const marker of [
   'AI_DIAGNOSTIC_ROWS_PER_FAMILY_FEATURE=100',
   'AI_DIAGNOSTIC_MAX_ATTEMPTS=4',
   "AiDiagnosticAttemptStatus='AI_OK'|'INVALID_OUTPUT'|'RATE_LIMIT'|'HTTP_ERROR'",
+  "AiDiagnosticReasonCode='HTTP_STATUS'|'RESPONSE_BODY_JSON_INVALID'|'MODEL_OUTPUT_JSON_INVALID'|'UNEXPECTED_TOP_LEVEL_KEYS'|'ITEM_VALIDATION_FAILED'|'SUMMARY_CARDINALITY'|'EXCEPTION'",
+  "AiDiagnosticFailureStage='PROVIDER_FETCH'|'PROVIDER_RESPONSE'|'RESPONSE_PARSE'|'TOP_LEVEL_VALIDATION'|'ITEM_VALIDATION'|'SUMMARY_VALIDATION'",
   "AiDiagnosticFinalStatus='AI_NOT_NEEDED'|'AI_OK'|'FALLBACK_DETERMINISTIC'|'BUDGET_OR_CIRCUIT'|'NOT_CONFIGURED'|'DISABLED'|'STORAGE'",
   "model:safeModel(attempt.model)??'unknown'",
   'httpStatus:safeHttpStatus(attempt.httpStatus)',
+  'reasonCode:attempt.reasonCode&&REASON_CODES.has(attempt.reasonCode)?attempt.reasonCode:null',
+  'failureStage:attempt.failureStage&&FAILURE_STAGES.has(attempt.failureStage)?attempt.failureStage:null',
   'if(value===null||value===undefined)return null;',
   'JSON.stringify(attempts)',
   'ORDER BY id DESC LIMIT ?',
@@ -39,7 +43,7 @@ assert.ok(!recorder.includes('JSON.stringify(event)'), 'diagnostics must seriali
 assert.ok(!/rawInput|originalText|prompt|responseBody|errorBody|requestBody|privateUrl|authorization|secret/i.test(recorder),'diagnostic recorder must not accept raw/private payload fields');
 
 for(const marker of [
-  "import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';",
+  "import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFailureStage, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';",
   "feature:'ROUGH_INPUT'",
   "reason==='SIMPLE_INPUT'?'AI_NOT_NEEDED'",
   "reason==='STORAGE'?'STORAGE'",
@@ -49,8 +53,13 @@ for(const marker of [
   "return fallback('SIMPLE_INPUT');",
   "catch{return fallback('STORAGE');}",
   "if(!reserved)return fallback('BUDGET');",
-  "status:response.status===429?'RATE_LIMIT':'HTTP_ERROR'",
-  "status:'INVALID_OUTPUT'",
+  "reasonCode:'HTTP_STATUS',failureStage:'PROVIDER_RESPONSE'",
+  "reasonCode:'RESPONSE_BODY_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
+  "reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
+  "reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'",
+  "reasonCode:'ITEM_VALIDATION_FAILED',failureStage:'ITEM_VALIDATION'",
+  "reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'",
+  "reasonCode:'EXCEPTION',failureStage",
   "status:'AI_OK'",
   "await recordDiagnostic('AI_OK',model,items.length);",
   'return fallback();',
@@ -64,6 +73,7 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 }
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
+assert.ok(!/reasonCode\s*:\s*(?:error|String\(error|String\(.*catch)/.test(api),'diagnostic reason codes must remain static coarse classifications');
 
 const readerColumns=['feature','final_status','ai_called','attempt_count','accepted_model','item_count','attempts_json','created_at'];
 for(const column of readerColumns)assert.ok(columnNames.includes(column),`AI diagnostics reader column must exist in migration: ${column}`);
@@ -75,10 +85,16 @@ for(const marker of [
   '.bind(m.family_id).all<Row>()',
   "JSON.parse(String(x.attempts_json||'[]'))",
   "new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR'])",
+  "new Set(['HTTP_STATUS','RESPONSE_BODY_JSON_INVALID','MODEL_OUTPUT_JSON_INVALID','UNEXPECTED_TOP_LEVEL_KEYS','ITEM_VALIDATION_FAILED','SUMMARY_CARDINALITY','EXCEPTION'])",
+  "new Set(['PROVIDER_FETCH','PROVIDER_RESPONSE','RESPONSE_PARSE','TOP_LEVEL_VALIDATION','ITEM_VALIDATION','SUMMARY_VALIDATION'])",
   'parsed.slice(0,4)',
   'ordinal:index+1',
   'http_status:httpStatus',
+  'reason_code:reasonCode',
+  'failure_stage:failureStage',
   'last_attempt_status:lastAttempt?.status??null',
+  'last_reason_code:lastAttempt?.reason_code??null',
+  'last_failure_stage:lastAttempt?.failure_stage??null',
   'attempts,item_count:',
   'final_status:String(x.final_status||\'\')',
   'ai_called:Number(x.ai_called||0)===1',
@@ -89,7 +105,7 @@ for(const marker of [
 ])assert.ok(settings.includes(marker),`AI diagnostics reader marker missing: ${marker}`);
 const aiReader=settings.match(/if\(issue==='ai_generation'\)\{([\s\S]*?)\n  \}/)?.[1]||'';
 assert.ok(aiReader,'AI diagnostics reader must remain an explicit bounded detail path');
-for(const forbidden of ['raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content']){
+for(const forbidden of ['raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content','exception_message','error_message']){
   assert.ok(!aiReader.toLowerCase().includes(forbidden.toLowerCase()),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
 }
 assert.ok(!aiReader.includes('attempts_json:'),'AI diagnostics reader must never expose attempts_json verbatim');
@@ -97,4 +113,4 @@ assert.ok(!aiReader.includes('attempts_json,created_at')||aiReader.includes('JSO
 assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
 assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
 
-console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, schema-aligned per-attempt outcome projection, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: coarse statuses/reasons/stages, bounded retention/reader, schema-aligned per-attempt projection, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
