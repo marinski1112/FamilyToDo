@@ -32,6 +32,36 @@ const constrainEditors=()=>{
   const choreHelp=chore?.nextElementSibling;
   if(choreHelp instanceof HTMLElement&&choreHelp.matches('p.small'))choreHelp.textContent='6文字以内で設定してください。既存の長い名前は自動で切断しません。';
 };
+const formatVisibleDate=value=>{
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));
+  if(!match)return String(value||'日付');
+  return `${Number(match[2])}/${Number(match[3])}`;
+};
+const enhanceDatePicker=dateInput=>{
+  if(!(dateInput instanceof HTMLInputElement))return;
+  dateInput.classList.add('family-log-compact-date');
+  dateInput.setAttribute('aria-label','表示する日付');
+  const dateLabel=dateInput.closest('label');
+  if(!(dateLabel instanceof HTMLLabelElement))return;
+  dateLabel.classList.add('family-log-date-picker-label');
+  let visibleDate=dateLabel.querySelector('.family-log-visible-date');
+  if(!(visibleDate instanceof HTMLElement)){
+    visibleDate=document.createElement('span');
+    visibleDate.className='family-log-visible-date';
+    visibleDate.setAttribute('aria-hidden','true');
+    dateLabel.insertBefore(visibleDate,dateInput);
+  }
+  const syncVisibleDate=()=>{
+    visibleDate.textContent=formatVisibleDate(dateInput.value);
+    dateInput.title=dateInput.value?`日付を選択（${dateInput.value}）`:'日付を選択';
+  };
+  syncVisibleDate();
+  if(!dateInput.dataset.familyLogVisibleDateBound){
+    dateInput.dataset.familyLogVisibleDateBound='true';
+    dateInput.addEventListener('input',syncVisibleDate);
+    dateInput.addEventListener('change',syncVisibleDate);
+  }
+};
 const buildToolbar=()=>{
   if(location.pathname!==DAILY_PATH)return;
   const page=document.querySelector('.family-log-page');
@@ -47,7 +77,7 @@ const buildToolbar=()=>{
   select.addEventListener('change',()=>{if(select.value)location.href=select.value;});
   toolbar.appendChild(select);
   const dateInput=date.querySelector('input[type="date"]');
-  if(dateInput instanceof HTMLInputElement){dateInput.classList.add('family-log-compact-date');dateInput.setAttribute('aria-label','表示する日付');dateInput.title='日付を選択';}
+  enhanceDatePicker(dateInput);
   const dateLinks=[...date.querySelectorAll('a[href]')];
   const previous=dateLinks[0],next=dateLinks.at(-1);
   if(previous){previous.textContent='‹';previous.setAttribute('aria-label','前の日');previous.title='前の日';}
