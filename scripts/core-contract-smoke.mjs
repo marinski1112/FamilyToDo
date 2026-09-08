@@ -129,12 +129,33 @@ for(const marker of [
 assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
 
 for(const marker of [
-  'window.roughInputSave',
-  "fetch('/api/task'",
-  "fetch('/api/item'",
-  "fetch('/api/shopping'",
-])assert.ok(roughInputSave.includes(marker),`rough-input save marker missing: ${marker}`);
+  "id=\"roughConfirmSave\"",
+  'この内容で保存',
+  "if(preview.dataset.saving==='1')return;",
+  "postJson('/api/task'",
+  "postJson('/api/shopping'",
+  "postJson('/api/item'",
+  "method:'DELETE'",
+  "headers:{'x-csrf':csrf()}",
+  'parent_task_id:parentTaskId',
+  "if(roots.length>1&&related.length)",
+  'rollbackTasks(createdTaskIds)',
+  "action:'add'",
+  "action:'add_batch'",
+  "products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]",
+  "assignees});",
+  "item.dueDate!==roots[0].startDate",
+  "task_id:taskId||0",
+  "const structuredPreview=preview.querySelector('.rough-advanced,.rough-row-details')",
+  'if(preview.hidden||!rows.length||!structuredPreview)return;',
+  "response.status>=500||!data||response.ok",
+  "!u.username&&!u.password",
+])assert.ok(roughInputSave.includes(marker),`rough-input explicit save guard missing: ${marker}`);
+assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(roughInputSave),'save companion must never call Gemini directly');
+const saveClick=roughInputSave.indexOf("saveButton.addEventListener('click',async()=>{");
+assert.ok(saveClick>=0&&saveClick<roughInputSave.indexOf('try{const result=await saveRows(rows)'),'save orchestration must remain behind the explicit save button');
+assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'rough-input companions must be scoped to the server-rendered task-new marker');
+assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
+assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-for(const marker of ['AIざっくり入力','task-rough-input-ai.js','task-rough-input-save.js'])assert.ok(appShell.includes(marker),`rough-input shell marker missing: ${marker}`);
-
-console.log('core contract smoke: canonical tasks/recurrence/private scope and guarded rough-input AI confirmation boundary ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, semantic rough-input blocks, deterministic multiplier quantity, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
