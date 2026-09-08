@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-const load=(src,onload)=>{const s=document.createElement('script');s.src=src;s.defer=true;if(onload)s.addEventListener('load',onload,{once:true});s.addEventListener('error',()=>console.error('[Family TODO] asset load failed',src),{once:true});document.head.appendChild(s);};
+const load=(src,onload,onerror)=>{const s=document.createElement('script');s.src=src;s.defer=true;if(onload)s.addEventListener('load',onload,{once:true});s.addEventListener('error',()=>{console.error('[Family TODO] asset load failed',src);if(onerror)onerror();},{once:true});document.head.appendChild(s);};
 // BABY_FOOD already uses the canonical MEAL/BABY_FOOD Family Log model, but the
 // historical default quick action records an empty row immediately. Keep that
 // stored action compatible while routing it through the existing authenticated
@@ -125,12 +125,16 @@ document.addEventListener('change',event=>{
 });
 
 // Load the photo enhancer first so its capture-phase save hook is registered before
-// the canonical Family Log core attaches its ordinary submit handler. When no photo
-// is pending, the core remains the sole owner of the save flow.
-load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',()=>{
+// the canonical Family Log core attaches its ordinary submit handler. The photo UI is
+// optional, so an asset-load failure must not disable the canonical Family Log UI.
+let coreStarted=false;
+const loadCore=()=>{
+  if(coreStarted)return;
+  coreStarted=true;
   load('/assets/family-log-core.js?v=wave128-fix18',()=>{
     syncBabyFoodFields();
     load('/assets/family-log-management-ui.js?v=wave128-fix18');
   });
-});
+};
+load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',loadCore,loadCore);
 })();
