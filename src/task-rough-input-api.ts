@@ -240,7 +240,7 @@ function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCa
     out.push({destination:field.destination,originalText,title,quantity,category,dueDate,dueTime,description});
   }
   const required=new Map<string,number>();
-  fields.forEach((field,sourceIndex)=>field.blocks.forEach(block=>{const key=`${sourceIndex}\u0000${block.originalText}`;required.set(key,(required.get(key)||0)+1;}));
+  fields.forEach((field,sourceIndex)=>field.blocks.forEach(block=>{const key=`${sourceIndex}\u0000${block.originalText}`;required.set(key,(required.get(key)||0)+1);}));
   for(const [key,count] of required)if((observed.get(key)||0)<count)return null;
   return out;
 }
