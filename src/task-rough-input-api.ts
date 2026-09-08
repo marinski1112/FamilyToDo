@@ -14,6 +14,8 @@ type Destination=typeof DESTINATIONS[number];
 type RoughBlock={originalText:string;titleSeed:string;lines:string[]};
 type RoughField={destination:Destination;text:string;blocks:RoughBlock[];sharedDueDirective:string|null};
 type RoughItem={destination:Destination;originalText:string;title:string;quantity:string|null;category:string|null;dueDate:string|null;dueTime:string|null;description:string|null};
+type RoughItemValidationReason='ITEM_CONTAINER_INVALID'|'ITEM_SCHEMA_INVALID'|'ITEM_VALUE_TYPE_INVALID'|'SOURCE_INDEX_INVALID'|'SOURCE_TEXT_MISMATCH'|'TITLE_INVALID'|'FIELD_VALUE_INVALID'|'QUANTITY_DESTINATION_INVALID'|'TIME_PROVENANCE_INVALID'|'DATE_PROVENANCE_INVALID'|'SHARED_DEADLINE_MISSING'|'SHARED_DEADLINE_CONFLICT'|'QUANTITY_PROVENANCE_INVALID'|'DESCRIPTION_DESTINATION_INVALID'|'DUPLICATE_ITEM_OVERFLOW'|'SOURCE_BLOCK_MISSING';
+type RoughItemValidationResult={items:RoughItem[];reasonCode:null}|{items:null;reasonCode:RoughItemValidationReason};
 export type RoughTaskCandidate={id:number;title:string;date:string|null};
 type RoughContext={referenceDate?:string;taskCandidates?:RoughTaskCandidate[]};
 
@@ -201,48 +203,50 @@ function categoryMap(rows:ShoppingCategoryCatalogRow[]):Map<string,string>{
   return new Map(resolveShoppingCategoryOptions(rows).map(name=>[shoppingCategoryKey(name),name]));
 }
 
-function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCategories:Map<string,string>):RoughItem[]|null{
-  if(!value||typeof value!=='object'||Array.isArray(value))return null;
-  const keys=Object.keys(value as Record<string,unknown>);if(keys.length!==1||keys[0]!=='items')return null;
-  const items=(value as any).items;if(!Array.isArray(items)||items.length<1||items.length>MAX_ITEMS)return null;
+function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCategories:Map<string,string>):RoughItemValidationResult{
+  const invalid=(reasonCode:RoughItemValidationReason):RoughItemValidationResult=>({items:null,reasonCode});
+  if(!value||typeof value!=='object'||Array.isArray(value))return invalid('ITEM_CONTAINER_INVALID');
+  const keys=Object.keys(value as Record<string,unknown>);if(keys.length!==1||keys[0]!=='items')return invalid('ITEM_SCHEMA_INVALID');
+  const items=(value as any).items;if(!Array.isArray(items)||items.length<1||items.length>MAX_ITEMS)return invalid('ITEM_SCHEMA_INVALID');
   const out:RoughItem[]=[],observed=new Map<string,number>(),duplicates=new Map<string,number>(),sharedDueDates=new Map<number,string>();
   for(const raw of items){
-    if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return invalid('ITEM_CONTAINER_INVALID');
     const expected=['sourceIndex','originalText','title','quantity','category','dueDate','dueTime','description'];
-    const actual=Object.keys(raw);if(actual.length!==expected.length||!actual.every(k=>expected.includes(k)))return null;
-    if(typeof raw.sourceIndex!=='number'||typeof raw.originalText!=='string'||typeof raw.title!=='string'||['quantity','category','dueDate','dueTime','description'].some(key=>raw[key]!==null&&typeof raw[key]!=='string'))return null;
-    const sourceIndex=Number(raw.sourceIndex);if(!Number.isInteger(sourceIndex)||sourceIndex<0||sourceIndex>=fields.length)return null;
+    const actual=Object.keys(raw);if(actual.length!==expected.length||!actual.every(k=>expected.includes(k)))return invalid('ITEM_SCHEMA_INVALID');
+    if(typeof raw.sourceIndex!=='number'||typeof raw.originalText!=='string'||typeof raw.title!=='string'||['quantity','category','dueDate','dueTime','description'].some(key=>raw[key]!==null&&typeof raw[key]!=='string'))return invalid('ITEM_VALUE_TYPE_INVALID');
+    const sourceIndex=Number(raw.sourceIndex);if(!Number.isInteger(sourceIndex)||sourceIndex<0||sourceIndex>=fields.length)return invalid('SOURCE_INDEX_INVALID');
     const field=fields[sourceIndex],originalText=String(raw.originalText||'').trim(),title=String(raw.title||'').trim();
-    if(!field.blocks.some(block=>block.originalText===originalText)||!title||title.length>200)return null;
+    if(!field.blocks.some(block=>block.originalText===originalText))return invalid('SOURCE_TEXT_MISMATCH');
+    if(!title||title.length>200)return invalid('TITLE_INVALID');
     const quantity=raw.quantity===null?null:clean(raw.quantity,40),categoryRaw=raw.category===null?null:clean(raw.category,SHOPPING_CATEGORY_MAX_LENGTH),dueDate=raw.dueDate===null?null:String(raw.dueDate),dueTime=raw.dueTime===null?null:String(raw.dueTime),description=raw.description===null?null:String(raw.description).trim().slice(0,1000);
-    if((quantity!==null&&!quantity)||(categoryRaw!==null&&!categoryRaw)||(description!==null&&!description)||!validDate(dueDate)||!validTime(dueTime)||(dueTime&&!dueDate))return null;
-    if(quantity!==null&&field.destination!=='shopping')return null;
+    if((quantity!==null&&!quantity)||(categoryRaw!==null&&!categoryRaw)||(description!==null&&!description)||!validDate(dueDate)||!validTime(dueTime)||(dueTime&&!dueDate))return invalid('FIELD_VALUE_INVALID');
+    if(quantity!==null&&field.destination!=='shopping')return invalid('QUANTITY_DESTINATION_INVALID');
     // A model must not invent dates or quantities outside an exact item source or a proven same-field shared deadline.
     const ownTemporalIntent=temporalIntentHint(originalText)||continuationRelativeDateHint.test(originalText)||continuationWeekdayHint.test(originalText);
-    if(dueTime&&!ownTemporalIntent)return null;
-    if(dueDate&&!ownTemporalIntent&&!field.sharedDueDirective)return null;
+    if(dueTime&&!ownTemporalIntent)return invalid('TIME_PROVENANCE_INVALID');
+    if(dueDate&&!ownTemporalIntent&&!field.sharedDueDirective)return invalid('DATE_PROVENANCE_INVALID');
     if(field.sharedDueDirective){
-      if(!dueDate)return null;
+      if(!dueDate)return invalid('SHARED_DEADLINE_MISSING');
       const sharedDueDate=sharedDueDates.get(sourceIndex);
-      if(sharedDueDate&&sharedDueDate!==dueDate)return null;
+      if(sharedDueDate&&sharedDueDate!==dueDate)return invalid('SHARED_DEADLINE_CONFLICT');
       sharedDueDates.set(sourceIndex,dueDate);
     }
-    if(quantity!==null&&!/[0-9０-９一二三四五六七八九十百半]/u.test(originalText))return null;
+    if(quantity!==null&&!/[0-9０-９一二三四五六七八九十百半]/u.test(originalText))return invalid('QUANTITY_PROVENANCE_INVALID');
     if(quantity!==null){
       const sourceNumbers:string[]=originalText.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[],claimedNumbers:string[]=quantity.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[];
-      if(sourceNumbers.length&&claimedNumbers.some(number=>!sourceNumbers.includes(number)))return null;
+      if(sourceNumbers.length&&claimedNumbers.some(number=>!sourceNumbers.includes(number)))return invalid('QUANTITY_PROVENANCE_INVALID');
     }
-    if(description!==null&&field.destination!=='task'&&field.destination!=='event')return null;
+    if(description!==null&&field.destination!=='task'&&field.destination!=='event')return invalid('DESCRIPTION_DESTINATION_INVALID');
     const category=field.destination==='shopping'&&categoryRaw!==null?allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null:null;
     const provenanceKey=`${sourceIndex}\u0000${originalText}`;observed.set(provenanceKey,(observed.get(provenanceKey)||0)+1);
     const duplicateKey=JSON.stringify([provenanceKey,title,quantity,category,dueDate,dueTime]),duplicateCount=(duplicates.get(duplicateKey)||0)+1;duplicates.set(duplicateKey,duplicateCount);
-    if(duplicateCount>field.blocks.filter(block=>block.originalText===originalText).length)return null;
+    if(duplicateCount>field.blocks.filter(block=>block.originalText===originalText).length)return invalid('DUPLICATE_ITEM_OVERFLOW');
     out.push({destination:field.destination,originalText,title,quantity,category,dueDate,dueTime,description});
   }
   const required=new Map<string,number>();
   fields.forEach((field,sourceIndex)=>field.blocks.forEach(block=>{const key=`${sourceIndex}\u0000${block.originalText}`;required.set(key,(required.get(key)||0)+1);}));
-  for(const [key,count] of required)if((observed.get(key)||0)<count)return null;
-  return out;
+  for(const [key,count] of required)if((observed.get(key)||0)<count)return invalid('SOURCE_BLOCK_MISSING');
+  return {items:out,reasonCode:null};
 }
 
 function modelBody(fields:RoughField[],today:string,summarize=false,context:RoughContext={},categories:string[]=[]){
@@ -309,10 +313,10 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
         allowedShoppingCategories=categoryMap(categoryRows.results);
       }catch{/* Fail closed for model-suggested categories if the family catalog cannot be read. */}
     }
-    let failureStage:AiDiagnosticFailureStage='PROVIDER_FETCH';
+    let failureStage:AiDiagnosticFailureStage='PROVIDER_FETCH',providerStartedAt=0;
     try{
       const bodyForModel=modelBody(parsed.fields,today,parsed.summarize,context,[...allowedShoppingCategories.values()]);
-      failureStage='PROVIDER_FETCH';
+      failureStage='PROVIDER_FETCH';providerStartedAt=Date.now();
       const response=await geminiFetch(env,model,bodyForModel);
       failureStage='PROVIDER_RESPONSE';
       if(!response.ok)diagnosticAttempts.push({model,status:response.status===429?'RATE_LIMIT':'HTTP_ERROR',httpStatus:response.status,reasonCode:'HTTP_STATUS',failureStage:'PROVIDER_RESPONSE'});
@@ -326,15 +330,20 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
       failureStage='TOP_LEVEL_VALIDATION';
       if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
       failureStage='ITEM_VALIDATION';
-      const items=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
-      if(!items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'ITEM_VALIDATION_FAILED',failureStage:'ITEM_VALIDATION'});continue;}
+      const validation=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
+      if(!validation.items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION'});continue;}
+      const items=validation.items;
       failureStage='SUMMARY_VALIDATION';
       if(parsed.summarize&&items.filter(x=>x.destination===parsed.primaryType).length!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'});continue;}
       const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
       diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
       await recordDiagnostic('AI_OK',model,items.length);
       return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
-    }catch{diagnosticAttempts.push({model,status:'HTTP_ERROR',httpStatus:null,reasonCode:'EXCEPTION',failureStage});/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
+    }catch{
+      const providerElapsedMs=providerStartedAt>0?Date.now()-providerStartedAt:0;
+      const reasonCode=failureStage==='PROVIDER_FETCH'&&providerStartedAt>0?(providerElapsedMs>=9_500?'PROVIDER_TIMEOUT':'PROVIDER_NETWORK_EXCEPTION'):'EXCEPTION';
+      diagnosticAttempts.push({model,status:'HTTP_ERROR',httpStatus:null,reasonCode,failureStage});/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */
+    }
   }
   return fallback();
 }
