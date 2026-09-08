@@ -51,7 +51,17 @@ for(const phrase of ['3日後','３日後','2週間後','二日後','1ヶ月後'
   assert.equal(context.validateGeminiItems({items:[item(original,'提出',{dueDate:'2026-09-10'})]},input,new Map()).items.length,1,phrase+' must not reject a resolved date');
 }
 assert.equal(vm.runInContext("temporalIntentHint('牛乳3本')",context),false);
-budget=false;let count=calls;const fallback=await (await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]})).json();assert.equal(fallback.reason,'BUDGET');assert.equal(calls,count);
+const roughBody={primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]};
+modelResult=[item(original,'遠足の準備')];let count=calls;
+const arrayAccepted=await (await context.analyzeTaskRoughInput(ctx,roughBody)).json();
+assert.equal(arrayAccepted.source,'gemini','a strict valid top-level item array is normalized into the existing envelope');assert.equal(calls,count+1,'valid array output must not spend the fallback-model call');
+count=calls;const arrayWithCandidates=await (await context.analyzeTaskRoughInput(ctx,roughBody,{taskCandidates:[{id:11,title:'遠足の準備',date:'2026-09-06'}]})).json();
+assert.equal(arrayWithCandidates.source,'gemini');assert.equal(arrayWithCandidates.suggestedTaskId,null,'array compatibility must not invent a task candidate id');assert.equal(calls,count+1);
+modelResult=[null];count=calls;const invalidArray=await (await context.analyzeTaskRoughInput(ctx,roughBody)).json();
+assert.equal(invalidArray.source,'deterministic','array compatibility must still reject invalid item containers');assert.equal(calls,count+2,'invalid array items may use only the existing primary + fallback attempts');
+modelResult='not-an-object';count=calls;const scalarOutput=await (await context.analyzeTaskRoughInput(ctx,roughBody)).json();
+assert.equal(scalarOutput.source,'deterministic','scalar top-level model output must remain rejected');assert.equal(calls,count+2);
+budget=false;count=calls;const fallback=await (await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]})).json();assert.equal(fallback.reason,'BUDGET');assert.equal(calls,count);
 budget=true;responseStatus=429;await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]});assert.equal(calls,count+1,'429 must stop the fallback model');
 responseStatus=200;modelResult={items:[]};count=calls;await context.analyzeTaskRoughInput(ctx,{primaryType:'task',summarize:true,fields:[{destination:'task',text:original}]});assert.equal(calls,count+2,'at most primary + fallback attempts');
 // The exact candidate query must omit private/other-family/completed/template rows.
@@ -79,5 +89,5 @@ let pending=browserContext.analyze(button);browserContext.dirty=true;resolveResp
 assert.ok(status.textContent.includes('入力を変更'));assert.equal(Object.keys(control).length,0);assert.equal(submit.disabled,false);
 pending=browserContext.analyze(button,true);browserContext.generation++;const oldStatus=status.textContent;resolveResponse({ok:true,json:async()=>draft});await pending;assert.equal(status.textContent,oldStatus);
 state.saving='1';const guardedStatus=status.textContent;await browserContext.analyze(button,true);assert.equal(status.textContent,guardedStatus,'analysis cannot restart during a save');
-console.log('message AI: actual analysis, bounded calls, reference date, candidate privacy, quantity/date validation and stale UI responses passed');
+console.log('message AI: actual analysis, bounded calls, reference date, candidate privacy, quantity/date validation, strict top-level array compatibility and stale UI responses passed');
 await import('./rough-input-save-state-contract.mjs');
