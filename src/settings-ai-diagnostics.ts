@@ -61,7 +61,7 @@ export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx
 
   const baseResponse=await settingsDiagnosticsDetail(request,ctx);
   if(!baseResponse.ok)return baseResponse;
-  const base=await baseResponse.json().catch(()=>null) as {ok?:boolean;issue?:string;items?:unknown[]}|null;
+  const base=await baseResponse.clone().json().catch(()=>null) as {ok?:boolean;issue?:string;items?:unknown[]}|null;
   if(!base?.ok||!ctx.member)return baseResponse;
 
   const rows=await ctx.env.DB.prepare('SELECT local_date,request_count,finalized,frame_json,created_at,updated_at FROM line_daily_digest_ai_family_daily WHERE family_id=? AND finalized=1 ORDER BY local_date DESC LIMIT 20').bind(ctx.member.family_id).all<Row>();
