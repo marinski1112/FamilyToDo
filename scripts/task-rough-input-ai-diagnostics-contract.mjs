@@ -65,22 +65,29 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
 
+const readerColumns=['feature','final_status','ai_called','attempt_count','accepted_model','item_count','attempts_json','created_at'];
+for(const column of readerColumns)assert.ok(columnNames.includes(column),`AI diagnostics reader column must exist in migration: ${column}`);
 for(const marker of [
   'AI実行履歴',
   '/api/settings/diagnostics-detail?issue=ai_generation',
   "if(issue==='ai_generation')",
-  'SELECT feature,final_status,model,http_status,attempt_count,item_count,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20',
+  'SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20',
   '.bind(m.family_id).all<Row>()',
+  "JSON.parse(String(x.attempts_json||'[]'))",
   'final_status:String(x.final_status||\'\')',
+  'ai_called:Number(x.ai_called||0)===1',
+  'model:acceptedModel||lastModel',
+  'http_status:httpStatus',
   'item_count:x.item_count==null?null:Number(x.item_count)',
   'limited:20',
 ])assert.ok(settings.includes(marker),`AI diagnostics reader marker missing: ${marker}`);
 const aiReader=settings.match(/if\(issue==='ai_generation'\)\{([\s\S]*?)\n  \}/)?.[1]||'';
 assert.ok(aiReader,'AI diagnostics reader must remain an explicit bounded detail path');
-for(const forbidden of ['attempts_json','raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content']){
+for(const forbidden of ['raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content']){
   assert.ok(!aiReader.toLowerCase().includes(forbidden.toLowerCase()),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
 }
+assert.ok(!aiReader.includes('attempts_json:'),'AI diagnostics reader must never expose attempts_json verbatim');
 assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
 assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
 
-console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, schema-aligned derived attempt metadata, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
