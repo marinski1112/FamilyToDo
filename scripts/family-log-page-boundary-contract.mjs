@@ -124,7 +124,8 @@ for(const marker of [
   "dateLabel.classList.add('family-log-date-picker-label')",
   "visibleDate.className='family-log-visible-date'",
   "visibleDate.setAttribute('aria-hidden','true')",
-  "dateLabel.insertBefore(visibleDate,dateInput)",
+  "const dateAnchor=dateInput.closest('.native-control-shell')||dateInput;",
+  "dateLabel.insertBefore(visibleDate,dateAnchor)",
   "dateInput.addEventListener('input',syncVisibleDate)",
   "const dateLinks=[...date.querySelectorAll('a[href]')]",
   "previous.setAttribute('aria-label','前の日')",
@@ -143,6 +144,8 @@ for(const marker of [
   'grid-template-columns:26px 80px 26px',
   '.family-log-date-picker-label{position:relative',
   '.family-log-visible-date{display:block!important',
+  '.family-log-page .family-log-compact-toolbar .family-log-date-head .native-control-shell{',
+  'opacity:1;overflow:visible;background:transparent',
   'opacity:1;cursor:pointer',
   'grid-template-columns:minmax(52px,.85fr) 124px auto 34px',
   '.family-log-page .family-log-manage-link{width:36px',
@@ -151,6 +154,8 @@ for(const marker of [
   '.family-log-page .family-log-quick{min-height:46px!important',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log compact mobile geometry missing: ${marker}`);
 if(familyLogLayout.includes('opacity:0;cursor:pointer'))throw new Error('Family Log selected-date control must not be transparent');
+if(!familyLogLayout.includes('.family-log-page .family-log-compact-toolbar .family-log-date-head .native-control-shell{position:absolute;'))throw new Error('Family Log compact date wrapper must explicitly override the canonical transparent native-control shell');
+if(familyLogCompactUi.includes('dateLabel.insertBefore(visibleDate,dateInput)'))throw new Error('Family Log visible-date enhancer must insert relative to the canonical native-control wrapper, not its nested input');
 if(familyLogLayout.includes('grid-template-columns:26px 96px 26px'))throw new Error('Family Log date control must not restore the clipped pre-fix geometry');
 if(/previous\.href\s*=|next\.href\s*=|previous\.setAttribute\(['"]href|next\.setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered previous/next navigation URLs');
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
