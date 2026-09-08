@@ -65,7 +65,7 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
     const rows=await ctx.env.DB.prepare('SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
     return json({ok:true,issue,items:rows.results.map(x=>{
       const allowedStatuses=new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR']);
-      const allowedReasons=new Set(['HTTP_STATUS','RESPONSE_BODY_JSON_INVALID','MODEL_OUTPUT_JSON_INVALID','UNEXPECTED_TOP_LEVEL_KEYS','ITEM_VALIDATION_FAILED','SUMMARY_CARDINALITY','EXCEPTION']);
+      const allowedReasons=new Set(['HTTP_STATUS','RESPONSE_BODY_JSON_INVALID','MODEL_OUTPUT_JSON_INVALID','UNEXPECTED_TOP_LEVEL_KEYS','ITEM_VALIDATION_FAILED','ITEM_CONTAINER_INVALID','ITEM_SCHEMA_INVALID','ITEM_VALUE_TYPE_INVALID','SOURCE_INDEX_INVALID','SOURCE_TEXT_MISMATCH','TITLE_INVALID','FIELD_VALUE_INVALID','QUANTITY_DESTINATION_INVALID','TIME_PROVENANCE_INVALID','DATE_PROVENANCE_INVALID','SHARED_DEADLINE_MISSING','SHARED_DEADLINE_CONFLICT','QUANTITY_PROVENANCE_INVALID','DESCRIPTION_DESTINATION_INVALID','DUPLICATE_ITEM_OVERFLOW','SOURCE_BLOCK_MISSING','SUMMARY_CARDINALITY','PROVIDER_TIMEOUT','PROVIDER_NETWORK_EXCEPTION','EXCEPTION']);
       const allowedStages=new Set(['PROVIDER_FETCH','PROVIDER_RESPONSE','RESPONSE_PARSE','TOP_LEVEL_VALIDATION','ITEM_VALIDATION','SUMMARY_VALIDATION']);
       let attempts:Array<{ordinal:number;model:string;status:string;http_status:number|null;reason_code:string|null;failure_stage:string|null}>=[];
       try{
