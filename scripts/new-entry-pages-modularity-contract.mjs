@@ -51,3 +51,4 @@ for(const marker of [
 for(const oldPrefix of ['子タスク：猫ホテルに連絡','買い物：旅行用シャンプー','持ち物：パスポート','prefixRules']) if(taskNewJs.includes(oldPrefix)) throw new Error(`rough-input must not require type prefixes: ${oldPrefix}`);
 if(taskNewJs.includes("fetch('/api/task-rough-input'")) throw new Error('visible rough-input preview must remain proposal-only in this bounded stage');
 console.log('new entry pages modularity contract ok');
+await import('./task-rough-input-shopping-manual-contract.mjs');
