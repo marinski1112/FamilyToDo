@@ -38,11 +38,11 @@ assert.equal(context.needsModel(context.parseRequestBody({primaryType:'shopping'
 assert.equal(context.needsModel(context.parseRequestBody({primaryType:'task',fields:[{destination:'task',text:'忘れずに書類を確認してください'}]}).fields),true);
 const fields=context.parseRequestBody({primaryType:'shopping',fields:[{destination:'shopping',text:'牛乳2本'}]}).fields;
 const validate=items=>context.validateGeminiItems({items},fields,new Map());
-assert.equal(validate([item('牛乳2本','牛乳',{quantity:'3本'})]).reasonCode,'QUANTITY_PROVENANCE_INVALID','invented quantity rejected');
+assert.equal(validate([item('牛乳2本','牛乳',{quantity:'3本'})]).reasonCode,'QUANTITY_NUMBER_MISMATCH','invented quantity rejected');
 assert.equal(validate([item('牛乳2本','牛乳',{dueDate:'2026-09-08'})]).reasonCode,'DATE_PROVENANCE_INVALID','invented date rejected');
-assert.equal(validate([item('牛乳2本','牛乳',{dueTime:'12:00'})]).reasonCode,'FIELD_VALUE_INVALID','time requires a date');
+assert.equal(validate([item('牛乳2本','牛乳',{dueTime:'12:00'})]).reasonCode,'DUE_TIME_WITHOUT_DATE','time requires a date');
 assert.equal(validate([item('牛乳2本','牛乳'),item('牛乳2本','牛乳')]).reasonCode,'DUPLICATE_ITEM_OVERFLOW','duplicated draft rows rejected');
-assert.equal(validate([item('牛乳2本','牛乳',{quantity:{value:2}})]).reasonCode,'ITEM_VALUE_TYPE_INVALID','non-scalar output rejected');
+assert.equal(validate([item('牛乳2本','牛乳',{quantity:{value:2}})]).reasonCode,'OPTIONAL_FIELD_TYPE_INVALID','non-scalar output rejected');
 assert.equal(validate([item('牛乳2本','牛乳',{quantity:'2本'})]).items.length,1);
 for(const phrase of ['3日後','３日後','2週間後','二日後','1ヶ月後']){
   const original='提出\n期限: '+phrase;

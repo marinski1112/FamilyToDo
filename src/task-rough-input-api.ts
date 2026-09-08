@@ -14,8 +14,9 @@ type Destination=typeof DESTINATIONS[number];
 type RoughBlock={originalText:string;titleSeed:string;lines:string[]};
 type RoughField={destination:Destination;text:string;blocks:RoughBlock[];sharedDueDirective:string|null};
 type RoughItem={destination:Destination;originalText:string;title:string;quantity:string|null;category:string|null;dueDate:string|null;dueTime:string|null;description:string|null};
-type RoughItemValidationReason='ITEM_CONTAINER_INVALID'|'ITEM_SCHEMA_INVALID'|'ITEM_VALUE_TYPE_INVALID'|'SOURCE_INDEX_INVALID'|'SOURCE_TEXT_MISMATCH'|'TITLE_INVALID'|'FIELD_VALUE_INVALID'|'QUANTITY_DESTINATION_INVALID'|'TIME_PROVENANCE_INVALID'|'DATE_PROVENANCE_INVALID'|'SHARED_DEADLINE_MISSING'|'SHARED_DEADLINE_CONFLICT'|'QUANTITY_PROVENANCE_INVALID'|'DESCRIPTION_DESTINATION_INVALID'|'DUPLICATE_ITEM_OVERFLOW'|'SOURCE_BLOCK_MISSING';
-type RoughItemValidationResult={items:RoughItem[];reasonCode:null}|{items:null;reasonCode:RoughItemValidationReason};
+type RoughItemValidationReason='TOP_LEVEL_CONTAINER_INVALID'|'ITEMS_PROPERTY_NOT_ARRAY'|'ITEM_COUNT_OUT_OF_RANGE'|'ITEM_ENTRY_CONTAINER_INVALID'|'ITEM_KEYS_INVALID'|'SOURCE_INDEX_TYPE_INVALID'|'ORIGINAL_TEXT_TYPE_INVALID'|'TITLE_TYPE_INVALID'|'OPTIONAL_FIELD_TYPE_INVALID'|'SOURCE_INDEX_RANGE_INVALID'|'SOURCE_TEXT_MISMATCH'|'TITLE_EMPTY'|'TITLE_TOO_LONG'|'QUANTITY_EMPTY'|'CATEGORY_EMPTY'|'DESCRIPTION_EMPTY'|'DUE_DATE_FORMAT_INVALID'|'DUE_TIME_FORMAT_INVALID'|'DUE_TIME_WITHOUT_DATE'|'QUANTITY_DESTINATION_INVALID'|'TIME_PROVENANCE_INVALID'|'DATE_PROVENANCE_INVALID'|'SHARED_DEADLINE_MISSING'|'SHARED_DEADLINE_CONFLICT'|'QUANTITY_PROVENANCE_MISSING'|'QUANTITY_NUMBER_MISMATCH'|'DESCRIPTION_DESTINATION_INVALID'|'DUPLICATE_ITEM_OVERFLOW'|'SOURCE_BLOCK_MISSING';
+type RoughItemValidationMeta={itemOrdinal?:number|null;sourceIndex?:number|null;expectedCount?:number|null;actualCount?:number|null};
+type RoughItemValidationResult={items:RoughItem[];reasonCode:null}|({items:null;reasonCode:RoughItemValidationReason}&RoughItemValidationMeta);
 export type RoughTaskCandidate={id:number;title:string;date:string|null};
 type RoughContext={referenceDate?:string;taskCandidates?:RoughTaskCandidate[]};
 
@@ -204,48 +205,60 @@ function categoryMap(rows:ShoppingCategoryCatalogRow[]):Map<string,string>{
 }
 
 function validateGeminiItems(value:unknown,fields:RoughField[],allowedShoppingCategories:Map<string,string>):RoughItemValidationResult{
-  const invalid=(reasonCode:RoughItemValidationReason):RoughItemValidationResult=>({items:null,reasonCode});
-  if(!value||typeof value!=='object'||Array.isArray(value))return invalid('ITEM_CONTAINER_INVALID');
-  const keys=Object.keys(value as Record<string,unknown>);if(keys.length!==1||keys[0]!=='items')return invalid('ITEM_SCHEMA_INVALID');
-  const items=(value as any).items;if(!Array.isArray(items)||items.length<1||items.length>MAX_ITEMS)return invalid('ITEM_SCHEMA_INVALID');
+  const invalid=(reasonCode:RoughItemValidationReason,meta:RoughItemValidationMeta={}):RoughItemValidationResult=>({items:null,reasonCode,...meta});
+  if(!value||typeof value!=='object'||Array.isArray(value))return invalid('TOP_LEVEL_CONTAINER_INVALID');
+  const keys=Object.keys(value as Record<string,unknown>);if(keys.length!==1||keys[0]!=='items')return invalid('ITEM_KEYS_INVALID',{expectedCount:1,actualCount:keys.length});
+  const items=(value as any).items;
+  if(!Array.isArray(items))return invalid('ITEMS_PROPERTY_NOT_ARRAY');
+  if(items.length<1||items.length>MAX_ITEMS)return invalid('ITEM_COUNT_OUT_OF_RANGE',{expectedCount:MAX_ITEMS,actualCount:items.length});
   const out:RoughItem[]=[],observed=new Map<string,number>(),duplicates=new Map<string,number>(),sharedDueDates=new Map<number,string>();
-  for(const raw of items){
-    if(!raw||typeof raw!=='object'||Array.isArray(raw))return invalid('ITEM_CONTAINER_INVALID');
+  for(let itemIndex=0;itemIndex<items.length;itemIndex++){
+    const raw=items[itemIndex],itemOrdinal=itemIndex+1;
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return invalid('ITEM_ENTRY_CONTAINER_INVALID',{itemOrdinal});
     const expected=['sourceIndex','originalText','title','quantity','category','dueDate','dueTime','description'];
-    const actual=Object.keys(raw);if(actual.length!==expected.length||!actual.every(k=>expected.includes(k)))return invalid('ITEM_SCHEMA_INVALID');
-    if(typeof raw.sourceIndex!=='number'||typeof raw.originalText!=='string'||typeof raw.title!=='string'||['quantity','category','dueDate','dueTime','description'].some(key=>raw[key]!==null&&typeof raw[key]!=='string'))return invalid('ITEM_VALUE_TYPE_INVALID');
-    const sourceIndex=Number(raw.sourceIndex);if(!Number.isInteger(sourceIndex)||sourceIndex<0||sourceIndex>=fields.length)return invalid('SOURCE_INDEX_INVALID');
+    const actual=Object.keys(raw);if(actual.length!==expected.length||!actual.every(k=>expected.includes(k)))return invalid('ITEM_KEYS_INVALID',{itemOrdinal,expectedCount:expected.length,actualCount:actual.length});
+    if(typeof raw.sourceIndex!=='number')return invalid('SOURCE_INDEX_TYPE_INVALID',{itemOrdinal});
+    if(typeof raw.originalText!=='string')return invalid('ORIGINAL_TEXT_TYPE_INVALID',{itemOrdinal});
+    if(typeof raw.title!=='string')return invalid('TITLE_TYPE_INVALID',{itemOrdinal});
+    if(['quantity','category','dueDate','dueTime','description'].some(key=>raw[key]!==null&&typeof raw[key]!=='string'))return invalid('OPTIONAL_FIELD_TYPE_INVALID',{itemOrdinal});
+    const sourceIndex=Number(raw.sourceIndex);if(!Number.isInteger(sourceIndex)||sourceIndex<0||sourceIndex>=fields.length)return invalid('SOURCE_INDEX_RANGE_INVALID',{itemOrdinal,sourceIndex});
     const field=fields[sourceIndex],originalText=String(raw.originalText||'').trim(),title=String(raw.title||'').trim();
-    if(!field.blocks.some(block=>block.originalText===originalText))return invalid('SOURCE_TEXT_MISMATCH');
-    if(!title||title.length>200)return invalid('TITLE_INVALID');
+    if(!field.blocks.some(block=>block.originalText===originalText))return invalid('SOURCE_TEXT_MISMATCH',{itemOrdinal,sourceIndex});
+    if(!title)return invalid('TITLE_EMPTY',{itemOrdinal,sourceIndex});
+    if(title.length>200)return invalid('TITLE_TOO_LONG',{itemOrdinal,sourceIndex});
     const quantity=raw.quantity===null?null:clean(raw.quantity,40),categoryRaw=raw.category===null?null:clean(raw.category,SHOPPING_CATEGORY_MAX_LENGTH),dueDate=raw.dueDate===null?null:String(raw.dueDate),dueTime=raw.dueTime===null?null:String(raw.dueTime),description=raw.description===null?null:String(raw.description).trim().slice(0,1000);
-    if((quantity!==null&&!quantity)||(categoryRaw!==null&&!categoryRaw)||(description!==null&&!description)||!validDate(dueDate)||!validTime(dueTime)||(dueTime&&!dueDate))return invalid('FIELD_VALUE_INVALID');
-    if(quantity!==null&&field.destination!=='shopping')return invalid('QUANTITY_DESTINATION_INVALID');
+    if(quantity!==null&&!quantity)return invalid('QUANTITY_EMPTY',{itemOrdinal,sourceIndex});
+    if(categoryRaw!==null&&!categoryRaw)return invalid('CATEGORY_EMPTY',{itemOrdinal,sourceIndex});
+    if(description!==null&&!description)return invalid('DESCRIPTION_EMPTY',{itemOrdinal,sourceIndex});
+    if(!validDate(dueDate))return invalid('DUE_DATE_FORMAT_INVALID',{itemOrdinal,sourceIndex});
+    if(!validTime(dueTime))return invalid('DUE_TIME_FORMAT_INVALID',{itemOrdinal,sourceIndex});
+    if(dueTime&&!dueDate)return invalid('DUE_TIME_WITHOUT_DATE',{itemOrdinal,sourceIndex});
+    if(quantity!==null&&field.destination!=='shopping')return invalid('QUANTITY_DESTINATION_INVALID',{itemOrdinal,sourceIndex});
     // A model must not invent dates or quantities outside an exact item source or a proven same-field shared deadline.
     const ownTemporalIntent=temporalIntentHint(originalText)||continuationRelativeDateHint.test(originalText)||continuationWeekdayHint.test(originalText);
-    if(dueTime&&!ownTemporalIntent)return invalid('TIME_PROVENANCE_INVALID');
-    if(dueDate&&!ownTemporalIntent&&!field.sharedDueDirective)return invalid('DATE_PROVENANCE_INVALID');
+    if(dueTime&&!ownTemporalIntent)return invalid('TIME_PROVENANCE_INVALID',{itemOrdinal,sourceIndex});
+    if(dueDate&&!ownTemporalIntent&&!field.sharedDueDirective)return invalid('DATE_PROVENANCE_INVALID',{itemOrdinal,sourceIndex});
     if(field.sharedDueDirective){
-      if(!dueDate)return invalid('SHARED_DEADLINE_MISSING');
+      if(!dueDate)return invalid('SHARED_DEADLINE_MISSING',{itemOrdinal,sourceIndex});
       const sharedDueDate=sharedDueDates.get(sourceIndex);
-      if(sharedDueDate&&sharedDueDate!==dueDate)return invalid('SHARED_DEADLINE_CONFLICT');
+      if(sharedDueDate&&sharedDueDate!==dueDate)return invalid('SHARED_DEADLINE_CONFLICT',{itemOrdinal,sourceIndex});
       sharedDueDates.set(sourceIndex,dueDate);
     }
-    if(quantity!==null&&!/[0-9０-９一二三四五六七八九十百半]/u.test(originalText))return invalid('QUANTITY_PROVENANCE_INVALID');
+    if(quantity!==null&&!/[0-9０-９一二三四五六七八九十百半]/u.test(originalText))return invalid('QUANTITY_PROVENANCE_MISSING',{itemOrdinal,sourceIndex});
     if(quantity!==null){
       const sourceNumbers:string[]=originalText.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[],claimedNumbers:string[]=quantity.normalize('NFKC').match(/\d+(?:\.\d+)?/g)||[];
-      if(sourceNumbers.length&&claimedNumbers.some(number=>!sourceNumbers.includes(number)))return invalid('QUANTITY_PROVENANCE_INVALID');
+      if(sourceNumbers.length&&claimedNumbers.some(number=>!sourceNumbers.includes(number)))return invalid('QUANTITY_NUMBER_MISMATCH',{itemOrdinal,sourceIndex});
     }
-    if(description!==null&&field.destination!=='task'&&field.destination!=='event')return invalid('DESCRIPTION_DESTINATION_INVALID');
+    if(description!==null&&field.destination!=='task'&&field.destination!=='event')return invalid('DESCRIPTION_DESTINATION_INVALID',{itemOrdinal,sourceIndex});
     const category=field.destination==='shopping'&&categoryRaw!==null?allowedShoppingCategories.get(shoppingCategoryKey(categoryRaw))??null:null;
     const provenanceKey=`${sourceIndex}\u0000${originalText}`;observed.set(provenanceKey,(observed.get(provenanceKey)||0)+1);
     const duplicateKey=JSON.stringify([provenanceKey,title,quantity,category,dueDate,dueTime]),duplicateCount=(duplicates.get(duplicateKey)||0)+1;duplicates.set(duplicateKey,duplicateCount);
-    if(duplicateCount>field.blocks.filter(block=>block.originalText===originalText).length)return invalid('DUPLICATE_ITEM_OVERFLOW');
+    if(duplicateCount>field.blocks.filter(block=>block.originalText===originalText).length)return invalid('DUPLICATE_ITEM_OVERFLOW',{itemOrdinal,sourceIndex,expectedCount:field.blocks.filter(block=>block.originalText===originalText).length,actualCount:duplicateCount});
     out.push({destination:field.destination,originalText,title,quantity,category,dueDate,dueTime,description});
   }
-  const required=new Map<string,number>();
-  fields.forEach((field,sourceIndex)=>field.blocks.forEach(block=>{const key=`${sourceIndex}\u0000${block.originalText}`;required.set(key,(required.get(key)||0)+1);}));
-  for(const [key,count] of required)if((observed.get(key)||0)<count)return invalid('SOURCE_BLOCK_MISSING');
+  const required=new Map<string,{count:number;sourceIndex:number}>();
+  fields.forEach((field,sourceIndex)=>field.blocks.forEach(block=>{const key=`${sourceIndex}\u0000${block.originalText}`,existing=required.get(key);required.set(key,{count:(existing?.count||0)+1,sourceIndex});}));
+  for(const [key,requiredEntry] of required){const actualCount=observed.get(key)||0;if(actualCount<requiredEntry.count)return invalid('SOURCE_BLOCK_MISSING',{sourceIndex:requiredEntry.sourceIndex,expectedCount:requiredEntry.count,actualCount});}
   return {items:out,reasonCode:null};
 }
 
@@ -325,16 +338,19 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
       let data:any,decoded:any;
       failureStage='RESPONSE_PARSE';
       try{data=await response.json() as any;}catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'RESPONSE_BODY_JSON_INVALID',failureStage:'RESPONSE_PARSE'});continue;}
-      const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
+      const candidateText=data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(typeof candidateText!=='string'||!candidateText.trim()){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'CANDIDATE_TEXT_MISSING',failureStage:'RESPONSE_PARSE'});continue;}
+      const text=candidateText;
       try{decoded=JSON.parse(text);}catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'});continue;}
       failureStage='TOP_LEVEL_VALIDATION';
-      if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
+      if(context.taskCandidates&&(!decoded||typeof decoded!=='object'||Array.isArray(decoded)||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
       failureStage='ITEM_VALIDATION';
       const validation=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
-      if(!validation.items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION'});continue;}
+      if(!validation.items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION',itemOrdinal:validation.itemOrdinal,sourceIndex:validation.sourceIndex,expectedCount:validation.expectedCount,actualCount:validation.actualCount});continue;}
       const items=validation.items;
       failureStage='SUMMARY_VALIDATION';
-      if(parsed.summarize&&items.filter(x=>x.destination===parsed.primaryType).length!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'});continue;}
+      const summaryCount=items.filter(x=>x.destination===parsed.primaryType).length;
+      if(parsed.summarize&&summaryCount!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION',expectedCount:1,actualCount:summaryCount});continue;}
       const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
       diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
       await recordDiagnostic('AI_OK',model,items.length);
