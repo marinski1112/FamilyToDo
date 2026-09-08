@@ -24,7 +24,7 @@ import { familyLogMutationBoundary } from './family-log-mutation-boundary';
 import { familyLogMediaApi } from './family-log-media-api';
 import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
-import { settingsDiagnosticsDetail } from './settings-diagnostics';
+import { settingsDiagnosticsDetailWithMorningAi } from './settings-ai-diagnostics';
 import { webPushApi } from './web-push-api';
 import { messages } from './messages-api';
 import { settings } from './settings-root';
@@ -76,7 +76,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family-ai/model-compatibility') return await familyAiModelCompatibility(request,context);
   if(url.pathname==='/api/family-ai/model-select') return await familyAiModelSelect(request,context);
   if(url.pathname==='/api/family-ai/model-reset') return await familyAiModelReset(request,context);
-  if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);
+  if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetailWithMorningAi(request,context);
   if(url.pathname==='/api/google-tasks/action') return await googleTasksAction(request,context);
   if(url.pathname==='/api/google-calendar/sync') return await calendarSyncOutboundOnly(request,context);
   if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
