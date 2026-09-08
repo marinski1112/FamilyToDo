@@ -52,3 +52,4 @@ for(const oldPrefix of ['子タスク：猫ホテルに連絡','買い物：旅�
 if(taskNewJs.includes("fetch('/api/task-rough-input'")) throw new Error('visible rough-input preview must remain proposal-only in this bounded stage');
 console.log('new entry pages modularity contract ok');
 await import('./task-rough-input-shopping-manual-contract.mjs');
+await import('./task-rough-input-item-manual-contract.mjs');
