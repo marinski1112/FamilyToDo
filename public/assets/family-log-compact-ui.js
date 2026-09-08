@@ -49,7 +49,8 @@ const enhanceDatePicker=dateInput=>{
     visibleDate=document.createElement('span');
     visibleDate.className='family-log-visible-date';
     visibleDate.setAttribute('aria-hidden','true');
-    dateLabel.insertBefore(visibleDate,dateInput);
+    const dateAnchor=dateInput.closest('.native-control-shell')||dateInput;
+    dateLabel.insertBefore(visibleDate,dateAnchor);
   }
   const syncVisibleDate=()=>{
     visibleDate.textContent=formatVisibleDate(dateInput.value);
