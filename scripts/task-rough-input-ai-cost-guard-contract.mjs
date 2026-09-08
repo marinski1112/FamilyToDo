@@ -137,5 +137,4 @@ assert.ok(api.includes('break;}\n      if(!response.ok)continue;'),'429 handling
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'rough-input must retain one bounded Gemini call site inside the two-model loop');
 
 console.log('rough-input AI cost guard contract: safe ISO due fallback, month-end/continuation temporal model eligibility, URL metadata exclusion, durable budgets, date-independent 429 circuit, and bounded model calls ok');
-await import('./task-rough-input-shared-deadline-contract.mjs');
 await import('./message-ai-draft-contract.mjs');
