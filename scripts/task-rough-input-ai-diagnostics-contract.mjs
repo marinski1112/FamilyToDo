@@ -22,25 +22,31 @@ for(const forbidden of ['raw_input','input_text','prompt','response','response_b
   assert.ok(!columnNames.includes(forbidden),`AI diagnostics must not persist private/raw column: ${forbidden}`);
 }
 
-const fineReasons=['ITEM_CONTAINER_INVALID','ITEM_SCHEMA_INVALID','ITEM_VALUE_TYPE_INVALID','SOURCE_INDEX_INVALID','SOURCE_TEXT_MISMATCH','TITLE_INVALID','FIELD_VALUE_INVALID','QUANTITY_DESTINATION_INVALID','TIME_PROVENANCE_INVALID','DATE_PROVENANCE_INVALID','SHARED_DEADLINE_MISSING','SHARED_DEADLINE_CONFLICT','QUANTITY_PROVENANCE_INVALID','DESCRIPTION_DESTINATION_INVALID','DUPLICATE_ITEM_OVERFLOW','SOURCE_BLOCK_MISSING','PROVIDER_TIMEOUT','PROVIDER_NETWORK_EXCEPTION'];
-for(const reason of fineReasons)assert.ok(recorder.includes(`'${reason}'`),`fine-grained reason must be allowlisted by recorder: ${reason}`);
+const comprehensiveReasons=['CANDIDATE_TEXT_MISSING','TOP_LEVEL_CONTAINER_INVALID','ITEMS_PROPERTY_NOT_ARRAY','ITEM_COUNT_OUT_OF_RANGE','ITEM_ENTRY_CONTAINER_INVALID','ITEM_KEYS_INVALID','SOURCE_INDEX_TYPE_INVALID','ORIGINAL_TEXT_TYPE_INVALID','TITLE_TYPE_INVALID','OPTIONAL_FIELD_TYPE_INVALID','SOURCE_INDEX_RANGE_INVALID','SOURCE_TEXT_MISMATCH','TITLE_EMPTY','TITLE_TOO_LONG','QUANTITY_EMPTY','CATEGORY_EMPTY','DESCRIPTION_EMPTY','DUE_DATE_FORMAT_INVALID','DUE_TIME_FORMAT_INVALID','DUE_TIME_WITHOUT_DATE','QUANTITY_DESTINATION_INVALID','TIME_PROVENANCE_INVALID','DATE_PROVENANCE_INVALID','SHARED_DEADLINE_MISSING','SHARED_DEADLINE_CONFLICT','QUANTITY_PROVENANCE_MISSING','QUANTITY_NUMBER_MISMATCH','DESCRIPTION_DESTINATION_INVALID','DUPLICATE_ITEM_OVERFLOW','SOURCE_BLOCK_MISSING','PROVIDER_TIMEOUT','PROVIDER_NETWORK_EXCEPTION'];
+for(const reason of comprehensiveReasons)assert.ok(recorder.includes(`'${reason}'`),`comprehensive reason must be allowlisted by recorder: ${reason}`);
+for(const historical of ['ITEM_VALIDATION_FAILED','ITEM_CONTAINER_INVALID','ITEM_SCHEMA_INVALID','ITEM_VALUE_TYPE_INVALID','SOURCE_INDEX_INVALID','TITLE_INVALID','FIELD_VALUE_INVALID','QUANTITY_PROVENANCE_INVALID'])assert.ok(recorder.includes(`'${historical}'`),`historical reason must remain readable: ${historical}`);
 for(const marker of [
   'AI_DIAGNOSTIC_ROWS_PER_FAMILY_FEATURE=100',
   'AI_DIAGNOSTIC_MAX_ATTEMPTS=4',
   "AiDiagnosticAttemptStatus='AI_OK'|'INVALID_OUTPUT'|'RATE_LIMIT'|'HTTP_ERROR'",
   "AiDiagnosticFailureStage='PROVIDER_FETCH'|'PROVIDER_RESPONSE'|'RESPONSE_PARSE'|'TOP_LEVEL_VALIDATION'|'ITEM_VALIDATION'|'SUMMARY_VALIDATION'",
   "AiDiagnosticFinalStatus='AI_NOT_NEEDED'|'AI_OK'|'FALLBACK_DETERMINISTIC'|'BUDGET_OR_CIRCUIT'|'NOT_CONFIGURED'|'DISABLED'|'STORAGE'",
+  'itemOrdinal?:number|null',
+  'sourceIndex?:number|null',
+  'expectedCount?:number|null',
+  'actualCount?:number|null',
   "model:safeModel(attempt.model)??'unknown'",
   'httpStatus:safeHttpStatus(attempt.httpStatus)',
   'reasonCode:attempt.reasonCode&&REASON_CODES.has(attempt.reasonCode)?attempt.reasonCode:null',
   'failureStage:attempt.failureStage&&FAILURE_STAGES.has(attempt.failureStage)?attempt.failureStage:null',
+  'itemOrdinal:safeBoundedInt(attempt.itemOrdinal,1,20)',
+  'sourceIndex:safeBoundedInt(attempt.sourceIndex,0,19)',
+  'expectedCount:safeBoundedInt(attempt.expectedCount,0,100)',
+  'actualCount:safeBoundedInt(attempt.actualCount,0,100)',
   'if(value===null||value===undefined)return null;',
   'JSON.stringify(attempts)',
   'ORDER BY id DESC LIMIT ?',
 ])assert.ok(recorder.includes(marker),`AI diagnostics recorder marker missing: ${marker}`);
-const itemCountGuard=recorder.indexOf('if(value===null||value===undefined)return null;');
-const itemCountCoercion=recorder.indexOf('const count=Number(value);');
-assert.ok(itemCountGuard>=0&&itemCountCoercion>itemCountGuard,'nullable itemCount must stay null before numeric coercion');
 assert.ok(!recorder.includes('JSON.stringify(event)'), 'diagnostics must serialize only the sanitized attempt projection, never the source event');
 assert.ok(!/rawInput|originalText|prompt|responseBody|errorBody|requestBody|privateUrl|authorization|secret/i.test(recorder),'diagnostic recorder must not accept raw/private payload fields');
 
@@ -56,11 +62,15 @@ for(const marker of [
   "if(!reserved)return fallback('BUDGET');",
   "reasonCode:'HTTP_STATUS',failureStage:'PROVIDER_RESPONSE'",
   "reasonCode:'RESPONSE_BODY_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
+  "reasonCode:'CANDIDATE_TEXT_MISSING',failureStage:'RESPONSE_PARSE'",
   "reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
   "reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'",
-  "reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'",
+  "reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION',expectedCount:1,actualCount:summaryCount",
   "const validation=validateGeminiItems",
-  "reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION'",
+  'itemOrdinal:validation.itemOrdinal',
+  'sourceIndex:validation.sourceIndex',
+  'expectedCount:validation.expectedCount',
+  'actualCount:validation.actualCount',
   "providerStartedAt=Date.now()",
   "providerElapsedMs>=9_500?'PROVIDER_TIMEOUT':'PROVIDER_NETWORK_EXCEPTION'",
   "status:'AI_OK'",
@@ -68,7 +78,7 @@ for(const marker of [
   'return fallback();',
   'catch{/* Diagnostics must never alter rough-input behavior. */}',
 ])assert.ok(api.includes(marker),`rough-input diagnostic marker missing: ${marker}`);
-for(const reason of fineReasons.filter(reason=>!reason.startsWith('PROVIDER_')))assert.ok(api.includes(`'${reason}'`),`validator branch must classify failure: ${reason}`);
+for(const reason of comprehensiveReasons.filter(reason=>!reason.startsWith('PROVIDER_')&&reason!=='CANDIDATE_TEXT_MISSING'))assert.ok(api.includes(`'${reason}'`),`validator branch must classify failure: ${reason}`);
 
 const recorderCall=api.match(/recordAiGenerationDiagnostic\(env\.DB,\{([^}]*)\}\)/s)?.[1]||'';
 assert.ok(recorderCall,'rough-input must write through the shared diagnostic recorder');
@@ -83,7 +93,7 @@ assert.equal((familyAi.match(/export async function geminiFetch\(/g)||[]).length
 
 const readerColumns=['feature','final_status','ai_called','attempt_count','accepted_model','item_count','attempts_json','created_at'];
 for(const column of readerColumns)assert.ok(columnNames.includes(column),`AI diagnostics reader column must exist in migration: ${column}`);
-for(const reason of fineReasons)assert.ok(settings.includes(`'${reason}'`),`fine-grained reason must be allowlisted by reader: ${reason}`);
+for(const reason of comprehensiveReasons)assert.ok(settings.includes(`'${reason}'`),`comprehensive reason must be allowlisted by reader: ${reason}`);
 for(const marker of [
   'AI実行履歴',
   '/api/settings/diagnostics-detail?issue=ai_generation',
@@ -98,9 +108,17 @@ for(const marker of [
   'http_status:httpStatus',
   'reason_code:reasonCode',
   'failure_stage:failureStage',
+  'item_ordinal:itemOrdinal',
+  'source_index:sourceIndex',
+  'expected_count:expectedCount',
+  'actual_count:actualCount',
   'last_attempt_status:lastAttempt?.status??null',
   'last_reason_code:lastAttempt?.reason_code??null',
   'last_failure_stage:lastAttempt?.failure_stage??null',
+  'last_item_ordinal:lastAttempt?.item_ordinal??null',
+  'last_source_index:lastAttempt?.source_index??null',
+  'last_expected_count:lastAttempt?.expected_count??null',
+  'last_actual_count:lastAttempt?.actual_count??null',
   'attempts,item_count:',
   'final_status:String(x.final_status||\'\')',
   'ai_called:Number(x.ai_called||0)===1',
@@ -119,4 +137,4 @@ assert.ok(!aiReader.includes('attempts_json,created_at')||aiReader.includes('JSO
 assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
 assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
 
-console.log('rough-input AI diagnostics contract: fine-grained validator/provider reasons, bounded retention/reader, unchanged provider budget/timeout, family scope, sanitized fields, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: comprehensive privacy-safe validator/provider reasons plus bounded numeric metadata, historical compatibility, bounded retention/reader, unchanged provider budget/timeout, family scope, and zero raw payload persistence ok');
