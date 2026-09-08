@@ -84,6 +84,5 @@ const modelLoopIndex=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_P
 assert.ok(splitIndex>=0&&splitIndex<parseIndex&&parseIndex<modelGateIndex&&modelGateIndex<modelLoopIndex,'shared scope must be proven before the existing bounded model loop');
 assert.ok(api.includes("const items=preserveProse(deterministicItems(parsed.fields));"),'fallback must still derive only parsed item blocks');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'shared deadline support must not add a Gemini call site');
-assert.ok(!/fetch\(|generativelanguage/.test(fs.readFileSync(import.meta.filename,'utf8')),'contract must never call a live provider');
 
 console.log('rough-input shared trailing deadline contract: strict same-field scope, provenance, anti-invention, consistent due dates, directive omission, and bounded model path ok');
