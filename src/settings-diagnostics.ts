@@ -64,11 +64,22 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
     if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
     const rows=await ctx.env.DB.prepare('SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
     return json({ok:true,issue,items:rows.results.map(x=>{
-      let lastAttempt:Record<string,unknown>|null=null;
-      try{const attempts=JSON.parse(String(x.attempts_json||'[]'));if(Array.isArray(attempts)&&attempts.length){const last=attempts[attempts.length-1];if(last&&typeof last==='object'&&!Array.isArray(last))lastAttempt=last as Record<string,unknown>;}}catch{/* Stored attempts are sanitized; malformed diagnostics must not break the reader. */}
-      const acceptedModel=x.accepted_model==null?null:String(x.accepted_model),lastModel=typeof lastAttempt?.model==='string'?String(lastAttempt.model):null;
-      const rawHttpStatus=Number(lastAttempt?.httpStatus),httpStatus=Number.isInteger(rawHttpStatus)&&rawHttpStatus>=100&&rawHttpStatus<=599?rawHttpStatus:null;
-      return {feature:String(x.feature||''),final_status:String(x.final_status||''),ai_called:Number(x.ai_called||0)===1,model:acceptedModel||lastModel,http_status:httpStatus,attempt_count:Number(x.attempt_count||0),item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')};
+      const allowedStatuses=new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR']);
+      let attempts:Array<{ordinal:number;model:string;status:string;http_status:number|null}>=[];
+      try{
+        const parsed=JSON.parse(String(x.attempts_json||'[]'));
+        if(Array.isArray(parsed))attempts=parsed.slice(0,4).flatMap((attempt,index)=>{
+          if(!attempt||typeof attempt!=='object'||Array.isArray(attempt))return [];
+          const row=attempt as Record<string,unknown>,status=String(row.status||'');
+          if(!allowedStatuses.has(status))return [];
+          const modelRaw=String(row.model||''),model=/^[A-Za-z0-9._-]{1,80}$/.test(modelRaw)?modelRaw:'unknown';
+          const rawHttpStatus=Number(row.httpStatus),httpStatus=Number.isInteger(rawHttpStatus)&&rawHttpStatus>=100&&rawHttpStatus<=599?rawHttpStatus:null;
+          return [{ordinal:index+1,model,status,http_status:httpStatus}];
+        });
+      }catch{/* Stored attempts are sanitized; malformed diagnostics must not break the reader. */}
+      const lastAttempt=attempts.length?attempts[attempts.length-1]:null;
+      const acceptedModel=x.accepted_model==null?null:String(x.accepted_model),lastModel=lastAttempt?.model||null;
+      return {feature:String(x.feature||''),final_status:String(x.final_status||''),ai_called:Number(x.ai_called||0)===1,model:acceptedModel||lastModel,http_status:lastAttempt?.http_status??null,last_attempt_status:lastAttempt?.status??null,attempt_count:Number(x.attempt_count||0),attempts,item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')};
     }),limited:20});
   }
   const d=DIAGNOSTIC_DEFINITIONS.find(x=>x.key===issue);

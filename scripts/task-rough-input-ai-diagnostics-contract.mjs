@@ -74,10 +74,16 @@ for(const marker of [
   'SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20',
   '.bind(m.family_id).all<Row>()',
   "JSON.parse(String(x.attempts_json||'[]'))",
+  "new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR'])",
+  'parsed.slice(0,4)',
+  'ordinal:index+1',
+  'http_status:httpStatus',
+  'last_attempt_status:lastAttempt?.status??null',
+  'attempts,item_count:',
   'final_status:String(x.final_status||\'\')',
   'ai_called:Number(x.ai_called||0)===1',
   'model:acceptedModel||lastModel',
-  'http_status:httpStatus',
+  'attempt_count:Number(x.attempt_count||0)',
   'item_count:x.item_count==null?null:Number(x.item_count)',
   'limited:20',
 ])assert.ok(settings.includes(marker),`AI diagnostics reader marker missing: ${marker}`);
@@ -87,7 +93,8 @@ for(const forbidden of ['raw_input','input_text','originalText','prompt','respon
   assert.ok(!aiReader.toLowerCase().includes(forbidden.toLowerCase()),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
 }
 assert.ok(!aiReader.includes('attempts_json:'),'AI diagnostics reader must never expose attempts_json verbatim');
+assert.ok(!aiReader.includes('attempts_json,created_at')||aiReader.includes('JSON.parse(String(x.attempts_json||\'[]\'))'),'attempts_json may only be consumed for sanitized projection');
 assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
 assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
 
-console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, schema-aligned derived attempt metadata, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention/reader, schema-aligned per-attempt outcome projection, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
