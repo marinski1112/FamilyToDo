@@ -27,9 +27,13 @@ for(const marker of [
   "AiDiagnosticFinalStatus='AI_NOT_NEEDED'|'AI_OK'|'FALLBACK_DETERMINISTIC'|'BUDGET_OR_CIRCUIT'|'NOT_CONFIGURED'|'DISABLED'|'STORAGE'",
   "model:safeModel(attempt.model)??'unknown'",
   'httpStatus:safeHttpStatus(attempt.httpStatus)',
+  'if(value===null||value===undefined)return null;',
   'JSON.stringify(attempts)',
   'ORDER BY id DESC LIMIT ?',
 ])assert.ok(recorder.includes(marker),`AI diagnostics recorder marker missing: ${marker}`);
+const itemCountGuard=recorder.indexOf('if(value===null||value===undefined)return null;');
+const itemCountCoercion=recorder.indexOf('const count=Number(value);');
+assert.ok(itemCountGuard>=0&&itemCountCoercion>itemCountGuard,'nullable itemCount must stay null before numeric coercion');
 assert.ok(!recorder.includes('JSON.stringify(event)'), 'diagnostics must serialize only the sanitized attempt projection, never the source event');
 assert.ok(!/rawInput|originalText|prompt|responseBody|errorBody|requestBody|privateUrl|authorization|secret/i.test(recorder),'diagnostic recorder must not accept raw/private payload fields');
 
@@ -60,4 +64,4 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
 
-console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention, sanitized attempts, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: coarse statuses, bounded retention, sanitized attempts, nullable item counts, and zero raw payload persistence ok');
