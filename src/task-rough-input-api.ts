@@ -1,6 +1,6 @@
 import { json } from './response';
 import { familyAiProvider, geminiFetch } from './family-ai';
-import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';
+import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFailureStage, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';
 import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
 import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from './task-rough-input-ai-guard';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
@@ -309,27 +309,32 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
         allowedShoppingCategories=categoryMap(categoryRows.results);
       }catch{/* Fail closed for model-suggested categories if the family catalog cannot be read. */}
     }
+    let failureStage:AiDiagnosticFailureStage='PROVIDER_FETCH';
     try{
       const bodyForModel=modelBody(parsed.fields,today,parsed.summarize,context,[...allowedShoppingCategories.values()]);
+      failureStage='PROVIDER_FETCH';
       const response=await geminiFetch(env,model,bodyForModel);
-      if(!response.ok)diagnosticAttempts.push({model,status:response.status===429?'RATE_LIMIT':'HTTP_ERROR',httpStatus:response.status});
+      failureStage='PROVIDER_RESPONSE';
+      if(!response.ok)diagnosticAttempts.push({model,status:response.status===429?'RATE_LIMIT':'HTTP_ERROR',httpStatus:response.status,reasonCode:'HTTP_STATUS',failureStage:'PROVIDER_RESPONSE'});
       if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);}catch{/* The current request still stops fallback even if circuit persistence fails. */}break;}
       if(!response.ok)continue;
-      let decoded:any;
-      try{
-        const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-        decoded=JSON.parse(text);
-      }catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});continue;}
-      if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});continue;}
+      let data:any,decoded:any;
+      failureStage='RESPONSE_PARSE';
+      try{data=await response.json() as any;}catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'RESPONSE_BODY_JSON_INVALID',failureStage:'RESPONSE_PARSE'});continue;}
+      const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
+      try{decoded=JSON.parse(text);}catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'});continue;}
+      failureStage='TOP_LEVEL_VALIDATION';
+      if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
+      failureStage='ITEM_VALIDATION';
       const items=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
-      if(items&&(!parsed.summarize||items.filter(x=>x.destination===parsed.primaryType).length===1)){
-        const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
-        diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
-        await recordDiagnostic('AI_OK',model,items.length);
-        return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
-      }
-      diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});
-    }catch{diagnosticAttempts.push({model,status:'HTTP_ERROR',httpStatus:null});/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
+      if(!items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'ITEM_VALIDATION_FAILED',failureStage:'ITEM_VALIDATION'});continue;}
+      failureStage='SUMMARY_VALIDATION';
+      if(parsed.summarize&&items.filter(x=>x.destination===parsed.primaryType).length!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'});continue;}
+      const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
+      diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
+      await recordDiagnostic('AI_OK',model,items.length);
+      return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
+    }catch{diagnosticAttempts.push({model,status:'HTTP_ERROR',httpStatus:null,reasonCode:'EXCEPTION',failureStage});/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
   }
   return fallback();
 }
