@@ -62,8 +62,14 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
   const issue=new URL(request.url).searchParams.get('issue')||'';
   if(issue==='ai_generation'){
     if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
-    const rows=await ctx.env.DB.prepare('SELECT feature,final_status,model,http_status,attempt_count,item_count,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
-    return json({ok:true,issue,items:rows.results.map(x=>({feature:String(x.feature||''),final_status:String(x.final_status||''),model:x.model==null?null:String(x.model),http_status:x.http_status==null?null:Number(x.http_status),attempt_count:Number(x.attempt_count||0),item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')})),limited:20});
+    const rows=await ctx.env.DB.prepare('SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
+    return json({ok:true,issue,items:rows.results.map(x=>{
+      let lastAttempt:Record<string,unknown>|null=null;
+      try{const attempts=JSON.parse(String(x.attempts_json||'[]'));if(Array.isArray(attempts)&&attempts.length){const last=attempts[attempts.length-1];if(last&&typeof last==='object'&&!Array.isArray(last))lastAttempt=last as Record<string,unknown>;}}catch{/* Stored attempts are sanitized; malformed diagnostics must not break the reader. */}
+      const acceptedModel=x.accepted_model==null?null:String(x.accepted_model),lastModel=typeof lastAttempt?.model==='string'?String(lastAttempt.model):null;
+      const rawHttpStatus=Number(lastAttempt?.httpStatus),httpStatus=Number.isInteger(rawHttpStatus)&&rawHttpStatus>=100&&rawHttpStatus<=599?rawHttpStatus:null;
+      return {feature:String(x.feature||''),final_status:String(x.final_status||''),ai_called:Number(x.ai_called||0)===1,model:acceptedModel||lastModel,http_status:httpStatus,attempt_count:Number(x.attempt_count||0),item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')};
+    }),limited:20});
   }
   const d=DIAGNOSTIC_DEFINITIONS.find(x=>x.key===issue);
   if(!d)return json({ok:false,error:'診断キーが不正です。'},400);
@@ -83,6 +89,10 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
     return json({ok:true,issue,count:Number(counts?.c||0),repairable_count:Number(counts?.repairable||0)});
   }
   if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
+  if(issue==='calendar_health'){
+    const rows=await ctx.env.DB.prepare(`SELECT id FROM tasks WHERE family_id=? AND id IN (SELECT task_id FROM external_calendar_links WHERE family_id=?) LIMIT 20`).bind(m.family_id,m.family_id).all<Row>();
+    return json({ok:true,issue,items:rows.results.map(x=>({id:Number(x.id)})),limited:20});
+  }
   const rows=await ctx.env.DB.prepare(`SELECT id FROM tasks WHERE family_id=? AND id IN (SELECT task_id FROM external_calendar_links WHERE family_id=?) LIMIT 20`).bind(m.family_id,m.family_id).all<Row>();
   return json({ok:true,issue,items:rows.results.map(x=>({id:Number(x.id)})),limited:20});
 }
