@@ -65,7 +65,9 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
     const rows=await ctx.env.DB.prepare('SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
     return json({ok:true,issue,items:rows.results.map(x=>{
       const allowedStatuses=new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR']);
-      let attempts:Array<{ordinal:number;model:string;status:string;http_status:number|null}>=[];
+      const allowedReasons=new Set(['HTTP_STATUS','RESPONSE_BODY_JSON_INVALID','MODEL_OUTPUT_JSON_INVALID','UNEXPECTED_TOP_LEVEL_KEYS','ITEM_VALIDATION_FAILED','SUMMARY_CARDINALITY','EXCEPTION']);
+      const allowedStages=new Set(['PROVIDER_FETCH','PROVIDER_RESPONSE','RESPONSE_PARSE','TOP_LEVEL_VALIDATION','ITEM_VALIDATION','SUMMARY_VALIDATION']);
+      let attempts:Array<{ordinal:number;model:string;status:string;http_status:number|null;reason_code:string|null;failure_stage:string|null}>=[];
       try{
         const parsed=JSON.parse(String(x.attempts_json||'[]'));
         if(Array.isArray(parsed))attempts=parsed.slice(0,4).flatMap((attempt,index)=>{
@@ -74,12 +76,14 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
           if(!allowedStatuses.has(status))return [];
           const modelRaw=String(row.model||''),model=/^[A-Za-z0-9._-]{1,80}$/.test(modelRaw)?modelRaw:'unknown';
           const rawHttpStatus=Number(row.httpStatus),httpStatus=Number.isInteger(rawHttpStatus)&&rawHttpStatus>=100&&rawHttpStatus<=599?rawHttpStatus:null;
-          return [{ordinal:index+1,model,status,http_status:httpStatus}];
+          const reasonRaw=String(row.reasonCode||''),reasonCode=allowedReasons.has(reasonRaw)?reasonRaw:null;
+          const stageRaw=String(row.failureStage||''),failureStage=allowedStages.has(stageRaw)?stageRaw:null;
+          return [{ordinal:index+1,model,status,http_status:httpStatus,reason_code:reasonCode,failure_stage:failureStage}];
         });
       }catch{/* Stored attempts are sanitized; malformed diagnostics must not break the reader. */}
       const lastAttempt=attempts.length?attempts[attempts.length-1]:null;
       const acceptedModel=x.accepted_model==null?null:String(x.accepted_model),lastModel=lastAttempt?.model||null;
-      return {feature:String(x.feature||''),final_status:String(x.final_status||''),ai_called:Number(x.ai_called||0)===1,model:acceptedModel||lastModel,http_status:lastAttempt?.http_status??null,last_attempt_status:lastAttempt?.status??null,attempt_count:Number(x.attempt_count||0),attempts,item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')};
+      return {feature:String(x.feature||''),final_status:String(x.final_status||''),ai_called:Number(x.ai_called||0)===1,model:acceptedModel||lastModel,http_status:lastAttempt?.http_status??null,last_attempt_status:lastAttempt?.status??null,last_reason_code:lastAttempt?.reason_code??null,last_failure_stage:lastAttempt?.failure_stage??null,attempt_count:Number(x.attempt_count||0),attempts,item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')};
     }),limited:20});
   }
   const d=DIAGNOSTIC_DEFINITIONS.find(x=>x.key===issue);
