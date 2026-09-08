@@ -139,21 +139,22 @@ for(const marker of [
 ])if(!familyLogCompactUi.includes(marker))throw new Error(`Family Log compact UI marker missing: ${marker}`);
 for(const marker of [
   '.family-log-page .family-log-compact-toolbar{',
-  'grid-template-columns:minmax(58px,.9fr) 116px auto 36px',
-  'grid-template-columns:26px 64px 26px',
+  'grid-template-columns:minmax(58px,.9fr) 132px auto 36px',
+  'grid-template-columns:26px 80px 26px',
   '.family-log-date-picker-label{position:relative',
   '.family-log-visible-date{display:block!important',
-  'opacity:0;cursor:pointer',
-  'grid-template-columns:minmax(52px,.85fr) 108px auto 34px',
+  'opacity:1;cursor:pointer',
+  'grid-template-columns:minmax(52px,.85fr) 124px auto 34px',
   '.family-log-page .family-log-manage-link{width:36px',
   '.family-log-page .family-quick-chore-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important',
   '.family-log-page .family-quick-chore-record{min-height:42px!important',
   '.family-log-page .family-log-quick{min-height:46px!important',
 ])if(!familyLogLayout.includes(marker))throw new Error(`Family Log compact mobile geometry missing: ${marker}`);
+if(familyLogLayout.includes('opacity:0;cursor:pointer'))throw new Error('Family Log selected-date control must not be transparent');
 if(familyLogLayout.includes('grid-template-columns:26px 96px 26px'))throw new Error('Family Log date control must not restore the clipped pre-fix geometry');
 if(/previous\.href\s*=|next\.href\s*=|previous\.setAttribute\(['"]href|next\.setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered previous/next navigation URLs');
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, deterministic visible tappable date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, visibly rendered tappable native date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
 
 for(const marker of ['.family-log-page .family-log-quick','.family-log-page .family-log-bars','flex:0 0 38px','max-width:100%','flex-direction:column'])if(!familyLogLayout.includes(marker))throw new Error(`mobile daily geometry missing: ${marker}`);
