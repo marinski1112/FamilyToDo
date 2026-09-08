@@ -46,7 +46,8 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
   const settled=await Promise.allSettled(DIAGNOSTIC_DEFINITIONS.map(d=>ctx.env.DB.prepare(d.sql).bind(...(d.params?.(m.family_id,current)||[m.family_id])).first<Row>()));
   let total=0;
   const cards=DIAGNOSTIC_DEFINITIONS.map((d,i)=>{const r=settled[i];if(r.status==='rejected')return `<div class="diagnostic-row has-issue"><div><strong>${esc(d.label)}</strong><div class="small">${esc(d.description)}</div><div class="notice">⚠️ この診断を実行できませんでした</div></div><span>--</span></div>`;const count=Number(r.value?.c||0);total+=count;return `<div class="diagnostic-row ${count?'has-issue':'is-ok'}"><div><strong>${esc(d.label)}</strong><div class="small">${esc(d.description)}</div>${count?`<a class="btn gray small" href="/api/settings/diagnostics-detail?issue=${encodeURIComponent(d.key)}">詳細を見る</a>`:''}</div><span class="diagnostic-count">${count}</span></div>`}).join('');
-  return html(layout('データ診断',`<div class="page-head"><h1>🩺 データ診断</h1><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>整合性（初期ロード ${DIAGNOSTIC_DEFINITIONS.length} query）</h2><span>${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">詳細は押した時だけ最大20件を取得します。secret、token、Web Push endpoint/鍵は表示しません。</p>${cards}</div>${environmentAuditHtml(ctx.env)}`, '/app/settings.php'));
+  const aiHistory=`<div class="card"><div class="section-head"><h2>AI実行履歴</h2><a class="btn gray small" href="/api/settings/diagnostics-detail?issue=ai_generation">最新20件を見る</a></div><p class="small">AIざっくり入力等のprivacy-safe診断です。入力文・prompt・response・URL・error body・token/secretは保存・表示しません。履歴は押した時だけ取得します。</p></div>`;
+  return html(layout('データ診断',`<div class="page-head"><h1>🩺 データ診断</h1><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>整合性（初期ロード ${DIAGNOSTIC_DEFINITIONS.length} query）</h2><span>${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">詳細は押した時だけ最大20件を取得します。secret、token、Web Push endpoint/鍵は表示しません。</p>${cards}</div>${aiHistory}${environmentAuditHtml(ctx.env)}`, '/app/settings.php'));
 }
 
 const apiAuthRequired=()=>json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
@@ -59,6 +60,11 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
   const role=String(m.role||'').toUpperCase();
   if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です。'},403);
   const issue=new URL(request.url).searchParams.get('issue')||'';
+  if(issue==='ai_generation'){
+    if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
+    const rows=await ctx.env.DB.prepare('SELECT feature,final_status,model,http_status,attempt_count,item_count,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();
+    return json({ok:true,issue,items:rows.results.map(x=>({feature:String(x.feature||''),final_status:String(x.final_status||''),model:x.model==null?null:String(x.model),http_status:x.http_status==null?null:Number(x.http_status),attempt_count:Number(x.attempt_count||0),item_count:x.item_count==null?null:Number(x.item_count),created_at:String(x.created_at||'')})),limited:20});
+  }
   const d=DIAGNOSTIC_DEFINITIONS.find(x=>x.key===issue);
   if(!d)return json({ok:false,error:'診断キーが不正です。'},400);
   if(issue==='task_range'){
