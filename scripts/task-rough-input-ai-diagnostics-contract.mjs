@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const api=fs.readFileSync('src/task-rough-input-api.ts','utf8');
 const recorder=fs.readFileSync('src/ai-generation-diagnostics.ts','utf8');
+const familyAi=fs.readFileSync('src/family-ai.ts','utf8');
 const migration=fs.readFileSync('migrations/0067_ai_generation_diagnostics.sql','utf8');
 const settings=fs.readFileSync('src/settings-diagnostics.ts','utf8');
 
@@ -21,11 +22,12 @@ for(const forbidden of ['raw_input','input_text','prompt','response','response_b
   assert.ok(!columnNames.includes(forbidden),`AI diagnostics must not persist private/raw column: ${forbidden}`);
 }
 
+const fineReasons=['ITEM_CONTAINER_INVALID','ITEM_SCHEMA_INVALID','ITEM_VALUE_TYPE_INVALID','SOURCE_INDEX_INVALID','SOURCE_TEXT_MISMATCH','TITLE_INVALID','FIELD_VALUE_INVALID','QUANTITY_DESTINATION_INVALID','TIME_PROVENANCE_INVALID','DATE_PROVENANCE_INVALID','SHARED_DEADLINE_MISSING','SHARED_DEADLINE_CONFLICT','QUANTITY_PROVENANCE_INVALID','DESCRIPTION_DESTINATION_INVALID','DUPLICATE_ITEM_OVERFLOW','SOURCE_BLOCK_MISSING','PROVIDER_TIMEOUT','PROVIDER_NETWORK_EXCEPTION'];
+for(const reason of fineReasons)assert.ok(recorder.includes(`'${reason}'`),`fine-grained reason must be allowlisted by recorder: ${reason}`);
 for(const marker of [
   'AI_DIAGNOSTIC_ROWS_PER_FAMILY_FEATURE=100',
   'AI_DIAGNOSTIC_MAX_ATTEMPTS=4',
   "AiDiagnosticAttemptStatus='AI_OK'|'INVALID_OUTPUT'|'RATE_LIMIT'|'HTTP_ERROR'",
-  "AiDiagnosticReasonCode='HTTP_STATUS'|'RESPONSE_BODY_JSON_INVALID'|'MODEL_OUTPUT_JSON_INVALID'|'UNEXPECTED_TOP_LEVEL_KEYS'|'ITEM_VALIDATION_FAILED'|'SUMMARY_CARDINALITY'|'EXCEPTION'",
   "AiDiagnosticFailureStage='PROVIDER_FETCH'|'PROVIDER_RESPONSE'|'RESPONSE_PARSE'|'TOP_LEVEL_VALIDATION'|'ITEM_VALIDATION'|'SUMMARY_VALIDATION'",
   "AiDiagnosticFinalStatus='AI_NOT_NEEDED'|'AI_OK'|'FALLBACK_DETERMINISTIC'|'BUDGET_OR_CIRCUIT'|'NOT_CONFIGURED'|'DISABLED'|'STORAGE'",
   "model:safeModel(attempt.model)??'unknown'",
@@ -43,7 +45,6 @@ assert.ok(!recorder.includes('JSON.stringify(event)'), 'diagnostics must seriali
 assert.ok(!/rawInput|originalText|prompt|responseBody|errorBody|requestBody|privateUrl|authorization|secret/i.test(recorder),'diagnostic recorder must not accept raw/private payload fields');
 
 for(const marker of [
-  "import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFailureStage, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';",
   "feature:'ROUGH_INPUT'",
   "reason==='SIMPLE_INPUT'?'AI_NOT_NEEDED'",
   "reason==='STORAGE'?'STORAGE'",
@@ -57,14 +58,17 @@ for(const marker of [
   "reasonCode:'RESPONSE_BODY_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
   "reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'",
   "reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'",
-  "reasonCode:'ITEM_VALIDATION_FAILED',failureStage:'ITEM_VALIDATION'",
   "reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION'",
-  "reasonCode:'EXCEPTION',failureStage",
+  "const validation=validateGeminiItems",
+  "reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION'",
+  "providerStartedAt=Date.now()",
+  "providerElapsedMs>=9_500?'PROVIDER_TIMEOUT':'PROVIDER_NETWORK_EXCEPTION'",
   "status:'AI_OK'",
   "await recordDiagnostic('AI_OK',model,items.length);",
   'return fallback();',
   'catch{/* Diagnostics must never alter rough-input behavior. */}',
 ])assert.ok(api.includes(marker),`rough-input diagnostic marker missing: ${marker}`);
+for(const reason of fineReasons.filter(reason=>!reason.startsWith('PROVIDER_')))assert.ok(api.includes(`'${reason}'`),`validator branch must classify failure: ${reason}`);
 
 const recorderCall=api.match(/recordAiGenerationDiagnostic\(env\.DB,\{([^}]*)\}\)/s)?.[1]||'';
 assert.ok(recorderCall,'rough-input must write through the shared diagnostic recorder');
@@ -74,9 +78,12 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
 assert.ok(!/reasonCode\s*:\s*(?:error|String\(error|String\(.*catch)/.test(api),'diagnostic reason codes must remain static coarse classifications');
+assert.ok(familyAi.includes('setTimeout(()=>controller.abort(),10_000)'),'diagnostics refinement must not change the Gemini 10-second timeout');
+assert.equal((familyAi.match(/export async function geminiFetch\(/g)||[]).length,1,'Gemini fetch implementation must remain single');
 
 const readerColumns=['feature','final_status','ai_called','attempt_count','accepted_model','item_count','attempts_json','created_at'];
 for(const column of readerColumns)assert.ok(columnNames.includes(column),`AI diagnostics reader column must exist in migration: ${column}`);
+for(const reason of fineReasons)assert.ok(settings.includes(`'${reason}'`),`fine-grained reason must be allowlisted by reader: ${reason}`);
 for(const marker of [
   'AI実行履歴',
   '/api/settings/diagnostics-detail?issue=ai_generation',
@@ -85,7 +92,6 @@ for(const marker of [
   '.bind(m.family_id).all<Row>()',
   "JSON.parse(String(x.attempts_json||'[]'))",
   "new Set(['AI_OK','INVALID_OUTPUT','RATE_LIMIT','HTTP_ERROR'])",
-  "new Set(['HTTP_STATUS','RESPONSE_BODY_JSON_INVALID','MODEL_OUTPUT_JSON_INVALID','UNEXPECTED_TOP_LEVEL_KEYS','ITEM_VALIDATION_FAILED','SUMMARY_CARDINALITY','EXCEPTION'])",
   "new Set(['PROVIDER_FETCH','PROVIDER_RESPONSE','RESPONSE_PARSE','TOP_LEVEL_VALIDATION','ITEM_VALIDATION','SUMMARY_VALIDATION'])",
   'parsed.slice(0,4)',
   'ordinal:index+1',
@@ -113,4 +119,4 @@ assert.ok(!aiReader.includes('attempts_json,created_at')||aiReader.includes('JSO
 assert.ok(settings.indexOf("if(issue==='ai_generation')")<settings.indexOf('const d=DIAGNOSTIC_DEFINITIONS.find'), 'AI history must stay outside integrity summary definitions');
 assert.ok(!settings.match(/DIAGNOSTIC_DEFINITIONS[^;]*ai_generation/s),'AI history must not add an initial-load integrity query');
 
-console.log('rough-input AI diagnostics contract: coarse statuses/reasons/stages, bounded retention/reader, schema-aligned per-attempt projection, family scope, sanitized fields, nullable item counts, and zero raw payload persistence ok');
+console.log('rough-input AI diagnostics contract: fine-grained validator/provider reasons, bounded retention/reader, unchanged provider budget/timeout, family scope, sanitized fields, and zero raw payload persistence ok');
