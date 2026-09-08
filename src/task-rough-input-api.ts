@@ -342,16 +342,17 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
       if(typeof candidateText!=='string'||!candidateText.trim()){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'CANDIDATE_TEXT_MISSING',failureStage:'RESPONSE_PARSE'});continue;}
       const text=candidateText;
       try{decoded=JSON.parse(text);}catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'MODEL_OUTPUT_JSON_INVALID',failureStage:'RESPONSE_PARSE'});continue;}
+      const normalizedDecoded=Array.isArray(decoded)?{items:decoded}:decoded;
       failureStage='TOP_LEVEL_VALIDATION';
-      if(context.taskCandidates&&(!decoded||typeof decoded!=='object'||Array.isArray(decoded)||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
+      if(context.taskCandidates&&(!normalizedDecoded||typeof normalizedDecoded!=='object'||Array.isArray(normalizedDecoded)||Object.keys(normalizedDecoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'UNEXPECTED_TOP_LEVEL_KEYS',failureStage:'TOP_LEVEL_VALIDATION'});continue;}
       failureStage='ITEM_VALIDATION';
-      const validation=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
+      const validation=validateGeminiItems(context.taskCandidates?{items:normalizedDecoded.items}:normalizedDecoded,parsed.fields,allowedShoppingCategories);
       if(!validation.items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION',itemOrdinal:validation.itemOrdinal,sourceIndex:validation.sourceIndex,expectedCount:validation.expectedCount,actualCount:validation.actualCount});continue;}
       const items=validation.items;
       failureStage='SUMMARY_VALIDATION';
       const summaryCount=items.filter(x=>x.destination===parsed.primaryType).length;
       if(parsed.summarize&&summaryCount!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION',expectedCount:1,actualCount:summaryCount});continue;}
-      const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
+      const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===normalizedDecoded.suggestedTaskId)?.id??null;
       diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
       await recordDiagnostic('AI_OK',model,items.length);
       return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
