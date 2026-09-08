@@ -64,9 +64,11 @@ export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx
   const base=await baseResponse.clone().json().catch(()=>null) as {ok?:boolean;issue?:string;items?:unknown[]}|null;
   if(!base?.ok||!ctx.member)return baseResponse;
 
-  const rows=await ctx.env.DB.prepare('SELECT local_date,request_count,finalized,frame_json,created_at,updated_at FROM line_daily_digest_ai_family_daily WHERE family_id=? AND finalized=1 ORDER BY local_date DESC LIMIT 20').bind(ctx.member.family_id).all<Row>();
-  const morning=rows.results.map(morningItem);
-  const existing=Array.isArray(base.items)?base.items:[];
-  const items=[...morning,...existing].sort((a:any,b:any)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))).slice(0,20);
-  return json({ok:true,issue:'ai_generation',items,limited:20});
+  try{
+    const rows=await ctx.env.DB.prepare('SELECT local_date,request_count,finalized,frame_json,created_at,updated_at FROM line_daily_digest_ai_family_daily WHERE family_id=? AND finalized=1 ORDER BY local_date DESC LIMIT 20').bind(ctx.member.family_id).all<Row>();
+    const morning=rows.results.map(morningItem);
+    const existing=Array.isArray(base.items)?base.items:[];
+    const items=[...morning,...existing].sort((a:any,b:any)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))).slice(0,20);
+    return json({ok:true,issue:'ai_generation',items,limited:20});
+  }catch{return baseResponse;}
 }
