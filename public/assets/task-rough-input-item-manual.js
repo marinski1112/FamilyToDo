@@ -73,8 +73,8 @@ try{
     return loadPromise;
   };
   const syncManualMode=()=>{
-    const itemMode=primary()==='item';
-    genericManual.hidden=itemMode;
+    const mode=primary(),itemMode=mode==='item';
+    genericManual.hidden=mode==='shopping'||itemMode;
     itemManual.hidden=!itemMode;
     if(!itemMode)itemManual.open=false;
     if(itemMode&&itemManual.open)void loadItemManual();
