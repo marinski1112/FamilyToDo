@@ -7,6 +7,7 @@ type SafeMorningGeneration={status:'AI'|'FALLBACK';reason:string;model?:string};
 
 const ALLOWED_REASONS=new Set(['OK','NOT_CONFIGURED','DISABLED','BUDGET_OR_CIRCUIT','STORAGE','RATE_LIMIT','UPSTREAM','INVALID_OUTPUT','LEGACY']);
 const PROVIDER_CALLED_REASONS=new Set(['RATE_LIMIT','UPSTREAM','INVALID_OUTPUT']);
+const NO_PROVIDER_CALL_REASONS=new Set(['NOT_CONFIGURED','DISABLED']);
 const safeModel=(value:unknown)=>{
   const model=String(value??'').trim();
   return model&&model.length<=120&&/^[A-Za-z0-9._-]+$/.test(model)?model:null;
@@ -33,7 +34,7 @@ function safeGeneration(frameJson:unknown):SafeMorningGeneration{
 function morningItem(row:Row){
   const generation=safeGeneration(row.frame_json);
   const requestCount=boundedRequestCount(row.request_count);
-  const aiCalled=generation.status==='AI'?true:PROVIDER_CALLED_REASONS.has(generation.reason)?true:['NOT_CONFIGURED','DISABLED','BUDGET_OR_CIRCUIT','STORAGE'].includes(generation.reason)?false:null;
+  const aiCalled=requestCount!==null&&requestCount>0?true:generation.status==='AI'?true:PROVIDER_CALLED_REASONS.has(generation.reason)?true:NO_PROVIDER_CALL_REASONS.has(generation.reason)?false:requestCount===0?false:null;
   return {
     feature:'MORNING_DIGEST',
     final_status:generation.status==='AI'?'AI_OK':'FALLBACK_DETERMINISTIC',
