@@ -1,5 +1,6 @@
 import { json } from './response';
 import { familyAiProvider, geminiFetch } from './family-ai';
+import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';
 import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
 import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from './task-rough-input-ai-guard';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
@@ -256,9 +257,18 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
   const member=ctx.member;if(!member)return json({ok:false,error:'ログインが必要です。'},401);
   const parsed=parseRequestBody(body);if(!parsed)return json({ok:false,error:'入力は4,000文字以内で内容を確認してください。'},400);
   const preserveProse=(items:RoughItem[])=>items.map(item=>parsed.summarize&&item.destination===parsed.primaryType?{...item,description:item.originalText}:item);
-  const fallback=(reason='UNAVAILABLE')=>json({ok:true,source:'deterministic',reason,requiresConfirmation:true,items:preserveProse(deterministicItems(parsed.fields)),suggestedTaskId:null});
-  const env=ctx.env as Env;
-  if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim()||!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback('DISABLED');
+  const env=ctx.env as Env,diagnosticAttempts:AiDiagnosticAttempt[]=[];
+  const recordDiagnostic=async(finalStatus:AiDiagnosticFinalStatus,acceptedModel:string|null=null,itemCount:number|null=null)=>{
+    try{await recordAiGenerationDiagnostic(env.DB,{familyId:Number(member.family_id),feature:'ROUGH_INPUT',finalStatus,attempts:diagnosticAttempts,acceptedModel,itemCount});}catch{/* Diagnostics must never alter rough-input behavior. */}
+  };
+  const fallback=async(reason='UNAVAILABLE',diagnosticStatus:AiDiagnosticFinalStatus|null=null)=>{
+    const items=preserveProse(deterministicItems(parsed.fields));
+    const finalStatus=diagnosticStatus??(reason==='SIMPLE_INPUT'?'AI_NOT_NEEDED':reason==='STORAGE'?'STORAGE':reason==='BUDGET'?'BUDGET_OR_CIRCUIT':reason==='DISABLED'?'DISABLED':'FALLBACK_DETERMINISTIC');
+    await recordDiagnostic(finalStatus,null,items.length);
+    return json({ok:true,source:'deterministic',reason,requiresConfirmation:true,items,suggestedTaskId:null});
+  };
+  if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim())return fallback('DISABLED','NOT_CONFIGURED');
+  if(!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback('DISABLED');
   if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');
   const timezone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),today=familyDate(timezone);
   const hasShopping=parsed.fields.some(field=>field.destination==='shopping');
@@ -277,17 +287,24 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
     try{
       const bodyForModel=modelBody(parsed.fields,today,parsed.summarize,context,[...allowedShoppingCategories.values()]);
       const response=await geminiFetch(env,model,bodyForModel);
+      if(!response.ok)diagnosticAttempts.push({model,status:response.status===429?'RATE_LIMIT':'HTTP_ERROR',httpStatus:response.status});
       if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);}catch{/* The current request still stops fallback even if circuit persistence fails. */}break;}
       if(!response.ok)continue;
-      const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
-      const decoded=JSON.parse(text);
-      if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k))))continue;
+      let decoded:any;
+      try{
+        const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
+        decoded=JSON.parse(text);
+      }catch{diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});continue;}
+      if(context.taskCandidates&&(!decoded||Object.keys(decoded).some(k=>!['items','suggestedTaskId'].includes(k)))){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});continue;}
       const items=validateGeminiItems(context.taskCandidates?{items:decoded.items}:decoded,parsed.fields,allowedShoppingCategories);
       if(items&&(!parsed.summarize||items.filter(x=>x.destination===parsed.primaryType).length===1)){
         const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===decoded.suggestedTaskId)?.id??null;
+        diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
+        await recordDiagnostic('AI_OK',model,items.length);
         return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
       }
-    }catch{/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
+      diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status});
+    }catch{diagnosticAttempts.push({model,status:'HTTP_ERROR',httpStatus:null});/* One bounded fallback model attempt follows; deterministic output remains authoritative fallback. */}
   }
   return fallback();
 }
