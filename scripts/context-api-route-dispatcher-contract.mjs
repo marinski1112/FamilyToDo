@@ -14,6 +14,7 @@ if(!apiRoutes.includes("import { calendarStampAdminAssetsApi,calendarStampPngSeq
 if(!apiRoutes.includes("import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';")) throw new Error('calendar stamp media adapter import missing');
 if(!apiRoutes.includes("import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';")) throw new Error('calendar shared stamp catalog adapter import missing');
 if(!apiRoutes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('Family Log retained mutation boundary import missing');
+if(!apiRoutes.includes("import { settingsDiagnosticsDetailWithMorningAi } from './settings-ai-diagnostics';")) throw new Error('Morning Digest diagnostics wrapper import missing');
 const routeLines=[
   "if(url.pathname==='/api/family/create') return await createFamily(request,context);",
   "if(url.pathname==='/api/family/join') return await joinFamily(request,context);",
@@ -43,7 +44,7 @@ const routeLines=[
   "if(url.pathname==='/api/family-ai/model-compatibility') return await familyAiModelCompatibility(request,context);",
   "if(url.pathname==='/api/family-ai/model-select') return await familyAiModelSelect(request,context);",
   "if(url.pathname==='/api/family-ai/model-reset') return await familyAiModelReset(request,context);",
-  "if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetail(request,context);",
+  "if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetailWithMorningAi(request,context);",
   "if(url.pathname==='/api/google-tasks/action') return await googleTasksAction(request,context);",
   "if(url.pathname==='/api/google-calendar/sync') return await calendarSyncOutboundOnly(request,context);",
   "if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);",
