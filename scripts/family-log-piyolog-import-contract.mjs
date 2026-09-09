@@ -32,7 +32,7 @@ assert.match(browser,/mediaStage='target_api'/,'target API failures must carry a
 assert.match(browser,/mediaError\('upload_api'/,'upload API failures must carry a privacy-safe stage/status/reason tuple');
 assert.match(browser,/SAFE_MEDIA_CODES=new Set/,'media diagnostics must use an explicit safe reason allowlist');
 assert.match(browser,/failureDiagnostics=new Map/,'failure diagnostics must be aggregated by safe reason instead of exposing per-file identifiers');
-assert.ok(!/file_name.*failureDiagnostics|external_id.*failureDiagnostics|log_id.*failureDiagnostics/s.test(browser),'media diagnostics must not include file names, external IDs, or log IDs');
+assert.match(browser,/failureSummary=\[\.\.\.failureDiagnostics\.entries\(\)\]\.map\(\(\[diagnostic,count\]\)=>`\$\{diagnostic\} ×\$\{count\}`\)\.join\('、'\)/,'failure summary must contain only the safe diagnostic tuple and aggregate count');
 const photoOnly=browser.match(/async function runPhotoOnly\([\s\S]*?\n}\n\nasync function runImport/);
 assert.ok(photoOnly,'photo-only handler must remain explicit');
 assert.ok(!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
