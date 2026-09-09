@@ -52,4 +52,3 @@ const detail=fixture();detail.fields.detail_code.value='BABY_FOOD';await detail.
 console.log('photo form: first-open, explicit state, prep/save exclusion, upload-only retry and stale decode isolation ok');
 
 const journal=fixture(true);journal.fields.id.value='12';await journal.ready();assert.equal(journal.wrap.hidden,false);assert.equal((await journal.save()).stopped,true,'empty photo form cannot navigate/submit');const jp=journal.select();journal.decode();await jp;await journal.save();assert.equal(journal.logs,0,'journal photo must not mutate canonical record');assert.equal(journal.uploads,1);journal.succeed();await journal.save();assert.equal(journal.logs,0);assert.equal(journal.uploads,2);assert.equal(journal.reloads,1);journal.fields.id.value='99';await journal.ready();assert.equal(journal.wrap.hidden,true,'unlisted journal record cannot use client photo form');
-
