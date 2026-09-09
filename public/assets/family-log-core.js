@@ -1,14 +1,15 @@
 (()=>{
   'use strict';
+  window.familyLogDiagnostic?.mark('CORE_SCRIPT_START');
 
   const byId=id=>document.getElementById(id);
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const payloadEl=byId('familyLogPayload');
-  if(!payloadEl)return;
+  if(!payloadEl){window.familyLogDiagnostic?.mark('PAYLOAD_MISSING');return;}
 
   let payload={};
   try{payload=JSON.parse(payloadEl.textContent||'{}');}
-  catch(e){console.error('[Family TODO] family-log payload parse failed',e);return;}
+  catch(e){window.familyLogDiagnostic?.mark('PAYLOAD_PARSE_FAILED');console.error('[Family TODO] family-log payload parse failed',e);return;}
 
   const csrf=String(payload.csrf||'');
   const managementMode=Boolean(payload.managementMode);
@@ -247,16 +248,20 @@
     setOpen(logModal,true);
   }
 
-  async function post(body){
-    const r=await fetch('/api/family-log',{
-      method:'POST',
-      headers:{'content-type':'application/json','accept':'application/json'},
-      credentials:'same-origin',
-      body:JSON.stringify({...body,csrf})
-    });
-    const d=await r.json().catch(()=>null);
-    if(!r.ok||!d?.ok)throw new Error(d?.error||`処理に失敗しました（HTTP ${r.status}）。`);
-    return d;
+  async function post(body,diagnostic){
+    try{
+      const r=await fetch('/api/family-log',{
+        method:'POST',
+        headers:{'content-type':'application/json','accept':'application/json',...diagnostic?.headers(body.action)},
+        credentials:'same-origin',
+        body:JSON.stringify({...body,csrf})
+      }).catch(error=>{diagnostic?.mark(error?.name==='AbortError'?'NETWORK_ABORT':'NETWORK_ERROR');throw error;});
+      diagnostic?.mark('RESPONSE_RECEIVED',r.status);
+      const d=await r.json().catch(()=>{diagnostic?.mark('PARSE_FAILED');return null;});
+      if(d!==null)diagnostic?.mark('PARSE_OK');
+      if(!r.ok||!d?.ok)throw new Error(d?.error||`処理に失敗しました（HTTP ${r.status}）。`);
+      return d;
+    }finally{diagnostic?.settle();}
   }
 
   function setSubjectTypes(types){
@@ -346,13 +351,13 @@
   document.querySelectorAll('[data-log-type]').forEach(btn=>
     btn.addEventListener('click',()=>openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||selectedSubject())))
   );
-  document.querySelectorAll('.family-log-quick-action').forEach(btn=>btn.addEventListener('click',async()=>{if(btn.disabled)return;btn.disabled=true;try{const result=await post({action:'execute_quick_action',quick_action_id:Number(btn.dataset.quickActionId||0)});const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),900);}catch(err){alert(err?.message||String(err));btn.disabled=false;}}));
+  document.querySelectorAll('.family-log-quick-action').forEach(btn=>btn.addEventListener('click',async()=>{if(btn.disabled)return;const diagnostic=window.familyLogDiagnostic?.begin();btn.disabled=true;diagnostic?.mark('BUTTON_DISABLED');try{const result=await post({action:'execute_quick_action',quick_action_id:Number(btn.dataset.quickActionId||0)},diagnostic);diagnostic?.mark('UI_UPDATE_START');const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);diagnostic?.mark('UI_UPDATE_DONE');setTimeout(()=>{diagnostic?.reload();location.reload();},900);}catch(err){alert(err?.message||String(err));btn.disabled=false;diagnostic?.mark('BUTTON_ENABLED');}}));
   document.querySelectorAll('.family-log-form-action').forEach(btn=>btn.addEventListener('click',()=>{openNew(String(btn.dataset.logType||'MEMO'),Number(btn.dataset.subjectId||0));formField('detail_code').value=String(btn.dataset.detail||'');formField('amount').value=String(btn.dataset.amount||'');formField('unit').value=String(btn.dataset.unit||'');formField('value_text').value=String(btn.dataset.valueText||'');refreshDynamicFields();}));
   document.querySelectorAll('.family-log-one-tap').forEach(btn=>btn.addEventListener('click',async()=>{
-    if(btn.disabled)return;btn.disabled=true;btn.setAttribute('aria-busy','true');
-    try{const result=await post({action:'quick_record',subject_id:Number(btn.dataset.subjectId||0),quick_key:String(btn.dataset.quickKey||''),milk_amount:btn.dataset.milkAmount?Number(btn.dataset.milkAmount):undefined});
-      const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),1100);
-    }catch(err){const toast=document.createElement('div');toast.className='family-log-toast error';toast.textContent=err?.message||String(err);document.body.append(toast);setTimeout(()=>toast.remove(),2000);btn.disabled=false;btn.removeAttribute('aria-busy');}
+    if(btn.disabled)return;const diagnostic=window.familyLogDiagnostic?.begin();btn.disabled=true;btn.setAttribute('aria-busy','true');diagnostic?.mark('BUTTON_DISABLED');
+    try{const result=await post({action:'quick_record',subject_id:Number(btn.dataset.subjectId||0),quick_key:String(btn.dataset.quickKey||''),milk_amount:btn.dataset.milkAmount?Number(btn.dataset.milkAmount):undefined},diagnostic);diagnostic?.mark('UI_UPDATE_START');
+      const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);diagnostic?.mark('UI_UPDATE_DONE');setTimeout(()=>{diagnostic?.reload();location.reload();},1100);
+    }catch(err){const toast=document.createElement('div');toast.className='family-log-toast error';toast.textContent=err?.message||String(err);document.body.append(toast);setTimeout(()=>toast.remove(),2000);btn.disabled=false;btn.removeAttribute('aria-busy');diagnostic?.mark('BUTTON_ENABLED');}
   }));
   document.querySelectorAll('.family-log-row').forEach(row=>
     row.addEventListener('click',e=>{
@@ -641,4 +646,5 @@
     catch(err){if(status)status.textContent=err?.message||String(err);}
   });
 
+  window.familyLogDiagnostic?.ready();
 })();
