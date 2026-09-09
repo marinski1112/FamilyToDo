@@ -1,9 +1,9 @@
 export type ProductLinkPreview={url:string;title:string};
-export type ProductLinkTitleSource='JSONLD_PRODUCT'|'OG_TITLE'|'TWITTER_TITLE'|'HTML_TITLE'|'NONE';
+export type ProductLinkTitleSource='JSONLD_PRODUCT'|'OG_TITLE'|'TWITTER_TITLE'|'HTML_TITLE'|'URL_PATH'|'NONE';
 export type ProductLinkHttpStatusClass='2XX'|'3XX'|'4XX'|'5XX'|'NONE';
 export type ProductLinkContentType='HTML'|'XHTML'|'NON_HTML'|'MISSING'|'NONE';
 export type ProductLinkDiagnosticStage='URL_VALIDATION'|'FETCH'|'REDIRECT'|'RESPONSE'|'CONTENT'|'TITLE'|'COMPLETE';
-export type ProductLinkDiagnosticReason='OK'|'INVALID_URL'|'TIMEOUT'|'NETWORK'|'HTTP_ERROR'|'REDIRECT_BLOCKED'|'REDIRECT_MISSING_LOCATION'|'REDIRECT_LIMIT'|'NON_HTML'|'READ_ERROR'|'NO_TITLE';
+export type ProductLinkDiagnosticReason='OK'|'INVALID_URL'|'TIMEOUT'|'NETWORK'|'HTTP_ERROR'|'REDIRECT_BLOCKED'|'REDIRECT_MISSING_LOCATION'|'REDIRECT_LIMIT'|'NON_HTML'|'READ_ERROR'|'NO_TITLE'|'PATH_FALLBACK';
 export type ProductLinkDiagnostic={
   stage:ProductLinkDiagnosticStage;
   httpStatusClass:ProductLinkHttpStatusClass;
@@ -26,16 +26,15 @@ const MAX_PRODUCT_LINK_PREVIEWS=4;
 const MAX_REDIRECTS=3;
 const MAX_HTML_BYTES=256*1024;
 const FETCH_TIMEOUT_MS=4_000;
-const RAKUTEN_ITEM_FETCH_TIMEOUT_MS=8_000;
 const MAX_METADATA_TITLE_LENGTH=400;
 const TRAILING_URL_PUNCTUATION=/[),.;。、「」』】]+$/u;
 const URL_TOKEN=/https?:\/\/[^\s<>"']+/giu;
 const BLOCKED_HOST_SUFFIXES=['.localhost','.local','.internal','.home','.lan','.test','.invalid','.example','.arpa'];
+const GENERIC_PRODUCT_PATH_SEGMENTS=new Set(['item','items','product','products','p','detail','details','index','index.html','shop']);
 
 const emptyDiagnostic=(stage:ProductLinkDiagnosticStage,reason:ProductLinkDiagnosticReason):ProductLinkDiagnostic=>({stage,httpStatusClass:'NONE',redirectCount:0,contentType:'NONE',titleSource:'NONE',reason,titleResolved:false});
 const statusClass=(status:number):ProductLinkHttpStatusClass=>status>=200&&status<300?'2XX':status>=300&&status<400?'3XX':status>=400&&status<500?'4XX':status>=500&&status<600?'5XX':'NONE';
 const contentTypeClass=(raw:string):ProductLinkContentType=>{const value=raw.toLowerCase();if(!value)return 'MISSING';if(value.startsWith('text/html'))return 'HTML';if(value.startsWith('application/xhtml+xml'))return 'XHTML';return 'NON_HTML';};
-const fetchTimeoutMs=(url:URL)=>url.hostname.replace(/\.$/,'').toLowerCase()==='item.rakuten.co.jp'?RAKUTEN_ITEM_FETCH_TIMEOUT_MS:FETCH_TIMEOUT_MS;
 
 function ipv4Parts(hostname:string):number[]|null{
   if(!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname))return null;
@@ -78,6 +77,22 @@ export function firstPublicProductUrl(text:string):URL|null{
     const url=parsePublicProductUrl(candidate);if(url)return url;
   }
   return null;
+}
+
+export function productTitleFromUrlPath(rawUrl:string):string|null{
+  const url=parsePublicProductUrl(rawUrl);if(!url)return null;
+  const rawSegment=url.pathname.split('/').filter(Boolean).at(-1);if(!rawSegment)return null;
+  let decoded:string;try{decoded=decodeURIComponent(rawSegment);}catch{decoded=rawSegment;}
+  const withoutExtension=decoded.replace(/\.(?:html?|php|aspx?)$/iu,'');
+  const candidate=withoutExtension.replace(/[_+\-]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!candidate||candidate.length<3||candidate.length>160)return null;
+  if(GENERIC_PRODUCT_PATH_SEGMENTS.has(candidate.toLowerCase()))return null;
+  if(!/\p{L}/u.test(candidate))return null;
+  const compact=candidate.replace(/[^0-9\p{L}]/gu,'');
+  if(compact.length<3||/^\d+$/u.test(compact))return null;
+  if(/^[0-9a-f]{16,}$/iu.test(compact))return null;
+  if(/^[A-Z0-9]{10,}$/u.test(withoutExtension))return null;
+  return candidate.slice(0,200);
 }
 
 function decodeHtmlEntities(value:string):string{
@@ -157,7 +172,7 @@ async function boundedResponseText(response:Response):Promise<string|null>{
 
 export async function fetchProductLinkPreviewWithDiagnostic(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreviewResult>{
   const url=parsePublicProductUrl(rawUrl);if(!url)return {preview:null,diagnostic:emptyDiagnostic('URL_VALIDATION','INVALID_URL')};
-  const deadline=Date.now()+fetchTimeoutMs(url);
+  const deadline=Date.now()+FETCH_TIMEOUT_MS;
   let current=new URL(url.href),redirectCount=0;
   for(let redirects=0;redirects<=MAX_REDIRECTS;redirects++){
     const remaining=deadline-Date.now();if(remaining<=0)return {preview:null,diagnostic:{...emptyDiagnostic('FETCH','TIMEOUT'),redirectCount}};
@@ -215,8 +230,18 @@ export async function enrichShoppingProductLinkPreviewsWithDiagnostics(fields:Pr
   }
   const results=await Promise.all(candidates.map(candidate=>fetchProductLinkPreviewWithDiagnostic(candidate.url.href,fetchImpl).catch(()=>({preview:null,diagnostic:emptyDiagnostic('FETCH','NETWORK')}))));
   let attached=0;
-  results.forEach((result,index)=>{if(result.preview){candidates[index].block.productLinkPreview=result.preview;attached++;}});
-  return {attached,diagnostics:results.map(result=>result.diagnostic)};
+  const diagnostics:ProductLinkDiagnostic[]=[];
+  results.forEach((result,index)=>{
+    if(result.preview){candidates[index].block.productLinkPreview=result.preview;attached++;diagnostics.push(result.diagnostic);return;}
+    const pathTitle=productTitleFromUrlPath(candidates[index].url.href);
+    if(pathTitle){
+      candidates[index].block.productLinkPreview={url:candidates[index].url.href,title:pathTitle};attached++;
+      diagnostics.push({...result.diagnostic,stage:'COMPLETE',titleSource:'URL_PATH',reason:'PATH_FALLBACK',titleResolved:true});
+      return;
+    }
+    diagnostics.push(result.diagnostic);
+  });
+  return {attached,diagnostics};
 }
 
 export async function enrichShoppingProductLinkPreviews(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<number>{return (await enrichShoppingProductLinkPreviewsWithDiagnostics(fields,fetchImpl)).attached;}
