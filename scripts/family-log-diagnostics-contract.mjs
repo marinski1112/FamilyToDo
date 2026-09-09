@@ -69,17 +69,25 @@ const core=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 for(const marker of ['GENERIC_QUICK_TAP','MODAL_NOT_OPEN','MODAL_OPEN','MODAL_SHEET_MISSING','MODAL_SHEET_ZERO_RECT','MODAL_SHEET_OUTSIDE_VIEWPORT','MODAL_HITTEST_BLOCKED','MODAL_READY','elementFromPoint','保存前の入力画面経路（POSTなし）'])assert.ok(recorder.includes(marker),`child quick modal diagnostic marker missing: ${marker}`);
 assert.ok(recorder.includes(".family-log-quick[data-log-type]"),'fallback child quick buttons must be observed by one-shot diagnostics');
-assert.ok(shell.includes('family-log-diagnostics.js?v=${APP_VERSION}-quick-modal-diag1'),'Family Log diagnostics asset must be cache-busted through the canonical app shell');
+assert.ok(recorder.includes("getStorage('localStorage')"),'client evidence must have a same-origin persistence fallback');
+assert.ok(recorder.includes('最大10分だけ退避'),'diagnostics UI must describe bounded client evidence retention');
+assert.ok(shell.includes('family-log-diagnostics.js?v=${APP_VERSION}-quick-client-persist1'),'Family Log diagnostics persistence asset must be cache-busted through the canonical app shell');
 const post=core.slice(core.indexOf('  async function post('),core.indexOf('  function setSubjectTypes'));
 const quick=core.slice(core.indexOf("  document.querySelectorAll('.family-log-quick-action')"),core.indexOf("  document.querySelectorAll('.family-log-form-action')"));
 const oneTap=core.slice(core.indexOf("  document.querySelectorAll('.family-log-one-tap')"),core.indexOf("  document.querySelectorAll('.family-log-row')"));
-function browser(fetcher,{saved,storageFails=false,uiFails=false,selector='.family-log-one-tap',pwaOrder='none'}={}){
-  let text=saved||JSON.stringify({scope:'1',expires:Date.now()+600000,armed:true,tapped:false,reload:false,started:Date.now(),id:null,events:[]});
+function browser(fetcher,{saved,persistentSaved,storageFails=false,sessionStorageFails=false,localStorageFails=false,uiFails=false,selector='.family-log-one-tap',pwaOrder='none',scope='1'}={}){
+  const initial=JSON.stringify({scope,expires:Date.now()+600000,armed:true,tapped:false,reload:false,started:Date.now(),updated:Date.now(),id:null,events:[]});
+  let sessionText=saved===undefined?initial:saved,localText=persistentSaved===undefined?(saved===undefined?initial:saved):persistentSaved;
   const listeners={},timers=[];let handler,fetchCount=0,reloads=0;
   class Element{closest(){return this;}}
   const button=new Element();Object.assign(button,{disabled:false,dataset:{subjectId:'1',quickKey:'PEE',quickActionId:'3'},setAttribute(){},removeAttribute(){},addEventListener(type,fn){handler=fn;}});
-  const sandbox={Date,Set,JSON,Number,Element,crypto:{randomUUID:()=>id},sessionStorage:{getItem(){if(storageFails)throw Error('storage');return text;},setItem(k,v){if(storageFails)throw Error('storage');text=v;},removeItem(){text='null';}},
-    document:{currentScript:{dataset:{family:'1'}},documentElement:{clientWidth:390,clientHeight:844},getElementById:()=>null,querySelector:()=>null,elementFromPoint:()=>null,head:{append(){}},addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({dataset:{},remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
+  const storage=(kind)=>({
+    getItem(){if(storageFails||(kind==='session'&&sessionStorageFails)||(kind==='local'&&localStorageFails))throw Error('storage');return kind==='session'?sessionText:localText;},
+    setItem(k,v){if(storageFails||(kind==='session'&&sessionStorageFails)||(kind==='local'&&localStorageFails))throw Error('storage');if(kind==='session')sessionText=v;else localText=v;},
+    removeItem(){if(kind==='session')sessionText='null';else localText='null';}
+  });
+  const sandbox={Date,Set,JSON,Number,Element,crypto:{randomUUID:()=>id},sessionStorage:storage('session'),localStorage:storage('local'),
+    document:{currentScript:{dataset:{family:scope}},documentElement:{clientWidth:390,clientHeight:844},getElementById:()=>null,querySelector:()=>null,elementFromPoint:()=>null,head:{append(){}},addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({dataset:{},remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
     navigator:{},MutationObserver:class{observe(){}},innerWidth:390,innerHeight:844,
     location:{reload(){reloads++;}},alert(){},setTimeout(fn,ms){timers.push({fn,ms});return timers.length;},clearTimeout(){},addEventListener(type,fn){listeners[type]=fn;},
     fetch:async(...args)=>{fetchCount++;return fetcher(...args);}};
@@ -88,24 +96,25 @@ function browser(fetcher,{saved,storageFails=false,uiFails=false,selector='.fami
   if(pwaOrder==='before')vm.runInContext(pwa,c);
   vm.runInContext("const csrf='SECRET';"+post+quick+oneTap,c);
   if(pwaOrder==='after')vm.runInContext(pwa,c);
-  return {c,button,timers,listeners,get text(){return text;},get count(){return fetchCount;},get reloads(){return reloads;},tap(){listeners.click?.({target:button});return handler();},events(){return JSON.parse(text)?.events||[];}};
+  const evidence=()=>{for(const text of [sessionText,localText]){try{const parsed=JSON.parse(text);if(parsed?.scope===scope&&Array.isArray(parsed.events))return parsed.events;}catch{}}return [];};
+  return {c,button,timers,listeners,get text(){return sessionText;},get persistentText(){return localText;},get count(){return fetchCount;},get reloads(){return reloads;},tap(){listeners.click?.({target:button});return handler();},events:evidence};
 }
 for(const selector of ['.family-log-one-tap','.family-log-quick-action'])for(const pwaOrder of ['before','after']){
   const b=browser(async(url,options)=>{assert.equal(url,'/api/family-log');assert.equal(options.headers['X-Family-Log-Trace'],id);return Response.json({ok:true,message:'PRIVATE MESSAGE'});},{selector,pwaOrder});
   await b.tap();await b.tap();assert.equal(b.count,1,'disabled tap must not resubmit');
   assert.ok(b.events().some(e=>e.stage==='UI_UPDATE_DONE'));assert.ok(b.events().some(e=>e.stage==='REQUEST_SETTLED'));
   b.timers.find(t=>t.ms===900||t.ms===1100).fn();assert.equal(b.reloads,1);
-  const next=browser(async()=>{throw Error('no fetch');},{saved:b.text});next.c.familyLogDiagnostic.ready();
+  const next=browser(async()=>{throw Error('no fetch');},{saved:b.text,persistentSaved:b.persistentText});next.c.familyLogDiagnostic.ready();
   assert.ok(next.events().some(e=>e.stage==='RELOAD_BOOTSTRAP_READY'));
-  assert.ok(!b.text.includes('PRIVATE')&&!b.text.includes('SECRET'));
+  assert.ok(!b.text.includes('PRIVATE')&&!b.text.includes('SECRET')&&!b.persistentText.includes('PRIVATE')&&!b.persistentText.includes('SECRET'));
 }
 for(const [fetcher,stage] of [[async()=>{throw new TypeError('PRIVATE NETWORK');},'NETWORK_ERROR'],[async()=>new Response('invalid json'),'PARSE_FAILED'],[async()=>Response.json({ok:false,error:'PRIVATE ERROR'},{status:403}),'PARSE_OK']]){
   const b=browser(fetcher);await b.tap();assert.equal(b.button.disabled,false);assert.equal(b.count,1);
-  assert.ok(b.events().some(e=>e.stage===stage));assert.ok(b.events().some(e=>e.stage==='BUTTON_ENABLED'));assert.ok(!b.text.includes('PRIVATE'));
+  assert.ok(b.events().some(e=>e.stage===stage));assert.ok(b.events().some(e=>e.stage==='BUTTON_ENABLED'));assert.ok(!b.text.includes('PRIVATE')&&!b.persistentText.includes('PRIVATE'));
 }
 const ui=browser(async()=>Response.json({ok:true}),{uiFails:true});await assert.rejects(()=>ui.tap());
 ui.listeners.unhandledrejection({reason:new TypeError('PRIVATE UI')});
-assert.equal(ui.button.disabled,true,'diagnostics do not conceal an existing recovery-path exception');assert.ok(ui.events().some(e=>e.stage==='UI_UPDATE_START'));assert.ok(!ui.events().some(e=>e.stage==='UI_UPDATE_DONE'));assert.ok(ui.events().some(e=>e.stage==='UNHANDLED_REJECTION'));assert.ok(!ui.text.includes('PRIVATE'));
+assert.equal(ui.button.disabled,true,'diagnostics do not conceal an existing recovery-path exception');assert.ok(ui.events().some(e=>e.stage==='UI_UPDATE_START'));assert.ok(!ui.events().some(e=>e.stage==='UI_UPDATE_DONE'));assert.ok(ui.events().some(e=>e.stage==='UNHANDLED_REJECTION'));assert.ok(!ui.text.includes('PRIVATE')&&!ui.persistentText.includes('PRIVATE'));
 const pendingRequest=browser(()=>new Promise(()=>{}));void pendingRequest.tap();await Promise.resolve();
 pendingRequest.timers.find(t=>t.ms===15000).fn();assert.equal(pendingRequest.count,1);assert.equal(pendingRequest.button.disabled,true,'observer must not retry/re-enable an uncertain mutation');assert.ok(pendingRequest.events().some(e=>e.stage==='PENDING_15S'));
 const missing=browser(async()=>Response.json({ok:true}));missing.listeners.click({target:missing.button});missing.timers.find(t=>t.ms===1000).fn();assert.ok(missing.events().some(e=>e.stage==='HANDLER_NOT_OBSERVED'));
@@ -114,6 +123,14 @@ let formClick;form.c.document.querySelectorAll=()=>[{dataset:{},addEventListener
 form.c.openNew=()=>{};form.c.formField=()=>({value:''});form.c.refreshDynamicFields=()=>{};
 vm.runInContext(core.slice(core.indexOf("  document.querySelectorAll('.family-log-form-action')"),core.indexOf("  document.querySelectorAll('.family-log-one-tap')")),form.c);
 form.listeners.click({target:form.button});formClick();assert.equal(form.count,0);assert.ok(form.events().some(e=>e.stage==='EDITOR_READY'));
+const persistentSource=browser(async()=>Response.json({ok:true}));await persistentSource.tap();
+const recovered=browser(async()=>{throw Error('no second mutation');},{saved:'null',persistentSaved:persistentSource.persistentText});
+assert.ok(recovered.events().some(e=>e.stage==='RESPONSE_RECEIVED'),'client response evidence must survive loss of sessionStorage context');
+assert.ok(recovered.events().some(e=>e.stage==='REQUEST_SETTLED'),'settled evidence must survive loss of sessionStorage context');
+assert.equal(recovered.count,0,'recovering evidence must never retry a mutation');
+const localOnly=browser(async()=>Response.json({ok:true}),{sessionStorageFails:true});await localOnly.tap();assert.equal(localOnly.count,1);assert.ok(localOnly.events().some(e=>e.stage==='UI_UPDATE_DONE'),'local fallback must observe client recovery when session storage is unavailable');
+const foreign=JSON.stringify({scope:'2',expires:Date.now()+600000,armed:false,tapped:true,reload:false,started:Date.now(),updated:Date.now(),id,events:[{stage:'RESPONSE_RECEIVED',ms:1,status:200}]});
+const scoped=browser(async()=>Response.json({ok:true}),{saved:'null',persistentSaved:foreign,scope:'1'});assert.equal(scoped.c.familyLogDiagnostic,undefined,'persistent evidence from another family scope must not be restored');
 const deniedStorage=browser(async()=>Response.json({ok:true}),{storageFails:true});await deniedStorage.tap();assert.equal(deniedStorage.count,1);
 assert.ok(!recorder.includes('console.')&&!source.includes('console.'),'no raw console logging');
 assert.ok(!core.includes('AbortController'),'no speculative mutation timeout');
@@ -121,4 +138,4 @@ const loader=fs.readFileSync('public/assets/family-log.js','utf8'),loads=[];
 vm.runInNewContext(loader.slice(loader.indexOf('let coreStarted=false;'),loader.lastIndexOf('})();')),{window:{},syncBabyFoodFields(){},load(...args){loads.push(args);}});
 assert.equal(loads.length,1);loads[0][2]();loads[0][1]();
 assert.equal(loads.filter(x=>x[0].includes('family-log-core')).length,1,'optional photo error must start core exactly once');
-console.log('Family Log one-shot diagnostics: success/failure, pending observation, child quick modal visibility/hit-test, UI recovery, no retry, auth/CSRF, tenant/privacy, monotonic evidence and retention ok');
+console.log('Family Log one-shot diagnostics: success/failure, pending observation, child quick modal visibility/hit-test, LIFF client evidence persistence, UI recovery, no retry, auth/CSRF, tenant/privacy, monotonic evidence and retention ok');
