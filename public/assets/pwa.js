@@ -75,29 +75,8 @@
       }
     });
 
-    const familyPayload=document.getElementById('familyLogPayload');
-    let familyData={};
-    try{familyData=familyPayload?JSON.parse(familyPayload.textContent||'{}'):{};}catch{}
-    const familyCsrf=String(familyData.csrf||'');
-    document.querySelectorAll('.family-log-quick-action').forEach(original=>{
-      if(original.dataset.wave128FlashFix==='1')return;
-      const button=original.cloneNode(true);
-      button.dataset.wave128FlashFix='1';
-      original.replaceWith(button);
-      button.addEventListener('click',async event=>{
-        event.preventDefault();event.stopPropagation();
-        if(button.disabled)return;
-        button.disabled=true;button.setAttribute('aria-busy','true');
-        try{
-          const response=await fetch(location.pathname,{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},credentials:'same-origin',body:JSON.stringify({csrf:familyCsrf,action:'execute_quick_action',quick_action_id:Number(button.dataset.quickActionId||0)})});
-          const result=await response.json().catch(()=>({}));
-          if(!response.ok||result.ok===false)throw new Error(result.error||`HTTP ${response.status}`);
-          const toast=document.createElement('div');toast.className='family-log-toast';toast.textContent=`✓ ${result.message||'記録しました'}`;document.body.append(toast);setTimeout(()=>location.reload(),900);
-        }catch(error){
-          const toast=document.createElement('div');toast.className='family-log-toast error';toast.textContent=error instanceof Error?error.message:String(error);document.body.append(toast);setTimeout(()=>toast.remove(),2000);button.disabled=false;button.removeAttribute('aria-busy');
-        }
-      });
-    });
+    // Family Log owns its quick-action handlers. Never clone those controls or
+    // attach a second mutation path here: core/media initialization is asynchronous.
 
     const calendarPayload=document.getElementById('calendarPayload');
     if(calendarPayload){

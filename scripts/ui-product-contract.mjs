@@ -81,9 +81,7 @@ assert.match(digest,/String\(receipt\.status\)==='SENT'/,'daily digest must not 
 assert.match(pwa,/grid-template-areas:'prev title next close' '\. reorder reorder \.'/,'mobile modal header controls must keep the compact grid');
 assert.match(pwa,/min-width:40px!important;min-height:40px!important/,'mobile modal controls must preserve touch targets');
 assert.match(pwa,/overflow-x:hidden!important/,'mobile modal must not introduce horizontal overflow');
-assert.match(pwa,/original\.cloneNode\(true\)/,'one-tap action rewriting must isolate the original control');
-assert.match(pwa,/event\.preventDefault\(\);event\.stopPropagation\(\)/,'one-tap actions must not leak navigation clicks');
-assert.match(pwa,/execute_quick_action/,'quick actions must retain their execution endpoint');
+assert.doesNotMatch(pwa,/original\.cloneNode\(true\)|execute_quick_action|wave128FlashFix/,'PWA must not replace Family Log controls or attach a competing save handler');
 assert.match(familyLoader,/family-log-quick-action\[data-log-type\]/,'Family Log loader must identify quick actions before the core generic form binding runs');
 assert.match(familyLoader,/removeAttribute\('data-log-type'\)/,'one-tap Family Log actions must not enter the generic detailed-record form route');
 assert.match(familyCore,/document\.querySelectorAll\('\.family-log-quick-action'\)/,'Family Log core must retain the dedicated one-tap execution handler');
