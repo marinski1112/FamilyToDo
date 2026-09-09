@@ -1,4 +1,19 @@
 export type ProductLinkPreview={url:string;title:string};
+export type ProductLinkTitleSource='JSONLD_PRODUCT'|'OG_TITLE'|'TWITTER_TITLE'|'HTML_TITLE'|'NONE';
+export type ProductLinkHttpStatusClass='2XX'|'3XX'|'4XX'|'5XX'|'NONE';
+export type ProductLinkContentType='HTML'|'XHTML'|'NON_HTML'|'MISSING'|'NONE';
+export type ProductLinkDiagnosticStage='URL_VALIDATION'|'FETCH'|'REDIRECT'|'RESPONSE'|'CONTENT'|'TITLE'|'COMPLETE';
+export type ProductLinkDiagnosticReason='OK'|'INVALID_URL'|'TIMEOUT'|'NETWORK'|'HTTP_ERROR'|'REDIRECT_BLOCKED'|'REDIRECT_MISSING_LOCATION'|'REDIRECT_LIMIT'|'NON_HTML'|'READ_ERROR'|'NO_TITLE';
+export type ProductLinkDiagnostic={
+  stage:ProductLinkDiagnosticStage;
+  httpStatusClass:ProductLinkHttpStatusClass;
+  redirectCount:number;
+  contentType:ProductLinkContentType;
+  titleSource:ProductLinkTitleSource;
+  reason:ProductLinkDiagnosticReason;
+  titleResolved:boolean;
+};
+export type ProductLinkPreviewResult={preview:ProductLinkPreview|null;diagnostic:ProductLinkDiagnostic};
 export type ProductLinkPreviewBlock={
   originalText:string;
   titleSeed:string;
@@ -15,6 +30,10 @@ const MAX_METADATA_TITLE_LENGTH=400;
 const TRAILING_URL_PUNCTUATION=/[),.;。、「」』】]+$/u;
 const URL_TOKEN=/https?:\/\/[^\s<>"']+/giu;
 const BLOCKED_HOST_SUFFIXES=['.localhost','.local','.internal','.home','.lan','.test','.invalid','.example','.arpa'];
+
+const emptyDiagnostic=(stage:ProductLinkDiagnosticStage,reason:ProductLinkDiagnosticReason):ProductLinkDiagnostic=>({stage,httpStatusClass:'NONE',redirectCount:0,contentType:'NONE',titleSource:'NONE',reason,titleResolved:false});
+const statusClass=(status:number):ProductLinkHttpStatusClass=>status>=200&&status<300?'2XX':status>=300&&status<400?'3XX':status>=400&&status<500?'4XX':status>=500&&status<600?'5XX':'NONE';
+const contentTypeClass=(raw:string):ProductLinkContentType=>{const value=raw.toLowerCase();if(!value)return 'MISSING';if(value.startsWith('text/html'))return 'HTML';if(value.startsWith('application/xhtml+xml'))return 'XHTML';return 'NON_HTML';};
 
 function ipv4Parts(hostname:string):number[]|null{
   if(!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname))return null;
@@ -92,20 +111,22 @@ function attributeValue(tag:string,name:string):string|null{
   return match?(match[1]??match[2]??match[3]??null):null;
 }
 
-export function extractProductTitleFromHtml(html:string):string|null{
+export function extractProductTitleDiagnosticFromHtml(html:string):{title:string|null;source:ProductLinkTitleSource}{
   const source=String(html||'').slice(0,MAX_HTML_BYTES);
   const scriptPattern=/<script\b[^>]*type\s*=\s*(?:"application\/ld\+json"|'application\/ld\+json'|application\/ld\+json)[^>]*>([\s\S]*?)<\/script\s*>/giu;
   for(const match of source.matchAll(scriptPattern)){
-    try{const name=jsonLdProductName(JSON.parse(match[1]));if(name)return name;}catch{/* Malformed page metadata falls through to Open Graph/title. */}
+    try{const name=jsonLdProductName(JSON.parse(match[1]));if(name)return {title:name,source:'JSONLD_PRODUCT'};}catch{/* Malformed page metadata falls through to Open Graph/title. */}
   }
   for(const meta of source.matchAll(/<meta\b[^>]*>/giu)){
     const tag=meta[0],property=String(attributeValue(tag,'property')||attributeValue(tag,'name')||'').toLowerCase();
     if(property!=='og:title'&&property!=='twitter:title')continue;
-    const title=cleanMetadataTitle(attributeValue(tag,'content'));if(title)return title;
+    const title=cleanMetadataTitle(attributeValue(tag,'content'));if(title)return {title,source:property==='og:title'?'OG_TITLE':'TWITTER_TITLE'};
   }
-  const titleMatch=source.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/iu);
-  return titleMatch?cleanMetadataTitle(titleMatch[1]):null;
+  const titleMatch=source.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/iu),title=titleMatch?cleanMetadataTitle(titleMatch[1]):null;
+  return {title,source:title?'HTML_TITLE':'NONE'};
 }
+
+export function extractProductTitleFromHtml(html:string):string|null{return extractProductTitleDiagnosticFromHtml(html).title;}
 
 function decoderFor(contentType:string):TextDecoder{
   const charset=contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/iu)?.[1]?.trim();
@@ -132,37 +153,37 @@ async function boundedResponseText(response:Response):Promise<string|null>{
   try{return decoder.decode(bytes);}catch{return new TextDecoder('utf-8').decode(bytes);}
 }
 
-async function fetchHtml(url:URL,fetchImpl:typeof fetch):Promise<string|null>{
+export async function fetchProductLinkPreviewWithDiagnostic(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreviewResult>{
+  const url=parsePublicProductUrl(rawUrl);if(!url)return {preview:null,diagnostic:emptyDiagnostic('URL_VALIDATION','INVALID_URL')};
   const deadline=Date.now()+FETCH_TIMEOUT_MS;
-  let current=new URL(url.href);
+  let current=new URL(url.href),redirectCount=0;
   for(let redirects=0;redirects<=MAX_REDIRECTS;redirects++){
-    const remaining=deadline-Date.now();if(remaining<=0)return null;
+    const remaining=deadline-Date.now();if(remaining<=0)return {preview:null,diagnostic:{...emptyDiagnostic('FETCH','TIMEOUT'),redirectCount}};
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),remaining);
     try{
-      const response=await fetchImpl(current.href,{method:'GET',redirect:'manual',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml;q=0.9'}});
+      const response=await fetchImpl(current.href,{method:'GET',redirect:'manual',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml;q=0.9'}}),httpStatusClass=statusClass(response.status);
       if(response.status>=300&&response.status<400){
-        if(redirects===MAX_REDIRECTS)return null;
-        const location=response.headers.get('location');if(!location)return null;
-        let next:URL;try{next=new URL(location,current);}catch{return null;}
-        const safe=parsePublicProductUrl(next.href);if(!safe)return null;
-        current=safe;continue;
+        if(redirects===MAX_REDIRECTS)return {preview:null,diagnostic:{...emptyDiagnostic('REDIRECT','REDIRECT_LIMIT'),httpStatusClass,redirectCount}};
+        const location=response.headers.get('location');if(!location)return {preview:null,diagnostic:{...emptyDiagnostic('REDIRECT','REDIRECT_MISSING_LOCATION'),httpStatusClass,redirectCount}};
+        let next:URL;try{next=new URL(location,current);}catch{return {preview:null,diagnostic:{...emptyDiagnostic('REDIRECT','REDIRECT_BLOCKED'),httpStatusClass,redirectCount}};}
+        const safe=parsePublicProductUrl(next.href);if(!safe)return {preview:null,diagnostic:{...emptyDiagnostic('REDIRECT','REDIRECT_BLOCKED'),httpStatusClass,redirectCount}};
+        current=safe;redirectCount++;continue;
       }
-      if(!response.ok)return null;
-      const contentType=String(response.headers.get('content-type')||'').toLowerCase();
-      if(!contentType||(!contentType.startsWith('text/html')&&!contentType.startsWith('application/xhtml+xml')))return null;
-      return await boundedResponseText(response);
-    }catch{return null;}
-    finally{clearTimeout(timer);}
+      if(!response.ok)return {preview:null,diagnostic:{...emptyDiagnostic('RESPONSE','HTTP_ERROR'),httpStatusClass,redirectCount}};
+      const contentType=contentTypeClass(String(response.headers.get('content-type')||''));
+      if(contentType!=='HTML'&&contentType!=='XHTML')return {preview:null,diagnostic:{...emptyDiagnostic('CONTENT','NON_HTML'),httpStatusClass,redirectCount,contentType}};
+      const html=await boundedResponseText(response);if(html===null)return {preview:null,diagnostic:{...emptyDiagnostic('CONTENT','READ_ERROR'),httpStatusClass,redirectCount,contentType}};
+      const extracted=extractProductTitleDiagnosticFromHtml(html);if(!extracted.title)return {preview:null,diagnostic:{...emptyDiagnostic('TITLE','NO_TITLE'),httpStatusClass,redirectCount,contentType,titleSource:'NONE'}};
+      return {preview:{url:url.href,title:extracted.title},diagnostic:{stage:'COMPLETE',httpStatusClass,redirectCount,contentType,titleSource:extracted.source,reason:'OK',titleResolved:true}};
+    }catch(error){
+      const timeout=controller.signal.aborted||Date.now()>=deadline||(error instanceof DOMException&&error.name==='AbortError');
+      return {preview:null,diagnostic:{...emptyDiagnostic('FETCH',timeout?'TIMEOUT':'NETWORK'),redirectCount}};
+    }finally{clearTimeout(timer);}
   }
-  return null;
+  return {preview:null,diagnostic:{...emptyDiagnostic('REDIRECT','REDIRECT_LIMIT'),redirectCount}};
 }
 
-export async function fetchProductLinkPreview(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreview|null>{
-  const url=parsePublicProductUrl(rawUrl);if(!url)return null;
-  const html=await fetchHtml(url,fetchImpl);if(!html)return null;
-  const title=extractProductTitleFromHtml(html);if(!title)return null;
-  return {url:url.href,title};
-}
+export async function fetchProductLinkPreview(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreview|null>{return (await fetchProductLinkPreviewWithDiagnostic(rawUrl,fetchImpl)).preview;}
 
 function urlOnlyTitleSeed(block:ProductLinkPreviewBlock):URL|null{
   const seed=String(block.titleSeed||'').trim(),direct=parsePublicProductUrl(seed);
@@ -179,7 +200,7 @@ export function resolveProductLinkModelTitle(modelTitle:string,block:ProductLink
   return title;
 }
 
-export async function enrichShoppingProductLinkPreviews(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<number>{
+export async function enrichShoppingProductLinkPreviewsWithDiagnostics(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<{attached:number;diagnostics:ProductLinkDiagnostic[]}>{
   const candidates:Array<{block:ProductLinkPreviewBlock;url:URL}>=[],seen=new Set<string>();
   for(const field of fields){
     if(field.destination!=='shopping')continue;
@@ -190,8 +211,10 @@ export async function enrichShoppingProductLinkPreviews(fields:ProductLinkPrevie
     }
     if(candidates.length>=MAX_PRODUCT_LINK_PREVIEWS)break;
   }
-  const previews=await Promise.all(candidates.map(candidate=>fetchProductLinkPreview(candidate.url.href,fetchImpl).catch(()=>null)));
+  const results=await Promise.all(candidates.map(candidate=>fetchProductLinkPreviewWithDiagnostic(candidate.url.href,fetchImpl).catch(()=>({preview:null,diagnostic:emptyDiagnostic('FETCH','NETWORK')}))));
   let attached=0;
-  previews.forEach((preview,index)=>{if(preview){candidates[index].block.productLinkPreview=preview;attached++;}});
-  return attached;
+  results.forEach((result,index)=>{if(result.preview){candidates[index].block.productLinkPreview=result.preview;attached++;}});
+  return {attached,diagnostics:results.map(result=>result.diagnostic)};
 }
+
+export async function enrichShoppingProductLinkPreviews(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<number>{return (await enrichShoppingProductLinkPreviewsWithDiagnostics(fields,fetchImpl)).attached;}

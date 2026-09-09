@@ -19,12 +19,13 @@ for(const marker of [
   "redirect:'manual'",
   'while(total<MAX_HTML_BYTES)',
   'if(total>=MAX_HTML_BYTES)await reader.cancel()',
-  "contentType.startsWith('text/html')",
-  "contentType.startsWith('application/xhtml+xml')",
+  "contentType!=='HTML'&&contentType!=='XHTML'",
   "hostname.includes(':')",
   "url.username||url.password",
   "BLOCKED_HOST_SUFFIXES",
-])assert.ok(helperSource.includes(marker),`product-link guard marker missing: ${marker}`);
+  'fetchProductLinkPreviewWithDiagnostic',
+  'enrichShoppingProductLinkPreviewsWithDiagnostics',
+])assert.ok(helperSource.includes(marker),`product-link guard/diagnostic marker missing: ${marker}`);
 
 const rakutenUrl='https://item.rakuten.co.jp/sanwa-junkei/t-018ss/?s-id=smt_top_normal_ranking_total_2';
 assert.equal(helper.parsePublicProductUrl(rakutenUrl)?.href,rakutenUrl,'Rakuten public product URL must be accepted');
@@ -42,8 +43,12 @@ for(const unsafe of [
 
 const jsonLdHtml=`<!doctype html><html><head><script type="application/ld+json">${JSON.stringify({ '@context':'https://schema.org','@type':'Product',name:'【送料無料】国産鶏 冷凍つくね 1kg 業務用 お取り寄せ' })}</script></head></html>`;
 assert.equal(helper.extractProductTitleFromHtml(jsonLdHtml),'【送料無料】国産鶏 冷凍つくね 1kg 業務用 お取り寄せ','JSON-LD Product.name must have priority');
+assert.deepEqual(helper.extractProductTitleDiagnosticFromHtml(jsonLdHtml),{title:'【送料無料】国産鶏 冷凍つくね 1kg 業務用 お取り寄せ',source:'JSONLD_PRODUCT'},'diagnostic extractor must classify JSON-LD without changing title');
 assert.equal(helper.extractProductTitleFromHtml('<meta property="og:title" content="冷凍つくね 1kg &amp; 国産鶏"><title>fallback</title>'),'冷凍つくね 1kg & 国産鶏','Open Graph title and HTML entities must be supported');
+assert.equal(helper.extractProductTitleDiagnosticFromHtml('<meta property="og:title" content="商品">').source,'OG_TITLE','Open Graph source enum');
+assert.equal(helper.extractProductTitleDiagnosticFromHtml('<meta name="twitter:title" content="商品">').source,'TWITTER_TITLE','Twitter source enum');
 assert.equal(helper.extractProductTitleFromHtml('<title> 冷凍 つくね   1kg | 店舗名 </title>'),'冷凍 つくね 1kg | 店舗名','HTML title must be the final metadata fallback');
+assert.equal(helper.extractProductTitleDiagnosticFromHtml('<title>商品</title>').source,'HTML_TITLE','HTML title source enum');
 
 const htmlResponse=html=>new Response(html,{status:200,headers:{'content-type':'text/html; charset=utf-8'}});
 let calls=[];
@@ -52,14 +57,33 @@ const direct=await helper.fetchProductLinkPreview(rakutenUrl,directFetch);
 assert.equal(direct?.url,rakutenUrl,'preview must retain the original normalized product URL');
 assert.equal(direct?.title,'【送料無料】国産鶏 冷凍つくね 1kg 業務用 お取り寄せ','preview must return extracted public page title');
 assert.equal(calls[0]?.init?.redirect,'manual','redirect following must stay under application validation');
+const directDiagnostic=await helper.fetchProductLinkPreviewWithDiagnostic(rakutenUrl,async()=>htmlResponse(jsonLdHtml));
+assert.deepEqual(directDiagnostic.diagnostic,{stage:'COMPLETE',httpStatusClass:'2XX',redirectCount:0,contentType:'HTML',titleSource:'JSONLD_PRODUCT',reason:'OK',titleResolved:true},'success diagnostic must expose only bounded classifications');
 
 calls=[];
 const privateRedirectFetch=async(url,init)=>{calls.push({url,init});return new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}});};
 assert.equal(await helper.fetchProductLinkPreview('https://shop.example.org/p',privateRedirectFetch),null,'redirect to private host must fail closed');
 assert.equal(calls.length,1,'private redirect must not be fetched');
+const blockedRedirectDiagnostic=await helper.fetchProductLinkPreviewWithDiagnostic('https://shop.example.org/p',async()=>new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}}));
+assert.equal(blockedRedirectDiagnostic.diagnostic.reason,'REDIRECT_BLOCKED','unsafe redirect must be diagnostically classified without exposing destination');
+assert.equal(blockedRedirectDiagnostic.diagnostic.httpStatusClass,'3XX','redirect status is coarse only');
 
 const safeRedirectFetch=async url=>url.includes('/start')?new Response(null,{status:302,headers:{location:'/product'}}):htmlResponse('<meta name="twitter:title" content="冷凍つくね1kg">');
 assert.equal((await helper.fetchProductLinkPreview('https://shop.example.org/start',safeRedirectFetch))?.title,'冷凍つくね1kg','bounded same-public-host redirect must be supported');
+const safeRedirectDiagnostic=await helper.fetchProductLinkPreviewWithDiagnostic('https://shop.example.org/start',safeRedirectFetch);
+assert.equal(safeRedirectDiagnostic.diagnostic.redirectCount,1,'safe redirect count is bounded diagnostic metadata');
+assert.equal(safeRedirectDiagnostic.diagnostic.titleSource,'TWITTER_TITLE','title source survives a safe redirect');
+
+const httpFailure=await helper.fetchProductLinkPreviewWithDiagnostic('https://shop.example.org/p',async()=>new Response('blocked',{status:403,headers:{'content-type':'text/html'}}));
+assert.deepEqual(httpFailure.diagnostic,{stage:'RESPONSE',httpStatusClass:'4XX',redirectCount:0,contentType:'NONE',titleSource:'NONE',reason:'HTTP_ERROR',titleResolved:false},'HTTP failure must expose status class but not body/status details');
+const nonHtml=await helper.fetchProductLinkPreviewWithDiagnostic('https://shop.example.org/file',async()=>new Response('binary',{status:200,headers:{'content-type':'application/octet-stream'}}));
+assert.deepEqual(nonHtml.diagnostic,{stage:'CONTENT',httpStatusClass:'2XX',redirectCount:0,contentType:'NON_HTML',titleSource:'NONE',reason:'NON_HTML',titleResolved:false},'non-HTML response must be classified');
+const noTitle=await helper.fetchProductLinkPreviewWithDiagnostic('https://shop.example.org/p',async()=>htmlResponse('<html><body>product page without metadata</body></html>'));
+assert.deepEqual(noTitle.diagnostic,{stage:'TITLE',httpStatusClass:'2XX',redirectCount:0,contentType:'HTML',titleSource:'NONE',reason:'NO_TITLE',titleResolved:false},'2xx HTML without title metadata must be distinguishable');
+for(const result of [directDiagnostic,blockedRedirectDiagnostic,httpFailure,nonHtml,noTitle]){
+  const serialized=JSON.stringify(result.diagnostic);
+  assert.ok(!serialized.includes('shop.example.org')&&!serialized.includes('rakuten')&&!serialized.includes('blocked')&&!serialized.includes('product page'),'diagnostic projection must not contain URL/domain/body/title text');
+}
 
 assert.equal(await helper.fetchProductLinkPreview('https://shop.example.org/file',async()=>new Response('binary',{status:200,headers:{'content-type':'application/octet-stream'}})),null,'non-HTML response must be ignored');
 const largeHtml='<head><meta property="og:title" content="冷凍つくね1kg"></head>'+('x'.repeat(300*1024));
@@ -70,8 +94,9 @@ const fields=[
   {destination:'task',blocks:[{originalText:'https://shop.example.org/ignored',titleSeed:'https://shop.example.org/ignored',lines:['https://shop.example.org/ignored']}]},
 ];
 let enrichCalls=0;
-const attached=await helper.enrichShoppingProductLinkPreviews(fields,async()=>{enrichCalls++;return htmlResponse('<meta property="og:title" content="冷凍つくね1kg">');});
-assert.equal(attached,1,'one URL-only shopping block must receive a preview');
+const enriched=await helper.enrichShoppingProductLinkPreviewsWithDiagnostics(fields,async()=>{enrichCalls++;return htmlResponse('<meta property="og:title" content="冷凍つくね1kg">');});
+assert.equal(enriched.attached,1,'one URL-only shopping block must receive a preview');
+assert.equal(enriched.diagnostics.length,1,'one safe per-link diagnostic must accompany the one attempted shopping URL');
 assert.equal(enrichCalls,1,'non-shopping URL blocks must not trigger metadata fetches');
 assert.equal(fields[0].blocks[0].productLinkPreview?.title,'冷凍つくね1kg','shopping block must carry bounded metadata title for draft generation');
 assert.equal(fields[1].blocks[0].productLinkPreview,undefined,'non-shopping block must remain untouched');
@@ -83,23 +108,30 @@ assert.equal(helper.resolveProductLinkModelTitle(prefixedBlock.titleSeed,prefixe
 
 const fiveUrls=Array.from({length:5},(_,i)=>{const url=`https://shop${i}.example.org/item`;return {originalText:url,titleSeed:url,lines:[url]};});
 let boundedCalls=0;
-await helper.enrichShoppingProductLinkPreviews([{destination:'shopping',blocks:fiveUrls}],async()=>{boundedCalls++;return htmlResponse('<title>商品</title>');});
+const bounded=await helper.enrichShoppingProductLinkPreviewsWithDiagnostics([{destination:'shopping',blocks:fiveUrls}],async()=>{boundedCalls++;return htmlResponse('<title>商品</title>');});
 assert.equal(boundedCalls,4,'one rough-input request must fetch at most four product pages');
+assert.equal(bounded.diagnostics.length,4,'diagnostic cardinality must obey the same four-link bound');
 
 for(const marker of [
-  "import { enrichShoppingProductLinkPreviews, resolveProductLinkModelTitle, type ProductLinkPreviewBlock } from './task-rough-input-product-link';",
+  'enrichShoppingProductLinkPreviewsWithDiagnostics',
+  'type ProductLinkDiagnostic',
   "if(destination==='shopping'&&block.productLinkPreview?.title)return block.productLinkPreview.title.slice(0,200);",
   "if(field.destination==='shopping'&&block.productLinkPreview?.title)return true;",
   'productPageTitles:field.blocks.map(block=>block.productLinkPreview?.title??null)',
   'productPageTitlesだけを根拠にquantity/category/dueDate/dueTimeを追加しないでください。',
   'return analyzeTaskRoughInput(ctx,body,{productLinkPreview:true});',
-  'if(context.productLinkPreview){try{await enrichShoppingProductLinkPreviews(parsed.fields);}',
+  'let productLinkDiagnostics:ProductLinkDiagnostic[]=[];',
+  'enrichShoppingProductLinkPreviewsWithDiagnostics(parsed.fields)',
+  'productLinkDiagnostics});',
   'function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughItem[]',
   'const items=acceptedProductLinkTitles(validation.items,parsed.fields);',
 ])assert.ok(apiSource.includes(marker),`rough-input product-link integration marker missing: ${marker}`);
-assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata enrichment must not add another Gemini call site');
+assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata diagnostics must not add another Gemini call site');
 assert.ok(previewUiSource.includes("firstHttpUrl(item.originalText)"),'shopping preview must continue deriving the editable URL field from original input');
+assert.ok(previewUiSource.includes('productLinkDiagnosticHtml'),'rough-input preview must render bounded product-link failure diagnostics');
+assert.ok(previewUiSource.includes('data.productLinkDiagnostics'),'browser must consume only the server diagnostic projection');
+for(const forbidden of ['d.url','d.href','d.hostname','d.host','d.body','d.titleText'])assert.ok(!previewUiSource.includes(forbidden),`browser diagnostic must not expose private/raw product metadata field: ${forbidden}`);
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');
+console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, privacy-safe stage/status/content/title-source/reason diagnostics, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');

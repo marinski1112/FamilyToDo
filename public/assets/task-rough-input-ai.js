@@ -26,6 +26,7 @@ try{
 .task-rough-input .rough-preview{margin-top:16px;border:0;border-top:1px solid #e2e8f0;background:none;padding:12px 0 0}
 .task-rough-input .rough-preview h3{font-size:17px;margin:0 0 4px}
 .task-rough-input .rough-preview>p{margin:4px 0 8px;font-size:13px;color:#475569}
+.rough-product-link-diagnostic{margin:8px 0;padding:8px 10px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .rough-draft-row{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid #e2e8f0}
 .rough-draft-row:last-of-type{border-bottom:0}
 .rough-draft-heading{display:grid;grid-template-columns:80px minmax(0,1fr) 44px;gap:6px;align-items:center}
@@ -114,9 +115,14 @@ try{
     const category=row.querySelector('.rough-draft-category');if(category)category.addEventListener('change',()=>{const custom=row.querySelector('.rough-draft-category-custom');if(custom){custom.hidden=category.value!=='__custom__';if(!custom.hidden)custom.focus();}});
     const destination=row.querySelector('.rough-draft-destination');if(destination)destination.addEventListener('change',()=>{syncItemFromRow(item,row);item.destination=destination.value;row.dataset.destination=item.destination;row.innerHTML=rowBody(item,index,dests);bindRow(row,item,index,dests);});
   };
-  const render=(items,source,reason='')=>{
+  const productLinkDiagnosticHtml=diagnostics=>{
+    const rows=(Array.isArray(diagnostics)?diagnostics:[]).filter(d=>d&&d.titleResolved!==true).slice(0,4);
+    if(!rows.length)return '';
+    return `<div class="rough-product-link-diagnostic" role="status"><strong>商品URL診断</strong><br>${rows.map((d,index)=>`#${index+1} stage=${esc(d.stage||'UNKNOWN')} / status=${esc(d.httpStatusClass||'NONE')} / redirects=${Number.isInteger(d.redirectCount)?d.redirectCount:0} / content=${esc(d.contentType||'NONE')} / title=${esc(d.titleSource||'NONE')} / reason=${esc(d.reason||'UNKNOWN')}`).join('<br>')}</div>`;
+  };
+  const render=(items,source,reason='',productLinkDiagnostics=[])=>{
     const dests=destinations();
-    preview.innerHTML=`<h3>下書き確認</h3><p class="small">${source==='gemini'?'AIで整理しました。':reason==='SIMPLE_INPUT'?'入力をそのまま下書きにしました。':'AIを利用できなかったため、原文の下書きです。'} 日付・数量を確認してください。</p>${items.map((item,index)=>`<div class="rough-draft-row" data-rough-index="${index}" data-destination="${esc(item.destination)}">${rowBody(item,index,dests)}</div>`).join('')}`;
+    preview.innerHTML=`<h3>下書き確認</h3><p class="small">${source==='gemini'?'AIで整理しました。':reason==='SIMPLE_INPUT'?'入力をそのまま下書きにしました。':'AIを利用できなかったため、原文の下書きです。'} 日付・数量を確認してください。</p>${productLinkDiagnosticHtml(productLinkDiagnostics)}${items.map((item,index)=>`<div class="rough-draft-row" data-rough-index="${index}" data-destination="${esc(item.destination)}">${rowBody(item,index,dests)}</div>`).join('')}`;
     [...preview.querySelectorAll('.rough-draft-row')].forEach((row,index)=>bindRow(row,items[index],index,dests));preview.hidden=false;preview.scrollIntoView({block:'nearest'});
   };
   button.onclick=async()=>{
@@ -131,7 +137,7 @@ try{
       const response=await fetch('/api/task-rough-input',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,primaryType:primary(),fields,summarize:summarize()}),signal:AbortSignal.timeout(45000)}),data=await response.json().catch(()=>null);
       if(snapshot(fieldPayload())!==requestSnapshot)return;
       if(!response.ok||!data?.ok||!Array.isArray(data.items))throw new Error('rough-input analysis failed');
-      render(data.items,data.source,data.reason);
+      render(data.items,data.source,data.reason,data.productLinkDiagnostics);
     }catch{
       if(snapshot(fieldPayload())!==requestSnapshot)return;
       const items=fields.flatMap(field=>(summarize()&&field.destination===primary()?[field.text.trim()]:nonblankLines(field.text)).filter(Boolean).map(text=>({destination:field.destination,originalText:text,title:text.split('\n')[0].slice(0,200),description:['task','event'].includes(field.destination)?text.slice(0,1000):null,quantity:null,category:null,dueDate:null,dueTime:null}))).slice(0,20);

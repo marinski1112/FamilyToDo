@@ -3,7 +3,7 @@ import { familyAiProvider, geminiFetch } from './family-ai';
 import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFailureStage, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';
 import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
 import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from './task-rough-input-ai-guard';
-import { enrichShoppingProductLinkPreviews, resolveProductLinkModelTitle, type ProductLinkPreviewBlock } from './task-rough-input-product-link';
+import { enrichShoppingProductLinkPreviewsWithDiagnostics, resolveProductLinkModelTitle, type ProductLinkDiagnostic, type ProductLinkPreviewBlock } from './task-rough-input-product-link';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
@@ -311,7 +311,8 @@ export async function taskRoughInputApi(request:Request,ctx:any):Promise<Respons
 export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughContext={}):Promise<Response>{
   const member=ctx.member;if(!member)return json({ok:false,error:'ログインが必要です。'},401);
   const parsed=parseRequestBody(body);if(!parsed)return json({ok:false,error:'入力は4,000文字以内で内容を確認してください。'},400);
-  if(context.productLinkPreview){try{await enrichShoppingProductLinkPreviews(parsed.fields);}catch{/* Product metadata is optional; the legacy rough-input path must remain available. */}}
+  let productLinkDiagnostics:ProductLinkDiagnostic[]=[];
+  if(context.productLinkPreview){try{productLinkDiagnostics=(await enrichShoppingProductLinkPreviewsWithDiagnostics(parsed.fields)).diagnostics;}catch{/* Product metadata is optional; the legacy rough-input path must remain available. */}}
   const preserveProse=(items:RoughItem[])=>items.map(item=>parsed.summarize&&item.destination===parsed.primaryType?{...item,description:item.originalText}:item);
   const env=ctx.env as Env,diagnosticAttempts:AiDiagnosticAttempt[]=[];
   const recordDiagnostic=async(finalStatus:AiDiagnosticFinalStatus,acceptedModel:string|null=null,itemCount:number|null=null)=>{
@@ -321,7 +322,7 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
     const items=preserveProse(deterministicItems(parsed.fields));
     const finalStatus=diagnosticStatus??(reason==='SIMPLE_INPUT'?'AI_NOT_NEEDED':reason==='STORAGE'?'STORAGE':reason==='BUDGET'?'BUDGET_OR_CIRCUIT':reason==='DISABLED'?'DISABLED':'FALLBACK_DETERMINISTIC');
     await recordDiagnostic(finalStatus,null,items.length);
-    return json({ok:true,source:'deterministic',reason,requiresConfirmation:true,items,suggestedTaskId:null});
+    return json({ok:true,source:'deterministic',reason,requiresConfirmation:true,items,suggestedTaskId:null,productLinkDiagnostics});
   };
   if(familyAiProvider(env)!=='GEMINI'||!String(env.GEMINI_API_KEY||'').trim())return fallback('DISABLED','NOT_CONFIGURED');
   if(!enabled((env as any).ROUGH_INPUT_AI_ENABLED))return fallback('DISABLED');
@@ -369,7 +370,7 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
       const suggestedTaskId=context.taskCandidates?.find(candidate=>candidate.id===normalizedDecoded.suggestedTaskId)?.id??null;
       diagnosticAttempts.push({model,status:'AI_OK',httpStatus:response.status});
       await recordDiagnostic('AI_OK',model,items.length);
-      return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId});
+      return json({ok:true,source:'gemini',model,requiresConfirmation:true,items:preserveProse(items),suggestedTaskId,productLinkDiagnostics});
     }catch{
       const providerElapsedMs=providerStartedAt>0?Date.now()-providerStartedAt:0;
       const reasonCode=failureStage==='PROVIDER_FETCH'&&providerStartedAt>0?(providerElapsedMs>=9_500?'PROVIDER_TIMEOUT':'PROVIDER_NETWORK_EXCEPTION'):'EXCEPTION';
