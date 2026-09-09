@@ -6,6 +6,7 @@ const file=document.getElementById('importFile'),subject=document.getElementById
 if(!file||!subject||!status||!out)return;
 let documentValue=null,lastBatch=0,lastPreview=null;
 const MAX_MEDIA_ITEMS=250,MAX_IMAGE_BYTES=4*1024*1024,IMAGE_TYPES=new Set(['image/jpeg','image/png','image/webp']);
+const SAFE_MEDIA_CODES=new Set(['AUTH_REQUIRED','CSRF_FAILED','INVALID_LOG','BABY_FOOD_LOG_NOT_FOUND','PHOTO_ALREADY_EXISTS','UNSUPPORTED_IMAGE_TYPE','FILE_TOO_LARGE','INVALID_IMAGE','BABY_FOOD_LOG_CHANGED','MEDIA_UPLOAD_FAILED','METHOD_NOT_ALLOWED','TARGET_RESOLUTION_FAILED','API_ERROR']);
 
 const mediaNotice=document.createElement('div');
 mediaNotice.className='notice';
@@ -17,11 +18,14 @@ const mediaStatus=document.createElement('div');mediaStatus.id='importMediaStatu
 file.insertAdjacentElement('afterend',mediaStatus);file.insertAdjacentElement('afterend',mediaFiles);file.insertAdjacentElement('afterend',mediaLabel);
 
 const call=async payload=>{const r=await fetch('/api/family-log-import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:config.csrf,...payload})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'処理できませんでした。');return d};
-const helperCall=async payload=>{const r=await fetch('/api/family-log-import-media-targets',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:config.csrf,subject_id:Number(subject.value),...payload})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error(d?.error||'ぴよログ補正を確認できませんでした。');return d};
+const helperCall=async payload=>{const r=await fetch('/api/family-log-import-media-targets',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:config.csrf,subject_id:Number(subject.value),...payload})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok){const e=new Error(d?.error||'ぴよログ補正を確認できませんでした。');e.mediaStage='target_api';e.mediaStatus=Number(r.status||0);e.mediaCode=SAFE_MEDIA_CODES.has(String(d?.error||''))?String(d.error):'API_ERROR';throw e;}return d};
 const mediaTargets=externalIds=>helperCall({action:'media_targets',external_ids:externalIds});
 const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(className)e.className=className;return e};
 const displayValue=r=>[r.amount!=null?`${r.amount}${r.unit||''}`:'',r.duration_minutes!=null?`${r.duration_minutes}分`:'',r.value_text||'',r.note||''].filter(Boolean).join(' ・ ');
 const cleanName=value=>String(value||'').trim();
+const safeMediaCode=value=>SAFE_MEDIA_CODES.has(String(value||''))?String(value):'API_ERROR';
+const mediaError=(stage,code,httpStatus,message)=>Object.assign(new Error(message),{mediaStage:stage,mediaCode:safeMediaCode(code),mediaStatus:Number(httpStatus||0)});
+const mediaDiagnostic=error=>{const stage=String(error?.mediaStage||'upload_client'),code=safeMediaCode(error?.mediaCode||'API_ERROR'),http=Number(error?.mediaStatus||0);return `${stage}${http?` / HTTP ${http}`:''} / ${code}`;};
 const promotionRecords=()=>Array.isArray(documentValue?.records)?documentValue.records.filter(record=>String(record?.log_type||'').toUpperCase()==='MEAL'&&String(record?.detail_code||'').toUpperCase()==='BABY_FOOD'):[];
 const promotionCall=action=>helperCall({action,source:String(documentValue?.source||''),records:promotionRecords()});
 
@@ -64,33 +68,39 @@ function renderPreview(d){
 }
 
 async function uploadPhoto(fileValue,target){
-  if(!IMAGE_TYPES.has(fileValue.type))throw new Error('対応していない画像形式です。');
-  if(fileValue.size<=0||fileValue.size>MAX_IMAGE_BYTES)throw new Error('画像は4MB以内にしてください。');
+  if(!IMAGE_TYPES.has(fileValue.type))throw mediaError('client_file','UNSUPPORTED_IMAGE_TYPE',0,'対応していない画像形式です。');
+  if(fileValue.size<=0||fileValue.size>MAX_IMAGE_BYTES)throw mediaError('client_file','FILE_TOO_LARGE',0,'画像は4MB以内にしてください。');
   const response=await fetch('/api/family-log-media',{method:'POST',headers:{'content-type':fileValue.type,'x-csrf-token':String(config.csrf||''),'x-family-log-id':String(target.log_id)},body:fileValue});
   let data=null;try{data=await response.json();}catch{}
   if(response.status===409&&data?.error==='PHOTO_ALREADY_EXISTS')return 'existing';
-  if(!response.ok||!data?.ok)throw new Error(data?.error||`写真アップロードに失敗しました（HTTP ${response.status}）。`);
+  if(!response.ok||!data?.ok)throw mediaError('upload_api',data?.error||'API_ERROR',response.status,data?.error||`写真アップロードに失敗しました（HTTP ${response.status}）。`);
   return 'uploaded';
 }
 
 async function uploadPhotos(button,explicitRetry=false){
-  const list=manifest();if(!list.length)return {uploaded:0,existing:0,missing:0,failed:0,uncertain:0};
+  const list=manifest();if(!list.length)return {uploaded:0,existing:0,unselected:0,targetMissing:0,failed:0,uncertain:0};
   const chosen=selectedFiles();
-  if(!chosen.size){mediaStatus.textContent=`家族ログは取り込み済みです。離乳食写真 ${list.length}件は未選択です。写真を選んで「写真だけ再試行」を押してください。`;if(button)button.hidden=false;return {uploaded:0,existing:0,missing:list.length,failed:0,uncertain:0};}
-  const resolved=await mediaTargets(list.map(item=>item.external_id)),byId=new Map((resolved.targets||[]).map(target=>[String(target.external_id),target]));
-  let uploaded=0,existing=0,missing=0,failed=0,uncertain=0;
+  if(!chosen.size){mediaStatus.textContent=`家族ログは取り込み済みです。離乳食写真 ${list.length}件は未選択です。写真を選んで「写真だけ再試行」を押してください。`;if(button)button.hidden=false;return {uploaded:0,existing:0,unselected:list.length,targetMissing:0,failed:0,uncertain:0};}
+  let resolved;
+  try{resolved=await mediaTargets(list.map(item=>item.external_id));}
+  catch(error){mediaStatus.textContent=`写真対象の確認に失敗しました（${mediaDiagnostic(error)}）。記録は再インポートしていません。`;throw error;}
+  const byId=new Map((resolved.targets||[]).map(target=>[String(target.external_id),target]));
+  let uploaded=0,existing=0,unselected=0,targetMissing=0,failed=0,uncertain=0;
+  const failureDiagnostics=new Map();
   for(const item of list){
     const selected=chosen.get(item.file_name),target=byId.get(item.external_id);
-    if(!selected||!target){missing++;continue;}
+    if(!selected){unselected++;continue;}
+    if(!target){targetMissing++;continue;}
     if(target.has_media){existing++;continue;}
     try{const result=await uploadPhoto(selected,target);result==='uploaded'?uploaded++:existing++;}
-    catch(error){if(error instanceof TypeError){uncertain++;}else{failed++;}}
+    catch(error){if(error instanceof TypeError){uncertain++;}else{failed++;const diagnostic=mediaDiagnostic(error);failureDiagnostics.set(diagnostic,(failureDiagnostics.get(diagnostic)||0)+1);}}
   }
-  const unresolved=missing+failed+uncertain;
-  mediaStatus.textContent=`写真: 追加 ${uploaded} / 既存 ${existing} / 未選択・対象なし ${missing} / 失敗 ${failed}${uncertain?` / 通信結果不明 ${uncertain}`:''}${uncertain?'。通信結果不明の写真は自動再試行していません。再試行時は既存写真を先に確認します。':''}`;
+  const unresolved=unselected+targetMissing+failed+uncertain;
+  const failureSummary=[...failureDiagnostics.entries()].map(([diagnostic,count])=>`${diagnostic} ×${count}`).join('、');
+  mediaStatus.textContent=`写真: 追加 ${uploaded} / 既存 ${existing} / 未選択 ${unselected} / 対象未解決 ${targetMissing} / 失敗 ${failed}${uncertain?` / 通信結果不明 ${uncertain}`:''}${failureSummary?`（${failureSummary}）`:''}${uncertain?'。通信結果不明の写真は自動再試行していません。再試行時は既存写真を先に確認します。':''}`;
   if(button)button.hidden=unresolved===0;
   if(explicitRetry&&unresolved===0)status.textContent='写真の取り込みも完了しました。';
-  return {uploaded,existing,missing,failed,uncertain};
+  return {uploaded,existing,unselected,targetMissing,failed,uncertain};
 }
 
 async function runPhotoOnly(button,progress){
