@@ -172,7 +172,7 @@
         row.textContent=formatTime(entry.from)+'〜'+formatTime(entry.to)+' · '+type+' '+entry.minutes+'分 · '+entry.place;
         reportEl.append(row);
       }
-      if(!payload.report?.length){const empty=document.createElement('p');empty.textContent='滞在時間を判定するには、時間をあけた複数の位置記録が必要です。';reportEl.append(empty);}
+      if(!payload.report?.length){const empty=document.createElement('p');empty.textContent=payload.reportAvailable===false?'レポートを取得できませんでした。地図の履歴は表示できます。管理の「拠点・到着通知」を確認してください。':'滞在時間を判定するには、時間をあけた複数の位置記録が必要です。';reportEl.append(empty);}
       if(payload.reportTruncated){const more=document.createElement('p');more.textContent='先頭100区間を表示しています。期間を絞って確認してください。';reportEl.append(more);}
       renderLinks(points,truncated);
       displayedMemberId=memberId;

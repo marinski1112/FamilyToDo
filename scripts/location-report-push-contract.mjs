@@ -42,6 +42,9 @@ const denied={member:{id:1,family_id:1},session:{csrfToken:'expected'},env:{DB:{
 assert.equal((await locationPlacesApi({method:'GET'},denied)).status,403);
 denied.env.DB.prepare=()=>({bind:()=>({first:async()=>({role:'MEMBER'})})});
 assert.equal((await locationPlacesApi({method:'POST',headers:{get:()=>''}},denied)).status,403,'CSRF denial precedes mutation');
+const {locationHistoryApi}=load('src/location-history-api.ts',['locationHistoryApi'],{URL,Date,Number,json:(body,status)=>({body,status}),D1LocationQueryService:class{async history(){return [point(0),point(5)];}},readKnownLocationPlaces:async()=>{throw Error('fixture failure');},buildLocationStayReport});
+const historyResult=await locationHistoryApi({method:'GET',url:'https://example.test/api/location/history?memberId=1&from='+encodeURIComponent(time(0))+'&to='+encodeURIComponent(time(5))},{member:{id:1,family_id:1},env:{DB:{}}});
+assert.equal(historyResult.body.points.length,2);assert.equal(historyResult.body.reportAvailable,false,'place/report failure must preserve map history');
 for(const source of [sender,api])assert.doesNotMatch(source,/console\.|JSON\.stringify\(point|GEMINI|generateContent/);
 const sql=spawnSync('python3',['-c',`
 import sqlite3,sys

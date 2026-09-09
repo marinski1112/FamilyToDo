@@ -54,10 +54,13 @@ export async function locationHistoryApi(request:Request,ctx:AppContext):Promise
     limit:HISTORY_LIMIT,
   });
 
-  const report=buildLocationStayReport(points,await readKnownLocationPlaces(ctx.env.DB,familyId));
+  let report:ReturnType<typeof buildLocationStayReport>=[],reportAvailable=true;
+  try{report=buildLocationStayReport(points,await readKnownLocationPlaces(ctx.env.DB,familyId));}
+  catch{reportAvailable=false;} // Optional place/report failure must not suppress the authorized map history.
   return json({
     ok:true,
     report:report.slice(0,100),
+    reportAvailable,
     reportTruncated:report.length>100,
     memberId:subjectMemberId,
     from,
