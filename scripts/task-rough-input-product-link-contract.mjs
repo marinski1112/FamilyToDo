@@ -17,7 +17,8 @@ for(const marker of [
   'MAX_HTML_BYTES=256*1024',
   'FETCH_TIMEOUT_MS=4_000',
   "redirect:'manual'",
-  "response.headers.get('content-length')",
+  'while(total<MAX_HTML_BYTES)',
+  'if(total>=MAX_HTML_BYTES)await reader.cancel()',
   "contentType.startsWith('text/html')",
   "contentType.startsWith('application/xhtml+xml')",
   "hostname.includes(':')",
@@ -61,7 +62,8 @@ const safeRedirectFetch=async url=>url.includes('/start')?new Response(null,{sta
 assert.equal((await helper.fetchProductLinkPreview('https://shop.example.org/start',safeRedirectFetch))?.title,'冷凍つくね1kg','bounded same-public-host redirect must be supported');
 
 assert.equal(await helper.fetchProductLinkPreview('https://shop.example.org/file',async()=>new Response('binary',{status:200,headers:{'content-type':'application/octet-stream'}})),null,'non-HTML response must be ignored');
-assert.equal(await helper.fetchProductLinkPreview('https://shop.example.org/huge',async()=>new Response('<title>x</title>',{status:200,headers:{'content-type':'text/html','content-length':String(256*1024+1)}})),null,'oversized response must be ignored before body consumption');
+const largeHtml='<head><meta property="og:title" content="冷凍つくね1kg"></head>'+('x'.repeat(300*1024));
+assert.equal((await helper.fetchProductLinkPreview('https://shop.example.org/large',async()=>new Response(largeHtml,{status:200,headers:{'content-type':'text/html','content-length':String(Buffer.byteLength(largeHtml))}})))?.title,'冷凍つくね1kg','large product pages must parse bounded head metadata instead of being rejected solely by Content-Length');
 
 const fields=[
   {destination:'shopping',blocks:[{originalText:rakutenUrl,titleSeed:rakutenUrl,lines:[rakutenUrl]}]},
@@ -93,4 +95,4 @@ assert.ok(previewUiSource.includes("firstHttpUrl(item.originalText)"),'shopping 
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: public URL preserved, bounded metadata extraction/redirect SSRF guards, mocked product title enrichment, one existing Gemini path, and shopping save URL retention ok');
+console.log('rough-input product link contract: public URL preserved, bounded large-page prefix metadata, redirect SSRF guards, mocked product title enrichment, one existing Gemini path, and shopping save URL retention ok');
