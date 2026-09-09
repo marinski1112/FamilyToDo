@@ -37,7 +37,7 @@ const constrainEditors=()=>{
 const formatVisibleDate=value=>{
   const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));
   if(!match)return String(value||'日付');
-  return `${Number(match[2])}/${Number(match[3])}`;
+  return `${match[1].slice(-2)}.${Number(match[2])}.${Number(match[3])}`;
 };
 const enhanceDatePicker=dateInput=>{
   if(!(dateInput instanceof HTMLInputElement))return;
