@@ -111,6 +111,7 @@ export const activeRegressionGroups=[
   {
     name:'google-integrations',
     checks:[
+      ['google-tasks-routing','node scripts/google-tasks-routing-contract.mjs'],
       ['feature-contracts','node scripts/feature-contract-bundle.mjs google-integrations'],
       ['google-voice-inquiry-gemini-fallback','node scripts/google-voice-inquiry-gemini-fallback-contract.mjs'],
       ['google-home-refresh-log-privacy','node scripts/google-home-refresh-log-privacy-contract.mjs'],
