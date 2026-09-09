@@ -103,6 +103,7 @@
     wrap.querySelectorAll('button[data-detail]').forEach(btn=>{
       btn.classList.toggle('active',String(btn.dataset.detail||'')===select.value);
     });
+    logForm?.dispatchEvent(new Event('family-log-fields-ready'));
   }
 
   function syncMilkPresets(){

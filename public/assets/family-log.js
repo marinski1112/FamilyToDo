@@ -115,15 +115,7 @@ const syncBabyFoodFields=()=>{
   if(label)label.textContent=babyFood?'食べたもの（任意）':'内容';
   if(input instanceof HTMLInputElement)input.placeholder=babyFood?'例：10倍がゆ、にんじん':'';
 };
-const queueBabyFoodSync=()=>queueMicrotask(syncBabyFoodFields);
-document.addEventListener('click',event=>{
-  const target=event.target instanceof Element?event.target:null;
-  if(target?.closest('.family-log-form-action[data-detail="BABY_FOOD"],.family-log-edit,#familyLogDetailChoices [data-detail]'))queueBabyFoodSync();
-},true);
-document.addEventListener('change',event=>{
-  const target=event.target;
-  if(target instanceof HTMLSelectElement&&['log_type','detail_code'].includes(target.name))queueBabyFoodSync();
-});
+document.getElementById('familyLogForm')?.addEventListener('family-log-fields-ready',syncBabyFoodFields);
 
 // Load the photo enhancer first so its capture-phase save hook is registered before
 // the canonical Family Log core attaches its ordinary submit handler. The photo UI is
@@ -133,7 +125,7 @@ const loadCore=()=>{
   if(coreStarted)return;
   coreStarted=true;
   window.familyLogDiagnostic?.mark('CORE_LOAD_START');
-  load('/assets/family-log-core.js?v=wave128-quick-diag1',()=>{
+  load('/assets/family-log-core.js?v=wave128-quick-diag1-photo1',()=>{
     window.familyLogDiagnostic?.mark('CORE_LOADED');
     syncBabyFoodFields();
     if(location.pathname==='/app/settings_family_log.php')load('/assets/family-log-management-ui.js?v=wave128-fix18');
@@ -141,5 +133,5 @@ const loadCore=()=>{
   },()=>window.familyLogDiagnostic?.mark('CORE_LOAD_FAILED'));
 };
 window.familyLogDiagnostic?.mark('PHOTO_LOAD_START');
-load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',()=>{window.familyLogDiagnostic?.mark('PHOTO_LOADED');loadCore();},()=>{window.familyLogDiagnostic?.mark('PHOTO_LOAD_FAILED');loadCore();});
+load('/assets/family-log-baby-food-media.js?v=baby-food-photo-form2',()=>{window.familyLogDiagnostic?.mark('PHOTO_LOADED');loadCore();},()=>{window.familyLogDiagnostic?.mark('PHOTO_LOAD_FAILED');loadCore();});
 })();

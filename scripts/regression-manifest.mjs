@@ -2,6 +2,7 @@ export const activeRegressionGroups=[
   {
     name:'core-domain',
     checks:[
+      ['family-log-photo-form','node scripts/family-log-photo-form-contract.mjs'],
       ['family-log-one-shot-diagnostics','node scripts/family-log-diagnostics-contract.mjs'],
       ['family-log-success-recovery','node scripts/family-log-success-recovery-contract.mjs'],
       ['current-contracts','node scripts/core-contract-smoke.mjs'],

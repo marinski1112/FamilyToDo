@@ -21,6 +21,6 @@ assert.match(compact,/choreHelp\.textContent!==choreHelpText/,'MutationObserver 
 assert.doesNotMatch(compact,/choreLabel\.textContent\?\.includes\('名前'\)\)choreLabel\.textContent='名前（1〜6文字）'/,'body observer must not self-trigger by unconditionally replacing the same label text node');
 assert.doesNotMatch(compact,/choreHelp\.matches\('p\.small'\)\)choreHelp\.textContent='6文字以内で設定してください。既存の長い名前は自動で切断しません。'/,'body observer must not self-trigger by unconditionally replacing the same help text node');
 assert.match(loader,/location\.pathname==='\/app\/settings_family_log\.php'\)load\('\/assets\/family-log-management-ui\.js\?v=wave128-fix18'\);\s*else load\('\/assets\/family-log-compact-ui\.js\?v=compact3'\)/,'daily Family Log must load the fixed compact enhancer directly instead of routing through the management enhancer');
-assert.match(shell,/const FAMILY_LOG_UI_REVISION = 'baby-food-photo2-observer1'/,'Family Log loader must be cache-busted for the observer fix');
+assert.match(shell,/const FAMILY_LOG_UI_REVISION = 'baby-food-photo2-observer1-form2'/,'Family Log loader must be cache-busted for the observer fix');
 
 console.log('Family Log successful quick saves can leave UI_UPDATE_DONE without entering a self-sustaining compact MutationObserver microtask loop');
