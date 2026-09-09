@@ -7,15 +7,39 @@
   const MODAL_FAILURE_STAGES=['MODAL_NOT_OPEN','MODAL_SHEET_MISSING','MODAL_SHEET_ZERO_RECT','MODAL_SHEET_OUTSIDE_VIEWPORT','MODAL_HITTEST_BLOCKED'];
   let record=null,requestActive=false;
   const safeEvents=events=>Array.isArray(events)?events.slice(0,64).flatMap(e=>e&&STAGES.has(e.stage)&&Number.isInteger(e.ms)&&e.ms>=0&&e.ms<=600000?[{stage:e.stage,ms:e.ms,...(Number.isInteger(e.status)&&e.status>=100&&e.status<=599?{status:e.status}:{}),...(ERROR_NAMES.has(e.reason)?{reason:e.reason}:{})}]:[]):[];
-  const read=()=>{
+  const getStorage=name=>{try{return window[name]||null;}catch{return null;}};
+  const normalizeRecord=v=>{
+    if(!v||v.scope!==scope||!Number.isFinite(v.expires)||v.expires<=Date.now())return null;
+    const started=Number(v.started)||Date.now();
+    return {scope,expires:v.expires,armed:v.armed===true,tapped:v.tapped===true,reload:v.reload===true,started,updated:Number(v.updated)||started,id:/^[0-9a-f-]{36}$/.test(v.id)?v.id:null,events:safeEvents(v.events)};
+  };
+  const readStorage=storage=>{
+    if(!storage)return null;
     try{
-      const v=JSON.parse(sessionStorage.getItem(KEY)||'null');
-      if(!v)return null;
-      if(v.scope!==scope||!Number.isFinite(v.expires)||v.expires<=Date.now()){sessionStorage.removeItem(KEY);return null;}
-      return {scope,expires:v.expires,armed:v.armed===true,tapped:v.tapped===true,reload:v.reload===true,started:Number(v.started)||Date.now(),id:/^[0-9a-f-]{36}$/.test(v.id)?v.id:null,events:safeEvents(v.events)};
+      const raw=storage.getItem(KEY);
+      if(!raw)return null;
+      const normalized=normalizeRecord(JSON.parse(raw));
+      if(!normalized)storage.removeItem(KEY);
+      return normalized;
     }catch{return null;}
   };
-  const save=()=>{try{sessionStorage.setItem(KEY,JSON.stringify(record));return true;}catch{return false;}};
+  const read=()=>{
+    const session=readStorage(getStorage('sessionStorage')),persistent=readStorage(getStorage('localStorage'));
+    if(!session)return persistent;
+    if(!persistent)return session;
+    if(persistent.updated!==session.updated)return persistent.updated>session.updated?persistent:session;
+    return persistent.events.length>session.events.length?persistent:session;
+  };
+  const writeStorage=(storage,text)=>{if(!storage)return false;try{storage.setItem(KEY,text);return true;}catch{return false;}};
+  const save=()=>{
+    try{
+      if(!record)return false;
+      record.updated=Date.now();
+      const text=JSON.stringify({...record,events:safeEvents(record.events)});
+      const sessionSaved=writeStorage(getStorage('sessionStorage'),text),persistentSaved=writeStorage(getStorage('localStorage'),text);
+      return sessionSaved||persistentSaved;
+    }catch{return false;}
+  };
   const mark=(stage,status,reason)=>{
     try{
       if(!record||record.expires<=Date.now()||!STAGES.has(stage)||record.events.length>=64)return;
@@ -26,7 +50,7 @@
   if(admin){
     const status=document.getElementById('familyLogDiagnosticStatus'),out=document.getElementById('familyLogDiagnosticResult');
     document.getElementById('familyLogDiagnosticArm')?.addEventListener('click',()=>{
-      record={scope,expires:Date.now()+600000,armed:true,tapped:false,reload:false,started:Date.now(),id:null,events:[]};
+      record={scope,expires:Date.now()+600000,armed:true,tapped:false,reload:false,started:Date.now(),updated:Date.now(),id:null,events:[]};
       if(!save()){status.textContent='端末の診断保存を利用できません。このブラウザでは採取できません。';return;}
       location.assign('/app/family_log.php');
     });
@@ -50,13 +74,13 @@
         append(box,'p',`${operation} ／ 端末最終段階：${events.at(-1)?.stage||'証拠なし'} ／ 経過：${events.at(-1)?.ms??'—'}ms`);
         append(box,'p',`Correlation ID：${id}`).style.overflowWrap='anywhere';
         if(s?.time)append(box,'p',`時刻（JST）：${new Date(s.time.replace(' ','T')+'Z').toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`);
-        for(const [label,list] of [['端末（同じタブのみ）',events],['サーバー',se]]){
+        for(const [label,list] of [['端末（短時間保存）',events],['サーバー',se]]){
           append(box,'h3',label);const ul=append(box,'ol','');
           if(!list.length)append(ul,'li','証拠なし：未到達とは断定できません');
           for(const e of list)append(ul,'li',`${e.stage} +${e.ms}ms${e.status?' HTTP '+e.status:''}${e.reason?' '+e.reason:''}`).style.overflowWrap='anywhere';
         }
       }
-      append(out,'p','時間は各側の記録開始からの経過です。保存が不明なときは再送せず、家族ログ一覧を確認してください。子供クイックの入力画面を開く経路は保存前なので、サーバー証拠が無いこと自体は異常ではありません。');
+      append(out,'p','時間は各側の記録開始からの経過です。端末記録は同一サイト内へ最大10分だけ退避し、family scopeが一致する診断だけを復元します。保存が不明なときは再送せず、家族ログ一覧を確認してください。子供クイックの入力画面を開く経路は保存前なので、サーバー証拠が無いこと自体は異常ではありません。');
     };
     document.getElementById('familyLogDiagnosticRead')?.addEventListener('click',async event=>{
       const btn=event.currentTarget;btn.disabled=true;status.textContent='診断を読み込み中…';
@@ -66,15 +90,15 @@
         const response=await fetch('/api/settings/diagnostics-detail?issue=family_log_quick',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal});
         const data=await response.json();
         if(!response.ok||!data.ok)throw new Error('READ_FAILED');
-        render(local,Array.isArray(data.items)?data.items:[]);status.textContent='取得完了。端末の証拠はこのタブだけに保存されています。';
-      }catch{render(local,[]);status.textContent='サーバー診断を取得できません。端末の証拠のみ表示しています（未到達とは断定できません）。';}
+        render(local,Array.isArray(data.items)?data.items:[]);status.textContent='取得完了。端末の証拠は同一サイト内へ最大10分だけ退避されます。';
+      }catch{render(local,[]);status.textContent='サーバー診断を取得できません。端末の短時間保存から復元した証拠のみ表示しています（未到達とは断定できません）。';}
       finally{clearTimeout(timer);btn.disabled=false;}
     });
     return;
   }
   record=read();
   if(!record)return;
-  if(!record.id){try{record.id=crypto.randomUUID();}catch{return;}record.started=Date.now();}
+  if(!record.id){try{record.id=crypto.randomUUID();}catch{return;}record.started=Date.now();save();}
   const reloadPage=record.reload;
   mark(reloadPage?'RELOAD_BOOTSTRAP_START':'DIAGNOSTIC_READY');
   if(reloadPage)setTimeout(()=>{if(!record.events.some(e=>e.stage==='RELOAD_BOOTSTRAP_READY'))mark('PENDING_15S');},15000);
