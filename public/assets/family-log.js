@@ -1,6 +1,6 @@
 (()=>{
-window.familyLogDiagnostic?.mark('LOADER_START');
 'use strict';
+window.familyLogDiagnostic?.mark('LOADER_START');
 const load=(src,onload,onerror)=>{const s=document.createElement('script');s.src=src;s.defer=true;if(onload)s.addEventListener('load',onload,{once:true});s.addEventListener('error',()=>{console.error('[Family TODO] asset load failed',src);if(onerror)onerror();},{once:true});document.head.appendChild(s);};
 // BABY_FOOD already uses the canonical MEAL/BABY_FOOD Family Log model, but the
 // historical default quick action records an empty row immediately. Keep that

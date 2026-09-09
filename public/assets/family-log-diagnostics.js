@@ -1,7 +1,7 @@
 (()=>{
   'use strict';
   const KEY='family-log-one-shot-v1',scope=String(document.currentScript?.dataset.family||'');
-  const STAGES=new Set(['DIAGNOSTIC_READY','LOADER_START','PHOTO_LOAD_START','PHOTO_LOADED','PHOTO_LOAD_FAILED','CORE_LOAD_START','CORE_SCRIPT_START','CORE_READY','CORE_LOADED','CORE_LOAD_FAILED','TAP','HANDLER_START','BUTTON_DISABLED','HANDLER_NOT_OBSERVED','REQUEST_START','RESPONSE_RECEIVED','PARSE_OK','PARSE_FAILED','NETWORK_ERROR','NETWORK_ABORT','REQUEST_SETTLED','UI_UPDATE_START','UI_UPDATE_DONE','BUTTON_ENABLED','RELOAD_REQUESTED','PAGEHIDE','RELOAD_BOOTSTRAP_START','RELOAD_BOOTSTRAP_READY','JS_ERROR','UNHANDLED_REJECTION','PENDING_15S']);
+  const STAGES=new Set(['DIAGNOSTIC_READY','LOADER_START','PHOTO_LOAD_START','PHOTO_LOADED','PHOTO_LOAD_FAILED','CORE_LOAD_START','CORE_SCRIPT_START','PAYLOAD_MISSING','PAYLOAD_PARSE_FAILED','CORE_READY','CORE_LOADED','CORE_LOAD_FAILED','TAP','HANDLER_START','BUTTON_DISABLED','HANDLER_NOT_OBSERVED','REQUEST_START','RESPONSE_RECEIVED','PARSE_OK','PARSE_FAILED','NETWORK_ERROR','NETWORK_ABORT','REQUEST_SETTLED','UI_UPDATE_START','UI_UPDATE_DONE','EDITOR_READY','BUTTON_ENABLED','RELOAD_REQUESTED','PAGEHIDE','RELOAD_BOOTSTRAP_START','RELOAD_BOOTSTRAP_READY','JS_ERROR','UNHANDLED_REJECTION','PENDING_15S']);
 const ERROR_NAMES=new Set(['TypeError','ReferenceError','SyntaxError','RangeError','SecurityError','AbortError']);
   let record=null,requestActive=false;
   const safeEvents=events=>Array.isArray(events)?events.slice(0,64).flatMap(e=>e&&STAGES.has(e.stage)&&Number.isInteger(e.ms)&&e.ms>=0&&e.ms<=600000?[{stage:e.stage,ms:e.ms,...(Number.isInteger(e.status)&&e.status>=100&&e.status<=599?{status:e.status}:{}),...(ERROR_NAMES.has(e.reason)?{reason:e.reason}:{})}]:[]):[];
@@ -38,7 +38,7 @@ const ERROR_NAMES=new Set(['TypeError','ReferenceError','SyntaxError','RangeErro
         const has=stage=>events.some(x=>x.stage===stage),saved=se.some(x=>x.stage==='DB_OK');
         const last=se.at(-1),failure=se.find(x=>x.stage==='SERVER_ERROR');
         const failureStage=failure?se[se.indexOf(failure)-1]?.stage:null;
-        const result=has('RELOAD_BOOTSTRAP_READY')?'再読込・初期化完了':has('BUTTON_ENABLED')?'エラー後ボタン復帰':has('PENDING_15S')?'15秒時点で操作未完了':failure?'サーバー処理失敗':'診断途中／証拠を確認';
+        const result=has('EDITOR_READY')?'入力画面を表示（保存前）':has('RELOAD_BOOTSTRAP_READY')?'再読込・初期化完了':has('BUTTON_ENABLED')?'エラー後ボタン復帰':has('PENDING_15S')?'15秒時点で操作未完了':failure?'サーバー処理失敗':'診断途中／証拠を確認';
         const box=append(out,'details','');box.open=id===local?.id;
         append(box,'summary',`FAMILY_LOG_QUICK：${result}`);
         append(box,'p',`DB保存：${saved?'成功を確認':'未確認（未保存とは断定しません）'} ／ サーバー最終段階：${failureStage||last?.stage||'証拠なし'}${failure?.reason?' ／ '+failure.reason:''}`);
@@ -74,6 +74,7 @@ const ERROR_NAMES=new Set(['TypeError','ReferenceError','SyntaxError','RangeErro
   if(!record.id){try{record.id=crypto.randomUUID();}catch{return;}record.started=Date.now();}
   const reloadPage=record.reload;
   mark(reloadPage?'RELOAD_BOOTSTRAP_START':'DIAGNOSTIC_READY');
+  if(reloadPage)setTimeout(()=>{if(!record.events.some(e=>e.stage==='RELOAD_BOOTSTRAP_READY'))mark('PENDING_15S');},15000);
   window.familyLogDiagnostic={
     mark,
     begin(){
@@ -89,11 +90,11 @@ const ERROR_NAMES=new Set(['TypeError','ReferenceError','SyntaxError','RangeErro
     ready(){mark('CORE_READY');if(reloadPage)mark('RELOAD_BOOTSTRAP_READY');}
   };
   document.addEventListener('click',event=>{
-    const btn=event.target instanceof Element?event.target.closest('.family-log-quick-action,.family-log-one-tap'):null;
+    const btn=event.target instanceof Element?event.target.closest('.family-log-quick-action,.family-log-one-tap,.family-log-form-action'):null;
     if(!btn||btn.disabled||record.tapped||!record.armed)return;
     record.tapped=true;record.armed=false;mark('TAP');
     setTimeout(()=>{if(!record.events.some(e=>e.stage==='HANDLER_START'))mark('HANDLER_NOT_OBSERVED');},1000);
-    setTimeout(()=>{if(!record.events.some(e=>['BUTTON_ENABLED','RELOAD_BOOTSTRAP_READY'].includes(e.stage)))mark('PENDING_15S');},15000);
+    setTimeout(()=>{if(!record.events.some(e=>['BUTTON_ENABLED','EDITOR_READY','RELOAD_BOOTSTRAP_READY'].includes(e.stage)))mark('PENDING_15S');},15000);
   },true);
   window.addEventListener('pagehide',()=>mark('PAGEHIDE'));
   window.addEventListener('error',event=>mark('JS_ERROR',undefined,ERROR_NAMES.has(event.error?.name)?event.error.name:undefined));

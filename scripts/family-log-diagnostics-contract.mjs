@@ -99,6 +99,11 @@ assert.equal(ui.button.disabled,true,'diagnostics do not conceal an existing rec
 const pendingRequest=browser(()=>new Promise(()=>{}));void pendingRequest.tap();await Promise.resolve();
 pendingRequest.timers.find(t=>t.ms===15000).fn();assert.equal(pendingRequest.count,1);assert.equal(pendingRequest.button.disabled,true,'observer must not retry/re-enable an uncertain mutation');assert.ok(pendingRequest.events().some(e=>e.stage==='PENDING_15S'));
 const missing=browser(async()=>Response.json({ok:true}));missing.listeners.click({target:missing.button});missing.timers.find(t=>t.ms===1000).fn();assert.ok(missing.events().some(e=>e.stage==='HANDLER_NOT_OBSERVED'));
+const form=browser(async()=>{throw Error('form open must not save');});
+let formClick;form.c.document.querySelectorAll=()=>[{dataset:{},addEventListener(type,fn){formClick=fn;}}];
+form.c.openNew=()=>{};form.c.formField=()=>({value:''});form.c.refreshDynamicFields=()=>{};
+vm.runInContext(core.slice(core.indexOf("  document.querySelectorAll('.family-log-form-action')"),core.indexOf("  document.querySelectorAll('.family-log-one-tap')")),form.c);
+form.listeners.click({target:form.button});formClick();assert.equal(form.count,0);assert.ok(form.events().some(e=>e.stage==='EDITOR_READY'));
 const deniedStorage=browser(async()=>Response.json({ok:true}),{storageFails:true});await deniedStorage.tap();assert.equal(deniedStorage.count,1);
 assert.ok(!recorder.includes('console.')&&!source.includes('console.'),'no raw console logging');
 assert.ok(!core.includes('AbortController'),'no speculative mutation timeout');
