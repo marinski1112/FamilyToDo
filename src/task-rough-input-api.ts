@@ -54,11 +54,13 @@ const temporalIntentHint=(value:string)=>relativeOffsetHint.test(value.normalize
 const sharedTrailingDueDirective=/^(?:これ|これら)\s*(?:全部|全て|すべて)\s*(.+?)\s*まで$/u;
 const sharedDeadlineDateText=/^(?:\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日|今日|本日|明日|あした|明後日|あさって|月末|来月末)$/u;
 
-function semanticBlocks(text:string):RoughBlock[]{
+function semanticBlocks(text:string,destination:Destination):RoughBlock[]{
   const source=text.replace(/\r\n?/g,'\n').split('\n').map(raw=>({raw,trimmed:raw.trim()})).filter(x=>x.trimmed);
   const groups:string[][]=[];
   for(const line of source){
-    const continuation=groups.length>0&&(/^\s/.test(line.raw)||metadataPrefix.test(line.trimmed)||explicitQuantityPrefix.test(line.trimmed)||httpUrlOnly.test(line.trimmed));
+    const current=groups[groups.length-1],currentHasUrl=!!current?.some(value=>httpUrlOnly.test(value));
+    const urlContinuation=httpUrlOnly.test(line.trimmed)&&!(destination==='shopping'&&currentHasUrl);
+    const continuation=groups.length>0&&(/^\s/.test(line.raw)||metadataPrefix.test(line.trimmed)||explicitQuantityPrefix.test(line.trimmed)||urlContinuation);
     if(continuation)groups[groups.length-1].push(line.trimmed);
     else groups.push([line.trimmed]);
   }
@@ -165,7 +167,7 @@ function parseRequestBody(value:unknown):{primaryType:Destination;fields:RoughFi
     if(!destinationOk(destination)||seen.has(destination))return null;
     seen.add(destination);totalChars+=text.length;
     const nonblank=text.replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
-    const initialBlocks=summarize&&destination===primaryType&&nonblank.length?[{originalText:text.trim(),titleSeed:nonblank[0],lines:nonblank}]:semanticBlocks(text);
+    const initialBlocks=summarize&&destination===primaryType&&nonblank.length?[{originalText:text.trim(),titleSeed:nonblank[0],lines:nonblank}]:semanticBlocks(text,destination);
     const scoped=summarize&&destination===primaryType?{blocks:initialBlocks,sharedDueDirective:null}:splitSharedDueDirective(initialBlocks);
     const blocks=scoped.blocks,sharedDueDirective=scoped.sharedDueDirective;
     totalLines+=nonblank.length;totalItems+=blocks.length;
