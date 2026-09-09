@@ -89,7 +89,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
       WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
         AND (
-          (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)=date(?))
+          (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
           OR (s.task_id IS NULL AND s.due_date IS NULL)
           OR (
             s.task_id IS NOT NULL
