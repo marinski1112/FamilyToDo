@@ -1,5 +1,5 @@
 import { recurringForFamilyRange } from './recurrence-projection';
-import { digestHasNumericClaim, type DigestGeneration } from './line-digest-generation';
+import { digestHasNumericClaim, safeDigestAttempts, type DigestAttempt, type DigestGeneration } from './line-digest-generation';
 import { dailyFortune, type DailyFortune } from './daily-fortune';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
@@ -170,7 +170,8 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   }catch{/* Optional personalization context must never block the deterministic morning digest. */}
   const fallbackBase=options[morningVariant(localDate,17,options.length)]||options[0];
   const fallbackFrame:Frame={...fallbackBase,personalNote:deterministicPersonalNote(profiles,localDate),narrativeVersion:3};
-  const fallback=async(reason:string,model?:string)=>{await finalizeRecapSafely(env,familyId,localDate,null,[],{status:'FALLBACK',reason,model});return fallbackFrame;};
+  const attempts:DigestAttempt[]=[];
+  const fallback=async(reason:string,model?:string)=>{await finalizeRecapSafely(env,familyId,localDate,null,[],{status:'FALLBACK',reason,model,attempts:safeDigestAttempts(attempts)});return fallbackFrame;};
   const evidence=morningNarrativeEvidence(sharedFacts,weather);
   try{
     const persisted=await readFinalizedMorningDigestFrame(env.DB,familyId,localDate);
@@ -186,12 +187,18 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
     let reserved=false;
     try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,localDate,attempt>0);}catch{return fallback('STORAGE',model);}
     if(!reserved)return fallback('BUDGET_OR_CIRCUIT',model);
+    const startedAt=Date.now();
+    const evidenceAttempt:DigestAttempt={model,httpStatus:null,stage:'PROVIDER_FETCH',reason:'NETWORK_ERROR',durationMs:0};
+    attempts.push(evidenceAttempt);
     try{
       const response=await geminiFetch(env,model,body);
+      evidenceAttempt.httpStatus=response.status;evidenceAttempt.stage='PROVIDER_RESPONSE';
       if(response.status===429){try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{/* The current bounded fallback may proceed even if circuit persistence fails. */}}
-      if(!response.ok){failureReason=response.status===429?'RATE_LIMIT':'UPSTREAM';continue;}
+      if(!response.ok){failureReason=response.status===429?'RATE_LIMIT':'UPSTREAM';evidenceAttempt.reason=response.status===429?'RATE_LIMIT':'HTTP_ERROR';continue;}
+      evidenceAttempt.stage='RESPONSE_PARSE';evidenceAttempt.reason='RESPONSE_BODY_JSON_INVALID';
       const data=await response.json() as any;
       const text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||'');
+      evidenceAttempt.stage='OUTPUT_PARSE';evidenceAttempt.reason=text.trim()?'MODEL_OUTPUT_JSON_INVALID':'CANDIDATE_TEXT_MISSING';
       const parsed=JSON.parse(text),recap=typeof parsed?.recap==='string'?clean(parsed.recap,MAX_MORNING_NARRATIVE_CHARS):'';
       const entries=Array.isArray(parsed?.members)?parsed.members:[];
       const memberMorning:MemberMorning[]=recipients.map(member=>{
@@ -199,13 +206,20 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
         const entry=matches.length===1?matches[0]:{};
         return {memberId:Number(member.id),note:typeof entry.note==='string'?clean(entry.note,80):'',fortune:typeof entry.fortune==='string'?clean(entry.fortune,120):''};
       });
-      if(recap&&generatedRecapPassesSafety(recap,profiles)&&memberMorning.every(entry=>generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles))){
+      evidenceAttempt.stage='RECAP_VALIDATION';evidenceAttempt.reason=digestHasNumericClaim(recap)?'NUMERIC_CLAIM':'RECAP_REJECTED';
+      const recapValid=!!recap&&generatedRecapPassesSafety(recap,profiles);
+      if(recapValid){evidenceAttempt.stage='MEMBER_VALIDATION';evidenceAttempt.reason=memberMorning.some(entry=>digestHasNumericClaim(entry.note)||digestHasNumericClaim(entry.fortune))?'NUMERIC_CLAIM':'MEMBER_REJECTED';}
+      if(recapValid&&memberMorning.every(entry=>generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles))){
         const frame:Frame={...fallbackBase,personalNote:recap,narrativeVersion:3,memberMorning};
-        await finalizeRecapSafely(env,familyId,localDate,recap,memberMorning,{status:'AI',reason:'OK',model});
+        evidenceAttempt.stage='COMPLETE';evidenceAttempt.reason='OK';evidenceAttempt.durationMs=Date.now()-startedAt;
+        await finalizeRecapSafely(env,familyId,localDate,recap,memberMorning,{status:'AI',reason:'OK',model,attempts:safeDigestAttempts(attempts)});
         return frame;
       }
       failureReason='INVALID_OUTPUT';
-    }catch(error){failureReason=error instanceof SyntaxError?'INVALID_OUTPUT':'UPSTREAM';}
+    }catch(error){
+      failureReason=error instanceof SyntaxError?'INVALID_OUTPUT':'UPSTREAM';
+      if(!(error instanceof SyntaxError))evidenceAttempt.reason=error instanceof Error&&error.name==='AbortError'?'PROVIDER_TIMEOUT':evidenceAttempt.stage==='PROVIDER_FETCH'?'NETWORK_ERROR':'EXCEPTION';
+    }finally{evidenceAttempt.durationMs=Date.now()-startedAt;}
   }
   return fallback(failureReason,lastModel);
 }

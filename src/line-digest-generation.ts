@@ -1,4 +1,17 @@
-export type DigestGeneration={status:'AI'|'FALLBACK';reason:string;model?:string};
+export type DigestAttempt={model:string;httpStatus:number|null;stage:string;reason:string;durationMs:number};
+export type DigestGeneration={status:'AI'|'FALLBACK';reason:string;model?:string;attempts?:DigestAttempt[]};
+
+const ATTEMPT_STAGES=new Set(['PROVIDER_FETCH','PROVIDER_RESPONSE','RESPONSE_PARSE','OUTPUT_PARSE','RECAP_VALIDATION','MEMBER_VALIDATION','COMPLETE']);
+const ATTEMPT_REASONS=new Set(['OK','HTTP_ERROR','RATE_LIMIT','PROVIDER_TIMEOUT','NETWORK_ERROR','RESPONSE_BODY_JSON_INVALID','CANDIDATE_TEXT_MISSING','MODEL_OUTPUT_JSON_INVALID','RECAP_REJECTED','MEMBER_REJECTED','NUMERIC_CLAIM','EXCEPTION']);
+export function safeDigestAttempts(value:unknown):DigestAttempt[]{
+  if(!Array.isArray(value))return [];
+  return value.slice(0,2).flatMap(raw=>{
+    if(!raw||typeof raw!=='object')return [];
+    const {model,httpStatus,stage,reason,durationMs}=raw;
+    if(typeof model!=='string'||! /^[A-Za-z0-9._-]{1,120}$/.test(model)||!ATTEMPT_STAGES.has(stage)||!ATTEMPT_REASONS.has(reason))return [];
+    return [{model,httpStatus:Number.isInteger(httpStatus)&&httpStatus>=100&&httpStatus<=599?httpStatus:null,stage,reason,durationMs:Number.isInteger(durationMs)&&durationMs>=0&&durationMs<=300000?durationMs:0}];
+  });
+}
 
 // Count claims stay in deterministic facts; ordinary words/names are not numbers.
 export function digestHasNumericClaim(value:string):boolean{

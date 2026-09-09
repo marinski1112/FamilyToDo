@@ -56,7 +56,7 @@ export async function geminiFetch(env:Env,model:string,body:unknown):Promise<Res
  if(!key)throw new Error('Gemini is not configured');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10_000);
  try{return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:controller.signal});}
- catch{throw new Error('Gemini upstream unavailable');}finally{clearTimeout(timer);}
+ catch{const error=new Error('Gemini upstream unavailable');if(controller.signal.aborted)error.name='AbortError';throw error;}finally{clearTimeout(timer);}
 }
 class InvalidPlanError extends Error{}
 class GeminiUpstreamError extends Error{constructor(public status:number,public safe:SafeGeminiError){super('Gemini upstream failure');}}
