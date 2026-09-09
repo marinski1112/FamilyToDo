@@ -64,24 +64,30 @@ db.exec("INSERT INTO family_log_diagnostics VALUES(2,'expired',1,datetime('now',
 await api.cleanupFamilyLogDiagnostics({DB:D1});assert.equal(db.prepare("SELECT COUNT(*) c FROM family_log_diagnostics WHERE correlation_id='expired'").get().c,0);
 
 const recorder=fs.readFileSync('public/assets/family-log-diagnostics.js','utf8');
+const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const core=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const post=core.slice(core.indexOf('  async function post('),core.indexOf('  function setSubjectTypes'));
 const quick=core.slice(core.indexOf("  document.querySelectorAll('.family-log-quick-action')"),core.indexOf("  document.querySelectorAll('.family-log-form-action')"));
 const oneTap=core.slice(core.indexOf("  document.querySelectorAll('.family-log-one-tap')"),core.indexOf("  document.querySelectorAll('.family-log-row')"));
-function browser(fetcher,{saved,storageFails=false,uiFails=false,selector='.family-log-one-tap'}={}){
+function browser(fetcher,{saved,storageFails=false,uiFails=false,selector='.family-log-one-tap',pwaOrder='none'}={}){
   let text=saved||JSON.stringify({scope:'1',expires:Date.now()+600000,armed:true,tapped:false,reload:false,started:Date.now(),id:null,events:[]});
   const listeners={},timers=[];let handler,fetchCount=0,reloads=0;
   class Element{closest(){return this;}}
   const button=new Element();Object.assign(button,{disabled:false,dataset:{subjectId:'1',quickKey:'PEE',quickActionId:'3'},setAttribute(){},removeAttribute(){},addEventListener(type,fn){handler=fn;}});
   const sandbox={Date,Set,JSON,Number,Element,crypto:{randomUUID:()=>id},sessionStorage:{getItem(){if(storageFails)throw Error('storage');return text;},setItem(k,v){if(storageFails)throw Error('storage');text=v;},removeItem(){text='null';}},
-    document:{currentScript:{dataset:{family:'1'}},getElementById:()=>null,addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
+    document:{currentScript:{dataset:{family:'1'}},getElementById:()=>null,querySelector:()=>null,head:{append(){}},addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({dataset:{},remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
+    navigator:{},MutationObserver:class{observe(){}},
     location:{reload(){reloads++;}},alert(){},setTimeout(fn,ms){timers.push({fn,ms});return timers.length;},clearTimeout(){},addEventListener(type,fn){listeners[type]=fn;},
     fetch:async(...args)=>{fetchCount++;return fetcher(...args);}};
-  sandbox.window=sandbox;const c=vm.createContext(sandbox);vm.runInContext(recorder,c);vm.runInContext("const csrf='SECRET';"+post+quick+oneTap,c);
+  sandbox.window=sandbox;const c=vm.createContext(sandbox);vm.runInContext(recorder,c);
+  button.cloneNode=()=>{throw new Error('PWA must not replace the canonical quick control');};
+  if(pwaOrder==='before')vm.runInContext(pwa,c);
+  vm.runInContext("const csrf='SECRET';"+post+quick+oneTap,c);
+  if(pwaOrder==='after')vm.runInContext(pwa,c);
   return {c,button,timers,listeners,get text(){return text;},get count(){return fetchCount;},get reloads(){return reloads;},tap(){listeners.click?.({target:button});return handler();},events(){return JSON.parse(text)?.events||[];}};
 }
-for(const selector of ['.family-log-one-tap','.family-log-quick-action']){
-  const b=browser(async(url,options)=>{assert.equal(url,'/api/family-log');assert.equal(options.headers['X-Family-Log-Trace'],id);return Response.json({ok:true,message:'PRIVATE MESSAGE'});},{selector});
+for(const selector of ['.family-log-one-tap','.family-log-quick-action'])for(const pwaOrder of ['before','after']){
+  const b=browser(async(url,options)=>{assert.equal(url,'/api/family-log');assert.equal(options.headers['X-Family-Log-Trace'],id);return Response.json({ok:true,message:'PRIVATE MESSAGE'});},{selector,pwaOrder});
   await b.tap();await b.tap();assert.equal(b.count,1,'disabled tap must not resubmit');
   assert.ok(b.events().some(e=>e.stage==='UI_UPDATE_DONE'));assert.ok(b.events().some(e=>e.stage==='REQUEST_SETTLED'));
   b.timers.find(t=>t.ms===900||t.ms===1100).fn();assert.equal(b.reloads,1);

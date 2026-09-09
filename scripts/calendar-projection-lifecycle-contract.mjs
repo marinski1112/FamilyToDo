@@ -25,6 +25,8 @@ for(const retired of ['processCalendarInbound','applyInbound','syncCalendarAccou
 assert.match(pwa,/calendarProjectionDiagnose/,'integration UI must expose projection diagnostics');
 assert.match(pwa,/calendarProjectionRebind/,'integration UI must expose guarded projection rebind');
 assert.match(pwa,/CREATE_NEW_CALENDAR/,'UI rebind must send the explicit confirmation token');
-assert.match(pwa,/familyCsrf/,'Family Log quick-action CSRF must remain isolated from integration-page CSRF');
+assert.doesNotMatch(pwa,/familyCsrf|familyLogPayload|execute_quick_action/,'PWA must not own Family Log mutations or their CSRF token');
+const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
+assert.ok(familyCore.includes("const csrf=String(payload.csrf||'')")&&familyCore.includes('JSON.stringify({...body,csrf})'),'canonical Family Log mutations must retain their own payload CSRF');
 
 console.log('calendar-projection-lifecycle-contract: diagnostics, guarded rebind, outbound link lifecycle, and effective-delete idempotency contract ok');
