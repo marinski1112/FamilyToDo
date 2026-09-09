@@ -69,7 +69,7 @@ assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'));
 assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'));
 assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
 assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
-assert.ok(/12\.(?:146|147)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
+assert.ok(/12\.(?:146|147|148)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
 for(const ui of ['FamilyToDo → Google Calendar','Google CalendarからFamilyToDoへの予定取り込みは行いません','watch notificationは連携状態確認','使用モデル:'])assert.ok(calendar.includes(ui),ui);
 assert.match(calendar,/pending_count/);

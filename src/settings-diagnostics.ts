@@ -6,6 +6,7 @@ import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
 import { DEFAULT_FAMILY_TIMEZONE, familyNow } from './timezone';
 import { APP_VERSION } from './version';
+import { familyLogDiagnosticCard, readFamilyLogDiagnostics } from './family-log-diagnostics';
 
 type Row = Record<string, unknown>;
 type DiagnosticDefinition={key:string;label:string;description:string;sql:string;params?:(familyId:number,now:string)=>unknown[]};
@@ -47,7 +48,7 @@ export async function settingsDiagnostics(ctx:AppContext):Promise<Response>{
   let total=0;
   const cards=DIAGNOSTIC_DEFINITIONS.map((d,i)=>{const r=settled[i];if(r.status==='rejected')return `<div class="diagnostic-row has-issue"><div><strong>${esc(d.label)}</strong><div class="small">${esc(d.description)}</div><div class="notice">⚠️ この診断を実行できませんでした</div></div><span>--</span></div>`;const count=Number(r.value?.c||0);total+=count;return `<div class="diagnostic-row ${count?'has-issue':'is-ok'}"><div><strong>${esc(d.label)}</strong><div class="small">${esc(d.description)}</div>${count?`<a class="btn gray small" href="/api/settings/diagnostics-detail?issue=${encodeURIComponent(d.key)}">詳細を見る</a>`:''}</div><span class="diagnostic-count">${count}</span></div>`}).join('');
   const aiHistory=`<div class="card"><div class="section-head"><h2>AI実行履歴</h2><a class="btn gray small" href="/api/settings/diagnostics-detail?issue=ai_generation">最新20件を見る</a></div><p class="small">AIざっくり入力等のprivacy-safe診断です。入力文・prompt・response・URL・error body・token/secretは保存・表示しません。履歴は押した時だけ取得します。</p></div>`;
-  return html(layout('データ診断',`<div class="page-head"><h1>🩺 データ診断</h1><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>整合性（初期ロード ${DIAGNOSTIC_DEFINITIONS.length} query）</h2><span>${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">詳細は押した時だけ最大20件を取得します。secret、token、Web Push endpoint/鍵は表示しません。</p>${cards}</div>${aiHistory}${environmentAuditHtml(ctx.env)}`, '/app/settings.php'));
+  return html(layout('データ診断',`<div class="page-head"><h1>🩺 データ診断</h1><a class="btn gray" href="/app/settings.php">戻る</a></div><div class="card"><div class="section-head"><h2>整合性（初期ロード ${DIAGNOSTIC_DEFINITIONS.length} query）</h2><span>${total?`要確認 ${total}件`:'異常なし'}</span></div><p class="small">詳細は押した時だけ最大20件を取得します。secret、token、Web Push endpoint/鍵は表示しません。</p>${cards}</div>${familyLogDiagnosticCard(ctx)}${aiHistory}${environmentAuditHtml(ctx.env)}`, '/app/settings.php'));
 }
 
 const apiAuthRequired=()=>json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
@@ -60,6 +61,7 @@ export async function settingsDiagnosticsDetail(request:Request,ctx:AppContext):
   const role=String(m.role||'').toUpperCase();
   if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です。'},403);
   const issue=new URL(request.url).searchParams.get('issue')||'';
+  if(issue==='family_log_quick')return readFamilyLogDiagnostics(request,ctx);
   if(issue==='ai_generation'){
     if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
     const rows=await ctx.env.DB.prepare('SELECT feature,final_status,ai_called,attempt_count,accepted_model,item_count,attempts_json,created_at FROM ai_generation_diagnostics WHERE family_id=? ORDER BY id DESC LIMIT 20').bind(m.family_id).all<Row>();

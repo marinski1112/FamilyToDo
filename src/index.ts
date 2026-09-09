@@ -1,4 +1,5 @@
 import { json, redirect } from './response';
+import { cleanupFamilyLogDiagnostics } from './family-log-diagnostics';
 import { AuthRequired, BadRequest, Forbidden } from './errors';
 import { makeContext } from './app-context';
 import { processGoogleTasksInbound } from './google-tasks';
@@ -61,6 +62,7 @@ export default {
     }
     if(controller.cron==='17 * * * *'){
       ctx.waitUntil(cleanupNotificationLifecycle(env));
+      ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
       return;
     }
     if(controller.cron==='29 18 * * *'){

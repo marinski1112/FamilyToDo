@@ -109,7 +109,7 @@ assert.match(calendar,/viewportW-rect\.width-margin/,'floating preview must clam
 assert.match(calendar,/cellRect\.top-gap-rect\.height/,'floating preview should prefer placement above the pressed date');
 assert.match(calendar,/viewportH-rect\.height-84/,'floating preview must stay clear of the bottom navigation');
 assert.doesNotMatch(calendar,/calendar-cell\.calendar-press-preview/,'press preview must not enlarge the pressed date cell itself');
-assert.match(familyLoader,/family-log-core\.js\?v=wave128-fix18/,'Family Log loader must preserve the existing core implementation with the refreshed cache key');
+assert.match(familyLoader,/family-log-core\.js\?v=wave128-quick-diag1/,'Family Log loader must preserve the existing core implementation with the refreshed cache key');
 assert.match(familyLoader,/family-log-management-ui\.js\?v=wave128-fix18/,'Family Log loader must include the refreshed consolidated management UI');
 assert.match(familyCore,/familyLogSubjectOpen/,'Family Log core must retain subject creation/edit behavior');
 assert.match(familyUi,/if\(head\)\[\.\.\.head\.children\]\.forEach/,'Family Log management must inspect every header child rather than only one legacy action');

@@ -1,5 +1,6 @@
 (()=>{
 'use strict';
+window.familyLogDiagnostic?.mark('LOADER_START');
 const load=(src,onload,onerror)=>{const s=document.createElement('script');s.src=src;s.defer=true;if(onload)s.addEventListener('load',onload,{once:true});s.addEventListener('error',()=>{console.error('[Family TODO] asset load failed',src);if(onerror)onerror();},{once:true});document.head.appendChild(s);};
 // BABY_FOOD already uses the canonical MEAL/BABY_FOOD Family Log model, but the
 // historical default quick action records an empty row immediately. Keep that
@@ -131,10 +132,13 @@ let coreStarted=false;
 const loadCore=()=>{
   if(coreStarted)return;
   coreStarted=true;
-  load('/assets/family-log-core.js?v=wave128-fix18',()=>{
+  window.familyLogDiagnostic?.mark('CORE_LOAD_START');
+  load('/assets/family-log-core.js?v=wave128-quick-diag1',()=>{
+    window.familyLogDiagnostic?.mark('CORE_LOADED');
     syncBabyFoodFields();
     load('/assets/family-log-management-ui.js?v=wave128-fix18');
-  });
+  },()=>window.familyLogDiagnostic?.mark('CORE_LOAD_FAILED'));
 };
-load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',loadCore,loadCore);
+window.familyLogDiagnostic?.mark('PHOTO_LOAD_START');
+load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',()=>{window.familyLogDiagnostic?.mark('PHOTO_LOADED');loadCore();},()=>{window.familyLogDiagnostic?.mark('PHOTO_LOAD_FAILED');loadCore();});
 })();

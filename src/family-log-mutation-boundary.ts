@@ -4,6 +4,7 @@ import { familyLogApi } from './family-log-api';
 import { cleanupFamilyLogMediaForLog, drainPendingFamilyLogMedia, reconcileFamilyLogMediaForLog } from './family-log-media-api';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
+import { familyLogStage, withFamilyLogDiagnostic } from './family-log-diagnostics';
 
 type Row=Record<string,unknown>;
 
@@ -32,9 +33,14 @@ function hasNonexistentCanonicalDate(value:unknown):boolean{
  * familyLogApi remains the mutation owner and repeats auth/CSRF/role checks.
  */
 export async function familyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{
+  return withFamilyLogDiagnostic(request,ctx,()=>runFamilyLogMutationBoundary(request,ctx));
+}
+
+async function runFamilyLogMutationBoundary(request:Request,ctx:AppContext):Promise<Response>{
   if(request.method!=='POST')return familyLogApi(request,ctx);
   let body:Record<string,unknown>;
-  try{body=await bodyJson(request.clone());}catch(error){
+  familyLogStage(ctx,'BODY_PARSE');
+  try{body=await bodyJson(request.clone());familyLogStage(ctx,'BODY_PARSED');}catch(error){
     if(error instanceof RequestBodyParseError)return familyLogApi(request,ctx);
     throw error;
   }

@@ -6,7 +6,7 @@ const loader=fs.readFileSync('public/assets/family-log.js','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 
-assert.ok(loader.includes('const loadCore=()=>{')&&loader.includes("load('/assets/family-log-core.js?v=wave128-fix18'")&&loader.includes("load('/assets/family-log-baby-food-media.js?v=baby-food-photo1',loadCore,loadCore)"),'photo enhancer must gate Family Log core on success while failing open on asset error');
+assert.ok(loader.includes('const loadCore=()=>{')&&loader.includes("load('/assets/family-log-core.js?v=wave128-quick-diag1'")&&loader.includes("()=>{window.familyLogDiagnostic?.mark('PHOTO_LOADED');loadCore();}")&&loader.includes("()=>{window.familyLogDiagnostic?.mark('PHOTO_LOAD_FAILED');loadCore();}"),'photo enhancer must gate Family Log core on success while failing open on asset error');
 assert.ok(loader.includes('let coreStarted=false')&&loader.includes('if(coreStarted)return'),'Family Log core bootstrap must remain exactly-once');
 for(const marker of ['accept="image/*"','capture="environment"','MAX_EDGE=800','最大辺800px',"'image/jpeg'",'ctx.drawImage','EXIFメタデータは引き継ぎません'])assert.ok(asset.includes(marker),`photo preparation boundary missing: ${marker}`);
 for(const marker of ["fetch('/api/family-log'","action:'save'","fetch('/api/family-log-media'","'x-csrf-token':csrf","'x-family-log-id':String(id)","method:'DELETE'"])assert.ok(asset.includes(marker),`private save/media boundary missing: ${marker}`);
