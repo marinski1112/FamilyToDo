@@ -44,7 +44,8 @@ export async function familyLogImportMediaTargetsApi(request:Request,context:App
   const rawIds=body.external_ids;
   if(!Array.isArray(rawIds)||rawIds.length<1||rawIds.length>MAX_EXTERNAL_IDS)throw new BadRequest(`写真参照は1〜${MAX_EXTERNAL_IDS}件です。`);
   const ids=[...new Set(rawIds.map(cleanExternalId))];
-  const byExternal=new Map<string,{external_id:string;log_id:number;has_media:boolean}>();
+  type Match={external_id:string;log_id:number;has_media:boolean;count:number};
+  const matches=new Map<string,Match>();
   for(let offset=0;offset<ids.length;offset+=70){
     const part=ids.slice(offset,offset+70),marks=part.map(()=>'?').join(',');
     const rows=await context.env.DB.prepare(`SELECT l.id,l.import_external_id,
@@ -57,11 +58,14 @@ export async function familyLogImportMediaTargetsApi(request:Request,context:App
       ORDER BY l.id DESC`).bind(m.family_id,subjectId,...part).all<Row>();
     for(const row of rows.results||[]){
       const externalId=String(row.import_external_id||'');
-      if(!externalId||byExternal.has(externalId))continue;
-      byExternal.set(externalId,{external_id:externalId,log_id:Number(row.id),has_media:Number(row.has_media||0)===1});
+      if(!externalId)continue;
+      const previous=matches.get(externalId);
+      if(previous){previous.count++;continue;}
+      matches.set(externalId,{external_id:externalId,log_id:Number(row.id),has_media:Number(row.has_media||0)===1,count:1});
     }
   }
-  const targets=ids.map(id=>byExternal.get(id)).filter((value):value is {external_id:string;log_id:number;has_media:boolean}=>Boolean(value));
+  if([...matches.values()].some(match=>match.count!==1))throw new BadRequest('写真参照IDが一意に特定できません。変換JSONのexternal_idを見直してください。');
+  const targets=ids.map(id=>matches.get(id)).filter((value):value is Match=>Boolean(value)).map(({count:_count,...target})=>target);
   const found=new Set(targets.map(target=>target.external_id));
   return json({ok:true,targets,missing:ids.filter(id=>!found.has(id))});
 }
