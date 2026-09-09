@@ -25,10 +25,18 @@ for(const marker of [
   "BLOCKED_HOST_SUFFIXES",
   'fetchProductLinkPreviewWithDiagnostic',
   'enrichShoppingProductLinkPreviewsWithDiagnostics',
+  'productTitleFromUrlPath',
+  "'URL_PATH'",
+  "'PATH_FALLBACK'",
 ])assert.ok(helperSource.includes(marker),`product-link guard/diagnostic marker missing: ${marker}`);
 
 const rakutenUrl='https://item.rakuten.co.jp/sanwa-junkei/t-018ss/?s-id=smt_top_normal_ranking_total_2';
+const slowRakutenUrl='https://item.rakuten.co.jp/enro/kamayaki_meijin_mini/?s-id=smt_top_normal_bhitem';
 assert.equal(helper.parsePublicProductUrl(rakutenUrl)?.href,rakutenUrl,'Rakuten public product URL must be accepted');
+assert.equal(helper.productTitleFromUrlPath(slowRakutenUrl),'kamayaki meijin mini','meaningful Rakuten path slug must provide a bounded deterministic fallback');
+assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/1234567890'),null,'numeric-only product path must not be presented as a product title');
+assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/550e8400-e29b-41d4-a716-446655440000'),null,'opaque UUID-like product path must not be presented as a product title');
+assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/index.html'),null,'generic product path must not be presented as a product title');
 for(const unsafe of [
   'http://127.0.0.1/private',
   'http://10.0.0.1/private',
@@ -103,6 +111,20 @@ assert.equal(fields[1].blocks[0].productLinkPreview,undefined,'non-shopping bloc
 assert.equal(helper.resolveProductLinkModelTitle(rakutenUrl,fields[0].blocks[0]),'冷凍つくね1kg','accepted AI output that repeats the source URL must fall back to fetched metadata title');
 assert.equal(helper.resolveProductLinkModelTitle('国産鶏つくね 1kg',fields[0].blocks[0]),'国産鶏つくね 1kg','a genuine AI-shortened product title must remain authoritative');
 
+const fallbackFields=[{destination:'shopping',blocks:[{originalText:slowRakutenUrl,titleSeed:slowRakutenUrl,lines:[slowRakutenUrl]}]}];
+const fallbackEnriched=await helper.enrichShoppingProductLinkPreviewsWithDiagnostics(fallbackFields,async()=>new Response('blocked',{status:403,headers:{'content-type':'text/html'}}));
+assert.equal(fallbackEnriched.attached,1,'metadata failure with a meaningful path must still attach a deterministic preview');
+assert.equal(fallbackFields[0].blocks[0].productLinkPreview?.title,'kamayaki meijin mini','path fallback must humanize separators without fabricating a product name');
+assert.equal(fallbackFields[0].blocks[0].productLinkPreview?.url,slowRakutenUrl,'path fallback must retain original normalized URL provenance');
+assert.deepEqual(fallbackEnriched.diagnostics[0],{stage:'COMPLETE',httpStatusClass:'4XX',redirectCount:0,contentType:'NONE',titleSource:'URL_PATH',reason:'PATH_FALLBACK',titleResolved:true},'path fallback diagnostic must remain bounded and privacy-safe');
+
+const opaqueUrl='https://shop.example.org/product/1234567890';
+const opaqueFields=[{destination:'shopping',blocks:[{originalText:opaqueUrl,titleSeed:opaqueUrl,lines:[opaqueUrl]}]}];
+const opaqueEnriched=await helper.enrichShoppingProductLinkPreviewsWithDiagnostics(opaqueFields,async()=>new Response('blocked',{status:403,headers:{'content-type':'text/html'}}));
+assert.equal(opaqueEnriched.attached,0,'opaque path must not fabricate a fallback title');
+assert.equal(opaqueFields[0].blocks[0].productLinkPreview,undefined,'opaque path must remain unresolved');
+assert.equal(opaqueEnriched.diagnostics[0].reason,'HTTP_ERROR','unusable path must retain the original metadata failure diagnostic');
+
 const prefixedBlock={originalText:`URL: ${rakutenUrl}`,titleSeed:`URL: ${rakutenUrl}`,lines:[`URL: ${rakutenUrl}`],productLinkPreview:{url:rakutenUrl,title:'冷凍つくね1kg'}};
 assert.equal(helper.resolveProductLinkModelTitle(prefixedBlock.titleSeed,prefixedBlock),'冷凍つくね1kg','URL-prefixed literal model title must fall back to metadata title');
 
@@ -126,7 +148,7 @@ for(const marker of [
   'function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughItem[]',
   'const items=acceptedProductLinkTitles(validation.items,parsed.fields);',
 ])assert.ok(apiSource.includes(marker),`rough-input product-link integration marker missing: ${marker}`);
-assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata diagnostics must not add another Gemini call site');
+assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata diagnostics/fallback must not add another Gemini call site');
 assert.ok(previewUiSource.includes("firstHttpUrl(item.originalText)"),'shopping preview must continue deriving the editable URL field from original input');
 assert.ok(previewUiSource.includes('productLinkDiagnosticHtml'),'rough-input preview must render bounded product-link failure diagnostics');
 assert.ok(previewUiSource.includes('data.productLinkDiagnostics'),'browser must consume only the server diagnostic projection');
@@ -134,4 +156,4 @@ for(const forbidden of ['d.url','d.href','d.hostname','d.host','d.body','d.title
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, privacy-safe stage/status/content/title-source/reason diagnostics, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');
+console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, privacy-safe diagnostics, meaningful URL-path fallback for blocked/slow commerce pages, opaque-path rejection, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');
