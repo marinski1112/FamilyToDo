@@ -138,22 +138,21 @@ async function fetchHtml(url:URL,fetchImpl:typeof fetch):Promise<string|null>{
   for(let redirects=0;redirects<=MAX_REDIRECTS;redirects++){
     const remaining=deadline-Date.now();if(remaining<=0)return null;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),remaining);
-    let response:Response;
     try{
-      response=await fetchImpl(current.href,{method:'GET',redirect:'manual',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml;q=0.9'}});
-    }catch{clearTimeout(timer);return null;}
-    clearTimeout(timer);
-    if(response.status>=300&&response.status<400){
-      if(redirects===MAX_REDIRECTS)return null;
-      const location=response.headers.get('location');if(!location)return null;
-      let next:URL;try{next=new URL(location,current);}catch{return null;}
-      const safe=parsePublicProductUrl(next.href);if(!safe)return null;
-      current=safe;continue;
-    }
-    if(!response.ok)return null;
-    const contentType=String(response.headers.get('content-type')||'').toLowerCase();
-    if(!contentType||(!contentType.startsWith('text/html')&&!contentType.startsWith('application/xhtml+xml')))return null;
-    return boundedResponseText(response);
+      const response=await fetchImpl(current.href,{method:'GET',redirect:'manual',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml;q=0.9'}});
+      if(response.status>=300&&response.status<400){
+        if(redirects===MAX_REDIRECTS)return null;
+        const location=response.headers.get('location');if(!location)return null;
+        let next:URL;try{next=new URL(location,current);}catch{return null;}
+        const safe=parsePublicProductUrl(next.href);if(!safe)return null;
+        current=safe;continue;
+      }
+      if(!response.ok)return null;
+      const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+      if(!contentType||(!contentType.startsWith('text/html')&&!contentType.startsWith('application/xhtml+xml')))return null;
+      return await boundedResponseText(response);
+    }catch{return null;}
+    finally{clearTimeout(timer);}
   }
   return null;
 }
