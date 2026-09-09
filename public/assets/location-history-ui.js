@@ -18,6 +18,9 @@
   let loadingHistory=false;
   let historyRequest=0,displayedMemberId=0;
   const liveRoot=root.closest('[data-location-live]');
+  const addressCache=new Map();
+  const MAX_ADDRESS_LOOKUPS=20;
+  let geocoder=null;
   const emitHistory=(memberId=0,points=[])=>liveRoot?.dispatchEvent(new CustomEvent('family-location-history',{detail:{memberId,points}}));
   const clearDisplay=()=>{reportEl.replaceChildren();historyRequest++;displayedMemberId=0;emitHistory();if(summaryEl)summaryEl.textContent='';linksEl?.replaceChildren();};
   liveRoot?.addEventListener('family-location-latest',event=>{
@@ -120,6 +123,39 @@
     }
   };
 
+  const reportRowText=(entry,address='')=>{
+    const place=address?(entry.place==='未登録地点付近'?address:`${entry.place}（${address}）`):entry.place;
+    return `${formatTime(entry.from)}〜${formatTime(entry.to)} · ${place} · ${entry.minutes}分滞在`;
+  };
+  const reverseAddress=async(point)=>{
+    const lat=Number(point?.latitude),lng=Number(point?.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng))return '';
+    const key=`${lat.toFixed(4)},${lng.toFixed(4)}`;
+    if(addressCache.has(key))return addressCache.get(key)||'';
+    const Maps=window.google?.maps;
+    if(!Maps?.Geocoder)return '';
+    geocoder=geocoder||new Maps.Geocoder();
+    try{
+      const address=await new Promise(resolve=>geocoder.geocode({location:{lat,lng}},(results,status)=>resolve(status==='OK'?String(results?.[0]?.formatted_address||''):'')));
+      const cleaned=String(address||'').replace(/^日本[、,]?\s*/,'').trim();
+      addressCache.set(key,cleaned);
+      return cleaned;
+    }catch{return '';}
+  };
+  const enrichStayAddresses=async(rows,points,requestId)=>{
+    const byTime=new Map(points.map(point=>[String(point?.recordedAt||''),point]));
+    let lookups=0;
+    for(const {entry,row} of rows){
+      if(requestId!==historyRequest||lookups>=MAX_ADDRESS_LOOKUPS)break;
+      const point=byTime.get(String(entry.from||''));
+      if(!point)continue;
+      lookups+=1;
+      const address=await reverseAddress(point);
+      if(requestId!==historyRequest)return;
+      if(address)row.textContent=reportRowText(entry,address);
+    }
+  };
+
   const loadHistory=async(mode='map')=>{
     if(!loadEl||!memberEl||loadingHistory)return;
     loadingHistory=true;
@@ -164,16 +200,16 @@
           ?`取得できた最新${points.length}件の記録点間の直線距離合計 ${distanceText(meters)}。上限に達したため選択期間全体の距離・開始地点とは限りません。期間を短くすると前の記録を確認できます。GPS誤差も含みます。`
           :`記録点間の直線距離合計 ${distanceText(meters)}。1時間を超える記録の空白は線で結びません。道路経路や実際の移動距離とは異なります。`;
       }
-      const heading=document.createElement('h3');heading.textContent='滞在・移動レポート';reportEl.append(heading);
-      const note=document.createElement('p');note.className='small';note.textContent='滞在時間は位置記録からの目安です。現在の登録拠点に照合しています。未登録の場所や移動手段は推測しません。';reportEl.append(note);
+      const heading=document.createElement('h3');heading.textContent='滞在レポート';reportEl.append(heading);
+      const note=document.createElement('p');note.className='small';note.textContent='「どこに・何分いたか」だけをまとめます。同じ未登録地点で続く短い記録も1つの滞在にまとめます。文字レポートでは表示中の滞在先を最大20件、Google Mapsで住所確認します。';reportEl.append(note);
+      const reportRows=[];
       for(const entry of Array.isArray(payload.report)?payload.report:[]){
-        const row=document.createElement('p');row.className='small';
-        const type={STAY:'滞在の目安',MOVE:'移動',GAP:'記録なし',UNCERTAIN:'判定できません'}[entry.kind]||'記録';
-        row.textContent=formatTime(entry.from)+'〜'+formatTime(entry.to)+' · '+type+' '+entry.minutes+'分 · '+entry.place;
-        reportEl.append(row);
+        if(entry?.kind!=='STAY')continue;
+        const row=document.createElement('p');row.className='small';row.textContent=reportRowText(entry);reportEl.append(row);reportRows.push({entry,row});
       }
-      if(!payload.report?.length){const empty=document.createElement('p');empty.textContent=payload.reportAvailable===false?'レポートを取得できませんでした。地図の履歴は表示できます。管理の「拠点・到着通知」を確認してください。':'滞在時間を判定するには、時間をあけた複数の位置記録が必要です。';reportEl.append(empty);}
-      if(payload.reportTruncated){const more=document.createElement('p');more.textContent='先頭100区間を表示しています。期間を絞って確認してください。';reportEl.append(more);}
+      if(!reportRows.length){const empty=document.createElement('p');empty.textContent=payload.reportAvailable===false?'レポートを取得できませんでした。地図の履歴は表示できます。管理の「拠点・到着通知」を確認してください。':'この期間にまとめて表示できる滞在はありません。';reportEl.append(empty);}
+      if(payload.reportTruncated){const more=document.createElement('p');more.textContent='滞在100件まで表示しています。期間を絞ると前の滞在も確認できます。';reportEl.append(more);}
+      if(mode==='report'&&reportRows.length)void enrichStayAddresses(reportRows,points,requestId);
       renderLinks(points,truncated);
       displayedMemberId=memberId;
       emitHistory(memberId,points);
