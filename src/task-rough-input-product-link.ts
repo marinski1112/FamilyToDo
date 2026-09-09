@@ -26,6 +26,7 @@ const MAX_PRODUCT_LINK_PREVIEWS=4;
 const MAX_REDIRECTS=3;
 const MAX_HTML_BYTES=256*1024;
 const FETCH_TIMEOUT_MS=4_000;
+const RAKUTEN_ITEM_FETCH_TIMEOUT_MS=8_000;
 const MAX_METADATA_TITLE_LENGTH=400;
 const TRAILING_URL_PUNCTUATION=/[),.;。、「」』】]+$/u;
 const URL_TOKEN=/https?:\/\/[^\s<>"']+/giu;
@@ -34,6 +35,7 @@ const BLOCKED_HOST_SUFFIXES=['.localhost','.local','.internal','.home','.lan','.
 const emptyDiagnostic=(stage:ProductLinkDiagnosticStage,reason:ProductLinkDiagnosticReason):ProductLinkDiagnostic=>({stage,httpStatusClass:'NONE',redirectCount:0,contentType:'NONE',titleSource:'NONE',reason,titleResolved:false});
 const statusClass=(status:number):ProductLinkHttpStatusClass=>status>=200&&status<300?'2XX':status>=300&&status<400?'3XX':status>=400&&status<500?'4XX':status>=500&&status<600?'5XX':'NONE';
 const contentTypeClass=(raw:string):ProductLinkContentType=>{const value=raw.toLowerCase();if(!value)return 'MISSING';if(value.startsWith('text/html'))return 'HTML';if(value.startsWith('application/xhtml+xml'))return 'XHTML';return 'NON_HTML';};
+const fetchTimeoutMs=(url:URL)=>url.hostname.replace(/\.$/,'').toLowerCase()==='item.rakuten.co.jp'?RAKUTEN_ITEM_FETCH_TIMEOUT_MS:FETCH_TIMEOUT_MS;
 
 function ipv4Parts(hostname:string):number[]|null{
   if(!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname))return null;
@@ -155,7 +157,7 @@ async function boundedResponseText(response:Response):Promise<string|null>{
 
 export async function fetchProductLinkPreviewWithDiagnostic(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreviewResult>{
   const url=parsePublicProductUrl(rawUrl);if(!url)return {preview:null,diagnostic:emptyDiagnostic('URL_VALIDATION','INVALID_URL')};
-  const deadline=Date.now()+FETCH_TIMEOUT_MS;
+  const deadline=Date.now()+fetchTimeoutMs(url);
   let current=new URL(url.href),redirectCount=0;
   for(let redirects=0;redirects<=MAX_REDIRECTS;redirects++){
     const remaining=deadline-Date.now();if(remaining<=0)return {preview:null,diagnostic:{...emptyDiagnostic('FETCH','TIMEOUT'),redirectCount}};
