@@ -35,6 +35,8 @@ export async function calendarSyncOutboundOnly(request: Request, ctx: AppContext
     pending_before: pendingBefore,
     pending_after: pendingAfter,
     inbound_more: false,
+    inbound_stage: 'AUTHORIZATION',
+    inbound_reason: 'APP_CREATED_SCOPE_ONLY',
     more,
     batch_size: { outbound: OUTBOX_LIMIT, inbound: 0 },
   });
