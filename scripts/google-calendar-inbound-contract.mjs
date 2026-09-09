@@ -46,8 +46,9 @@ for(const marker of [
   'calendarImportPrepare',
   'calendarImportApply',
   "source_format='ICS'",
-  "visibility_scope='FAMILY'",
 ]) assert.ok(calendarImport.includes(marker),`safe calendar-import primitive missing: ${marker}`);
+assert.ok(calendarImport.includes('visibility_scope,private_owner_id'),'calendar import task insert must explicitly retain visibility ownership columns');
+assert.ok(calendarImport.includes("'EVENT',0,'FAMILY',NULL"),'calendar import apply must create FAMILY-visible EVENT rows rather than PRIVATE rows');
 assert.ok(apiRoutes.includes("'/api/calendar-import/preview'"),'calendar import preview route must remain available');
 assert.ok(apiRoutes.includes("'/api/calendar-import/prepare'"),'calendar import prepare route must remain available');
 assert.ok(apiRoutes.includes("'/api/calendar-import/apply'"),'calendar import apply route must remain available');
