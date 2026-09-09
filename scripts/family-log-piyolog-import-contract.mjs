@@ -22,6 +22,10 @@ assert.match(browser,/fetch\('\/api\/family-log-media'/,'photo bytes must use th
 assert.match(browser,/if\(target\.has_media\)\{existing\+\+;continue;\}/,'existing private photos must never be overwritten');
 assert.match(browser,/if\(error instanceof TypeError\)\{uncertain\+\+;/,'ambiguous network outcomes must be tracked separately');
 assert.match(browser,/通信結果不明の写真は自動再試行していません/,'ambiguous uploads must not be retried automatically');
+assert.match(browser,/button\.onclick=\(\)=>d\.new_count\?runImport\(d,button,progress\):runPhotoOnly\(button,progress\)/,'all-duplicate previews must enter the photo-only path');
+const photoOnly=browser.match(/async function runPhotoOnly\([\s\S]*?\n}\n\nasync function runImport/);
+assert.ok(photoOnly,'photo-only handler must remain explicit');
+assert.ok(!photoOnly[0].includes('call(')&&!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
 assert.ok(!browser.includes('application/pdf')&&!browser.includes('.pdf"')&&!browser.includes(".pdf'"),'browser import controller must not offer PDF upload');
 assert.ok(!/gemini|generativelanguage|openai|ocr|pdfjs/i.test(browser),'browser import controller must not add AI/OCR/PDF parsing');
 
@@ -35,6 +39,8 @@ for(const marker of [
   "lower(b.source)='piyolog'",
   'l.import_external_id IN',
 ])assert.ok(targets.includes(marker),`missing Piyolog media target boundary: ${marker}`);
+assert.match(targets,/if\(previous\)\{previous\.count\+\+;continue;\}/,'duplicate active matches for one external ID must be counted');
+assert.match(targets,/some\(match=>match\.count!==1\).*写真参照IDが一意に特定できません/s,'ambiguous external IDs must be rejected instead of silently picking the newest log');
 assert.ok(!targets.includes('env.MEDIA')&&!targets.includes('.MEDIA.'),'target resolution must never read or write private object bytes');
 assert.ok(!/gemini|generativelanguage|openai|ocr|pdfjs/i.test(targets),'server target resolution must not add AI/OCR/PDF parsing');
 assert.match(targets,/MAX_EXTERNAL_IDS=250/,'target resolver must stay bounded');
@@ -51,4 +57,4 @@ assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) retur
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'photo target resolver must be routed through the authenticated context dispatcher');
 assert.match(String(pkg.scripts?.['check:browser-js']||''),/family-log-import-piyolog\.js/,'Piyolog browser controller must be syntax checked in CI');
 
-console.log('family-log Piyolog import: external conversion, preview-first records, private baby-food photo resolution, no overwrite/retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
+console.log('family-log Piyolog import: external conversion, preview-first records, unambiguous private baby-food photo resolution, record-free photo retry, no overwrite/auto-retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
