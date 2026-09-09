@@ -75,6 +75,11 @@ assert.equal(attached,1,'one URL-only shopping block must receive a preview');
 assert.equal(enrichCalls,1,'non-shopping URL blocks must not trigger metadata fetches');
 assert.equal(fields[0].blocks[0].productLinkPreview?.title,'冷凍つくね1kg','shopping block must carry bounded metadata title for draft generation');
 assert.equal(fields[1].blocks[0].productLinkPreview,undefined,'non-shopping block must remain untouched');
+assert.equal(helper.resolveProductLinkModelTitle(rakutenUrl,fields[0].blocks[0]),'冷凍つくね1kg','accepted AI output that repeats the source URL must fall back to fetched metadata title');
+assert.equal(helper.resolveProductLinkModelTitle('国産鶏つくね 1kg',fields[0].blocks[0]),'国産鶏つくね 1kg','a genuine AI-shortened product title must remain authoritative');
+
+const prefixedBlock={originalText:`URL: ${rakutenUrl}`,titleSeed:`URL: ${rakutenUrl}`,lines:[`URL: ${rakutenUrl}`],productLinkPreview:{url:rakutenUrl,title:'冷凍つくね1kg'}};
+assert.equal(helper.resolveProductLinkModelTitle(prefixedBlock.titleSeed,prefixedBlock),'冷凍つくね1kg','URL-prefixed literal model title must fall back to metadata title');
 
 const fiveUrls=Array.from({length:5},(_,i)=>{const url=`https://shop${i}.example.org/item`;return {originalText:url,titleSeed:url,lines:[url]};});
 let boundedCalls=0;
@@ -82,17 +87,19 @@ await helper.enrichShoppingProductLinkPreviews([{destination:'shopping',blocks:f
 assert.equal(boundedCalls,4,'one rough-input request must fetch at most four product pages');
 
 for(const marker of [
-  "import { enrichShoppingProductLinkPreviews, type ProductLinkPreviewBlock } from './task-rough-input-product-link';",
+  "import { enrichShoppingProductLinkPreviews, resolveProductLinkModelTitle, type ProductLinkPreviewBlock } from './task-rough-input-product-link';",
   "if(destination==='shopping'&&block.productLinkPreview?.title)return block.productLinkPreview.title.slice(0,200);",
   "if(field.destination==='shopping'&&block.productLinkPreview?.title)return true;",
   'productPageTitles:field.blocks.map(block=>block.productLinkPreview?.title??null)',
   'productPageTitlesだけを根拠にquantity/category/dueDate/dueTimeを追加しないでください。',
   'return analyzeTaskRoughInput(ctx,body,{productLinkPreview:true});',
   'if(context.productLinkPreview){try{await enrichShoppingProductLinkPreviews(parsed.fields);}',
+  'function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughItem[]',
+  'const items=acceptedProductLinkTitles(validation.items,parsed.fields);',
 ])assert.ok(apiSource.includes(marker),`rough-input product-link integration marker missing: ${marker}`);
 assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata enrichment must not add another Gemini call site');
 assert.ok(previewUiSource.includes("firstHttpUrl(item.originalText)"),'shopping preview must continue deriving the editable URL field from original input');
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: public URL preserved, bounded large-page prefix metadata, redirect SSRF guards, mocked product title enrichment, one existing Gemini path, and shopping save URL retention ok');
+console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');

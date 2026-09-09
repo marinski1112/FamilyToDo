@@ -171,6 +171,14 @@ function urlOnlyTitleSeed(block:ProductLinkPreviewBlock):URL|null{
   return prefixed?.[1]?parsePublicProductUrl(prefixed[1].replace(TRAILING_URL_PUNCTUATION,'')):null;
 }
 
+export function resolveProductLinkModelTitle(modelTitle:string,block:ProductLinkPreviewBlock):string{
+  const title=String(modelTitle||'').trim().slice(0,200),fallback=String(block.productLinkPreview?.title||'').trim().slice(0,200);
+  if(!fallback)return title;
+  const sourceUrl=firstPublicProductUrl(block.originalText),modelUrl=parsePublicProductUrl(title);
+  if(title===String(block.titleSeed||'').trim()||title===String(block.originalText||'').trim()||(sourceUrl&&modelUrl&&sourceUrl.href===modelUrl.href))return fallback;
+  return title;
+}
+
 export async function enrichShoppingProductLinkPreviews(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<number>{
   const candidates:Array<{block:ProductLinkPreviewBlock;url:URL}>=[],seen=new Set<string>();
   for(const field of fields){
