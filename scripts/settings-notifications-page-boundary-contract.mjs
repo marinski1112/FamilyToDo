@@ -5,6 +5,7 @@ const handlers=fs.readFileSync('src/settings-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 
 for(const marker of [
+  "import { digestReasonLabel, safeDigestAttempts } from './line-digest-generation';",
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "import { html, json, redirect } from './response';",
@@ -44,8 +45,12 @@ for(const marker of [
   'id="notificationSettingsPayload"',
   '/assets/settings-notifications.js?v=${APP_VERSION}',
   "layout('通知設定',body,'/app/settings.php')",
+  "const morningAttemptModel=(frameJson:unknown)=>{",
+  'safeDigestAttempts(frame.generation?.attempts).at(-1)?.model??null',
+  "const model=row.report_type==='DAILY'?morningAttemptModel(row.frame_json):row.generation_model;",
 ]) if(!page.includes(marker)) throw new Error(`settings notifications page lost behavior marker: ${marker}`);
 if(page.includes("from './app'")) throw new Error('settings notifications page must not depend on app.ts');
+if(page.includes("row.report_type==='DAILY'?row.generation_model")) throw new Error('Morning Digest admin diagnostics must not display an uncalled candidate model');
 
 if(!handlers.includes("export { settingsNotifications } from './settings-notifications-page';")) throw new Error('settings page handlers must export retained settingsNotifications');
 if(!handlers.includes("export { settings } from './settings-root';")) throw new Error('top-level settings retained boundary regressed');

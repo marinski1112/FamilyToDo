@@ -1,4 +1,4 @@
-import { digestReasonLabel } from './line-digest-generation';
+import { digestReasonLabel, safeDigestAttempts } from './line-digest-generation';
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { html, json, redirect } from './response';
@@ -31,6 +31,13 @@ const numberIds=(value:unknown)=>Array.isArray(value)?[...new Set(value.map(Numb
 const validTime=(value:string)=>{const m=/^(\d{2}):(\d{2})$/.exec(value);return Boolean(m&&Number(m[1])<24&&Number(m[2])<60);};
 const DIGEST_TONES=['PLAIN','FRIENDLY','FRIENDLY_LIGHT'] as const;
 const digestTone=(value:unknown)=>DIGEST_TONES.includes(String(value) as typeof DIGEST_TONES[number])?String(value):'FRIENDLY_LIGHT';
+const morningAttemptModel=(frameJson:unknown)=>{
+  if(typeof frameJson!=='string'||!frameJson)return null;
+  try{
+    const frame=JSON.parse(frameJson) as {generation?:{attempts?:unknown}};
+    return safeDigestAttempts(frame.generation?.attempts).at(-1)?.model??null;
+  }catch{return null;}
+};
 
 async function saveNotificationSettings(request:Request,ctx:AppContext,isAdmin:boolean):Promise<Response>{
   let body:NotificationSettingsBody;
@@ -109,21 +116,24 @@ export async function settingsNotifications(request:Request,ctx:AppContext):Prom
   let digestDiagnostics='';
   if(isAdmin){
     try{
-      const generationRows=await ctx.env.DB.prepare(`SELECT report_type,period_key,request_count,updated_at,
+      const generationRows=await ctx.env.DB.prepare(`SELECT report_type,period_key,request_count,updated_at,frame_json,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.status') END generation_status,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.reason') END generation_reason,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.model') END generation_model
         FROM (
           SELECT 'DAILY' report_type,local_date period_key,request_count,updated_at,frame_json FROM line_daily_digest_ai_family_daily WHERE family_id=? ORDER BY local_date DESC LIMIT 3
         )
-        UNION ALL SELECT report_type,period_key,request_count,updated_at,
+        UNION ALL SELECT report_type,period_key,request_count,updated_at,frame_json,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.status') END,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.reason') END,
         CASE WHEN json_valid(frame_json) THEN json_extract(frame_json,'$.generation.model') END
         FROM (
           SELECT report_type,period_key,request_count,updated_at,frame_json FROM line_periodic_digest_ai_reports WHERE family_id=? ORDER BY updated_at DESC LIMIT 3
         )`).bind(m.family_id,m.family_id).all<Row>();
-      digestDiagnostics=generationRows.results.map(row=>`<li><strong>${esc(row.report_type==='DAILY'?'朝':row.report_type==='WEEKLY'?'週次':'月次')} · ${esc(row.period_key)}</strong><p class="small">${row.generation_status==='AI'?'Gemini文章':'通常の文章・未確定'}：${esc(digestReasonLabel(row.generation_reason))}<br>モデル ${esc(row.generation_model||'記録なし')} · 生成要求 ${esc(row.request_count)}回</p></li>`).join('')||'<li>生成履歴はまだありません。</li>';
+      digestDiagnostics=generationRows.results.map(row=>{
+        const model=row.report_type==='DAILY'?morningAttemptModel(row.frame_json):row.generation_model;
+        return `<li><strong>${esc(row.report_type==='DAILY'?'朝':row.report_type==='WEEKLY'?'週次':'月次')} · ${esc(row.period_key)}</strong><p class="small">${row.generation_status==='AI'?'Gemini文章':'通常の文章・未確定'}：${esc(digestReasonLabel(row.generation_reason))}<br>モデル ${esc(model||'記録なし')} · 生成要求 ${esc(row.request_count)}回</p></li>`;
+      }).join('')||'<li>生成履歴はまだありません。</li>';
     }catch{digestDiagnostics='<li>生成履歴を取得できませんでした。時間をおいて再度開いてください。</li>';}
     digestDiagnostics=`<details class="card"><summary>レポートのAI生成状況</summary><p class="small">生成結果の確認欄です。LINEへの配信成功を示すものではありません。</p>${String(ctx.env.LINE_ACCESS_TOKEN||'').trim()?'':'<p class="error">LINE送信トークンが未設定です。</p>'}<ul>${digestDiagnostics}</ul></details>`;
   }
