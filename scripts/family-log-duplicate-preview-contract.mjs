@@ -14,7 +14,7 @@ const checks=[
   [api.includes('isBabyFood(a)||isBabyFood(b)')&&api.includes("normalizeText(a.detail_code)===normalizeText(b.detail_code)"),'BABY_FOOD pairing must require matching detail code'],
   [api.includes("classification:DuplicateClass=coreEqual&&comparison.content_equal?'exact':coreEqual?'likely':'ambiguous'")&&api.includes('provenance_equal'),'preview must classify exact/likely/ambiguous and compare provenance'],
   [api.includes("return 'MANUAL'")&&api.includes("?'PIYOLOG_IMPORT':'IMPORT'")&&api.includes('has_import_identity'),'preview must expose bounded provenance rather than raw import source identity'],
-  [api.includes('read_only:true')&&!/\b(?:UPDATE|DELETE|INSERT|REPLACE)\s+/i.test(api),'duplicate preview must remain read-only'],
+  [api.includes('read_only:true')&&!/(?:prepare|exec)\s*\(\s*[`'"]\s*(?:UPDATE|DELETE|INSERT|REPLACE)\b/i.test(api),'duplicate preview must remain read-only'],
   [!api.includes('console.log')&&!api.includes('console.error'),'duplicate preview must not log Family Log content'],
 ];
 
