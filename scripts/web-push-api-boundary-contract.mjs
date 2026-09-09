@@ -2,6 +2,8 @@ import fs from 'node:fs';
 
 const api=fs.readFileSync('src/web-push-api.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
+const diagnostics=fs.readFileSync('src/webpush-diagnostics.ts','utf8');
+const settings=fs.readFileSync('src/settings-notifications-page.ts','utf8');
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
@@ -43,4 +45,25 @@ for(const marker of [
   "import { toggle } from './toggle-api';",
 ]) if(!routes.includes(marker)) throw new Error(`retained context API boundary missing: ${marker}`);
 
-console.log('Web Push retained API boundary contract ok');
+for(const marker of [
+  'export async function diagnoseWebPushVapid',
+  'publicBytes.length === 65 && publicBytes[0] === 4',
+  'privateBytes.length === 32',
+  "crypto.subtle.importKey('raw'",
+  "crypto.subtle.verify({name:'ECDSA', hash:'SHA-256'}",
+  'const expirationHours = 12',
+  "'KEY_PAIR_MISMATCH'",
+  "'ENDPOINT_INVALID'",
+]) if(!diagnostics.includes(marker)) throw new Error(`VAPID diagnostics lost marker: ${marker}`);
+if(/\bfetch\s*\(/.test(diagnostics)) throw new Error('VAPID diagnostics must not call a push provider');
+for(const marker of [
+  "import { diagnoseWebPushVapid } from './webpush-diagnostics';",
+  'Web Push / VAPID診断',
+  '鍵ペア整合性',
+  'JWT audience',
+  'Secret・鍵全文・Push endpoint・p256dh/auth・JWTは表示しません。',
+  'await diagnoseWebPushVapid(ctx.env',
+]) if(!settings.includes(marker)) throw new Error(`notification settings lost VAPID diagnostic marker: ${marker}`);
+for(const sensitiveTemplate of ['${pushDiagnostic.privateKey','${latestActiveDevice.endpoint','${latestActiveDevice.p256dh','${latestActiveDevice.auth']) if(settings.includes(sensitiveTemplate)) throw new Error(`notification settings may expose sensitive push data: ${sensitiveTemplate}`);
+
+console.log('Web Push retained API and VAPID diagnostics boundary contract ok');
