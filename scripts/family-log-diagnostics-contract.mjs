@@ -96,7 +96,14 @@ function browser(fetcher,{saved,persistentSaved,storageFails=false,sessionStorag
   if(pwaOrder==='before')vm.runInContext(pwa,c);
   vm.runInContext("const csrf='SECRET';"+post+quick+oneTap,c);
   if(pwaOrder==='after')vm.runInContext(pwa,c);
-  const evidence=()=>{for(const text of [sessionText,localText]){try{const parsed=JSON.parse(text);if(parsed?.scope===scope&&Array.isArray(parsed.events))return parsed.events;}catch{}}return [];};
+  const evidence=()=>{
+    const candidates=[];
+    for(const text of [sessionText,localText]){
+      try{const parsed=JSON.parse(text);if(parsed?.scope===scope&&Array.isArray(parsed.events))candidates.push(parsed);}catch{}
+    }
+    candidates.sort((a,b)=>(Number(b.updated)||Number(b.started)||0)-(Number(a.updated)||Number(a.started)||0)||b.events.length-a.events.length);
+    return candidates[0]?.events||[];
+  };
   return {c,button,timers,listeners,get text(){return sessionText;},get persistentText(){return localText;},get count(){return fetchCount;},get reloads(){return reloads;},tap(){listeners.click?.({target:button});return handler();},events:evidence};
 }
 for(const selector of ['.family-log-one-tap','.family-log-quick-action'])for(const pwaOrder of ['before','after']){
