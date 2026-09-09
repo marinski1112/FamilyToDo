@@ -9,7 +9,7 @@ import { settings, settingsContent, settingsDiagnostics, settingsMembers, settin
 import { childJournalPage } from './child-journal';
 import { familyLogPiyologImportPage } from './family-log-piyolog-import-page';
 import { googleTasksSettings } from './google-tasks';
-import { googleHomeSettings } from './google-home';
+import { googleHomeSettingsWithExecuteDiagnostics } from './google-home-execute-diagnostics';
 import { integrationsSettings } from './google-calendar';
 import { calendarImportPage } from './calendar-ics-import';
 import { logsPage } from './activity-log-page';
@@ -40,7 +40,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/settings.php') return await settings(request,context);
   if(url.pathname==='/app/settings_location.php') return await settingsLocation(request,context);
   if(url.pathname==='/app/settings_google_tasks.php') return await googleTasksSettings(request,context);
-  if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettings(request,context);
+  if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettingsWithExecuteDiagnostics(request,context);
   if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
   if(url.pathname==='/app/message_new.php') return await messageNew(context);
   if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
