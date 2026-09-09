@@ -15,7 +15,7 @@ modelResult={items:[item(original,'遠足の持ち物を準備',{dueDate:'2026-0
 const context=vm.createContext({Request,Response,URL,console,
   json:(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers}),
   familyAiProvider:()=> 'GEMINI',familyDate:()=> '2026-09-07',DEFAULT_FAMILY_TIMEZONE:'Asia/Tokyo',
-  SHOPPING_CATEGORY_MAX_LENGTH:255,resolveShoppingCategoryOptions:()=>[],shoppingCategoryKey:x=>String(x).toLowerCase(),
+  SHOPPING_CATEGORY_MAX_LENGTH:255,resolveShoppingCategoryOptions:()=>[],shoppingCategoryKey:x=>String(x).toLowerCase(),firstPublicProductUrl:()=>null,
   reserveTaskRoughInputAiRequest:async(_db,_family,date)=>{reserved.push(date);return budget;},blockTaskRoughInputAiAfter429:async()=>{},
   geminiFetch:async(_env,_model,body)=>{calls++;prompt=body.contents[0].parts[0].text;return{ok:responseStatus===200,status:responseStatus,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(modelResult)}]}}]})};},
 });

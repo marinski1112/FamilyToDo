@@ -136,10 +136,15 @@ assert.equal(bounded.diagnostics.length,4,'diagnostic cardinality must obey the 
 
 for(const marker of [
   'enrichShoppingProductLinkPreviewsWithDiagnostics',
+  'firstPublicProductUrl',
   'type ProductLinkDiagnostic',
   "if(destination==='shopping'&&block.productLinkPreview?.title)return block.productLinkPreview.title.slice(0,200);",
-  "if(field.destination==='shopping'&&block.productLinkPreview?.title)return true;",
+  "if(field.destination==='shopping'&&firstPublicProductUrl(block.originalText))return true;",
+  'inputText:field.text',
   'productPageTitles:field.blocks.map(block=>block.productLinkPreview?.title??null)',
+  '各fieldのinputTextはユーザーが入力した文章全体です。',
+  'kamayaki meijin mini → 窯焼名人 mini',
+  'URL文字列そのものをtitleにはしないでください。',
   'productPageTitlesだけを根拠にquantity/category/dueDate/dueTimeを追加しないでください。',
   'return analyzeTaskRoughInput(ctx,body,{productLinkPreview:true});',
   'let productLinkDiagnostics:ProductLinkDiagnostic[]=[];',
@@ -147,8 +152,8 @@ for(const marker of [
   'productLinkDiagnostics});',
   'function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughItem[]',
   'const items=acceptedProductLinkTitles(validation.items,parsed.fields);',
-])assert.ok(apiSource.includes(marker),`rough-input product-link integration marker missing: ${marker}`);
-assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'product metadata diagnostics/fallback must not add another Gemini call site');
+])assert.ok(apiSource.includes(marker),`rough-input product-link/full-context integration marker missing: ${marker}`);
+assert.equal((apiSource.match(/geminiFetch\(/g)||[]).length,1,'full-input product URL shaping must reuse the one existing Gemini call site');
 assert.ok(previewUiSource.includes("firstHttpUrl(item.originalText)"),'shopping preview must continue deriving the editable URL field from original input');
 assert.ok(previewUiSource.includes('productLinkDiagnosticHtml'),'rough-input preview must render bounded product-link failure diagnostics');
 assert.ok(previewUiSource.includes('data.productLinkDiagnostics'),'browser must consume only the server diagnostic projection');
@@ -156,4 +161,4 @@ for(const forbidden of ['d.url','d.href','d.hostname','d.host','d.body','d.title
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: public URL preserved, bounded metadata fetch, privacy-safe diagnostics, meaningful URL-path fallback for blocked/slow commerce pages, opaque-path rejection, accepted AI URL-title fallback, redirect SSRF guards, one existing Gemini path, and shopping save URL retention ok');
+console.log('rough-input product link contract: full field input goes through the existing single Gemini structured-output path for shopping URLs, public URL provenance remains saved, bounded metadata/path hints remain non-authoritative, privacy-safe diagnostics and SSRF/redirect/size guards stay intact');
