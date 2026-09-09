@@ -39,7 +39,7 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav" aria-label="メインメニュー"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"${active===href?' aria-current="page"':''}><span aria-hidden="true">${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
-  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1">`:'';
+  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1"><script defer src="/assets/family-log-success-recovery.js?v=${APP_VERSION}-post-save1"></script>`:'';
   const locationDiagnosticsExtra=active==='/app/location.php'?`<script defer src="/assets/location-maps-diagnostics.js?v=${APP_VERSION}-maps-diagnostics4"></script>`:'';
   const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}"></script>`:'';
   const messageExtra=active==='/app/messages.php'?`<link rel="stylesheet" href="/assets/messages-compact.css?v=message3"><script defer src="/assets/messages-ai-ui.js?v=message3"></script>`:'';
