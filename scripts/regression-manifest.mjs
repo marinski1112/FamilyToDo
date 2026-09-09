@@ -57,6 +57,7 @@ export const activeRegressionGroups=[
       ['family-log-api-boundary','node scripts/family-log-api-boundary-contract.mjs'],
       ['family-log-media','node scripts/family-log-media-contract.mjs'],
       ['family-log-baby-food-photo-ui','node scripts/family-log-baby-food-photo-ui-contract.mjs'],
+      ['family-log-piyolog-import','node scripts/family-log-piyolog-import-contract.mjs'],
       ['family-log-page-boundary','node scripts/family-log-page-boundary-contract.mjs'],
       ['web-push-api-boundary','node scripts/web-push-api-boundary-contract.mjs'],
       ['liff-entry-boundary','node scripts/liff-entry-boundary-contract.mjs'],
