@@ -114,18 +114,18 @@ function decoderFor(contentType:string):TextDecoder{
 }
 
 async function boundedResponseText(response:Response):Promise<string|null>{
-  const declared=Number(response.headers.get('content-length')||'');
-  if(Number.isFinite(declared)&&declared>MAX_HTML_BYTES)return null;
   if(!response.body)return '';
   const reader=response.body.getReader(),chunks:Uint8Array[]=[],decoder=decoderFor(response.headers.get('content-type')||'');
   let total=0;
   try{
-    while(true){
+    while(total<MAX_HTML_BYTES){
       const {done,value}=await reader.read();if(done)break;
       if(!value)continue;
-      total+=value.byteLength;if(total>MAX_HTML_BYTES){await reader.cancel().catch(()=>undefined);return null;}
-      chunks.push(value);
+      const remaining=MAX_HTML_BYTES-total;
+      if(value.byteLength<=remaining){chunks.push(value);total+=value.byteLength;continue;}
+      chunks.push(value.slice(0,remaining));total+=remaining;break;
     }
+    if(total>=MAX_HTML_BYTES)await reader.cancel().catch(()=>undefined);
   }catch{return null;}
   const bytes=new Uint8Array(total);let offset=0;
   for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
