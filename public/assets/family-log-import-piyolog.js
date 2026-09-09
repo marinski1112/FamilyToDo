@@ -52,7 +52,7 @@ function renderPreview(d){
   d.rows.forEach(x=>{const row=node('div',undefined,`import-preview-row ${x.status}`);if(x.status==='error'){row.append(node('span','—'),node('span',`未対応 / ${x.error}`),node('b','エラー'));}else{const meta=config.types[x.value.log_type]||{icon:'',label:x.value.log_type};row.append(node('span',x.value.occurred_at),node('span',`${meta.icon} ${meta.label} ${displayValue(x.value)}`),node('b',x.status==='new'?'新規':'重複'));}out.appendChild(row);});
   const media=manifest();if(media.length)out.appendChild(node('div',`📷 離乳食写真 ${media.length}件（既存写真がある記録は上書きしません）`,'notice'));
   const progress=node('div',undefined,'import-progress');progress.hidden=true;progress.append(node('div','インポート中…','import-progress-label'),node('progress'));out.appendChild(progress);
-  const button=node('button',d.new_count?'インポート確定':'写真を確認・取り込む');button.type='button';button.disabled=!d.new_count&&!media.length;button.onclick=()=>runImport(d,button,progress);out.appendChild(button);
+  const button=node('button',d.new_count?'インポート確定':'写真のみ取り込む');button.type='button';button.disabled=!d.new_count&&!media.length;button.onclick=()=>d.new_count?runImport(d,button,progress):runPhotoOnly(button,progress);out.appendChild(button);
   const retry=node('button','写真だけ再試行','btn gray');retry.type='button';retry.hidden=true;retry.onclick=()=>uploadPhotos(retry,true);out.appendChild(retry);progress.dataset.mediaRetryButton='1';progress._retryButton=retry;
   updateMediaSelection();
 }
@@ -87,6 +87,16 @@ async function uploadPhotos(button,explicitRetry=false){
   if(button)button.hidden=unresolved===0;
   if(explicitRetry&&unresolved===0)status.textContent='写真の取り込みも完了しました。';
   return {uploaded,existing,missing,failed,uncertain};
+}
+
+async function runPhotoOnly(button,progress){
+  const media=manifest();if(!media.length)return;
+  const chosen=selectedFiles(),matched=media.filter(item=>chosen.has(item.file_name)).length;
+  if(!confirm(`Family Log記録はすべて既存です。記録の再インポートは行わず、離乳食写真だけ確認・追加します。\n写真指定: ${media.length}件 / 選択済み: ${matched}件\n\n続けますか？`))return;
+  button.disabled=true;progress.hidden=false;const label=progress.querySelector('.import-progress-label');label.textContent='既存記録と写真を確認しています…';
+  try{await uploadPhotos(button,true);label.textContent='写真確認完了';}
+  catch(e){status.textContent=e?.message||'写真を確認できませんでした。';label.textContent='写真確認に失敗しました';button.hidden=false;}
+  finally{button.disabled=false;}
 }
 
 async function runImport(preview,button,progress){
