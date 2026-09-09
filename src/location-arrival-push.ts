@@ -20,7 +20,7 @@ export async function processLocationArrival(env:Env,point:NormalizedLocationPoi
   if(!webPushConfigured(env))return;
   const age=Date.now()-Date.parse(point.recordedAt);if(age>10*60000||age< -60000)return;
   const {familyId,memberId}=point;
-  const recipients=await env.DB.prepare(`SELECT p.member_id FROM location_arrival_preferences p JOIN members m ON m.id=p.member_id AND m.family_id=p.family_id AND m.active=1 AND m.deleted_at IS NULL WHERE p.family_id=? AND p.enabled=1 ORDER BY p.member_id LIMIT 4`).bind(familyId).all<{member_id:number}>();
+  const recipients=await env.DB.prepare(`SELECT p.member_id FROM location_arrival_preferences p JOIN members m ON m.id=p.member_id AND m.family_id=p.family_id AND m.active=1 AND m.deleted_at IS NULL AND COALESCE(m.notification_enabled,1)=1 WHERE p.family_id=? AND p.enabled=1 ORDER BY p.member_id LIMIT 4`).bind(familyId).all<{member_id:number}>();
   if(!recipients.results.length)return;
   const service=new D1LocationQueryService(env.DB);
   const current=await service.latest({scope:{familyId,requesterMemberId:memberId},subjectMemberId:memberId});
@@ -38,7 +38,7 @@ export async function processLocationArrival(env:Env,point:NormalizedLocationPoi
       const visible=await service.latest({scope:{familyId,requesterMemberId:recipient.member_id},subjectMemberId:memberId});
       if(!visible||placePresence(visible,place)!=='IN'||Date.now()-Date.parse(visible.recordedAt)>10*60000)continue;
       const claim=await env.DB.prepare(`INSERT OR IGNORE INTO location_arrival_deliveries(family_id,member_id,recipient_id,place_key,recorded_at,status)
-        SELECT ?,?,?,?,?,'ATTEMPTED' WHERE EXISTS(SELECT 1 FROM location_arrival_preferences WHERE family_id=? AND member_id=? AND enabled=1)`).bind(familyId,memberId,recipient.member_id,place.key,point.recordedAt,familyId,recipient.member_id).run();
+        SELECT ?,?,?,?,?,'ATTEMPTED' WHERE EXISTS(SELECT 1 FROM location_arrival_preferences p JOIN members m ON m.id=p.member_id AND m.family_id=p.family_id AND m.active=1 AND m.deleted_at IS NULL AND COALESCE(m.notification_enabled,1)=1 WHERE p.family_id=? AND p.member_id=? AND p.enabled=1)`).bind(familyId,memberId,recipient.member_id,place.key,point.recordedAt,familyId,recipient.member_id).run();
       if(Number(claim.meta.changes)!==1)continue;
       const name=await env.DB.prepare('SELECT name FROM members WHERE id=? AND family_id=? AND active=1 AND deleted_at IS NULL').bind(memberId,familyId).first<{name:string}>();
       if(!name)continue;
