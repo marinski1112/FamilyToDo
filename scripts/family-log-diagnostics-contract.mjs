@@ -66,6 +66,10 @@ await api.cleanupFamilyLogDiagnostics({DB:D1});assert.equal(db.prepare("SELECT C
 const recorder=fs.readFileSync('public/assets/family-log-diagnostics.js','utf8');
 const pwa=fs.readFileSync('public/assets/pwa.js','utf8');
 const core=fs.readFileSync('public/assets/family-log-core.js','utf8');
+const shell=fs.readFileSync('src/app-shell.ts','utf8');
+for(const marker of ['GENERIC_QUICK_TAP','MODAL_NOT_OPEN','MODAL_OPEN','MODAL_SHEET_MISSING','MODAL_SHEET_ZERO_RECT','MODAL_SHEET_OUTSIDE_VIEWPORT','MODAL_HITTEST_BLOCKED','MODAL_READY','elementFromPoint','保存前の入力画面経路（POSTなし）'])assert.ok(recorder.includes(marker),`child quick modal diagnostic marker missing: ${marker}`);
+assert.ok(recorder.includes(".family-log-quick[data-log-type]"),'fallback child quick buttons must be observed by one-shot diagnostics');
+assert.ok(shell.includes('family-log-diagnostics.js?v=${APP_VERSION}-quick-modal-diag1'),'Family Log diagnostics asset must be cache-busted through the canonical app shell');
 const post=core.slice(core.indexOf('  async function post('),core.indexOf('  function setSubjectTypes'));
 const quick=core.slice(core.indexOf("  document.querySelectorAll('.family-log-quick-action')"),core.indexOf("  document.querySelectorAll('.family-log-form-action')"));
 const oneTap=core.slice(core.indexOf("  document.querySelectorAll('.family-log-one-tap')"),core.indexOf("  document.querySelectorAll('.family-log-row')"));
@@ -75,8 +79,8 @@ function browser(fetcher,{saved,storageFails=false,uiFails=false,selector='.fami
   class Element{closest(){return this;}}
   const button=new Element();Object.assign(button,{disabled:false,dataset:{subjectId:'1',quickKey:'PEE',quickActionId:'3'},setAttribute(){},removeAttribute(){},addEventListener(type,fn){handler=fn;}});
   const sandbox={Date,Set,JSON,Number,Element,crypto:{randomUUID:()=>id},sessionStorage:{getItem(){if(storageFails)throw Error('storage');return text;},setItem(k,v){if(storageFails)throw Error('storage');text=v;},removeItem(){text='null';}},
-    document:{currentScript:{dataset:{family:'1'}},getElementById:()=>null,querySelector:()=>null,head:{append(){}},addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({dataset:{},remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
-    navigator:{},MutationObserver:class{observe(){}},
+    document:{currentScript:{dataset:{family:'1'}},documentElement:{clientWidth:390,clientHeight:844},getElementById:()=>null,querySelector:()=>null,elementFromPoint:()=>null,head:{append(){}},addEventListener(type,fn){listeners[type]=fn;},querySelectorAll:q=>q===selector?[button]:[],createElement:()=>({dataset:{},remove(){}}),body:{append(){if(uiFails)throw new TypeError('PRIVATE UI');}}},
+    navigator:{},MutationObserver:class{observe(){}},innerWidth:390,innerHeight:844,
     location:{reload(){reloads++;}},alert(){},setTimeout(fn,ms){timers.push({fn,ms});return timers.length;},clearTimeout(){},addEventListener(type,fn){listeners[type]=fn;},
     fetch:async(...args)=>{fetchCount++;return fetcher(...args);}};
   sandbox.window=sandbox;const c=vm.createContext(sandbox);vm.runInContext(recorder,c);
@@ -117,4 +121,4 @@ const loader=fs.readFileSync('public/assets/family-log.js','utf8'),loads=[];
 vm.runInNewContext(loader.slice(loader.indexOf('let coreStarted=false;'),loader.lastIndexOf('})();')),{window:{},syncBabyFoodFields(){},load(...args){loads.push(args);}});
 assert.equal(loads.length,1);loads[0][2]();loads[0][1]();
 assert.equal(loads.filter(x=>x[0].includes('family-log-core')).length,1,'optional photo error must start core exactly once');
-console.log('Family Log one-shot diagnostics: success/failure, pending observation, UI recovery, no retry, auth/CSRF, tenant/privacy, monotonic evidence and retention ok');
+console.log('Family Log one-shot diagnostics: success/failure, pending observation, child quick modal visibility/hit-test, UI recovery, no retry, auth/CSRF, tenant/privacy, monotonic evidence and retention ok');
