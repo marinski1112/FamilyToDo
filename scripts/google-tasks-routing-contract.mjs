@@ -92,7 +92,7 @@ try{
   const legacy=item('持ち物：ノート');query('INSERT INTO external_google_task_links VALUES(1,?,?)',['list',legacy.id]);
   assert.equal(await sandbox.apply({DB},account,legacy),'not-handled');
   assert.equal(await sandbox.apply({DB},account,item('持ち物：ペン',{deleted:true})),'not-handled');
-  assert.equal(await sandbox.apply({DB},account,item('買い物：牛乳',{status:'completed'})),'not-handled');
+  assert.equal(await sandbox.apply({DB},account,item('買い物：牛乳',{status:'completed'})),'noop');
   assert.equal(query("SELECT COUNT(*) n FROM google_tasks_routes WHERE status='PENDING'")[0].n,0);
   console.log('google-tasks-routing: date/grammar, privacy, tenant/auth, replay, rollback/retry and legacy ownership OK');
 }finally{fs.rmSync(tmp,{recursive:true,force:true});}

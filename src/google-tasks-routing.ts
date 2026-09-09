@@ -56,7 +56,7 @@ export async function applyChecklistRoute(env:Env,a:Row,item:any):Promise<'not-h
   const key=[a.id,String(a.tasklist_id||''),String(item.id)];
   const old=await env.DB.prepare('SELECT status,etag FROM google_tasks_routes WHERE account_id=? AND list_id=? AND external_id=? AND family_id=? AND member_id=?').bind(...key,a.family_id,a.member_id).first<Row>();
   if(old&&(old.status==='EXECUTED'||old.etag===String(item.etag||'')))return 'noop';
-  if(item.deleted||item.status==='completed')return old?'noop':'not-handled';
+  if(item.deleted)return old?'noop':'not-handled';
   // Avoid extra auth/legacy reads for ordinary titles, while still recognizing prior routed IDs.
   if(!/(?:タスク|買い物|持ち物|を買って)/.test(String(item.title||'')))return old?'review':'not-handled';
   const owner=await env.DB.prepare("SELECT f.timezone,a.import_visibility FROM external_google_task_accounts a JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id JOIN families f ON f.id=a.family_id WHERE a.id=? AND a.family_id=? AND a.member_id=? AND a.tasklist_id=? AND a.status IN ('ACTIVE','SYNCING','ERROR') AND m.active=1 AND m.deleted_at IS NULL").bind(a.id,a.family_id,a.member_id,a.tasklist_id).first<Row>();
@@ -66,6 +66,7 @@ export async function applyChecklistRoute(env:Env,a:Row,item:any):Promise<'not-h
   // Never convert a task/command that the pre-existing importer already owns.
   const legacy=await env.DB.prepare('SELECT 1 found FROM external_google_task_links WHERE account_id=? AND external_tasklist_id=? AND external_task_id=? UNION ALL SELECT 1 FROM external_google_voice_commands WHERE account_id=? AND external_tasklist_id=? AND external_task_id=? LIMIT 1').bind(...key,...key).first();
   if(legacy)return 'not-handled';
+  if(item.status==='completed')return 'noop';
   const claim=crypto.randomUUID(),n=utcNow(),local=formatFamilyDateTime(new Date(),String(owner.timezone||'Asia/Tokyo'));
   const visibility=owner.import_visibility==='FAMILY'?'FAMILY':'PRIVATE';
   const gate='SELECT id FROM google_tasks_routes WHERE account_id=? AND list_id=? AND external_id=? AND claim=? AND status=\'PENDING\'';
