@@ -27,7 +27,7 @@ finally: c.close()
 `;
 function rpc(p){const r=spawnSync('python3',['-c',python,dbfile],{input:JSON.stringify(p),encoding:'utf8'});if(r.status!==0)throw Error(r.stderr);return JSON.parse(r.stdout);}
 let failAt=-1,statements=0;
-const DB={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this;},async first(){statements++;return rpc({statements:[this]})[0].rows[0]||null;}};},async batch(ss){statements+=ss.length;return rpc({statements:ss,failAt});}};
+const DB={prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this;},async run(){statements++;return rpc({statements:[this]})[0];},async first(){statements++;return rpc({statements:[this]})[0].rows[0]||null;}};},async batch(ss){statements+=ss.length;return rpc({statements:ss,failAt});}};
 const timezone=stripTypeScriptTypes(fs.readFileSync('src/timezone.ts','utf8')).replace(/export /g,'');
 const routing=stripTypeScriptTypes(fs.readFileSync('src/google-tasks-routing.ts','utf8')).replace(/^import .*;$/gm,'').replace(/export /g,'');
 const sandbox={crypto:webcrypto,Date,Intl};vm.createContext(sandbox);
@@ -82,6 +82,12 @@ try{
   assert.equal(await sandbox.apply({DB},account,retry),'command');
   assert.equal(query('SELECT COUNT(*) n FROM item_assignees')[0].n,2);
   const bad=item('買い物：牛乳 2');assert.equal(await sandbox.apply({DB},account,bad),'review');
+  const correction=item('買い物：豆乳 2');assert.equal(await sandbox.apply({DB},account,correction),'review');
+  assert.equal(await sandbox.apply({DB},account,{...correction,title:'FT 買い物 豆乳 2',etag:'v2'}),'not-handled');
+  assert.equal(query('SELECT COUNT(*) n FROM google_tasks_routes WHERE external_id=?',[correction.id])[0].n,0);
+  const ordinary=item('買い物：水 2');await sandbox.apply({DB},account,ordinary);
+  assert.equal(await sandbox.apply({DB},account,{...ordinary,title:'水を忘れない',etag:'v2'}),'not-handled');
+  assert.equal(query('SELECT COUNT(*) n FROM google_tasks_routes WHERE external_id=?',[ordinary.id])[0].n,0);
   assert.equal(await sandbox.apply({DB},account,{...bad,title:'買い物：牛乳',etag:'v2'}),'command');
   const revoked=item('持ち物：傘');query("UPDATE external_google_task_accounts SET status='REVOKED'");
   assert.equal(await sandbox.apply({DB},account,revoked),'noop');
