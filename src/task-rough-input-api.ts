@@ -3,7 +3,7 @@ import { familyAiProvider, geminiFetch } from './family-ai';
 import { recordAiGenerationDiagnostic, type AiDiagnosticAttempt, type AiDiagnosticFailureStage, type AiDiagnosticFinalStatus } from './ai-generation-diagnostics';
 import { SHOPPING_CATEGORY_MAX_LENGTH, resolveShoppingCategoryOptions, shoppingCategoryKey, type ShoppingCategoryCatalogRow } from './shopping-categories';
 import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from './task-rough-input-ai-guard';
-import { enrichShoppingProductLinkPreviews, type ProductLinkPreviewBlock } from './task-rough-input-product-link';
+import { enrichShoppingProductLinkPreviews, resolveProductLinkModelTitle, type ProductLinkPreviewBlock } from './task-rough-input-product-link';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
@@ -184,6 +184,15 @@ function deterministicItems(fields:RoughField[]):RoughItem[]{
   })).slice(0,MAX_ITEMS);
 }
 
+function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughItem[]{
+  const shoppingBlocks=fields.filter(field=>field.destination==='shopping').flatMap(field=>field.blocks);
+  return items.map(item=>{
+    if(item.destination!=='shopping')return item;
+    const block=shoppingBlocks.find(candidate=>candidate.originalText===item.originalText&&candidate.productLinkPreview?.title);
+    return block?{...item,title:resolveProductLinkModelTitle(item.title,block)}:item;
+  });
+}
+
 function needsModel(fields:RoughField[]):boolean{
   return fields.some(field=>{
     if(field.sharedDueDirective)return true;
@@ -353,7 +362,7 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
       failureStage='ITEM_VALIDATION';
       const validation=validateGeminiItems(context.taskCandidates?{items:normalizedDecoded.items}:normalizedDecoded,parsed.fields,allowedShoppingCategories);
       if(!validation.items){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:validation.reasonCode,failureStage:'ITEM_VALIDATION',itemOrdinal:validation.itemOrdinal,sourceIndex:validation.sourceIndex,expectedCount:validation.expectedCount,actualCount:validation.actualCount});continue;}
-      const items=validation.items;
+      const items=acceptedProductLinkTitles(validation.items,parsed.fields);
       failureStage='SUMMARY_VALIDATION';
       const summaryCount=items.filter(x=>x.destination===parsed.primaryType).length;
       if(parsed.summarize&&summaryCount!==1){diagnosticAttempts.push({model,status:'INVALID_OUTPUT',httpStatus:response.status,reasonCode:'SUMMARY_CARDINALITY',failureStage:'SUMMARY_VALIDATION',expectedCount:1,actualCount:summaryCount});continue;}
