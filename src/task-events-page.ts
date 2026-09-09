@@ -162,11 +162,23 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const expiredHtml=data.expiredTasks.length?`<details class="card expired-tasks"><summary>⚠️ 期限切れタスク ${data.expiredTasks.length}件</summary><div class="expired-list">${data.expiredTasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}<a href="/task/view.php?id=${esc(task.id)}">${esc(task.title)}</a></span></label><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('')}</div></details>`:'';
   const expiredShoppingHtml=data.expiredShopping.length?`<details class="card expired-shopping"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>${shoppingRows(data.expiredShopping)}</details>`:'';
   const cursor=new Date(`${date}T12:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()-1);const prev=cursor.toISOString().slice(0,10);cursor.setUTCDate(cursor.getUTCDate()+2);const next=cursor.toISOString().slice(0,10);
-  const eventCount=data.tasks.filter(task=>String(task.task_kind||'').toLowerCase()==='event').length;
-  const checkableTaskCount=data.tasks.length-eventCount;
-  const summary=`<div class="task-event-summary meta">タスク ${checkableTaskCount}${eventCount?` ・ イベント ${eventCount}`:''} ・ 買い物 ${data.shopping.length}</div>`;
+  const [year,month,day]=date.split('-');
+  const compactDate=year&&month&&day?`${year}.${Number(month)}.${Number(day)}`:date;
+  const taskSection=`<div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>`;
   const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>一覧・表示ルール</summary><a class="btn gray" href="/app/shopping.php">一覧・管理</a><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
+  const overdueSection=`${expiredShoppingHtml}${expiredHtml}`;
+  const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemRows||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
+  const primarySections=[
+    {priority:0,hasContent:Boolean(taskRows),html:taskSection},
+    {priority:1,hasContent:data.shopping.length>0,html:shoppingSection},
+    {priority:2,hasContent:Boolean(overdueSection),html:overdueSection},
+    {priority:3,hasContent:Boolean(itemRows),html:itemSection},
+  ].sort((a,b)=>Number(b.hasContent)-Number(a.hasContent)||a.priority-b.priority).map(section=>section.html).join('');
   const checklistStyle=`<style>
+.checklist-page .daily-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.checklist-page .daily-head h1{font-size:19px!important;line-height:1.2;margin:0;white-space:nowrap;min-width:0}
+.checklist-page .checklist-date{font-size:14px;font-weight:700;color:#64748b;margin-left:5px;font-variant-numeric:tabular-nums}
+.checklist-page .date-nav{display:flex;gap:6px;flex-shrink:0}
 .checklist-page .section-card{padding:12px!important;margin-bottom:12px}
 .checklist-page .section-head{gap:8px;align-items:center;margin-bottom:6px}
 .checklist-page .section-head>div:first-child,.checklist-page .section-head h2{min-width:0}
@@ -177,8 +189,9 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 .checklist-page .checklist-more{margin-top:8px;border-top:1px solid #e2e8f0}
 .checklist-page .checklist-more>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:11px 0;font-size:13px;color:#475569}
 .checklist-page .checklist-more .meta{font-size:13px;line-height:1.5;margin:8px 0 0}
+@media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}}
 </style>`;
-  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><div><h1>✅ チェックリスト</h1><div class="date-title">${esc(date)}</div>${summary}</div><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div><div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>${shoppingSection}${expiredShoppingHtml}${unorganizedHtml}${expiredHtml}<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemRows||'<p class="empty">対象日の持ち物はありません。</p>'}</div></div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
 

@@ -9,6 +9,8 @@ if(page.includes("from './app'"))throw new Error('unified task/shopping page mus
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
 if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task classification must use the selected checklist date, not runtime today');
 if(page.includes('<details class="card expired-shopping" open>'))throw new Error('overdue Shopping must stay collapsed by default to preserve Checklist information density');
+if(page.includes('task-event-summary meta')||page.includes('const summary=`<div class="task-event-summary'))throw new Error('Checklist header must not restore Task/Shopping count summary');
+if(page.includes('<div class="date-title">'))throw new Error('Checklist selected date must stay inline with the compact title');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
@@ -49,7 +51,13 @@ for(const marker of [
   "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
   "/app/shopping_new.php?date=",
   "href=\"/app/shopping.php\">一覧・管理</a>",
-  "<h1>✅ チェックリスト</h1>",
+  "const primarySections=[",
+  "{priority:0,hasContent:Boolean(taskRows),html:taskSection}",
+  "{priority:1,hasContent:data.shopping.length>0,html:shoppingSection}",
+  "{priority:2,hasContent:Boolean(overdueSection),html:overdueSection}",
+  "{priority:3,hasContent:Boolean(itemRows),html:itemSection}",
+  "Number(b.hasContent)-Number(a.hasContent)||a.priority-b.priority",
+  "<h1>✅ チェックリスト <span class=\"checklist-date\">${esc(compactDate)}</span></h1>",
   "return layout('チェックリスト',body,'/app/tasks.php');",
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
 
@@ -74,4 +82,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
