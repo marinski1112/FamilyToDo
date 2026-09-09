@@ -7,6 +7,7 @@ export const activeRegressionGroups=[
       ['family-log-success-recovery','node scripts/family-log-success-recovery-contract.mjs'],
       ['current-contracts','node scripts/core-contract-smoke.mjs'],
       ['task-rough-input-ai-cost-guard','node scripts/task-rough-input-ai-cost-guard-contract.mjs'],
+      ['task-rough-input-product-link','node scripts/task-rough-input-product-link-contract.mjs'],
       ['task-rough-input-shared-deadline','node scripts/task-rough-input-shared-deadline-contract.mjs'],
       ['task-rough-input-multiplier-dimension','node scripts/task-rough-input-multiplier-dimension-contract.mjs'],
       ['regression-structure','node scripts/regression-structure-smoke.mjs'],
