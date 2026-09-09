@@ -11,13 +11,15 @@
   const linksEl=root.querySelector('[data-location-history-links]');
   const fromEl=root.querySelector('[data-location-history-from]');
   const toEl=root.querySelector('[data-location-history-to]');
+  const reportEl=document.createElement('section');reportEl.setAttribute('aria-live','polite');root.append(reportEl);
+  const reportButton=document.createElement('button');reportButton.type='button';reportButton.className='btn gray small';reportButton.textContent='文字レポート';loadEl?.insertAdjacentElement('afterend',reportButton);
   let membersLoaded=false;
   let latestMembers=null;
   let loadingHistory=false;
   let historyRequest=0,displayedMemberId=0;
   const liveRoot=root.closest('[data-location-live]');
   const emitHistory=(memberId=0,points=[])=>liveRoot?.dispatchEvent(new CustomEvent('family-location-history',{detail:{memberId,points}}));
-  const clearDisplay=()=>{historyRequest++;displayedMemberId=0;emitHistory();if(summaryEl)summaryEl.textContent='';linksEl?.replaceChildren();};
+  const clearDisplay=()=>{reportEl.replaceChildren();historyRequest++;displayedMemberId=0;emitHistory();if(summaryEl)summaryEl.textContent='';linksEl?.replaceChildren();};
   liveRoot?.addEventListener('family-location-latest',event=>{
     latestMembers=event.detail?.members||[];membersLoaded=false;
     if(displayedMemberId&&!latestMembers.some(member=>Number(member.memberId)===displayedMemberId&&member.sharingEnabled)){clearDisplay();setStatus('位置共有が停止されたため、履歴を非表示にしました。');}
@@ -118,11 +120,11 @@
     }
   };
 
-  const loadHistory=async()=>{
+  const loadHistory=async(mode='map')=>{
     if(!loadEl||!memberEl||loadingHistory)return;
     loadingHistory=true;
     const requestId=++historyRequest;
-    loadEl.disabled=true;
+    loadEl.disabled=true;reportButton.disabled=true;reportEl.replaceChildren();
     emitHistory();
     if(summaryEl)summaryEl.textContent='';
     if(linksEl)linksEl.replaceChildren();
@@ -162,19 +164,30 @@
           ?`取得できた最新${points.length}件の記録点間の直線距離合計 ${distanceText(meters)}。上限に達したため選択期間全体の距離・開始地点とは限りません。期間を短くすると前の記録を確認できます。GPS誤差も含みます。`
           :`記録点間の直線距離合計 ${distanceText(meters)}。1時間を超える記録の空白は線で結びません。道路経路や実際の移動距離とは異なります。`;
       }
+      const heading=document.createElement('h3');heading.textContent='滞在・移動レポート';reportEl.append(heading);
+      const note=document.createElement('p');note.className='small';note.textContent='滞在時間は位置記録からの目安です。現在の登録拠点に照合しています。未登録の場所や移動手段は推測しません。';reportEl.append(note);
+      for(const entry of Array.isArray(payload.report)?payload.report:[]){
+        const row=document.createElement('p');row.className='small';
+        const type={STAY:'滞在の目安',MOVE:'移動',GAP:'記録なし',UNCERTAIN:'判定できません'}[entry.kind]||'記録';
+        row.textContent=formatTime(entry.from)+'〜'+formatTime(entry.to)+' · '+type+' '+entry.minutes+'分 · '+entry.place;
+        reportEl.append(row);
+      }
+      if(!payload.report?.length){const empty=document.createElement('p');empty.textContent=payload.reportAvailable===false?'レポートを取得できませんでした。地図の履歴は表示できます。管理の「拠点・到着通知」を確認してください。':'滞在時間を判定するには、時間をあけた複数の位置記録が必要です。';reportEl.append(empty);}
+      if(payload.reportTruncated){const more=document.createElement('p');more.textContent='先頭100区間を表示しています。期間を絞って確認してください。';reportEl.append(more);}
       renderLinks(points,truncated);
       displayedMemberId=memberId;
       emitHistory(memberId,points);
-      const sheet=liveRoot?.querySelector('[data-location-family-sheet]');if(sheet){sheet.open=false;sheet.querySelector('summary')?.focus({preventScroll:true});}
+      const sheet=liveRoot?.querySelector('[data-location-family-sheet]');if(sheet&&mode==='map'){sheet.open=false;sheet.querySelector('summary')?.focus({preventScroll:true});}
     }catch(error){
       if(requestId===historyRequest)setStatus(error instanceof Error&&error.message?error.message:'選択期間の移動を取得できませんでした。');
     }finally{
       loadingHistory=false;
       if(selectorLocked)memberEl.disabled=false;
       if(latestMembers&&!membersLoaded)void loadMembers().catch(()=>{});
-      loadEl.disabled=false;
+      loadEl.disabled=false;reportButton.disabled=false;
     }
   };
 
+  reportButton.addEventListener('click',()=>void loadHistory('report'));
   if(loadEl)loadEl.addEventListener('click',()=>void loadHistory());
 })();
