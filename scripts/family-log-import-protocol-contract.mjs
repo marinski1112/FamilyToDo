@@ -37,8 +37,12 @@ const browser=fs.readFileSync('public/assets/family-log-import.js','utf8');
 const server=fs.readFileSync('src/family-log-import.ts','utf8');
 assert.match(browser,/createElement|textContent/,'import browser must use safe DOM construction');
 assert.ok(!/out\.innerHTML|source_text.*activity/.test(browser),'unsafe raw import rendering must stay absent');
-for(const token of ['VACCINE','LOOKUP_SIZE=90','validateChunkOffset','chunk_manifest_json'])
+for(const token of ['VACCINE','D1_MAX_BOUND_PARAMETERS=100','LOOKUP_FIXED_BINDS=2','LOOKUP_KEYS_PER_RECORD=2','validateChunkOffset','chunk_manifest_json'])
   assert.ok(server.includes(token),`missing ${token}`);
+assert.match(server,/LOOKUP_SIZE=Math\.floor\(\(D1_MAX_BOUND_PARAMETERS-LOOKUP_FIXED_BINDS\)\/LOOKUP_KEYS_PER_RECORD\)/,'duplicate lookup batch size must stay derived from the D1 bind budget');
+const duplicateLookupSize=Math.floor((100-2)/2);
+assert.equal(duplicateLookupSize,49,'100-bind budget with two fixed binds and two keys per record must resolve to 49 records');
+assert.equal(2+duplicateLookupSize*2,100,'duplicate lookup must not exceed D1 bound parameter ceiling');
 
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'familytodo-import-protocol-'));
 const db=path.join(dir,'contract.sqlite');
@@ -57,4 +61,4 @@ try{
   fs.rmSync(dir,{recursive:true,force:true});
 }
 
-console.log('family-log-import-protocol-contract: chunking, retry, completion, safe DOM, and schema coverage ok');
+console.log('family-log-import-protocol-contract: chunking, retry, completion, safe DOM, D1 bind budget, and schema coverage ok');

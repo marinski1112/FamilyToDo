@@ -70,4 +70,11 @@ assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) retur
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');
 assert.match(String(pkg.scripts?.['check:browser-js']||''),/family-log-import-piyolog\.js/,'Piyolog browser controller must be syntax checked in CI');
 
+// D1 duplicate preview lookups must remain below the documented 100-bound-parameter ceiling.
+assert.match(importer,/D1_MAX_BOUND_PARAMETERS=100, LOOKUP_FIXED_BINDS=2, LOOKUP_KEYS_PER_RECORD=2/,'duplicate lookup must keep an explicit D1 bind-parameter budget');
+assert.match(importer,/LOOKUP_SIZE=Math\.floor\(\(D1_MAX_BOUND_PARAMETERS-LOOKUP_FIXED_BINDS\)\/LOOKUP_KEYS_PER_RECORD\)/,'duplicate lookup batch size must be derived from the parameter budget');
+const lookupSize=Math.floor((100-2)/2);
+assert.equal(2+lookupSize*2,100,'derived duplicate lookup must never bind more than 100 parameters');
+assert.equal(lookupSize,49,'current canonical+legacy lookup budget must resolve to 49 records per query');
+
 console.log('family-log Piyolog import: preview-first records, in-place generic-meal promotion, duplicate prevention, unambiguous private baby-food photo resolution, record-free photo retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');

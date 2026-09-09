@@ -6,7 +6,9 @@ import { FAMILY_LOG_IMPORT_CHUNK_SIZE as CHUNK_SIZE, validateChunkOffset, valida
 import { addWallClockMinutes, DEFAULT_FAMILY_TIMEZONE, familyNow, parseImportDateTime, timezoneOffsetMinutesAt } from './timezone';
 
 type Row=Record<string,unknown>; type ImportRecord=Record<string,unknown>;
-const FORMAT='familytodo-family-log-import-v1', MAX_RECORDS=5000, MAX_BODY_BYTES=3*1024*1024, LOOKUP_SIZE=90;
+const FORMAT='familytodo-family-log-import-v1', MAX_RECORDS=5000, MAX_BODY_BYTES=3*1024*1024;
+const D1_MAX_BOUND_PARAMETERS=100, LOOKUP_FIXED_BINDS=2, LOOKUP_KEYS_PER_RECORD=2;
+const LOOKUP_SIZE=Math.floor((D1_MAX_BOUND_PARAMETERS-LOOKUP_FIXED_BINDS)/LOOKUP_KEYS_PER_RECORD);
 const TYPES:Record<string,{icon:string;label:string;units:string[]}>= {
   MILK:{icon:'🍼',label:'ミルク',units:['ml']},BREASTFEED:{icon:'🤱',label:'母乳',units:[]},MEAL:{icon:'🍚',label:'食事',units:[]},DIAPER:{icon:'🧷',label:'おむつ',units:[]},SLEEP:{icon:'😴',label:'睡眠',units:[]},BATH:{icon:'🛁',label:'お風呂',units:[]},TEMPERATURE:{icon:'🌡️',label:'体温',units:['°C','℃']},MEDICINE:{icon:'💊',label:'薬',units:[]},VACCINE:{icon:'💉',label:'予防接種',units:[]},CONDITION:{icon:'🙂',label:'体調',units:[]},WEIGHT:{icon:'⚖️',label:'体重',units:['kg']},HEIGHT:{icon:'📏',label:'身長',units:['cm']},BLOOD_PRESSURE:{icon:'🫀',label:'血圧',units:[]},EXERCISE:{icon:'🏃',label:'運動',units:[]},WATER:{icon:'💧',label:'水分',units:['ml']},TOILET:{icon:'🚻',label:'トイレ',units:[]},WALK:{icon:'🐕',label:'散歩',units:[]},MEMO:{icon:'📝',label:'メモ',units:[]}
 };
