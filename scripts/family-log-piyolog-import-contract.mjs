@@ -27,6 +27,12 @@ assert.match(browser,/fetch\('\/api\/family-log-media'/,'photo bytes must use th
 assert.match(browser,/if\(target\.has_media\)\{existing\+\+;continue;\}/,'existing private photos must never be overwritten');
 assert.match(browser,/if\(error instanceof TypeError\)\{uncertain\+\+;/,'ambiguous network outcomes must be tracked separately');
 assert.match(browser,/通信結果不明の写真は自動再試行していません/,'ambiguous uploads must not be retried automatically');
+assert.match(browser,/対象未解決 \$\{targetMissing\}/,'photo status must distinguish unresolved imported-record targets from unselected files');
+assert.match(browser,/mediaStage='target_api'/,'target API failures must carry a privacy-safe stage');
+assert.match(browser,/mediaError\('upload_api'/,'upload API failures must carry a privacy-safe stage/status/reason tuple');
+assert.match(browser,/SAFE_MEDIA_CODES=new Set/,'media diagnostics must use an explicit safe reason allowlist');
+assert.match(browser,/failureDiagnostics=new Map/,'failure diagnostics must be aggregated by safe reason instead of exposing per-file identifiers');
+assert.ok(!/file_name.*failureDiagnostics|external_id.*failureDiagnostics|log_id.*failureDiagnostics/s.test(browser),'media diagnostics must not include file names, external IDs, or log IDs');
 const photoOnly=browser.match(/async function runPhotoOnly\([\s\S]*?\n}\n\nasync function runImport/);
 assert.ok(photoOnly,'photo-only handler must remain explicit');
 assert.ok(!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
@@ -64,7 +70,7 @@ assert.match(importer,/familytodo-family-log-import-v1/,'canonical Family Log im
 assert.match(importer,/import_external_id/,'canonical importer must retain the external ID used to resolve converted photo manifests');
 assert.match(media,/one optional private BABY_FOOD photo per Family Log record|authenticated same-family proxy/i,'canonical private-media boundary must remain in use');
 assert.match(wrapper,/CORE_IMPORT_ASSET='\/assets\/family-log-import\.js\?v=12\.121\.0-wave102'/,'wrapper must pin the exact retained canonical controller it replaces');
-assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-media2'/,'Piyolog controller must be cache-busted after promotion behavior changes');
+assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-media3'/,'Piyolog controller must be cache-busted after media diagnostic behavior changes');
 assert.ok(importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'wrapper sentinel must stay aligned with the canonical import page');
 assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) return await familyLogPiyologImportPage\(context\)/,'visible Family Log import page must use the restored Piyolog-capable controller');
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');
@@ -77,4 +83,4 @@ const lookupSize=Math.floor((100-2)/2);
 assert.equal(2+lookupSize*2,100,'derived duplicate lookup must never bind more than 100 parameters');
 assert.equal(lookupSize,49,'current canonical+legacy lookup budget must resolve to 49 records per query');
 
-console.log('family-log Piyolog import: preview-first records, in-place generic-meal promotion, duplicate prevention, unambiguous private baby-food photo resolution, record-free photo retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
+console.log('family-log Piyolog import: preview-first records, in-place generic-meal promotion, duplicate prevention, privacy-safe photo failure stages, unambiguous private baby-food photo resolution, record-free photo retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
