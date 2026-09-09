@@ -44,11 +44,13 @@ for(const marker of [
   "familyAiProvider(env)!=='GEMINI'",
   "requiresConfirmation:true",
   'deterministicItems(parsed.fields)',
-  'function semanticBlocks(text:string)',
+  'function semanticBlocks(text:string,destination:Destination)',
+  'semanticBlocks(text,destination)',
   "originalText:lines.join('\\n')",
   '/^\\s/.test(line.raw)',
   'metadataPrefix.test(line.trimmed)',
   'httpUrlOnly.test(line.trimmed)',
+  "destination==='shopping'&&currentHasUrl",
   'const trailingMultiplierQuantity=/\\s+×\\s*(\\d+(?:\\.\\d+)?)\\s*$/u;',
   'function explicitMultiplierQuantity(block:RoughBlock):{quantity:string;start:number}|null',
   'function explicitQuantity(block:RoughBlock)',
@@ -158,4 +160,4 @@ assert.ok(appShell.includes("compactBody.includes('id=\"taskNewPayload\"')"),'ro
 assert.ok(appShell.includes('/assets/task-rough-input-ai.js?v=${APP_VERSION}-explicit-save1'),'rough-input AI asset must be cache-versioned for explicit save');
 assert.ok(appShell.includes('/assets/task-rough-input-save.js?v=${APP_VERSION}-explicit-save1'),'rough-input save companion must be cache-versioned');
 
-console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, semantic rough-input blocks, deterministic multiplier quantity, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
+console.log('core contract smoke: visibility, task/event, recurrence, lifecycle, deterministic-first bounded Gemini analysis, destination-aware semantic rough-input blocks, deterministic multiplier quantity, family-scoped AI category allowlist, progressive confirmation, and explicit save boundaries ok');
