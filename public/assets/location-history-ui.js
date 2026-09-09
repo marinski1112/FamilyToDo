@@ -9,6 +9,8 @@
   const statusEl=root.querySelector('[data-location-history-status]');
   const summaryEl=root.querySelector('[data-location-history-summary]');
   const linksEl=root.querySelector('[data-location-history-links]');
+  const fromEl=root.querySelector('[data-location-history-from]');
+  const toEl=root.querySelector('[data-location-history-to]');
   let membersLoaded=false;
   let latestMembers=null;
   let loadingHistory=false;
@@ -26,7 +28,7 @@
   const setStatus=(text)=>{if(statusEl)statusEl.textContent=text;};
   const formatTime=(value)=>{
     const date=new Date(value);
-    return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}).format(date):'';
+    return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(date):'';
   };
   const distanceMeters=(a,b)=>{
     const lat1=Number(a?.latitude),lng1=Number(a?.longitude),lat2=Number(b?.latitude),lng2=Number(b?.longitude);
@@ -42,15 +44,27 @@
     if(!Number.isFinite(lat)||!Number.isFinite(lng))return '';
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
   };
-  const yesterdayRangeJst=()=>{
-    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
-    const values=Object.fromEntries(parts.filter(part=>part.type!=='literal').map(part=>[part.type,Number(part.value)]));
-    const todayJstMidnightUtc=Date.UTC(values.year,values.month-1,values.day)-9*60*60*1000;
-    return {
-      from:new Date(todayJstMidnightUtc-24*60*60*1000).toISOString(),
-      to:new Date(todayJstMidnightUtc-1).toISOString(),
-    };
+  const todayJst=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const dateMs=value=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return NaN;
+    const ms=Date.parse(value+'T00:00:00+09:00');
+    return Number.isFinite(ms)&&new Date(ms+9*3600000).toISOString().slice(0,10)===value?ms:NaN;
   };
+  const setDays=days=>{
+    const today=todayJst();
+    toEl.value=today;
+    fromEl.value=new Date(dateMs(today)-(days-1)*86400000+9*3600000).toISOString().slice(0,10);
+  };
+  const selectedRange=()=>{
+    const from=dateMs(fromEl.value),last=dateMs(toEl.value),today=dateMs(todayJst());
+    if(!Number.isFinite(from)||!Number.isFinite(last)||from>last||last-from>=31*86400000||last>today)throw new Error('開始日・終了日を確認してください。今日までの最大31日間を選べます。');
+    return {from:new Date(from).toISOString(),to:new Date(last+86400000-1).toISOString()};
+  };
+  if(fromEl&&toEl){fromEl.max=toEl.max=todayJst();setDays(7);}
+  root.querySelectorAll('[data-location-history-days]').forEach(button=>button.addEventListener('click',()=>{
+    setDays(Number(button.dataset.locationHistoryDays));clearDisplay();setStatus('期間を変更しました。「地図に表示」を押してください。');
+  }));
+  [fromEl,toEl,memberEl].forEach(input=>input?.addEventListener('change',()=>{clearDisplay();setStatus('条件を変更しました。「地図に表示」を押してください。');}));
 
   const loadMembers=async()=>{
     if(membersLoaded)return;
@@ -72,7 +86,7 @@
       option.textContent='共有中の家族がいません';
       memberEl.append(option);
       memberEl.disabled=true;
-      throw new Error('昨日の履歴を参照できる共有中メンバーがいません。');
+      throw new Error('選択期間の履歴を参照できる共有中メンバーがいません。');
     }
     for(const member of members){
       const option=document.createElement('option');
@@ -114,7 +128,7 @@
     if(linksEl)linksEl.replaceChildren();
     let selectorLocked=false;
     try{
-      setStatus('昨日の移動を確認しています…');
+      setStatus('選択期間の移動を確認しています…');
       await loadMembers();
       if(requestId!==historyRequest)return;
       const memberId=Number(memberEl.value);
@@ -122,36 +136,38 @@
       if(!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('家族を選択してください。');
       memberEl.disabled=true;
       selectorLocked=true;
-      const range=yesterdayRangeJst();
+      const range=selectedRange();
+      const rangeLabel=fromEl.value+'〜'+toEl.value;
       const params=new URLSearchParams({memberId:String(memberId),from:range.from,to:range.to});
       const response=await fetch(`/api/location/history?${params.toString()}`,{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
       const payload=await response.json().catch(()=>null);
       if(requestId!==historyRequest)return;
-      if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'昨日の移動を取得できませんでした。');
+      if(!response.ok||!payload?.ok)throw new Error(typeof payload?.error==='string'?payload.error:'選択期間の移動を取得できませんでした。');
       if(latestMembers&&!latestMembers.some(member=>Number(member.memberId)===memberId&&member.sharingEnabled))throw new Error('位置共有が停止されました。');
       if(Number(memberEl.value)!==memberId)throw new Error('選択した家族が変更されたため、もう一度確認してください。');
       const points=Array.isArray(payload.points)?payload.points:[];
       if(!points.length){
-        setStatus(`${memberName}・昨日の位置履歴はありません。`);
+        setStatus(`${memberName}・選択期間の位置履歴はありません。`);
         return;
       }
       const limit=Number(payload.limit);
       const truncated=Number.isSafeInteger(limit)&&limit>0&&points.length>=limit;
       let meters=0;
-      for(let i=1;i<points.length;i+=1)meters+=distanceMeters(points[i-1],points[i]);
+      for(let i=1;i<points.length;i+=1){if(Date.parse(points[i].recordedAt)-Date.parse(points[i-1].recordedAt)<=3600000)meters+=distanceMeters(points[i-1],points[i]);}
       const start=formatTime(points[0]?.recordedAt),end=formatTime(points[points.length-1]?.recordedAt);
       const countText=truncated?`${points.length}件以上（最新${points.length}件のみ表示）`:`${points.length}件`;
-      setStatus(`${memberName}・昨日の記録 ${countText}${start&&end?` ・ ${start}〜${end}`:''}`);
+      setStatus(`${memberName}・${rangeLabel}の記録 ${countText}${start&&end?` ・ ${start}〜${end}`:''}`);
       if(summaryEl){
         summaryEl.textContent=truncated
-          ?`取得できた最新${points.length}件の記録点間の直線距離合計 ${distanceText(meters)}。上限に達したため昨日1日全体の距離・開始地点とは限りません。GPS誤差も含みます。`
-          :`記録点間の直線距離合計 ${distanceText(meters)}。GPS誤差を含むため実際の移動距離とは異なる場合があります。`;
+          ?`取得できた最新${points.length}件の記録点間の直線距離合計 ${distanceText(meters)}。上限に達したため選択期間全体の距離・開始地点とは限りません。期間を短くすると前の記録を確認できます。GPS誤差も含みます。`
+          :`記録点間の直線距離合計 ${distanceText(meters)}。1時間を超える記録の空白は線で結びません。道路経路や実際の移動距離とは異なります。`;
       }
       renderLinks(points,truncated);
       displayedMemberId=memberId;
       emitHistory(memberId,points);
+      const sheet=liveRoot?.querySelector('[data-location-family-sheet]');if(sheet){sheet.open=false;sheet.querySelector('summary')?.focus({preventScroll:true});}
     }catch(error){
-      if(requestId===historyRequest)setStatus(error instanceof Error&&error.message?error.message:'昨日の移動を取得できませんでした。');
+      if(requestId===historyRequest)setStatus(error instanceof Error&&error.message?error.message:'選択期間の移動を取得できませんでした。');
     }finally{
       loadingHistory=false;
       if(selectorLocked)memberEl.disabled=false;

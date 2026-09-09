@@ -2,8 +2,8 @@ import type { AppContext } from './app-context';
 import { D1LocationQueryService } from './location-query-service';
 import { json } from './response';
 
-const HISTORY_LIMIT=250;
-const MAX_HISTORY_WINDOW_MS=48*60*60*1000;
+const HISTORY_LIMIT=500;
+const MAX_HISTORY_WINDOW_MS=31*24*60*60*1000;
 
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 const canonicalIso=(value:string):boolean=>{
@@ -41,7 +41,7 @@ export async function locationHistoryApi(request:Request,ctx:AppContext):Promise
   if(!canonicalIso(from)||!canonicalIso(to))return fail(400,'INVALID_RANGE','from / to はISO日時で指定してください。');
 
   const fromMs=Date.parse(from),toMs=Date.parse(to);
-  if(fromMs>toMs||toMs-fromMs>MAX_HISTORY_WINDOW_MS)return fail(400,'INVALID_RANGE','参照期間は48時間以内で指定してください。');
+  if(fromMs>toMs||toMs-fromMs>MAX_HISTORY_WINDOW_MS)return fail(400,'INVALID_RANGE','参照期間は31日以内で指定してください。');
 
   const service=new D1LocationQueryService(ctx.env.DB);
   const points=await service.history({
