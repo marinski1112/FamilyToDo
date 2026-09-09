@@ -5,7 +5,14 @@ const MAX_IMAGE_BYTES=4*1024*1024;
 type FamilyLogImageMime='image/jpeg'|'image/png'|'image/webp';
 type Scope={familyId:number;memberId:number};
 type MediaRow={id:number;log_id:number;subject_id:number;storage_key:string;mime_type:string;byte_size:number;reconcile_pending?:number};
-type ParentRow={id:number;subject_id:number;deleted_at:string|null;log_type:string;detail_code:string|null;subject_kind:string};
+type ParentRow={id:number;subject_id:number;deleted_at:string|null;log_type:string;detail_code:string|null;subject_kind:string;media_eligible:number};
+const JOURNAL_PARENT_SQL=`EXISTS (SELECT 1 FROM family_log_journal_entries j WHERE j.log_id=l.id AND j.family_id=l.family_id AND j.subject_id=l.subject_id AND j.journal_kind='CHILD' AND (
+  (j.entry_kind='MEMO' AND l.log_type='MEMO' AND l.detail_code='JOURNAL_MEMO') OR
+  (j.entry_kind='MILESTONE' AND l.log_type='MEMO' AND l.detail_code IN ('JOURNAL_STAND','JOURNAL_FIRST_STEP','JOURNAL_FIRST_TOOTH','JOURNAL_TOOTH')) OR
+  (j.entry_kind='MEASUREMENT' AND ((l.log_type='HEIGHT' AND l.detail_code='JOURNAL_HEIGHT') OR (l.log_type='WEIGHT' AND l.detail_code='JOURNAL_WEIGHT')))
+))`;
+const PHOTO_PARENT_SQL=`((l.log_type='MEAL' AND l.detail_code='BABY_FOOD') OR ${JOURNAL_PARENT_SQL})`;
+
 type CleanupPurpose='ORPHAN'|'DELETE';
 
 function scope(context:AppContext):Scope|null{
@@ -62,7 +69,7 @@ async function readBoundedBody(request:Request,maxBytes:number):Promise<ArrayBuf
 }
 
 async function mediaById(env:Env,familyId:number,mediaId:number,requireVisibleParent:boolean):Promise<MediaRow|null>{
-  const parentClause=requireVisibleParent?" AND l.deleted_at IS NULL AND l.log_type='MEAL' AND l.detail_code='BABY_FOOD' AND s.subject_kind IN ('BABY','CHILD')":'';
+  const parentClause=requireVisibleParent?` AND l.deleted_at IS NULL AND ${PHOTO_PARENT_SQL} AND s.subject_kind IN ('BABY','CHILD')`:'';
   return await env.DB.prepare(`SELECT m.id,m.log_id,m.subject_id,m.storage_key,m.mime_type,m.byte_size,m.reconcile_pending
     FROM family_log_media m
     JOIN family_logs l ON l.id=m.log_id AND l.family_id=m.family_id AND l.subject_id=m.subject_id
@@ -76,7 +83,7 @@ async function mediaByLog(env:Env,familyId:number,logId:number):Promise<MediaRow
     JOIN family_logs l ON l.id=m.log_id AND l.family_id=m.family_id AND l.subject_id=m.subject_id
     JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
     WHERE m.log_id=? AND m.family_id=? AND l.deleted_at IS NULL
-      AND l.log_type='MEAL' AND l.detail_code='BABY_FOOD' AND s.subject_kind IN ('BABY','CHILD')
+      AND ${PHOTO_PARENT_SQL} AND s.subject_kind IN ('BABY','CHILD')
     LIMIT 1`).bind(logId,familyId).first<MediaRow>()||null;
 }
 
@@ -85,7 +92,7 @@ async function mediaRowByLog(env:Env,familyId:number,logId:number):Promise<Media
 }
 
 async function parentByLog(env:Env,familyId:number,logId:number):Promise<ParentRow|null>{
-  return await env.DB.prepare(`SELECT l.id,l.subject_id,l.deleted_at,l.log_type,l.detail_code,s.subject_kind
+  return await env.DB.prepare(`SELECT l.id,l.subject_id,l.deleted_at,l.log_type,l.detail_code,s.subject_kind,${PHOTO_PARENT_SQL} AS media_eligible
     FROM family_logs l
     JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
     WHERE l.id=? AND l.family_id=? LIMIT 1`).bind(logId,familyId).first<ParentRow>()||null;
@@ -96,7 +103,7 @@ async function babyFoodParent(env:Env,familyId:number,logId:number):Promise<{id:
     FROM family_logs l
     JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id AND s.active=1
     WHERE l.id=? AND l.family_id=? AND l.deleted_at IS NULL
-      AND l.log_type='MEAL' AND l.detail_code='BABY_FOOD'
+      AND ${PHOTO_PARENT_SQL}
       AND s.subject_kind IN ('BABY','CHILD')
     LIMIT 1`).bind(logId,familyId).first<{id:number;subject_id:number}>()||null;
 }
@@ -151,7 +158,7 @@ export async function reconcileFamilyLogMediaForLog(env:Env,familyId:number,logI
   const row=await mediaRowByLog(env,familyId,logId);
   if(!row)return;
   const parent=await parentByLog(env,familyId,logId);
-  const eligible=Boolean(parent&&!parent.deleted_at&&String(parent.log_type)==='MEAL'&&String(parent.detail_code||'')==='BABY_FOOD'&&['BABY','CHILD'].includes(String(parent.subject_kind))&&Number(parent.subject_id)===Number(row.subject_id));
+  const eligible=Boolean(parent&&!parent.deleted_at&&Number(parent.media_eligible)===1&&['BABY','CHILD'].includes(String(parent.subject_kind))&&Number(parent.subject_id)===Number(row.subject_id));
   if(!eligible){await cleanupMediaRow(env,familyId,row);return;}
   if(Number(row.reconcile_pending||0)!==0)await env.DB.prepare('UPDATE family_log_media SET reconcile_pending=0 WHERE id=? AND family_id=?').bind(Number(row.id),familyId).run();
 }

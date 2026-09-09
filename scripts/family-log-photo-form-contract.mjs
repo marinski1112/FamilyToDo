@@ -5,7 +5,7 @@ const asset=fs.readFileSync('public/assets/family-log-baby-food-media.js','utf8'
 const core=fs.readFileSync('public/assets/family-log-core.js','utf8');
 assert.ok(core.includes("logForm?.dispatchEvent(new Event('family-log-fields-ready'))"));
 assert.ok(!asset.includes('queueMicrotask(()=>queueMicrotask(sync))'),'no click/microtask guessing');
-function fixture(){
+function fixture(journalPhotos=false){
   class El{
     constructor(){this.listeners={};this.children=[];this.hidden=false;this.value='';this.disabled=false;this.style={};this.classList={add(){},remove(){}};}
     addEventListener(type,fn){this.listeners[type]=fn;}
@@ -21,7 +21,7 @@ function fixture(){
   Object.assign(fields.subject_id,{value:'1'});fields.log_type.value='MEAL';fields.occurred_at.value='2026-09-09T12:00';
   form.elements={namedItem:k=>fields[k]||null};
   let wrap,decodeResolve,uploads=0,logs=0,reloads=0,failUpload=true;
-  const listeners={},doc={getElementById(id){return id==='familyLogPayload'?{textContent:JSON.stringify({csrf:'SECRET',logs:{}})}:id==='familyLogForm'?form:id==='familyLogAdvanced'?new El():null;},head:new El(),body:new El(),querySelector:()=>null,addEventListener(type,fn){listeners[type]=fn;},createElement(tag){const el=new El();if(tag==='section')wrap=el;if(tag==='canvas'){el.getContext=()=>({drawImage(){}});el.toBlob=cb=>cb({size:100,type:'image/jpeg'});}return el;}};
+  const listeners={},doc={getElementById(id){return id==='familyLogPayload'?{textContent:JSON.stringify({csrf:'SECRET',logs:{},journalPhotos,journalLogIds:[12]})}:id==='familyLogForm'?form:id==='familyLogAdvanced'?new El():null;},head:new El(),body:new El(),querySelector:()=>null,addEventListener(type,fn){listeners[type]=fn;},createElement(tag){const el=new El();if(tag==='section')wrap=el;if(tag==='canvas'){el.getContext=()=>({drawImage(){}});el.toBlob=cb=>cb({size:100,type:'image/jpeg'});}return el;}};
   const sandbox={document:doc,HTMLFormElement:Form,HTMLSelectElement:El,Element:El,Map,Set,JSON,Number,String,Object,Array,Promise,
     URL:{createObjectURL:()=> 'blob:local-photo',revokeObjectURL(){}},
     createImageBitmap:()=>new Promise(resolve=>{decodeResolve=resolve;}),
@@ -50,3 +50,6 @@ const switched=fixture();switched.fields.detail_code.value='BABY_FOOD';await swi
 assert.equal(switched.preview.children.length,0,'late decode cannot attach a previous draft photo');assert.equal((await switched.save()).stopped,undefined);assert.equal(switched.logs,0);
 const detail=fixture();detail.fields.detail_code.value='BABY_FOOD';await detail.ready();assert.equal(detail.wrap.hidden,false);detail.fields.detail_code.value='BREAKFAST';await detail.ready();assert.equal(detail.wrap.hidden,true,'only eligible BABY_FOOD flow attaches photos');
 console.log('photo form: first-open, explicit state, prep/save exclusion, upload-only retry and stale decode isolation ok');
+
+const journal=fixture(true);journal.fields.id.value='12';await journal.ready();assert.equal(journal.wrap.hidden,false);assert.equal((await journal.save()).stopped,true,'empty photo form cannot navigate/submit');const jp=journal.select();journal.decode();await jp;await journal.save();assert.equal(journal.logs,0,'journal photo must not mutate canonical record');assert.equal(journal.uploads,1);journal.succeed();await journal.save();assert.equal(journal.logs,0);assert.equal(journal.uploads,2);assert.equal(journal.reloads,1);journal.fields.id.value='99';await journal.ready();assert.equal(journal.wrap.hidden,true,'unlisted journal record cannot use client photo form');
+
