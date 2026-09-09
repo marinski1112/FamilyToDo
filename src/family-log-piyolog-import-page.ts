@@ -2,7 +2,7 @@ import type {AppContext} from './app-context';
 import {familyLogImportPage} from './family-log-import';
 
 const CORE_IMPORT_ASSET='/assets/family-log-import.js?v=12.121.0-wave102';
-const PIYOLOG_IMPORT_ASSET='/assets/family-log-import-piyolog.js?v=piyolog-media2';
+const PIYOLOG_IMPORT_ASSET='/assets/family-log-import-piyolog.js?v=piyolog-media3';
 
 /**
  * Keep the canonical preview/chunk/rollback importer and only replace its browser
