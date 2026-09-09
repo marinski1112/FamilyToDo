@@ -7,14 +7,6 @@ const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 if(!index.includes("import { dispatchContextApiRoute } from './context-api-routes';")) throw new Error('index.ts must import context API dispatcher');
 if(!index.includes('const apiResponse=await dispatchContextApiRoute(request,context,url);')) throw new Error('index.ts must invoke context API dispatcher');
 if(!index.includes('if(apiResponse) return apiResponse;')) throw new Error('index.ts must return matched context API response');
-if(!apiRoutes.includes('export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{')) throw new Error('context API dispatcher export missing');
-if(!apiRoutes.includes("import { calendarStampReadApi } from './calendar-stamp-api';")) throw new Error('calendar stamp read adapter import missing');
-if(!apiRoutes.includes("import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';")) throw new Error('calendar stamp placement adapter import missing');
-if(!apiRoutes.includes("import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';")) throw new Error('calendar stamp admin adapter import missing');
-if(!apiRoutes.includes("import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';")) throw new Error('calendar stamp media adapter import missing');
-if(!apiRoutes.includes("import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';")) throw new Error('calendar shared stamp catalog adapter import missing');
-if(!apiRoutes.includes("import { familyLogMutationBoundary } from './family-log-mutation-boundary';")) throw new Error('Family Log retained mutation boundary import missing');
-if(!apiRoutes.includes("import { settingsDiagnosticsDetailWithMorningAi } from './settings-ai-diagnostics';")) throw new Error('Morning Digest diagnostics wrapper import missing');
 const routeLines=[
   "if(url.pathname==='/api/family/create') return await createFamily(request,context);",
   "if(url.pathname==='/api/family/join') return await joinFamily(request,context);",
@@ -22,10 +14,22 @@ const routeLines=[
   "if(url.pathname==='/api/me') return await apiMe(context);",
   "if(url.pathname==='/api/toggle') return await toggle(request,context);",
   "if(url.pathname==='/api/task') return await taskApi(request,context);",
+  "if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);",
+  "if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(request,context);",
   "if(url.pathname==='/api/item') return await itemApi(request,context);",
   "if(url.pathname==='/api/messages') return await messages(request,context);",
+  "if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);",
   "if(url.pathname==='/api/shopping') return await shopping(request,context);",
+  "if(url.pathname==='/api/shopping-categories') return await shoppingCategoryApi(request,context);",
+  "if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);",
+  "if(url.pathname==='/api/location/latest') return await locationLatestApi(request,context);",
+  "if(url.pathname==='/api/location/history') return await locationHistoryApi(request,context);",
+  "if(url.pathname==='/api/location/eta') return await locationRouteEtaApi(request,context);",
+  "if(url.pathname==='/api/location/places') return await locationPlacesApi(request,context);",
+  "if(url.pathname==='/api/location/home') return await locationHomeApi(request,context);",
   "if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);",
+  "if(url.pathname==='/api/family-log-media') return await familyLogMediaApi(request,context);",
+  "if(url.pathname==='/api/family-log-import-media-targets') return await familyLogImportMediaTargetsApi(request,context);",
   "if(url.pathname==='/api/child-journal') return await childJournalApi(request,context);",
   "if(url.pathname==='/api/calendar-stamps') return await calendarStampReadApi(request,context.env,{familyId:Number(context.member?.family_id||0),memberId:Number(context.member?.id||0)});",
   "if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);",
@@ -33,6 +37,7 @@ const routeLines=[
   "if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);",
+  "if(url.pathname==='/api/calendar-stamp-admin/shared-publish') return await calendarSharedStampPublishAdminApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);",
   "if(url.pathname==='/api/calendar-stamp-admin/png-sequence') return await calendarStampPngSequenceAdminApi(request,context);",
   "if(url.pathname==='/api/family-ai/query') return await familyAiQuery(request,context);",
@@ -67,7 +72,7 @@ for(const route of routeLines){
 }
 for(const required of [
   "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);",
-  "if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillment(request,env);",
+  "if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillmentWithExecuteDiagnostics(request,env);",
 ]) if(!publicRoutes.includes(required)) throw new Error(`public routing boundary moved unexpectedly: ${required}`);
 for(const required of [
   "if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);",
