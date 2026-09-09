@@ -63,7 +63,8 @@ for(const marker of [
   'JWT audience',
   'Secret・鍵全文・Push endpoint・p256dh/auth・JWTは表示しません。',
   'await diagnoseWebPushVapid(ctx.env',
+  "SELECT endpoint FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT 1",
 ]) if(!settings.includes(marker)) throw new Error(`notification settings lost VAPID diagnostic marker: ${marker}`);
-for(const sensitiveTemplate of ['${pushDiagnostic.privateKey','${latestActiveDevice.endpoint','${latestActiveDevice.p256dh','${latestActiveDevice.auth']) if(settings.includes(sensitiveTemplate)) throw new Error(`notification settings may expose sensitive push data: ${sensitiveTemplate}`);
+for(const sensitiveTemplate of ['${pushDiagnostic.privateKey}','${latestActiveDevice.endpoint}','${latestActiveDevice.p256dh}','${latestActiveDevice.auth}','${pushDiagnosticSubscription.endpoint}']) if(settings.includes(sensitiveTemplate)) throw new Error(`notification settings may expose sensitive push data: ${sensitiveTemplate}`);
 
 console.log('Web Push retained API and VAPID diagnostics boundary contract ok');
