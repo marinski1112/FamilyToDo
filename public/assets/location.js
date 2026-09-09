@@ -335,7 +335,7 @@
           markers.push(new maps.Marker({map,position:point,title,label:{text:markerInitial(title),color:'#fff',fontWeight:'700'}}));
         }
       }
-      if(refocusMap){if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56});}}
+      if(refocusMap){if(points.length===1){map.setCenter(points[0].point);map.setZoom(15);}else{map.fitBounds(bounds,{top:64,right:56,bottom:96,left:56});}}
     }catch(_error){
       mapEl.hidden=true;
       mapStateEl.hidden=false;
@@ -469,7 +469,7 @@
     const generation=historyGeneration;
     const detail=event.detail||{},memberId=Number(detail.memberId);
     if(!currentSharedMembers.has(memberId)||!Array.isArray(detail.points)||!mapsKey)return;
-    const points=detail.points.filter(point=>validPoint(point)&&Number.isFinite(Date.parse(point.recordedAt))).sort((a,b)=>Date.parse(a.recordedAt)-Date.parse(b.recordedAt)).slice(0,250);
+    const points=detail.points.filter(point=>validPoint(point)&&Number.isFinite(Date.parse(point.recordedAt))).sort((a,b)=>Date.parse(a.recordedAt)-Date.parse(b.recordedAt)).slice(0,500);
     if(!points.length)return;
     try{
       const maps=await loadGoogleMaps();
@@ -484,7 +484,7 @@
       const bounds=new maps.LatLngBounds();
       points.forEach(point=>bounds.extend(validPoint(point)));
       historyLines=segments.filter(path=>path.length>1).map(path=>new maps.Polyline({map,path,strokeColor:'#7c3aed',strokeOpacity:.85,strokeWeight:4,clickable:false}));
-      map.fitBounds(bounds,{top:140,right:36,bottom:100,left:36});
+      map.fitBounds(bounds,{top:64,right:36,bottom:100,left:36});
       if(sheet)sheet.open=false;
     }catch{setStatus('移動の線を描画できませんでした。履歴の一覧をご確認ください。');}
   });

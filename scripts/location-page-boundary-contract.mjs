@@ -1,6 +1,7 @@
 import './location-route-eta-contract.mjs';
 import './location-home-place-contract.mjs';
 import './location-home-presence-contract.mjs';
+import './location-history-range-contract.mjs';
 import fs from 'node:fs';
 
 const domain=fs.readFileSync('src/location-domain.ts','utf8');
@@ -16,8 +17,7 @@ if(page.includes("from './app'"))throw new Error('Location page must not depend 
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
-  "import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';",
-  "const phase1Ready=new Set(['owntracks','latest','history','places','distance']);",
+  "import { LOCATION_PRIVACY_DEFAULTS } from './location-domain';",
   "export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{",
   "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');",
   "const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');",
@@ -73,7 +73,7 @@ for(const marker of [
   'new maps.LatLngBounds()',
   'new maps.Map(mapEl',
   'fullscreenControlOptions:{position:maps.ControlPosition.RIGHT_CENTER}',
-  'map.fitBounds(bounds,{top:156,right:56,bottom:96,left:56})',
+  'map.fitBounds(bounds,{top:64,right:56,bottom:96,left:56})',
   'const markerInitial=(name)=>Array.from(String(name||\'家族\').trim())[0]||\'家\';',
   'const makeFamilyMarkerContent=(member)=>{',
   "wrap.className='location-family-map-marker';",
@@ -144,7 +144,7 @@ if(!routes.includes("import { locationPage } from './location-page';"))throw new
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
 if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
-if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-sheet3';"))throw new Error('Location cache revision missing');
+if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4';"))throw new Error('Location cache revision missing');
 if(!shell.includes("active==='/app/location.php'?`<script defer src=\"/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}\"></script>`:''"))throw new Error('Location client asset must load only on Location page');
 if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
 if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');

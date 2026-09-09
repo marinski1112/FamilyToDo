@@ -30,8 +30,8 @@ assert.doesNotMatch(source,/navigator\.geolocation|GOOGLE_MAPS_|Routes API/i,'Ph
 assert.match(routes,/import \{ locationLatestApi \} from '\.\/location-latest-api';/,'context API dispatcher must retain the latest-location boundary');
 assert.match(routes,/url\.pathname==='\/api\/location\/latest'\) return await locationLatestApi\(request,context\)/,'authenticated context routing must expose the latest projection endpoint');
 
-assert.match(history,/const HISTORY_LIMIT=250;/,'history API must keep a fixed bounded point count');
-assert.match(history,/const MAX_HISTORY_WINDOW_MS=48\*60\*60\*1000;/,'history API must bound each request to 48 hours');
+assert.match(history,/const HISTORY_LIMIT=500;/,'history API must keep a fixed bounded point count');
+assert.match(history,/const MAX_HISTORY_WINDOW_MS=31\*24\*60\*60\*1000;/,'history API must bound each request to 31 days');
 assert.match(history,/if\(!requester\)return fail\(401,'AUTH_REQUIRED'/,'history API must require an authenticated member');
 assert.match(history,/request\.method!=='GET'/,'history API must be read-only');
 assert.match(history,/new D1LocationQueryService\(ctx\.env\.DB\)/,'history API must reuse the provider-neutral LocationQueryService');

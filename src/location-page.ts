@@ -1,6 +1,6 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
-import { LOCATION_PRIVACY_DEFAULTS, LOCATION_ROADMAP } from './location-domain';
+import { LOCATION_PRIVACY_DEFAULTS } from './location-domain';
 import { html } from './response';
 
 const esc=(v:unknown)=>String(v??'')
@@ -10,7 +10,7 @@ const esc=(v:unknown)=>String(v??'')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
 
-const phase1Ready=new Set(['owntracks','latest','history','places','distance']);
+
 
 /**
  * Location landing surface. It never requests browser geolocation. The live
@@ -22,10 +22,6 @@ export async function locationPage(_request:Request,ctx:AppContext,env:Env):Prom
   const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');
   const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');
   const csrf=esc(ctx.session.csrfToken||'');
-  const roadmap=LOCATION_ROADMAP.map(item=>{
-    const status=phase1Ready.has(item.key)?'基盤実装済み':'準備中 ・ この画面では実行しません';
-    return `<div class="row"><strong>${esc(item.label)}</strong><div class="meta">${status}</div></div>`;
-  }).join('');
   const body=`<style>
 .location-page{min-width:0}
 .wrap:has(.location-page){padding-top:0!important;padding-bottom:0!important}
@@ -45,7 +41,7 @@ export async function locationPage(_request:Request,ctx:AppContext,env:Env):Prom
 .location-history-clear{min-height:44px}
 @media(prefers-reduced-motion:no-preference){.location-family-sheet{transition:box-shadow .15s ease}}
 .location-page .location-map-card{padding:0!important;margin:0;border:0;overflow:hidden;position:relative;background:#fff}
-.location-map-head{position:absolute;z-index:4;top:10px;left:10px;right:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(255,255,255,.96);border-radius:18px;box-shadow:0 4px 18px #0f172a20}
+.location-map-head{position:absolute;z-index:4;top:10px;right:10px;display:flex}.location-map-head .location-refresh{box-shadow:0 2px 8px #0f172a25;border-radius:50%}
 .location-map-head>div{min-width:0}.location-map-head h1{font-size:18px!important;margin:0;line-height:1.35}.location-map-head .meta{font-size:12px;line-height:1.4;margin-top:3px}
 .location-page .location-refresh{min-height:44px;flex-shrink:0}.location-refresh[disabled]{opacity:.55}
 .location-map-surface{height:clamp(360px,66svh,740px);position:relative;background:#eef2ff}
@@ -67,21 +63,21 @@ export async function locationPage(_request:Request,ctx:AppContext,env:Env):Prom
 .location-tools,.location-info{border-top:1px solid #e2e8f0;padding:0 14px}.location-tools>summary,.location-info>summary{cursor:pointer;min-height:48px;box-sizing:border-box;padding:14px 0;font-size:14px;font-weight:600}
 .location-map-head-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.location-map-head-actions button{min-height:44px}
 .location-page .location-secondary,.location-info .card{padding:10px 0!important;margin:0;border:0;box-shadow:none;border-radius:0}.location-secondary h2,.location-info h2{font-size:16px!important;margin:8px 0}
-.location-history-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.location-history-controls select{min-width:0;max-width:100%;margin:0;font-size:16px}.location-history-controls button{min-height:44px}
+.location-history-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;grid-column:1/-1}.location-history-dates label{min-width:0;margin:0;font-size:12px}.location-history-dates input{box-sizing:border-box;width:100%;min-width:0;font-size:16px;margin:4px 0}.location-history-presets{display:flex;gap:6px;grid-column:1/-1}.location-history-presets button{flex:1;padding:8px}.location-history-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.location-history-controls select{min-width:0;max-width:100%;margin:0;font-size:16px}.location-history-controls button{min-height:44px}
 .location-history-links{display:flex;gap:8px;flex-wrap:wrap}.location-history-summary,.location-map-note{font-size:12px;line-height:1.6;margin:8px 0}.location-empty{padding:14px;color:#475569}
-@media(max-width:560px){.location-page{margin:0 -8px}.location-map-head{top:8px;left:8px;right:8px}.location-map-surface{height:clamp(320px,66svh,640px)}.location-history-controls{grid-template-columns:1fr}.location-page .location-map-card{border-radius:0}}
+@media(max-width:560px){.location-page{margin:0 -8px}.location-map-head{top:8px;right:8px}.location-map-surface{height:clamp(320px,66svh,640px)}.location-history-controls{grid-template-columns:1fr}.location-page .location-map-card{border-radius:0}}
 @media(max-width:360px){.location-member-row{grid-template-columns:34px minmax(0,1fr);gap:8px}.location-state-badge{grid-column:2;justify-self:start}.location-avatar-fallback{width:32px;height:32px}}
   </style>
   <div class="location-page">
   <section class="card section-card location-map-card" data-location-live data-google-maps-key="${mapsKey}" data-google-maps-map-id="${mapsMapId}" data-location-csrf="${csrf}">
-    <div class="location-map-head"><div><h1>📍 家族の場所</h1><div class="meta" data-location-status>最新位置を確認しています…</div><div class="location-auto-note">表示中は約1分ごとに更新</div></div><div class="location-map-head-actions"><button class="btn gray small location-refresh" type="button" data-location-refresh aria-label="家族の最新位置を更新" title="最新位置を更新">↻</button></div></div>
+    <div class="location-map-head"><button class="btn gray small location-refresh" type="button" data-location-refresh aria-label="家族の最新位置を更新" title="最新位置を更新">↻</button></div>
     <div class="location-map-surface" role="region" aria-label="家族の場所 地図領域"><div class="location-map-canvas" data-location-map hidden></div><div class="location-map-placeholder" data-location-map-state><div class="location-map-placeholder-inner"><div class="location-map-icon" aria-hidden="true">🗺️</div><strong>家族の最新位置</strong><div class="meta">共有中の位置情報を読み込んでいます。</div><div class="location-map-provider-note">この画面は端末の現在地を自動取得しません。共有中の家族位置だけをGoogle Maps上に表示します。</div></div></div></div>
-    <details class="location-family-sheet" data-location-family-sheet><summary class="location-sheet-handle" aria-controls="locationSheetBody"><span class="location-family-sheet-label">家族の位置・メニュー</span><span class="location-sheet-hint" aria-hidden="true"></span></summary><div class="location-sheet-body" id="locationSheetBody"><div class="location-list" data-location-list aria-live="polite"><div class="location-empty">家族の位置一覧を読み込んでいます…</div></div>
+    <details class="location-family-sheet" data-location-family-sheet><summary class="location-sheet-handle" aria-controls="locationSheetBody"><span class="location-family-sheet-label">家族の位置・メニュー</span><span class="location-sheet-hint" aria-hidden="true"></span></summary><div class="location-sheet-body" id="locationSheetBody"><div class="location-map-note" data-location-status aria-live="polite">最新位置を確認しています…</div><div class="location-list" data-location-list aria-live="polite"><div class="location-empty">家族の位置一覧を読み込んでいます…</div></div>
   <details class="location-tools"><summary>経路・移動履歴</summary><div class="location-map-head-actions"><button class="btn small" type="button" data-location-home-eta>🏠 家まで何分？</button><span class="location-home-eta-result" data-location-home-eta-result aria-live="polite"></span></div>
-  <section class="card section-card location-secondary" data-location-history-panel><h2>🧭 昨日の移動</h2><p class="meta">家族を選んで保存済みの記録点を地図に表示します。線は記録点を結んだもので、実際の道路経路とは異なります。</p><div class="location-history-controls"><select data-location-history-member disabled aria-label="昨日の移動を確認する家族"><option value="">家族を読み込みます</option></select><button class="btn gray small" type="button" data-location-history-load>昨日の移動を地図に表示</button><button class="btn gray small location-history-clear" type="button" data-location-history-clear>軌跡を消す</button></div><div class="meta location-history-summary" data-location-history-status aria-live="polite">まだ読み込んでいません。</div><div class="meta location-history-summary" data-location-history-summary></div><div class="location-history-links" data-location-history-links></div></section>
+  <section class="card section-card location-secondary" data-location-history-panel><h2>🧭 移動履歴</h2><div class="location-history-controls"><select data-location-history-member disabled aria-label="移動履歴を確認する家族"><option value="">家族を読み込みます</option></select><div class="location-history-dates"><label>開始日<input type="date" data-location-history-from required></label><label>終了日<input type="date" data-location-history-to required></label></div><div class="location-history-presets"><button type="button" class="btn gray small" data-location-history-days="1">今日</button><button type="button" class="btn gray small" data-location-history-days="7">7日間</button><button type="button" class="btn gray small" data-location-history-days="31">31日間</button></div><button class="btn small" type="button" data-location-history-load>地図に表示</button><button class="btn gray small location-history-clear" type="button" data-location-history-clear>軌跡を消す</button></div><div class="meta location-history-summary" data-location-history-status aria-live="polite">まだ読み込んでいません。</div><div class="meta location-history-summary" data-location-history-summary></div><div class="location-history-links" data-location-history-links></div></section>
   </details><details class="location-info"><summary>共有設定・使い方</summary><div class="location-map-note meta">位置が古い場合は「現在地」と断定せず、最終更新からの経過時間を表示します。車の所要時間は「車で何分？」または「家まで何分？」を押した時だけRoutes APIへ問い合わせます。</div>
   <div class="card section-card location-secondary"><h2>🔒 共有設定</h2><div class="row"><strong>位置共有の既定値: ${privacy.sharingEnabled?'ON':'OFF'}</strong><div class="meta">登録した端末も最初は共有OFFです。共有ONにした有効な端末だけが、認証済みの位置送信と保存の対象になります。</div></div><div class="row"><strong>🏠 自宅地点</strong><div class="meta">OWNER / ADMIN が「管理 → 位置情報・OwnTracks」で、共有中の最新位置から家族共通の自宅地点を設定できます。</div></div></div>
-  <div class="card section-card"><h2>🧭 位置情報機能</h2>${roadmap}</div>
+
   <div class="card section-card"><h2>プライバシー方針</h2><p>この画面自体はブラウザの現在地を取得しません。共有ONの登録端末から認証済みの位置情報が届いた場合にだけ、FamilyToDoのlatest/history基盤へ保存されます。</p><p class="meta">端末は個別に共有停止・失効でき、共有OFFまたは失効済みの端末は位置送信・参照の対象外になります。自宅地点も明示的な管理操作でのみ設定され、経路時間はボタン操作時だけ計算します。</p></div></details></div></details></section></div><script defer src="/assets/location-history-ui.js?v=history3"></script>`;
   return html(layout('家族の場所',body,'/app/location.php'));
 }
