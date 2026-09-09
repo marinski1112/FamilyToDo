@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import './family-log-duplicate-preview-contract.mjs';
 
 const read=path=>fs.readFileSync(path,'utf8');
 const browser=read('public/assets/family-log-import-piyolog.js');
