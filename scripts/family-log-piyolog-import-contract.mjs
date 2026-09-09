@@ -17,19 +17,23 @@ assert.match(browser,/source\|\|'\'\)\.trim\(\)\.toLowerCase\(\)!=='piyolog'/,'p
 assert.match(browser,/MAX_MEDIA_ITEMS=250/,'photo manifest must stay bounded');
 assert.match(browser,/MAX_IMAGE_BYTES=4\*1024\*1024/,'client photo size must match the canonical private-media limit');
 assert.match(browser,/IMAGE_TYPES=new Set\(\['image\/jpeg','image\/png','image\/webp'\]\)/,'only canonical image types are selectable for import');
-assert.match(browser,/record\.log_type\|\|''\)\.toUpperCase\(\)!=='MEAL'.*record\.detail_code\|\|''\)\.toUpperCase\(\)!=='BABY_FOOD'/s,'manifest records must be explicit MEAL/BABY_FOOD entries');
+assert.match(browser,/promotionRecords=.*detail_code.*BABY_FOOD/s,'promotion input must be restricted to explicit MEAL/BABY_FOOD records');
+assert.match(browser,/promotionCall\('promotion_preview'\)/,'preview must check existing generic meals without writing');
+assert.match(browser,/promotionCall\('promotion_apply'\)/,'confirmed import must promote generic meals before canonical record import');
+assert.match(browser,/actual_new_count/,'preview must separate true new records from in-place baby-food promotions');
+assert.match(browser,/既存のぴよログ「食事」.*同じ時刻の記録を新規追加せず離乳食として上書き/s,'UI must explain in-place promotion instead of duplicate creation');
+assert.match(browser,/if\(actualNew>0\)/,'promotion-only runs must not create a redundant canonical import batch');
 assert.match(browser,/fetch\('\/api\/family-log-media'/,'photo bytes must use the existing authenticated private Family Log media endpoint');
 assert.match(browser,/if\(target\.has_media\)\{existing\+\+;continue;\}/,'existing private photos must never be overwritten');
 assert.match(browser,/if\(error instanceof TypeError\)\{uncertain\+\+;/,'ambiguous network outcomes must be tracked separately');
 assert.match(browser,/通信結果不明の写真は自動再試行していません/,'ambiguous uploads must not be retried automatically');
-assert.match(browser,/button\.onclick=\(\)=>d\.new_count\?runImport\(d,button,progress\):runPhotoOnly\(button,progress\)/,'all-duplicate previews must enter the photo-only path');
 const photoOnly=browser.match(/async function runPhotoOnly\([\s\S]*?\n}\n\nasync function runImport/);
 assert.ok(photoOnly,'photo-only handler must remain explicit');
-assert.ok(!photoOnly[0].includes('call(')&&!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
+assert.ok(!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
 assert.ok(!browser.includes('application/pdf')&&!browser.includes('.pdf"')&&!browser.includes(".pdf'"),'browser import controller must not offer PDF upload');
 assert.ok(!/gemini|generativelanguage|openai|ocr|pdfjs/i.test(browser),'browser import controller must not add AI/OCR/PDF parsing');
 
-// Resolution is server-side, admin-only and tenant/subject/source/type constrained.
+// Resolution/promotion is server-side, admin-only and tenant/subject/source/type constrained.
 for(const marker of [
   "['OWNER','ADMIN']",
   "String(body.csrf||'')!==String(context.session.csrfToken||'')",
@@ -38,12 +42,21 @@ for(const marker of [
   "l.log_type='MEAL' AND l.detail_code='BABY_FOOD'",
   "lower(b.source)='piyolog'",
   'l.import_external_id IN',
-])assert.ok(targets.includes(marker),`missing Piyolog media target boundary: ${marker}`);
-assert.match(targets,/if\(previous\)\{previous\.count\+\+;continue;\}/,'duplicate active matches for one external ID must be counted');
-assert.match(targets,/some\(match=>match\.count!==1\).*写真参照IDが一意に特定できません/s,'ambiguous external IDs must be rejected instead of silently picking the newest log');
+  "action==='promotion_preview'",
+  "action==='promotion_apply'",
+  "COALESCE(l.detail_code,'')<>'BABY_FOOD'",
+  "SET detail_code='BABY_FOOD',import_source_key=?",
+  "NOT EXISTS(SELECT 1 FROM family_logs x",
+])assert.ok(targets.includes(marker),`missing Piyolog import safety boundary: ${marker}`);
+assert.match(targets,/existingTargetKeys\.has\(record\.targetKey\)/,'already-correct canonical baby-food rows must not be promoted again');
+assert.match(targets,/if\(candidates\.length>1&&record\.externalId\)/,'ambiguous same-time rows must be narrowed by stable external ID when available');
+assert.match(targets,/if\(candidates\.length>1\).*exactText/s,'remaining ambiguity must be narrowed by retained source/value text');
+assert.match(targets,/if\(candidates\.length>1\)ambiguous\+\+/,'unresolved ambiguous generic meals must be rejected');
+assert.match(targets,/if\(ambiguous\.size\)throw new BadRequest/,'ambiguous photo external IDs must be rejected instead of silently choosing a log');
 assert.ok(!targets.includes('env.MEDIA')&&!targets.includes('.MEDIA.'),'target resolution must never read or write private object bytes');
 assert.ok(!/gemini|generativelanguage|openai|ocr|pdfjs/i.test(targets),'server target resolution must not add AI/OCR/PDF parsing');
 assert.match(targets,/MAX_EXTERNAL_IDS=250/,'target resolver must stay bounded');
+assert.match(targets,/MAX_PROMOTION_RECORDS=250/,'promotion resolver must stay bounded');
 assert.match(targets,/MAX_BODY_BYTES=256\*1024/,'target resolver body must stay bounded');
 
 // Reuse the canonical import and private-media contracts instead of creating parallel storage paths.
@@ -51,10 +64,10 @@ assert.match(importer,/familytodo-family-log-import-v1/,'canonical Family Log im
 assert.match(importer,/import_external_id/,'canonical importer must retain the external ID used to resolve converted photo manifests');
 assert.match(media,/one optional private BABY_FOOD photo per Family Log record|authenticated same-family proxy/i,'canonical private-media boundary must remain in use');
 assert.match(wrapper,/CORE_IMPORT_ASSET='\/assets\/family-log-import\.js\?v=12\.121\.0-wave102'/,'wrapper must pin the exact retained canonical controller it replaces');
-assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-media1'/,'Piyolog controller must be cache-busted');
+assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-media2'/,'Piyolog controller must be cache-busted after promotion behavior changes');
 assert.ok(importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'wrapper sentinel must stay aligned with the canonical import page');
 assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) return await familyLogPiyologImportPage\(context\)/,'visible Family Log import page must use the restored Piyolog-capable controller');
-assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'photo target resolver must be routed through the authenticated context dispatcher');
+assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');
 assert.match(String(pkg.scripts?.['check:browser-js']||''),/family-log-import-piyolog\.js/,'Piyolog browser controller must be syntax checked in CI');
 
-console.log('family-log Piyolog import: external conversion, preview-first records, unambiguous private baby-food photo resolution, record-free photo retry, no overwrite/auto-retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
+console.log('family-log Piyolog import: preview-first records, in-place generic-meal promotion, duplicate prevention, unambiguous private baby-food photo resolution, record-free photo retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
