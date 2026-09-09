@@ -42,7 +42,7 @@ function morningItem(row:Row){
     feature:'MORNING_DIGEST',
     final_status:generation.status==='AI'?'AI_OK':'FALLBACK_DETERMINISTIC',
     ai_called:aiCalled,
-    model:generation.model??null,
+    model:last?.model??null,
     http_status:last?.http_status??null,
     last_attempt_status:generation.status==='AI'?'AI_OK':null,
     last_reason_code:last?.reason_code??generation.reason,
