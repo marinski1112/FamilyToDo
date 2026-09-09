@@ -27,10 +27,12 @@ const constrainEditors=()=>{
   document.querySelectorAll('#familyLogQuickManage input[name="name"],.family-log-quick-manage input[name="name"]').forEach(input=>{
     if(input instanceof HTMLInputElement){input.maxLength=4;input.dataset.familyLogMaxChars='4';}
   });
+  const choreLabelText='名前（1〜6文字）';
   const choreLabel=chore?.previousElementSibling;
-  if(choreLabel instanceof HTMLElement&&choreLabel.textContent?.includes('名前'))choreLabel.textContent='名前（1〜6文字）';
+  if(choreLabel instanceof HTMLElement&&choreLabel.textContent?.includes('名前')&&choreLabel.textContent!==choreLabelText)choreLabel.textContent=choreLabelText;
+  const choreHelpText='6文字以内で設定してください。既存の長い名前は自動で切断しません。';
   const choreHelp=chore?.nextElementSibling;
-  if(choreHelp instanceof HTMLElement&&choreHelp.matches('p.small'))choreHelp.textContent='6文字以内で設定してください。既存の長い名前は自動で切断しません。';
+  if(choreHelp instanceof HTMLElement&&choreHelp.matches('p.small')&&choreHelp.textContent!==choreHelpText)choreHelp.textContent=choreHelpText;
 };
 const formatVisibleDate=value=>{
   const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));
