@@ -1,6 +1,7 @@
 import { verifyLocationDeviceCredential } from './location-device-auth';
 import { normalizeOwnTracksLocation } from './location-owntracks';
 import { persistAuthenticatedLocationPoint } from './location-persistence';
+import {processLocationArrival} from './location-arrival-push';
 import { json } from './response';
 
 const MAX_BODY_BYTES=16*1024;
@@ -49,7 +50,7 @@ const declaredBodyTooLarge=(request:Request):boolean=>{
  * URL/query string. Raw request bodies, credentials and coordinates are never
  * logged here.
  */
-export async function ownTracksLocationIngress(request:Request,env:Env):Promise<Response>{
+export async function ownTracksLocationIngress(request:Request,env:Env,execution?:ExecutionContext):Promise<Response>{
   if(request.method!=='POST')return json({ok:false,code:'METHOD_NOT_ALLOWED'},405,{allow:'POST'});
   if(declaredBodyTooLarge(request))return json({ok:false,code:'PAYLOAD_TOO_LARGE'},413);
 
@@ -78,5 +79,6 @@ export async function ownTracksLocationIngress(request:Request,env:Env):Promise<
 
   const persisted=await persistAuthenticatedLocationPoint(env.DB,device,normalized.point);
   if(!persisted)return unauthorized();
+  if(execution)execution.waitUntil(processLocationArrival(env,normalized.point).catch(()=>{}));
   return json([]);
 }

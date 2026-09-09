@@ -40,7 +40,7 @@ if(!source.includes("code:'INVALID_LOCATION'")) throw new Error('normalizer erro
 
 for(const required of [
   "import { ownTracksLocationIngress } from './location-owntracks-ingress';",
-  "if(url.pathname==='/api/location/owntracks') return await ownTracksLocationIngress(request,env);",
+  "if(url.pathname==='/api/location/owntracks') return await ownTracksLocationIngress(request,env,ctx);",
 ]) if(!publicRoutes.includes(required)) throw new Error(`OwnTracks public route wiring missing: ${required}`);
 
 console.log('location OwnTracks ingress contract: ok');

@@ -1,5 +1,7 @@
 import type { AppContext } from './app-context';
 import { D1LocationQueryService } from './location-query-service';
+import {readKnownLocationPlaces} from './location-places-api';
+import {buildLocationStayReport} from './location-stay-report';
 import { json } from './response';
 
 const HISTORY_LIMIT=500;
@@ -52,8 +54,11 @@ export async function locationHistoryApi(request:Request,ctx:AppContext):Promise
     limit:HISTORY_LIMIT,
   });
 
+  const report=buildLocationStayReport(points,await readKnownLocationPlaces(ctx.env.DB,familyId));
   return json({
     ok:true,
+    report:report.slice(0,100),
+    reportTruncated:report.length>100,
     memberId:subjectMemberId,
     from,
     to,

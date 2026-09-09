@@ -27,6 +27,7 @@ export const activeRegressionGroups=[
       ['location-persistence','node scripts/location-persistence-contract.mjs'],
       ['location-owntracks-ingress','node scripts/location-owntracks-ingress-contract.mjs'],
       ['location-latest-api','node scripts/location-latest-api-contract.mjs'],
+      ['location-report-push','node scripts/location-report-push-contract.mjs'],
       ['login-page-boundary','node scripts/login-page-boundary-contract.mjs'],
       ['family-onboarding-page-boundary','node scripts/family-onboarding-page-boundary-contract.mjs'],
       ['family-invite-page-boundary','node scripts/family-invite-page-boundary-contract.mjs'],
