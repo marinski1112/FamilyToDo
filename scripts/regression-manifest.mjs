@@ -93,6 +93,7 @@ export const activeRegressionGroups=[
       ['exception-route-dispatchers','node scripts/exception-route-dispatchers-contract.mjs'],
       ['index-entrypoint-final','node scripts/index-entrypoint-final-contract.mjs'],
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
+      ['child-journal-photo','node scripts/child-journal-photo-contract.mjs'],
       ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
     ],
   },
