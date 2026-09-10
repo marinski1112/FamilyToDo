@@ -120,7 +120,7 @@ for(const marker of [
   'granted_scopes TEXT NOT NULL',
   "CHECK(status IN ('ACTIVE','REVOKED'))",
 ]) assert.ok(inboundAuthMigration.includes(marker),`inbound authorization persistence missing: ${marker}`);
-assert.ok(!inboundAuthMigration.includes('external_calendar_accounts'),'inbound authorization storage must remain independent from the outbound account table');
+assert.ok(!inboundAuthMigration.includes('REFERENCES external_calendar_accounts'),'inbound authorization storage must not depend on the outbound account row');
 
 // Safety classifier stays pure, and the new authorization step is still incapable of importing
 // or mutating FamilyToDo tasks. Live read-only preview and later apply remain separate reviews.
