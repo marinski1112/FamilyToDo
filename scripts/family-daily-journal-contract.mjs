@@ -15,6 +15,8 @@ const checks=[
   [journal.includes("l.log_type='HOUSEWORK'")&&journal.includes('family_logs'),'journal includes canonical housework logs'],
   [journal.includes('REPAIR_DAYS=7')&&journal.includes('date>=todayJst()'),'only completed days are generated with bounded repair'],
   [journal.includes('ON CONFLICT(family_id,journal_date) DO UPDATE')&&journal.includes("storage_tier='HOT'"),'hot recent summaries can be refreshed without mutating cold archive'],
+  [journal.includes('MAX_SUMMARY_DETAILS=3')&&journal.includes('MAX_SUMMARY_DETAIL_CHARS=60')&&journal.includes('summaryDetails(stays.map(stay=>stay.place))')&&journal.includes('summaryDetails(tasks.map(task=>task.title))')&&journal.includes('summaryDetails(housework.map(item=>item.name))'),'deterministic summary exposes bounded semantic evidence for search'],
+  [journal.includes('placeholder="場所・タスク・家事などで検索"'),'journal search copy matches searchable deterministic evidence'],
   [routes.includes("url.pathname==='/app/family_journal.php'")&&routes.includes('familyDailyJournalPage'),'family journal page is routed'],
   [index.includes('archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env))'),'daily journal runs after Location projection'],
   [shell.includes('/assets/family-journal-link.js')&&link.includes('/app/family_journal.php'),'Family Log exposes family journal'],
