@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {stripTypeScriptTypes} from 'node:module';
 const read=path=>fs.readFileSync(path,'utf8');
 const time=minutes=>new Date(Date.parse('2026-01-01T00:00:00.000Z')+minutes*60000).toISOString();
 const point=minutes=>({latitude:35.0,longitude:139.0,recordedAt:time(minutes),accuracyMeters:10});
 const load=(path,exports,globals={})=>{
-  const source=read(path).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
+  const source=stripTypeScriptTypes(read(path),{mode:'strip'}).replace(/^import .*;\s*$/gm,'').replace(/\bexport /g,'');
   const sandbox={...globals,console};vm.runInNewContext(source+`;this.__exports={${exports.join(',')}};`,sandbox);return sandbox.__exports;
 };
 const {buildLocationStayReport}=load('src/location-stay-report.ts',['buildLocationStayReport'],{});
