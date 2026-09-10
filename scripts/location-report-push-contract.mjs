@@ -33,7 +33,7 @@ assert.equal(arrivalDecision(pending,'IN','1',time(2)).notify,true);
 assert.equal(arrivalDecision(pending,'UNKNOWN','1',time(2)),null);
 assert.equal(arrivalDecision(pending,'IN','1',time(1)),null,'replay/out-of-order ignored');
 assert.equal(arrivalDecision(pending,'IN','2',time(2)).notify,false,'place reset is baseline');
-assert.equal(arrivalDecision(pending,'IN','1',time(40)).notify,false,'long gap cannot imply arrival');
+assert.equal(arrivalDecision(pending,'IN','1',time(40)).notify=false,'long gap cannot imply arrival');
 assert.equal(arrivalDecision({...pending,last_arrival_at:time(0)},'IN','1',time(2)).notify,false,'jitter cooldown');
 const sender=read('src/location-arrival-push.ts'),api=read('src/location-places-api.ts'),ingress=read('src/location-owntracks-ingress.ts'),historySource=read('src/location-history-api.ts'),historyUi=read('public/assets/location-history-ui.js');
 assert.ok(sender.includes('current.recordedAt!==point.recordedAt'));assert.ok(sender.includes('AND recorded_at=? AND place_version=?'));
@@ -43,7 +43,9 @@ assert.ok(ingress.indexOf('if(!persisted)return unauthorized();')<ingress.indexO
 assert.ok(ingress.includes('processLocationArrival(env,normalized.point).catch(()=>{})'));
 assert.ok(api.includes('constantTimeEqual')&&api.includes("['OWNER','ADMIN']")&&api.includes('size>2048'));
 assert.ok(historySource.includes(".filter(entry=>entry.kind==='STAY')"),'history text report stays focused on stays only');
-assert.ok(historyUi.includes('MAX_ADDRESS_LOOKUPS=20')&&historyUi.includes('new Maps.Geocoder()'),'address lookup must use the existing browser Maps provider with a hard bound');
+assert.ok(historyUi.includes('MAX_ADDRESS_LOOKUPS=20')&&historyUi.includes("importLibrary('geocoding')"),'address lookup must use the existing browser Maps provider with an explicit modern geocoding library and a hard bound');
+assert.ok(historyUi.includes('coarseJapaneseAddress')&&historyUi.includes("language:'ja'")&&historyUi.includes("region:'JP'"),'unregistered stay addresses must be localized and coarse-grained');
+assert.ok(historyUi.includes('番地・建物名は表示しません'),'history UI must document the coarse address privacy boundary');
 assert.ok(historyUi.includes("mode==='report'&&reportRows.length"),'reverse geocoding is explicit text-report work, not automatic history polling');
 assert.doesNotMatch(historyUi,/console\.|localStorage|sessionStorage/,'private addresses are display-only and not logged or persisted');
 const {locationPlacesApi}=load('src/location-places-api.ts',['locationPlacesApi'],{json:(body,status)=>({body,status}),constantTimeEqual:(a,b)=>a===b});
@@ -66,4 +68,4 @@ d.execute("INSERT INTO location_arrival_states VALUES(1,1,'H:1','1','old','OUT',
 q="UPDATE location_arrival_states SET recorded_at='new',state='IN' WHERE family_id=1 AND member_id=1 AND place_key='H:1' AND recorded_at='old' AND place_version='1'"
 assert d.execute(q).rowcount==1;assert d.execute(q).rowcount==0
 `],{input:read('migrations/0069_location_places_arrival.sql'),encoding:'utf8'});assert.equal(sql.status,0,sql.stderr);
-console.log('location report/arrival: aggregated stays, bounded explicit address lookup, gaps, uncertainty, arrival replay/CAS, tenant/CSRF wiring, no AI calls ok');
+console.log('location report/arrival: aggregated stays, bounded explicit coarse address lookup, gaps, uncertainty, arrival replay/CAS, tenant/CSRF wiring, no AI calls ok');
