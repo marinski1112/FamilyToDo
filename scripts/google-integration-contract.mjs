@@ -13,6 +13,7 @@ const ai=read('src/family-ai.ts');
 const calendarEntry=read('src/google-calendar.ts');
 const calendarCore=read('src/google-calendar-core.ts');
 const calendarOneWay=read('src/google-calendar-one-way.ts');
+const inboundAuto=read('src/google-calendar-inbound-auto.ts');
 const calendar=calendarEntry+calendarCore;
 const index=read('src/index.ts');
 const publicRoutes=read('src/public-routes.ts');
@@ -65,13 +66,16 @@ for(const token of ['resolveFamilyGeminiModel','FAMILY_SETTING','CLOUDFLARE_FALL
 
 for(const token of ['external_calendar_watch_channels','token_hash','createCalendarWatch','X-Goog-Channel-ID','X-Goog-Resource-ID','X-Goog-Channel-Token','renewCalendarWatches','stopFamilyCalendarWatches','wakeCalendarOutbox'])assert.ok((calendar+calendarOneWay+watchMigration).includes(token),token);
 assert.ok(publicRoutes.includes("'/api/google-calendar/watch'"));
-assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'));
+assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'));
+assert.ok(calendarOneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'authenticated watch must wake separate inbound auto processing');
+assert.ok(index.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env))'),'five-minute Calendar inbound fallback must remain wired');
+assert.ok(inboundAuto.includes("a.provider=? AND a.status='ACTIVE'"),'auto inbound must stay scoped to the app-owned Family TODO calendar');
 assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'));
 assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
 assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
 assert.ok(/12\.(?:146|147|148)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
-for(const ui of ['FamilyToDo → Google Calendar','Google CalendarからFamilyToDoへの予定取り込みは行いません','watch notificationは連携状態確認','使用モデル:'])assert.ok(calendar.includes(ui),ui);
+for(const ui of ['FamilyToDo → Google Calendar','Google Calendarからの予定取り込みは、明示的な読み取り許可を分離して行います。','使用モデル:'])assert.ok(calendar.includes(ui),ui);
 assert.match(calendar,/pending_count/);
 assert.match(calendar,/status IN \('PENDING','ERROR'\)/);
 assert.match(calendarOneWay,/pendingBefore/);
@@ -107,11 +111,11 @@ assert.match(calendarCore,/effectiveDelete=op==='DELETE'\|\|!task\|\|!eligibleTa
 assert.ok(calendarOneWay.includes('received: 0')&&calendarOneWay.includes('inbound_more: false'),'manual sync compatibility must explicitly report no inbound work');
 
 for(const retired of ['processCalendarInbound','calendarSyncNow','calendarWatchWebhook','syncCalendarAccount','inboundEventTimes','applyInbound','PAGE_PREFIX','INBOUND_PAGE_SIZE','reconcileHintedInbound','hintedInboundAlreadyProjected','sameInboundShape','applyInboundSafely']){
-  assert.ok(!calendar.includes(retired),`retired normal Calendar inbound must stay absent: ${retired}`);
+  assert.ok(!calendar.includes(retired),`retired monolithic Calendar inbound must stay absent: ${retired}`);
 }
 assert.ok(!calendarEntry.includes('duplicateCandidates'));
 assert.ok(!calendarEntry.includes("action === 'diagnose_duplicates'"));
 assert.ok(!calendarEntry.includes("action === 'repair_duplicates'"));
 assert.ok(!calendarEntry.includes('calendarDuplicateDiagnose')&&!calendarEntry.includes('calendarDuplicateRepair'));
 
-console.log('google-integration-contract: Home, credentials, AI model, and one-way Calendar diagnostics/watch/outbound/delete/retry contracts ok');
+console.log('google-integration-contract: Home, credentials, AI model, outbound Calendar lifecycle, and bounded verified inbound auto-sync contracts ok');
