@@ -1,4 +1,4 @@
-const STATIC_CACHE='familytodo-static-pwa-branding-safe1';
+const STATIC_CACHE='familytodo-static-shopping-task-fallback';
 const STATIC_ASSETS=['/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>{}));
@@ -8,14 +8,15 @@ self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
     const names=await caches.keys();
     await Promise.all(names.filter(name=>name.startsWith('familytodo-static-')&&name!==STATIC_CACHE).map(name=>caches.delete(name)));
+    const cache=await caches.open(STATIC_CACHE);
+    await Promise.all(['/manifest.webmanifest','/app-icon-180.png','/app-icon-192.png','/app-icon-512.png'].map(path=>cache.delete(path).catch(()=>false)));
     await self.clients.claim();
   })());
 });
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
-  // Family-scoped manifest and /app-icon-* responses are private/no-store and
-  // must never enter this origin-wide CacheStorage shared across logins.
+  // Only immutable/shared static assets belong in origin-wide CacheStorage.
   if(url.pathname.startsWith('/assets/')){
     event.respondWith((async()=>{
       const cached=await caches.match(event.request);
