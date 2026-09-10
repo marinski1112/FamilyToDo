@@ -14,6 +14,7 @@ const checks=[
   [journal.includes('task_completion_history')&&journal.includes("visibility_scope='FAMILY'")&&journal.includes("lower(t.task_kind)<>'event'"),'journal includes only family-visible completed tasks'],
   [journal.includes("l.log_type='HOUSEWORK'")&&journal.includes('family_logs'),'journal includes canonical housework logs'],
   [journal.includes('REPAIR_DAYS=7')&&journal.includes('date>=todayJst()'),'only completed days are generated with bounded repair'],
+  [journal.includes('JOURNAL_REFRESH_MS=24*60*60*1000')&&journal.includes("SELECT journal_date,generated_at FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT'")&&journal.includes('freshDates.has(date)'),'scheduled repair skips fresh HOT journal rows while retaining the seven-day repair window'],
   [journal.includes('ON CONFLICT(family_id,journal_date) DO UPDATE')&&journal.includes("storage_tier='HOT'"),'hot recent summaries can be refreshed without mutating cold archive'],
   [journal.includes('MAX_SUMMARY_DETAILS=3')&&journal.includes('MAX_SUMMARY_DETAIL_CHARS=60')&&journal.includes('summaryDetails(stays.map(stay=>stay.place))')&&journal.includes('summaryDetails(tasks.map(task=>task.title))')&&journal.includes('summaryDetails(housework.map(item=>item.name))'),'deterministic summary exposes bounded semantic evidence for search'],
   [journal.includes('placeholder="場所・タスク・家事などで検索"'),'journal search copy matches searchable deterministic evidence'],
