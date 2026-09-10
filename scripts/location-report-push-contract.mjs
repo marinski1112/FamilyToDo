@@ -33,7 +33,7 @@ assert.equal(arrivalDecision(pending,'IN','1',time(2)).notify,true);
 assert.equal(arrivalDecision(pending,'UNKNOWN','1',time(2)),null);
 assert.equal(arrivalDecision(pending,'IN','1',time(1)),null,'replay/out-of-order ignored');
 assert.equal(arrivalDecision(pending,'IN','2',time(2)).notify,false,'place reset is baseline');
-assert.equal(arrivalDecision(pending,'IN','1',time(40)).notify=false,'long gap cannot imply arrival');
+assert.equal(arrivalDecision(pending,'IN','1',time(40)).notify,false,'long gap cannot imply arrival');
 assert.equal(arrivalDecision({...pending,last_arrival_at:time(0)},'IN','1',time(2)).notify,false,'jitter cooldown');
 const sender=read('src/location-arrival-push.ts'),api=read('src/location-places-api.ts'),ingress=read('src/location-owntracks-ingress.ts'),historySource=read('src/location-history-api.ts'),historyUi=read('public/assets/location-history-ui.js');
 assert.ok(sender.includes('current.recordedAt!==point.recordedAt'));assert.ok(sender.includes('AND recorded_at=? AND place_version=?'));
