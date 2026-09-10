@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS google_calendar_inbound_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   family_id INTEGER NOT NULL REFERENCES families(id) ON DELETE CASCADE,
-  account_id INTEGER NOT NULL REFERENCES external_calendar_accounts(id) ON DELETE CASCADE,
+  account_id INTEGER REFERENCES external_calendar_accounts(id) ON DELETE SET NULL,
   calendar_id TEXT NOT NULL,
   external_event_id TEXT NOT NULL,
   ical_uid TEXT,
