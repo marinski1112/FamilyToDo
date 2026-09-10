@@ -18,7 +18,7 @@ const routeLines=[
   "if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}",
   "if(url.pathname==='/__cf/db-schema-health') return await dbSchemaHealth(env);",
   "if(url.pathname==='/__cf/db-runtime-health') return await dbRuntimeHealth(env);",
-  "if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env,ctx);return await authHealth(context);",
+  "if(url.pathname==='/__cf/auth-health'){const context=await makeContext(request,env,ctx);return await authHealth(context);}",
   "if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);",
   "if(url.pathname==='/__cf/integrations-health') return integrationsHealthResponse(env);",
   "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotification(request,env,ctx);",
