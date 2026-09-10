@@ -7,7 +7,7 @@ type Row=Record<string,unknown>;
 type LocationSummary={memberId:number;name:string;routePointCount:number;stays:Array<{from:string;to:string;minutes:number;place:string}>};
 type TaskSummary={taskId:number;title:string;memberId:number;memberName:string;completedAt:string};
 type HouseworkSummary={name:string;memberId:number;memberName:string;occurredAt:string};
-const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50;
+const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50,MAX_SUMMARY_DETAILS=3,MAX_SUMMARY_DETAIL_CHARS=60;
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const validDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}T00:00:00Z`));
 const validMonth=(v:string)=>/^\d{4}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}-01T00:00:00Z`));
@@ -37,11 +37,17 @@ async function readHousework(db:D1Database,familyId:number,date:string):Promise<
   return rows.results.map(row=>({name:String(row.value_text||'家事'),memberId:Number(row.created_by||0),memberName:String(row.member_name||'家族'),occurredAt:String(row.occurred_at||'')}));
 }
 
+function summaryDetails(values:string[]):string{
+  const seen=new Set<string>(),out:string[]=[];
+  for(const value of values){const normalized=String(value||'').trim().replace(/\s+/g,' ').slice(0,MAX_SUMMARY_DETAIL_CHARS);if(!normalized||seen.has(normalized))continue;seen.add(normalized);out.push(normalized);if(out.length>=MAX_SUMMARY_DETAILS)break;}
+  return out.join('・');
+}
+
 function summary(location:LocationSummary[],tasks:TaskSummary[],housework:HouseworkSummary[]):string{
   const out:string[]=[];
-  if(location.length)out.push(`位置記録${location.length}人分・滞在${location.reduce((n,m)=>n+m.stays.length,0)}件。`);
-  if(tasks.length)out.push(`完了タスク${tasks.length}件。`);
-  if(housework.length)out.push(`家事${housework.length}件。`);
+  if(location.length){const stays=location.flatMap(member=>member.stays),details=summaryDetails(stays.map(stay=>stay.place));out.push(`位置記録${location.length}人分・滞在${stays.length}件${details?`（${details}）`:''}。`);}
+  if(tasks.length){const details=summaryDetails(tasks.map(task=>task.title));out.push(`完了タスク${tasks.length}件${details?`（${details}）`:''}。`);}
+  if(housework.length){const details=summaryDetails(housework.map(item=>item.name));out.push(`家事${housework.length}件${details?`（${details}）`:''}。`);}
   return out.join('')||'この日は、日次総括に残す記録がありませんでした。';
 }
 
@@ -72,6 +78,6 @@ export async function familyDailyJournalPage(request:Request,ctx:AppContext):Pro
   const location=parseArray<LocationSummary>(selected?.location_json),tasks=parseArray<TaskSummary>(selected?.tasks_json),housework=parseArray<HouseworkSummary>(selected?.housework_json);
   const search=q?`<section class="card"><h2>「${esc(q)}」の振り返り</h2>${found.results.length?found.results.map(r=>`<a class="journal-result" href="/app/family_journal.php?month=${esc(String(r.journal_date).slice(0,7))}&date=${esc(r.journal_date)}"><strong>${esc(r.journal_date)}</strong><span>${esc(r.summary_text)}</span></a>`).join(''):'<p class="small">一致する総括はありません。</p>'}</section>`:'';
   const detail=selected?`<section class="card"><h2>${esc(selectedDate)} の総括</h2><p>${esc(selected.summary_text)}</p></section><section class="card"><h2>📍 移動・滞在</h2>${location.length?location.map(m=>`<div class="journal-member"><strong>${esc(m.name)}</strong><small> 簡略ルート${m.routePointCount}点</small>${m.stays.map(s=>`<p>${esc(timeOnly(s.from))}〜${esc(timeOnly(s.to))} ${esc(s.place)}・${s.minutes}分</p>`).join('')||'<p class="small">まとまった滞在なし</p>'}</div>`).join(''):'<p class="small">位置記録なし</p>'}</section><section class="card"><h2>✅ 完了タスク</h2>${tasks.map(t=>`<p>${esc(timeOnly(t.completedAt))} ${esc(t.title)} <small>・${esc(t.memberName)}</small></p>`).join('')||'<p class="small">完了タスクなし</p>'}</section><section class="card"><h2>🧹 家事</h2>${housework.map(h=>`<p>${esc(timeOnly(h.occurredAt))} ${esc(h.name)} <small>・${esc(h.memberName)}</small></p>`).join('')||'<p class="small">家事記録なし</p>'}</section>`:'<section class="card"><p class="small">日付を選ぶと、その日の総括を表示します。総括は翌日以降に自動生成します。</p></section>';
-  const body=`<div class="page-head"><h1>📘 家族日記</h1><a class="btn gray small" href="/app/family_log.php">家族ログへ</a></div><p class="small">移動・滞在、家族共有タスクの完了、家事を1日単位で長期保存します。位置RAWは日記生成では削除しません。</p><form method="get" class="card"><label>日記を検索</label><div class="actions"><input name="q" maxlength="80" value="${esc(q)}" placeholder="総括の言葉で検索"><button class="btn small">検索</button></div></form>${search}<section class="card"><div class="section-head"><a class="btn gray small" href="?month=${shiftMonth(month,-1)}">‹ 前月</a><h2>${esc(month.replace('-','年'))}月</h2><a class="btn gray small" href="?month=${shiftMonth(month,1)}">翌月 ›</a></div><div class="journal-week"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div class="journal-grid">${calendar(month,byDate,selectedDate)}</div></section>${detail}<style>.journal-week,.journal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.journal-week span{text-align:center;font-size:12px}.family-journal-day{min-height:54px;padding:6px;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:3px}.family-journal-day.muted{border-color:transparent}.family-journal-day.selected{outline:2px solid currentColor}.family-journal-day small{font-size:10px}.journal-member{padding:8px 0;border-bottom:1px solid #eee}.journal-member p{margin:5px 0}.journal-result{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #eee;text-decoration:none;color:inherit}.journal-result span{flex:1}</style>`;
+  const body=`<div class="page-head"><h1>📘 家族日記</h1><a class="btn gray small" href="/app/family_log.php">家族ログへ</a></div><p class="small">移動・滞在、家族共有タスクの完了、家事を1日単位で長期保存します。位置RAWは日記生成では削除しません。</p><form method="get" class="card"><label>日記を検索</label><div class="actions"><input name="q" maxlength="80" value="${esc(q)}" placeholder="場所・タスク・家事などで検索"><button class="btn small">検索</button></div></form>${search}<section class="card"><div class="section-head"><a class="btn gray small" href="?month=${shiftMonth(month,-1)}">‹ 前月</a><h2>${esc(month.replace('-','年'))}月</h2><a class="btn gray small" href="?month=${shiftMonth(month,1)}">翌月 ›</a></div><div class="journal-week"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div class="journal-grid">${calendar(month,byDate,selectedDate)}</div></section>${detail}<style>.journal-week,.journal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.journal-week span{text-align:center;font-size:12px}.family-journal-day{min-height:54px;padding:6px;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:3px}.family-journal-day.muted{border-color:transparent}.family-journal-day.selected{outline:2px solid currentColor}.family-journal-day small{font-size:10px}.journal-member{padding:8px 0;border-bottom:1px solid #eee}.journal-member p{margin:5px 0}.journal-result{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #eee;text-decoration:none;color:inherit}.journal-result span{flex:1}</style>`;
   const response=html(layout('家族日記',body,'/app/family_log.php'));response.headers.set('cache-control','no-store');return response;
 }
