@@ -24,6 +24,7 @@
     "check:location-quality-diagnostics": "node scripts/location-quality-diagnostics-contract.mjs",
     "check:location-long-term-history": "node scripts/location-long-term-history-contract.mjs",
     "check:family-daily-journal": "node scripts/family-daily-journal-contract.mjs",
+    "check:family-daily-journal-ai": "node scripts/family-daily-journal-ai-contract.mjs",
     "check:ai-model-usage-visibility": "node scripts/ai-model-usage-visibility-contract.mjs",
     "check:family-log-js": "node --check public/assets/family-log.js && node --check public/assets/family-log-core.js && node --check public/assets/family-log-diagnostics.js && node --check public/assets/family-log-baby-food-media.js",
     "check:family-log-compact-date": "node scripts/family-log-compact-date-contract.mjs",
@@ -39,7 +40,7 @@
     "check:location-query-service": "node scripts/location-query-service-contract.mjs",
     "check:family-log-media": "node scripts/family-log-media-contract.mjs",
     "check:legacy-regression": "node scripts/regression-legacy.mjs",
-    "test": "npm run typecheck && npm run check:browser-js && npm run check:pwa-family-branding && npm run check:location-quality-diagnostics && npm run check:location-long-term-history && npm run check:family-daily-journal && npm run check:ai-model-usage-visibility && npm run check:family-log-compact-date && npm run check:migrations && npm run check:rough-input-ai-cost-guard && npm run check:rough-input-product-link && npm run check:rough-input-ai-diagnostics && npm run check:rough-input-shared-deadline && npm run check:static-assets && npm run check:location-device-api && npm run check:location-query-service && npm run check:family-log-media && npm run check:regression",
+    "test": "npm run typecheck && npm run check:browser-js && npm run check:pwa-family-branding && npm run check:location-quality-diagnostics && npm run check:location-long-term-history && npm run check:family-daily-journal && npm run check:family-daily-journal-ai && npm run check:ai-model-usage-visibility && npm run check:family-log-compact-date && npm run check:migrations && npm run check:rough-input-ai-cost-guard && npm run check:rough-input-product-link && npm run check:rough-input-ai-diagnostics && npm run check:rough-input-shared-deadline && npm run check:static-assets && npm run check:location-device-api && npm run check:location-query-service && npm run check:family-log-media && npm run check:regression",
     "test:legacy": "npm run check:legacy-regression"
   },
   "devDependencies": {
