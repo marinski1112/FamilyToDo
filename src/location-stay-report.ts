@@ -1,16 +1,34 @@
 import type { LocationPoint } from './location-providers';
 
 export type KnownLocationPlace={key:string;label:string;latitude:number;longitude:number;accuracyMeters:number;version:string};
+export type LocationProximityPhase='OUTSIDE'|'APPROACHING'|'INSIDE'|'UNKNOWN';
 export function locationDistance(a:{latitude:number;longitude:number},b:{latitude:number;longitude:number}):number{
   const r=Math.PI/180,h=Math.sin((b.latitude-a.latitude)*r/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin((b.longitude-a.longitude)*r/2)**2;
   return 6371000*2*Math.asin(Math.sqrt(Math.min(1,h)));
 }
+function placeUncertainty(point:LocationPoint,place:KnownLocationPlace){
+  const pointAccuracy=Number(point.accuracyMeters),placeAccuracy=Number(place.accuracyMeters);
+  if(!Number.isFinite(pointAccuracy)||!Number.isFinite(placeAccuracy)||pointAccuracy<0||placeAccuracy<0||pointAccuracy>150||placeAccuracy>100)return null;
+  return pointAccuracy+placeAccuracy;
+}
+function insideRadius(uncertainty:number){return 150+Math.min(75,uncertainty*.5);}
+function insideExitRadius(uncertainty:number){return 240+Math.min(90,uncertainty*.5);}
+function approachRadius(uncertainty:number){return 450+Math.min(100,uncertainty*.5);}
+function approachExitRadius(uncertainty:number){return 600+Math.min(100,uncertainty*.5);}
+/** Accuracy-aware registered-place match for stay/journal projections. The UNKNOWN band avoids boundary jitter. */
 export function placePresence(point:LocationPoint,place:KnownLocationPlace):'IN'|'OUT'|'UNKNOWN'{
-  if(!Number.isFinite(point.accuracyMeters)||!Number.isFinite(place.accuracyMeters))return 'UNKNOWN';
-  const uncertainty=Number(point.accuracyMeters)+place.accuracyMeters;
-  if(uncertainty>150||uncertainty<0)return 'UNKNOWN';
+  const uncertainty=placeUncertainty(point,place);if(uncertainty===null)return 'UNKNOWN';
   const distance=locationDistance(point,place);
-  return distance+uncertainty<=150?'IN':distance-uncertainty>200?'OUT':'UNKNOWN';
+  return distance<=insideRadius(uncertainty)?'IN':distance>insideExitRadius(uncertainty)?'OUT':'UNKNOWN';
+}
+/** Stateful proximity classification used only for notification transitions. Hysteresis depends on the prior stable phase. */
+export function placeProximity(point:LocationPoint,place:KnownLocationPlace,previous:'OUTSIDE'|'APPROACHING'|'INSIDE'='OUTSIDE'):LocationProximityPhase{
+  const uncertainty=placeUncertainty(point,place);if(uncertainty===null)return 'UNKNOWN';
+  const distance=locationDistance(point,place);
+  const inLimit=previous==='INSIDE'?insideExitRadius(uncertainty):insideRadius(uncertainty);
+  if(distance<=inLimit)return 'INSIDE';
+  const nearLimit=previous==='APPROACHING'?approachExitRadius(uncertainty):approachRadius(uncertainty);
+  return distance<=nearLimit?'APPROACHING':'OUTSIDE';
 }
 export type StayReportEntry={kind:'STAY'|'MOVE'|'GAP'|'UNCERTAIN';from:string;to:string;minutes:number;place:string;meters?:number};
 type InternalStayReportEntry=StayReportEntry&{knownPlaceKey?:string;unknownAnchor?:LocationPoint};
