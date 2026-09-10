@@ -40,6 +40,7 @@ import { locationHistoryApi } from './location-history-api';
 import { locationRouteEtaApi } from './location-route-api';
 import {locationPlacesApi} from './location-places-api';
 import { locationHomeApi } from './location-home-api';
+import { familyPwaBrandingApi, familyPwaIconApi } from './family-pwa-branding';
 
 export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/api/family/create') return await createFamily(request,context);
@@ -102,6 +103,8 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/calendar-import/rollback') return await calendarImportRollback(request,context);
   if(url.pathname==='/api/recurrence/family-log-complete') return await recordOccurrenceFamilyLog(request,context);
   if(url.pathname==='/api/settings') return await settings(request,context);
+  if(url.pathname==='/api/pwa-branding') return await familyPwaBrandingApi(request,context);
+  if(url.pathname==='/api/pwa-icon') return await familyPwaIconApi(request,context);
   if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return await webPushApi(request,context);
   return null;
 }

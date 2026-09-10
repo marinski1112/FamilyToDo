@@ -1,5 +1,5 @@
 const STATIC_CACHE='familytodo-static-shopping-task-fallback';
-const STATIC_ASSETS=['/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
+const STATIC_ASSETS=['/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>{}));
   self.skipWaiting();
@@ -8,13 +8,16 @@ self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
     const names=await caches.keys();
     await Promise.all(names.filter(name=>name.startsWith('familytodo-static-')&&name!==STATIC_CACHE).map(name=>caches.delete(name)));
+    const cache=await caches.open(STATIC_CACHE);
+    await Promise.all(['/manifest.webmanifest','/app-icon-180.png','/app-icon-192.png','/app-icon-512.png'].map(path=>cache.delete(path).catch(()=>false)));
     await self.clients.claim();
   })());
 });
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
-  if(url.pathname.startsWith('/assets/')||url.pathname==='/manifest.webmanifest'){
+  // Only immutable/shared static assets belong in origin-wide CacheStorage.
+  if(url.pathname.startsWith('/assets/')){
     event.respondWith((async()=>{
       const cached=await caches.match(event.request);
       const network=fetch(event.request).then(async response=>{
