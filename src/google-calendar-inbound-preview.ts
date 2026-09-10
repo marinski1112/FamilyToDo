@@ -166,8 +166,9 @@ function normalizeGoogleEvent(event:GoogleCalendarEvent,familyZone:string):{ok:t
   if(hasDate&&hasDateTime)return {ok:false,reason:'MIXED_EVENT_TIME'};
   let startAt='',endAt:string|null=null,allDay=false,normalizedStartDate='';
   if(hasDate){
-    if(!isValidDateOnly(startDate)||!isValidDateOnly(endDateExclusive)||endDateExclusive<=startDate)return {ok:false,reason:'INVALID_ALL_DAY_RANGE'};
-    const inclusiveEnd=shiftDate(endDateExclusive,-1);
+    if(!isValidDateOnly(startDate)||!isValidDateOnly(endDateExclusive)||endDateExclusive<startDate)return {ok:false,reason:'INVALID_ALL_DAY_RANGE'};
+    // Legacy Google/ICS all-day entries can survive with an equal start/end date. Treat only equality as one day; reversed ranges stay invalid.
+    const inclusiveEnd=endDateExclusive===startDate?startDate:shiftDate(endDateExclusive,-1);
     startAt=`${startDate} 00:00:00`;
     endAt=inclusiveEnd===startDate?null:`${inclusiveEnd} 23:59:59`;
     normalizedStartDate=startDate;
