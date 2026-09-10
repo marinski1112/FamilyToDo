@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const routes=fs.readFileSync('src/page-routes.ts','utf8');
+const api=fs.readFileSync('src/context-api-routes.ts','utf8');
+const shell=fs.readFileSync('src/app-shell.ts','utf8');
+const service=fs.readFileSync('src/family-pwa-branding.ts','utf8');
+const client=fs.readFileSync('public/assets/settings-pwa-branding.js','utf8');
+const settings=fs.readFileSync('public/assets/settings.js','utf8');
+const sw=fs.readFileSync('public/sw.js','utf8');
+const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
+const migration=fs.readFileSync('migrations/0076_family_pwa_branding.sql','utf8');
+
+for(const value of ['/manifest.webmanifest','/app-icon-180.png','/app-icon-192.png','/app-icon-512.png'])assert.ok(wrangler.includes(value),`Worker-first route missing: ${value}`);
+assert.ok(routes.includes("url.pathname==='/manifest.webmanifest'"),'dynamic manifest route must be wired');
+assert.ok(routes.includes("/^\\/app-icon-(180|192|512)\\.png$/"),'dynamic icon route must be size-bounded');
+assert.ok(routes.includes("'/app/settings_pwa_branding.php'"),'branding settings page must be wired');
+assert.ok(api.includes("'/api/pwa-branding'"),'branding metadata API must be wired');
+assert.ok(api.includes("'/api/pwa-icon'"),'branding icon API must be wired');
+assert.ok(shell.includes('crossorigin="use-credentials"'),'same-origin private manifest must request credentials');
+assert.ok(shell.includes('href="/app-icon-180.png"'),'iOS apple-touch-icon must use family-scoped endpoint');
+assert.ok(shell.includes('href="/app-icon-192.png"'),'browser icon must use family-scoped endpoint');
+assert.ok(service.includes("cache-control':'private, no-store, max-age=0'"),'dynamic branding responses must be private/no-store');
+assert.ok(service.includes('pwa/families/${family}/icon-${size}.png'),'R2 icon key must derive from authenticated family');
+assert.ok(service.includes("dimensions.width!==size||dimensions.height!==size"),'server must verify final PNG dimensions');
+assert.ok(service.includes("role==='OWNER'||role==='ADMIN'"),'mutations must remain admin-only');
+assert.deepEqual([...client.matchAll(/const sizes=\[([^\]]+)\]/g)].map(m=>m[1]),['180,192,512'],'client must generate all required icon sizes');
+assert.ok(client.includes("canvas.toBlob"),'client must render cropped PNGs locally');
+assert.ok(client.includes("/api/pwa-icon?size=${size}"),'client must upload bounded size variants');
+assert.ok(settings.includes('/app/settings_pwa_branding.php'),'admin settings must expose the home-screen branding page');
+assert.doesNotMatch(sw,/url\.pathname==='\/manifest\.webmanifest'/,'service worker must not cache private manifest');
+assert.doesNotMatch(sw,/app-icon-/,'service worker must not cache family-scoped icons');
+assert.ok(migration.includes('pwa_display_name')&&migration.includes('pwa_icon_updated_at'),'additive family branding schema must exist');
+console.log('pwa-family-branding-contract: family-scoped iPhone home-screen branding boundaries ok');
