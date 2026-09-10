@@ -7,7 +7,7 @@ import { googleFulfillmentWithExecuteDiagnostics } from './google-home-execute-d
 import { integrationsHealthResponse } from './environment-health';
 import { googleCalendarCallback } from './google-calendar';
 import { googleCalendarInboundCallback, isGoogleCalendarInboundOAuthState } from './google-calendar-inbound-auth';
-import { calendarWatchNotificationOnly } from './google-calendar-one-way';
+import { calendarWatchNotification } from './google-calendar-one-way';
 import { googleTasksCallback } from './google-tasks';
 import { liffDispatcher, lineGoogleHomeStart, lineGoogleHomeCallback, resumeGoogleHome } from './oauth-continuation';
 import { ownTracksLocationIngress } from './location-owntracks-ingress';
@@ -25,7 +25,7 @@ export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionC
   if(url.pathname==='/__cf/google-home-health') return await googleHomeHealth(env);
   if(url.pathname==='/__cf/integrations-health') return integrationsHealthResponse(env);
   if(url.pathname==='/api/location/owntracks') return await ownTracksLocationIngress(request,env,ctx);
-  if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);
+  if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotification(request,env,ctx);
   if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
   if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
   if(url.pathname==='/oauth/google-calendar/callback') return isGoogleCalendarInboundOAuthState(url.searchParams.get('state')) ? await googleCalendarInboundCallback(request,env) : await googleCalendarCallback(request,env);

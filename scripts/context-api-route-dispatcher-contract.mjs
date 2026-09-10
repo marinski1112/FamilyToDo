@@ -71,7 +71,7 @@ for(const route of routeLines){
   if(index.split('\n').some(line=>line.trim()===route)) throw new Error(`context API route must not remain in index.ts: ${route}`);
 }
 for(const required of [
-  "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);",
+  "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotification(request,env,ctx);",
   "if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillmentWithExecuteDiagnostics(request,env);",
 ]) if(!publicRoutes.includes(required)) throw new Error(`public routing boundary moved unexpectedly: ${required}`);
 for(const required of [

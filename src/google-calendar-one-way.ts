@@ -2,6 +2,7 @@ import { json } from './response';
 import type { AppContext } from './app-context';
 import { CALENDAR_MAX_RETRIES } from './google-calendar-core';
 import { processCalendarOutbox } from './google-calendar';
+import { processGoogleCalendarInboundAuto } from './google-calendar-inbound-auto';
 import { utcNow } from './timezone';
 
 type Row = Record<string, unknown>;
@@ -42,7 +43,7 @@ export async function calendarSyncOutboundOnly(request: Request, ctx: AppContext
   });
 }
 
-export async function calendarWatchNotificationOnly(request: Request, env: Env) {
+export async function calendarWatchNotification(request: Request, env: Env, ctx: ExecutionContext) {
   if (request.method !== 'POST') return new Response(null, { status: 405 });
   const channel = request.headers.get('X-Goog-Channel-ID') || '';
   const resource = request.headers.get('X-Goog-Resource-ID') || '';
@@ -57,5 +58,7 @@ export async function calendarWatchNotificationOnly(request: Request, env: Env) 
   if (expected !== actual) return new Response(null, { status: 403 });
   await env.DB.prepare('UPDATE external_calendar_watch_channels SET last_notification_at=?,updated_at=? WHERE id=?')
     .bind(now(), now(), row.id).run();
+  const familyId=Number(row.family_id||0);
+  if(Number.isSafeInteger(familyId)&&familyId>0)ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId));
   return new Response(null, { status: 204 });
 }

@@ -9,6 +9,7 @@ const notificationDelivery=read('src/notification-delivery.ts');
 const digest=read('src/line-daily-digest.ts');
 const calendar=read('src/google-calendar.ts')+read('src/google-calendar-core.ts');
 const oneWay=read('src/google-calendar-one-way.ts');
+const inboundAuto=read('src/google-calendar-inbound-auto.ts');
 const publicRoutes=read('src/public-routes.ts');
 const contextRoutes=read('src/context-api-routes.ts');
 const calendarJs=read('public/assets/calendar.js');
@@ -25,8 +26,11 @@ assert.ok(calendar.includes("ON CONFLICT(provider,task_id)")&&calendar.includes(
 assert.ok(calendar.includes('familyTodoTaskId'),'Google outbound projection identity must remain attached');
 assert.ok(oneWay.includes('received: 0')&&oneWay.includes('inbound_more: false'),'normal Calendar API compatibility must report no inbound work');
 assert.ok(contextRoutes.includes('calendarSyncOutboundOnly(request,context)'),'normal Calendar manual sync must remain outbound-only');
-assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'),'normal Calendar watch must remain notification-only');
-for(const retired of ['processCalendarInbound','calendarSyncNow','calendarWatchWebhook','applyInbound','inboundEventTimes','syncCalendarAccount'])assert.ok(!calendar.includes(retired),`normal Google inbound must stay removed: ${retired}`);
+assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'),'verified Calendar watch must receive execution context for bounded background inbound wake-up');
+assert.ok(oneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'verified watch must wake the separate inbound-auto worker only after channel authentication');
+assert.ok(!oneWay.includes('INSERT INTO tasks')&&!oneWay.includes('UPDATE tasks')&&!oneWay.includes('DELETE FROM tasks'),'public watch handler itself must not mutate local tasks');
+assert.ok(inboundAuto.includes("String(event.status||'')==='cancelled'")&&!inboundAuto.includes('UPDATE tasks SET')&&!inboundAuto.includes('DELETE FROM tasks'),'inbound auto must create only and ignore remote delete/update propagation');
+for(const retired of ['processCalendarInbound','calendarSyncNow','calendarWatchWebhook','applyInbound','inboundEventTimes','syncCalendarAccount'])assert.ok(!calendar.includes(retired),`retired monolithic Google inbound must stay removed: ${retired}`);
 for(const token of ['text-overflow:clip','-webkit-line-clamp:2','repeat(4'])assert.ok(familyCss.includes(token),token);
 assert.ok(!app.includes('その他のタイマー'),'obsolete timer section must remain removed');
 assert.ok(notificationDelivery.includes('sendWebPush(env')&&!notificationDelivery.includes('pushLineMessage'),'scheduled notification processor must remain WEB_PUSH-only in this path');
@@ -35,4 +39,4 @@ assert.ok(digest.includes("t.visibility_scope='PRIVATE' AND t.private_owner_id=?
 for(const token of ['active channel count','DB_SCHEMA_MIGRATION_REQUIRED'])assert.ok((calendar+index).includes(token),token);
 assert.ok(!calendar.includes('fallback polling active'),'retired normal inbound polling copy must stay removed');
 
-console.log('platform-integration-contract: Calendar recurrence, visibility, digest, notification and one-way projection contracts ok');
+console.log('platform-integration-contract: Calendar recurrence, visibility, digest, outbound projection and verified bounded inbound wake contracts ok');

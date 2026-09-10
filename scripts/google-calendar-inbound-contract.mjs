@@ -5,6 +5,7 @@ const calendarEntry=fs.readFileSync('src/google-calendar.ts','utf8');
 const calendarCore=fs.readFileSync('src/google-calendar-core.ts','utf8');
 const calendar=calendarEntry+calendarCore;
 const oneWay=fs.readFileSync('src/google-calendar-one-way.ts','utf8');
+const inboundAuto=fs.readFileSync('src/google-calendar-inbound-auto.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
@@ -18,6 +19,7 @@ const inboundUi=fs.readFileSync('public/assets/google-calendar-inbound.js','utf8
 const inboundIdentityMigration=fs.readFileSync('migrations/0072_google_calendar_inbound_identity.sql','utf8');
 const inboundAuthMigration=fs.readFileSync('migrations/0073_google_calendar_inbound_authorization.sql','utf8');
 const inboundApplyGuardMigration=fs.readFileSync('migrations/0074_google_calendar_inbound_apply_guard.sql','utf8');
+const inboundAutoMigration=fs.readFileSync('migrations/0075_google_calendar_inbound_auto_sync.sql','utf8');
 
 for(const marker of [
   'calendar.app.created',
@@ -35,7 +37,9 @@ for(const marker of [
 assert.ok((calendar.match(/refresh_token_ciphertext/g)||[]).length>=2,'encrypted refresh token flow must remain present');
 assert.ok(apiRoutes.includes("'/api/google-calendar/sync'"),'/api/google-calendar/sync');
 assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'),'existing manual Calendar sync must preserve the app-owned outbound adapter');
-assert.ok(publicRoutes.includes('calendarWatchNotificationOnly(request,env)'),'existing app-owned Calendar watch must remain notification-only and must not mutate local tasks');
+assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'),'existing app-owned Calendar watch must remain authenticated and may only wake the separate bounded inbound worker');
+assert.ok(oneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'verified watch must wake bounded inbound work asynchronously');
+assert.ok(!oneWay.includes('INSERT INTO tasks')&&!oneWay.includes('UPDATE tasks')&&!oneWay.includes('DELETE FROM tasks'),'public watch handler itself must not mutate task data');
 assert.ok(oneWay.includes('processCalendarOutbox(ctx.env, OUTBOX_LIMIT, familyId)'),'manual sync must preserve outbound projection');
 assert.ok(oneWay.includes('received: 0'),'existing outbound adapter must not claim that inbound records were imported');
 assert.ok(oneWay.includes("inbound_stage: 'AUTHORIZATION'"),'legacy manual sync diagnostics remain scoped to the outbound adapter');
@@ -43,7 +47,11 @@ assert.ok(oneWay.includes("inbound_reason: 'APP_CREATED_SCOPE_ONLY'"),'legacy ou
 assert.ok(oneWay.includes('inbound_more: false'),'existing outbound adapter must preserve inbound_more compatibility as false');
 assert.ok(oneWay.includes("UPDATE external_calendar_watch_channels SET last_notification_at=?"),'watch notification health timestamp must remain present');
 assert.ok(index.includes('processCalendarOutbox(env)'),'scheduled outbound Calendar projection must remain present');
+assert.ok(index.includes('processGoogleCalendarInboundAuto(env)'),'five-minute inbound recovery must remain present');
 assert.ok(index.includes('renewCalendarWatches(env)'),'calendar watch renewal must remain present');
+for(const marker of ['google_calendar_inbound_sync_state','sync_token','page_token','bootstrap_since'])assert.ok(inboundAutoMigration.includes(marker),`automatic inbound state missing: ${marker}`);
+for(const marker of ["a.provider=? AND a.status='ACTIVE'","String(event.status||'')==='cancelled'","==='NEW_CANDIDATE'",'env.DB.batch(statements)','INSERT INTO google_calendar_inbound_links'])assert.ok(inboundAuto.includes(marker),`automatic inbound guard missing: ${marker}`);
+for(const forbidden of ['UPDATE tasks SET','DELETE FROM tasks'])assert.ok(!inboundAuto.includes(forbidden),`automatic inbound must not overwrite/delete local task data: ${forbidden}`);
 
 // Existing ICS import remains an independent, preview-first path. Its UID ledger is secondary
 // collision evidence only; Google calendarId + event.id remains the inbound primary identity.
@@ -165,4 +173,4 @@ assert.ok(calendarEntry.includes('calendar-inbound-auth-btn'),'inbound authoriza
 
 for(const forbidden of ['INSERT INTO tasks','UPDATE tasks','DELETE FROM tasks','INSERT INTO google_calendar_inbound_links','UPDATE google_calendar_inbound_links','DELETE FROM google_calendar_inbound_links','fetch(']) assert.ok(!inboundSafety.includes(forbidden),`inbound safety classifier must remain pure/read-only: ${forbidden}`);
 
-console.log('google-calendar-inbound-contract: dedicated OAuth, bounded read-only preview, server-revalidated apply, atomic identity, and outbound projection guard are enforced');
+console.log('google-calendar-inbound-contract: dedicated OAuth, bounded preview/apply, automatic app-owned NEW_CANDIDATE creation, atomic identity, and outbound projection guard are enforced');
