@@ -30,6 +30,7 @@ const groups={
     ['google-calendar-inbound',['node','scripts/google-calendar-inbound-contract.mjs']],
     ['google-calendar-inbound-csrf',['node','scripts/google-calendar-inbound-csrf-contract.mjs']],
     ['google-calendar-hub-preview',['node','scripts/google-calendar-hub-preview-contract.mjs']],
+    ['google-calendar-inbound-all-day-compat',['node','scripts/google-calendar-inbound-all-day-compat-contract.mjs']],
     ['calendar-sync-foundation',['node','scripts/calendar-sync-foundation-contract.mjs']],
     ['google-home-quick',['node','scripts/google-home-quick-contract.mjs']],
     ['google-home-scene',['node','scripts/google-home-scene-contract.mjs']],
