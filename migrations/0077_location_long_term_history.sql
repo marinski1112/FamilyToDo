@@ -1,5 +1,6 @@
 -- Long-term Location summary archive.
--- Raw member_location_history points remain operational short-retention data.
+-- Raw member_location_history remains the operational source until an explicit
+-- future data-maintenance workflow safely removes or cold-archives it.
 -- Archived rows intentionally omit provider payloads, credentials and detailed telemetry.
 
 CREATE TABLE IF NOT EXISTS location_history_archive_days (
