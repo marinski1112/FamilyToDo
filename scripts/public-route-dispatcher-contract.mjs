@@ -24,7 +24,7 @@ const routeLines=[
   "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);",
   "if(url.pathname==='/oauth/google/token') return await googleToken(request,env);",
   "if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);",
-  "if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);",
+  "if(url.pathname==='/oauth/google-calendar/callback') return isGoogleCalendarInboundOAuthState(url.searchParams.get('state')) ? await googleCalendarInboundCallback(request,env) : await googleCalendarCallback(request,env);",
   "if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillmentWithExecuteDiagnostics(request,env);",
   "if(url.pathname==='/liff'||url.pathname.startsWith('/liff/')) return await liffDispatcher(request,env);",
   "if(url.pathname==='/oauth/line/google-home/start') return await lineGoogleHomeStart(request,env);",
@@ -37,9 +37,10 @@ for(const route of routeLines){
 }
 for(const required of [
   "import { privacyPage, termsPage } from './legal-pages';",
+  "import { googleCalendarInboundCallback, isGoogleCalendarInboundOAuthState } from './google-calendar-inbound-auth';",
   "if(url.pathname==='/privacy') return privacyPage();",
   "if(url.pathname==='/terms') return termsPage();",
-]) if(!publicRoutes.includes(required)) throw new Error(`public legal route missing: ${required}`);
+]) if(!publicRoutes.includes(required)) throw new Error(`public legal/OAuth route missing: ${required}`);
 for(const required of ['export function privacyPage():Response{','export function termsPage():Response{','Google OAuth','Google Calendar','Google Tasks','OwnTracks','Cloudflare R2']) if(!legalPages.includes(required)) throw new Error(`legal page disclosure missing: ${required}`);
 for(const forbidden of ['/login.php','AuthRequired','makeContext(']) if(legalPages.includes(forbidden)) throw new Error(`legal pages must stay unauthenticated: ${forbidden}`);
 for(const route of ['"/privacy"','"/terms"']) if(!wrangler.includes(route)) throw new Error(`legal route must run Worker-first: ${route}`);
