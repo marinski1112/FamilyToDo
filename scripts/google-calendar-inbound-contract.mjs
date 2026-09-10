@@ -120,7 +120,11 @@ assert.ok(!inboundUi.includes('/inbound-apply'),'preview UI must not expose appl
 assert.ok(calendarEntry.includes('/assets/google-calendar-inbound.js'),'integrations settings must load the bounded inbound preview UI');
 assert.ok(calendarEntry.includes('読み取り専用プレビューです。ここではFamilyToDoにもGoogle Calendarにも書き込みません。'),'settings copy must state the read-only boundary');
 assert.ok(calendarEntry.includes('取り込み元カレンダーと期間を選んで、安全性を確認できます。'),'settings must expose the preview as available after authorization');
+assert.ok(calendarEntry.includes("const googleTasksCardMarker='<div class=\"card\"><h2>Google Tasks</h2>'"),'settings must locate the boundary immediately after the Google Calendar card');
+assert.ok(calendarEntry.includes("source.lastIndexOf('</div>',googleTasksCardStart)"),'inbound controls must target the closing edge of the existing Google Calendar card');
+assert.ok(calendarEntry.includes('source.slice(0,googleCalendarCardClose)+inboundPanel+source.slice(googleCalendarCardClose)'),'inbound controls must be inserted inside the Google Calendar card rather than appended at page bottom');
+assert.ok(calendarEntry.includes('calendar-inbound-auth-btn'),'inbound authorization control must retain a mobile-sized in-card button');
 
 for(const forbidden of ['INSERT INTO tasks','UPDATE tasks','DELETE FROM tasks','INSERT INTO google_calendar_inbound_links','UPDATE google_calendar_inbound_links','DELETE FROM google_calendar_inbound_links','fetch(']) assert.ok(!inboundSafety.includes(forbidden),`inbound safety classifier must remain pure/read-only: ${forbidden}`);
 
-console.log('google-calendar-inbound-contract: dedicated OAuth, bounded selected-calendar live read, fail-closed classification and read-only UI are isolated from outbound/apply lanes');
+console.log('google-calendar-inbound-contract: dedicated OAuth, bounded selected-calendar live read, fail-closed classification and in-card read-only UI are isolated from outbound/apply lanes');
