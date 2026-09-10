@@ -55,9 +55,8 @@ function accuracyTrend(newer:number|null,older:number|null):AccuracyTrend{
  * Privacy-safe Location quality diagnostics.
  *
  * Deliberately selects no coordinates, addresses, public device IDs, credentials,
- * request bodies or raw provider payloads. This endpoint is for determining
- * whether OwnTracks is supplying coarse fixes and whether such fixes become the
- * current newest point. It is observational only and never changes Location data.
+ * request bodies or raw provider payloads. This endpoint shows source quality and
+ * which stored point is currently serving as latest; it never changes Location data.
  */
 export async function locationQualityDiagnosticsApi(request:Request,ctx:AppContext):Promise<Response>{
   if(!ctx.member)return fail(401,'AUTH_REQUIRED','ログインが必要です。');
@@ -145,7 +144,13 @@ export async function locationQualityDiagnosticsApi(request:Request,ctx:AppConte
 
   return json({
     ok:true,
-    policy:{latestSelection:'NEWEST_SENSOR_TIME',qualityAware:false,poorThresholdMeters:100},
+    policy:{
+      latestSelection:'QUALITY_GUARDED_NEWEST_SENSOR_TIME',
+      qualityAware:true,
+      poorThresholdMeters:100,
+      goodLatestProtectionSeconds:1800,
+      historyKeepsPoorPoints:true,
+    },
     summary:{
       pointCount:points.length,
       currentLatestCount:currentLatestPoints.length,
