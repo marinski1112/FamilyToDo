@@ -17,6 +17,7 @@ const checks=[
   [api.includes("url.searchParams.get('date')")&&api.includes('readArchivedDay'),'one-day history supports long-term archive'],
   [api.includes('locationHistorySearchApi')&&api.includes('locationStayAddressApi'),'stay search/address persistence APIs exist'],
   [api.includes('sharing_enabled=1')&&api.includes('revoked_at IS NULL'),'archive reads preserve sharing/revoke gate'],
+  [api.includes('d.member_id=location_history_stays.member_id')&&api.includes('d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL'),'archived stay address writes preserve current sharing/revoke gate'],
   [ui.includes("new URLSearchParams({memberId:String(memberId),date})"),'UI requests one day'],
   [ui.includes("history-search")&&ui.includes('いつ行った？'),'UI exposes stay search'],
   [index.includes('archiveLocationHistory(env)'),'hourly lifecycle schedules archive projection'],

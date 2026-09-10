@@ -164,6 +164,7 @@ export async function locationStayAddressApi(request:Request,ctx:AppContext):Pro
     UPDATE location_history_stays SET address_label=?,updated_at=CURRENT_TIMESTAMP
     WHERE id=? AND family_id=? AND place_label='未登録地点付近'
       AND EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.family_id=? AND m.active=1)
+      AND EXISTS(SELECT 1 FROM location_devices d WHERE d.family_id=location_history_stays.family_id AND d.member_id=location_history_stays.member_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL)
   `).bind(addressLabel,archiveStayId,familyId,memberId,familyId).run();
   return json({ok:true},200,{'cache-control':'no-store'});
 }
