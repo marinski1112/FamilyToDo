@@ -20,7 +20,7 @@ export async function locationPlacesApi(request:Request,ctx:AppContext):Promise<
     const places=await readKnownLocationPlaces(ctx.env.DB,familyId);
     const pref=await ctx.env.DB.prepare('SELECT enabled FROM location_arrival_preferences WHERE family_id=? AND member_id=?').bind(familyId,memberId).first<{enabled:number}>();
     const sub=await ctx.env.DB.prepare('SELECT id FROM web_push_subscriptions WHERE family_id=? AND member_id=? AND enabled=1 LIMIT 1').bind(familyId,memberId).first();
-    const recent=await ctx.env.DB.prepare('SELECT status,created_at FROM location_arrival_deliveries WHERE family_id=? AND recipient_id=? ORDER BY id DESC LIMIT 5').bind(familyId,memberId).all();
+    const recent=await ctx.env.DB.prepare('SELECT status,event_type,created_at FROM location_arrival_deliveries WHERE family_id=? AND recipient_id=? ORDER BY id DESC LIMIT 5').bind(familyId,memberId).all();
     return reply({ok:true,places:places.map(p=>({key:p.key,label:p.label})),enabled:pref?.enabled===1,pushReady:webPushConfigured(ctx.env)&&Boolean(sub),recent:recent.results});
   }
   if(request.method!=='POST')return reply({ok:false,error:'操作できません。'},405);
@@ -35,7 +35,7 @@ export async function locationPlacesApi(request:Request,ctx:AppContext):Promise<
   if(body.action==='preference'){
     if(typeof body.enabled!=='boolean')return reply({ok:false,error:'通知設定を確認してください。'},400);
     const result=await ctx.env.DB.prepare(`INSERT INTO location_arrival_preferences(family_id,member_id,enabled) SELECT ?,?,? WHERE ?=0 OR (SELECT COUNT(*) FROM location_arrival_preferences WHERE family_id=? AND enabled=1 AND member_id<>?)<4 ON CONFLICT(family_id,member_id) DO UPDATE SET enabled=excluded.enabled`).bind(familyId,memberId,body.enabled?1:0,body.enabled?1:0,familyId,memberId).run();
-    if(!Number(result.meta.changes))return reply({ok:false,error:'到着通知の受信者は家族4人までです。'},409);
+    if(!Number(result.meta.changes))return reply({ok:false,error:'位置通知の受信者は家族4人までです。'},409);
     return reply({ok:true});
   }
   if(!['OWNER','ADMIN'].includes(String(actor.role).toUpperCase()))return reply({ok:false,error:'拠点変更は管理者のみ操作できます。'},403);
