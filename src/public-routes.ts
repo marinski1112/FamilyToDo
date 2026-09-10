@@ -6,6 +6,7 @@ import { googleHomeHealth, googleToken } from './google-home';
 import { googleFulfillmentWithExecuteDiagnostics } from './google-home-execute-diagnostics';
 import { integrationsHealthResponse } from './environment-health';
 import { googleCalendarCallback } from './google-calendar';
+import { googleCalendarInboundCallback, isGoogleCalendarInboundOAuthState } from './google-calendar-inbound-auth';
 import { calendarWatchNotificationOnly } from './google-calendar-one-way';
 import { googleTasksCallback } from './google-tasks';
 import { liffDispatcher, lineGoogleHomeStart, lineGoogleHomeCallback, resumeGoogleHome } from './oauth-continuation';
@@ -27,7 +28,7 @@ export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionC
   if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotificationOnly(request,env);
   if(url.pathname==='/oauth/google/token') return await googleToken(request,env);
   if(url.pathname==='/oauth/google-tasks/callback') return await googleTasksCallback(request,env);
-  if(url.pathname==='/oauth/google-calendar/callback') return await googleCalendarCallback(request,env);
+  if(url.pathname==='/oauth/google-calendar/callback') return isGoogleCalendarInboundOAuthState(url.searchParams.get('state')) ? await googleCalendarInboundCallback(request,env) : await googleCalendarCallback(request,env);
   if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillmentWithExecuteDiagnostics(request,env);
   if(url.pathname==='/liff'||url.pathname.startsWith('/liff/')) return await liffDispatcher(request,env);
   if(url.pathname==='/oauth/line/google-home/start') return await lineGoogleHomeStart(request,env);
