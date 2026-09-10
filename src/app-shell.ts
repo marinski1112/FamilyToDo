@@ -34,7 +34,7 @@ export function layout(title: string, body: string, active = ''): string {
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
   const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1"><script defer src="/assets/family-log-success-recovery.js?v=${APP_VERSION}-post-save1"></script><script defer src="/assets/family-journal-link.js?v=${APP_VERSION}-journal1"></script>`:'';
   const locationDiagnosticsExtra=active==='/app/location.php'?`<script defer src="/assets/location-maps-diagnostics.js?v=${APP_VERSION}-maps-diagnostics4"></script>`:'';
-  const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}"></script>`:'';
+  const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}"></script><script defer src="/assets/location-retention-copy.js?v=${APP_VERSION}-raw-maintenance1"></script>`:'';
   const messageExtra=active==='/app/messages.php'?`<link rel="stylesheet" href="/assets/messages-compact.css?v=message3"><script defer src="/assets/messages-ai-ui.js?v=message3"></script>`:'';
   const extra=calendarExtra+familyLogExtra+locationDiagnosticsExtra+locationExtra+messageExtra;
   const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`)
