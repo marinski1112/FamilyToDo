@@ -25,7 +25,7 @@ export type ProductLinkPreviewField={destination:string;blocks:ProductLinkPrevie
 const MAX_PRODUCT_LINK_PREVIEWS=4;
 const MAX_REDIRECTS=3;
 const MAX_HTML_BYTES=256*1024;
-const FETCH_TIMEOUT_MS=4_000;
+const FETCH_TIMEOUT_MS=15_000;
 const MAX_METADATA_TITLE_LENGTH=400;
 const TRAILING_URL_PUNCTUATION=/[),.;。、「」』】]+$/u;
 const URL_TOKEN=/https?:\/\/[^\s<>"']+/giu;
@@ -92,6 +92,12 @@ export function productTitleFromUrlPath(rawUrl:string):string|null{
   if(compact.length<3||/^\d+$/u.test(compact))return null;
   if(/^[0-9a-f]{16,}$/iu.test(compact))return null;
   if(/^[A-Z0-9]{10,}$/u.test(withoutExtension))return null;
+  const hasJapanese=/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(candidate);
+  if(!hasJapanese){
+    const words=candidate.split(/\s+/).filter(Boolean),meaningfulWords=words.filter(word=>/^\p{L}[\p{L}\d]*$/u.test(word)&&word.length>=4&&/[aeiouy]/iu.test(word));
+    const digitCount=(candidate.match(/\d/g)||[]).length;
+    if(!meaningfulWords.length||digitCount/Math.max(1,compact.length)>0.45)return null;
+  }
   return candidate.slice(0,200);
 }
 
