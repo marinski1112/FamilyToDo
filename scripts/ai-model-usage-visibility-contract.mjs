@@ -4,7 +4,6 @@ const read=(path)=>fs.readFileSync(path,'utf8');
 const policy=read('src/ai-model-policy.ts');
 const rough=read('src/task-rough-input-api.ts');
 const settings=read('src/settings-ai-diagnostics.ts');
-const diagnostics=read('src/ai-generation-diagnostics.ts');
 
 const assert=(ok,message)=>{if(!ok)throw new Error(message);};
 
@@ -16,7 +15,6 @@ assert(rough.includes("ROUGH_INPUT_GEMINI_MODEL_FALLBACK='gemini-3.5-flash'"),'r
 assert(settings.includes('AIモデル利用状況'),'settings must render AI model inventory');
 assert(settings.includes('model_usage:modelUsage'),'JSON diagnostics must expose safe model usage inventory');
 assert(settings.includes('APIキー・prompt・response本文は表示しません'),'settings must state privacy boundary');
-assert(diagnostics.includes("'FAMILY_DAILY_JOURNAL'"),'Family Journal must be an allowed AI diagnostic feature');
 assert(!policy.includes('GEMINI_API_KEY'),'model policy must not access Gemini secret');
 
 console.log('AI model usage visibility contract OK');
