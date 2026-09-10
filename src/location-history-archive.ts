@@ -113,9 +113,10 @@ async function archivePendingDays(db:D1Database):Promise<void>{
           AND a.local_date=date(h.recorded_at,'+9 hours')
       )
     GROUP BY h.family_id,h.member_id,local_date
+    HAVING COUNT(*)<=?
     ORDER BY local_date DESC
     LIMIT ?
-  `).bind(todayJst(),MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
+  `).bind(todayJst(),MAX_RAW_POINTS_PER_DAY,MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
   for(const group of groups.results){
     try{await archiveOneDay(db,group);}catch{/* Archive failure must never mutate raw history. */}
   }
