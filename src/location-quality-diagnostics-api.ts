@@ -98,14 +98,22 @@ export async function locationQualityDiagnosticsApi(request:Request,ctx:AppConte
     LIMIT ${MAX_POINTS}
   `).bind(familyId).all<QualityRow>();
 
-  const previousByDevice=new Map<string,QualityRow>();
-  const points=result.results.map((row)=>{
+  // The query is newest-first. Build an explicit older-neighbour map by walking
+  // oldest-to-newest so interval/trend labels cannot accidentally compare a row
+  // against a newer fix.
+  const olderById=new Map<number,QualityRow>();
+  const lastOlderByDevice=new Map<string,QualityRow>();
+  for(const row of [...result.results].reverse()){
     const key=`${row.member_id}:${row.device_id}`;
-    const newer=row;
-    const older=previousByDevice.get(key)||null;
-    previousByDevice.set(key,row);
+    const older=lastOlderByDevice.get(key);
+    if(older)olderById.set(Number(row.id),older);
+    lastOlderByDevice.set(key,row);
+  }
+
+  const points=result.results.map((row)=>{
+    const older=olderById.get(Number(row.id))||null;
     const accuracy=row.accuracy_meters===null?null:Number(row.accuracy_meters);
-    const olderAccuracy=older?.accuracy_meters===null||older===null?null:Number(older.accuracy_meters);
+    const olderAccuracy=older===null||older.accuracy_meters===null?null:Number(older.accuracy_meters);
     const isCurrentLatest=Number(row.latest_device_id)===Number(row.device_id)
       &&row.latest_recorded_at===row.recorded_at
       &&row.latest_received_at===row.received_at;
@@ -117,7 +125,7 @@ export async function locationQualityDiagnosticsApi(request:Request,ctx:AppConte
       accuracyMeters:accuracy,
       accuracyBand:accuracyBand(accuracy),
       trigger:String(row.trigger||'UNKNOWN'),
-      intervalSecondsToOlder:older?secondsBetween(newer.recorded_at,older.recorded_at):null,
+      intervalSecondsToOlder:older?secondsBetween(row.recorded_at,older.recorded_at):null,
       accuracyTrendVsOlder:older?accuracyTrend(accuracy,olderAccuracy):'UNKNOWN' as AccuracyTrend,
       isCurrentLatest,
     };
