@@ -34,16 +34,18 @@ export type GoogleCalendarInboundEvidence={
 const normalizedId=(value:unknown)=>String(value??'').trim();
 
 /**
- * App-owned projection calendars are never valid inbound sources. Keeping this check separate
- * makes the calendar-level gate mandatory before any event preview is considered.
+ * The app-owned Family TODO calendar is intentionally allowed as the shared Google Home hub.
+ * Feedback-loop prevention therefore happens per event, not per calendar: FamilyToDo projections
+ * carry familyTodoTaskId and also have an outbound external_event_id link. CHILD_JOURNAL remains a
+ * separate projection lane and is still blocked as an inbound source. APP_OWNED_CALENDAR_BLOCKED is
+ * retained in the public reason type for compatibility with older clients but is no longer emitted.
  */
 export function googleCalendarInboundCalendarBlockReason(
   selectedCalendarId:unknown,
-  appOwnedCalendarId:unknown,
+  _appOwnedCalendarId:unknown,
   childJournalCalendarId:unknown,
 ):GoogleCalendarInboundCalendarBlockReason{
   const selected=normalizedId(selectedCalendarId);
-  if(selected&&selected===normalizedId(appOwnedCalendarId))return 'APP_OWNED_CALENDAR_BLOCKED';
   if(selected&&selected===normalizedId(childJournalCalendarId))return 'CHILD_JOURNAL_CALENDAR_BLOCKED';
   return null;
 }
