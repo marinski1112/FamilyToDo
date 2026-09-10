@@ -20,7 +20,7 @@ export type ProductLinkPreviewBlock={
   lines:string[];
   productLinkPreview?:ProductLinkPreview|null;
 };
-export type ProductLinkPreviewField={destination:string;blocks:ProductLinkPreviewBlock[]};
+export type ProductLinkPreviewField={destination:string;text?:string;blocks:ProductLinkPreviewBlock[]};
 
 const MAX_PRODUCT_LINK_PREVIEWS=4;
 const MAX_REDIRECTS=3;
@@ -31,6 +31,8 @@ const TRAILING_URL_PUNCTUATION=/[),.;。、「」』】]+$/u;
 const URL_TOKEN=/https?:\/\/[^\s<>"']+/giu;
 const BLOCKED_HOST_SUFFIXES=['.localhost','.local','.internal','.home','.lan','.test','.invalid','.example','.arpa'];
 const GENERIC_PRODUCT_PATH_SEGMENTS=new Set(['item','items','product','products','p','detail','details','index','index.html','shop']);
+const QUANTITY_CONTEXT_NUMBER=/[0-9０-９一二三四五六七八九十百半]/u;
+const QUANTITY_CONTEXT_WORD=/(?:以下|下記|上記|これ|この|各|全部|全て|すべて|買|購入|個|つ|本|袋|箱|枚|セット|パック)/u;
 
 const emptyDiagnostic=(stage:ProductLinkDiagnosticStage,reason:ProductLinkDiagnosticReason):ProductLinkDiagnostic=>({stage,httpStatusClass:'NONE',redirectCount:0,contentType:'NONE',titleSource:'NONE',reason,titleResolved:false});
 const statusClass=(status:number):ProductLinkHttpStatusClass=>status>=200&&status<300?'2XX':status>=300&&status<400?'3XX':status>=400&&status<500?'4XX':status>=500&&status<600?'5XX':'NONE';
@@ -77,6 +79,25 @@ export function firstPublicProductUrl(text:string):URL|null{
     const url=parsePublicProductUrl(candidate);if(url)return url;
   }
   return null;
+}
+
+function propagateShoppingQuantityContext(fields:ProductLinkPreviewField[]):void{
+  for(const field of fields){
+    if(field.destination!=='shopping'||!field.text)continue;
+    const contexts=new Map<string,string>();let active='';
+    for(const raw of String(field.text).replace(/\r\n?/g,'\n').split('\n')){
+      const line=raw.trim();if(!line)continue;
+      const url=firstPublicProductUrl(line);
+      if(url){if(active)contexts.set(url.href,active);continue;}
+      if(QUANTITY_CONTEXT_NUMBER.test(line)&&QUANTITY_CONTEXT_WORD.test(line))active=line;
+    }
+    if(!contexts.size)continue;
+    for(const block of field.blocks){
+      const url=firstPublicProductUrl(block.originalText),directive=url?contexts.get(url.href):'';
+      if(!url||!directive||block.originalText.includes(directive)||QUANTITY_CONTEXT_NUMBER.test(block.originalText))continue;
+      block.originalText=`${directive}\n${block.originalText}`;block.lines=[directive,...block.lines];block.titleSeed=directive;
+    }
+  }
 }
 
 export function productTitleFromUrlPath(rawUrl:string):string|null{
@@ -209,10 +230,7 @@ export async function fetchProductLinkPreviewWithDiagnostic(rawUrl:string,fetchI
 export async function fetchProductLinkPreview(rawUrl:string,fetchImpl:typeof fetch=fetch):Promise<ProductLinkPreview|null>{return (await fetchProductLinkPreviewWithDiagnostic(rawUrl,fetchImpl)).preview;}
 
 function urlOnlyTitleSeed(block:ProductLinkPreviewBlock):URL|null{
-  const seed=String(block.titleSeed||'').trim(),direct=parsePublicProductUrl(seed);
-  if(direct)return direct;
-  const prefixed=seed.match(/^(?:url|リンク)\s*[:：]\s*(https?:\/\/\S+)$/iu);
-  return prefixed?.[1]?parsePublicProductUrl(prefixed[1].replace(TRAILING_URL_PUNCTUATION,'')):null;
+  return firstPublicProductUrl(block.originalText);
 }
 
 export function resolveProductLinkModelTitle(modelTitle:string,block:ProductLinkPreviewBlock):string{
@@ -224,6 +242,7 @@ export function resolveProductLinkModelTitle(modelTitle:string,block:ProductLink
 }
 
 export async function enrichShoppingProductLinkPreviewsWithDiagnostics(fields:ProductLinkPreviewField[],fetchImpl:typeof fetch=fetch):Promise<{attached:number;diagnostics:ProductLinkDiagnostic[]}>{
+  propagateShoppingQuantityContext(fields);
   const candidates:Array<{block:ProductLinkPreviewBlock;url:URL}>=[],seen=new Set<string>();
   for(const field of fields){
     if(field.destination!=='shopping')continue;
