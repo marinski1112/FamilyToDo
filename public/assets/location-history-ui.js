@@ -86,22 +86,14 @@
     const members=(Array.isArray(payload.members)?payload.members:[]).filter(member=>member?.sharingEnabled&&Number.isSafeInteger(Number(member?.memberId))&&Number(member.memberId)>0);
     memberEl.replaceChildren();
     if(!members.length){
-      const option=document.createElement('option');
-      option.value='';
-      option.textContent='共有中の家族がいません';
-      memberEl.append(option);
-      memberEl.disabled=true;
+      const option=document.createElement('option');option.value='';option.textContent='共有中の家族がいません';memberEl.append(option);memberEl.disabled=true;
       throw new Error('選択期間の履歴を参照できる共有中メンバーがいません。');
     }
     for(const member of members){
-      const option=document.createElement('option');
-      option.value=String(member.memberId);
-      option.textContent=String(member.name||'家族');
-      memberEl.append(option);
+      const option=document.createElement('option');option.value=String(member.memberId);option.textContent=String(member.name||'家族');memberEl.append(option);
       if(selected?String(member.memberId)===selected:member.isViewer)option.selected=true;
     }
-    memberEl.disabled=false;
-    membersLoaded=true;
+    memberEl.disabled=false;membersLoaded=true;
   };
 
   const renderLinks=(points,truncated)=>{
@@ -113,13 +105,7 @@
     const lastLabel=truncated?'取得範囲の終了地点をGoogle Mapsで開く':'終了地点をGoogle Mapsで開く';
     for(const [label,url] of [[firstLabel,firstUrl],[lastLabel,lastUrl]]){
       if(!url)continue;
-      const link=document.createElement('a');
-      link.className='btn gray small';
-      link.href=url;
-      link.target='_blank';
-      link.rel='noopener noreferrer';
-      link.textContent=label;
-      linksEl.append(link);
+      const link=document.createElement('a');link.className='btn gray small';link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=label;linksEl.append(link);
     }
   };
 
@@ -128,80 +114,88 @@
     return `${formatTime(entry.from)}〜${formatTime(entry.to)} · ${place} · ${entry.minutes}分滞在`;
   };
   const coarseJapaneseAddress=(result)=>{
-    const formatted=String(result?.formatted_address||'')
-      .replace(/^日本[、,]?\s*/,'')
-      .replace(/^〒?\s*\d{3}-?\d{4}\s*/,'')
-      .trim();
+    const formatted=String(result?.formatted_address||'').replace(/^日本[、,]?\s*/,'').replace(/^〒?\s*\d{3}-?\d{4}\s*/,'').trim();
     if(!formatted)return '';
     const chome=formatted.match(/^(.+?\d+\s*丁目)/);
     if(chome)return chome[1].replace(/\s+/g,'');
     const components=Array.isArray(result?.address_components)?result.address_components:[];
     const byType=(type)=>String(components.find(component=>Array.isArray(component?.types)&&component.types.includes(type))?.long_name||'').trim();
-    const coarse=[
-      byType('administrative_area_level_1'),
-      byType('locality'),
-      byType('sublocality_level_1'),
-      byType('sublocality_level_2'),
-      byType('sublocality_level_3'),
-      byType('sublocality_level_4'),
-    ].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join('');
+    const coarse=[byType('administrative_area_level_1'),byType('locality'),byType('sublocality_level_1'),byType('sublocality_level_2'),byType('sublocality_level_3'),byType('sublocality_level_4')]
+      .filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join('');
     if(coarse)return coarse;
-    return formatted
-      .replace(/(?:\s|　)*(?:\d+[-‐ー−]\d+(?:[-‐ー−]\d+)?|\d+番地?.*)$/,'')
-      .trim();
+    return formatted.replace(/(?:\s|　)*(?:\d+[-‐ー−]\d+(?:[-‐ー−]\d+)?|\d+番地?.*)$/,'').trim();
   };
-  const loadGeocoderClass=async()=>{
+  const newAddressDiagnostic=()=>({maps:window.google?.maps?'READY':'UNAVAILABLE',library:'NOT_ATTEMPTED',attempted:0,succeeded:0,failed:0,cacheHits:0,noAnchor:0,lastFailure:'NONE'});
+  const safeGeocodeFailure=(error)=>{
+    const text=`${typeof error?.code==='string'?error.code:''} ${typeof error?.message==='string'?error.message:''}`.toUpperCase();
+    for(const code of ['REQUEST_DENIED','ZERO_RESULTS','OVER_QUERY_LIMIT','INVALID_REQUEST','UNKNOWN_ERROR'])if(text.includes(code))return code;
+    return 'GEOCODE_FAILED';
+  };
+  const loadGeocoderClass=async(diag)=>{
     if(geocoderClassPromise)return geocoderClassPromise;
     geocoderClassPromise=(async()=>{
       const Maps=window.google?.maps;
-      if(!Maps)return null;
+      diag.maps=Maps?'READY':'UNAVAILABLE';
+      if(!Maps){diag.library='MAPS_UNAVAILABLE';return null;}
       if(typeof Maps.importLibrary==='function'){
         try{
           const library=await Maps.importLibrary('geocoding');
-          if(typeof library?.Geocoder==='function')return library.Geocoder;
-        }catch{}
+          if(typeof library?.Geocoder==='function'){diag.library='READY_IMPORT_LIBRARY';return library.Geocoder;}
+          diag.library='GEOCODING_LIBRARY_UNAVAILABLE';
+        }catch(error){diag.library=safeGeocodeFailure(error)==='GEOCODE_FAILED'?'GEOCODING_LIBRARY_IMPORT_FAILED':safeGeocodeFailure(error);}
       }
-      return typeof Maps.Geocoder==='function'?Maps.Geocoder:null;
+      if(typeof Maps.Geocoder==='function'){diag.library='READY_LEGACY';return Maps.Geocoder;}
+      if(diag.library==='NOT_ATTEMPTED')diag.library='GEOCODING_LIBRARY_UNAVAILABLE';
+      return null;
     })();
     const result=await geocoderClassPromise;
     if(!result)geocoderClassPromise=null;
     return result;
   };
-  const reverseAddress=async(point)=>{
+  const reverseAddress=async(point,diag)=>{
     const lat=Number(point?.latitude),lng=Number(point?.longitude);
-    if(!Number.isFinite(lat)||!Number.isFinite(lng))return '';
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)){diag.failed+=1;diag.lastFailure='INVALID_POINT';return '';}
     const key=`${lat.toFixed(4)},${lng.toFixed(4)}`;
-    if(addressCache.has(key))return addressCache.get(key)||'';
+    if(addressCache.has(key)){diag.cacheHits+=1;const cached=addressCache.get(key)||'';if(cached)diag.succeeded+=1;else{diag.failed+=1;diag.lastFailure='CACHED_EMPTY';}return cached;}
     try{
-      const Geocoder=await loadGeocoderClass();
-      if(!Geocoder)return '';
+      const Geocoder=await loadGeocoderClass(diag);
+      if(!Geocoder){diag.failed+=1;diag.lastFailure=diag.library||'GEOCODING_LIBRARY_UNAVAILABLE';return '';}
       geocoder=geocoder||new Geocoder();
+      diag.attempted+=1;
       const response=await geocoder.geocode({location:{lat,lng},language:'ja',region:'JP'});
-      const coarse=coarseJapaneseAddress(response?.results?.[0]);
-      addressCache.set(key,coarse);
-      return coarse;
-    }catch{return '';}
+      const result=response?.results?.[0];
+      if(!result){diag.failed+=1;diag.lastFailure='ZERO_RESULTS';return '';}
+      const coarse=coarseJapaneseAddress(result);
+      if(!coarse){diag.failed+=1;diag.lastFailure='EMPTY_ADDRESS';return '';}
+      addressCache.set(key,coarse);diag.succeeded+=1;return coarse;
+    }catch(error){diag.attempted+=diag.attempted?0:1;diag.failed+=1;diag.lastFailure=safeGeocodeFailure(error);return '';}
+  };
+  const appendAddressDiagnostic=(diag)=>{
+    const row=document.createElement('p');row.className='small';row.dataset.locationAddressDiagnostic='1';
+    row.textContent=`住所診断: Maps=${diag.maps} / Geocoder=${diag.library} / API試行=${diag.attempted} / 成功=${diag.succeeded} / 失敗=${diag.failed} / キャッシュ=${diag.cacheHits} / anchorなし=${diag.noAnchor} / 最終=${diag.lastFailure}`;
+    reportEl.append(row);
   };
   const enrichStayAddresses=async(rows,points,requestId)=>{
     const byTime=new Map(points.map(point=>[String(point?.recordedAt||''),point]));
+    const diag=newAddressDiagnostic();
     let lookups=0;
     for(const {entry,row} of rows){
       if(requestId!==historyRequest||lookups>=MAX_ADDRESS_LOOKUPS)break;
       const point=byTime.get(String(entry.from||''));
-      if(!point)continue;
+      if(!point){diag.noAnchor+=1;diag.lastFailure='NO_ANCHOR_POINT';continue;}
       lookups+=1;
-      const address=await reverseAddress(point);
+      const address=await reverseAddress(point,diag);
       if(requestId!==historyRequest)return;
       if(address)row.textContent=reportRowText(entry,address);
     }
+    if(requestId===historyRequest)appendAddressDiagnostic(diag);
   };
 
   const loadHistory=async(mode='map')=>{
     if(!loadEl||!memberEl||loadingHistory)return;
     loadingHistory=true;
     const requestId=++historyRequest;
-    loadEl.disabled=true;reportButton.disabled=true;reportEl.replaceChildren();
-    emitHistory();
+    loadEl.disabled=true;reportButton.disabled=true;reportEl.replaceChildren();emitHistory();
     if(summaryEl)summaryEl.textContent='';
     if(linksEl)linksEl.replaceChildren();
     let selectorLocked=false;
@@ -212,8 +206,7 @@
       const memberId=Number(memberEl.value);
       const memberName=String(memberEl.selectedOptions?.[0]?.textContent||'家族');
       if(!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('家族を選択してください。');
-      memberEl.disabled=true;
-      selectorLocked=true;
+      memberEl.disabled=true;selectorLocked=true;
       const range=selectedRange();
       const rangeLabel=fromEl.value+'〜'+toEl.value;
       const params=new URLSearchParams({memberId:String(memberId),from:range.from,to:range.to});
@@ -224,10 +217,7 @@
       if(latestMembers&&!latestMembers.some(member=>Number(member.memberId)===memberId&&member.sharingEnabled))throw new Error('位置共有が停止されました。');
       if(Number(memberEl.value)!==memberId)throw new Error('選択した家族が変更されたため、もう一度確認してください。');
       const points=Array.isArray(payload.points)?payload.points:[];
-      if(!points.length){
-        setStatus(`${memberName}・選択期間の位置履歴はありません。`);
-        return;
-      }
+      if(!points.length){setStatus(`${memberName}・選択期間の位置履歴はありません。`);return;}
       const limit=Number(payload.limit);
       const truncated=Number.isSafeInteger(limit)&&limit>0&&points.length>=limit;
       let meters=0;
@@ -251,8 +241,7 @@
       if(payload.reportTruncated){const more=document.createElement('p');more.textContent='滞在100件まで表示しています。期間を絞ると前の滞在も確認できます。';reportEl.append(more);}
       if(mode==='report'&&reportRows.length)void enrichStayAddresses(reportRows,points,requestId);
       renderLinks(points,truncated);
-      displayedMemberId=memberId;
-      emitHistory(memberId,points);
+      displayedMemberId=memberId;emitHistory(memberId,points);
       const sheet=liveRoot?.querySelector('[data-location-family-sheet]');if(sheet&&mode==='map'){sheet.open=false;sheet.querySelector('summary')?.focus({preventScroll:true});}
     }catch(error){
       if(requestId===historyRequest)setStatus(error instanceof Error&&error.message?error.message:'選択期間の移動を取得できませんでした。');
