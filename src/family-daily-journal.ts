@@ -7,7 +7,7 @@ type Row=Record<string,unknown>;
 type LocationSummary={memberId:number;name:string;routePointCount:number;stays:Array<{from:string;to:string;minutes:number;place:string}>};
 type TaskSummary={taskId:number;title:string;memberId:number;memberName:string;completedAt:string};
 type HouseworkSummary={name:string;memberId:number;memberName:string;occurredAt:string};
-const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50,MAX_SUMMARY_DETAILS=3,MAX_SUMMARY_DETAIL_CHARS=60;
+const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50,MAX_SUMMARY_DETAILS=3,MAX_SUMMARY_DETAIL_CHARS=60,JOURNAL_REFRESH_MS=24*60*60*1000;
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const validDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}T00:00:00Z`));
 const validMonth=(v:string)=>/^\d{4}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}-01T00:00:00Z`));
@@ -16,6 +16,7 @@ const shiftMonth=(month:string,delta:number)=>{const d=new Date(`${month}-01T12:
 const todayJst=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const parseArray=<T>(raw:unknown):T[]=>{try{const v=JSON.parse(String(raw??'[]'));return Array.isArray(v)?v as T[]:[];}catch{return [];}};
 const timeOnly=(v:string)=>/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(v)?v.slice(11,16):'';
+const journalFresh=(raw:unknown,nowMs:number)=>{const generated=Date.parse(String(raw||''));return Number.isFinite(generated)&&generated<=nowMs&&nowMs-generated<JOURNAL_REFRESH_MS;};
 
 async function readLocation(db:D1Database,familyId:number,date:string):Promise<LocationSummary[]>{
   const [days,stays]=await Promise.all([
@@ -58,8 +59,13 @@ export async function generateFamilyDailyJournal(db:D1Database,familyId:number,d
 }
 
 export async function generateFamilyDailyJournals(env:Env):Promise<void>{
-  const families=await env.DB.prepare('SELECT id FROM families ORDER BY id LIMIT ?').bind(MAX_FAMILIES).all<Row>(),yesterday=shiftDate(todayJst(),-1);
-  for(const row of families.results){const id=Number(row.id);if(!Number.isSafeInteger(id)||id<=0)continue;for(let i=0;i<REPAIR_DAYS;i+=1){try{await generateFamilyDailyJournal(env.DB,id,shiftDate(yesterday,-i));}catch{}}}
+  const families=await env.DB.prepare('SELECT id FROM families ORDER BY id LIMIT ?').bind(MAX_FAMILIES).all<Row>(),yesterday=shiftDate(todayJst(),-1),dates=Array.from({length:REPAIR_DAYS},(_,i)=>shiftDate(yesterday,-i)),nowMs=Date.now();
+  for(const row of families.results){
+    const id=Number(row.id);if(!Number.isSafeInteger(id)||id<=0)continue;
+    const freshDates=new Set<string>();
+    try{const existing=await env.DB.prepare(`SELECT journal_date,generated_at FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date>=? AND journal_date<=? ORDER BY journal_date`).bind(id,dates[dates.length-1],dates[0]).all<Row>();for(const journal of existing.results){if(journalFresh(journal.generated_at,nowMs))freshDates.add(String(journal.journal_date));}}catch{}
+    for(const date of dates){if(freshDates.has(date))continue;try{await generateFamilyDailyJournal(env.DB,id,date);}catch{}}
+  }
 }
 
 function calendar(month:string,rows:Map<string,Row>,selected:string):string{
