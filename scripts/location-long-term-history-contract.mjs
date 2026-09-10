@@ -12,6 +12,7 @@ const checks=[
   [!archive.includes('DELETE FROM member_location_history')&&!archive.includes('RAW_RETENTION_SECONDS'),'hourly archive never deletes raw history'],
   [archive.includes('explicit')&&archive.includes('data-maintenance'),'raw cleanup is reserved for explicit maintenance'],
   [archive.includes('MAX_ROUTE_POINTS=72')&&archive.includes('simplifyRoute'),'route is bounded and simplified'],
+  [archive.includes('HAVING COUNT(*)<=?')&&archive.includes('.bind(todayJst(),MAX_RAW_POINTS_PER_DAY,MAX_ARCHIVE_GROUPS_PER_RUN)'),'oversized raw days cannot consume bounded archive candidate slots'],
   [migration.includes('route_point_count <= 72'),'schema bounds simplified routes'],
   [api.includes("url.searchParams.get('date')")&&api.includes('readArchivedDay'),'one-day history supports long-term archive'],
   [api.includes('locationHistorySearchApi')&&api.includes('locationStayAddressApi'),'stay search/address persistence APIs exist'],
