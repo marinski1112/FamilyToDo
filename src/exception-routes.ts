@@ -8,6 +8,7 @@ import { preserveGoogleHomeLogin } from './oauth-continuation';
 import { googleAuthorize } from './google-home';
 import { googleTasksAuthorize } from './google-tasks';
 import { googleCalendarAuthorize } from './google-calendar';
+import { googleCalendarInboundAuthorize } from './google-calendar-inbound-auth';
 import { liffConfigDiagnose } from './runtime-diagnostics';
 import { reorderApi } from './reorder-api';
 import { webhook } from './line-webhook';
@@ -40,6 +41,7 @@ export async function dispatchContextPreludeRoute(request:Request,context:any,en
   }
   if(url.pathname==='/oauth/google-tasks/authorize') return await googleTasksAuthorize(request,context);
   if(url.pathname==='/oauth/google-calendar/authorize') return await googleCalendarAuthorize(request,context);
+  if(url.pathname==='/oauth/google-calendar/inbound/authorize') return await googleCalendarInboundAuthorize(request,context);
   if(url.pathname==='/app/api/liff_login.php'||url.pathname==='/app/api/liff_login') return await liffLogin(request,context);
   return null;
 }
