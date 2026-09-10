@@ -140,7 +140,7 @@ export async function googleCalendarInboundApply(request:Request,ctx:AppContext)
       );
     }
 
-    let results:D1Result[];
+    let results:any[];
     try{
       results=await ctx.env.DB.batch(statements);
     }catch(error){
