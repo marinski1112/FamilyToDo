@@ -21,13 +21,6 @@ body{padding-bottom:0}
 .fab{right:calc(16px + var(--nav-safe-right))!important;bottom:calc(var(--nav-box-h) + 14px)!important}
 </style>`;
 
-/**
- * Canonical shell for retained server-rendered pages.
- *
- * Keep navigation order, Calendar stylesheet loading, native temporal-control
- * wrapping, and asset versioning behavior-compatible with the legacy app.ts
- * implementation while the monolith is decomposed incrementally.
- */
 export function layout(title: string, body: string, active = ''): string {
   const navItems = [
     ['/app/tasks.php','✅','チェックリスト'],
@@ -39,13 +32,11 @@ export function layout(title: string, body: string, active = ''): string {
   ];
   const nav = `<nav class="bottom-nav" aria-label="メインメニュー"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"${active===href?' aria-current="page"':''}><span aria-hidden="true">${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
-  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1"><script defer src="/assets/family-log-success-recovery.js?v=${APP_VERSION}-post-save1"></script>`:'';
+  const familyLogExtra=active==='/app/family_log.php'?`<link rel="stylesheet" href="/assets/family-log-layout.css?v=${APP_VERSION}-mobile1"><script defer src="/assets/family-log-success-recovery.js?v=${APP_VERSION}-post-save1"></script><script defer src="/assets/family-journal-link.js?v=${APP_VERSION}-journal1"></script>`:'';
   const locationDiagnosticsExtra=active==='/app/location.php'?`<script defer src="/assets/location-maps-diagnostics.js?v=${APP_VERSION}-maps-diagnostics4"></script>`:'';
   const locationExtra=active==='/app/location.php'?`<script defer src="/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}"></script>`:'';
   const messageExtra=active==='/app/messages.php'?`<link rel="stylesheet" href="/assets/messages-compact.css?v=message3"><script defer src="/assets/messages-ai-ui.js?v=message3"></script>`:'';
   const extra=calendarExtra+familyLogExtra+locationDiagnosticsExtra+locationExtra+messageExtra;
-  // Every server-rendered native temporal control passes through one component.
-  // Keeping padding/border on the shell avoids WebKit 301648's width:100% + padding bug.
   const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`)
     .replace(/\/assets\/messages\.js\?v=[^"'<>\s]+/g,`/assets/messages.js?v=${APP_VERSION}-message3`)
     .replace(/\/assets\/location-history-ui\.js\?v=[^"'<>\s]+/g,`/assets/location-history-ui.js?v=${APP_VERSION}-history9`)
