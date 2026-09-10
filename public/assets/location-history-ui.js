@@ -21,6 +21,7 @@
   const addressCache=new Map();
   const MAX_ADDRESS_LOOKUPS=20;
   let geocoder=null;
+  let geocoderClassPromise=null;
   const emitHistory=(memberId=0,points=[])=>liveRoot?.dispatchEvent(new CustomEvent('family-location-history',{detail:{memberId,points}}));
   const clearDisplay=()=>{reportEl.replaceChildren();historyRequest++;displayedMemberId=0;emitHistory();if(summaryEl)summaryEl.textContent='';linksEl?.replaceChildren();};
   liveRoot?.addEventListener('family-location-latest',event=>{
@@ -78,7 +79,6 @@
       const response=await fetch('/api/location/latest',{headers:{accept:'application/json'},credentials:'same-origin',cache:'no-store'});
       payload=await response.json().catch(()=>null);
       if(!response.ok||!payload?.ok)throw new Error('家族一覧を取得できませんでした。');
-      // Let the map validate history when its initial latest request failed.
       latestMembers=Array.isArray(payload.members)?payload.members:[];
       liveRoot?.dispatchEvent(new CustomEvent('family-location-members',{detail:{members:latestMembers}}));
     }
@@ -127,19 +127,59 @@
     const place=address?(entry.place==='未登録地点付近'?address:`${entry.place}（${address}）`):entry.place;
     return `${formatTime(entry.from)}〜${formatTime(entry.to)} · ${place} · ${entry.minutes}分滞在`;
   };
+  const coarseJapaneseAddress=(result)=>{
+    const formatted=String(result?.formatted_address||'')
+      .replace(/^日本[、,]?\s*/,'')
+      .replace(/^〒?\s*\d{3}-?\d{4}\s*/,'')
+      .trim();
+    if(!formatted)return '';
+    const chome=formatted.match(/^(.+?\d+\s*丁目)/);
+    if(chome)return chome[1].replace(/\s+/g,'');
+    const components=Array.isArray(result?.address_components)?result.address_components:[];
+    const byType=(type)=>String(components.find(component=>Array.isArray(component?.types)&&component.types.includes(type))?.long_name||'').trim();
+    const coarse=[
+      byType('administrative_area_level_1'),
+      byType('locality'),
+      byType('sublocality_level_1'),
+      byType('sublocality_level_2'),
+      byType('sublocality_level_3'),
+      byType('sublocality_level_4'),
+    ].filter(Boolean).filter((value,index,array)=>array.indexOf(value)===index).join('');
+    if(coarse)return coarse;
+    return formatted
+      .replace(/(?:\s|　)*(?:\d+[-‐ー−]\d+(?:[-‐ー−]\d+)?|\d+番地?.*)$/,'')
+      .trim();
+  };
+  const loadGeocoderClass=async()=>{
+    if(geocoderClassPromise)return geocoderClassPromise;
+    geocoderClassPromise=(async()=>{
+      const Maps=window.google?.maps;
+      if(!Maps)return null;
+      if(typeof Maps.importLibrary==='function'){
+        try{
+          const library=await Maps.importLibrary('geocoding');
+          if(typeof library?.Geocoder==='function')return library.Geocoder;
+        }catch{}
+      }
+      return typeof Maps.Geocoder==='function'?Maps.Geocoder:null;
+    })();
+    const result=await geocoderClassPromise;
+    if(!result)geocoderClassPromise=null;
+    return result;
+  };
   const reverseAddress=async(point)=>{
     const lat=Number(point?.latitude),lng=Number(point?.longitude);
     if(!Number.isFinite(lat)||!Number.isFinite(lng))return '';
     const key=`${lat.toFixed(4)},${lng.toFixed(4)}`;
     if(addressCache.has(key))return addressCache.get(key)||'';
-    const Maps=window.google?.maps;
-    if(!Maps?.Geocoder)return '';
-    geocoder=geocoder||new Maps.Geocoder();
     try{
-      const address=await new Promise(resolve=>geocoder.geocode({location:{lat,lng}},(results,status)=>resolve(status==='OK'?String(results?.[0]?.formatted_address||''):'')));
-      const cleaned=String(address||'').replace(/^日本[、,]?\s*/,'').trim();
-      addressCache.set(key,cleaned);
-      return cleaned;
+      const Geocoder=await loadGeocoderClass();
+      if(!Geocoder)return '';
+      geocoder=geocoder||new Geocoder();
+      const response=await geocoder.geocode({location:{lat,lng},language:'ja',region:'JP'});
+      const coarse=coarseJapaneseAddress(response?.results?.[0]);
+      addressCache.set(key,coarse);
+      return coarse;
     }catch{return '';}
   };
   const enrichStayAddresses=async(rows,points,requestId)=>{
@@ -201,7 +241,7 @@
           :`記録点間の直線距離合計 ${distanceText(meters)}。1時間を超える記録の空白は線で結びません。道路経路や実際の移動距離とは異なります。`;
       }
       const heading=document.createElement('h3');heading.textContent='滞在レポート';reportEl.append(heading);
-      const note=document.createElement('p');note.className='small';note.textContent='「どこに・何分いたか」だけをまとめます。同じ未登録地点で続く短い記録も1つの滞在にまとめます。文字レポートでは表示中の滞在先を最大20件、Google Mapsで住所確認します。';reportEl.append(note);
+      const note=document.createElement('p');note.className='small';note.textContent='「どこに・何分いたか」だけをまとめます。同じ未登録地点で続く短い記録も1つの滞在にまとめます。文字レポートでは表示中の滞在先を最大20件、Google Mapsで住所確認し、番地・建物名は表示しません。';reportEl.append(note);
       const reportRows=[];
       for(const entry of Array.isArray(payload.report)?payload.report:[]){
         if(entry?.kind!=='STAY')continue;
