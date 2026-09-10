@@ -15,7 +15,7 @@ for(const marker of [
   'MAX_PRODUCT_LINK_PREVIEWS=4',
   'MAX_REDIRECTS=3',
   'MAX_HTML_BYTES=256*1024',
-  'FETCH_TIMEOUT_MS=4_000',
+  'FETCH_TIMEOUT_MS=15_000',
   "redirect:'manual'",
   'while(total<MAX_HTML_BYTES)',
   'if(total>=MAX_HTML_BYTES)await reader.cancel()',
@@ -26,6 +26,7 @@ for(const marker of [
   'fetchProductLinkPreviewWithDiagnostic',
   'enrichShoppingProductLinkPreviewsWithDiagnostics',
   'productTitleFromUrlPath',
+  'propagateShoppingQuantityContext',
   "'URL_PATH'",
   "'PATH_FALLBACK'",
 ])assert.ok(helperSource.includes(marker),`product-link guard/diagnostic marker missing: ${marker}`);
@@ -34,6 +35,7 @@ const rakutenUrl='https://item.rakuten.co.jp/sanwa-junkei/t-018ss/?s-id=smt_top_
 const slowRakutenUrl='https://item.rakuten.co.jp/enro/kamayaki_meijin_mini/?s-id=smt_top_normal_bhitem';
 assert.equal(helper.parsePublicProductUrl(rakutenUrl)?.href,rakutenUrl,'Rakuten public product URL must be accepted');
 assert.equal(helper.productTitleFromUrlPath(slowRakutenUrl),'kamayaki meijin mini','meaningful Rakuten path slug must provide a bounded deterministic fallback');
+assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/dm1_mpo_b066'),null,'opaque code-like path must not be presented as a product title');
 assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/1234567890'),null,'numeric-only product path must not be presented as a product title');
 assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/550e8400-e29b-41d4-a716-446655440000'),null,'opaque UUID-like product path must not be presented as a product title');
 assert.equal(helper.productTitleFromUrlPath('https://shop.example.org/product/index.html'),null,'generic product path must not be presented as a product title');
@@ -125,6 +127,16 @@ assert.equal(opaqueEnriched.attached,0,'opaque path must not fabricate a fallbac
 assert.equal(opaqueFields[0].blocks[0].productLinkPreview,undefined,'opaque path must remain unresolved');
 assert.equal(opaqueEnriched.diagnostics[0].reason,'HTTP_ERROR','unusable path must retain the original metadata failure diagnostic');
 
+const contextualUrl1='https://shop.example.org/item/alpha-product';
+const contextualUrl2='https://shop.example.org/item/beta-product';
+const contextualFields=[{destination:'shopping',text:`以下を2つ買う\n${contextualUrl1}\n${contextualUrl2}`,blocks:[
+  {originalText:`以下を2つ買う\n${contextualUrl1}`,titleSeed:'以下を2つ買う',lines:['以下を2つ買う',contextualUrl1]},
+  {originalText:contextualUrl2,titleSeed:contextualUrl2,lines:[contextualUrl2]},
+]}];
+await helper.enrichShoppingProductLinkPreviewsWithDiagnostics(contextualFields,async()=>new Response('blocked',{status:403,headers:{'content-type':'text/html'}}));
+assert.equal(contextualFields[0].blocks[0].originalText,`以下を2つ買う\n${contextualUrl1}`,'first URL keeps its explicit quantity context');
+assert.equal(contextualFields[0].blocks[1].originalText,`以下を2つ買う\n${contextualUrl2}`,'explicit Shopping quantity context must carry to following URL blocks for Gemini provenance validation');
+
 const prefixedBlock={originalText:`URL: ${rakutenUrl}`,titleSeed:`URL: ${rakutenUrl}`,lines:[`URL: ${rakutenUrl}`],productLinkPreview:{url:rakutenUrl,title:'冷凍つくね1kg'}};
 assert.equal(helper.resolveProductLinkModelTitle(prefixedBlock.titleSeed,prefixedBlock),'冷凍つくね1kg','URL-prefixed literal model title must fall back to metadata title');
 
@@ -161,4 +173,4 @@ for(const forbidden of ['d.url','d.href','d.hostname','d.host','d.body','d.title
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
 assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
 
-console.log('rough-input product link contract: full field input goes through the existing single Gemini structured-output path for shopping URLs, public URL provenance remains saved, bounded metadata/path hints remain non-authoritative, privacy-safe diagnostics and SSRF/redirect/size guards stay intact');
+console.log('rough-input product link contract: full field input goes through the existing single Gemini structured-output path for shopping URLs, contextual explicit quantities carry across URL blocks, public URL provenance remains saved, bounded metadata/path hints remain non-authoritative, privacy-safe diagnostics and SSRF/redirect/size guards stay intact');
