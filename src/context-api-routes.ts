@@ -37,6 +37,7 @@ import { shoppingCategoryApi } from './shopping-category-api';
 import { locationDeviceApi } from './location-device-api';
 import { locationLatestApi } from './location-latest-api';
 import { locationHistoryApi } from './location-history-api';
+import { locationQualityDiagnosticsApi } from './location-quality-diagnostics-api';
 import { locationRouteEtaApi } from './location-route-api';
 import {locationPlacesApi} from './location-places-api';
 import { locationHomeApi } from './location-home-api';
@@ -59,6 +60,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);
   if(url.pathname==='/api/location/latest') return await locationLatestApi(request,context);
   if(url.pathname==='/api/location/history') return await locationHistoryApi(request,context);
+  if(url.pathname==='/api/location/quality-diagnostics') return await locationQualityDiagnosticsApi(request,context);
   if(url.pathname==='/api/location/eta') return await locationRouteEtaApi(request,context);
   if(url.pathname==='/api/location/places') return await locationPlacesApi(request,context);
   if(url.pathname==='/api/location/home') return await locationHomeApi(request,context);
