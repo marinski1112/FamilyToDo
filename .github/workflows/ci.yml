@@ -29,6 +29,8 @@ jobs:
         if: always()
       - run: npm run check:pwa-family-branding
         if: always()
+      - run: npm run check:location-quality-diagnostics
+        if: always()
       - run: npm run check:static-assets
         if: always()
       - run: npm run check:migrations
