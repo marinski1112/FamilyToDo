@@ -28,6 +28,7 @@ const groups={
   'google-integrations':[
     ['google-integration',['node','scripts/google-integration-contract.mjs']],
     ['google-calendar-inbound',['node','scripts/google-calendar-inbound-contract.mjs']],
+    ['google-calendar-inbound-auto-sync',['node','scripts/google-calendar-inbound-auto-sync-contract.mjs']],
     ['google-calendar-inbound-csrf',['node','scripts/google-calendar-inbound-csrf-contract.mjs']],
     ['google-calendar-hub-preview',['node','scripts/google-calendar-hub-preview-contract.mjs']],
     ['google-calendar-inbound-all-day-compat',['node','scripts/google-calendar-inbound-all-day-compat-contract.mjs']],
