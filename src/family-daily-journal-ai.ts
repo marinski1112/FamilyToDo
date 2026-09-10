@@ -38,8 +38,8 @@ async function markFailure(db:D1Database,id:number,status:string,now:string):Pro
 }
 
 export async function generateFamilyDailyJournalAi(env:Env):Promise<void>{
-  const cutoff=`-${AI_RETRY_HOURS} hours`;
-  const rows=await env.DB.prepare(`SELECT id,family_id,journal_date,summary_text,location_json,content_version FROM family_daily_journals WHERE storage_tier='HOT' AND journal_date<? AND (ai_source_content_version IS NULL OR ai_source_content_version<>content_version) AND (ai_generated_at IS NULL OR ai_generated_at<=datetime('now',?)) ORDER BY journal_date DESC,id DESC LIMIT ?`)
+  const cutoff=new Date(Date.now()-AI_RETRY_HOURS*60*60*1000).toISOString();
+  const rows=await env.DB.prepare(`SELECT id,family_id,journal_date,summary_text,location_json,content_version FROM family_daily_journals WHERE storage_tier='HOT' AND journal_date<? AND (ai_source_content_version IS NULL OR ai_source_content_version<>content_version) AND (ai_generated_at IS NULL OR ai_generated_at<=?) ORDER BY journal_date DESC,id DESC LIMIT ?`)
     .bind(todayJst(),cutoff,MAX_AI_GENERATIONS_PER_RUN).all<Row>();
   if(!rows.results.length)return;
   if(!String(env.GEMINI_API_KEY||'').trim()){
