@@ -5,6 +5,7 @@ import { AuthRequired, BadRequest, Forbidden } from './errors';
 import { makeContext } from './app-context';
 import { processGoogleTasksInbound } from './google-tasks';
 import { processCalendarOutbox, renewCalendarWatches } from './google-calendar';
+import { processGoogleCalendarInboundAuto } from './google-calendar-inbound-auto';
 import { validateLiffNext } from './liff-target';
 import { logRequestFailure } from './observability/errors';
 import { processChildJournalCalendarOutbox } from './child-journal-calendar';
@@ -58,6 +59,7 @@ export default {
       ctx.waitUntil(processLineDailyDigests(env));
       ctx.waitUntil(processLinePeriodicDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
+      ctx.waitUntil(processGoogleCalendarInboundAuto(env));
       ctx.waitUntil(processChildJournalCalendarOutbox(env));
       return;
     }
