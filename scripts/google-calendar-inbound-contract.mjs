@@ -13,9 +13,11 @@ const calendarImport=fs.readFileSync('src/calendar-ics-import.ts','utf8');
 const inboundSafety=fs.readFileSync('src/google-calendar-inbound-safety.ts','utf8');
 const inboundAuth=fs.readFileSync('src/google-calendar-inbound-auth.ts','utf8');
 const inboundPreview=fs.readFileSync('src/google-calendar-inbound-preview.ts','utf8');
+const inboundApply=fs.readFileSync('src/google-calendar-inbound-apply.ts','utf8');
 const inboundUi=fs.readFileSync('public/assets/google-calendar-inbound.js','utf8');
 const inboundIdentityMigration=fs.readFileSync('migrations/0072_google_calendar_inbound_identity.sql','utf8');
 const inboundAuthMigration=fs.readFileSync('migrations/0073_google_calendar_inbound_authorization.sql','utf8');
+const inboundApplyGuardMigration=fs.readFileSync('migrations/0074_google_calendar_inbound_apply_guard.sql','utf8');
 
 for(const marker of [
   'calendar.app.created',
@@ -86,7 +88,7 @@ for(const marker of ['google_calendar_inbound_authorizations','family_id INTEGER
 assert.ok(!inboundAuthMigration.includes('REFERENCES external_calendar_accounts'),'inbound authorization storage must not depend on the outbound account row');
 
 // Live Google read is deliberately limited to an authenticated, CSRF-protected OWNER/ADMIN
-// preview. The app-owned and CHILD_JOURNAL calendar IDs are checked before the events request.
+// preview. CHILD_JOURNAL is blocked; app-owned hub events are classified individually to stop loops.
 for(const marker of [
   "const MAX_RANGE_DAYS=90","const LOCAL_COLLISION_LIMIT=500","const EVIDENCE_BIND_CHUNK=80",
   'GOOGLE_CALENDAR_INBOUND_MAX_EVENTS','google_calendar_inbound_authorizations','decryptRefreshToken',
@@ -100,7 +102,7 @@ for(const marker of [
   'classifyGoogleCalendarInboundEvent','read_only:true',
 ]) assert.ok(inboundPreview.includes(marker),`Google inbound preview guard missing: ${marker}`);
 const previewHandler=inboundPreview.slice(inboundPreview.indexOf('export async function googleCalendarInboundPreview'));
-assert.ok(previewHandler.indexOf('googleCalendarInboundCalendarBlockReason(calendarId')<previewHandler.indexOf('const access=await inboundAccessToken(ctx);'), 'calendar-level feedback-loop block must run before live events access');
+assert.ok(previewHandler.indexOf('googleCalendarInboundCalendarBlockReason(calendarId')<previewHandler.indexOf('const access=await inboundAccessToken(ctx);'), 'calendar-level safety check must run before live events access');
 for(const forbidden of ['INSERT INTO ','UPDATE google_calendar_inbound','UPDATE external_calendar','UPDATE calendar_sync','UPDATE tasks','DELETE FROM ','calendar_sync_outbox','external_calendar_watch_channels']) assert.ok(!inboundPreview.includes(forbidden),`read-only preview must not mutate app or projection state: ${forbidden}`);
 assert.ok(!inboundPreview.includes("singleEvents','true'"),'recurring events must not be expanded while recurrence import is unsupported');
 assert.ok(!inboundPreview.includes('console.log')&&!inboundPreview.includes('console.error'),'preview must not log Calendar/private event data');
@@ -109,16 +111,52 @@ assert.ok(apiRoutes.includes("'/api/google-calendar/inbound-calendars'"),'select
 assert.ok(apiRoutes.includes('googleCalendarInboundCalendars(request,context)'),'calendar discovery route wiring missing');
 assert.ok(apiRoutes.includes("'/api/google-calendar/inbound-preview'"),'read-only inbound preview route missing');
 assert.ok(apiRoutes.includes('googleCalendarInboundPreview(request,context)'),'preview route wiring missing');
-assert.ok(!apiRoutes.includes("'/api/google-calendar/inbound-apply'"),'Google inbound apply route must remain absent in the preview stage');
+assert.ok(apiRoutes.includes("'/api/google-calendar/inbound-apply'"),'explicit inbound apply route missing');
+assert.ok(apiRoutes.includes('googleCalendarInboundApply(request,context)'),'inbound apply route wiring missing');
+
+// Apply never trusts client event contents. It replays the server preview, admits only current
+// NEW_CANDIDATE rows, and writes a FAMILY EVENT + primary Google identity in one D1 transaction.
+for(const marker of [
+  'GOOGLE_CALENDAR_INBOUND_APPLY_MAX_EVENTS=15',
+  "['OWNER','ADMIN']",
+  "String(body.csrf||'')!==String(ctx.session.csrfToken||'')",
+  'googleCalendarInboundPreview(replayPreviewRequest(request,ctx,body),ctx)',
+  "String(value.classification||'')==='NEW_CANDIDATE'",
+  "String(value.task_kind||'')==='EVENT'",
+  "String(value.visibility_scope||'')==='FAMILY'",
+  'ctx.env.DB.batch(statements)',
+  'INSERT INTO tasks',
+  "'EVENT',0,'FAMILY',NULL",
+  'INSERT INTO google_calendar_inbound_links',
+  'last_insert_rowid()',
+  "google_mutation:'none'",
+  "outbound_projection:'blocked_for_inbound_identity'",
+  "recurrence_import:'unsupported'",
+]) assert.ok(inboundApply.includes(marker),`Google inbound apply guard missing: ${marker}`);
+for(const forbidden of ['/calendar/v3','external_calendar_links','calendar_sync_outbox','recurrence_rules','UPDATE tasks','DELETE FROM tasks','console.log','console.error']) assert.ok(!inboundApply.includes(forbidden),`inbound apply must not mutate Google/outbound/recurrence state: ${forbidden}`);
+assert.ok(!inboundApply.includes('body.title')&&!inboundApply.includes('body.description')&&!inboundApply.includes('body.location'),'client event content must never become task input');
+
+// Database-level projection guard makes the one-way import boundary durable across future task edits
+// and manual backfill code paths that enqueue via INSERT ... ON CONFLICT.
+for(const marker of [
+  'trg_google_calendar_inbound_clear_outbox_insert',
+  'trg_google_calendar_inbound_clear_outbox_update',
+  'trg_google_calendar_inbound_block_outbox_insert',
+  'BEFORE INSERT ON calendar_sync_outbox',
+  "NEW.provider='GOOGLE_CALENDAR'",
+  'google_calendar_inbound_links',
+  'SELECT RAISE(IGNORE)',
+  'DELETE FROM calendar_sync_outbox',
+]) assert.ok(inboundApplyGuardMigration.includes(marker),`Google inbound outbound-projection guard missing: ${marker}`);
+assert.ok(!inboundApplyGuardMigration.includes('DELETE FROM google_calendar_inbound_links'),'projection guard must preserve inbound dedupe history');
 
 // UI exposes explicit selection and dates, renders private event text only with textContent, and
-// has no apply/checkbox mutation affordance in this stage.
+// enables an explicit bounded apply action only for rows classified NEW_CANDIDATE.
 new Function(inboundUi);
-for(const marker of ['googleCalendarInboundLoad','googleCalendarInboundCalendar','googleCalendarInboundFrom','googleCalendarInboundTo','googleCalendarInboundPreviewButton','/api/google-calendar/inbound-calendars','/api/google-calendar/inbound-preview','textContent']) assert.ok(inboundUi.includes(marker),`inbound preview UI marker missing: ${marker}`);
+for(const marker of ['googleCalendarInboundLoad','googleCalendarInboundCalendar','googleCalendarInboundFrom','googleCalendarInboundTo','googleCalendarInboundPreviewButton','googleCalendarInboundApplyButton','google-calendar-inbound-apply-check','/api/google-calendar/inbound-calendars','/api/google-calendar/inbound-preview','/api/google-calendar/inbound-apply','NEW_CANDIDATE','APPLY_MAX=15','textContent','Google Calendar側は変更しません']) assert.ok(inboundUi.includes(marker),`inbound UI marker missing: ${marker}`);
 assert.ok(!inboundUi.includes('innerHTML'),'remote Calendar/private event data must never flow through innerHTML');
-assert.ok(!inboundUi.includes('/inbound-apply'),'preview UI must not expose apply');
-assert.ok(calendarEntry.includes('/assets/google-calendar-inbound.js'),'integrations settings must load the bounded inbound preview UI');
-assert.ok(calendarEntry.includes('読み取り専用プレビューです。ここではFamilyToDoにもGoogle Calendarにも書き込みません。'),'settings copy must state the read-only boundary');
+assert.ok(calendarEntry.includes('/assets/google-calendar-inbound.js'),'integrations settings must load the bounded inbound preview/apply UI');
+assert.ok(calendarEntry.includes('読み取り専用プレビューです。ここではFamilyToDoにもGoogle Calendarにも書き込みません。'),'settings copy must state the preview read-only boundary');
 assert.ok(calendarEntry.includes('取り込み元カレンダーと期間を選んで、安全性を確認できます。'),'settings must expose the preview as available after authorization');
 assert.ok(calendarEntry.includes("const googleTasksCardMarker='<div class=\"card\"><h2>Google Tasks</h2>'"),'settings must locate the boundary immediately after the Google Calendar card');
 assert.ok(calendarEntry.includes("source.lastIndexOf('</div>',googleTasksCardStart)"),'inbound controls must target the closing edge of the existing Google Calendar card');
@@ -127,4 +165,4 @@ assert.ok(calendarEntry.includes('calendar-inbound-auth-btn'),'inbound authoriza
 
 for(const forbidden of ['INSERT INTO tasks','UPDATE tasks','DELETE FROM tasks','INSERT INTO google_calendar_inbound_links','UPDATE google_calendar_inbound_links','DELETE FROM google_calendar_inbound_links','fetch(']) assert.ok(!inboundSafety.includes(forbidden),`inbound safety classifier must remain pure/read-only: ${forbidden}`);
 
-console.log('google-calendar-inbound-contract: dedicated OAuth, bounded selected-calendar live read, fail-closed classification and in-card read-only UI are isolated from outbound/apply lanes');
+console.log('google-calendar-inbound-contract: dedicated OAuth, bounded read-only preview, server-revalidated apply, atomic identity, and outbound projection guard are enforced');
