@@ -23,6 +23,8 @@ assert.ok(core.includes('extendedProperties:{private:{familyTodoTaskId:String(t.
 assert.ok(preview.includes("external_event_id value FROM external_calendar_links WHERE family_id=? AND provider=? AND calendar_id=?"),'preview must retain outbound event-id evidence scoped to family/provider/calendar');
 assert.ok(preview.includes('blocked_reason:googleCalendarInboundCalendarBlockReason(id,protectedIds.appOwned,protectedIds.childJournal)'),'calendar discovery must use the shared gate so Family TODO becomes selectable while CHILD_JOURNAL stays blocked');
 assert.ok(preview.includes('googleCalendarInboundCalendarBlockReason(calendarId,protectedIds.appOwned,protectedIds.childJournal)'),'preview must re-check the selected calendar server-side');
-assert.ok(!apiRoutes.includes("'/api/google-calendar/inbound-apply'"),'hub-preview change must not introduce apply/task mutation');
+for(const forbidden of ['INSERT INTO tasks','UPDATE tasks','DELETE FROM tasks','INSERT INTO google_calendar_inbound_links']) assert.ok(!preview.includes(forbidden),`hub preview itself must remain read-only: ${forbidden}`);
+assert.ok(apiRoutes.includes("'/api/google-calendar/inbound-apply'")&&apiRoutes.includes('googleCalendarInboundApply(request,context)'),'later explicit apply must remain a separate handler from the read-only hub preview');
+assert.ok(!preview.includes('googleCalendarInboundApply'),'hub preview module must not absorb the apply handler');
 
-console.log('google-calendar-hub-preview-contract: Family TODO is a selectable hub and self-generated events remain fail-closed before NEW_CANDIDATE');
+console.log('google-calendar-hub-preview-contract: Family TODO stays selectable, preview stays read-only, and self-generated events fail closed before NEW_CANDIDATE');
