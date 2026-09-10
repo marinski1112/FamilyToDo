@@ -15,6 +15,19 @@ try{
   const errorMessage=(data,fallback)=>String(data?.error||fallback||'保存に失敗しました。');
   class SaveRequestError extends Error{constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
 
+  const analysisButton=document.getElementById('roughPreviewButton');
+  if(analysisButton){
+    if(!document.getElementById('roughAnalysisLoadingStyle')){const style=document.createElement('style');style.id='roughAnalysisLoadingStyle';style.textContent='.task-rough-input #roughPreviewButton.rough-analysis-loading{display:inline-flex;align-items:center;justify-content:center;gap:8px}.rough-analysis-spinner{width:18px;height:18px;box-sizing:border-box;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:roughAnalysisSpin .8s linear infinite;flex:0 0 auto}@keyframes roughAnalysisSpin{to{transform:rotate(360deg)}}';document.head.appendChild(style);}
+    let loadingTimer=null,loadingObserver=null;
+    const stopLoading=()=>{if(loadingTimer){clearInterval(loadingTimer);loadingTimer=null;}loadingObserver?.disconnect();loadingObserver=null;analysisButton.classList.remove('rough-analysis-loading');};
+    analysisButton.addEventListener('click',()=>setTimeout(()=>{
+      if(!analysisButton.disabled)return;
+      stopLoading();const startedAt=Date.now();analysisButton.classList.add('rough-analysis-loading');analysisButton.innerHTML='<span class="rough-analysis-spinner" aria-hidden="true"></span><span class="rough-analysis-label">AIで整理中… 0秒</span>';
+      const label=analysisButton.querySelector('.rough-analysis-label'),update=()=>{const seconds=Math.max(0,Math.floor((Date.now()-startedAt)/1000));if(label)label.textContent=seconds>=15?`商品情報を確認中… ${seconds}秒`:`AIで整理中… ${seconds}秒`;};
+      loadingTimer=setInterval(update,1000);loadingObserver=new MutationObserver(()=>{if(!analysisButton.disabled)stopLoading();});loadingObserver.observe(analysisButton,{attributes:true,attributeFilter:['disabled']});
+    },0));
+  }
+
   const readRow=row=>{
     const destination=value(row,'.rough-draft-destination'),title=value(row,'.rough-draft-title');
     const base={row,destination,title};
