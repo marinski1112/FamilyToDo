@@ -31,6 +31,8 @@ jobs:
         if: always()
       - run: npm run check:location-quality-diagnostics
         if: always()
+      - run: npm run check:location-long-term-history
+        if: always()
       - run: npm run check:static-assets
         if: always()
       - run: npm run check:migrations
