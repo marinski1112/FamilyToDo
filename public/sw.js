@@ -1,5 +1,5 @@
-const STATIC_CACHE='familytodo-static-shopping-task-fallback';
-const STATIC_ASSETS=['/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
+const STATIC_CACHE='familytodo-static-pwa-branding-safe1';
+const STATIC_ASSETS=['/assets/pwa-192.png','/assets/pwa-512.png','/assets/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)).catch(()=>{}));
   self.skipWaiting();
@@ -14,7 +14,9 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
-  if(url.pathname.startsWith('/assets/')||url.pathname==='/manifest.webmanifest'){
+  // Family-scoped manifest and /app-icon-* responses are private/no-store and
+  // must never enter this origin-wide CacheStorage shared across logins.
+  if(url.pathname.startsWith('/assets/')){
     event.respondWith((async()=>{
       const cached=await caches.match(event.request);
       const network=fetch(event.request).then(async response=>{
