@@ -99,7 +99,8 @@ for(const marker of [
   'google_calendar_inbound_links','external_calendar_links','calendar_import_entries','localScanTruncated',
   'classifyGoogleCalendarInboundEvent','read_only:true',
 ]) assert.ok(inboundPreview.includes(marker),`Google inbound preview guard missing: ${marker}`);
-assert.ok(inboundPreview.indexOf('googleCalendarInboundCalendarBlockReason(calendarId')<inboundPreview.indexOf('const access=await inboundAccessToken(ctx)'), 'calendar-level feedback-loop block must run before live events access');
+const previewHandler=inboundPreview.slice(inboundPreview.indexOf('export async function googleCalendarInboundPreview'));
+assert.ok(previewHandler.indexOf('googleCalendarInboundCalendarBlockReason(calendarId')<previewHandler.indexOf('const access=await inboundAccessToken(ctx);'), 'calendar-level feedback-loop block must run before live events access');
 for(const forbidden of ['INSERT INTO ','UPDATE google_calendar_inbound','UPDATE external_calendar','UPDATE calendar_sync','UPDATE tasks','DELETE FROM ','calendar_sync_outbox','external_calendar_watch_channels']) assert.ok(!inboundPreview.includes(forbidden),`read-only preview must not mutate app or projection state: ${forbidden}`);
 assert.ok(!inboundPreview.includes("singleEvents','true'"),'recurring events must not be expanded while recurrence import is unsupported');
 assert.ok(!inboundPreview.includes('console.log')&&!inboundPreview.includes('console.error'),'preview must not log Calendar/private event data');
