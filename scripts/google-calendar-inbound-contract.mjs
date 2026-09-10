@@ -55,11 +55,11 @@ assert.ok(calendarImport.includes("String(b.csrf||'')!==String(ctx.session.csrfT
 assert.ok(calendarImport.includes("['OWNER','ADMIN']"),'calendar import must remain OWNER/ADMIN scoped');
 
 // Before any Google -> FamilyToDo apply path exists, external identity must be independently
-// idempotent and must survive account/reconnect details. account_id remains provenance, while the
-// family + calendarId + event.id uniqueness prevents duplicate/triplicate local links.
+// idempotent and must survive account/reconnect details. account_id is nullable provenance so a
+// future hard account deletion cannot erase the family + calendarId + event.id dedupe history.
 for(const marker of [
   'google_calendar_inbound_links',
-  'account_id INTEGER NOT NULL REFERENCES external_calendar_accounts(id)',
+  'account_id INTEGER REFERENCES external_calendar_accounts(id) ON DELETE SET NULL',
   'calendar_id TEXT NOT NULL',
   'external_event_id TEXT NOT NULL',
   'ical_uid TEXT',
@@ -68,6 +68,8 @@ for(const marker of [
   'WHERE task_id IS NOT NULL',
 ]) assert.ok(inboundIdentityMigration.includes(marker),`Google inbound identity guard missing: ${marker}`);
 assert.ok(!inboundIdentityMigration.includes('UNIQUE(family_id, ical_uid)'), 'iCalUID must not be the Google primary unique identity because recurring occurrences can share it');
+assert.ok(!inboundIdentityMigration.includes('account_id INTEGER NOT NULL'),'account provenance must not force deletion of dedupe identity on account removal');
+assert.ok(!inboundIdentityMigration.includes('account_id INTEGER NOT NULL REFERENCES external_calendar_accounts(id) ON DELETE CASCADE'),'account deletion must never cascade-delete inbound dedupe history');
 
 for(const marker of [
   'GOOGLE_CALENDAR_INBOUND_MAX_EVENTS=250',
