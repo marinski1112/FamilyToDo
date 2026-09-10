@@ -10,6 +10,7 @@ const locationArchive=read('src/location-history-archive.ts');
 const checks=[
   [migration.includes('CREATE TABLE IF NOT EXISTS family_daily_journals'),'daily journal table exists'],
   [migration.includes("storage_tier TEXT NOT NULL DEFAULT 'HOT'")&&migration.includes('archive_object_key')&&migration.includes('archived_at'),'journal is cold-archive ready'],
+  [migration.includes('idx_family_daily_journals_family_date')&&migration.includes('family_id, journal_date DESC'),'journal has family/date index for bounded reads'],
   [journal.includes('location_history_archive_days')&&journal.includes('location_history_stays'),'journal consumes durable Location projections'],
   [journal.includes('task_completion_history')&&journal.includes("visibility_scope='FAMILY'")&&journal.includes("lower(t.task_kind)<>'event'"),'journal includes only family-visible completed tasks'],
   [journal.includes("l.log_type='HOUSEWORK'")&&journal.includes('family_logs'),'journal includes canonical housework logs'],
@@ -17,6 +18,8 @@ const checks=[
   [journal.includes('JOURNAL_REFRESH_MS=24*60*60*1000')&&journal.includes("SELECT journal_date,generated_at FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT'")&&journal.includes('freshDates.has(date)'),'scheduled repair skips fresh HOT journal rows while retaining the seven-day repair window'],
   [journal.includes('ON CONFLICT(family_id,journal_date) DO UPDATE')&&journal.includes("storage_tier='HOT'"),'hot recent summaries can be refreshed without mutating cold archive'],
   [journal.includes('MAX_SUMMARY_DETAILS=3')&&journal.includes('MAX_SUMMARY_DETAIL_CHARS=60')&&journal.includes('summaryDetails(stays.map(stay=>stay.place))')&&journal.includes('summaryDetails(tasks.map(task=>task.title))')&&journal.includes('summaryDetails(housework.map(item=>item.name))'),'deterministic summary exposes bounded semantic evidence for search'],
+  [journal.includes("url.searchParams.get('search_year')")&&journal.includes('journal_date>=? AND journal_date<?')&&journal.includes('searchFrom,searchTo,pattern,MAX_SEARCH'),'free-text search is bounded to one indexed calendar year'],
+  [journal.includes('name="search_year"')&&journal.includes('検索は指定した1年単位'),'journal UI exposes the bounded search year'],
   [journal.includes('placeholder="場所・タスク・家事などで検索"'),'journal search copy matches searchable deterministic evidence'],
   [routes.includes("url.pathname==='/app/family_journal.php'")&&routes.includes('familyDailyJournalPage'),'family journal page is routed'],
   [index.includes('archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env))'),'daily journal runs after Location projection'],
