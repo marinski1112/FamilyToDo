@@ -1,4 +1,5 @@
 import type { AppContext } from './app-context';
+import { resolveAiModelInventory } from './ai-model-policy';
 import { json } from './response';
 import { settingsDiagnosticsDetail } from './settings-diagnostics';
 import { safeDigestAttempts, type DigestAttempt } from './line-digest-generation';
@@ -61,6 +62,8 @@ function morningItem(row:Row){
   };
 }
 
+const latestForFeature=(items:any[],feature:string)=>items.find(item=>String(item?.feature||'')===feature)||null;
+
 export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx:AppContext):Promise<Response>{
   const issue=new URL(request.url).searchParams.get('issue')||'';
   if(issue!=='ai_generation')return settingsDiagnosticsDetail(request,ctx);
@@ -75,11 +78,18 @@ export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx
     const morning=rows.results.map(morningItem);
     const existing=Array.isArray(base.items)?base.items:[];
     const items=[...morning,...existing].sort((a:any,b:any)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))).slice(0,20);
+    const inventory=await resolveAiModelInventory(ctx.env.DB,ctx.member.family_id,ctx.env);
+    const modelUsage=inventory.map(entry=>{
+      const diagnosticFeature=entry.feature==='ROUGH_INPUT'?'ROUGH_INPUT':entry.feature==='FAMILY_DAILY_JOURNAL'?'FAMILY_DAILY_JOURNAL':null;
+      const recent=diagnosticFeature?latestForFeature(items,diagnosticFeature):null;
+      return {...entry,recent:recent?{status:recent.final_status??null,model:recent.model??null,at:recent.created_at??null}:null};
+    });
     if(new URL(request.url).searchParams.get('format')==='html'){
       const esc=(value:unknown)=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+      const usageRows=modelUsage.map(entry=>`<tr><td>${esc(entry.feature)}</td><td>${esc(entry.models.join(' → '))}</td><td>${esc(entry.source)}</td><td>${esc(entry.recent?.status||'履歴なし')}</td><td>${esc(entry.recent?.model||'—')}</td><td>${esc(entry.note)}</td></tr>`).join('');
       const cards=items.map((raw:any)=>`<article><h2>${esc(raw.feature)}</h2><p>${esc(raw.local_date||raw.created_at)} · ${esc(raw.final_status)}</p><p>AI呼出: ${esc(raw.ai_called)} / 回数: ${esc(raw.attempt_count)} / 確定: ${esc(raw.finalized)}</p><p>生成判定: ${esc(raw.generation_reason||raw.last_reason_code)}</p><p>段階: ${esc(raw.last_failure_stage)} / 理由: ${esc(raw.last_reason_code)} / HTTP: ${esc(raw.http_status)}</p><p>モデル: ${esc(raw.model)}</p><details><summary>試行ごとの診断</summary><pre>${esc(JSON.stringify(raw.attempts||[],null,2))}</pre></details></article>`).join('');
-      return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI実行履歴</title><style>body{font:16px system-ui;margin:16px;background:#f4f5f9;color:#243044}article{background:white;padding:16px;margin:12px 0;border-radius:16px;overflow-wrap:anywhere}h2{font-size:18px}pre{white-space:pre-wrap}p{margin:8px 0}</style><a href="/app/settings_diagnostics.php">管理の診断へ戻る</a><h1>AI実行履歴</h1><p>朝まとめは当日の確定結果です。再表示ではAIを呼びません。変更前の履歴には試行詳細がありません。</p>${cards||'<p>記録はありません。</p>'}</html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+      return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI実行履歴</title><style>body{font:16px system-ui;margin:16px;background:#f4f5f9;color:#243044}article,.panel{background:white;padding:16px;margin:12px 0;border-radius:16px;overflow-wrap:anywhere}h2{font-size:18px}pre{white-space:pre-wrap}p{margin:8px 0}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid #e5e7eb}.scroll{overflow-x:auto}</style><a href="/app/settings_diagnostics.php">管理の診断へ戻る</a><h1>AI実行履歴</h1><section class="panel"><h2>AIモデル利用状況</h2><p>機能ごとの設定モデル、設定元、直近の安全な実行状態です。APIキー・prompt・response本文は表示しません。</p><div class="scroll"><table><thead><tr><th>機能</th><th>モデル</th><th>設定元</th><th>直近状態</th><th>直近実行モデル</th><th>補足</th></tr></thead><tbody>${usageRows}</tbody></table></div></section><p>朝まとめは当日の確定結果です。再表示ではAIを呼びません。変更前の履歴には試行詳細がありません。</p>${cards||'<p>記録はありません。</p>'}</html>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
     }
-    return json({ok:true,issue:'ai_generation',items,limited:20});
+    return json({ok:true,issue:'ai_generation',model_usage:modelUsage,items,limited:20});
   }catch{return baseResponse;}
 }

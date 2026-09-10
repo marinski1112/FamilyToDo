@@ -36,18 +36,21 @@ assert.doesNotMatch(diagnosticBlock,/\bUNION(?:\s+ALL)?\b/i,'settings diagnostic
 
 for(const marker of [
   "import { settingsDiagnosticsDetail } from './settings-diagnostics';",
+  "import { resolveAiModelInventory } from './ai-model-policy';",
   "issue!=='ai_generation'",
   "feature:'MORNING_DIGEST'",
   "final_status:generation.status==='AI'?'AI_OK':'FALLBACK_DETERMINISTIC'",
   'line_daily_digest_ai_family_daily WHERE family_id=? AND finalized=1 ORDER BY local_date DESC LIMIT 20',
   'const generation=safeGeneration(row.frame_json);',
-  "return json({ok:true,issue:'ai_generation',items,limited:20});",
+  "return json({ok:true,issue:'ai_generation',model_usage:modelUsage,items,limited:20});",
+  'AIモデル利用状況',
 ]) assert.ok(aiDiagnostics.includes(marker),marker);
 assert.ok(aiDiagnostics.includes("const ALLOWED_REASONS=new Set(['OK','NOT_CONFIGURED','DISABLED','BUDGET_OR_CIRCUIT','STORAGE','RATE_LIMIT','UPSTREAM','INVALID_OUTPUT','LEGACY']);"),'morning reason allowlist changed');
 assert.doesNotMatch(aiDiagnostics,/return\s+\{[^}]*frame_json/s,'raw morning frame must never be returned');
 assert.ok(!aiDiagnostics.includes('recap:'),'morning recap must not be projected by diagnostics');
 assert.ok(!aiDiagnostics.includes('memberMorning:'),'member morning text must not be projected by diagnostics');
 assert.ok(!aiDiagnostics.includes('latitude')&&!aiDiagnostics.includes('longitude'),'coordinates must not enter diagnostics');
+assert.ok(!aiDiagnostics.includes('GEMINI_API_KEY'),'Gemini API key must not enter diagnostics');
 
 assert.ok(handlers.includes("export { settingsDiagnostics } from './settings-diagnostics';"),'settings page handlers must use retained settingsDiagnostics');
 const appExport=handlers.split('\n').find(line=>line.includes("from './app'"))||'';
@@ -58,4 +61,4 @@ assert.doesNotMatch(appImport,/\bsettingsDiagnosticsDetail\b/,'settingsDiagnosti
 assert.ok(apiRoutes.includes("if(url.pathname==='/api/settings/diagnostics-detail') return await settingsDiagnosticsDetailWithMorningAi(request,context);"),'diagnostics detail route changed');
 assert.ok(pageRoutes.includes("if(url.pathname==='/app/settings_diagnostics.php') return await settingsDiagnostics(context);"),'settings diagnostics page route changed');
 
-console.log('settings-diagnostics-contract: retained diagnostics plus privacy-safe Morning Digest AI history boundary ok');
+console.log('settings-diagnostics-contract: retained diagnostics plus privacy-safe AI history/model boundary ok');

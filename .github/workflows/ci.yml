@@ -35,6 +35,8 @@ jobs:
         if: always()
       - run: npm run check:family-daily-journal
         if: always()
+      - run: npm run check:ai-model-usage-visibility
+        if: always()
       - run: npm run check:static-assets
         if: always()
       - run: npm run check:migrations
