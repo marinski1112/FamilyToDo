@@ -31,5 +31,19 @@ assert.deepEqual(Array.from(namedPairs.fields[0].blocks,block=>block.originalTex
 const nonShopping=context.parseRequestBody({primaryType:'task',fields:[{destination:'task',text:`${url1}\n${url3}`}]});
 assert.equal(nonShopping.fields[0].blocks.length,1,'non-shopping reference URLs keep the existing continuation behavior');
 
+const twoEachBlock={originalText:`以下を2つ買う\n${url1}`,titleSeed:'以下を2つ買う',lines:['以下を2つ買う',url1]};
+const threeBlock={originalText:`これは３つ\n${url2}`,titleSeed:'これは３つ',lines:['これは３つ',url2]};
+assert.equal(context.explicitQuantity(twoEachBlock),'2','natural contextual count phrase must deterministically resolve 2');
+assert.equal(context.explicitQuantity(threeBlock),'3','full-width natural contextual count phrase must deterministically resolve 3');
+const deterministic=context.deterministicItems([{destination:'shopping',text:'',blocks:[twoEachBlock,threeBlock],sharedDueDirective:null}]);
+assert.deepEqual(Array.from(deterministic,item=>item.quantity),['2','3'],'deterministic fallback must retain contextual Shopping quantities');
+const modelAdjusted=context.acceptedProductLinkTitles([{destination:'shopping',originalText:twoEachBlock.originalText,title:'楽天商品タイトル',quantity:null,category:null,dueDate:null,dueTime:null,description:null}],[{destination:'shopping',text:'',blocks:[twoEachBlock],sharedDueDirective:null}]);
+assert.equal(modelAdjusted[0].quantity,'2','accepted Gemini item that omits an explicit contextual quantity must be completed deterministically');
+
+const previewUiSource=fs.readFileSync('public/assets/task-rough-input-ai.js','utf8');
+for(const marker of ['rough-analysis-spinner','startAnalysisLoading','stopAnalysisLoading',"button.setAttribute('aria-busy','true')","button.disabled=true;startAnalysisLoading();","finally{stopAnalysisLoading();button.disabled=false;button.textContent=oldText;}"]){
+  assert.ok(previewUiSource.includes(marker),`rough-input direct loading lifecycle marker missing: ${marker}`);
+}
+
 assert.ok(fs.readFileSync('src/task-rough-input-api.ts','utf8').includes("semanticBlocks(text,destination)"),'parseRequestBody must pass the explicit destination into the splitter');
-console.log('rough-input multi-URL split: consecutive Shopping URLs are separate products while name+URL pairing and non-Shopping URL continuation remain intact');
+console.log('rough-input multi-URL split: separate Shopping URLs remain separate, contextual quantities survive Gemini/fallback paths, and loading feedback is bound directly to the analysis lifecycle');

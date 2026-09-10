@@ -23,6 +23,9 @@ try{
 .task-rough-input .rough-input-help{flex:1;min-width:0}
 .task-rough-input .rough-input-help summary{font-weight:400}
 .task-rough-input #roughPreviewButton{min-height:44px;margin:0}
+.task-rough-input #roughPreviewButton.rough-analysis-loading{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.rough-analysis-spinner{display:inline-block;width:18px;height:18px;box-sizing:border-box;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:roughAnalysisSpin .8s linear infinite;flex:0 0 auto}
+@keyframes roughAnalysisSpin{to{transform:rotate(360deg)}}
 .task-rough-input .rough-preview{margin-top:16px;border:0;border-top:1px solid #e2e8f0;background:none;padding:12px 0 0}
 .task-rough-input .rough-preview h3{font-size:17px;margin:0 0 4px}
 .task-rough-input .rough-preview>p{margin:4px 0 8px;font-size:13px;color:#475569}
@@ -49,6 +52,13 @@ try{
 .task-manual-fields{border-top:1px solid #e2e8f0;padding-top:4px}
 @media(max-width:340px){.rough-draft-heading{grid-template-columns:70px minmax(0,1fr) 44px}.rough-draft-basic-grid,.rough-detail-grid{grid-template-columns:1fr}}`;document.head.appendChild(style);
   }
+  let analysisTimer=null;
+  const stopAnalysisLoading=()=>{if(analysisTimer){clearInterval(analysisTimer);analysisTimer=null;}button.classList.remove('rough-analysis-loading');button.removeAttribute('aria-busy');};
+  const startAnalysisLoading=()=>{
+    stopAnalysisLoading();const startedAt=Date.now();button.classList.add('rough-analysis-loading');button.setAttribute('aria-busy','true');button.innerHTML='<span class="rough-analysis-spinner" aria-hidden="true"></span><span class="rough-analysis-label">AIで整理中… 0秒</span>';
+    const update=()=>{const seconds=Math.max(0,Math.floor((Date.now()-startedAt)/1000)),label=button.querySelector('.rough-analysis-label');if(label)label.textContent=seconds>=15?`商品情報を確認中… ${seconds}秒`:`AIで整理中… ${seconds}秒`;};
+    update();analysisTimer=setInterval(update,1000);
+  };
   const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const primary=()=>String(form.querySelector('[name=rough_primary_type]:checked')?.value||'task');
   const summaryChoice=document.createElement('label');summaryChoice.className='checkrow rough-summary-choice';summaryChoice.innerHTML='<input type="checkbox" id="roughSummarize"><span>文章を1つのタスク・予定に要約する</span>';
@@ -131,8 +141,8 @@ try{
     if(totalChars>4000){alert('ざっくり入力は全入力欄を合計して4,000文字以内にしてください。');return;}
     if(totalLines<1){alert('ざっくり入力を入力してください。');document.getElementById('roughMainInput')?.focus();return;}
     if(!summarize()&&totalLines>20){alert('ざっくり入力は全入力欄を合計して20行以内にしてください。');return;}
-    const csrf=String(form.elements.csrf?.value||'');
-    button.disabled=true;const oldText=button.textContent;button.textContent='AIで整理中…';
+    const csrf=String(form.elements.csrf?.value||''),oldText=button.textContent;
+    button.disabled=true;startAnalysisLoading();
     try{
       const response=await fetch('/api/task-rough-input',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,primaryType:primary(),fields,summarize:summarize()}),signal:AbortSignal.timeout(45000)}),data=await response.json().catch(()=>null);
       if(snapshot(fieldPayload())!==requestSnapshot)return;
@@ -142,7 +152,7 @@ try{
       if(snapshot(fieldPayload())!==requestSnapshot)return;
       const items=fields.flatMap(field=>(summarize()&&field.destination===primary()?[field.text.trim()]:nonblankLines(field.text)).filter(Boolean).map(text=>({destination:field.destination,originalText:text,title:text.split('\n')[0].slice(0,200),description:['task','event'].includes(field.destination)?text.slice(0,1000):null,quantity:null,category:null,dueDate:null,dueTime:null}))).slice(0,20);
       render(items,'deterministic','UNAVAILABLE');
-    }finally{button.disabled=false;button.textContent=oldText;}
+    }finally{stopAnalysisLoading();button.disabled=false;button.textContent=oldText;}
   };
   // Progressive enhancement: keep original controls and their values in the same form.
   // Only collapse manual entry after the AI UI has initialized successfully.

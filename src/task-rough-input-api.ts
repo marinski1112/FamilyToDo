@@ -39,6 +39,8 @@ const categoryIntentHint=/(?:^|[\s、,])(?:カテゴリー|カテゴリ)\s*[:：
 const dueIntentHint=/(?:^|[\s、,])(?:期限|締切)\s*[:：]/iu;
 const explicitDueDateLine=/^(?:期限|締切)\s*[:：]\s*(\d{4}-\d{2}-\d{2})\s*$/u;
 const quantityIntentHint=/(?:^|[\s、,])(?:数量|個数)\s*[:：]?/iu;
+const contextualCountIntent=/(?:以下|下記|上記|これ|この|各|全部|全て|すべて|買|購入|お願い|欲)/u;
+const contextualCountPattern=/(\d+)\s*(?:つ|個|本|袋|箱|枚|セット|パック)(?:ずつ)?(?=$|[\s、。,.]|(?:買|購入|お願い|欲))/u;
 const multiplyQuantityHint=/(?:^|\s)[×xX]\s*\d+(?:\.\d+)?(?:\s|$)/u;
 const trailingMultiplierQuantity=/\s+×\s*(\d+(?:\.\d+)?)\s*$/u;
 const unspacedTrailingMultiplierQuantity=/×\s*(\d+(?:\.\d+)?)\s*$/u;
@@ -89,11 +91,26 @@ function explicitMultiplierQuantity(block:RoughBlock):{quantity:string;start:num
   return quantity?{quantity,start:match.index}:null;
 }
 
+function contextualCountQuantity(block:RoughBlock):string|null{
+  for(const line of block.lines){
+    const normalized=line.normalize('NFKC');
+    if(!contextualCountIntent.test(normalized))continue;
+    const match=normalized.match(contextualCountPattern);
+    if(!match?.[1])continue;
+    const amount=Number(match[1]);
+    if(!Number.isInteger(amount)||amount<=0)return null;
+    return clean(match[1],40)||null;
+  }
+  return null;
+}
+
 function explicitQuantity(block:RoughBlock):string|null{
   for(const line of block.lines){
     const prefixed=line.match(/^(?:数量|個数)\s*[:：]?\s*([^\s]+(?:\s*[^\s]+)?)/u);
     if(prefixed?.[1])return clean(prefixed[1],40)||null;
   }
+  const contextual=contextualCountQuantity(block);
+  if(contextual)return contextual;
   const multiplier=explicitMultiplierQuantity(block);
   if(multiplier)return multiplier.quantity;
   const inline=block.titleSeed.match(/(?:^|\s)(\d+(?:\.\d+)?\s*(?:個|本|袋|箱|枚|セット|パック|kg|g|ml|mL|L))(?:\s|$)/u);
@@ -190,8 +207,10 @@ function acceptedProductLinkTitles(items:RoughItem[],fields:RoughField[]):RoughI
   const shoppingBlocks=fields.filter(field=>field.destination==='shopping').flatMap(field=>field.blocks);
   return items.map(item=>{
     if(item.destination!=='shopping')return item;
-    const block=shoppingBlocks.find(candidate=>candidate.originalText===item.originalText&&candidate.productLinkPreview?.title);
-    return block?{...item,title:resolveProductLinkModelTitle(item.title,block)}:item;
+    const block=shoppingBlocks.find(candidate=>candidate.originalText===item.originalText);
+    if(!block)return item;
+    const title=block.productLinkPreview?.title?resolveProductLinkModelTitle(item.title,block):item.title;
+    return {...item,title,quantity:item.quantity??explicitQuantity(block)};
   });
 }
 
