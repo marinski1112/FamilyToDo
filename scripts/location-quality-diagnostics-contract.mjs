@@ -19,7 +19,11 @@ assert.match(api,/receivedDelaySeconds/);
 assert.match(api,/intervalSecondsToOlder/);
 assert.match(api,/accuracyTrendVsOlder/);
 assert.match(api,/isCurrentLatest/);
-assert.match(api,/latestSelection:'NEWEST_SENSOR_TIME',qualityAware:false/,'diagnostics must report the actual current latest policy');
+assert.match(api,/latestSelection:'QUALITY_GUARDED_NEWEST_SENSOR_TIME'/,'diagnostics must report the actual current latest policy');
+assert.match(api,/qualityAware:true/,'diagnostics must report quality-aware latest selection');
+assert.match(api,/poorThresholdMeters:100/,'diagnostics must expose the bounded coarse-fix threshold');
+assert.match(api,/goodLatestProtectionSeconds:1800/,'diagnostics must expose the good-latest protection window');
+assert.match(api,/historyKeepsPoorPoints:true/,'diagnostics must make clear that poor fixes remain in history');
 assert.match(api,/'cache-control':'no-store'/);
 
 const sql=api.match(/const result=await ctx\.env\.DB\.prepare\(`([\s\S]*?)`\)/)?.[1]||'';

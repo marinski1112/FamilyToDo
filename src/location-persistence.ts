@@ -3,6 +3,8 @@ import type { AuthenticatedLocationDevice } from './location-device-auth';
 import { isValidLatitude, isValidLongitude } from './location-domain';
 
 const SHA256_HEX_LENGTH=64;
+const GOOD_LATEST_ACCURACY_METERS=100;
+const GOOD_LATEST_PROTECTION_SECONDS=30*60;
 
 const bytesToHex=(bytes:Uint8Array):string=>
   Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -58,6 +60,12 @@ export async function buildLocationPointDedupeKey(point:NormalizedLocationPoint)
  * current device/member sharing state in D1, so revoke/disable/share-off fails
  * closed even if it changes after credential verification. History is replay-
  * safe and latest only moves forward by sensor time (then receipt time).
+ *
+ * Every authorized point remains in history. Latest additionally resists a
+ * transient coarse/unknown fix while the current latest has known <=100m
+ * accuracy and is no more than 30 minutes older. Once that protected point is
+ * older than the existing Location AGING window, a newer coarse fix may advance
+ * latest so the map cannot remain frozen indefinitely.
  *
  * The boolean return means the device/member authorization was still valid at
  * mutation time. A duplicate or older point may therefore return true without
@@ -167,6 +175,13 @@ export async function persistAuthenticatedLocationPoint(
         excluded.recorded_at>member_location_latest.recorded_at OR
         (excluded.recorded_at=member_location_latest.recorded_at
           AND excluded.received_at>member_location_latest.received_at)
+      )
+      AND (
+        member_location_latest.accuracy_meters IS NULL OR
+        member_location_latest.accuracy_meters>${GOOD_LATEST_ACCURACY_METERS} OR
+        (excluded.accuracy_meters IS NOT NULL
+          AND excluded.accuracy_meters<=${GOOD_LATEST_ACCURACY_METERS}) OR
+        unixepoch(excluded.recorded_at)-unixepoch(member_location_latest.recorded_at)>${GOOD_LATEST_PROTECTION_SECONDS}
       )
   `).bind(
     point.latitude,point.longitude,...telemetry,point.trigger,
