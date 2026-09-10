@@ -10,7 +10,7 @@
   };
   const load=async()=>{
     const d=await request();enabled.checked=d.enabled;
-    status.textContent=d.pushReady?(d.enabled?'到着通知はONです。':'到着通知はOFFです。'):'先に「Push通知の設定」で、この端末の通知を有効にしてください。';
+    status.textContent=d.pushReady?(d.enabled?'接近・出発通知はONです。':'接近・出発通知はOFFです。'):'先に「Push通知の設定」で、この端末の通知を有効にしてください。';
     list.replaceChildren();
     for(const place of d.places){
       const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;margin:8px 0;overflow-wrap:anywhere';
@@ -18,7 +18,7 @@
       if(payload.isAdmin&&place.key.startsWith('N:')){const button=document.createElement('button');button.type='button';button.className='btn gray small';button.textContent='削除';button.setAttribute('aria-label',place.label+'を削除');button.addEventListener('click',()=>{if(confirm(place.label+'を削除しますか？'))void mutate({action:'delete',key:place.key});});row.append(button);}
       list.append(row);
     }
-    recent.replaceChildren();for(const item of d.recent){const row=document.createElement('p');row.className='small';row.textContent=item.created_at+' UTC · '+({SENT:'送信受付済み',FAILED:'送信失敗',ATTEMPTED:'送信結果を確認できません'}[item.status]||'不明');recent.append(row);}
+    recent.replaceChildren();for(const item of d.recent){const row=document.createElement('p');row.className='small';const event=item.event_type==='APPROACH'?'接近':item.event_type==='LEAVE'?'出発':'旧到着';row.textContent=item.created_at+' UTC · '+event+' · '+({SENT:'送信受付済み',FAILED:'送信失敗',ATTEMPTED:'送信結果を確認できません'}[item.status]||'不明');recent.append(row);}
     if(!d.recent.length)recent.textContent='まだ通知履歴はありません。';
   };
   const mutate=async body=>{
