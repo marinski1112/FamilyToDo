@@ -85,7 +85,7 @@ async function sceneCatalog(env:Env,familyId:unknown,includeCustom=true){
   const scenes:any[]=[],single=subjects.results.filter(s=>String(s.subject_kind)!=='PET').length===1;
   for(const s of subjects.results){
     if(String(s.subject_kind)==='PET'){let quick:string[]=[];try{const p=JSON.parse(String(s.overview_quick_types_json||'[]'));if(Array.isArray(p))quick=p.map(String).map(x=>x.toUpperCase());}catch{}const enabled=enabledTypes(s),labels:Record<string,string>={MEAL:'ごはん',BATH:'お風呂',MEDICINE:'薬',WATER:'水'};for(const type of ['MEAL','BATH','MEDICINE','WATER'])if(enabled.includes(type)&&quick.includes(type))scenes.push({...scene(`ft:pet:${type.toLowerCase()}:${s.id}`,`${s.name}${labels[type]}記録`,[`${s.name}の${labels[type]}を記録`]),category:'ペット',operation:`PET_${type}`});continue;}
-    const prefix=single?'':String(s.name),possessive=single?'':`${s.name}の`,types=enabledTypes(s);
+    const prefix=single?'':String(s.name),possessive=single?'':`${s.name}の`,types=String(s.subject_kind)==='BABY'?['DIAPER','SLEEP']:['TOILET','SLEEP'];
     if(types.includes('SLEEP'))scenes.push({...scene(`ft:sleep:start:${s.id}`,`${prefix}寝た`,[`${possessive}睡眠開始`,`${possessive}寝かしつけ完了`]),category:'睡眠',operation:'SLEEP_START'},{...scene(`ft:sleep:stop:${s.id}`,`${prefix}起きた`,[`${possessive}起床記録`,`${possessive}睡眠終了`]),category:'睡眠',operation:'SLEEP_STOP'});
     if(journalReady){
       const journalMilestones=[
