@@ -10,13 +10,13 @@
   const rows=document.getElementById('googleCalendarInboundRows');
   if(!(loadButton instanceof HTMLButtonElement)||!(previewButton instanceof HTMLButtonElement)||!(calendarSelect instanceof HTMLSelectElement)||!(fromInput instanceof HTMLInputElement)||!(toInput instanceof HTMLInputElement)||!status||!rows)return;
 
-  const csrfToken=typeof csrf==='string'?csrf:'';
+  const csrfToken=()=>typeof csrf==='string'?csrf:'';
   const classificationLabel={
     NEW_CANDIDATE:'新規候補',ALREADY_IMPORTED:'取り込み済み',ALREADY_LINKED_OUTBOUND:'FamilyToDo同期済み',ICS_ALREADY_IMPORTED:'ICS取り込み済み',AMBIGUOUS_EXISTING_LOCAL:'既存予定と要確認',APP_OWNED_MARKER:'FamilyToDo生成予定',RECURRING_UNSUPPORTED:'定期予定（未対応）',INVALID_EVENT_ID:'無効な予定ID',INVALID:'無効な予定',
   };
   const blockedLabel={APP_OWNED_CALENDAR_BLOCKED:'FamilyToDo同期用',CHILD_JOURNAL_CALENDAR_BLOCKED:'成長日記'};
   const post=async(url,body)=>{
-    const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:csrfToken,...body})});
+    const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:csrfToken(),...body})});
     const data=await response.json().catch(()=>({ok:false,error:'応答を解析できません。'}));
     if(!response.ok||data.ok===false)throw new Error(String(data.error||`HTTP ${response.status}`));
     return data;
