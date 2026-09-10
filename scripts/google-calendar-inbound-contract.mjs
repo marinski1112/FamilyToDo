@@ -9,6 +9,8 @@ const index=fs.readFileSync('src/index.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const calendarImport=fs.readFileSync('src/calendar-ics-import.ts','utf8');
+const inboundSafety=fs.readFileSync('src/google-calendar-inbound-safety.ts','utf8');
+const inboundIdentityMigration=fs.readFileSync('migrations/0072_google_calendar_inbound_identity.sql','utf8');
 
 for(const marker of [
   'calendar.app.created',
@@ -36,11 +38,8 @@ assert.ok(oneWay.includes("UPDATE external_calendar_watch_channels SET last_noti
 assert.ok(index.includes('processCalendarOutbox(env)'),'scheduled outbound Calendar projection must remain present');
 assert.ok(index.includes('renewCalendarWatches(env)'),'calendar watch renewal must remain present');
 
-// The user now explicitly expects Google Calendar -> FamilyToDo import. This contract must
-// protect the existing app-owned outbound lane without categorically forbidding a separate,
-// explicit, preview-first inbound implementation. The safe local import primitives must stay
-// available so a future Google adapter can normalize into them rather than destructively
-// reconciling the app-owned projection state.
+// Existing ICS import remains an independent, preview-first path. Its UID ledger is useful
+// secondary evidence, but it is not a substitute for Google calendarId + event.id identity.
 for(const marker of [
   'calendarImportPreview',
   'calendarImportPrepare',
@@ -55,4 +54,48 @@ assert.ok(apiRoutes.includes("'/api/calendar-import/apply'"),'calendar import ap
 assert.ok(calendarImport.includes("String(b.csrf||'')!==String(ctx.session.csrfToken||'')"),'calendar import must retain CSRF protection');
 assert.ok(calendarImport.includes("['OWNER','ADMIN']"),'calendar import must remain OWNER/ADMIN scoped');
 
-console.log('google-calendar-inbound-contract: app-owned outbound lane is protected; independent preview-first inbound implementation is no longer categorically blocked');
+// Before any Google -> FamilyToDo apply path exists, external identity must be independently
+// idempotent and must survive account/reconnect details. account_id remains provenance, while the
+// family + calendarId + event.id uniqueness prevents duplicate/triplicate local links.
+for(const marker of [
+  'google_calendar_inbound_links',
+  'account_id INTEGER NOT NULL REFERENCES external_calendar_accounts(id)',
+  'calendar_id TEXT NOT NULL',
+  'external_event_id TEXT NOT NULL',
+  'ical_uid TEXT',
+  'UNIQUE(family_id, calendar_id, external_event_id)',
+  'idx_google_calendar_inbound_task',
+  'WHERE task_id IS NOT NULL',
+]) assert.ok(inboundIdentityMigration.includes(marker),`Google inbound identity guard missing: ${marker}`);
+assert.ok(!inboundIdentityMigration.includes('UNIQUE(family_id, ical_uid)'), 'iCalUID must not be the Google primary unique identity because recurring occurrences can share it');
+
+for(const marker of [
+  'GOOGLE_CALENDAR_INBOUND_MAX_EVENTS=250',
+  'APP_OWNED_CALENDAR_BLOCKED',
+  'CHILD_JOURNAL_CALENDAR_BLOCKED',
+  'INVALID_EVENT_ID',
+  'RECURRING_UNSUPPORTED',
+  'APP_OWNED_MARKER',
+  'ALREADY_IMPORTED',
+  'ALREADY_LINKED_OUTBOUND',
+  'ICS_ALREADY_IMPORTED',
+  'AMBIGUOUS_EXISTING_LOCAL',
+  'NEW_CANDIDATE',
+  'familyTodoTaskId',
+  'localScanTruncated',
+]) assert.ok(inboundSafety.includes(marker),`Google inbound fail-closed classifier missing: ${marker}`);
+
+// This foundation is deliberately incapable of changing FamilyToDo data. Enabling a live
+// read-only preview and later apply remain separate reviewed steps.
+for(const forbidden of [
+  'INSERT INTO tasks',
+  'UPDATE tasks',
+  'DELETE FROM tasks',
+  'INSERT INTO google_calendar_inbound_links',
+  'UPDATE google_calendar_inbound_links',
+  'DELETE FROM google_calendar_inbound_links',
+  'fetch(',
+]) assert.ok(!inboundSafety.includes(forbidden),`inbound safety foundation must remain pure/read-only: ${forbidden}`);
+assert.ok(!apiRoutes.includes("'/api/google-calendar/inbound-apply'"),'Google inbound apply route must not exist in the dedupe-foundation stage');
+
+console.log('google-calendar-inbound-contract: outbound lane stays isolated; Google inbound identity is DB-idempotent and fail-closed before any live apply path exists');
