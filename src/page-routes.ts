@@ -16,10 +16,15 @@ import { logsPage } from './activity-log-page';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
 import { json } from './response';
+import { settingsPwaBranding } from './settings-pwa-branding-page';
+import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
 
 function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 
 export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{
+  if(url.pathname==='/manifest.webmanifest') return await familyPwaManifest(request,context);
+  const pwaIconMatch=url.pathname.match(/^\/app-icon-(180|192|512)\.png$/);
+  if(pwaIconMatch) return await familyPwaIcon(request,context,Number(pwaIconMatch[1]) as 180|192|512);
   if(url.pathname==='/login.php'||url.pathname==='/login'||url.pathname==='/login_error.php') return await loginPage(env,url.searchParams.get('next')||'/app/index.php');
   if(url.pathname==='/app/create.php'||url.pathname==='/app/create') return await createFamilyPage(context);
   if(url.pathname==='/app/join.php'||url.pathname==='/app/join') return await (url.searchParams.get('token') ? invitePage(context,url.searchParams.get('token')||'') : createFamilyPage(context));
@@ -38,6 +43,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/family_log_import.php') return await familyLogPiyologImportPage(context);
   if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
   if(url.pathname==='/app/settings.php') return await settings(request,context);
+  if(url.pathname==='/app/settings_pwa_branding.php') return await settingsPwaBranding(request,context);
   if(url.pathname==='/app/settings_location.php') return await settingsLocation(request,context);
   if(url.pathname==='/app/settings_google_tasks.php') return await googleTasksSettings(request,context);
   if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettingsWithExecuteDiagnostics(request,context);
