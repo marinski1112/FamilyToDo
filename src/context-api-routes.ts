@@ -19,6 +19,7 @@ import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, f
 import { googleTasksAction } from './google-tasks';
 import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
 import { calendarSyncOutboundOnly } from './google-calendar-one-way';
+import { googleCalendarInboundCalendars, googleCalendarInboundPreview } from './google-calendar-inbound-preview';
 import { familyLogImportMediaBoundary as familyLogImportApi } from './family-log-import-media-boundary';
 import { familyLogImportMediaTargetsApi } from './family-log-import-media-targets';
 import { familyLogDuplicatePreviewApi } from './family-log-duplicate-preview';
@@ -88,6 +89,8 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/google-calendar/backfill') return await calendarBackfill(request,context);
   if(url.pathname==='/api/google-calendar/disconnect') return await calendarDisconnect(request,context);
   if(url.pathname==='/api/google-calendar/retry-failed') return await calendarRetryFailed(request,context);
+  if(url.pathname==='/api/google-calendar/inbound-calendars') return await googleCalendarInboundCalendars(request,context);
+  if(url.pathname==='/api/google-calendar/inbound-preview') return await googleCalendarInboundPreview(request,context);
   if(url.pathname==='/api/family-log-import') return await familyLogImportApi(request,context);
   if(url.pathname==='/api/calendar-import/preview') return await calendarImportPreview(request,context);
   if(url.pathname==='/api/calendar-import/normalization-preview') return await calendarImportNormalizationPreview(request,context);
