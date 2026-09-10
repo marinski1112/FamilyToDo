@@ -1,4 +1,5 @@
 import {cleanupLocationArrivals} from './location-arrival-push';
+import {archiveAndCleanupLocationHistory} from './location-history-archive';
 import { json, redirect } from './response';
 import { cleanupFamilyLogDiagnostics } from './family-log-diagnostics';
 import { AuthRequired, BadRequest, Forbidden } from './errors';
@@ -67,6 +68,7 @@ export default {
       ctx.waitUntil(cleanupNotificationLifecycle(env));
       ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
       ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
+      ctx.waitUntil(archiveAndCleanupLocationHistory(env).catch(()=>{}));
       return;
     }
     if(controller.cron==='29 18 * * *'){
