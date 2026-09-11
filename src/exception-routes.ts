@@ -14,7 +14,8 @@ import { reorderApi } from './reorder-api';
 import { webhook } from './line-webhook';
 import { taskDelete } from './task-delete';
 import { convertOccurrence } from './recurring-occurrence';
-import { taskNew, itemNew } from './new-entry-pages';
+import { itemNew } from './new-entry-pages';
+import { taskEntryPage } from './task-entry-page';
 import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
 
 function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
@@ -54,7 +55,15 @@ export async function dispatchContextFallbackRoute(request:Request,context:any,e
   if(url.pathname==='/logout.php'||url.pathname==='/logout') return await logout();
   if(url.pathname==='/task/delete.php') return await taskDelete(request,context);
   if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);
-  if(url.pathname==='/task/new.php') return await taskNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),url.searchParams.get('return')||'');
+  if(url.pathname==='/task/new.php') {
+    const initialType=url.searchParams.get('event')==='1'?'event':'task';
+    return await taskEntryPage(
+      context,
+      url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),
+      url.searchParams.get('return')||'',
+      initialType,
+    );
+  }
   if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));
   return null;
 }

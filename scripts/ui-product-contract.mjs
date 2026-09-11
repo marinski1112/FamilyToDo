@@ -10,7 +10,8 @@ const familyCore=fs.readFileSync('public/assets/family-log-core.js','utf8');
 const familyUi=fs.readFileSync('public/assets/family-log-management-ui.js','utf8');
 const messageNew=fs.readFileSync('public/assets/message-new.js','utf8');
 const messages=fs.readFileSync('public/assets/messages.js','utf8');
-const taskNew=fs.readFileSync('public/assets/task-new.js','utf8');
+const taskEntryPage=fs.readFileSync('src/task-entry-page.ts','utf8');
+const taskEntryManual=fs.readFileSync('public/assets/task-entry-manual.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskEditServer=fs.readFileSync('src/task-edit-page.ts','utf8');
 const app=retainedAppContractSource();
@@ -39,7 +40,9 @@ assert.match(pwa,/grid-template-columns:18px minmax\(0,1fr\)!important/,'compact
 assert.match(pwa,/\.message-actions \.convert-shopping\{color:#fff!important\}/,'shopping conversion action must retain readable contrast');
 
 // PRIVATE task/event creation and editing must preserve the same visibility controls.
-assert.match(taskNew,/if\(isEvent\?\.checked\)\{noDate\.checked=false;noDate\.disabled=true;if\(isPrivate\)isPrivate\.disabled=false/,'new EVENT flow must allow PRIVATE visibility');
+assert.match(taskEntryPage,/id="isPrivate" type="checkbox" name="is_private"/,'unified Task/Event create page must expose PRIVATE visibility');
+assert.match(taskEntryManual,/is_private:Boolean\(isPrivate\?\.checked\)/,'unified create payload must carry PRIVATE visibility for Task and Event');
+assert.doesNotMatch(taskEntryManual,/isPrivate\.disabled=true|isPrivate\.checked=false/,'EVENT create flow must never disable or reset PRIVATE visibility');
 assert.match(taskEdit,/if\(editIsEvent\?\.checked\)\{editNoDate\.checked=false;editNoDate\.disabled=true;\}else\{editNoDate\.disabled=false;\}if\(editIsPrivate\)editIsPrivate\.disabled=false/,'editing an EVENT must keep PRIVATE visibility available');
 assert.doesNotMatch(taskEdit,/editIsPrivate\.checked=false/,'editing an EVENT must never silently reset PRIVATE to FAMILY');
 assert.match(taskEdit,/is_private:editIsPrivate\?\.checked\|\|false/,'edit submit payload must carry PRIVATE visibility explicitly');
@@ -50,13 +53,14 @@ assert.ok(taskEditServer.includes('const assignees=makePrivate?[m.id]'),'PRIVATE
 assert.ok(taskEditServer.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
 
 // Task creation transport failure handling
-assert.match(taskNew,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('登録に失敗しました'\)/,'task creation must treat non-JSON, HTTP, and API failures as fixed-detail failures');
-assert.match(taskNew,/catch\(_err\)\{alert\('登録に失敗しました'\)/,'task creation network failures must reach the privacy-safe user-visible error path');
-assert.doesNotMatch(taskNew,/d\?\.error|err\.message|console\.(?:log|warn|error)\(/,'task creation failures must not surface or log arbitrary server/exception detail');
-assert.match(taskNew,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
-assert.match(taskNew,/document\.referrer/,'Calendar task creation must recover the originating Calendar navigation state');
-assert.match(taskNew,/\['all','family','assigned','private'\]\.includes\(v\)/,'Calendar return view must be constrained to the supported filter allowlist');
-assert.match(taskNew,/\/app\/calendar\.php\?view='\+encodeURIComponent\(calendarReturnView\)\+'&month='/,'successful Calendar task creation must retain the active filter when returning');
+assert.match(taskEntryManual,/await response\.json\(\)\.catch\(\(\)=>null\)/,'task creation must tolerate non-JSON error responses');
+assert.match(taskEntryManual,/if\(!response\.ok\|\|!data\?\.ok\)throw new Error\('登録に失敗しました。'\)/,'task creation must treat HTTP and API failures as fixed-detail failures');
+assert.match(taskEntryManual,/catch\(_error\)\{alert\('登録に失敗しました。'\)/,'task creation network failures must reach the privacy-safe user-visible error path');
+assert.doesNotMatch(taskEntryManual,/data\?\.error|_error\.message|error\.message|console\.(?:log|warn|error)\(/,'task creation failures must not surface or log arbitrary server/exception detail');
+assert.match(taskEntryManual,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
+assert.match(taskEntryManual,/document\.referrer/,'Calendar task creation must recover the originating Calendar navigation state');
+assert.match(taskEntryManual,/\['all','family','assigned','private'\]\.includes\(v\)/,'Calendar return view must be constrained to the supported filter allowlist');
+assert.match(taskEntryManual,/\/app\/calendar\.php\?view='\+encodeURIComponent\(calendarReturnView\)\+'&month='/,'successful Calendar task creation must retain the active filter when returning');
 assert.doesNotMatch(sw,/const STATIC_CACHE='familytodo-static-message-delete-error-handling'/,'task creation asset changes must remain past the pre-fix static cache namespace so first-visit delivery is preserved');
 
 // Message composition failure handling

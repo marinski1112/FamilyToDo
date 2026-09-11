@@ -15,7 +15,7 @@ const routeLines=[
   "if(url.pathname==='/api/toggle') return await toggle(request,context);",
   "if(url.pathname==='/api/task') return await taskApi(request,context);",
   "if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);",
-  "if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(request,context);",
+  "if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request),context);",
   "if(url.pathname==='/api/item') return await itemApi(request,context);",
   "if(url.pathname==='/api/messages') return await messages(request,context);",
   "if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);",
@@ -70,6 +70,7 @@ for(const route of routeLines){
   if(!apiRoutes.includes(route)) throw new Error(`context API dispatcher route missing: ${route}`);
   if(index.split('\n').some(line=>line.trim()===route)) throw new Error(`context API route must not remain in index.ts: ${route}`);
 }
+if(!apiRoutes.includes("import { normalizeEventRoughInputRequest } from './task-rough-input-event-normalize';")) throw new Error('rough-input EVENT request normalizer import missing');
 for(const required of [
   "if(url.pathname==='/api/google-calendar/watch') return await calendarWatchNotification(request,env,ctx);",
   "if(url.pathname==='/api/google-home/fulfillment') return await googleFulfillmentWithExecuteDiagnostics(request,env);",
