@@ -31,6 +31,8 @@ A Wave/history file is removable only after checking, as applicable:
 
 The fact that a file is old, contains `wave`, or is not found by GitHub code search is insufficient evidence. GitHub search can be incomplete.
 
+A small re-export module is not automatically dead. Barrel modules can be intentional route ownership boundaries and must be checked from current importers before consolidation or removal.
+
 ## Consolidation strategy
 
 Use small, reviewable PRs:
@@ -47,6 +49,18 @@ Do not combine mass deletion with functional bug fixes.
 
 `src/exception-routes.ts` contains live exceptional/compatibility paths, including recurring authentication handling, OAuth/LIFF prelude handling, check/reorder aliases, webhook aliases, task delete/occurrence conversion, and new-entry pages. It is therefore ACTIVE/COMPAT at module level; individual routes require separate classification.
 
+## Current verified active barrel modules
+
+At baseline `aa8a49bbec8505d358525f40d335e76f9ecce395`, `src/page-routes.ts` directly imports the following re-export/barrel modules:
+
+- `src/auth-page-handlers.ts`
+- `src/task-page-handlers.ts`
+- `src/message-page-handlers.ts`
+- `src/shopping-page-handlers.ts`
+- `src/settings-page-handlers.ts`
+
+They are **ACTIVE** at module level. Their wrapper-only shape is not unused-code evidence. Any future consolidation must be treated as an intentional route/module-ownership refactor and revalidated against current source.
+
 ## Inventory table
 
 Populate this table from current-main evidence during cleanup PRs. Keep UNKNOWN entries rather than guessing.
@@ -58,9 +72,16 @@ Populate this table from current-main evidence during cleanup PRs. Keep UNKNOWN 
 | `src/context-api-routes.ts` | ACTIVE | authenticated API dispatcher | — | keep |
 | `src/page-routes.ts` | ACTIVE | page dispatcher | — | keep |
 | `src/exception-routes.ts` | ACTIVE/COMPAT | early/prelude/fallback live routes | route-specific | audit per route |
+| `src/auth-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying auth/onboarding/home page modules | keep; do not classify as dead wrapper |
+| `src/task-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying task/item page modules | keep; do not classify as dead wrapper |
+| `src/message-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying message page modules | keep; do not classify as dead wrapper |
+| `src/shopping-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying shopping page modules | keep; do not classify as dead wrapper |
+| `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying settings page modules | keep; do not classify as dead wrapper |
 | top-level `*wave*` / Wave-era artifacts | UNKNOWN | not yet reachability-audited | TBD | do not delete yet |
 | former duplicate local `asDateOffset()` helpers | canonicalized duplicate | identical ACTIVE callers and helper semantics verified before centralization | `src/timezone.ts#asDateOffset()` | keep canonical helper; no local copies |
 
 ## Git-history principle
 
 Once a file is proven HISTORICAL or DEAD and its current behavior is represented by canonical source/contracts, repository history is the archive. Keeping every historical implementation in the working tree increases search noise and should not be the default.
+
+The execution guardrails for any autonomous cleanup are defined in `CLEANUP_AUTOMATION_RUNBOOK.md`.
