@@ -14,13 +14,11 @@ import { googleHomeSettingsWithExecuteDiagnostics } from './google-home-execute-
 import { integrationsSettings } from './google-calendar';
 import { calendarImportPage } from './calendar-ics-import';
 import { logsPage } from './activity-log-page';
-import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
+import { asDateOffset, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
 import { json } from './response';
 import { settingsPwaBranding } from './settings-pwa-branding-page';
 import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
-
-function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 
 export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/manifest.webmanifest') return await familyPwaManifest(request,context);

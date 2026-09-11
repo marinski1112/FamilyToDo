@@ -11,6 +11,7 @@ export function formatFamilyDateTime(date:Date,timeZone:string){
 }
 export const familyNow=(timeZone:string)=>formatFamilyDateTime(new Date(),timeZone);
 export const familyDate=(timeZone:string)=>familyNow(timeZone).slice(0,10);
+export function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 /** Infrastructure timestamps are UTC-naive SQL values, not family wall-clock values. */
 export const utcNow=(date=new Date())=>date.toISOString().slice(0,19).replace('T',' ');
 
