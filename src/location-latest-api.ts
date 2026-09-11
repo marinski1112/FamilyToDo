@@ -64,11 +64,9 @@ function homePoint(row:HomeRow|null):PresencePoint|null{
   };
 }
 
-function homePresence(point:PresencePoint|null,state:LocationFreshness,home:PresencePoint|null):HomePresenceProjection{
+function classifyHomePresenceAtPoint(point:PresencePoint|null,home:PresencePoint|null):HomePresenceProjection{
   if(!home)return {status:'NO_HOME',reason:'HOME_NOT_CONFIGURED'};
-  if(state==='SHARING_OFF')return {status:'UNKNOWN',reason:'SHARING_OFF'};
-  if(!point||state==='NO_LOCATION')return {status:'UNKNOWN',reason:'NO_LOCATION'};
-  if(state==='STALE')return {status:'UNKNOWN',reason:'STALE_LOCATION'};
+  if(!point)return {status:'UNKNOWN',reason:'NO_LOCATION'};
   const pointAccuracy=point.accuracyMeters;
   const homeAccuracy=home.accuracyMeters;
   if(pointAccuracy===undefined||!Number.isFinite(pointAccuracy))return {status:'UNKNOWN',reason:'LOCATION_ACCURACY_MISSING'};
@@ -81,6 +79,14 @@ function homePresence(point:PresencePoint|null,state:LocationFreshness,home:Pres
   return {status:'UNKNOWN',reason:'ACCURACY_OVERLAP'};
 }
 
+function homePresence(point:PresencePoint|null,state:LocationFreshness,home:PresencePoint|null):HomePresenceProjection{
+  if(!home)return {status:'NO_HOME',reason:'HOME_NOT_CONFIGURED'};
+  if(state==='SHARING_OFF')return {status:'UNKNOWN',reason:'SHARING_OFF'};
+  if(!point||state==='NO_LOCATION')return {status:'UNKNOWN',reason:'NO_LOCATION'};
+  if(state==='STALE')return {status:'UNKNOWN',reason:'STALE_LOCATION'};
+  return classifyHomePresenceAtPoint(point,home);
+}
+
 /**
  * Browser-safe authenticated Location projection for the family map surface.
  *
@@ -90,6 +96,8 @@ function homePresence(point:PresencePoint|null,state:LocationFreshness,home:Pres
  * closed. Device IDs, provider payloads, credentials and other internal sensor
  * metadata never enter the response. HOME presence is a deterministic derived
  * projection only: stale/uncertain points never assert that someone is home.
+ * For stale points, a separate last-known HOME/AWAY projection may be returned
+ * when the stored point and accuracy are decisive; it never means current presence.
  */
 export async function locationLatestApi(request:Request,ctx:AppContext):Promise<Response>{
   const requester=ctx.member;
@@ -148,6 +156,10 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       ?straightLineDistanceMeters(requesterPoint,point)
       :null;
     const presence=homePresence(point,safeFreshness.state,home);
+    const stalePointPresence=safeFreshness.state==='STALE'?classifyHomePresenceAtPoint(point,home):null;
+    const lastKnownHomePresence=stalePointPresence&&(stalePointPresence.status==='HOME'||stalePointPresence.status==='AWAY')
+      ?stalePointPresence.status
+      :null;
     members.push({
       memberId:subjectMemberId,
       isViewer:subjectMemberId===requesterMemberId,
@@ -158,6 +170,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       distanceMetersFromViewer,
       homePresence:presence.status,
       homePresenceReason:presence.reason,
+      lastKnownHomePresence,
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,
