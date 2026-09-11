@@ -1,5 +1,8 @@
 import type { AppContext } from './app-context';
 import { D1LocationQueryService } from './location-query-service';
+import { readKnownLocationPlaces } from './location-places-api';
+import type { LocationPoint } from './location-providers';
+import { locationDistance,placePresence,type KnownLocationPlace } from './location-stay-report';
 import { json } from './response';
 
 type FamilyMemberRow=Readonly<{
@@ -87,6 +90,18 @@ function homePresence(point:PresencePoint|null,state:LocationFreshness,home:Pres
   return classifyHomePresenceAtPoint(point,home);
 }
 
+function nearestNamedPlace(point:LocationPoint|null,places:readonly KnownLocationPlace[]):KnownLocationPlace|null{
+  if(!point)return null;
+  let selected:KnownLocationPlace|null=null;
+  let selectedDistance=Infinity;
+  for(const place of places){
+    if(!place.key.startsWith('N:')||placePresence(point,place)!=='IN')continue;
+    const distance=locationDistance(point,place);
+    if(Number.isFinite(distance)&&distance<selectedDistance){selected=place;selectedDistance=distance;}
+  }
+  return selected;
+}
+
 /**
  * Browser-safe authenticated Location projection for the family map surface.
  *
@@ -98,6 +113,8 @@ function homePresence(point:PresencePoint|null,state:LocationFreshness,home:Pres
  * projection only: stale/uncertain points never assert that someone is home.
  * For stale points, a separate last-known HOME/AWAY projection may be returned
  * when the stored point and accuracy are decisive; it never means current presence.
+ * Registered non-HOME place labels use the same accuracy-aware placePresence
+ * projection used by stay/arrival features and likewise never imply freshness.
  */
 export async function locationLatestApi(request:Request,ctx:AppContext):Promise<Response>{
   const requester=ctx.member;
@@ -130,6 +147,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     LIMIT 1
   `).bind(familyId).first<HomeRow>();
   const home=homePoint(homeRow);
+  const knownPlaces=await readKnownLocationPlaces(ctx.env.DB,familyId);
 
   const service=new D1LocationQueryService(ctx.env.DB);
   const nowMs=Date.now();
@@ -160,6 +178,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     const lastKnownHomePresence=stalePointPresence&&(stalePointPresence.status==='HOME'||stalePointPresence.status==='AWAY')
       ?stalePointPresence.status
       :null;
+    const registeredPlace=nearestNamedPlace(point,knownPlaces);
     members.push({
       memberId:subjectMemberId,
       isViewer:subjectMemberId===requesterMemberId,
@@ -171,6 +190,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       homePresence:presence.status,
       homePresenceReason:presence.reason,
       lastKnownHomePresence,
+      registeredPlaceLabel:registeredPlace?.label??null,
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,

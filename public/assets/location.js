@@ -24,6 +24,8 @@
   let historyGeneration=0;
   let currentSharedMembers=new Set();
   let refreshTimer=null;
+  const addressCache=new Map();
+  const addressPending=new Map();
   const clearHistory=()=>{historyGeneration++;historyLines.forEach(line=>line.setMap(null));historyLines=[];historyMemberId=0;};
 
   const stateText={
@@ -62,6 +64,22 @@
     }
     const reason=homePresenceReasonText[String(member?.homePresenceReason||'')]||'';
     return reason?`${base}（${reason}）`:base;
+  };
+  const rawRegisteredPlaceLabel=(member)=>typeof member?.registeredPlaceLabel==='string'?member.registeredPlaceLabel.trim():'';
+  const registeredPlaceLabel=(member)=>{
+    const label=rawRegisteredPlaceLabel(member);
+    if(!label)return '';
+    return member?.state==='STALE'?`最終確認：${label}`:`${label}に滞在中`;
+  };
+  const isHomeHeadline=(member)=>member?.homePresence==='HOME'||(member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME');
+  const memberLocationHeadline=(member,address='')=>{
+    const home=homePresenceLabel(member);
+    if(isHomeHeadline(member))return home;
+    const place=registeredPlaceLabel(member);
+    if(place)return place;
+    const cleanAddress=typeof address==='string'?address.trim():'';
+    if(cleanAddress)return member?.state==='STALE'?`最終確認：${cleanAddress}`:cleanAddress;
+    return home;
   };
 
   const ageText=(minutes)=>{
@@ -109,6 +127,45 @@
     const point=validPoint(latest);
     if(!point)return null;
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${point.lat},${point.lng}`)}`;
+  };
+
+  const addressCacheKey=(member)=>{
+    const point=validPoint(member?.latest);
+    if(!point)return '';
+    const latitude=Math.round(point.lat*2000)/2000;
+    const longitude=Math.round(point.lng*2000)/2000;
+    return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+  };
+  const needsAddress=(member)=>Boolean(
+    mapsKey&&member?.sharingEnabled&&validPoint(member?.latest)
+    &&member?.state!=='SHARING_OFF'&&member?.state!=='NO_LOCATION'
+    &&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)
+  );
+  const cachedAddress=(member)=>{
+    const key=addressCacheKey(member);
+    return key&&addressCache.has(key)?String(addressCache.get(key)||''):'';
+  };
+  const normalizeAddress=(value)=>String(value||'').trim().replace(/^(?:日本|Japan)(?:、|,)?\s*/i,'').replace(/\s+/g,' ').slice(0,120);
+
+  const memberLocationCopy=(member,address='')=>{
+    const pieces=[];
+    pieces.push(stateText[member.state]||'状態不明');
+    const presence=homePresenceLabel(member);
+    if(presence)pieces.push(presence);
+    const place=rawRegisteredPlaceLabel(member);
+    if(place&&!isHomeHeadline(member))pieces.push(`登録地点 ${place}`);
+    if(address&&needsAddress(member))pieces.push(`住所 ${address}`);
+    const age=ageText(Number(member.ageMinutes));
+    if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
+    const lastUpdated=lastUpdatedText(member.latest?.recordedAt);
+    if(lastUpdated&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(lastUpdated);
+    const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
+    if(distance)pieces.push(`直線 ${distance}`);
+    const accuracy=Number(member.latest?.accuracyMeters);
+    if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
+    const headline=memberLocationHeadline(member,address);
+    const summary=[headline,(member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')?age:''].filter(Boolean).join(' ・ ');
+    return {summary,details:pieces.join(' ・ ')};
   };
 
   const markerInitial=(name)=>Array.from(String(name||'家族').trim())[0]||'家';
@@ -214,6 +271,7 @@
     row.className='location-member-row';
     row.dataset.state=String(member.state||'NO_LOCATION');
     row.dataset.memberId=String(member.memberId||'');
+    row.dataset.recordedAt=String(member.latest?.recordedAt||'');
 
     const avatar=document.createElement('div');
     avatar.className='location-avatar-fallback';
@@ -228,20 +286,8 @@
     title.textContent=name;
     const meta=document.createElement('div');
     meta.className='meta location-member-meta';
-
-    const pieces=[];
-    pieces.push(stateText[member.state]||'状態不明');
-    const presence=homePresenceLabel(member);
-    if(presence)pieces.push(presence);
-    const age=ageText(Number(member.ageMinutes));
-    if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
-    const lastUpdated=lastUpdatedText(member.latest?.recordedAt);
-    if(lastUpdated&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(lastUpdated);
-    const distance=member.distanceMetersFromViewer==null?'':distanceText(Number(member.distanceMetersFromViewer));
-    if(distance)pieces.push(`直線 ${distance}`);
-    const accuracy=Number(member.latest?.accuracyMeters);
-    if(Number.isFinite(accuracy)&&accuracy>=0)pieces.push(`精度 ±${Math.round(accuracy)}m`);
-    meta.textContent=[presence,(member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')?age:''].filter(Boolean).join(' ・ ');
+    const copy=memberLocationCopy(member,cachedAddress(member));
+    meta.textContent=copy.summary;
     main.append(title,meta);
 
     const actions=document.createElement('div');
@@ -270,7 +316,7 @@
     }
     const details=document.createElement('details');details.className='location-member-details';
     const disclosure=document.createElement('summary');disclosure.textContent='経路・詳細';
-    const detailText=document.createElement('p');detailText.className='meta';detailText.textContent=pieces.join(' ・ ');
+    const detailText=document.createElement('p');detailText.className='meta';detailText.textContent=copy.details;
     details.append(disclosure,detailText,actions);main.append(details);
 
     const badge=document.createElement('span');
@@ -314,6 +360,57 @@
     });
     mapsPromise=mapsPromise.catch(error=>{mapsPromise=null;throw error;});
     return mapsPromise;
+  };
+
+  const reverseGeocodeMember=async(member)=>{
+    if(!needsAddress(member))return '';
+    const key=addressCacheKey(member);
+    if(!key)return '';
+    if(addressCache.has(key))return String(addressCache.get(key)||'');
+    if(addressPending.has(key))return addressPending.get(key);
+    const point=validPoint(member.latest);
+    const pending=(async()=>{
+      try{
+        const maps=await loadGoogleMaps();
+        let Geocoder=maps.Geocoder;
+        if(!Geocoder&&typeof maps.importLibrary==='function'){
+          const library=await maps.importLibrary('geocoding');
+          Geocoder=library?.Geocoder;
+        }
+        if(typeof Geocoder!=='function'){addressCache.set(key,'');return '';}
+        const response=await new Geocoder().geocode({location:point,language:'ja',region:'JP'});
+        const address=normalizeAddress(response?.results?.[0]?.formatted_address);
+        addressCache.set(key,address);
+        return address;
+      }catch{
+        addressCache.set(key,'');
+        return '';
+      }finally{
+        addressPending.delete(key);
+      }
+    })();
+    addressPending.set(key,pending);
+    return pending;
+  };
+
+  const applyMemberLocationCopy=(member,address)=>{
+    if(!listEl||!address)return;
+    const memberId=Number(member?.memberId);
+    if(!Number.isSafeInteger(memberId)||memberId<=0)return;
+    const row=listEl.querySelector(`.location-member-row[data-member-id="${memberId}"]`);
+    if(!row||row.dataset.recordedAt!==String(member.latest?.recordedAt||''))return;
+    const copy=memberLocationCopy(member,address);
+    const meta=row.querySelector('.location-member-meta');
+    const detail=row.querySelector('.location-member-details p');
+    if(meta)meta.textContent=copy.summary;
+    if(detail)detail.textContent=copy.details;
+  };
+
+  const enrichAddresses=async(members)=>{
+    await Promise.all(members.filter(needsAddress).map(async(member)=>{
+      const address=await reverseGeocodeMember(member);
+      if(address)applyMemberLocationCopy(member,address);
+    }));
   };
 
   const clearMarkers=()=>{
@@ -385,6 +482,7 @@
           const row=makeMemberRow(member||{}),old=previous.get(row.dataset.memberId);
           if(!old){listEl.append(row);return;}
           old.dataset.state=row.dataset.state;
+          old.dataset.recordedAt=row.dataset.recordedAt;
           for(const selector of ['.location-avatar-fallback','.location-member-name','.location-member-meta','.location-state-badge'])old.querySelector(selector).textContent=row.querySelector(selector).textContent;
           const before=old.querySelector('details'),after=row.querySelector('details');
           if(Boolean(before.querySelector('button'))!==Boolean(after.querySelector('button'))||Boolean(before.querySelector('a'))!==Boolean(after.querySelector('a'))){after.open=before.open;before.replaceWith(after);}
@@ -401,6 +499,7 @@
     if(historyMemberId&&!currentSharedMembers.has(historyMemberId))clearHistory();
     root.dispatchEvent(new CustomEvent('family-location-latest',{detail:{members:members.map(member=>({memberId:member.memberId,name:member.name,sharingEnabled:member.sharingEnabled,isViewer:member.isViewer}))}}));
     await renderMap(located,refocus);
+    if(map)void enrichAddresses(members);
     hasRendered=true;
     const atHome=members.filter((member)=>member?.homePresence==='HOME').length;
     const lastKnownHome=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME').length;
