@@ -23,6 +23,7 @@ When source and this index disagree, source wins and the index must be updated i
 - `ROUTE_MAP.md` — Worker dispatch order and canonical route-owner modules.
 - `CONFIG_FUNCTION_MAP.md` — canonical config/function ownership and duplicate/drift candidates.
 - `LEGACY_INVENTORY.md` — classification rules for active, compatibility, historical, dead, and unknown files.
+- `CLEANUP_AUTOMATION_RUNBOOK.md` — one-bounded-change cleanup execution contract, lease/CI/Workers flow, source-reconstruction prohibition, and autonomous-task prompt contract.
 
 ## Cleanup safety classes
 
@@ -37,6 +38,8 @@ When source and this index disagree, source wins and the index must be updated i
 
 A filename containing `wave` or an old number is not evidence that a file is dead.
 
+Small re-export/barrel modules are also not inherently dead. Current route imports must be checked before treating a wrapper as removable.
+
 ## Structural cleanup policy
 
 The cleanup sequence is intentionally conservative:
@@ -48,4 +51,4 @@ The cleanup sequence is intentionally conservative:
 5. run the full regression suite and Workers Build;
 6. update this index with each structural change.
 
-No automation schedule is defined by this documentation.
+The autonomous cleanup contract, if the user later chooses to schedule it, is defined in `CLEANUP_AUTOMATION_RUNBOOK.md`. The existence of that runbook does **not** itself enable or schedule automation.
