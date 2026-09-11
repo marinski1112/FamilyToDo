@@ -8,6 +8,7 @@ for(const marker of [
   "type HomePresenceReason='HOME_CONFIRMED'|'AWAY_CONFIRMED'|'HOME_NOT_CONFIGURED'|'SHARING_OFF'|'NO_LOCATION'|'STALE_LOCATION'|'LOCATION_ACCURACY_MISSING'|'HOME_ACCURACY_MISSING'|'INVALID_DISTANCE'|'ACCURACY_OVERLAP';",
   'const HOME_RADIUS_METERS=150;',
   "WHERE family_id=? AND kind='HOME'",
+  'function classifyHomePresenceAtPoint(point:PresencePoint|null,home:PresencePoint|null):HomePresenceProjection{',
   "if(state==='SHARING_OFF')return {status:'UNKNOWN',reason:'SHARING_OFF'};",
   "if(!point||state==='NO_LOCATION')return {status:'UNKNOWN',reason:'NO_LOCATION'};",
   "if(state==='STALE')return {status:'UNKNOWN',reason:'STALE_LOCATION'};",
@@ -17,6 +18,9 @@ for(const marker of [
   "if(distance+uncertainty<=HOME_RADIUS_METERS)return {status:'HOME',reason:'HOME_CONFIRMED'};",
   "if(distance-uncertainty>HOME_RADIUS_METERS)return {status:'AWAY',reason:'AWAY_CONFIRMED'};",
   "return {status:'UNKNOWN',reason:'ACCURACY_OVERLAP'};",
+  "const stalePointPresence=safeFreshness.state==='STALE'?classifyHomePresenceAtPoint(point,home):null;",
+  "stalePointPresence.status==='HOME'||stalePointPresence.status==='AWAY'",
+  'lastKnownHomePresence,',
   'homePresence:presence.status,',
   'homePresenceReason:presence.reason,',
   'homeConfigured:Boolean(home)',
@@ -41,10 +45,15 @@ for(const marker of [
   "LOCATION_ACCURACY_MISSING:'現在地の精度情報がありません'",
   "HOME_ACCURACY_MISSING:'自宅地点の精度情報がありません'",
   "ACCURACY_OVERLAP:'GPS誤差が自宅判定の境界と重なっています'",
+  "HOME:'最終確認：🏠 自宅内'",
+  "AWAY:'最終確認：外出中'",
+  "String(member?.lastKnownHomePresence||'')",
+  "member?.homePresenceReason==='STALE_LOCATION'",
   'const presence=homePresenceLabel(member);',
   "const atHome=members.filter((member)=>member?.homePresence==='HOME').length;",
-  "const presenceUnknown=members.filter((member)=>member?.homePresence==='UNKNOWN').length;",
+  "const lastKnownHome=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME').length;",
+  "const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;",
   '位置の古さとは別に、Google Maps表示には管理側のブラウザ用Mapsキー設定が必要です。',
 ])if(!client.includes(marker))throw new Error(`HOME presence client marker missing: ${marker}`);
 
-console.log('location-home-presence: HOME/AWAY stays deterministic and accuracy-aware; UNKNOWN now exposes a privacy-safe reason including stale stationary locations');
+console.log('location-home-presence: stale points never assert current presence; decisive stale points expose separate privacy-safe last-known HOME/AWAY context');
