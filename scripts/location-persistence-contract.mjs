@@ -1,4 +1,4 @@
-import './location-quality-aware-latest-runtime-contract.mjs';
+import './location-newest-latest-runtime-contract.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
@@ -15,12 +15,9 @@ assert.match(source,/ON CONFLICT\(device_id,dedupe_key\) DO NOTHING/,'history re
 assert.match(source,/INSERT INTO member_location_latest/,'normalized points must update latest state');
 assert.match(source,/excluded\.recorded_at>member_location_latest\.recorded_at/,'older points must not replace newer latest state');
 assert.match(source,/excluded\.received_at>member_location_latest\.received_at/,'same-time latest replacement must use receipt time ordering');
-assert.match(source,/const GOOD_LATEST_ACCURACY_METERS=100;/,'known-good latest threshold must stay explicit');
-assert.match(source,/const GOOD_LATEST_PROTECTION_SECONDS=30\*60;/,'quality protection must align with the existing 30-minute AGING window');
-assert.match(source,/member_location_latest\.accuracy_meters IS NULL/,'unknown existing quality must not freeze latest');
-assert.match(source,/member_location_latest\.accuracy_meters>\$\{GOOD_LATEST_ACCURACY_METERS\}/,'already-coarse latest must accept a newer fix');
-assert.match(source,/excluded\.accuracy_meters IS NOT NULL[\s\S]*excluded\.accuracy_meters<=\$\{GOOD_LATEST_ACCURACY_METERS\}/,'known-good incoming fixes must advance latest normally');
-assert.match(source,/unixepoch\(excluded\.recorded_at\)-unixepoch\(member_location_latest\.recorded_at\)>\$\{GOOD_LATEST_PROTECTION_SECONDS\}/,'coarse fixes must advance after the protected latest ages out');
+assert.doesNotMatch(source,/GOOD_LATEST_ACCURACY_METERS|GOOD_LATEST_PROTECTION_SECONDS/,'latest arbitration must not retain a quality-protection threshold');
+assert.doesNotMatch(source,/member_location_latest\.accuracy_meters/,'stored accuracy must not participate in latest arbitration');
+assert.doesNotMatch(source,/unixepoch\(excluded\.recorded_at\)-unixepoch\(member_location_latest\.recorded_at\)/,'latest arbitration must not pin an older fix behind an age window');
 assert.match(source,/d\.enabled=1 AND d\.sharing_enabled=1 AND d\.revoked_at IS NULL/,'every persistence path must retain fail-closed device-state guards');
 assert.match(source,/m\.id=d\.member_id AND m\.family_id=d\.family_id AND m\.active=1/,'history/latest writes must re-check active same-family member binding');
 assert.match(source,/EXISTS \([\s\S]*m\.id=location_devices\.member_id[\s\S]*m\.family_id=location_devices\.family_id[\s\S]*m\.active=1/,'last-seen mutation must re-check active same-family member binding');
