@@ -159,7 +159,10 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) >= (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) > 0 THEN 'completed' ELSE 'pending' END, updated_at=? WHERE task_id=? AND family_id=?").bind(now,id,m.family_id).run();
     }
 
-    if(reminderAt&&assignees.length){
+    const reminderTask=reminderAt&&assignees.length
+      ?await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>()
+      :null;
+    if(reminderAt&&assignees.length&&String(reminderTask?.status||'').toLowerCase()!=='completed'){
       const recipients=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();
       if(recipients.results.length)await ctx.env.DB.batch(recipients.results.map(row=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .bind(m.family_id,Number(row.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description||'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location||'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));

@@ -33,6 +33,8 @@ for(const marker of [
   "UPDATE shopping_items SET status=CASE WHEN",
   "UPDATE items SET status=CASE WHEN",
   "UPDATE notifications SET status='cancelled'",
+  "SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1",
+  "String(reminderTask?.status||'').toLowerCase()!=='completed'",
   "INSERT OR IGNORE INTO notifications",
   "...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,shoppingId,now)",
   "...archiveItemCompletionStatements(ctx.env.DB,m.family_id,itemId,now)",
@@ -47,6 +49,10 @@ for(const marker of [
 
 if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT member_id FROM task_assignees"))throw new Error('task edit must not purge zero-assignee family completion rows inline');
 if(page.includes('UPDATE tasks SET status=CASE WHEN (SELECT COUNT(*) FROM task_assignees'))throw new Error('task edit must use canonical completion reconciliation instead of zero-assignee pending fallback');
+const reconcileIndex=page.indexOf("if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);");
+const reminderStatusIndex=page.indexOf('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1');
+const reminderInsertIndex=page.indexOf('INSERT OR IGNORE INTO notifications');
+if(reconcileIndex<0||reminderStatusIndex<=reconcileIndex||reminderInsertIndex<=reminderStatusIndex)throw new Error('task edit reminder must use reconciled task status before recreating notification');
 
 for(const marker of [
   'export async function reconcileTaskCompletionAfterAssigneeChange(',
