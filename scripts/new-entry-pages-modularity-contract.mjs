@@ -18,8 +18,6 @@ for(const marker of ['async function taskNew(','async function itemNew(','id="ta
 if(pages.includes('export async function taskNew(')) throw new Error('obsolete taskNew renderer must stay retired');
 for(const marker of [
   'export async function itemNew(',
-  'shopping_category_catalog',
-  'resolveShoppingCategoryOptions',
   "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
   '/assets/item-new.js?v=12.93-wave74',
   'taskVisibilitySql',
