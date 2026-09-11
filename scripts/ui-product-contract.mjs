@@ -50,7 +50,7 @@ assert.match(taskEditServer,/const makePrivate=truthy\(b\.visibility_scope==='PR
 assert.doesNotMatch(taskEditServer,/const makePrivate=!isEvent&&/,'server edit flow must not force EVENT visibility back to FAMILY');
 assert.ok(taskEditServer.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
 assert.ok(taskEditServer.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
-assert.ok(taskEditServer.includes('if(reminderAt&&assignees.length){'),'scheduled reminders must be generated only from the resolved assignee recipient scope');
+assert.ok(taskEditServer.includes("if(reminderAt&&assignees.length&&String(reminderTask?.status||'').toLowerCase()!=='completed'){"),'scheduled reminders must be generated only from the resolved assignee recipient scope and a non-completed final task state');
 
 // Task creation transport failure handling
 assert.match(taskEntryManual,/await response\.json\(\)\.catch\(\(\)=>null\)/,'task creation must tolerate non-JSON error responses');
