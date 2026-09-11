@@ -39,6 +39,22 @@
     UNKNOWN:'自宅判定保留',
     NO_HOME:'',
   };
+  const homePresenceReasonText={
+    SHARING_OFF:'位置共有がOFFです',
+    NO_LOCATION:'位置情報がありません',
+    STALE_LOCATION:'最終位置が30分以上前です',
+    LOCATION_ACCURACY_MISSING:'現在地の精度情報がありません',
+    HOME_ACCURACY_MISSING:'自宅地点の精度情報がありません',
+    INVALID_DISTANCE:'位置情報から距離を計算できません',
+    ACCURACY_OVERLAP:'GPS誤差が自宅判定の境界と重なっています',
+  };
+  const homePresenceLabel=(member)=>{
+    const status=String(member?.homePresence||'');
+    const base=homePresenceText[status]||'';
+    if(status!=='UNKNOWN')return base;
+    const reason=homePresenceReasonText[String(member?.homePresenceReason||'')]||'';
+    return reason?`${base}（${reason}）`:base;
+  };
 
   const ageText=(minutes)=>{
     if(!Number.isFinite(minutes))return '';
@@ -207,7 +223,7 @@
 
     const pieces=[];
     pieces.push(stateText[member.state]||'状態不明');
-    const presence=homePresenceText[String(member.homePresence||'')]||'';
+    const presence=homePresenceLabel(member);
     if(presence)pieces.push(presence);
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
