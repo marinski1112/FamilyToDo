@@ -11,7 +11,7 @@ const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 const TASK_CHILD_UI_REVISION = 'child-task1-linked2';
 const TASK_ENTRY_UI_REVISION = 'ai-first-ui1-message4';
 const FAMILY_LOG_UI_REVISION = 'baby-food-photo2-observer1-form2';
-const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4';
+const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4-presence-reason1';
 
 const BOTTOM_NAV_VIEWPORT_FIX = `<style data-bottom-nav-viewport-fix="1">
 :root{--nav-safe-top:env(safe-area-inset-top,0px);--nav-safe-bottom:env(safe-area-inset-bottom,0px);--nav-safe-left:env(safe-area-inset-left,0px);--nav-safe-right:env(safe-area-inset-right,0px);--nav-box-h:calc(var(--nav-h) + var(--nav-safe-bottom))}
