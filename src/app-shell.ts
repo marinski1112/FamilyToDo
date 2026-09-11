@@ -9,7 +9,7 @@ const esc = (v: unknown) => String(v ?? '')
 
 const CALENDAR_STAMP_UI_REVISION = 'stamp-multi-placement-2';
 const TASK_CHILD_UI_REVISION = 'child-task1-linked2';
-const TASK_ENTRY_UI_REVISION = 'ai-first-ui2-entry-cleanup2';
+const TASK_ENTRY_UI_REVISION = 'ai-first-ui2-entry-cleanup3';
 const FAMILY_LOG_UI_REVISION = 'baby-food-photo2-observer1-form2';
 const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4-presence-place-address1';
 
