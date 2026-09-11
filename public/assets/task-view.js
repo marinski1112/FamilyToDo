@@ -96,7 +96,7 @@
       const buttons=[...exceptionModal.querySelectorAll('button')];
       buttons.forEach(b=>b.disabled=true);
       try{
-        const r=await fetch('/api/task?id='+encodeURIComponent(String(id))+'&exception_mode='+encodeURIComponent(mode),{
+        const r=await fetch('/task/delete.php?id='+encodeURIComponent(String(id))+'&exception_mode='+encodeURIComponent(mode),{
           method:'DELETE',headers:{'x-csrf':csrf,'accept':'application/json'},credentials:'same-origin'
         });
         const d=await r.json().catch(()=>null);
