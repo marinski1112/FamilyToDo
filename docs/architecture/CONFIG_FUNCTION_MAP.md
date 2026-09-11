@@ -1,6 +1,6 @@
 # Config and function ownership map
 
-Verified against baseline `787d3633ba365318fea13027d72df67ffb66eda3`.
+Verified against base main `2cf6263d33ab55ec31151bc6ca501ded7a1980ae` and the bounded helper-centralization change in this branch.
 
 This file identifies canonical owners and cleanup candidates. A candidate is not permission to remove code; current callers and dynamic routes must be checked first.
 
@@ -11,6 +11,7 @@ Canonical helper module: `src/timezone.ts`.
 - `DEFAULT_FAMILY_TIMEZONE = 'Asia/Tokyo'` is the fallback default, not the canonical value for every family.
 - `validateTimezone()` validates configured IANA timezone values.
 - `formatFamilyDateTime()`, `familyNow()`, and `familyDate()` are family wall-clock helpers.
+- `asDateOffset()` derives a `YYYY-MM-DD` family date offset for route date defaults/navigation while preserving the caller-selected timezone.
 - `utcNow()` is explicitly for infrastructure UTC-naive timestamps.
 - `formatStoredUtcForFamily()` converts stored infrastructure UTC-naive values for family display; it must not be used for already-family-local domain wall clocks.
 - `parseImportDateTime()` distinguishes naive family-local inputs from offset/UTC instants.
@@ -25,18 +26,13 @@ Therefore the cleanup rule is:
 
 PR #776 is a reference example: Family Journal archived location times were corrected to use the existing configured family timezone rather than a disconnected display assumption.
 
-## Known duplicate-function candidate
+## Date-offset helper ownership
 
-`asDateOffset(days, timeZone=DEFAULT_FAMILY_TIMEZONE)` is currently locally defined in both:
+`asDateOffset(days, timeZone=DEFAULT_FAMILY_TIMEZONE)` is owned by `src/timezone.ts`.
 
-- `src/page-routes.ts`
-- `src/exception-routes.ts`
+The previously identical local implementations in `src/page-routes.ts` and `src/exception-routes.ts` were centralized after confirming the same signature, body, caller-selected timezone semantics, and live date-boundary call sites. Route caller expressions remain unchanged.
 
-Both implementations derive a family date, construct a noon UTC anchor, add UTC days, and return `YYYY-MM-DD`.
-
-Classification: **duplicate candidate, not yet removed**.
-
-Before centralizing it, verify all date-boundary callers and contracts. If semantics are identical, move it to a canonical date/time utility and update both route owners in one bounded PR.
+Classification: **canonicalized duplicate helper**.
 
 ## Router ownership
 
