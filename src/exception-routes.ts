@@ -16,9 +16,7 @@ import { taskDelete } from './task-delete';
 import { convertOccurrence } from './recurring-occurrence';
 import { itemNew } from './new-entry-pages';
 import { taskEntryPage } from './task-entry-page';
-import { DEFAULT_FAMILY_TIMEZONE, familyDate } from './timezone';
-
-function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+import { asDateOffset, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
 async function logout():Promise<Response>{
   const headers=new Headers({'Location':'/login.php','Set-Cookie':'family_line_cf=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'});
