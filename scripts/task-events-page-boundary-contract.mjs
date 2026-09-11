@@ -45,6 +45,10 @@ for(const marker of [
   "data-type=\"item\"",
   "data-type=\"${Number(task.id)<0?'recurrence':'task'}\"",
   "const mainHtml=isEvent?",
+  "class=\"checklist-row-action\" href=\"/app/shopping_edit.php?id=${esc(item.id)}\"",
+  "const detailAction=!isEvent&&Number(task.id)>=0?",
+  "<div class=\"checklist-row-actions\">${detailAction}${shoppingCount}${shoppingAdd}</div>",
+  ".checklist-page .checklist-row-action{display:inline-flex",
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
   "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
@@ -60,6 +64,10 @@ for(const marker of [
   "<h1>✅ チェックリスト <span class=\"checklist-date\">${esc(compactDate)}</span></h1>",
   "return layout('チェックリスト',body,'/app/tasks.php');",
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
+
+for(const match of page.matchAll(/<label class="(?:task-main|shopping-check-row|expired-task-main)"[\s\S]*?<\/label>/g)){
+  if(match[0].includes('<a '))throw new Error('completion checkbox labels must not contain navigation/edit anchors');
+}
 
 if(page.includes("item.task_title?'予定 '+item.task_title:''"))throw new Error('Shopping rows must not repeat linked task title in every item metadata row');
 if(page.includes("effectiveDue?'期限 '+effectiveDue:''"))throw new Error('Shopping rows must not repeat the shared effective date in every item metadata row');
@@ -82,4 +90,4 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
