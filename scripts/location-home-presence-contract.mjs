@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const api=fs.readFileSync('src/location-latest-api.ts','utf8');
 const client=fs.readFileSync('public/assets/location.js','utf8');
+const stay=fs.readFileSync('src/location-stay-report.ts','utf8');
 
 for(const marker of [
   "type HomePresence='HOME'|'AWAY'|'UNKNOWN'|'NO_HOME';",
@@ -41,8 +42,24 @@ for(const marker of [
   'lastKnownHomePresence,',
   'homePresence:presence.status,',
   'homePresenceReason:presence.reason,',
+  'latest:point?{',
+  'recordedAt:point.recordedAt,',
+  '...(point.accuracyMeters===undefined?{}:{accuracyMeters:point.accuracyMeters}),',
   'homeConfigured:Boolean(home)',
 ])if(!api.includes(marker))throw new Error(`HOME/place presence API boundary missing: ${marker}`);
+
+const displayAccuracyLimit=Number(api.match(/const MAX_DISPLAY_ACCURACY_METERS=(\d+);/)?.[1]);
+const strictAccuracyLimit=Number(stay.match(/pointAccuracy>(\d+)\|\|placeAccuracy>/)?.[1]);
+if(!Number.isFinite(displayAccuracyLimit)||!Number.isFinite(strictAccuracyLimit))throw new Error('coarse-fix accuracy limits must stay explicit and contract-readable');
+for(const accuracyMeters of [1414,2000]){
+  if(!(accuracyMeters>strictAccuracyLimit))throw new Error(`coarse fixture ${accuracyMeters}m must remain UNKNOWN for strict stay/journal presence`);
+  if(!(accuracyMeters<=displayAccuracyLimit))throw new Error(`coarse fixture ${accuracyMeters}m must remain eligible for display-only nearby projection`);
+}
+
+for(const marker of [
+  'pointAccuracy>150',
+  "if(uncertainty===null)return 'UNKNOWN';",
+])if(!stay.includes(marker))throw new Error(`strict stay/journal accuracy boundary missing: ${marker}`);
 
 for(const forbidden of [
   'GoogleRoutesProvider',
@@ -90,4 +107,4 @@ for(const marker of [
 
 for(const forbidden of ['localStorage','sessionStorage'])if(client.includes(forbidden))throw new Error(`Location address cache must remain in-memory only: ${forbidden}`);
 
-console.log('location-home-presence: strict HOME/stay semantics stay fail-closed while coarse current fixes render only as low-accuracy nearby hints');
+console.log('location-home-presence: strict HOME/stay semantics stay fail-closed; 1414m/2000m coarse fixes stay display-only and latest timestamps remain visible');
