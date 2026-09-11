@@ -7,6 +7,8 @@ const index=read('src/index.ts');
 const shell=read('src/app-shell.ts');
 const link=read('public/assets/family-journal-link.js');
 const locationArchive=read('src/location-history-archive.ts');
+const calendarPage=read('src/calendar-page.ts');
+const calendarJs=read('public/assets/calendar.js');
 const checks=[
   [migration.includes('CREATE TABLE IF NOT EXISTS family_daily_journals'),'daily journal table exists'],
   [migration.includes("storage_tier TEXT NOT NULL DEFAULT 'HOT'")&&migration.includes('archive_object_key')&&migration.includes('archived_at'),'journal is cold-archive ready'],
@@ -31,6 +33,9 @@ const checks=[
   [routes.includes("url.pathname==='/app/family_journal.php'")&&routes.includes('familyDailyJournalPage'),'family journal page is routed'],
   [index.includes('archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env))'),'daily journal runs after Location projection'],
   [shell.includes('/assets/family-journal-link.js')&&link.includes('/app/family_journal.php'),'Family Log exposes family journal'],
+  [calendarPage.includes("SELECT journal_date FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date BETWEEN ? AND ?")&&calendarPage.includes('journalDates'),'Calendar reads only same-family HOT journal existence for its visible range'],
+  [!calendarPage.includes('SELECT summary_text FROM family_daily_journals')&&!calendarPage.includes('SELECT location_json FROM family_daily_journals'),'Calendar does not duplicate journal evidence into its day payload'],
+  [calendarJs.includes('journalDates.has(d)')&&calendarJs.includes('/app/family_journal.php?month=')&&calendarJs.includes('&date='),'Calendar day detail links only dates with an existing journal row'],
   [!locationArchive.includes('DELETE FROM member_location_history'),'journal generation does not force raw deletion'],
 ];
 const failed=checks.filter(([ok])=>!ok).map(([,label])=>label);
