@@ -15,8 +15,10 @@ type HomeRow=Readonly<{
 
 type LocationFreshness='FRESH'|'AGING'|'STALE'|'NO_LOCATION'|'SHARING_OFF';
 type HomePresence='HOME'|'AWAY'|'UNKNOWN'|'NO_HOME';
+type HomePresenceReason='HOME_CONFIRMED'|'AWAY_CONFIRMED'|'HOME_NOT_CONFIGURED'|'SHARING_OFF'|'NO_LOCATION'|'STALE_LOCATION'|'LOCATION_ACCURACY_MISSING'|'HOME_ACCURACY_MISSING'|'INVALID_DISTANCE'|'ACCURACY_OVERLAP';
 type CoordinatePoint=Readonly<{latitude:number;longitude:number}>;
 type PresencePoint=CoordinatePoint&Readonly<{accuracyMeters?:number}>;
+type HomePresenceProjection=Readonly<{status:HomePresence;reason:HomePresenceReason}>;
 
 const HOME_RADIUS_METERS=150;
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
@@ -62,18 +64,21 @@ function homePoint(row:HomeRow|null):PresencePoint|null{
   };
 }
 
-function homePresence(point:PresencePoint|null,state:LocationFreshness,home:PresencePoint|null):HomePresence{
-  if(!home)return 'NO_HOME';
-  if(!point||(state!=='FRESH'&&state!=='AGING'))return 'UNKNOWN';
+function homePresence(point:PresencePoint|null,state:LocationFreshness,home:PresencePoint|null):HomePresenceProjection{
+  if(!home)return {status:'NO_HOME',reason:'HOME_NOT_CONFIGURED'};
+  if(state==='SHARING_OFF')return {status:'UNKNOWN',reason:'SHARING_OFF'};
+  if(!point||state==='NO_LOCATION')return {status:'UNKNOWN',reason:'NO_LOCATION'};
+  if(state==='STALE')return {status:'UNKNOWN',reason:'STALE_LOCATION'};
   const pointAccuracy=point.accuracyMeters;
   const homeAccuracy=home.accuracyMeters;
-  if(pointAccuracy===undefined||homeAccuracy===undefined||!Number.isFinite(pointAccuracy)||!Number.isFinite(homeAccuracy))return 'UNKNOWN';
+  if(pointAccuracy===undefined||!Number.isFinite(pointAccuracy))return {status:'UNKNOWN',reason:'LOCATION_ACCURACY_MISSING'};
+  if(homeAccuracy===undefined||!Number.isFinite(homeAccuracy))return {status:'UNKNOWN',reason:'HOME_ACCURACY_MISSING'};
   const distance=straightLineDistanceMeters(point,home);
-  if(distance===null)return 'UNKNOWN';
+  if(distance===null)return {status:'UNKNOWN',reason:'INVALID_DISTANCE'};
   const uncertainty=Math.max(0,pointAccuracy)+Math.max(0,homeAccuracy);
-  if(distance+uncertainty<=HOME_RADIUS_METERS)return 'HOME';
-  if(distance-uncertainty>HOME_RADIUS_METERS)return 'AWAY';
-  return 'UNKNOWN';
+  if(distance+uncertainty<=HOME_RADIUS_METERS)return {status:'HOME',reason:'HOME_CONFIRMED'};
+  if(distance-uncertainty>HOME_RADIUS_METERS)return {status:'AWAY',reason:'AWAY_CONFIRMED'};
+  return {status:'UNKNOWN',reason:'ACCURACY_OVERLAP'};
 }
 
 /**
@@ -142,6 +147,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     const distanceMetersFromViewer=subjectMemberId!==requesterMemberId&&requesterPoint&&point
       ?straightLineDistanceMeters(requesterPoint,point)
       :null;
+    const presence=homePresence(point,safeFreshness.state,home);
     members.push({
       memberId:subjectMemberId,
       isViewer:subjectMemberId===requesterMemberId,
@@ -150,7 +156,8 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       state:safeFreshness.state,
       ageMinutes:safeFreshness.ageMinutes,
       distanceMetersFromViewer,
-      homePresence:homePresence(point,safeFreshness.state,home),
+      homePresence:presence.status,
+      homePresenceReason:presence.reason,
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,
