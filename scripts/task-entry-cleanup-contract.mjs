@@ -76,8 +76,10 @@ for(const marker of [
   "replace(/\\s*[（(]TimeTree[）)]\\s*/gu,'')",
 ])assert.ok(colorUi.includes(marker),`calendar color UI contract missing: ${marker}`);
 assert.ok(shell.includes('/assets/calendar-color-ui.js'),'calendar color UI must load on color forms');
-const bootstrapIndex=shell.indexOf('/assets/task-rough-input-ui.js'),aiIndex=shell.indexOf('/assets/task-rough-input-ai.js');
-assert.ok(bootstrapIndex>=0&&aiIndex>bootstrapIndex,'rough input bootstrap must load before rough input AI controller');
+const bootstrapIndex=page.indexOf('/assets/task-rough-input-ui.js'),manualIndex=page.indexOf('/assets/task-entry-manual.js');
+assert.ok(bootstrapIndex>=0&&manualIndex>bootstrapIndex,'rough input bootstrap must run before manual type binding');
+assert.ok(!shell.includes('/assets/task-rough-input-ui.js'),'rough input bootstrap must not be loaded twice');
+assert.ok(shell.includes('/assets/task-rough-input-ai.js'),'rough input AI controller must load for unified entry');
 assert.ok(shell.includes('/assets/task-rough-input-event-normalize.js'),'event normalization must load with rough input');
 assert.ok(shell.includes('/assets/task-entry-type-ui.js'),'explicit type UI cleanup must load with rough input');
 assert.ok(pkg.includes('public/assets/task-rough-input-ui.js'),'browser/task checks must include rough input bootstrap');
