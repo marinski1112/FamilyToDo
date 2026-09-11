@@ -5,7 +5,7 @@ import { archiveItemCompletionStatements, archiveShoppingCompletionStatements } 
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
-import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
+import { reconcileItemCompletionAfterAssigneeChange, reconcileShoppingCompletionAfterAssigneeChange, reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 import { buildStoredTaskRange } from './task-range-safety';
 import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
 import { APP_VERSION } from './version';
@@ -150,14 +150,8 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       if(assignees.length)for(const memberId of assignees)syncStatements.push(ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(Number(row.id),memberId,m.family_id));
     }
     if(syncStatements.length)await ctx.env.DB.batch(syncStatements);
-    if(linkedShopsForAssignees.results.length){
-      await ctx.env.DB.batch(linkedShopsForAssignees.results.map(row=>ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?)').bind(Number(row.id),Number(row.id))));
-      await ctx.env.DB.prepare("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=shopping_items.id)=0 THEN 'pending' WHEN (SELECT COUNT(*) FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=shopping_items.id) > 0 THEN 'completed' ELSE 'pending' END, updated_at=? WHERE task_id=? AND family_id=?").bind(now,id,m.family_id).run();
-    }
-    if(linkedItemsForAssignees.results.length){
-      await ctx.env.DB.batch(linkedItemsForAssignees.results.map(row=>ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT member_id FROM item_assignees WHERE item_id=?)').bind(Number(row.id),Number(row.id))));
-      await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) >= (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id) > 0 THEN 'completed' ELSE 'pending' END, updated_at=? WHERE task_id=? AND family_id=?").bind(now,id,m.family_id).run();
-    }
+    for(const row of linkedShopsForAssignees.results)await reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now);
+    for(const row of linkedItemsForAssignees.results)await reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now);
 
     const reminderTask=reminderAt&&assignees.length
       ?await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>()
