@@ -28,7 +28,7 @@ export function layout(title: string, body: string, active = ''): string {
     ['/app/location.php','📍','位置情報'],
     ['/app/family_log.php','🐣','家族ログ'],
     ['/app/messages.php','💬','伝言'],
-    ['/app/settings.php','⚙️','管理'],
+    ['/app/index.php','🏠','ホーム'],
   ];
   const nav = `<nav class="bottom-nav" aria-label="メインメニュー"><div class="nav-inner" style="--nav-count:${navItems.length}">${navItems.map(([href,icon,label])=>`<a class="${active===href?'active':''}" href="${href}"${active===href?' aria-current="page"':''}><span aria-hidden="true">${icon}</span>${label}</a>`).join('')}</div></nav>`;
   const calendarExtra=active==='/app/calendar.php'?`<link rel="stylesheet" href="/assets/calendar.css?v=${APP_VERSION}"><script defer src="/assets/calendar-stamp-ui.js?v=${APP_VERSION}-${CALENDAR_STAMP_UI_REVISION}"></script>`:'';
