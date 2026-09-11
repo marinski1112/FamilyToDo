@@ -6,6 +6,8 @@ const page=fs.readFileSync('src/task-entry-page.ts','utf8');
 const route=fs.readFileSync('src/exception-routes.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
+const taskDelete=fs.readFileSync('src/task-delete.ts','utf8');
+const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
 const newEntries=fs.readFileSync('src/new-entry-pages.ts','utf8');
 const serverNormalize=fs.readFileSync('src/task-rough-input-event-normalize.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
@@ -31,6 +33,13 @@ assert.ok(!page.includes('id="isEvent"'),'manual create page must not contain re
 assert.ok(!page.includes('name="is_event"'),'manual create page must not submit a checkbox-derived event type');
 assert.ok(route.includes("import { taskEntryPage } from './task-entry-page';"),'legacy-compatible route must use unified entry page');
 assert.ok(route.includes("url.searchParams.get('event')==='1'?'event':'task'"),'event entry link must explicitly preselect EVENT');
+assert.ok(taskView.includes("fetch('/api/task?id='+encodeURIComponent(String(id))"),'ordinary task delete must retain the canonical /api/task path');
+assert.ok(taskView.includes("fetch('/task/delete.php?id='+encodeURIComponent(String(id))+'&exception_mode='+encodeURIComponent(mode)"),'recurring exception delete must use the lifecycle-aware delete handler');
+assert.ok(taskView.includes("exceptionDeleteRestore')?.addEventListener('click',()=>remove('restore'))"),'exception delete UI must preserve restore semantics');
+assert.ok(taskView.includes("exceptionDeleteExclude')?.addEventListener('click',()=>remove('exclude'))"),'exception delete UI must preserve exclude semantics');
+assert.ok(taskDelete.includes("if(exceptionOrigin&&!['restore','exclude'].includes(exceptionMode))"),'server must reject ambiguous recurring-exception deletion');
+assert.ok(taskDelete.includes("exception_task_id=NULL,status='excluded'"),'exclude deletion must detach the exception and keep the occurrence excluded');
+assert.ok(taskDelete.includes("exception_task_id=NULL,status=?,completed_by=?,completed_at=?"),'restore deletion must detach the exception and restore occurrence state');
 
 for(const marker of [
   "const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';",
@@ -109,4 +118,4 @@ assert.equal(fs.existsSync(obsoleteTaskNewFile),false,'obsolete task-new asset m
 assert.equal(fs.existsSync('src/client/task-new.ts'),false,'missing legacy task-new source must not be recreated');
 assert.equal(fs.existsSync('.github/EMPTY'),false,'temporary empty GitHub marker must not remain');
 
-console.log('task entry cleanup contract: unified entry routing, required event dates, mobile AI detail layout, progressive manual fallback, server/client event grouping, explicit task/event UI semantics, calendar labels/swatches/default memory, and task-new retirement ok');
+console.log('task entry cleanup contract: unified entry routing, required event dates, recurring exception delete semantics, mobile AI detail layout, progressive manual fallback, server/client event grouping, explicit task/event UI semantics, calendar labels/swatches/default memory, and task-new retirement ok');
