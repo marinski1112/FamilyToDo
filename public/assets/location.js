@@ -48,10 +48,18 @@
     INVALID_DISTANCE:'位置情報から距離を計算できません',
     ACCURACY_OVERLAP:'GPS誤差が自宅判定の境界と重なっています',
   };
+  const lastKnownHomePresenceText={
+    HOME:'最終確認：🏠 自宅内',
+    AWAY:'最終確認：外出中',
+  };
   const homePresenceLabel=(member)=>{
     const status=String(member?.homePresence||'');
     const base=homePresenceText[status]||'';
     if(status!=='UNKNOWN')return base;
+    if(member?.homePresenceReason==='STALE_LOCATION'){
+      const lastKnown=lastKnownHomePresenceText[String(member?.lastKnownHomePresence||'')]||'';
+      if(lastKnown)return lastKnown;
+    }
     const reason=homePresenceReasonText[String(member?.homePresenceReason||'')]||'';
     return reason?`${base}（${reason}）`:base;
   };
@@ -395,9 +403,11 @@
     await renderMap(located,refocus);
     hasRendered=true;
     const atHome=members.filter((member)=>member?.homePresence==='HOME').length;
-    const presenceUnknown=members.filter((member)=>member?.homePresence==='UNKNOWN').length;
+    const lastKnownHome=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME').length;
+    const lastKnownAway=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='AWAY').length;
+    const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;
     const presenceSummary=payload?.homeConfigured
-      ?` ・ 自宅内 ${atHome}人${presenceUnknown?` ・ 判定保留 ${presenceUnknown}人`:''}`
+      ?` ・ 自宅内 ${atHome}人${lastKnownHome?` ・ 最終確認自宅内 ${lastKnownHome}人`:''}${lastKnownAway?` ・ 最終確認外出 ${lastKnownAway}人`:''}${unresolvedPresence?` ・ 判定保留 ${unresolvedPresence}人`:''}`
       :'';
     setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人${presenceSummary}`);
   };
