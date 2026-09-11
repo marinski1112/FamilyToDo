@@ -60,7 +60,7 @@ for(const marker of [
   'const addressCache=new Map();',
   'const addressPending=new Map();',
   'const latitude=Math.round(point.lat*2000)/2000;',
-  "&& !isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)".replace('&& ', '&&'),
+  "&&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)",
   "maps.importLibrary('geocoding')",
   "new Geocoder().geocode({location:point,language:'ja',region:'JP'})",
   "addressCache.set(key,'');",
