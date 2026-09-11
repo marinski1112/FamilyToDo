@@ -16,7 +16,8 @@ try{
     }
     return changed?out.join('\n'):String(text||'');
   };
-  button.addEventListener('click',()=>{
+  form.addEventListener('click',event=>{
+    if(event.target!==button)return;
     const primary=String(form.querySelector('[name=rough_primary_type]:checked')?.value||'task');
     if(primary!=='event')return;
     const original=input.value,normalized=normalizeEventText(original);
