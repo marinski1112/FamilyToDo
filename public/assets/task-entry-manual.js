@@ -113,11 +113,11 @@ const init=()=>{
       const submit=form.querySelector('button[type=submit]'),old=submit?.textContent||'登録する';if(submit){submit.disabled=true;submit.textContent='登録中…';}
       try{
         const response=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),data=await response.json().catch(()=>null);
-        if(!response.ok||!data?.ok)throw new Error(String(data?.error||'登録に失敗しました。'));
+        if(!response.ok||!data?.ok)throw new Error('登録に失敗しました。');
         const savedDate=String(body.dateOnly||'');
         if(payload.returnTo==='calendar')location.href=!body.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='+encodeURIComponent(savedDate.slice(0,7))+'&date='+encodeURIComponent(savedDate):'/app/calendar.php?view='+encodeURIComponent(calendarReturnView);
         else location.href=body.noDate?'/app/tasks.php':'/app/tasks.php?date='+encodeURIComponent(savedDate);
-      }catch(error){alert(String(error?.message||'登録に失敗しました。'));if(submit){submit.disabled=false;submit.textContent=old;}}
+      }catch(_error){alert('登録に失敗しました。');if(submit){submit.disabled=false;submit.textContent=old;}}
     });
     document.documentElement.dataset.taskEntryManual='ready';
   }catch{document.documentElement.dataset.taskEntryManual='error';}
