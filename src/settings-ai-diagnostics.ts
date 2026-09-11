@@ -62,6 +62,33 @@ function morningItem(row:Row){
   };
 }
 
+function journalItem(row:Row|null){
+  if(!row)return null;
+  const status=String(row.ai_status||'').replace(/[^A-Z0-9_]/g,'').slice(0,48)||'UNKNOWN';
+  const called=status!=='NOT_CONFIGURED';
+  return {
+    feature:'FAMILY_DAILY_JOURNAL',
+    final_status:status==='AI_OK'?'AI_OK':'FALLBACK_DETERMINISTIC',
+    ai_called:called,
+    model:called?safeModel(row.ai_model):null,
+    http_status:null,
+    last_attempt_status:status==='AI_OK'?'AI_OK':null,
+    last_reason_code:status,
+    generation_reason:status,
+    finalized:true,
+    last_failure_stage:null,
+    last_item_ordinal:null,
+    last_source_index:null,
+    last_expected_count:null,
+    last_actual_count:null,
+    attempt_count:called?1:0,
+    attempts:[],
+    item_count:null,
+    local_date:String(row.journal_date||''),
+    created_at:String(row.ai_generated_at||''),
+  };
+}
+
 const latestForFeature=(items:any[],feature:string)=>items.find(item=>String(item?.feature||'')===feature)||null;
 
 export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx:AppContext):Promise<Response>{
@@ -75,9 +102,11 @@ export async function settingsDiagnosticsDetailWithMorningAi(request:Request,ctx
 
   try{
     const rows=await ctx.env.DB.prepare('SELECT local_date,request_count,finalized,frame_json,created_at,updated_at FROM line_daily_digest_ai_family_daily WHERE family_id=? AND finalized=1 ORDER BY local_date DESC LIMIT 20').bind(ctx.member.family_id).all<Row>();
-    const morning=rows.results.map(morningItem);
+    let latestJournal:Row|null=null;
+    try{latestJournal=await ctx.env.DB.prepare("SELECT journal_date,ai_model,ai_status,ai_generated_at FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND ai_generated_at IS NOT NULL ORDER BY ai_generated_at DESC,id DESC LIMIT 1").bind(ctx.member.family_id).first<Row>();}catch{}
+    const morning=rows.results.map(morningItem),journal=journalItem(latestJournal);
     const existing=Array.isArray(base.items)?base.items:[];
-    const items=[...morning,...existing].sort((a:any,b:any)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))).slice(0,20);
+    const items=[...(journal?[journal]:[]),...morning,...existing].sort((a:any,b:any)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))).slice(0,20);
     const inventory=await resolveAiModelInventory(ctx.env.DB,ctx.member.family_id,ctx.env);
     const modelUsage=inventory.map(entry=>{
       const diagnosticFeature=entry.feature==='ROUGH_INPUT'?'ROUGH_INPUT':entry.feature==='FAMILY_DAILY_JOURNAL'?'FAMILY_DAILY_JOURNAL':null;

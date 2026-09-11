@@ -7,7 +7,7 @@ import { locationPage } from './location-page';
 import { familyLog } from './family-log-page-handler';
 import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, settingsLocation, recurring } from './settings-page-handlers';
 import { childJournalPage } from './child-journal';
-import { familyDailyJournalPage } from './family-daily-journal';
+import { familyDailyJournalPageWithAi } from './family-daily-journal-ai-page';
 import { familyLogPiyologImportPage } from './family-log-piyolog-import-page';
 import { googleTasksSettings } from './google-tasks';
 import { googleHomeSettingsWithExecuteDiagnostics } from './google-home-execute-diagnostics';
@@ -41,7 +41,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/shopping.php') return await shopping(request,context);
   if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
   if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);
-  if(url.pathname==='/app/family_journal.php') return await familyDailyJournalPage(request,context);
+  if(url.pathname==='/app/family_journal.php') return await familyDailyJournalPageWithAi(request,context);
   if(url.pathname==='/app/family_log_import.php') return await familyLogPiyologImportPage(context);
   if(url.pathname==='/app/calendar_import.php') return await calendarImportPage(context);
   if(url.pathname==='/app/settings.php') return await settings(request,context);
