@@ -8,6 +8,9 @@ if(index.includes('async function taskDelete(')) throw new Error('taskDelete mus
 if(!exceptionRoutes.includes("if(url.pathname==='/task/delete.php') return await taskDelete(request,context);")) throw new Error('task delete route wiring changed');
 if(!taskDelete.includes('export async function taskDelete(')) throw new Error('taskDelete export missing');
 for(const marker of [
+  "import { taskVisibilitySql } from './task-visibility';",
+  "SELECT created_by,task_kind FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1",
+  '.bind(id,m.family_id,m.id).first()',
   "request.method!=='POST'&&request.method!=='DELETE'",
   "request.headers.get('x-csrf')",
   "role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id",
@@ -21,4 +24,4 @@ for(const marker of [
   'await ctx.env.DB.batch(statements)',
 ]) if(!taskDelete.includes(marker)) throw new Error(`task delete behavior sentinel missing: ${marker}`);
 if(taskDelete.split('queueCalendarProjectionAfterMutation(').length-1<2) throw new Error('calendar delete projection hooks must remain before and after batch');
-console.log('task delete modularity contract: ok');
+console.log('task delete modularity contract: private visibility and lifecycle ok');

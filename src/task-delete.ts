@@ -1,6 +1,7 @@
 import { json, redirect } from './response';
 import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation } from './google-calendar';
+import { taskVisibilitySql } from './task-visibility';
 
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 
@@ -12,7 +13,7 @@ export async function taskDelete(request:Request,ctx:any):Promise<Response>{
   const body=request.method==='POST'?await request.clone().json().catch(()=>({})):{};
   const csrf=request.headers.get('x-csrf')||String(body.csrf||'');
   if(csrf!==String(ctx.session.csrfToken||''))return json({ok:false,error:'CSRF検証に失敗しました。'},403);
-  const task=await ctx.env.DB.prepare('SELECT created_by,task_kind FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first();
+  const task=await ctx.env.DB.prepare(`SELECT created_by,task_kind FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(id,m.family_id,m.id).first();
   if(!task)return json({ok:false,error:'対象が見つかりません。'},404);
   const role=String(m.role||'').toUpperCase();if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return json({ok:false,error:'権限がありません。'},403);
   const exceptionOrigin=await ctx.env.DB.prepare('SELECT o.id,o.recurrence_rule_id,o.occurrence_date FROM recurrence_occurrences o WHERE o.exception_task_id=? AND o.family_id=? LIMIT 1').bind(id,m.family_id).first();
