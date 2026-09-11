@@ -9,6 +9,7 @@ import { matchesRecurrence, parseJsonArray } from './recurrence-projection';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
 import { commitSession } from './session';
+import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 import { ensureFamilyLogMemberSubjects, familyLogSubjectIcon, FAMILY_LOG_DETAILS, FAMILY_LOG_TYPES, saveTaskFamilyLogTemplate, TaskFamilyLogTemplateInputError, validateTaskFamilyLogTemplateInput } from './task-family-log-template';
 import { APP_VERSION } from './version';
 
@@ -160,7 +161,7 @@ export async function recurring(request:Request,ctx:AppContext):Promise<Response
         await ctx.env.DB.prepare("DELETE FROM recurrence_occurrences WHERE family_id=? AND recurrence_rule_id=? AND occurrence_date>=? AND exception_task_id IS NULL AND status<>'excluded' AND NOT EXISTS (SELECT 1 FROM recurrence_occurrence_completions c WHERE c.occurrence_id=recurrence_occurrences.id)").bind(m.family_id,id,dateOnly()).run();
         await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(taskId).run();
         if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(taskId,mid,m.family_id)));
-        await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT member_id FROM task_assignees WHERE task_id=?)').bind(taskId,taskId).run();
+        await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,taskId,now);
         await ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE member_id NOT IN (SELECT member_id FROM task_assignees WHERE task_id=?) AND occurrence_id IN (SELECT o.id FROM recurrence_occurrences o WHERE o.recurrence_rule_id=? AND o.family_id=?)').bind(taskId,id,m.family_id).run();
         await ctx.env.DB.prepare("UPDATE recurrence_occurrences SET status=CASE WHEN (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? )=0 THEN 'pending' WHEN (SELECT COUNT(*) FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=recurrence_occurrences.id) > 0 AND (SELECT completion_mode FROM tasks WHERE id=?) <> 'ALL' THEN 'completed' WHEN (SELECT completion_mode FROM tasks WHERE id=?)='ALL' AND (SELECT COUNT(*) FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=recurrence_occurrences.id) >= (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?) THEN 'completed' ELSE 'pending' END,updated_at=? WHERE recurrence_rule_id=? AND family_id=? AND status<>'excluded'").bind(taskId,taskId,taskId,taskId,taskId,taskId,now,id,m.family_id).run();
         await ctx.env.DB.batch([
