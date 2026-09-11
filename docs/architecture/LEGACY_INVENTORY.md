@@ -59,7 +59,7 @@ Populate this table from current-main evidence during cleanup PRs. Keep UNKNOWN 
 | `src/page-routes.ts` | ACTIVE | page dispatcher | — | keep |
 | `src/exception-routes.ts` | ACTIVE/COMPAT | early/prelude/fallback live routes | route-specific | audit per route |
 | top-level `*wave*` / Wave-era artifacts | UNKNOWN | not yet reachability-audited | TBD | do not delete yet |
-| duplicate local `asDateOffset()` helpers | duplicate candidate | current `page-routes.ts` and `exception-routes.ts` | TBD canonical date helper | audit/centralize separately |
+| former duplicate local `asDateOffset()` helpers | canonicalized duplicate | identical ACTIVE callers and helper semantics verified before centralization | `src/timezone.ts#asDateOffset()` | keep canonical helper; no local copies |
 
 ## Git-history principle
 
