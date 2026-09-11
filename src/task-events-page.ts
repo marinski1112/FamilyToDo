@@ -189,14 +189,14 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 .checklist-page .checklist-row-line{display:flex;align-items:center;gap:8px}
 .checklist-page .checklist-row-line>label{flex:1;min-width:0}
 .checklist-page .checklist-row-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.checklist-page .checklist-row-action{font-size:13px;font-weight:700;white-space:nowrap;text-decoration:none}
+.checklist-page .checklist-row-action{display:inline-flex;align-items:center;min-height:34px;padding:0 6px;font-size:13px;font-weight:700;white-space:nowrap;text-decoration:none}
 .checklist-page .empty{padding:0!important;margin:8px 0 2px!important;font-size:13px;line-height:1.5}
 .checklist-page .checklist-more{margin-top:8px;border-top:1px solid #e2e8f0}
 .checklist-page .checklist-more>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:11px 0;font-size:13px;color:#475569}
 .checklist-page .checklist-more .meta{font-size:13px;line-height:1.5;margin:8px 0 0}
 @media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}}
 </style>`;
-  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
 
