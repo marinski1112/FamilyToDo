@@ -3,6 +3,8 @@ const EVENT_METADATA_LINE=/^(?:説明|メモ|備考|note|url|リンク|数量|�
 const URL_ONLY_LINE=/^https?:\/\/\S+$/iu;
 const DUE_DATE_LINE=/^((?:期限|締切)\s*[:：]\s*)(.+)$/u;
 
+function currentReferenceDate():string{return new Date().toISOString().slice(0,10);}
+
 function isEventTitleLine(value:string):boolean{
   const line=value.trim();
   return Boolean(line)&&!DATE_ONLY_EVENT_LINE.test(line)&&!EVENT_METADATA_LINE.test(line)&&!URL_ONLY_LINE.test(line);
@@ -29,7 +31,7 @@ function toIsoDate(value:string,referenceDate:string):string|null{
  * A date-only line is metadata for the immediately following title line; ordinary
  * adjacent title lines stay separate records. Blank lines intentionally break the pair.
  */
-export function normalizeEventDateTitleText(value:unknown,referenceDate=''):string{
+export function normalizeEventDateTitleText(value:unknown,referenceDate=currentReferenceDate()):string{
   const original=String(value??'');
   const lines=original.replace(/\r\n?/g,'\n').split('\n');
   const out:string[]=[];
@@ -54,7 +56,7 @@ export function normalizeEventDateTitleText(value:unknown,referenceDate=''):stri
   return changed?out.join('\n'):original;
 }
 
-export function normalizeEventRoughInputBody(value:unknown,referenceDate=''):unknown{
+export function normalizeEventRoughInputBody(value:unknown,referenceDate=currentReferenceDate()):unknown{
   if(!value||typeof value!=='object'||Array.isArray(value))return value;
   const body=value as Record<string,unknown>;
   if(String(body.primaryType||'')!=='event'||!Array.isArray(body.fields))return value;
@@ -71,7 +73,7 @@ export function normalizeEventRoughInputBody(value:unknown,referenceDate=''):unk
   return changed?{...body,fields}:value;
 }
 
-export async function normalizeEventRoughInputRequest(request:Request,referenceDate=''):Promise<Request>{
+export async function normalizeEventRoughInputRequest(request:Request,referenceDate=currentReferenceDate()):Promise<Request>{
   if(request.method!=='POST')return request;
   if(!String(request.headers.get('content-type')||'').toLowerCase().includes('application/json'))return request;
   let parsed:unknown;
