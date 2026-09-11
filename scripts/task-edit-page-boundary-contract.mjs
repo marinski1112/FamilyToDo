@@ -12,8 +12,8 @@ for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
   "archiveItemCompletionStatements, archiveShoppingCompletionStatements",
+  "reconcileItemCompletionAfterAssigneeChange, reconcileShoppingCompletionAfterAssigneeChange, reconcileTaskCompletionAfterAssigneeChange",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
-  "import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';",
   "import { buildStoredTaskRange } from './task-range-safety';",
   "taskChildVisibilitySql, taskVisibilitySql",
   "export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{",
@@ -30,8 +30,8 @@ for(const marker of [
   "if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);",
   "DELETE FROM shopping_assignees WHERE shopping_item_id=?",
   "DELETE FROM item_assignees WHERE item_id=?",
-  "UPDATE shopping_items SET status=CASE WHEN",
-  "UPDATE items SET status=CASE WHEN",
+  "reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)",
+  "reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)",
   "UPDATE notifications SET status='cancelled'",
   "SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1",
   "String(reminderTask?.status||'').toLowerCase()!=='completed'",
@@ -49,10 +49,15 @@ for(const marker of [
 
 if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT member_id FROM task_assignees"))throw new Error('task edit must not purge zero-assignee family completion rows inline');
 if(page.includes('UPDATE tasks SET status=CASE WHEN (SELECT COUNT(*) FROM task_assignees'))throw new Error('task edit must use canonical completion reconciliation instead of zero-assignee pending fallback');
+if(page.includes("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees"))throw new Error('task edit must use canonical shopping completion reconciliation instead of zero-assignee pending fallback');
+if(page.includes("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees"))throw new Error('task edit must use canonical item completion reconciliation instead of zero-assignee pending fallback');
 const reconcileIndex=page.indexOf("if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);");
+const childAssigneeSyncIndex=page.indexOf('if(syncStatements.length)await ctx.env.DB.batch(syncStatements);');
+const shopReconcileIndex=page.indexOf('reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)');
+const itemReconcileIndex=page.indexOf('reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)');
 const reminderStatusIndex=page.indexOf('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1');
 const reminderInsertIndex=page.indexOf('INSERT OR IGNORE INTO notifications');
-if(reconcileIndex<0||reminderStatusIndex<=reconcileIndex||reminderInsertIndex<=reminderStatusIndex)throw new Error('task edit reminder must use reconciled task status before recreating notification');
+if(reconcileIndex<0||childAssigneeSyncIndex<=reconcileIndex||shopReconcileIndex<=childAssigneeSyncIndex||itemReconcileIndex<=childAssigneeSyncIndex||reminderStatusIndex<=itemReconcileIndex||reminderInsertIndex<=reminderStatusIndex)throw new Error('task edit reconciliation/reminder ordering changed');
 
 for(const marker of [
   'export async function reconcileTaskCompletionAfterAssigneeChange(',
@@ -64,7 +69,16 @@ for(const marker of [
   "const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';",
   'ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1',
   'UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
-])if(!reconciliation.includes(marker))throw new Error(`task completion reconciliation marker missing: ${marker}`);
+  'export async function reconcileShoppingCompletionAfterAssigneeChange(',
+  'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT id FROM members WHERE family_id=? AND active=1)',
+  'JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?',
+  'UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
+  'export async function reconcileItemCompletionAfterAssigneeChange(',
+  'DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT id FROM members WHERE family_id=? AND active=1)',
+  'JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=?',
+  "const mode=assignedCount>0?String(item.completion_mode||'ANY').toUpperCase():'ANY';",
+  'UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
+])if(!reconciliation.includes(marker))throw new Error(`task/child completion reconciliation marker missing: ${marker}`);
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must not depend on app.ts after task edit extraction');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('taskEdit must route through retained task edit page');
@@ -90,4 +104,4 @@ for(const marker of [
   "items:[...f.querySelectorAll('[name=\"item_name[]\"]')].map",
 ])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
 
-console.log('task-edit-page-boundary: retained Task/Event edit ownership, canonical completion reconciliation, server hierarchy guard, PRIVATE conversion, child lifecycle and projection semantics ok');
+console.log('task-edit-page-boundary: retained Task/Event edit ownership, canonical task/child completion reconciliation, server hierarchy guard, PRIVATE conversion, child lifecycle and projection semantics ok');
