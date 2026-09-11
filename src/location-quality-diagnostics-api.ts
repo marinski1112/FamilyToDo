@@ -145,10 +145,9 @@ export async function locationQualityDiagnosticsApi(request:Request,ctx:AppConte
   return json({
     ok:true,
     policy:{
-      latestSelection:'QUALITY_GUARDED_NEWEST_SENSOR_TIME',
-      qualityAware:true,
+      latestSelection:'NEWEST_SENSOR_TIME',
+      qualityAware:false,
       poorThresholdMeters:100,
-      goodLatestProtectionSeconds:1800,
       historyKeepsPoorPoints:true,
     },
     summary:{
