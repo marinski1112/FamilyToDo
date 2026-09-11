@@ -67,22 +67,27 @@ for(const marker of [
   "AWAY:'最終確認：外出中'",
   "String(member?.lastKnownHomePresence||'')",
   "member?.homePresenceReason==='STALE_LOCATION'",
-  "return member?.state==='STALE'?`最終確認：${label}`:`${label}に滞在中`;",
+  "if(member?.homeDisplayNearbyLowAccuracy)return '🏠 自宅付近（GPS精度低）';",
+  "const rawDisplayNearbyPlaceLabel=(member)=>typeof member?.displayNearbyPlaceLabel==='string'?member.displayNearbyPlaceLabel.trim():'';",
+  "if(label)return member?.state==='STALE'?`最終確認：${label}`:`${label}に滞在中`;",
+  "return member?.state==='STALE'?`最終位置：${nearby}付近（GPS精度低）`:`${nearby}付近（GPS精度低）`;",
   'const addressCache=new Map();',
   'const addressPending=new Map();',
   'const latitude=Math.round(point.lat*2000)/2000;',
-  "&&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)",
+  "&&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)&&!rawDisplayNearbyPlaceLabel(member)",
+  "else if(nearby&&!isHomeHeadline(member))pieces.push(`登録地点付近 ${nearby}（GPS精度低）`);",
   "maps.importLibrary('geocoding')",
   "new Geocoder().geocode({location:point,language:'ja',region:'JP'})",
   "addressCache.set(key,'');",
   'if(map)void enrichAddresses(members);',
   'const presence=homePresenceLabel(member);',
   "const atHome=members.filter((member)=>member?.homePresence==='HOME').length;",
+  "const nearHomeLowAccuracy=members.filter((member)=>member?.homeDisplayNearbyLowAccuracy).length;",
   "const lastKnownHome=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME').length;",
-  "const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;",
+  "const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!member?.homeDisplayNearbyLowAccuracy&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;",
   '位置の古さとは別に、Google Maps表示には管理側のブラウザ用Mapsキー設定が必要です。',
 ])if(!client.includes(marker))throw new Error(`HOME/place/address client marker missing: ${marker}`);
 
 for(const forbidden of ['localStorage','sessionStorage'])if(client.includes(forbidden))throw new Error(`Location address cache must remain in-memory only: ${forbidden}`);
 
-console.log('location-home-presence: strict HOME/stay semantics remain fail-closed while the latest API exposes separate low-accuracy display hints');
+console.log('location-home-presence: strict HOME/stay semantics stay fail-closed while coarse current fixes render only as low-accuracy nearby hints');
