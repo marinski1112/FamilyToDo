@@ -6,9 +6,12 @@ const client=fs.readFileSync('public/assets/location.js','utf8');
 for(const marker of [
   "type HomePresence='HOME'|'AWAY'|'UNKNOWN'|'NO_HOME';",
   "type HomePresenceReason='HOME_CONFIRMED'|'AWAY_CONFIRMED'|'HOME_NOT_CONFIGURED'|'SHARING_OFF'|'NO_LOCATION'|'STALE_LOCATION'|'LOCATION_ACCURACY_MISSING'|'HOME_ACCURACY_MISSING'|'INVALID_DISTANCE'|'ACCURACY_OVERLAP';",
+  "type DisplayPlaceConfidence='CONFIRMED'|'LOW_ACCURACY_NEARBY';",
   "import { readKnownLocationPlaces } from './location-places-api';",
   "import { locationDistance,placePresence,type KnownLocationPlace } from './location-stay-report';",
   'const HOME_RADIUS_METERS=150;',
+  'const DISPLAY_PLACE_RADIUS_METERS=150;',
+  'const MAX_DISPLAY_ACCURACY_METERS=3000;',
   "WHERE family_id=? AND kind='HOME'",
   'function classifyHomePresenceAtPoint(point:PresencePoint|null,home:PresencePoint|null):HomePresenceProjection{',
   "if(state==='SHARING_OFF')return {status:'UNKNOWN',reason:'SHARING_OFF'};",
@@ -20,11 +23,19 @@ for(const marker of [
   "if(distance+uncertainty<=HOME_RADIUS_METERS)return {status:'HOME',reason:'HOME_CONFIRMED'};",
   "if(distance-uncertainty>HOME_RADIUS_METERS)return {status:'AWAY',reason:'AWAY_CONFIRMED'};",
   "return {status:'UNKNOWN',reason:'ACCURACY_OVERLAP'};",
-  'function nearestNamedPlace(point:LocationPoint|null,places:readonly KnownLocationPlace[]):KnownLocationPlace|null{',
-  "if(!place.key.startsWith('N:')||placePresence(point,place)!=='IN')continue;",
+  'function displayPlaceCandidate(point:LocationPoint|null,places:readonly KnownLocationPlace[]):DisplayPlaceProjection|null{',
+  "const strict=placePresence(point,place);",
+  "confidence:'CONFIRMED'",
+  "confidence:'LOW_ACCURACY_NEARBY'",
+  'const overlapLimit=DISPLAY_PLACE_RADIUS_METERS+usableAccuracy+storedAccuracy;',
+  'function homeDisplayNearbyLowAccuracy(point:LocationPoint|null,home:PresencePoint|null,presence:HomePresenceProjection):boolean{',
+  "presence.reason!=='ACCURACY_OVERLAP'",
   'const knownPlaces=await readKnownLocationPlaces(ctx.env.DB,familyId);',
-  'const registeredPlace=nearestNamedPlace(point,knownPlaces);',
-  'registeredPlaceLabel:registeredPlace?.label??null,',
+  'const displayPlace=displayPlaceCandidate(point,knownPlaces);',
+  "registeredPlaceLabel:displayPlace?.confidence==='CONFIRMED'?displayPlace.place.label:null,",
+  "displayNearbyPlaceLabel:displayPlace?.confidence==='LOW_ACCURACY_NEARBY'?displayPlace.place.label:null,",
+  "displayNearbyPlaceDistanceMeters:displayPlace?.confidence==='LOW_ACCURACY_NEARBY'?Math.round(displayPlace.distanceMeters):null,",
+  'homeDisplayNearbyLowAccuracy:homeDisplayNearbyLowAccuracy(point,home,presence),',
   "const stalePointPresence=safeFreshness.state==='STALE'?classifyHomePresenceAtPoint(point,home):null;",
   "stalePointPresence.status==='HOME'||stalePointPresence.status==='AWAY'",
   'lastKnownHomePresence,',
@@ -74,4 +85,4 @@ for(const marker of [
 
 for(const forbidden of ['localStorage','sessionStorage'])if(client.includes(forbidden))throw new Error(`Location address cache must remain in-memory only: ${forbidden}`);
 
-console.log('location-home-presence: current/stale HOME semantics stay fail-closed; registered places reuse accuracy-aware presence and unregistered points may show an in-memory-cached reverse-geocoded address');
+console.log('location-home-presence: strict HOME/stay semantics remain fail-closed while the latest API exposes separate low-accuracy display hints');
