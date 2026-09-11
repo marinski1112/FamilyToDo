@@ -19,11 +19,15 @@ type HomeRow=Readonly<{
 type LocationFreshness='FRESH'|'AGING'|'STALE'|'NO_LOCATION'|'SHARING_OFF';
 type HomePresence='HOME'|'AWAY'|'UNKNOWN'|'NO_HOME';
 type HomePresenceReason='HOME_CONFIRMED'|'AWAY_CONFIRMED'|'HOME_NOT_CONFIGURED'|'SHARING_OFF'|'NO_LOCATION'|'STALE_LOCATION'|'LOCATION_ACCURACY_MISSING'|'HOME_ACCURACY_MISSING'|'INVALID_DISTANCE'|'ACCURACY_OVERLAP';
+type DisplayPlaceConfidence='CONFIRMED'|'LOW_ACCURACY_NEARBY';
 type CoordinatePoint=Readonly<{latitude:number;longitude:number}>;
 type PresencePoint=CoordinatePoint&Readonly<{accuracyMeters?:number}>;
 type HomePresenceProjection=Readonly<{status:HomePresence;reason:HomePresenceReason}>;
+type DisplayPlaceProjection=Readonly<{place:KnownLocationPlace;confidence:DisplayPlaceConfidence;distanceMeters:number}>;
 
 const HOME_RADIUS_METERS=150;
+const DISPLAY_PLACE_RADIUS_METERS=150;
+const MAX_DISPLAY_ACCURACY_METERS=3000;
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 const toRadians=(degrees:number):number=>degrees*Math.PI/180;
 
@@ -90,16 +94,37 @@ function homePresence(point:PresencePoint|null,state:LocationFreshness,home:Pres
   return classifyHomePresenceAtPoint(point,home);
 }
 
-function nearestNamedPlace(point:LocationPoint|null,places:readonly KnownLocationPlace[]):KnownLocationPlace|null{
+function displayPlaceCandidate(point:LocationPoint|null,places:readonly KnownLocationPlace[]):DisplayPlaceProjection|null{
   if(!point)return null;
-  let selected:KnownLocationPlace|null=null;
-  let selectedDistance=Infinity;
+  const pointAccuracy=Number(point.accuracyMeters);
+  const usableAccuracy=Number.isFinite(pointAccuracy)&&pointAccuracy>=0&&pointAccuracy<=MAX_DISPLAY_ACCURACY_METERS?pointAccuracy:null;
+  let selected:DisplayPlaceProjection|null=null;
   for(const place of places){
-    if(!place.key.startsWith('N:')||placePresence(point,place)!=='IN')continue;
+    if(!place.key.startsWith('N:'))continue;
     const distance=locationDistance(point,place);
-    if(Number.isFinite(distance)&&distance<selectedDistance){selected=place;selectedDistance=distance;}
+    if(!Number.isFinite(distance))continue;
+    const strict=placePresence(point,place);
+    if(strict==='IN'){
+      if(!selected||selected.confidence!=='CONFIRMED'||distance<selected.distanceMeters)selected={place,confidence:'CONFIRMED',distanceMeters:distance};
+      continue;
+    }
+    if(selected?.confidence==='CONFIRMED'||usableAccuracy===null)continue;
+    const placeAccuracy=Number(place.accuracyMeters);
+    const storedAccuracy=Number.isFinite(placeAccuracy)&&placeAccuracy>=0?Math.min(placeAccuracy,100):0;
+    const overlapLimit=DISPLAY_PLACE_RADIUS_METERS+usableAccuracy+storedAccuracy;
+    if(distance<=overlapLimit&&(!selected||distance<selected.distanceMeters))selected={place,confidence:'LOW_ACCURACY_NEARBY',distanceMeters:distance};
   }
   return selected;
+}
+
+function homeDisplayNearbyLowAccuracy(point:LocationPoint|null,home:PresencePoint|null,presence:HomePresenceProjection):boolean{
+  if(!point||!home||presence.status==='HOME'||presence.reason!=='ACCURACY_OVERLAP')return false;
+  const pointAccuracy=Number(point.accuracyMeters),homeAccuracy=Number(home.accuracyMeters);
+  if(!Number.isFinite(pointAccuracy)||pointAccuracy<0||pointAccuracy>MAX_DISPLAY_ACCURACY_METERS)return false;
+  const distance=straightLineDistanceMeters(point,home);
+  if(distance===null)return false;
+  const storedAccuracy=Number.isFinite(homeAccuracy)&&homeAccuracy>=0?Math.min(homeAccuracy,100):0;
+  return distance<=HOME_RADIUS_METERS+pointAccuracy+storedAccuracy;
 }
 
 /**
@@ -109,12 +134,11 @@ function nearestNamedPlace(point:LocationPoint|null,places:readonly KnownLocatio
  * provider-neutral D1LocationQueryService remains the only coordinate read
  * boundary, so disabled/share-off/revoked sources and cross-family rows fail
  * closed. Device IDs, provider payloads, credentials and other internal sensor
- * metadata never enter the response. HOME presence is a deterministic derived
- * projection only: stale/uncertain points never assert that someone is home.
- * For stale points, a separate last-known HOME/AWAY projection may be returned
- * when the stored point and accuracy are decisive; it never means current presence.
- * Registered non-HOME place labels use the same accuracy-aware placePresence
- * projection used by stay/arrival features and likewise never imply freshness.
+ * metadata never enter the response. HOME presence remains the strict derived
+ * projection used to avoid asserting presence from uncertain points. A separate
+ * display-only nearby hint may be returned for a coarse current fix whose error
+ * circle overlaps HOME or a named place. Stay/journal/arrival semantics continue
+ * to use placePresence unchanged and never consume the display-only hint.
  */
 export async function locationLatestApi(request:Request,ctx:AppContext):Promise<Response>{
   const requester=ctx.member;
@@ -178,7 +202,7 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
     const lastKnownHomePresence=stalePointPresence&&(stalePointPresence.status==='HOME'||stalePointPresence.status==='AWAY')
       ?stalePointPresence.status
       :null;
-    const registeredPlace=nearestNamedPlace(point,knownPlaces);
+    const displayPlace=displayPlaceCandidate(point,knownPlaces);
     members.push({
       memberId:subjectMemberId,
       isViewer:subjectMemberId===requesterMemberId,
@@ -189,8 +213,11 @@ export async function locationLatestApi(request:Request,ctx:AppContext):Promise<
       distanceMetersFromViewer,
       homePresence:presence.status,
       homePresenceReason:presence.reason,
+      homeDisplayNearbyLowAccuracy:homeDisplayNearbyLowAccuracy(point,home,presence),
       lastKnownHomePresence,
-      registeredPlaceLabel:registeredPlace?.label??null,
+      registeredPlaceLabel:displayPlace?.confidence==='CONFIRMED'?displayPlace.place.label:null,
+      displayNearbyPlaceLabel:displayPlace?.confidence==='LOW_ACCURACY_NEARBY'?displayPlace.place.label:null,
+      displayNearbyPlaceDistanceMeters:displayPlace?.confidence==='LOW_ACCURACY_NEARBY'?Math.round(displayPlace.distanceMeters):null,
       latest:point?{
         latitude:point.latitude,
         longitude:point.longitude,

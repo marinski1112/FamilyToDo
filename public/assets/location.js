@@ -62,16 +62,20 @@
       const lastKnown=lastKnownHomePresenceText[String(member?.lastKnownHomePresence||'')]||'';
       if(lastKnown)return lastKnown;
     }
+    if(member?.homeDisplayNearbyLowAccuracy)return '🏠 自宅付近（GPS精度低）';
     const reason=homePresenceReasonText[String(member?.homePresenceReason||'')]||'';
     return reason?`${base}（${reason}）`:base;
   };
   const rawRegisteredPlaceLabel=(member)=>typeof member?.registeredPlaceLabel==='string'?member.registeredPlaceLabel.trim():'';
+  const rawDisplayNearbyPlaceLabel=(member)=>typeof member?.displayNearbyPlaceLabel==='string'?member.displayNearbyPlaceLabel.trim():'';
   const registeredPlaceLabel=(member)=>{
     const label=rawRegisteredPlaceLabel(member);
-    if(!label)return '';
-    return member?.state==='STALE'?`最終確認：${label}`:`${label}に滞在中`;
+    if(label)return member?.state==='STALE'?`最終確認：${label}`:`${label}に滞在中`;
+    const nearby=rawDisplayNearbyPlaceLabel(member);
+    if(!nearby)return '';
+    return member?.state==='STALE'?`最終位置：${nearby}付近（GPS精度低）`:`${nearby}付近（GPS精度低）`;
   };
-  const isHomeHeadline=(member)=>member?.homePresence==='HOME'||(member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME');
+  const isHomeHeadline=(member)=>member?.homePresence==='HOME'||Boolean(member?.homeDisplayNearbyLowAccuracy)||(member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME');
   const memberLocationHeadline=(member,address='')=>{
     const home=homePresenceLabel(member);
     if(isHomeHeadline(member))return home;
@@ -139,7 +143,7 @@
   const needsAddress=(member)=>Boolean(
     mapsKey&&member?.sharingEnabled&&validPoint(member?.latest)
     &&member?.state!=='SHARING_OFF'&&member?.state!=='NO_LOCATION'
-    &&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)
+    &&!isHomeHeadline(member)&&!rawRegisteredPlaceLabel(member)&&!rawDisplayNearbyPlaceLabel(member)
   );
   const cachedAddress=(member)=>{
     const key=addressCacheKey(member);
@@ -153,7 +157,9 @@
     const presence=homePresenceLabel(member);
     if(presence)pieces.push(presence);
     const place=rawRegisteredPlaceLabel(member);
+    const nearby=rawDisplayNearbyPlaceLabel(member);
     if(place&&!isHomeHeadline(member))pieces.push(`登録地点 ${place}`);
+    else if(nearby&&!isHomeHeadline(member))pieces.push(`登録地点付近 ${nearby}（GPS精度低）`);
     if(address&&needsAddress(member))pieces.push(`住所 ${address}`);
     const age=ageText(Number(member.ageMinutes));
     if(age&&member.state!=='SHARING_OFF'&&member.state!=='NO_LOCATION')pieces.push(age);
@@ -502,11 +508,12 @@
     if(map)void enrichAddresses(members);
     hasRendered=true;
     const atHome=members.filter((member)=>member?.homePresence==='HOME').length;
+    const nearHomeLowAccuracy=members.filter((member)=>member?.homeDisplayNearbyLowAccuracy).length;
     const lastKnownHome=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='HOME').length;
     const lastKnownAway=members.filter((member)=>member?.homePresence==='UNKNOWN'&&member?.homePresenceReason==='STALE_LOCATION'&&member?.lastKnownHomePresence==='AWAY').length;
-    const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;
+    const unresolvedPresence=members.filter((member)=>member?.homePresence==='UNKNOWN'&&!member?.homeDisplayNearbyLowAccuracy&&!(member?.homePresenceReason==='STALE_LOCATION'&&(member?.lastKnownHomePresence==='HOME'||member?.lastKnownHomePresence==='AWAY'))).length;
     const presenceSummary=payload?.homeConfigured
-      ?` ・ 自宅内 ${atHome}人${lastKnownHome?` ・ 最終確認自宅内 ${lastKnownHome}人`:''}${lastKnownAway?` ・ 最終確認外出 ${lastKnownAway}人`:''}${unresolvedPresence?` ・ 判定保留 ${unresolvedPresence}人`:''}`
+      ?` ・ 自宅内 ${atHome}人${nearHomeLowAccuracy?` ・ 自宅付近(低精度) ${nearHomeLowAccuracy}人`:''}${lastKnownHome?` ・ 最終確認自宅内 ${lastKnownHome}人`:''}${lastKnownAway?` ・ 最終確認外出 ${lastKnownAway}人`:''}${unresolvedPresence?` ・ 判定保留 ${unresolvedPresence}人`:''}`
       :'';
     setStatus(`家族 ${members.length}人 ・ 位置あり ${located.length}人${presenceSummary}`);
   };

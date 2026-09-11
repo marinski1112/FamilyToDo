@@ -12,6 +12,7 @@ type HomeRow=Readonly<{
 type MemberRow=Readonly<{id:unknown;name:unknown}>;
 
 const MAX_LOCATION_AGE_MS=30*60*1000;
+const MAX_HOME_CAPTURE_ACCURACY_METERS=100;
 const MAX_BODY_BYTES=2048;
 const isPositiveId=(value:number):boolean=>Number.isSafeInteger(value)&&value>0;
 
@@ -84,6 +85,10 @@ export async function locationHomeApi(request:Request,ctx:AppContext):Promise<Re
   const point=await service.latest({scope:{familyId,requesterMemberId},subjectMemberId:sourceMemberId});
   if(!point)return fail(409,'SOURCE_LOCATION_UNAVAILABLE','このメンバーの共有中の位置情報がありません。');
   if(!freshEnough(point.recordedAt,Date.now()))return fail(409,'SOURCE_LOCATION_STALE','このメンバーの位置情報が古いため、自宅地点として保存できません。');
+  const accuracy=Number(point.accuracyMeters);
+  if(!Number.isFinite(accuracy)||accuracy<0||accuracy>MAX_HOME_CAPTURE_ACCURACY_METERS){
+    return fail(409,'SOURCE_LOCATION_INACCURATE','精度100m以内の位置情報が必要です。測位精度が改善してから自宅地点を保存してください。');
+  }
 
   await ctx.env.DB.prepare(`
     INSERT INTO family_location_places(
@@ -96,7 +101,7 @@ export async function locationHomeApi(request:Request,ctx:AppContext):Promise<Re
       source_recorded_at=excluded.source_recorded_at,updated_by_member_id=excluded.updated_by_member_id,
       updated_at=CURRENT_TIMESTAMP
   `).bind(
-    familyId,point.latitude,point.longitude,point.accuracyMeters??null,sourceMemberId,
+    familyId,point.latitude,point.longitude,accuracy,sourceMemberId,
     point.recordedAt,requesterMemberId,requesterMemberId,
   ).run();
   return readHome(ctx,familyId);
