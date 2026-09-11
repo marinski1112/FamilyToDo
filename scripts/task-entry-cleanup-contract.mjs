@@ -14,6 +14,8 @@ const normalize=fs.readFileSync('public/assets/task-rough-input-event-normalize.
 const typeUi=fs.readFileSync('public/assets/task-entry-type-ui.js','utf8');
 const colorUi=fs.readFileSync('public/assets/calendar-color-ui.js','utf8');
 const pkg=fs.readFileSync('package.json','utf8');
+const obsoleteTaskNewAsset='/assets/'+'task-new.js';
+const obsoleteTaskNewFile='public/assets/'+'task-new.js';
 
 const expectedColors=['#7c3aed','#2563eb','#16a34a','#ea580c','#dc2626','#db2777','#0891b2','#64748b','#f35f8c','#2ecc87','#47b2f7','#b38bdc','#fdc02d','#fb7f77'];
 const actualColors=[...colors.matchAll(/value:'(#[0-9a-f]{6})'/gi)].map(match=>match[1].toLowerCase());
@@ -47,6 +49,8 @@ assert.ok(typeUi.includes("row.querySelector('.rough-main-completion')?.closest(
 assert.ok(normalize.includes("out.push(next,`期限: ${current}`)"),'client date-only EVENT line must become metadata for the following title');
 assert.ok(serverNormalize.includes('export function normalizeEventDateTitleText'),'server must own the EVENT date/title semantic normalization contract');
 assert.ok(serverNormalize.includes("String(body.primaryType||'')!=='event'"),'server normalization must be scoped to explicit EVENT primary type');
+assert.ok(serverNormalize.includes('toIsoDate(current,referenceDate)'),'server normalization must retain a yearless EVENT date without requiring AI');
+assert.ok(serverNormalize.includes('DUE_DATE_LINE'),'server normalization must upgrade the client metadata form as well as raw date/title input');
 assert.ok(apiRoutes.includes("taskRoughInputApi(await normalizeEventRoughInputRequest(request),context)"),'rough-input API must apply server EVENT normalization before canonical parsing');
 const dateOnly=/^(?:\d{4}[\/.\-])?\d{1,2}[\/.\-]\d{1,2}$|^\d{1,2}\s*月\s*\d{1,2}\s*日$/u;
 const metadata=/^(?:説明|メモ|備考|note|url|リンク|数量|個数|カテゴリー|カテゴリ|期限|締切)\s*[:：]/iu;
@@ -86,9 +90,9 @@ assert.ok(pkg.includes('public/assets/task-rough-input-ui.js'),'browser/task che
 assert.ok(pkg.includes('public/assets/task-entry-type-ui.js'),'browser/task checks must include explicit type UI cleanup');
 
 assert.ok(!newEntries.includes('taskNew'),'obsolete taskNew renderer must not remain in new-entry-pages');
-assert.ok(!shell.includes('/assets/task-new.js'),'app shell must not reference obsolete task-new asset');
-assert.ok(!pkg.includes('public/assets/task-new.js'),'checks must not reference obsolete task-new asset');
-assert.equal(fs.existsSync('public/assets/task-new.js'),false,'obsolete task-new asset must be removed');
+assert.ok(!shell.includes(obsoleteTaskNewAsset),'app shell must not reference obsolete task-new asset');
+assert.ok(!pkg.includes(obsoleteTaskNewFile),'checks must not reference obsolete task-new asset');
+assert.equal(fs.existsSync(obsoleteTaskNewFile),false,'obsolete task-new asset must be removed');
 assert.equal(fs.existsSync('src/client/task-new.ts'),false,'missing legacy task-new source must not be recreated');
 assert.equal(fs.existsSync('.github/EMPTY'),false,'temporary empty GitHub marker must not remain');
 
