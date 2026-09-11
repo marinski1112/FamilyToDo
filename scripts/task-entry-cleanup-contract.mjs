@@ -5,11 +5,13 @@ const colors=fs.readFileSync('src/calendar-colors.ts','utf8');
 const page=fs.readFileSync('src/task-entry-page.ts','utf8');
 const route=fs.readFileSync('src/exception-routes.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
+const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 const newEntries=fs.readFileSync('src/new-entry-pages.ts','utf8');
 const serverNormalize=fs.readFileSync('src/task-rough-input-event-normalize.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const manual=fs.readFileSync('public/assets/task-entry-manual.js','utf8');
 const roughUi=fs.readFileSync('public/assets/task-rough-input-ui.js','utf8');
+const roughSave=fs.readFileSync('public/assets/task-rough-input-save.js','utf8');
 const normalize=fs.readFileSync('public/assets/task-rough-input-event-normalize.js','utf8');
 const typeUi=fs.readFileSync('public/assets/task-entry-type-ui.js','utf8');
 const colorUi=fs.readFileSync('public/assets/calendar-color-ui.js','utf8');
@@ -35,16 +37,26 @@ for(const marker of [
   'if(noDateWrap)noDateWrap.hidden=eventMode;',
   'if(completionWrap)completionWrap.hidden=eventMode;',
   'if(assigneeWrap)assigneeWrap.hidden=eventMode;',
+  'dateInput.required=eventMode',
   "is_event:eventMode,",
   "noDate:eventMode?false:Boolean(noDate?.checked),",
   "completion_mode:eventMode?'ANY':",
   'assignees:eventMode?[]:',
 ])assert.ok(manual.includes(marker),`manual task/event contract missing: ${marker}`);
+assert.ok(taskApi.includes("if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);"),'server must reject EVENT creation without a date');
+assert.ok(roughSave.includes("if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;"),'rough EVENT save must require a start date');
+assert.ok(roughSave.includes("noDate:item.destination!=='event'&&!(item.startDate||item.dueDate)"),'rough EVENT save must never use no-deadline mode');
 
 assert.ok(roughUi.includes('name="rough_primary_type" value="event"'),'rough input must expose explicit EVENT primary type');
 assert.ok(typeUi.includes("row.dataset.destination!=='event'"),'EVENT rough draft cleanup must key from explicit destination');
 assert.ok(typeUi.includes("row.querySelector('.rough-main-assignees')?.remove()"),'EVENT rough draft must omit assignee controls');
 assert.ok(typeUi.includes("row.querySelector('.rough-main-completion')?.closest('label')?.remove()"),'EVENT rough draft must omit completion controls');
+assert.ok(typeUi.includes('start.required=true'),'EVENT rough draft must mark start date required');
+assert.ok(typeUi.includes("setLabelText(start,'開始日（必須）')"),'EVENT rough draft must visibly identify the required start date');
+assert.ok(typeUi.includes('@media(max-width:640px)'),'rough detail UI must use an iPhone/LIFF mobile breakpoint');
+assert.ok(typeUi.includes('.rough-detail-grid{grid-template-columns:minmax(0,1fr)!important}'),'rough detail fields must stack to one column on mobile');
+assert.ok(typeUi.includes("button.textContent='手入力に戻す';"),'AI preview must retain a compact way back to manual entry');
+assert.ok(typeUi.includes('manual.hidden=true;'),'successful AI preview must hide the redundant manual form');
 
 assert.ok(normalize.includes("out.push(next,`期限: ${current}`)"),'client date-only EVENT line must become metadata for the following title');
 assert.ok(serverNormalize.includes('export function normalizeEventDateTitleText'),'server must own the EVENT date/title semantic normalization contract');
@@ -80,6 +92,7 @@ for(const marker of [
   "replace(/\\s*[（(]TimeTree[）)]\\s*/gu,'')",
 ])assert.ok(colorUi.includes(marker),`calendar color UI contract missing: ${marker}`);
 assert.ok(shell.includes('/assets/calendar-color-ui.js'),'calendar color UI must load on color forms');
+assert.ok(shell.includes("const TASK_ENTRY_UI_REVISION = 'ai-first-ui2-entry-cleanup3';"),'task entry cache revision must invalidate the real-device UI bundle');
 const bootstrapIndex=page.indexOf('/assets/task-rough-input-ui.js'),manualIndex=page.indexOf('/assets/task-entry-manual.js');
 assert.ok(bootstrapIndex>=0&&manualIndex>bootstrapIndex,'rough input bootstrap must run before manual type binding');
 assert.ok(!shell.includes('/assets/task-rough-input-ui.js'),'rough input bootstrap must not be loaded twice');
@@ -96,4 +109,4 @@ assert.equal(fs.existsSync(obsoleteTaskNewFile),false,'obsolete task-new asset m
 assert.equal(fs.existsSync('src/client/task-new.ts'),false,'missing legacy task-new source must not be recreated');
 assert.equal(fs.existsSync('.github/EMPTY'),false,'temporary empty GitHub marker must not remain');
 
-console.log('task entry cleanup contract: unified entry routing, server/client event grouping, explicit task/event UI semantics, calendar labels/swatches/default memory, and task-new retirement ok');
+console.log('task entry cleanup contract: unified entry routing, required event dates, mobile AI detail layout, progressive manual fallback, server/client event grouping, explicit task/event UI semantics, calendar labels/swatches/default memory, and task-new retirement ok');
