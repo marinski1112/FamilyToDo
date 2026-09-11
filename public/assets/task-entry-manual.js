@@ -50,6 +50,7 @@ const init=()=>{
       if(noDateWrap)noDateWrap.hidden=eventMode;
       if(completionWrap)completionWrap.hidden=eventMode;
       if(assigneeWrap)assigneeWrap.hidden=eventMode;
+      if(dateInput){dateInput.required=eventMode;dateInput.setAttribute('aria-required',eventMode?'true':'false');}
       if(eventMode){
         if(noDate){noDate.checked=false;noDate.disabled=true;}
         assignees.forEach(input=>{input.checked=false;input.disabled=true;});
