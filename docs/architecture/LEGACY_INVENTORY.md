@@ -77,7 +77,8 @@ Populate this table from current-main evidence during cleanup PRs. Keep UNKNOWN 
 | `src/message-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying message page modules | keep; do not classify as dead wrapper |
 | `src/shopping-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying shopping page modules | keep; do not classify as dead wrapper |
 | `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying settings page modules | keep; do not classify as dead wrapper |
-| top-level `*wave*` / Wave-era artifacts | UNKNOWN | not yet reachability-audited | TBD | do not delete yet |
+| `CHANGELOG_CLOUDFLARE_WAVE10.md` | HISTORICAL | documentation-only v12.35/Wave10 migration notes; exact filename has no current repository references; root README does not link it; package/CI do not consume top-level Markdown; static-asset contract scans only ts/js/mjs/html | Git history | removed in bounded W4 cleanup |
+| top-level `*wave*` / Wave-era artifacts | UNKNOWN | remaining artifacts not yet reachability-audited | TBD | do not delete yet |
 | former duplicate local `asDateOffset()` helpers | canonicalized duplicate | identical ACTIVE callers and helper semantics verified before centralization | `src/timezone.ts#asDateOffset()` | keep canonical helper; no local copies |
 
 ## Git-history principle
