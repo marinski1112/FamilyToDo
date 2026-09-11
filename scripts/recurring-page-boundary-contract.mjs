@@ -17,6 +17,7 @@ for(const marker of [
   "archiveTaskCompletionStatements",
   "import { matchesRecurrence, parseJsonArray } from './recurrence-projection';",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
+  "import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';",
   "saveTaskFamilyLogTemplate",
   "validateTaskFamilyLogTemplateInput",
   "export async function recurring(request:Request,ctx:AppContext):Promise<Response>{",
@@ -27,7 +28,7 @@ for(const marker of [
   "edit_scope||'all')==='future'",
   "'recurrence_split_future'",
   "'SPLIT_FUTURE'",
-  "DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN",
+  "await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,taskId,now);",
   "DELETE FROM recurrence_occurrence_completions WHERE member_id NOT IN",
   "UPDATE recurrence_occurrences SET status=CASE WHEN",
   "archiveTaskChildCompletionStatements(ctx.env.DB,m.family_id,taskId,nowJst())",
@@ -39,6 +40,8 @@ for(const marker of [
   "/assets/recurring.js?v=${APP_VERSION}",
   "action=\"/app/recurring.php\"",
 ])if(!page.includes(marker))throw new Error(`retained recurring behavior marker missing: ${marker}`);
+
+if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN"))throw new Error('recurring series-wide assignee edits must use canonical task completion reconciliation');
 
 for(const marker of [
   "export const FAMILY_LOG_TYPES=Object.keys(FAMILY_LOG_TYPE_META);",
@@ -55,4 +58,4 @@ if(!exceptions.includes("import { recurring } from './recurring-page';"))throw n
 if(!exceptions.includes("if(url.pathname!=='/app/recurring.php') return null;"))throw new Error('canonical recurring early route changed');
 if(!routes.includes("if(url.pathname==='/app/settings_recurring.php') return await recurring(request,context);"))throw new Error('settings recurring alias route changed');
 
-console.log('recurring-page-boundary: retained recurring ownership, split/archive/template/restore semantics ok');
+console.log('recurring-page-boundary: retained recurring ownership, split/archive/template/restore/completion reconciliation semantics ok');
