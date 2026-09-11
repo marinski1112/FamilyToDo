@@ -24,6 +24,7 @@ When source and this index disagree, source wins and the index must be updated i
 - `CONFIG_FUNCTION_MAP.md` — canonical config/function ownership and duplicate/drift candidates.
 - `LEGACY_INVENTORY.md` — classification rules for active, compatibility, historical, dead, and unknown files.
 - `CLEANUP_AUTOMATION_RUNBOOK.md` — one-bounded-change cleanup execution contract, lease/CI/Workers flow, source-reconstruction prohibition, and autonomous-task prompt contract.
+- `FIVE_WORKER_AUTONOMY.md` — five-task lane split, global lease/collision rules, staggered schedule, and final read-only auditor contract.
 
 ## Cleanup safety classes
 
@@ -51,4 +52,4 @@ The cleanup sequence is intentionally conservative:
 5. run the full regression suite and Workers Build;
 6. update this index with each structural change.
 
-The autonomous cleanup contract, if the user later chooses to schedule it, is defined in `CLEANUP_AUTOMATION_RUNBOOK.md`. The existence of that runbook does **not** itself enable or schedule automation.
+The single-run cleanup contract is defined in `CLEANUP_AUTOMATION_RUNBOOK.md`. The five-task orchestration contract is defined in `FIVE_WORKER_AUTONOMY.md`. Neither document by itself enables or schedules automation.
