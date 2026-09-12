@@ -23,10 +23,12 @@ for(const marker of [
   'href="/app/settings.php" aria-label="管理を開く"',
   'href="/app/family_journal.php"',
   'href="/app/location.php"',
-  'href="/app/shopping.php"',
+  'const shoppingHref=`/app/tasks.php?date=${encodeURIComponent(dashboard.today)}#shopping-checklist`;',
+  'href="${shoppingHref}"',
   'return=tasks',
   "return html(layout('ホーム',body,'/app/index.php'));",
 ])if(!home.includes(marker))throw new Error(`home dashboard marker missing: ${marker}`);
+if(home.includes('href="/app/shopping.php"'))throw new Error('Home must not navigate internally through retired Shopping compatibility URL');
 if(home.includes('明日:'))throw new Error('Home must prioritize today/yesterday instead of the old tomorrow menu summary');
 
 for(const marker of [
@@ -61,4 +63,4 @@ for(const marker of [
 ])if(!handlers.includes(marker))throw new Error(`retained auth page boundary missing: ${marker}`);
 if(!routes.includes("if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return await home(context);"))throw new Error('home route changed');
 
-console.log('home-page-boundary: bounded today/yesterday dashboard, action alerts, journal privacy gate and admin gear navigation ok');
+console.log('home-page-boundary: bounded today/yesterday dashboard, canonical Shopping checklist links, journal privacy gate and admin gear navigation ok');
