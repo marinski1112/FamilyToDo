@@ -3,6 +3,11 @@ import {readFile} from 'node:fs/promises';
 
 const api=await readFile(new URL('../src/location-device-api.ts',import.meta.url),'utf8');
 const routes=await readFile(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
+const publicRoutes=await readFile(new URL('../src/public-routes.ts',import.meta.url),'utf8');
+const ownTracks=await readFile(new URL('../src/location-owntracks-ingress.ts',import.meta.url),'utf8');
+const overland=await readFile(new URL('../src/location-overland-ingress.ts',import.meta.url),'utf8');
+const overlandNormalizer=await readFile(new URL('../src/location-overland.ts',import.meta.url),'utf8');
+const settings=await readFile(new URL('../src/settings-location-page.ts',import.meta.url),'utf8');
 
 assert.match(routes,/import \{ locationDeviceApi \} from '\.\/location-device-api';/,'context router must retain Location device API import');
 assert.match(routes,/url\.pathname==='\/api\/location\/devices'[\s\S]{0,80}locationDeviceApi\(request,context\)/,'device management must use authenticated context routing');
@@ -18,4 +23,22 @@ assert.doesNotMatch(api,/SELECT[^;]*secret_hash/is,'management API must never re
 assert.doesNotMatch(api,/console\.(?:log|info|warn|error)/,'management API must not log device credentials or state');
 assert.doesNotMatch(api,/GOOGLE_MAPS_ROUTES_API_KEY/,'management API must not expose the Worker-only Routes key');
 
-console.log('location-device-api-contract: ok');
+assert.match(publicRoutes,/\/api\/location\/overland'[\s\S]{0,80}overlandLocationIngress\(request,env,ctx\)/,'Overland receiver must be a public device-authenticated route');
+assert.match(overland,/Authorization[\s\S]*publicId:secret|publicId:secret[\s\S]*Authorization/,'Overland credential must stay in the Authorization header, not the URL');
+assert.match(overland,/verifyLocationDeviceCredential\(env\.DB,credential\.publicId,credential\.secret\)/,'Overland must reuse hashed FamilyToDo device credential verification');
+assert.match(overland,/device\.provider!=='OWNTRACKS'/,'Overland must currently reuse only the existing iPhone credential class');
+assert.match(overland,/persistAuthenticatedLocationPoint\(env\.DB,device,point\)/,'Overland must reuse canonical D1 persistence');
+assert.doesNotMatch(overland,/searchParams|console\.(?:log|info|warn|error)|raw_payload/i,'Overland ingress must not accept URL tokens or log raw location data');
+assert.match(overlandNormalizer,/payload\.locations\.length>MAX_OVERLAND_LOCATIONS/,'Overland batches must be bounded');
+assert.match(overlandNormalizer,/geometry\.coordinates/,'Overland GeoJSON coordinates must be normalized');
+assert.match(overlandNormalizer,/properties\.timestamp/,'Overland must preserve the sensor timestamp');
+assert.match(overlandNormalizer,/provider:'OWNTRACKS'/,'Overland points must match the shared credential provider until a schema migration explicitly introduces another provider');
+assert.match(settings,/id="overlandUrl"/,'Location settings must expose the Overland endpoint');
+assert.match(settings,/id="overlandToken"/,'Location settings must expose the one-time Overland bearer token');
+
+assert.match(ownTracks,/if\(ownTracksType\(payload\)==='waypoint'\)return json\(\[\]\);/,'authenticated OwnTracks waypoint metadata must be acknowledged as a 2xx no-op');
+const waypointIndex=ownTracks.indexOf("ownTracksType(payload)==='waypoint'");
+const verifyIndex=ownTracks.indexOf('verifyLocationDeviceCredential');
+assert.ok(verifyIndex>=0&&waypointIndex>verifyIndex,'waypoint no-op must occur only after credential verification');
+
+console.log('location-device-api-contract: management, Overland auth/persistence, and authenticated OwnTracks waypoint no-op boundaries ok');
