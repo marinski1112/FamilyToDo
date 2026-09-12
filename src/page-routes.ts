@@ -1,8 +1,8 @@
 import { loginPage, createFamilyPage, invitePage, home } from './auth-page-handlers';
-import { today, tomorrow, taskEvents, taskView, taskEdit, itemEdit } from './task-page-handlers';
+import { taskEvents, taskView, taskEdit, itemEdit } from './task-page-handlers';
 import { calendar } from './calendar-page-handler';
 import { messages, messageNew } from './message-page-handlers';
-import { shopping, shoppingNew, shoppingEdit } from './shopping-page-handlers';
+import { shoppingNew, shoppingEdit } from './shopping-page-handlers';
 import { locationPage } from './location-page';
 import { familyLog } from './family-log-page-handler';
 import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, settingsLocation, recurring } from './settings-page-handlers';
@@ -16,7 +16,7 @@ import { calendarImportPage } from './calendar-ics-import';
 import { logsPage } from './activity-log-page';
 import { asDateOffset, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
-import { json } from './response';
+import { json, redirect } from './response';
 import { settingsPwaBranding } from './settings-pwa-branding-page';
 import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
 
@@ -30,13 +30,22 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return await createFamilyPage(context);
   if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return await invitePage(context,url.searchParams.get('token')||'');
   if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return await home(context);
-  if(url.pathname==='/today.php') return await today(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
-  if(url.pathname==='/tomorrow.php') return await tomorrow(request,context,url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+  if(url.pathname==='/today.php'){
+    const date=url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE));
+    return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}`);
+  }
+  if(url.pathname==='/tomorrow.php'){
+    const date=url.searchParams.get('date')||asDateOffset(1,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE));
+    return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}`);
+  }
   if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
   if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
   if(url.pathname==='/app/messages.php') return await messages(request,context);
   if(url.pathname==='/app/location.php') return await locationPage(request,context,env);
-  if(url.pathname==='/app/shopping.php') return await shopping(request,context);
+  if(url.pathname==='/app/shopping.php'){
+    const date=url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE));
+    return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`);
+  }
   if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
   if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);
   if(url.pathname==='/app/family_journal.php') return await familyDailyJournalPageWithAi(request,context);
