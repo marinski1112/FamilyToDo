@@ -13,6 +13,10 @@ type Row=Record<string,unknown>;
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const nowJst=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T').replace('T',' ');
 const bad=(message:string)=>json({ok:false,error:message,code:'BAD_REQUEST'},400);
+const shoppingChecklistUrl=(value:unknown)=>{
+  const date=String(value||'').slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
+};
 
 function taskRange(task:Row):{start:string;end:string}{
   const start=String(task.start_at||task.due_at||'').slice(0,10);
@@ -82,7 +86,7 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
         ...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
         ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id),
       ]);
-      return redirect('/app/shopping.php');
+      return redirect(shoppingChecklistUrl(item.due_date));
     }
     const name=String(b.name||'').trim();
     if(!name)return bad('商品名を入力してください。');
@@ -104,7 +108,7 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,memberId,m.family_id)));
     await ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT member_id FROM shopping_assignees WHERE shopping_item_id=?)').bind(id,id).run();
     await ctx.env.DB.prepare("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=shopping_items.id)=0 THEN 'pending' WHEN (SELECT COUNT(*) FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=shopping_items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();
-    return redirect('/app/shopping.php');
+    return redirect(shoppingChecklistUrl(due||item.due_date));
   }
 
   const currentCategory=normalizeShoppingCategoryName(item.category);
