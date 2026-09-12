@@ -21,10 +21,11 @@ for(const marker of [
   "INSERT INTO shopping_completion_history",
   "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`shopping root lost ${marker}`);
+const retiredAsset='/assets/'+'shopping.js';
 for(const retiredMarker of [
   "return html(layout('買い物'",
   'id="shoppingPayload"',
-  '/assets/shopping.js',
+  retiredAsset,
   "url.searchParams.get('view')",
 ]) if(root.includes(retiredMarker)) throw new Error(`retired standalone Shopping renderer must not return: ${retiredMarker}`);
 
