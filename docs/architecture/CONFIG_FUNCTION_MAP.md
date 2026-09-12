@@ -1,6 +1,6 @@
 # Config and function ownership map
 
-Verified against current structural baseline `d7ccdc50cab1be951625cb48b7c0873e56d31f59`.
+Verified against current structural baseline `2d3bf73a79f3d6f325beffbb2d79a9a81b355bc3`.
 
 This file identifies canonical owners and cleanup candidates. A candidate is not permission to remove code; current callers and dynamic routes must be checked first.
 
@@ -81,6 +81,27 @@ The authenticated API dispatcher for this domain is `src/context-api-routes.ts`.
 - Do not infer parent-child inheritance that is not explicit in current source. A child remains its own task row; recurrence, assignees, linked Shopping/Items, and completion state are not implicitly inherited from the parent.
 - Do not bypass `taskVisibilitySql()` when adding task-linked reads or mutations. PRIVATE visibility and owner identity are part of the domain contract, not page-only filtering.
 - `taskRoughInputApi()` analyzes and validates input; it does not replace canonical persistence owners. AI output must continue through the normal task/Shopping/Item save paths.
+
+## Message ownership
+
+`src/messages-api.ts#messages()` is intentionally both the canonical `/app/messages.php` page handler and the canonical `/api/messages` mutation handler. `src/message-new-page.ts#messageNew()` is a separate create-form page only; it submits into the same messages API rather than owning message persistence.
+
+| Concern | Canonical owner / exported function | Route/caller | Data / external side effects | Authorization / tenant boundary | Regression boundary |
+| --- | --- | --- | --- | --- | --- |
+| Message list + create/edit/delete | `src/messages-api.ts#messages()` | `/app/messages.php` via `src/page-routes.ts`; `/api/messages` via `src/context-api-routes.ts` | reads/writes `messages`; create/edit schedules `message_reminder` rows in `notifications`; edit/delete cancels pending/retry notifications; edit/delete activity is recorded | authenticated member + CSRF on POST; target member is validated active and same-family; edit/delete require sender or OWNER/ADMIN; recipient display JOIN remains family-scoped | `messages-api-boundary-contract.mjs`, `context-api-route-dispatcher-contract.mjs`, `page-route-dispatcher-contract.mjs` |
+| New-message form | `src/message-new-page.ts#messageNew()` | `GET /app/message_new.php` | reads active family members and renders `message-new.js`; no message persistence owner | authenticated member; recipient choices are family-scoped; CSRF token is embedded for the API submission | `message-new-page-boundary-contract.mjs`, `page-route-dispatcher-contract.mjs` |
+| AI conversion draft | `src/message-ai-draft.ts#messageAiDraft()` | `action=ai_draft` through `POST /api/messages` | read-only: reads one family message and bounded active FAMILY task candidates, then reuses `analyzeTaskRoughInput()`; returns suggestions with `requiresConfirmation=true`; no Task/Shopping/message conversion mutation | authenticated member; message lookup is family-scoped; candidate tasks are FAMILY, incomplete, non-recurring; reference date uses family timezone fallback chain | `messages-api-boundary-contract.mjs` plus the active task rough-input regression contracts that guard the reused analyzer |
+| Message -> Shopping conversion | `src/messages-api.ts#messages()` `action=convert_shopping` | confirmed conversion through `POST /api/messages` | inserts `shopping_items` and `shopping_assignees`, records `messages.converted_to_shopping_id`, logs conversion; optional task link accepts only active FAMILY non-recurring task | authenticated member + CSRF; assignees/target member must be active same-family; stale AI draft is rejected by message updated/text checks; already-converted message is idempotently returned | `messages-api-boundary-contract.mjs`, Shopping contracts for downstream active surfaces |
+| Message -> Task/Event conversion | `src/messages-api.ts#messages()` `action=convert_task` | confirmed conversion through `POST /api/messages` | existing mode may append message text to an active FAMILY task; new mode creates Task/Event, assignees and reminders; records `messages.converted_to_task_id`, logs conversion and queues Google Calendar projection | authenticated member + CSRF; existing target is active FAMILY non-recurring; assignees are active same-family; stale AI draft is rejected; already-converted message is idempotently returned | `messages-api-boundary-contract.mjs`, task range/Calendar behavior retained by the current handler and downstream Task contracts |
+
+### Message-domain cleanup rules
+
+- Do not split page and API behavior by assuming `/app/messages.php` and `/api/messages` have different business owners. Both intentionally delegate to `messages()` today.
+- Do not move persistence into `messageNew()`. It is a server-rendered form surface; the canonical message mutation path is `/api/messages`.
+- `messageAiDraft()` is advisory/read-only. It may reuse the Task rough-input analyzer and rank nearby tasks, but conversion still requires a confirmed `convert_task` / `convert_shopping` action through `messages()`.
+- Preserve the message version/text stale-draft guard before confirmed conversion; it prevents an AI draft generated from an older message body from being persisted after the source message changes.
+- Message conversion currently accepts FAMILY task targets only. Do not broaden it to PRIVATE targets by reusing generic Task access helpers without an explicit product/privacy decision.
+- `/api/message-stamps` is a separate canonical owner (`src/message-stamp-api.ts`) and is not part of the `messages()` persistence boundary.
 
 ## Function cleanup classifications
 
