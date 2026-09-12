@@ -14,6 +14,7 @@ const esc = (v: unknown) => String(v ?? '')
   .replaceAll('>','&gt;')
   .replaceAll('"','&quot;')
   .replaceAll("'",'&#39;');
+const shoppingChecklistUrl=(date='')=>date?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
 
 function taskRange(task:Row):{start:string;end:string}{
   const start=String(task.start_at||task.due_at||'').slice(0,10);
@@ -94,6 +95,7 @@ export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):
     ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE,id').bind(m.family_id).all<Row>(),
   ]);
   const categoryOptions=resolveShoppingCategoryOptions(catalog.results);
-  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="/app/shopping.php">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId,categoryOptions)}`;
-  return html(layout('買い物を追加',body,'/app/shopping.php'));
+  const checklistUrl=shoppingChecklistUrl(d);
+  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="${checklistUrl}">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId,categoryOptions)}`;
+  return html(layout('買い物を追加',body,'/app/tasks.php'));
 }
