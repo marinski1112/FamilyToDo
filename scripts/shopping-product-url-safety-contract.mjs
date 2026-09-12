@@ -38,6 +38,10 @@ assert.match(renderer,/parsed\.username\|\|parsed\.password/,'checklist renderer
 assert.match(renderer,/parsed\.protocol==='http:'\|\|parsed\.protocol==='https:'/,'checklist renderer must allow only http/https product links');
 assert.match(renderer,/const productUrl=safeProductUrl\(item\.url\)/,'checklist renderer must sanitize each persisted Shopping URL before HTML assembly');
 assert.doesNotMatch(renderer,/item\.url\?`<a href="\$\{esc\(item\.url\)\}/,'checklist renderer must never insert raw persisted Shopping URLs into href');
-assert.doesNotMatch(renderer,/console\.(?:log|warn|error)|cookie|authorization|token|member_name|family_name|private_owner_id/i,'checklist product-link safety block must not introduce sensitive logging or identity/session handling');
+const helperStart=renderer.indexOf('  const safeProductUrl=');
+const helperEnd=renderer.indexOf('  const effectiveShoppingDue=',helperStart);
+assert.ok(helperStart>=0&&helperEnd>helperStart,'checklist product URL safety helper must remain bounded and detectable');
+const helperSource=renderer.slice(helperStart,helperEnd);
+assert.doesNotMatch(helperSource,/console\.(?:log|warn|error)|cookie|authorization|token|member_name|family_name|private_owner_id/i,'checklist product-link safety helper must not introduce sensitive logging or identity/session handling');
 
 console.log('shopping product url safety contract: shopping and canonical checklist renderers accept only bounded credential-free absolute http/https links');
