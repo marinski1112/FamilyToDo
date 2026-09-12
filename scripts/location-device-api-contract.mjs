@@ -28,10 +28,15 @@ assert.match(overland,/Authorization[\s\S]*publicId:secret|publicId:secret[\s\S]
 assert.match(overland,/verifyLocationDeviceCredential\(env\.DB,credential\.publicId,credential\.secret\)/,'Overland must reuse hashed FamilyToDo device credential verification');
 assert.match(overland,/device\.provider!=='OWNTRACKS'/,'Overland must currently reuse only the existing iPhone credential class');
 assert.match(overland,/persistAuthenticatedLocationPoint\(env\.DB,device,point\)/,'Overland must reuse canonical D1 persistence');
+assert.match(overland,/return json\(\{result:'ok',ok:true,accepted:accepted\.length\}\);/,'Overland success must include the canonical result=ok acknowledgement so the app clears its local queue');
 assert.doesNotMatch(overland,/searchParams|console\.(?:log|info|warn|error)|raw_payload/i,'Overland ingress must not accept URL tokens or log raw location data');
 assert.match(overlandNormalizer,/payload\.locations\.length>MAX_OVERLAND_LOCATIONS/,'Overland batches must be bounded');
 assert.match(overlandNormalizer,/geometry\.coordinates/,'Overland GeoJSON coordinates must be normalized');
 assert.match(overlandNormalizer,/properties\.timestamp/,'Overland must preserve the sensor timestamp');
+assert.match(overlandNormalizer,/const speed=nonNegative\(feature\.properties\.speed\)/,'negative unavailable speed sentinels must be omitted instead of rejecting the GPS point');
+assert.match(overlandNormalizer,/const course=heading\(feature\.properties\.course\)/,'unavailable or invalid course metadata must be omitted instead of rejecting the GPS point');
+assert.match(overlandNormalizer,/const accuracy=nonNegative\(feature\.properties\.horizontal_accuracy\)/,'unavailable negative accuracy metadata must be omitted instead of rejecting the GPS point');
+assert.doesNotMatch(overlandNormalizer,/speed!==undefined&&speed<0|course!==undefined&&\(course<0|accuracy!==undefined&&accuracy<0/,'optional negative sensor sentinels must not reject a valid location point');
 assert.match(overlandNormalizer,/provider:'OWNTRACKS'/,'Overland points must match the shared credential provider until a schema migration explicitly introduces another provider');
 assert.match(settings,/id="overlandUrl"/,'Location settings must expose the Overland endpoint');
 assert.match(settings,/id="overlandToken"/,'Location settings must expose the one-time Overland bearer token');
@@ -41,4 +46,4 @@ const waypointIndex=ownTracks.indexOf("ownTracksType(payload)==='waypoint'");
 const verifyIndex=ownTracks.indexOf('verifyLocationDeviceCredential');
 assert.ok(verifyIndex>=0&&waypointIndex>verifyIndex,'waypoint no-op must occur only after credential verification');
 
-console.log('location-device-api-contract: management, Overland auth/persistence, and authenticated OwnTracks waypoint no-op boundaries ok');
+console.log('location-device-api-contract: management, Overland auth/sentinel/ack persistence, and authenticated OwnTracks waypoint no-op boundaries ok');

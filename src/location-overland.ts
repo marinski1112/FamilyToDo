@@ -18,6 +18,20 @@ export const MAX_OVERLAND_LOCATIONS=250;
 type JsonObject=Record<string,unknown>;
 const isObject=(value:unknown):value is JsonObject=>typeof value==='object'&&value!==null&&!Array.isArray(value);
 const finite=(value:unknown):number|undefined=>typeof value==='number'&&Number.isFinite(value)?value:undefined;
+const nonNegative=(value:unknown):number|undefined=>{
+  const numeric=finite(value);
+  return numeric!==undefined&&numeric>=0?numeric:undefined;
+};
+const heading=(value:unknown):number|undefined=>{
+  const numeric=finite(value);
+  return numeric!==undefined&&numeric>=0&&numeric<=360?numeric:undefined;
+};
+const batteryPercent=(value:unknown):number|undefined=>{
+  const numeric=finite(value);
+  if(numeric===undefined||numeric<0)return undefined;
+  if(numeric<=1)return numeric*100;
+  return numeric<=100?numeric:undefined;
+};
 
 const validContext=(context:OverlandNormalizeContext):boolean=>
   Number.isSafeInteger(context.familyId)&&context.familyId>0&&
@@ -40,13 +54,14 @@ const normalizeOne=(feature:unknown,context:OverlandNormalizeContext):Normalized
   const maxFutureSkewMs=context.maxFutureSkewMs??DEFAULT_MAX_FUTURE_SKEW_MS;
   if(!Number.isFinite(recordedMs)||recordedMs<=0||recordedMs>receivedMs+maxFutureSkewMs)return null;
 
-  const accuracy=finite(feature.properties.horizontal_accuracy);
+  // CoreLocation/Overland may use negative sentinel values when optional sensor
+  // metadata such as speed, course, or accuracy is unavailable. Those values do
+  // not invalidate an otherwise valid GPS point; omit only the unusable field.
+  const accuracy=nonNegative(feature.properties.horizontal_accuracy);
   const altitude=finite(feature.properties.altitude);
-  const speed=finite(feature.properties.speed);
-  const course=finite(feature.properties.course);
-  const batteryRaw=finite(feature.properties.battery_level);
-  if((accuracy!==undefined&&accuracy<0)||(speed!==undefined&&speed<0)||(course!==undefined&&(course<0||course>360))||(batteryRaw!==undefined&&(batteryRaw<0||batteryRaw>100)))return null;
-  const battery=batteryRaw===undefined?undefined:(batteryRaw<=1?batteryRaw*100:batteryRaw);
+  const speed=nonNegative(feature.properties.speed);
+  const course=heading(feature.properties.course);
+  const battery=batteryPercent(feature.properties.battery_level);
 
   return {
     // Overland and OwnTracks intentionally share one FamilyToDo iPhone-location
