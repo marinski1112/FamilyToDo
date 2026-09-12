@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('public/assets/shopping.js','utf8');
 const createSource=fs.readFileSync('public/assets/shopping-new.js','utf8');
-const appSource=fs.readFileSync('src/daily-task-page.ts','utf8');
+const checklistSource=fs.readFileSync('src/task-events-page.ts','utf8');
 
 assert.ok(source.includes('safeProductUrl'),'shopping detail must normalize product links through a dedicated safety boundary');
 assert.match(source,/raw\.length>2048/,'product URL safety boundary must reject oversized persisted links before URL parsing');
@@ -27,21 +27,21 @@ assert.match(createSource,/url:safeUrls\[j\]\|\|''/,'shopping create payload mus
 assert.doesNotMatch(createSource,/products:names\.map\(\(name,j\)=>\(\{name,quantity:quantities\[j\]\|\|'1',url:urls\[j\]/,'shopping create must not send raw product URLs');
 assert.doesNotMatch(createSource,/cookie|authorization|token|member_name|family_name|private_owner_id/i,'shopping create URL safety must not add identity/session handling');
 
-const dailyStart=appSource.indexOf('function renderDailyPage(');
-const dailyEnd=appSource.indexOf('\nasync function dailyPage(',dailyStart+1);
-assert.ok(dailyStart>=0&&dailyEnd>dailyStart,'daily renderer source must remain detectable');
-const dailySource=appSource.slice(dailyStart,dailyEnd);
-const dailySafetyStart=dailySource.indexOf('  const safeDailyProductUrl=');
-const dailySafetyEnd=dailySource.indexOf('  const rows=data.tasks.map',dailySafetyStart);
-assert.ok(dailySafetyStart>=0&&dailySafetyEnd>dailySafetyStart,'daily product-link safety block must remain bounded and detectable');
-const dailySafetySource=dailySource.slice(dailySafetyStart,dailySafetyEnd);
-assert.match(dailySafetySource,/const safeDailyProductUrl=\(value:unknown\)=>/,'daily task/shopping renderer must use its own product URL safety boundary');
-assert.match(dailySafetySource,/raw\.length>2048/,'daily renderer must reject oversized persisted product links before parsing');
-assert.match(dailySafetySource,/new URL\(raw\)/,'daily renderer must parse persisted product links as absolute URLs');
-assert.match(dailySafetySource,/parsed\.username\|\|parsed\.password/,'daily renderer must reject credential-bearing product links');
-assert.match(dailySafetySource,/parsed\.protocol==='http:'\|\|parsed\.protocol==='https:'/,'daily renderer must allow only http/https product links');
-assert.match(dailySafetySource,/const productUrl=safeDailyProductUrl\((?:i|item)\.url\)/,'daily renderer must sanitize each persisted Shopping URL before HTML assembly');
-assert.doesNotMatch(dailySafetySource,/(?:i|item)\.url\?`<a href="\$\{esc\((?:i|item)\.url\)\}/,'daily renderer must never insert raw persisted Shopping URLs into href');
-assert.doesNotMatch(dailySafetySource,/console\.(?:log|warn|error)|cookie|authorization|token|member_name|family_name|private_owner_id/i,'daily product-link safety block must not introduce sensitive logging or identity/session handling');
+const rendererStart=checklistSource.indexOf('function renderTaskEventsPage(');
+const rendererEnd=checklistSource.indexOf('\nexport async function taskEvents(',rendererStart+1);
+assert.ok(rendererStart>=0&&rendererEnd>rendererStart,'canonical checklist renderer source must remain detectable');
+const renderer=checklistSource.slice(rendererStart,rendererEnd);
+assert.match(renderer,/const safeProductUrl=\(value:unknown\)=>/,'checklist shopping renderer must use its own product URL safety boundary');
+assert.match(renderer,/raw\.length>2048/,'checklist renderer must reject oversized persisted product links before parsing');
+assert.match(renderer,/new URL\(raw\)/,'checklist renderer must parse persisted product links as absolute URLs');
+assert.match(renderer,/parsed\.username\|\|parsed\.password/,'checklist renderer must reject credential-bearing product links');
+assert.match(renderer,/parsed\.protocol==='http:'\|\|parsed\.protocol==='https:'/,'checklist renderer must allow only http/https product links');
+assert.match(renderer,/const productUrl=safeProductUrl\(item\.url\)/,'checklist renderer must sanitize each persisted Shopping URL before HTML assembly');
+assert.doesNotMatch(renderer,/item\.url\?`<a href="\$\{esc\(item\.url\)\}/,'checklist renderer must never insert raw persisted Shopping URLs into href');
+const helperStart=renderer.indexOf('  const safeProductUrl=');
+const helperEnd=renderer.indexOf('  const effectiveShoppingDue=',helperStart);
+assert.ok(helperStart>=0&&helperEnd>helperStart,'checklist product URL safety helper must remain bounded and detectable');
+const helperSource=renderer.slice(helperStart,helperEnd);
+assert.doesNotMatch(helperSource,/console\.(?:log|warn|error)|cookie|authorization|token|member_name|family_name|private_owner_id/i,'checklist product-link safety helper must not introduce sensitive logging or identity/session handling');
 
-console.log('shopping product url safety contract: shopping and daily renderers accept only bounded credential-free absolute http/https links');
+console.log('shopping product url safety contract: shopping and canonical checklist renderers accept only bounded credential-free absolute http/https links');

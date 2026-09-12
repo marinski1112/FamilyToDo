@@ -138,8 +138,8 @@ for(const [name,source] of [['root',root],['new',newPage],['edit',editPage]]){
   if(source.includes("from './app'")) throw new Error(`Shopping ${name} retained handler must not depend on app.ts`);
 }
 if(handlers.includes("from './app'")) throw new Error('Shopping page handler boundary must not depend on app.ts');
+if(handlers.includes("export { shopping } from './shopping-root';")) throw new Error('retired standalone Shopping page export must not return');
 for(const marker of [
-  "export { shopping } from './shopping-root';",
   "export { shoppingNew } from './shopping-new-page';",
   "export { shoppingEdit } from './shopping-edit-page';",
 ]) if(!handlers.includes(marker)) throw new Error(`Shopping page handler wiring missing: ${marker}`);
@@ -147,11 +147,12 @@ if(!apiRoutes.includes("import { shopping } from './shopping-root';")) throw new
 if(!apiRoutes.includes("if(url.pathname==='/api/shopping') return await shopping(request,context);")) throw new Error('/api/shopping route wiring changed');
 const appImport=apiRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bshopping\b/.test(appImport)) throw new Error('context API dispatcher must not import shopping from app.ts');
-if(!pageRoutes.includes("import { shopping, shoppingNew, shoppingEdit } from './shopping-page-handlers';")) throw new Error('page dispatcher shopping boundary changed');
+if(!pageRoutes.includes("import { shoppingNew, shoppingEdit } from './shopping-page-handlers';")) throw new Error('page dispatcher shopping new/edit boundary changed');
 for(const marker of [
-  "if(url.pathname==='/app/shopping.php') return await shopping(request,context);",
+  "if(url.pathname==='/app/shopping.php'){",
+  "return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`);",
   "if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));",
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 
-console.log('Shopping retained domain boundary contract ok');
+console.log('Shopping retained API/new/edit domain boundary contract ok; standalone page is compatibility-only');

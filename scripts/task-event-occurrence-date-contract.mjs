@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const dailySource=fs.readFileSync(new URL('../src/daily-task-page.ts',import.meta.url),'utf8');
+const checklistSource=fs.readFileSync(new URL('../src/task-events-page.ts',import.meta.url),'utf8');
 const recurrence=fs.readFileSync(new URL('../src/recurrence-projection.ts',import.meta.url),'utf8');
 const ics=fs.readFileSync(new URL('../src/calendar-ics-import.ts',import.meta.url),'utf8');
 
@@ -20,21 +20,21 @@ assert.equal(visibleOn({task_kind:'task',start_at:'2026-08-29 10:00:00',due_at:'
 assert.equal(visibleOn({task_kind:'task',start_at:'2026-08-29 10:00:00',due_at:'2026-09-02 23:59:00',end_at:null},'2026-09-01'),true,'task must remain visible through its due date when no explicit end exists');
 assert.equal(visibleOn({task_kind:'task',start_at:'2026-09-01 10:00:00',due_at:null,end_at:null},'2026-09-02'),false,'start-only task must use its start date as the same fallback deadline used by expired classification');
 
-const makeViewStart=dailySource.indexOf('async function makeDailyData');
-const makeViewEnd=dailySource.indexOf('\nasync function unorganizedTasksFor',makeViewStart);
-assert.ok(makeViewStart>=0&&makeViewEnd>makeViewStart,'makeDailyData must remain present');
-const daily=dailySource.slice(makeViewStart,makeViewEnd);
-assert.match(daily,/lower\(COALESCE\(t\.task_kind,''\)\)='event'/,'daily query must explicitly separate event semantics');
-assert.match(daily,/date\(COALESCE\(t\.end_at,t\.start_at\)\)>=date\(\?\)/,'event without end_at must fall back to its start date, not become open-ended');
-assert.match(daily,/lower\(COALESCE\(t\.task_kind,''\)\)<>'event'/,'non-event task semantics must remain a separate branch');
-assert.match(daily,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\)>=date\(\?\)/,'normal task window must use the same end_at -> due_at -> start_at effective deadline as expired classification');
-assert.match(daily,/recurringForDate\(ctx,date\)/,'recurring rows must continue to be projected for the selected date only');
-assert.doesNotMatch(daily,/task_kind.*event.*status='completed'/is,'event visibility must not depend on completion state');
+const makeViewStart=checklistSource.indexOf('async function makeTaskEventsData');
+const makeViewEnd=checklistSource.indexOf('\nfunction renderTaskEventsPage',makeViewStart);
+assert.ok(makeViewStart>=0&&makeViewEnd>makeViewStart,'makeTaskEventsData must remain present');
+const checklist=checklistSource.slice(makeViewStart,makeViewEnd);
+assert.match(checklist,/lower\(COALESCE\(t\.task_kind,''\)\)='event'/,'checklist query must explicitly separate event semantics');
+assert.match(checklist,/date\(COALESCE\(t\.end_at,t\.start_at\)\)>=date\(\?\)/,'event without end_at must fall back to its start date, not become open-ended');
+assert.match(checklist,/lower\(COALESCE\(t\.task_kind,''\)\)<>'event'/,'non-event task semantics must remain a separate branch');
+assert.match(checklist,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\)>=date\(\?\)/,'normal task window must use the same end_at -> due_at -> start_at effective deadline as expired classification');
+assert.match(checklist,/recurringForDate\(ctx,date\)/,'recurring rows must continue to be projected for the selected date only');
+assert.doesNotMatch(checklist,/task_kind.*event.*status='completed'/is,'event visibility must not depend on completion state');
 
-const expiredStart=dailySource.indexOf('async function expiredTasksFor');
-const expiredEnd=dailySource.indexOf('\nasync function makeDailyData',expiredStart);
+const expiredStart=checklistSource.indexOf('async function expiredTasksFor');
+const expiredEnd=checklistSource.indexOf('\nasync function unorganizedTasksFor',expiredStart);
 assert.ok(expiredStart>=0&&expiredEnd>expiredStart,'expired task query must remain present');
-const expired=dailySource.slice(expiredStart,expiredEnd);
+const expired=checklistSource.slice(expiredStart,expiredEnd);
 assert.match(expired,/lower\(t\.task_kind\)='task'/,'overdue section must remain task-only');
 assert.match(expired,/t\.status='pending'/,'overdue pending-task path must remain active');
 assert.match(expired,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\) < date\(\?\)/,'expired classification must keep the same effective deadline order as the normal task window');
@@ -42,4 +42,4 @@ assert.match(expired,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\) < date
 assert.match(ics,/e\.startAt,e\.endAt/,'ICS import must continue to persist both normalized event boundaries');
 assert.match(ics,/'EVENT'/,'ICS import must continue to classify imported rows as events');
 assert.match(recurrence,/export async function recurringForDate\(ctx:AppContext,date:string\):Promise<Row\[]>\{return recurringForRange\(ctx,date,date\);\}/,'recurring event/task projection must remain target-date scoped');
-console.log('Task/Event occurrence-date contract passed');
+console.log('Task/Event occurrence-date contract passed against canonical checklist');

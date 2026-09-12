@@ -75,7 +75,7 @@ if(page.includes('LINKED_SHOPPING_TASK_CHUNK_SIZE'))throw new Error('linked Shop
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskEvents } from './task-events-page';"))throw new Error('taskEvents must route through retained unified checklist page');
-if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('daily pages must route through retained daily task page');
+if(handlers.includes("from './daily-task-page'"))throw new Error('retired daily pages must not return');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary missing');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('retained taskView boundary regressed');
