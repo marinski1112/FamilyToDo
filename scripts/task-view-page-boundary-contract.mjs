@@ -45,7 +45,7 @@ if(view.includes('const mode=String(occurrence.completion_mode||\'ANY\').toUpper
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('task page boundary must route taskView through retained module');
 if(!handlers.includes("export { taskEvents } from './task-events-page';"))throw new Error('retained taskEvents boundary missing');
-if(!handlers.includes("export { today, tomorrow } from './daily-task-page';"))throw new Error('retained daily task page boundary missing');
+if(handlers.includes("from './daily-task-page'"))throw new Error('retired daily task page boundary must not return');
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary missing');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!routes.includes("if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));"))throw new Error('task detail page route changed');
