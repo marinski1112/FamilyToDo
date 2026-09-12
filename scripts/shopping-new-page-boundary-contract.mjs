@@ -37,6 +37,10 @@ for(const marker of [
   "status<>'completed'",
   "visibility_scope='FAMILY'",
   'taskOverlapsDate(task,date)',
+  'const shoppingChecklistUrl=',
+  'const checklistUrl=shoppingChecklistUrl(d);',
+  'href="${checklistUrl}"',
+  "return html(layout('買い物を追加',body,'/app/tasks.php'));",
   'id="shoppingTaskDueDate"',
   'id="shoppingTaskId"',
   'id="shoppingTaskShowAll"',
@@ -48,6 +52,7 @@ for(const marker of [
   'id="shoppingNewPayload"',
   '/assets/shopping-new.js?v=${APP_VERSION}',
 ]) if(!newPage.includes(marker)) throw new Error(`Shopping new page lost behavior marker: ${marker}`);
+if(newPage.includes('/app/shopping.php'))throw new Error('Shopping new page must not navigate internally through retired standalone Shopping compatibility URL');
 
 for(const marker of [
   "categoryRegisterToggle.type='button';",
@@ -55,7 +60,9 @@ for(const marker of [
   "const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;",
   "fetch('/api/shopping-categories'",
   "const body={action:'add_batch'",
-]) if(!newJs.includes(marker)) throw new Error(`Shopping new category behavior lost marker: ${marker}`);
+  "location.href=dueDate?`/app/tasks.php?date=${encodeURIComponent(dueDate)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';",
+]) if(!newJs.includes(marker)) throw new Error(`Shopping new behavior lost marker: ${marker}`);
+if(newJs.includes('/app/shopping.php'))throw new Error('Shopping new client must return directly to the canonical checklist');
 
 for(const marker of [
   'export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{',
@@ -105,4 +112,4 @@ for(const marker of [
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 
-console.log('Shopping API/new/edit boundary contract ok; standalone page remains compatibility-only');
+console.log('Shopping API/new/edit boundary contract ok; standalone page remains compatibility-only while active new/edit return directly to canonical checklist');

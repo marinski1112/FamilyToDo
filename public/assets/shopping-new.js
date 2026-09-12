@@ -66,7 +66,6 @@ try {
     if(list.querySelectorAll('[data-product-row]').length>=MAX_BATCH_PRODUCTS){alert(`商品は一度に${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
     sequence++;
     const row=document.createElement('div');row.className='product-row batch-product';row.dataset.productRow='';row.dataset.rowNumber=String(sequence);row.innerHTML=rowHtml();list.appendChild(row);
-    // Intentionally no focus and no scroll. Users may add the desired number of rows first.
   };
   list.onclick=e=>{
     const target=e.target instanceof Element?e.target:null;if(!target)return;
@@ -114,7 +113,8 @@ try {
         const categoryData=await categoryResponse.json().catch(()=>null);
         if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
       }
-      const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');location.href='/app/shopping.php';
+      const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');
+      location.href=dueDate?`/app/tasks.php?date=${encodeURIComponent(dueDate)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
     }
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
     finally{if(button)button.disabled=false;}
