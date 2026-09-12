@@ -1,6 +1,6 @@
 # Config and function ownership map
 
-Verified against structural baseline `0b2faf7c222d72e0a1ed54da0c2797d68d28f7aa` plus the bounded Shopping API-only cleanup in this branch.
+Verified against structural baseline `e498bb5f52115c818671fd75cd0b59272a6bab33` plus the bounded Shopping dead-asset cleanup in this branch.
 
 This file identifies canonical owners and cleanup candidates. A candidate is not permission to remove code; current callers and dynamic routes must be checked first.
 
@@ -57,7 +57,7 @@ Feature code should not add a second hidden route table when one of these owners
 | Shopping edit page | `src/shopping-edit-page.ts` | `/app/shopping_edit.php` | update/delete, assignee reconciliation, completion archive | `shopping-new-page-boundary-contract.mjs`, `shopping-domain-boundary-contract.mjs` |
 | Legacy standalone Shopping URL | `src/page-routes.ts` COMPAT redirect | `/app/shopping.php` | no renderer / no data ownership | page-route + Shopping boundary contracts |
 
-The retired standalone Shopping GET renderer is not a canonical owner. `public/assets/shopping.js` is a page-only legacy asset candidate after its remaining package/contract references are removed in a separate bounded cleanup.
+The retired standalone Shopping GET renderer is not a canonical owner. Its former page-only asset `public/assets/shopping.js` was proven unreachable after renderer retirement and removed; product-link safety remains covered on the active create and canonical checklist surfaces by `shopping-product-url-safety-contract.mjs`.
 
 ## Function cleanup classifications
 
