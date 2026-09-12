@@ -11,6 +11,7 @@ for(const [label,source] of [['root',root],['new',newPage],['edit',editPage]]){
   if(source.includes("from './app'")) throw new Error(`shopping ${label} must not depend on app.ts`);
 }
 for(const marker of [
+  "if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);",
   "action==='to_task'",
   "action==='toggle'",
   "action==='add_batch'",
@@ -18,10 +19,15 @@ for(const marker of [
   "taskChildVisibilitySql('s')",
   "queueCalendarProjectionAfterMutation",
   "INSERT INTO shopping_completion_history",
+  "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`shopping root lost ${marker}`);
-if(!root.includes('date(COALESCE(pt.end_at,pt.due_at,pt.start_at)) < ?')) throw new Error('shopping linked-task expiry must use end_at -> due_at -> start_at deadline precedence');
-if(!root.includes('substr(COALESCE(t.end_at,t.due_at,t.start_at),1,10)')) throw new Error('shopping expired ordering must use the same linked-task effective deadline precedence');
-if(root.includes('COALESCE(pt.end_at,pt.start_at,pt.due_at)')||root.includes('COALESCE(t.end_at,t.start_at,t.due_at)')) throw new Error('shopping must not regress to start_at before due_at for linked-task expiry');
+for(const retiredMarker of [
+  "return html(layout('買い物'",
+  'id="shoppingPayload"',
+  '/assets/shopping.js',
+  "url.searchParams.get('view')",
+]) if(root.includes(retiredMarker)) throw new Error(`retired standalone Shopping renderer must not return: ${retiredMarker}`);
+
 for(const marker of [
   "visibility_scope='PRIVATE' AND private_owner_id=?",
   'archiveShoppingCompletionStatements',
@@ -44,4 +50,4 @@ if(!apiRoutes.includes("if(url.pathname==='/api/shopping') return await shopping
 const appImport=apiRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bshopping\b/.test(appImport)) throw new Error('shopping must not remain in context app.ts import');
 
-console.log('Shopping retained API/new/edit domain contract ok; standalone list page is retired');
+console.log('Shopping API/new/edit domain contract ok; standalone list renderer is retired and /api/shopping is POST-only');

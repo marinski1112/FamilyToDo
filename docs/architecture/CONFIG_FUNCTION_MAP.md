@@ -1,6 +1,6 @@
 # Config and function ownership map
 
-Verified against base main `2cf6263d33ab55ec31151bc6ca501ded7a1980ae` and the bounded helper-centralization change in this branch.
+Verified against structural baseline `0b2faf7c222d72e0a1ed54da0c2797d68d28f7aa` plus the bounded Shopping API-only cleanup in this branch.
 
 This file identifies canonical owners and cleanup candidates. A candidate is not permission to remove code; current callers and dynamic routes must be checked first.
 
@@ -47,6 +47,18 @@ Canonical route tables:
 
 Feature code should not add a second hidden route table when one of these owners is appropriate.
 
+## Shopping ownership
+
+| Concern | Canonical owner | Route/caller | Data / side effects | Regression boundary |
+| --- | --- | --- | --- | --- |
+| Shopping mutations | `src/shopping-root.ts#shopping()` | `POST /api/shopping` via `src/context-api-routes.ts` | `shopping_items`, `shopping_assignees`, `shopping_completion_history`; `to_task` also creates/links a task and queues Google Calendar projection | `shopping-domain-boundary-contract.mjs`, `shopping-new-page-boundary-contract.mjs` |
+| Shopping checklist/read presentation | `src/task-events-page.ts` | `/app/tasks.php?date=...#shopping-checklist` | reads Shopping + linked task/assignee data; completion transport uses canonical toggle/API paths | `task-events-page-boundary-contract.mjs`, Shopping UI contracts |
+| Shopping create page | `src/shopping-new-page.ts` | `/app/shopping_new.php` | submits to `/api/shopping`; category registration uses `/api/shopping-categories` | `shopping-new-page-boundary-contract.mjs` |
+| Shopping edit page | `src/shopping-edit-page.ts` | `/app/shopping_edit.php` | update/delete, assignee reconciliation, completion archive | `shopping-new-page-boundary-contract.mjs`, `shopping-domain-boundary-contract.mjs` |
+| Legacy standalone Shopping URL | `src/page-routes.ts` COMPAT redirect | `/app/shopping.php` | no renderer / no data ownership | page-route + Shopping boundary contracts |
+
+The retired standalone Shopping GET renderer is not a canonical owner. `public/assets/shopping.js` is a page-only legacy asset candidate after its remaining package/contract references are removed in a separate bounded cleanup.
+
 ## Function cleanup classifications
 
 | Candidate | Evidence required before action | Action |
@@ -61,7 +73,7 @@ Feature code should not add a second hidden route table when one of these owners
 
 ## Development lookup contract
 
-For every mapped canonical helper, future structural work should record:
+For every mapped canonical helper or feature boundary, future structural work should record:
 
 1. owner module;
 2. public/exported function names;
