@@ -76,6 +76,7 @@ for(const marker of [
   "import { archiveShoppingCompletionStatements } from './lifecycle';",
   "import { taskVisibilitySql } from './task-visibility';",
   "import { APP_VERSION } from './version';",
+  'const shoppingChecklistUrl=(value:unknown)=>{',
   'export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{',
   "visibility_scope='PRIVATE' AND private_owner_id=?",
   "role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id",
@@ -89,9 +90,11 @@ for(const marker of [
   "archiveShoppingCompletionStatements",
   "DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN",
   "UPDATE shopping_items SET status=CASE WHEN",
-  "return redirect('/app/shopping.php');",
+  'return redirect(shoppingChecklistUrl(item.due_date));',
+  'return redirect(shoppingChecklistUrl(due||item.due_date));',
   "return html(layout('買い物編集',body,''));",
 ]) if(!editPage.includes(marker)) throw new Error(`Shopping edit page lost behavior marker: ${marker}`);
+if(editPage.includes("return redirect('/app/shopping.php');"))throw new Error('Shopping edit must not return through retired standalone Shopping compatibility URL');
 
 for(const marker of [
   "const payloadNode=document.getElementById('shoppingTaskLinkPayload');",
@@ -155,4 +158,4 @@ for(const marker of [
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 
-console.log('Shopping retained API/new/edit domain boundary contract ok; standalone page is compatibility-only');
+console.log('Shopping retained API/new/edit domain boundary contract ok; standalone page is compatibility-only and edit returns canonical checklist');
