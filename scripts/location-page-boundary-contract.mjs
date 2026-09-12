@@ -142,7 +142,8 @@ if(!workerConfig.includes('GOOGLE_MAPS_BROWSER_API_KEY?:string;')||!workerConfig
 if(workerConfig.includes('GOOGLE_MAPS_BROWSER_KEY?:string;')||page.includes('GOOGLE_MAPS_BROWSER_KEY'))throw new Error('Legacy Maps browser key name must not drift from canonical GOOGLE_MAPS_BROWSER_API_KEY');
 if(!routes.includes("import { locationPage } from './location-page';"))throw new Error('Location page import missing');
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
-if(!routes.includes("if(url.pathname==='/app/shopping.php') return await shopping(request,context);"))throw new Error('Shopping compatibility/management route must remain');
+if(!routes.includes("if(url.pathname==='/app/shopping.php'){"))throw new Error('Shopping compatibility route must remain');
+if(!routes.includes("return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`);"))throw new Error('Shopping compatibility route must redirect to canonical checklist');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
 if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4-presence-place-address2';"))throw new Error('Location cache revision missing');
 const locationExtra=shell.match(/const locationExtra=active==='\/app\/location\.php'\?`([^`]+)`:'';/)?.[1]||'';
