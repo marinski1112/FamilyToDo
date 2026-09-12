@@ -7,10 +7,10 @@ assert.match(source,/implements LocationQueryService/,'D1 read layer must implem
 assert.match(source,/const MAX_HISTORY_LIMIT=500;/,'history must retain a hard browser-safe bound');
 assert.match(source,/const MAX_BATCH_SUBJECTS=12;/,'family batch history must retain the family-member cap');
 assert.match(source,/JOIN members subject[\s\S]*subject\.family_id=l\.family_id[\s\S]*subject\.active=1/,'latest must require an active subject in the same family');
-assert.match(source,/JOIN location_devices device[\s\S]*device\.id=l\.device_id[\s\S]*device\.family_id=l\.family_id[\s\S]*device\.member_id=l\.member_id[\s\S]*device\.enabled=1[\s\S]*device\.sharing_enabled=1[\s\S]*device\.revoked_at IS NULL/,'latest must hide retained coordinates when the source device is disabled, share-off, revoked, or scope-mismatched');
+assert.match(source,/JOIN location_devices device[\s\S]*device\.id=l\.device_id[\s\S]*device\.family_id=l\.family_id[\s\S]*device\.member_id=l\.member_id[\s\S]*device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'latest must remain visible after permanent credential revoke while temporary sharing-off remains hidden');
 assert.match(source,/WHERE l\.family_id=\? AND l\.member_id=\?/,'latest must scope stored coordinates by family and subject');
 assert.match(source,/requester\.id=\? AND requester\.family_id=\? AND requester\.active=1/,'latest/history must prove the requester is an active member of the supplied family');
-assert.match(source,/JOIN location_devices device[\s\S]*device\.id=h\.device_id[\s\S]*device\.family_id=h\.family_id[\s\S]*device\.member_id=h\.member_id[\s\S]*device\.enabled=1[\s\S]*device\.sharing_enabled=1[\s\S]*device\.revoked_at IS NULL/,'history must hide retained points when their source device is disabled, share-off, revoked, or scope-mismatched');
+assert.match(source,/JOIN location_devices device[\s\S]*device\.id=h\.device_id[\s\S]*device\.family_id=h\.family_id[\s\S]*device\.member_id=h\.member_id[\s\S]*device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'history must retain accepted points after permanent credential revoke');
 assert.match(source,/WHERE h\.family_id=\? AND h\.member_id=\?/,'history must scope raw points by family and subject');
 assert.match(source,/h\.recorded_at>=\? AND h\.recorded_at<=\?/,'history must use an explicit time window');
 assert.match(source,/ORDER BY h\.recorded_at DESC,h\.id DESC[\s\S]*LIMIT \?/,'history must select only the newest bounded points in the interval');
@@ -26,10 +26,11 @@ assert.match(source,/ORDER BY member_id ASC,recorded_at ASC,id ASC/,'batch histo
 const batchStart=source.indexOf('async historyForSubjects');
 const batchBlock=batchStart>=0?source.slice(batchStart):'';
 assert.match(batchBlock,/JOIN members subject[\s\S]*subject\.id=h\.member_id[\s\S]*subject\.family_id=h\.family_id[\s\S]*subject\.active=1/,'batch history must require active same-family subjects');
-assert.match(batchBlock,/JOIN location_devices device[\s\S]*device\.id=h\.device_id[\s\S]*device\.family_id=h\.family_id[\s\S]*device\.member_id=h\.member_id[\s\S]*device\.enabled=1[\s\S]*device\.sharing_enabled=1[\s\S]*device\.revoked_at IS NULL/,'batch history must preserve device sharing/revocation boundaries');
+assert.match(batchBlock,/JOIN location_devices device[\s\S]*device\.id=h\.device_id[\s\S]*device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'batch history must preserve accepted points across permanent credential revoke');
 assert.match(batchBlock,/requester\.id=\? AND requester\.family_id=\? AND requester\.active=1/,'batch history must prove the active same-family requester');
 
+assert.doesNotMatch(source,/device\.enabled=1[\s\S]{0,80}device\.revoked_at IS NULL/,'revoking a credential must not hide already accepted latest/history rows');
 assert.doesNotMatch(source,/SELECT \*/,'Location reads must project only fields required by the provider-neutral point contract');
 assert.doesNotMatch(source,/secret_hash|authorization|raw_payload|console\.(?:log|info|warn|error)/i,'Location query layer must not touch credentials, raw provider payloads, or logs');
 
-console.log('location-query-service-contract: single-subject and bounded batched family history privacy/order/cap boundaries ok');
+console.log('location-query-service-contract: revoked credentials retain accepted history; temporary share-off and family privacy boundaries remain enforced');
