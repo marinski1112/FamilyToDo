@@ -1,0 +1,33 @@
+# Calendar ownership map
+
+Verified against main `1c948429c38273336b55da4720b92db4b3a4c69a`.
+
+This map records the current Calendar ownership boundaries. It does not treat historical design notes as runtime truth.
+
+## Canonical boundaries
+
+| Concern | Canonical owner / exported function | Route / caller | Data / side effects | Regression boundary |
+| --- | --- | --- | --- | --- |
+| Calendar page/read model | `src/calendar-page-handler.ts#calendar` -> `src/calendar-page.ts#calendar()` | `GET /app/calendar.php` via `src/page-routes.ts` | reads canonical `tasks` schedule fields and calendar visibility/color; renders month grid and client payload | `calendar-page-boundary-contract.mjs`, `page-route-dispatcher-contract.mjs` |
+| Month/day client interaction | `public/assets/calendar.js` | calendar page asset | renders task/event bars and day-detail interactions; no canonical persistence ownership | browser/static asset checks plus Calendar page contracts |
+| Family Daily Report calendar affordance | `src/calendar-page.ts` + `public/assets/family-journal-link.js` | month cells for dates present in `family_daily_journals`; navigation to `/app/family_journal.php?date=...` | read-only calendar marker/link; report generation/persistence remains owned by Family Daily Journal modules | Family Daily Journal contracts; no dedicated calendar-link contract identified in current regression manifest |
+| Calendar stamp read/placement/admin/media | `src/calendar-stamp-api.ts`, `src/calendar-stamp-placement-api.ts`, `src/calendar-stamp-admin-api.ts`, `src/calendar-stamp-media-api.ts`, shared-stamp modules | `/api/calendar-stamps`, `/api/calendar-stamp-options`, `/api/calendar-stamp-placement`, `/api/calendar-stamp-media`, `/api/calendar-stamp-admin/*` via `src/context-api-routes.ts` | stamp catalog/placement/media state; separate from task/event schedule persistence | active calendar-stamp contracts in `scripts/regression-manifest.mjs` |
+| Task/Event schedule persistence | Task-domain owners (`src/task-api.ts#taskApi()`, `src/task-edit-page.ts#taskEdit()`) | `/api/task`, `/task/edit.php` | canonical schedule rows remain in `tasks`; Calendar page is a projection/read surface, not a second event store | Task-domain and Calendar contracts |
+| Google Calendar outbound projection | `src/google-calendar-core.ts`, wrapped by `src/google-calendar.ts#processCalendarOutbox()` | `/api/google-calendar/sync`, backfill/retry/settings flows; scheduled every 5 minutes | `calendar_sync_outbox`, `external_calendar_links`, Google Calendar API; normal projection eligibility is FAMILY-visible calendar rows according to current Google Calendar policy | Google Calendar outbound/one-way/projection contracts in active regression manifest |
+| Google Calendar inbound authorization/preview/apply | `src/google-calendar-inbound-auth.ts`, `src/google-calendar-inbound-preview.ts`, `src/google-calendar-inbound-apply.ts` | settings UI plus `/api/google-calendar/inbound-calendars`, `/inbound-preview`, `/inbound-apply` | separately authorized Google read/import path; applies accepted external events into canonical FamilyToDo task/event state with inbound identity/evidence tracking | Google Calendar inbound authorization/preview/apply contracts in active regression manifest |
+| Google Calendar automatic inbound | `src/google-calendar-inbound-auto.ts#processGoogleCalendarInboundAuto()` | `src/index.ts` scheduled every 5 minutes | bounded per-run Google event scan with sync state/lease, safety classification, duplicate/outbound/ICS collision evidence and canonical EVENT creation for eligible candidates | active automatic-inbound contracts if present; exact dedicated entry was not inferred from search-zero alone |
+| ICS import | `src/calendar-ics-import.ts` | `/app/calendar_import.php`; `/api/calendar-import/{preview,normalization-preview,prepare,status,apply,rollback}` | staged ICS normalization/import into canonical task/event model with rollback/status ownership | active Calendar import contracts in regression manifest |
+| Child Journal Calendar | `src/child-journal-calendar.ts#processChildJournalCalendarOutbox()` | dedicated Child Journal calendar flow; scheduled every 5 minutes | separate Journal calendar account/link/outbox state | `child-journal-google-calendar-contract.mjs` |
+| Scheduled Calendar orchestration | `src/index.ts#scheduled()` | `*/5 * * * *` and `7,37 * * * *` | every 5 minutes runs normal outbound, automatic inbound, and Child Journal outbox; `7,37` renews normal Calendar watches | scheduler/Google Calendar contracts |
+
+## Ownership rules
+
+- The canonical Calendar domain does **not** use the legacy `events` table. Calendar/Event rows are projections of canonical `tasks` rows with the current task kind/schedule fields.
+- `calendar()` owns month read/presentation, not Task/Event mutation. Schedule writes must continue through the Task-domain owners.
+- Family Daily Report markers in the month grid are navigation/read affordances only. `family_daily_journals` generation, deterministic facts, AI narrative and privacy checks remain owned by the Family Daily Journal modules.
+- Calendar stamps are a separate subdomain. Do not fold stamp media/catalog/placement persistence into Task/Event schedule ownership merely because both render on the month grid.
+- Normal Google Calendar outbound projection and Child Journal Calendar synchronization are separate owners and separate persistence flows.
+- Current main also contains an explicitly authorized Google Calendar inbound import path and an automatic inbound processor. Do not describe current runtime as outbound-only without re-reading these modules and `src/index.ts`.
+- Inbound safety depends on identity/evidence checks that distinguish already-imported rows, outbound-linked events, ICS-imported identities and local collisions. Do not bypass those checks with a generic Google-event-to-task insert path.
+- ICS import is a staged import owner, not a second Calendar page owner.
+- Search returning zero is not evidence that a dedicated regression contract is absent. Where a dedicated contract was not positively identified, this map says so rather than declaring nonexistence.
