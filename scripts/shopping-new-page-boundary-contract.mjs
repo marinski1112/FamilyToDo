@@ -25,7 +25,8 @@ for(const marker of [
   "String(task.visibility_scope)==='PRIVATE'",
   "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`Shopping API lost behavior marker: ${marker}`);
-for(const marker of ["return html(layout('買い物'",'id="shoppingPayload"','/assets/shopping.js']){
+const retiredAsset='/assets/'+'shopping.js';
+for(const marker of ["return html(layout('買い物'",'id="shoppingPayload"',retiredAsset]){
   if(root.includes(marker))throw new Error(`retired standalone Shopping renderer returned: ${marker}`);
 }
 
