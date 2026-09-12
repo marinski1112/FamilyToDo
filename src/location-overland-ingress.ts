@@ -64,5 +64,7 @@ export async function overlandLocationIngress(request:Request,env:Env,execution?
   if(execution&&accepted.length>0){
     execution.waitUntil(Promise.all(accepted.map(point=>processLocationArrival(env,point).catch(()=>{}))).then(()=>{}));
   }
-  return json({ok:true,accepted:accepted.length});
+  // Overland only clears its local queue by default when the response contains
+  // {"result":"ok"}. Keep FamilyToDo metadata while honoring that contract.
+  return json({result:'ok',ok:true,accepted:accepted.length});
 }
