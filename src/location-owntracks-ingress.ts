@@ -41,6 +41,11 @@ const declaredBodyTooLarge=(request:Request):boolean=>{
   return !Number.isSafeInteger(length)||length>MAX_BODY_BYTES;
 };
 
+const ownTracksType=(payload:unknown):unknown=>
+  typeof payload==='object'&&payload!==null&&!Array.isArray(payload)
+    ?(payload as Record<string,unknown>)._type
+    :undefined;
+
 /**
  * Public OwnTracks HTTP-mode ingestion boundary.
  *
@@ -67,6 +72,10 @@ export async function ownTracksLocationIngress(request:Request,env:Env,execution
 
   let payload:unknown;
   try{payload=JSON.parse(body);}catch{return json({ok:false,code:'INVALID_JSON'},400);}
+  // OwnTracks can send waypoint metadata (for example after +follow is enabled)
+  // to the same HTTP endpoint. It has no canonical FamilyToDo point semantics,
+  // so acknowledge it only after device authentication and persist nothing.
+  if(ownTracksType(payload)==='waypoint')return json([]);
 
   const receivedAt=new Date().toISOString();
   const normalized=normalizeOwnTracksLocation(payload,{
