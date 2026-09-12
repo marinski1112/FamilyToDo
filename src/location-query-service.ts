@@ -53,9 +53,9 @@ const historyLimit=(value:number|undefined):number|null=>{
  * D1-backed provider-neutral Location reads.
  *
  * Every query proves that both requester and subject are active members of the
- * supplied family and that each returned coordinate still belongs to an
- * enabled, explicitly sharing, non-revoked source device. Cross-family rows and
- * retained coordinates from paused/revoked devices therefore fail closed.
+ * supplied family. A temporarily share-off/disabled source remains hidden, but
+ * already accepted points from a permanently revoked credential remain readable:
+ * revocation stops future ingest and must not erase today's retained history.
  * History returns the newest bounded points in the requested interval,
  * re-sorted chronologically for map rendering; no unbounded raw history is
  * exposed.
@@ -79,9 +79,10 @@ export class D1LocationQueryService implements LocationQueryService{
         ON device.id=l.device_id
         AND device.family_id=l.family_id
         AND device.member_id=l.member_id
-        AND device.enabled=1
-        AND device.sharing_enabled=1
-        AND device.revoked_at IS NULL
+        AND (
+          device.revoked_at IS NOT NULL OR
+          (device.enabled=1 AND device.sharing_enabled=1)
+        )
       WHERE l.family_id=? AND l.member_id=?
         AND EXISTS (
           SELECT 1 FROM members requester
@@ -115,9 +116,10 @@ export class D1LocationQueryService implements LocationQueryService{
           ON device.id=h.device_id
           AND device.family_id=h.family_id
           AND device.member_id=h.member_id
-          AND device.enabled=1
-          AND device.sharing_enabled=1
-          AND device.revoked_at IS NULL
+          AND (
+            device.revoked_at IS NOT NULL OR
+            (device.enabled=1 AND device.sharing_enabled=1)
+          )
         WHERE h.family_id=? AND h.member_id=?
           AND h.recorded_at>=? AND h.recorded_at<=?
           AND EXISTS (
@@ -180,9 +182,10 @@ export class D1LocationQueryService implements LocationQueryService{
           ON device.id=h.device_id
           AND device.family_id=h.family_id
           AND device.member_id=h.member_id
-          AND device.enabled=1
-          AND device.sharing_enabled=1
-          AND device.revoked_at IS NULL
+          AND (
+            device.revoked_at IS NOT NULL OR
+            (device.enabled=1 AND device.sharing_enabled=1)
+          )
         WHERE h.family_id=? AND h.member_id IN (${placeholders})
           AND h.recorded_at>=? AND h.recorded_at<=?
           AND EXISTS (
