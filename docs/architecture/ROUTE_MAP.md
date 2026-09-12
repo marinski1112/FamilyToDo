@@ -1,6 +1,6 @@
 # Route map
 
-Verified against baseline `787d3633ba365318fea13027d72df67ffb66eda3`.
+Verified against current structural baseline `0b2faf7c222d72e0a1ed54da0c2797d68d28f7aa` plus the bounded Shopping API-only cleanup in this branch.
 
 ## Worker entrypoint
 
@@ -38,7 +38,7 @@ Major feature edges:
 | Task | `/api/task` -> `task-api.ts`; `/api/task-children` -> `task-children-api.ts`; `/api/task-rough-input` -> normalize + `task-rough-input-api.ts` |
 | Completion | `/api/toggle` -> `toggle-api.ts` |
 | Item | `/api/item` -> `item-api.ts` |
-| Shopping | `/api/shopping` -> `shopping-root.ts`; categories -> `shopping-category-api.ts` |
+| Shopping | `/api/shopping` -> POST-only mutation owner `shopping-root.ts`; categories -> `shopping-category-api.ts` |
 | Messages | `/api/messages` -> `messages-api.ts`; stamps -> `message-stamp-api.ts` |
 | Family Log | mutation boundary -> `family-log-mutation-boundary.ts`; media/import/duplicate preview have dedicated modules |
 | Location | device/latest/history/search/stay-address/quality/ETA/places/home each have dedicated API modules |
@@ -58,16 +58,24 @@ Owner: `src/page-routes.ts`
 Canonical page-handler groupings:
 
 - auth/home -> `auth-page-handlers.ts`
-- task today/tomorrow/list/view/edit + item edit -> `task-page-handlers.ts`
+- checklist/task view/edit + item edit -> `task-page-handlers.ts`
 - calendar -> `calendar-page-handler.ts`
 - messages -> `message-page-handlers.ts`
-- shopping -> `shopping-page-handlers.ts`
+- Shopping create/edit -> `shopping-page-handlers.ts`
 - location -> `location-page.ts`
 - Family Log -> `family-log-page-handler.ts`
 - admin/settings/recurring -> `settings-page-handlers.ts`
 - Family Journal AI page -> `family-daily-journal-ai-page.ts`
 - Piyolog import -> `family-log-piyolog-import-page.ts`
 - PWA settings -> `settings-pwa-branding-page.ts`
+
+Current retired standalone-page compatibility routes are handled directly in `src/page-routes.ts`:
+
+- `/today.php` -> canonical `/app/tasks.php?date=...`
+- `/tomorrow.php` -> canonical `/app/tasks.php?date=...`
+- `/app/shopping.php` -> canonical `/app/tasks.php?date=...#shopping-checklist`
+
+These URLs are **COMPAT** only. They do not own standalone page renderers.
 
 ### Compatibility / exceptional routes
 
