@@ -70,10 +70,10 @@ assert.match(movementSummary,/historyForSubjects\(\{[\s\S]*scope:\{familyId,requ
 assert.doesNotMatch(movementSummary,/for\s*\([^)]*member[^)]*\)[\s\S]{0,300}service\.history\(/,'movement projection must not issue one D1 history statement per member');
 assert.match(queryService,/ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY h\.member_id/,'batch history must preserve a separate newest-point cap per member');
 assert.match(queryService,/WHERE member_rank<=\?/,'batch history must enforce the per-member history limit');
-assert.match(queryService,/device\.enabled=1[\s\S]*device\.sharing_enabled=1[\s\S]*device\.revoked_at IS NULL/,'batch history must preserve enabled/share-on/non-revoked device filtering');
+assert.match(queryService,/device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'batch history must hide temporarily disabled/share-off sources while retaining already accepted points after permanent credential revocation');
 assert.match(queryService,/requester\.id=\? AND requester\.family_id=\? AND requester\.active=1/,'batch history must preserve active same-family requester proof');
 assert.match(movementSummary,/centerDistance-accuracyRadiusMeters\(previous\)-accuracyRadiusMeters\(current\)/,'movement distance must preserve GPS-accuracy uncertainty subtraction');
 assert.match(tasksSync,/export const MAX_D1_QUERY_BUDGET=40;/,'Google Tasks sync must retain its explicit D1 query budget');
 assert.match(tasksSync,/export const MAX_TASKS_PER_INVOCATION=3;/,'Google Tasks sync page cap must remain explicit');
 
-console.log('google-tasks-inquiry-command-contract: exactly-once movement inquiry uses one bounded family history statement per requested day, preserving tenant/privacy boundaries and the Google Tasks D1 query budget');
+console.log('google-tasks-inquiry-command-contract: exactly-once movement inquiry uses one bounded family history statement per requested day, preserving tenant/privacy boundaries, retained revoked history, and the Google Tasks D1 query budget');
