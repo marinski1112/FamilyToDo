@@ -34,13 +34,14 @@ for(const marker of [
   "const matches=query?sorted.filter(task=>normalizeSearch(task.title).includes(query)):[];",
 ]) if(!taskLink.includes(marker)) throw new Error(`shopping task candidate count/search lost ${marker}`);
 for(const marker of [
-  "export { shopping } from './shopping-root';",
   "export { shoppingNew } from './shopping-new-page';",
   "export { shoppingEdit } from './shopping-edit-page';",
 ]) if(!handlers.includes(marker)) throw new Error(`shopping handler wiring lost ${marker}`);
+if(handlers.includes("export { shopping } from './shopping-root';")) throw new Error('retired standalone shopping page export must not return');
 if(handlers.includes("from './app'")) throw new Error('shopping page handlers must not depend on app.ts');
 if(!apiRoutes.includes("import { shopping } from './shopping-root';")) throw new Error('shopping API must use retained root');
+if(!apiRoutes.includes("if(url.pathname==='/api/shopping') return await shopping(request,context);")) throw new Error('shopping API route must remain active after standalone page retirement');
 const appImport=apiRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bshopping\b/.test(appImport)) throw new Error('shopping must not remain in context app.ts import');
 
-console.log('Shopping retained domain contract ok');
+console.log('Shopping retained API/new/edit domain contract ok; standalone list page is retired');
