@@ -1,101 +1,110 @@
-# Family TODO LINE — Cloudflare migration foundation
+# FamilyToDo
 
-This directory is a **parallel migration workspace** based on `FamilyTODO_v12_35_full_latest.zip`.
-The XREA/PHP source is not modified by this migration scaffold.
+FamilyToDo is a Cloudflare Workers + D1 family application integrated with LINE. The current application includes family membership, tasks/items/shopping, calendar and recurrence, messages, Family Log and journals, notifications, Location, Family AI, Google Calendar, Google Tasks, Google Home, PWA/Web Push, and related administration surfaces.
 
-## Architecture
+The repository is no longer an initial XREA-to-Cloudflare migration scaffold. Current `main`, runtime source, migrations, `wrangler.jsonc`, and active regression contracts are authoritative.
 
-- Cloudflare Workers: runtime for PHP replacement code
-- D1: Cloudflare-native SQLite database for the migrated application
-- Workers Static Assets: CSS/images/static files
-- Worker Secrets: LINE secrets, application secret, notification secret
-- Cron Triggers: reserved for the existing notification job; not enabled yet because the current app uses `notify_mode=manual`
+## Runtime architecture
 
-Cloudflare D1 is the active database target for this migration. D1 is accessed through the Workers Binding API with SQLite-compatible prepared statements. See the official documentation:
+- **Worker entrypoint:** `src/index.ts`
+- **Database:** Cloudflare D1 binding `DB`, migrations under `migrations/`
+- **Static assets:** `public/` through Workers Static Assets binding `ASSETS`
+- **Media:** R2 binding `MEDIA`
+- **AI:** Workers AI binding plus configured Family AI provider paths
+- **Service binding:** shared calendar-stamp service through `SHARED_STAMPS_SERVICE`
+- **Scheduled execution:** active cron triggers in `wrangler.jsonc`; `src/index.ts#scheduled()` dispatches notification, digest, Google Tasks/Calendar, journal, Location/archive, lifecycle-cleanup, and audit work
+- **External integrations:** LINE/LIFF, Google Calendar, Google Tasks, Google Home, Location device ingress, Web Push
 
-- https://developers.cloudflare.com/d1/worker-api/
-- https://developers.cloudflare.com/d1/worker-api/prepared-statements/
-- https://developers.cloudflare.com/workers/static-assets/
-- https://developers.cloudflare.com/workers/configuration/secrets/
-- https://developers.cloudflare.com/workers/configuration/cron-triggers/
+The configured application URL and integration callback URLs live in `wrangler.jsonc`. Do not duplicate them in new source unless the owning integration explicitly requires a separate contract.
 
-## Important safety rule
+## Request dispatch
 
-Do not put the existing XREA database password, LINE Channel Secret, LINE Access Token, or other credentials into this repository. The source ZIP contained production-looking credentials; this migration package intentionally excludes those values.
+Worker requests enter `src/index.ts` and are dispatched in this order:
 
-Rotate those credentials before the Cloudflare production cutover if the ZIP has been shared outside the intended trusted environment.
+1. `src/public-routes.ts`
+2. early authenticated routes in `src/exception-routes.ts`
+3. authenticated context creation in `src/app-context.ts`
+4. context prelude routes in `src/exception-routes.ts`
+5. `src/context-api-routes.ts`
+6. `src/page-routes.ts`
+7. context fallback routes in `src/exception-routes.ts`
+8. static asset fallback
 
-## First Cloudflare setup (do not change DNS yet)
+Do not infer ownership from URL shape or a `.php` suffix. Compatibility aliases and current first-class routes coexist.
 
-1. Install Node.js LTS and npm.
-2. Open a terminal in this `cloudflare` directory.
-3. Run `npm install`.
-4. Run `npx wrangler login`.
-5. Create or bind the Hyperdrive configuration for the existing MySQL database. Replace the placeholders with the actual DB host/user/password/database values that are currently used by XREA:
+## Architecture navigation
 
-   `npx wrangler hyperdrive create familytodo-db --connection-string="mysql://USER:PASSWORD@HOST:3306/DATABASE"`
+Start structural or feature work from `docs/architecture/README.md`. The architecture directory contains current owner/reachability maps for the major domains, including:
 
-6. The D1 database is already bound in `wrangler.jsonc`.
-7. Apply the schema remotely with `npx wrangler d1 migrations apply familytodo --remote`.
-8. Copy `.dev.vars.example` to `.dev.vars` and enter **staging/test credentials only** if you have them.
-9. Run `npx wrangler dev --remote`.
-10. Test:
-   - `http://localhost:8787/__cf/health`
-   - `http://localhost:8787/__cf/db-health`
+- route ownership: `docs/architecture/ROUTE_MAP.md`
+- configuration and shared-function ownership: `docs/architecture/CONFIG_FUNCTION_MAP.md`
+- authentication/session/CSRF: `docs/architecture/AUTH_FUNCTION_MAP.md`
+- family membership/invitations/member administration: `docs/architecture/FAMILY_MEMBERSHIP_FUNCTION_MAP.md`
+- task/item/completion, messages, Family Log/journals, calendar, notifications, Family AI, Google Calendar/Tasks/Home, and other mapped domains
+- legacy classification and cleanup rules: `docs/architecture/LEGACY_INVENTORY.md`
 
-Do not change the domain DNS or the LINE webhook until the staging worker and database connection have been verified.
+These maps are navigation aids, not source-of-truth replacements. If a map disagrees with current source, current source wins and the map should be corrected in the same bounded structural change.
 
-## Secret setup for Cloudflare
+## Local development
 
-For production/staging, use Wrangler secrets instead of `vars`:
+Prerequisites:
 
-- `npx wrangler secret put LINE_CHANNEL_SECRET`
-- `npx wrangler secret put LINE_CHANNEL_ID`
-- `npx wrangler secret put LINE_LIFF_ID`
-- `npx wrangler secret put LINE_ACCESS_TOKEN`
-- `npx wrangler secret put APP_SECRET`
-- `npx wrangler secret put NOTIFY_SECRET`
+- Node.js 22-compatible environment
+- npm
+- Wrangler authentication when Cloudflare resources are required
 
-## Current migration status
+Typical setup:
 
-Implemented in this foundation:
+```bash
+npm ci
+npx wrangler types
+npm run typecheck
+npm run dev
+```
 
-- Worker entry point
-- static asset delivery
-- D1/SQLite adapter
-- encrypted stateless session cookie
-- CSRF verification primitive
-- LINE ID-token verification primitive
-- LINE webhook signature verification
-- compatibility URLs for the existing LIFF login and webhook endpoints
-- health checks
-- scheduled handler placeholder
+Use `.dev.vars.example` as the reference for local/test configuration. Put only test/staging credentials in local environment files and never commit secret values.
 
-Not yet migrated:
+D1 schema changes must be represented by migrations. Review the current migration chain before applying anything remotely. The repository deploy script applies D1 migrations before Worker deploy; do not run it casually against an environment you did not intend to modify.
 
-- all PHP page rendering
-- all form POST/redirect flows
-- full task/item/shopping/message CRUD
-- calendar UI/API behavior
-- recurrence engine
-- notification business logic
-- family creation/join
-- settings/admin pages
-- existing LINE message behavior
+## Validation
 
-Those are intentionally left as TODOs so this foundation does not accidentally replace a working XREA implementation with incomplete code.
+CI runs TypeScript checks, browser JavaScript checks, static-asset and migration checks, Location/journal/AI contracts, and the regression suite. Before merging a bounded change, validate the relevant contract plus the full CI/Workers Build path required by the repository workflow.
 
+Useful health endpoints exposed by the current Worker include:
 
-### Cloudflare Workers の型定義について
+- `/__cf/health`
+- `/__cf/db-health`
+- `/__cf/db-schema-health`
+- `/__cf/db-runtime-health`
+- `/__cf/auth-health`
+- `/__cf/integrations-health`
+- `/__cf/google-home-health`
+- `/__cf/secrets-health`
 
-Cloudflare の現行推奨方式に合わせ、`@cloudflare/workers-types` の日付固定版には依存しません。Wrangler v4 の `wrangler types` で `worker-configuration.d.ts` を生成し、`tsconfig.json` はその生成ファイルを参照します。これにより、Cloudflare の compatibility date と実行環境に対応した型が生成されます。
+Health and diagnostic endpoints must remain privacy-safe and must not return secret values.
 
-## Runtime Secret Diagnostic
+## Secrets and credentials
 
-The endpoint `/__cf/secrets-health` checks whether the six required runtime Worker secrets are actually visible to the deployed Worker. It returns only `present` and `length`; it never returns secret values.
+Do not commit LINE secrets/tokens, Google credentials, application secrets, VAPID/private push material, Location device secrets, database credentials, or provider API keys.
 
-Important: Workers Builds has a separate **Build variables and secrets** section. Those values are available only during the build and are **not** available to the Worker at runtime. Runtime secrets must be configured in the Worker itself under **Workers & Pages → familytodo → Settings → Variables and Secrets**, then deployed.
+Runtime Worker secrets belong in Cloudflare Worker runtime configuration, not in repository files and not only in Workers Build variables. Use `wrangler secret put <NAME>` or the equivalent Cloudflare runtime secret configuration for each required secret. Consult `.dev.vars.example`, current environment-health code, and the owning integration module for the actual required names.
 
-### LINE Login channel (Google Home Web OAuth)
+The LINE Login credentials used by Google Home account-linking continuation are distinct from LINE Messaging API credentials. Do not reuse one channel's secret as the other.
 
-Set `LINE_LOGIN_CHANNEL_ID` as a Worker text variable and `LINE_LOGIN_CHANNEL_SECRET` with `npx wrangler secret put LINE_LOGIN_CHANNEL_SECRET`. Obtain both from **LINE Developers → LINE Login channel → Basic settings**. These are separate from the Messaging API `LINE_CHANNEL_SECRET` and `LINE_ACCESS_TOKEN`; never reuse the Messaging API channel secret for Login.
+## Database and data ownership
+
+D1 is the active application database. Current schema behavior is defined by the migration chain and current runtime queries; historical Wave documentation is not authoritative.
+
+When changing persistence:
+
+- preserve tenant/family scoping;
+- preserve auth and CSRF boundaries;
+- avoid logging credentials, raw provider payloads, raw GPS where prohibited, or sensitive user content in diagnostics;
+- keep compatibility and external callback contracts unless their callers are explicitly migrated;
+- do not recreate removed legacy stores merely because an old document references them.
+
+## Structural cleanup rule
+
+The repository contains historical Wave-era artifacts and compatibility paths. Before deleting or consolidating anything, classify it using `docs/architecture/LEGACY_INVENTORY.md` and prove runtime/build/static-asset/scheduler/test/contract/external-callback reachability. `UNKNOWN` is not deletion evidence.
+
+Keep cleanup PRs small and separate from unrelated behavior fixes.
