@@ -31,7 +31,7 @@ assert.ok(health.includes("env.GOOGLE_TASKS_CLIENT_ID||env.GOOGLE_CALENDAR_CLIEN
 assert.ok(health.includes("env.FAMILY_AI_PROVIDER||'GEMINI'"));
 
 const targets=read('src/liff-target.ts');
-for(const path of ['/app/tasks.php','/app/calendar.php','/app/shopping.php','/app/family_log.php','/app/messages.php','/app/settings.php'])assert.ok(targets.includes(`'${path}'`));
+for(const path of ['/app/tasks.php','/app/calendar.php','/app/tasks.php#shopping-checklist','/app/family_log.php','/app/messages.php','/app/settings.php'])assert.ok(targets.includes(`'${path}'`));
 for(const route of ['tasks','calendar','shopping','family-log','messages','settings','resolveLiffDestination','liff.state'])assert.ok(targets.includes(route),`missing LIFF route target: ${route}`);
 for(const rejected of ['/oauth/google/token','/oauth/google/authorize?client_id=x','https://evil.example','//evil.example','javascript:alert(1)','/app/calendar.php\r\nLocation: //evil','/app\\calendar.php'])assert.equal(validateLiffNext(rejected),null);
 assert.equal(validateLiffNext('/app/calendar.php'),'/app/calendar.php');
@@ -71,7 +71,7 @@ assert.ok(!client.includes("data.redirect||'/app/index.php'"));
 assert.ok(!client.includes('googleHome'),'LIFF client must stay generic and not embed Google Home flow state');
 
 const voiceSetup=read('docs/GOOGLE_HOME_VOICE_SETUP.md');
-for(const page of ['tasks.php','calendar.php','shopping.php','family_log.php','messages.php','settings.php'])assert.ok(voiceSetup.includes(`{LIFF_ID}/?next=%2Fapp%2F${page}`),`missing LIFF setup example for ${page}`);
+for(const next of ['%2Fapp%2Ftasks.php','%2Fapp%2Fcalendar.php','%2Fapp%2Ftasks.php%23shopping-checklist','%2Fapp%2Ffamily_log.php','%2Fapp%2Fmessages.php','%2Fapp%2Fsettings.php'])assert.ok(voiceSetup.includes(`{LIFF_ID}/?next=${next}`),`missing canonical LIFF setup example for ${next}`);
 assert.ok(voiceSetup.includes('LINE Login channel → Basic settings'),'Google Home setup docs must distinguish LINE Login channel configuration');
 assert.ok(voiceSetup.includes('{LIFF_ID}/calendar'),'Google Home setup docs must retain path-style LIFF example');
 
