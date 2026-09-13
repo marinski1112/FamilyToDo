@@ -55,7 +55,6 @@ Feature code should not add a second hidden route table when one of these owners
 | Shopping checklist/read presentation | `src/task-events-page.ts` | `/app/tasks.php?date=...#shopping-checklist` | reads Shopping + linked task/assignee data; completion transport uses canonical toggle/API paths | `task-events-page-boundary-contract.mjs`, Shopping UI contracts |
 | Shopping create page | `src/shopping-new-page.ts` | `/app/shopping_new.php` | submits to `/api/shopping`; category registration uses `/api/shopping-categories` | `shopping-new-page-boundary-contract.mjs` |
 | Shopping edit page | `src/shopping-edit-page.ts` | `/app/shopping_edit.php` | update/delete, assignee reconciliation, completion archive | `shopping-new-page-boundary-contract.mjs`, `shopping-domain-boundary-contract.mjs` |
-| Legacy standalone Shopping URL | `src/page-routes.ts` COMPAT redirect | `/app/shopping.php` | no renderer / no data ownership | page-route + Shopping boundary contracts |
 
 The retired standalone Shopping GET renderer is not a canonical owner. Its former page-only asset `public/assets/shopping.js` was proven unreachable after renderer retirement and removed; product-link safety remains covered on the active create and canonical checklist surfaces by `shopping-product-url-safety-contract.mjs`.
 
