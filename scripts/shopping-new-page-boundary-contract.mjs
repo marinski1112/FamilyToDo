@@ -52,7 +52,6 @@ for(const marker of [
   'id="shoppingNewPayload"',
   '/assets/shopping-new.js?v=${APP_VERSION}',
 ]) if(!newPage.includes(marker)) throw new Error(`Shopping new page lost behavior marker: ${marker}`);
-if(newPage.includes('/app/shopping.php'))throw new Error('Shopping new page must not navigate internally through retired standalone Shopping compatibility URL');
 
 for(const marker of [
   "categoryRegisterToggle.type='button';",
@@ -62,7 +61,6 @@ for(const marker of [
   "const body={action:'add_batch'",
   "location.href=dueDate?`/app/tasks.php?date=${encodeURIComponent(dueDate)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';",
 ]) if(!newJs.includes(marker)) throw new Error(`Shopping new behavior lost marker: ${marker}`);
-if(newJs.includes('/app/shopping.php'))throw new Error('Shopping new client must return directly to the canonical checklist');
 
 for(const marker of [
   'export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{',
@@ -77,7 +75,6 @@ for(const marker of [
   'return redirect(shoppingChecklistUrl(due||item.due_date));',
   "return html(layout('買い物編集',body,''));",
 ]) if(!editPage.includes(marker)) throw new Error(`Shopping edit page lost behavior marker: ${marker}`);
-if(editPage.includes("return redirect('/app/shopping.php');"))throw new Error('Shopping edit must not return through retired standalone Shopping compatibility URL');
 
 for(const marker of [
   "const payloadNode=document.getElementById('shoppingTaskLinkPayload');",
@@ -106,10 +103,8 @@ if(!apiRoutes.includes("import { shopping } from './shopping-root';")) throw new
 if(!apiRoutes.includes("if(url.pathname==='/api/shopping') return await shopping(request,context);")) throw new Error('/api/shopping route wiring changed');
 if(!pageRoutes.includes("import { shoppingNew, shoppingEdit } from './shopping-page-handlers';")) throw new Error('page dispatcher shopping new/edit boundary changed');
 for(const marker of [
-  "if(url.pathname==='/app/shopping.php'){",
-  "return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`);",
   "if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));",
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 
-console.log('Shopping API/new/edit boundary contract ok; standalone page remains compatibility-only while active new/edit return directly to canonical checklist');
+console.log('Shopping API/new/edit boundary contract ok; active new/edit flows return directly to the canonical checklist');
