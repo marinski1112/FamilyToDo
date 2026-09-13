@@ -52,9 +52,9 @@ for(const marker of [
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
   "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
+  "<details class=\"checklist-more\"><summary>表示ルール</summary>",
   "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
   "/app/shopping_new.php?date=",
-  "href=\"/app/shopping.php\">一覧・管理</a>",
   "const primarySections=[",
   "{priority:0,hasContent:Boolean(taskRows),html:taskSection}",
   "{priority:1,hasContent:data.shopping.length>0,html:shoppingSection}",
@@ -79,7 +79,12 @@ if(handlers.includes("from './daily-task-page'"))throw new Error('retired daily 
 if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary missing');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('retained taskView boundary regressed');
-if(!routes.includes("if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"))throw new Error('unified checklist route changed');
+for(const marker of [
+  "if(url.pathname==='/app/tasks.php'){",
+  "const timezone=String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);",
+  "const date=url.searchParams.get('date')||asDateOffset(url.searchParams.get('offset')==='1'?1:0,timezone);",
+  "return await taskEvents(request,context,date);",
+])if(!routes.includes(marker))throw new Error(`unified checklist route marker missing: ${marker}`);
 for(const marker of [
   "el.matches('.toggle[data-type][data-id]')",
   "fetch('/api/toggle'",

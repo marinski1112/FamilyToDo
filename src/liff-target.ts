@@ -1,14 +1,14 @@
 export const RICH_MENU_DESTINATIONS = [
   '/app/tasks.php',
   '/app/calendar.php',
-  '/app/shopping.php',
+  '/app/tasks.php#shopping-checklist',
   '/app/family_log.php',
   '/app/messages.php',
   '/app/settings.php',
 ] as const;
 
 export const LIFF_PATH_ALIASES: Readonly<Record<string, string>> = {
-  tasks: '/app/tasks.php', calendar: '/app/calendar.php', shopping: '/app/shopping.php',
+  tasks: '/app/tasks.php', calendar: '/app/calendar.php', shopping: '/app/tasks.php#shopping-checklist',
   'family-log': '/app/family_log.php', messages: '/app/messages.php', settings: '/app/settings.php',
   location: '/app/location.php',
 };

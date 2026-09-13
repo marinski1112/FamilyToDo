@@ -77,7 +77,7 @@ Do not change the existing LIFF endpoint URL (`https://familytodo.marinski1112.w
 
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fcalendar.php`
-- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fshopping.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php%23shopping-checklist`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ffamily_log.php`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fmessages.php`
 - `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fsettings.php`
@@ -105,7 +105,7 @@ Use LIFF additional paths for stable destinations:
 - `https://liff.line.me/{LIFF_ID}/messages`
 - `https://liff.line.me/{LIFF_ID}/settings`
 
-The legacy `?next=` URLs above remain supported.
+The `?next=` forms above remain supported.
 
 ## Wave122 acceptance and Console alignment
 

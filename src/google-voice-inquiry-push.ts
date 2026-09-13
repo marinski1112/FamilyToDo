@@ -12,9 +12,9 @@ const MAX_LINE_LENGTH = 120;
 const MAX_BODY_LENGTH = 500;
 
 const META: Record<GoogleVoiceInquiryKind,{title:string;empty:string;url:string;tag:string}> = {
-  TODAY_SCHEDULE: {title:'今日の予定',empty:'今日の予定はありません。',url:'/today.php',tag:'familytodo-inquiry-today'},
-  TOMORROW_SCHEDULE: {title:'明日の予定',empty:'明日の予定はありません。',url:'/tomorrow.php',tag:'familytodo-inquiry-tomorrow'},
-  OPEN_SHOPPING: {title:'買い物リスト',empty:'未完了の買い物はありません。',url:'/app/shopping.php',tag:'familytodo-inquiry-shopping'},
+  TODAY_SCHEDULE: {title:'今日の予定',empty:'今日の予定はありません。',url:'/app/tasks.php',tag:'familytodo-inquiry-today'},
+  TOMORROW_SCHEDULE: {title:'明日の予定',empty:'明日の予定はありません。',url:'/app/tasks.php?offset=1',tag:'familytodo-inquiry-tomorrow'},
+  OPEN_SHOPPING: {title:'買い物リスト',empty:'未完了の買い物はありません。',url:'/app/tasks.php#shopping-checklist',tag:'familytodo-inquiry-shopping'},
 };
 
 function cleanLine(value:string):string{

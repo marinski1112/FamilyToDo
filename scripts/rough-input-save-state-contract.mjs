@@ -19,4 +19,4 @@ await context.save();assert.equal(preview.dataset.saving,'0');assert.equal(field
 pendingResolve=()=>{};const saving=context.save();await context.save();assert.equal(calls,3,'only one in-flight save');pendingResolve();await saving;
 console.log('rough save: unknown results block duplicate retries; known failures unlock fields; in-flight saves are singular');
 
-destination='shopping';uncertain=true;pendingResolve=null;preview.dataset.saving='0';button.disabled=field.disabled=parse.disabled=false;await context.save();assert.equal(links.at(-1).href,'/app/shopping.php');assert.equal(links.at(-1).textContent,'買い物一覧を確認');
+destination='shopping';uncertain=true;pendingResolve=null;preview.dataset.saving='0';button.disabled=field.disabled=parse.disabled=false;await context.save();assert.equal(links.at(-1).href,'/app/tasks.php#shopping-checklist');assert.equal(links.at(-1).textContent,'買い物一覧を確認');

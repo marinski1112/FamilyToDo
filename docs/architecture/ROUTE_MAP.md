@@ -1,6 +1,6 @@
 # Route and site-connection map
 
-Verified against current main `c82da00e7d7b3171b1d2a45613b3929ed152ef69` (`12.148.0-wave128`).
+Verified against current main `a8585e25fc882aceb114e03c5b4c7db77dd91d55` (`12.148.0-wave128`).
 
 This document is a navigation map, not the source of truth. Current runtime source, `wrangler.jsonc`, migrations, and active regression contracts remain authoritative. When source and this map disagree, source wins and the map should be updated with the structural change.
 
@@ -228,18 +228,6 @@ Owner: `src/page-routes.ts` unless otherwise noted.
 | `/app-icon-180.png` | ACTIVE | `family-pwa-branding.ts#familyPwaIcon()` |
 | `/app-icon-192.png` | ACTIVE | `family-pwa-branding.ts#familyPwaIcon()` |
 | `/app-icon-512.png` | ACTIVE | `family-pwa-branding.ts#familyPwaIcon()` |
-
-## Direct compatibility redirects in page routes
-
-These URLs have no standalone renderer. They are retained as compatibility entrances only.
-
-| URL | Class | Canonical destination |
-| --- | --- | --- |
-| `/today.php` | COMPAT | `/app/tasks.php?date=<family today>` |
-| `/tomorrow.php` | COMPAT | `/app/tasks.php?date=<family tomorrow>` |
-| `/app/shopping.php` | COMPAT | `/app/tasks.php?date=<date>#shopping-checklist` |
-
-Current internal Home, Shopping create and Shopping edit flows do not need to traverse `/app/shopping.php`; it remains an external/old-link compatibility entrance.
 
 ## Exceptional and compatibility routes
 
