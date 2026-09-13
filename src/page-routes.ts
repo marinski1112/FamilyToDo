@@ -30,7 +30,11 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/family/create.php'||url.pathname==='/family/create') return await createFamilyPage(context);
   if(url.pathname==='/family/join.php'||url.pathname==='/family/join') return await invitePage(context,url.searchParams.get('token')||'');
   if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return await home(context);
-  if(url.pathname==='/app/tasks.php') return await taskEvents(request,context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));
+  if(url.pathname==='/app/tasks.php'){
+    const timezone=String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);
+    const date=url.searchParams.get('date')||asDateOffset(url.searchParams.get('offset')==='1'?1:0,timezone);
+    return await taskEvents(request,context,date);
+  }
   if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
   if(url.pathname==='/app/messages.php') return await messages(request,context);
   if(url.pathname==='/app/location.php') return await locationPage(request,context,env);
