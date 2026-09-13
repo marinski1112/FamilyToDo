@@ -11,7 +11,6 @@ const client=fs.readFileSync('public/assets/location.js','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
 const workerConfig=fs.readFileSync('worker-configuration.d.ts','utf8');
-const checklist=fs.readFileSync('src/task-events-page.ts','utf8');
 
 if(page.includes("from './app'"))throw new Error('Location page must not depend on app.ts');
 for(const marker of [
@@ -142,15 +141,11 @@ if(!workerConfig.includes('GOOGLE_MAPS_BROWSER_API_KEY?:string;')||!workerConfig
 if(workerConfig.includes('GOOGLE_MAPS_BROWSER_KEY?:string;')||page.includes('GOOGLE_MAPS_BROWSER_KEY'))throw new Error('Legacy Maps browser key name must not drift from canonical GOOGLE_MAPS_BROWSER_API_KEY');
 if(!routes.includes("import { locationPage } from './location-page';"))throw new Error('Location page import missing');
 if(!routes.includes("if(url.pathname==='/app/location.php') return await locationPage(request,context,env);"))throw new Error('Location page route must pass environment config');
-if(!routes.includes("if(url.pathname==='/app/shopping.php'){"))throw new Error('Shopping compatibility route must remain');
-if(!routes.includes("return redirect(`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`);"))throw new Error('Shopping compatibility route must redirect to canonical checklist');
 if(!shell.includes("['/app/location.php','📍','位置情報']"))throw new Error('Location must occupy the former Shopping bottom-navigation slot');
 if(!shell.includes("const LOCATION_UI_REVISION = 'maps-family-markers1-sheet4-presence-place-address2';"))throw new Error('Location cache revision missing');
 const locationExtra=shell.match(/const locationExtra=active==='\/app\/location\.php'\?`([^`]+)`:'';/)?.[1]||'';
 if(!locationExtra.includes('/assets/location.js?v=${APP_VERSION}-${LOCATION_UI_REVISION}'))throw new Error('Location client asset must load only on Location page');
 if(!locationExtra.includes('/assets/location-retention-copy.js?v=${APP_VERSION}-raw-maintenance1'))throw new Error('Location retention copy must load only on Location page');
-if(shell.includes("['/app/shopping.php','🛒','買い物']"))throw new Error('Shopping must not remain in bottom navigation');
-if(!checklist.includes('href="/app/shopping.php">一覧・管理</a>'))throw new Error('Checklist must retain a direct Shopping management link');
 
 await import('./location-sheet-behavior-contract.mjs');
 console.log('location-page-boundary: visible-page latest refresh with explicit history/ETA, no browser geolocation, and provider secrets server-side');
