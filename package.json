@@ -2,7 +2,7 @@
   "name": "familytodo-cloudflare",
   "version": "12.148.0-wave128",
   "private": true,
-  "description": "Family TODO LINE - Cloudflare Workers migration foundation",
+  "description": "FamilyToDo LINE family application on Cloudflare Workers and D1",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
