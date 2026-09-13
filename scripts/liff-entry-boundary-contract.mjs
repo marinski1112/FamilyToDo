@@ -23,7 +23,7 @@ if(page.includes("from './app'")) throw new Error('retained LIFF entry page must
 for(const marker of [
   "tasks: '/app/tasks.php'",
   "calendar: '/app/calendar.php'",
-  "shopping: '/app/shopping.php'",
+  "shopping: '/app/tasks.php#shopping-checklist'",
   "'family-log': '/app/family_log.php'",
   "messages: '/app/messages.php'",
   "settings: '/app/settings.php'",
