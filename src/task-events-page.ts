@@ -166,7 +166,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const [year,month,day]=date.split('-');
   const compactDate=year&&month&&day?`${year}.${Number(month)}.${Number(day)}`:date;
   const taskSection=`<div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>`;
-  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>一覧・表示ルール</summary><a class="btn gray" href="/app/shopping.php">一覧・管理</a><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
+  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>表示ルール</summary><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
   const overdueSection=`${expiredShoppingHtml}${expiredHtml}`;
   const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemRows||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
   const primarySections=[
