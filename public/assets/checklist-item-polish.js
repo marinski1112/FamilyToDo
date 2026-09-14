@@ -25,6 +25,25 @@ style.textContent=`
     border-right:0!important;
     border-radius:0!important;
   }
+  .reminders-add-button{
+    left:auto!important;
+    right:16px!important;
+    width:58px!important;
+    min-width:58px!important;
+    height:58px!important;
+    min-height:58px!important;
+    padding:0!important;
+    border-radius:50%!important;
+    justify-content:center!important;
+    gap:0!important;
+    background:#4f46e5!important;
+    color:#fff!important;
+    box-shadow:0 6px 18px rgba(79,70,229,.26)!important;
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+  }
+  .reminders-add-button>span:not(.reminders-plus){display:none!important}
+  .reminders-add-button .reminders-plus{font-size:38px!important;font-weight:300!important;line-height:1!important}
 }
 `;
 document.head.append(style);
