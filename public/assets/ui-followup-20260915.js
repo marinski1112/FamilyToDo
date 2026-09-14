@@ -23,6 +23,20 @@ const stripEventPins=()=>{
   });
 };
 
+const stripEventTypeLabels=()=>{
+  const roots=document.querySelectorAll('.event-task-row,.task-row,.task-card,.modal-task-copy');
+  roots.forEach(root=>{
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode())nodes.push(walker.currentNode);
+    for(const node of nodes){
+      const value=String(node.textContent||'');
+      const cleaned=value.replace(/\s*[（(]イベント[）)]\s*/gu,' ');
+      if(cleaned!==value)node.textContent=cleaned.replace(/\s{2,}/g,' ');
+    }
+  });
+};
+
 const fixChecklistFab=()=>{
   if(location.pathname!=='/app/tasks.php')return;
   const fab=document.querySelector('a.reminders-add-button[href*="/task/new.php"],a.fab.calendar-fab[href*="/task/new.php"]');
@@ -47,13 +61,14 @@ const observeCalendarPins=()=>{
   }
   const modal=document.getElementById('dayModal');
   if(modal instanceof HTMLElement){
-    new MutationObserver(stripEventPins).observe(modal,{childList:true,subtree:true,characterData:true});
+    new MutationObserver(()=>{stripEventPins();stripEventTypeLabels();}).observe(modal,{childList:true,subtree:true,characterData:true});
   }
 };
 
 const run=()=>{
   fixChecklistFab();
   stripEventPins();
+  stripEventTypeLabels();
   observeCalendarPins();
 };
 
