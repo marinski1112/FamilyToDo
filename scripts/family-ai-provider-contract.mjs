@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import { retainedAppContractSource } from './retained-app-contract-source.mjs';
 
 const ai=fs.readFileSync('src/family-ai.ts','utf8');
@@ -11,6 +12,30 @@ const calendar=fs.readFileSync('src/google-calendar.ts','utf8')+fs.readFileSync(
 const oneWay=fs.readFileSync('src/google-calendar-one-way.ts','utf8');
 const home=fs.readFileSync('src/google-home.ts','utf8');
 const docs=fs.readFileSync('docs/EXTERNAL_SERVICE_COSTS.md','utf8');
+
+// Exercise the real inline browser handler with the current catalog schema:
+// available/generateContentSupported are not returned by this API.
+const integrationSource=fs.readFileSync('src/google-calendar-core.ts','utf8');
+const handler=integrationSource.slice(integrationSource.indexOf('async function act('),integrationSource.indexOf("document.getElementById('calendarSync')"));
+assert.ok(handler.startsWith('async function act('));
+let payload={ok:true,provider:'GEMINI',results:[{model:'gemini-test',supportedGenerationMethods:['generateContent']}]},fetches=0;
+const label={textContent:''};
+const browser=vm.createContext({csrf:'fixture',aiMessages:{PERMISSION_DENIED:'権限を確認してください'},
+  fetch:async()=>{fetches++;return {json:async()=>payload};},
+  document:{getElementById:()=>label},location:{reload:()=>assert.fail('catalog must not reload')},
+});
+vm.runInContext(handler+';this.invoke=act;',browser);
+await browser.invoke('/api/family-ai/model-catalog');
+assert.match(label.textContent,/一覧を取得.*1件/);
+assert.match(label.textContent,/未確認/);
+assert.ok(!label.textContent.includes('利用不可'));
+payload={ok:false,category:'PERMISSION_DENIED'};
+await browser.invoke('/api/family-ai/model-catalog');
+assert.equal(label.textContent,'権限を確認してください');
+payload={ok:true,results:[]};
+await browser.invoke('/api/family-ai/model-catalog');
+assert.match(label.textContent,/0件/);
+assert.equal(fetches,3,'one request per catalog action, no generation probes');
 
 assert.ok(ai.includes("new URL('https://generativelanguage.googleapis.com/v1beta/models')"));
 assert.ok(ai.includes("'x-goog-api-key':env.GEMINI_API_KEY"));
