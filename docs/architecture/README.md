@@ -34,7 +34,7 @@ When source and this index disagree, source wins and the index must be updated i
 - `CLEANUP_AUTOMATION_RUNBOOK.md` — one-bounded-change cleanup execution contract, lease/CI/Workers flow, source-reconstruction prohibition, and autonomous-task prompt contract.
 - `FIVE_WORKER_AUTONOMY.md` — five-task lane split, global lease/collision rules, staggered schedule, and final read-only auditor contract.
 
-Current operator/workflow documentation that is intentionally outside this directory includes `../EXTERNAL_SERVICE_COSTS.md` and `../import/piyolog-conversion-prompt.md`. Google Home operator setup is maintained in `GOOGLE_HOME_FUNCTION_MAP.md` rather than a separate Wave-specific file.
+Current operator/workflow documentation that is intentionally outside this directory includes `../EXTERNAL_SERVICE_COSTS.md` and `../import/piyolog-conversion-prompt.md`. Google Home operator setup is maintained in `GOOGLE_HOME_FUNCTION_MAP.md`; `../GOOGLE_HOME_VOICE_SETUP.md` is only a compatibility symlink for residual filename consumers and contains no separate Wave-specific documentation.
 
 ## Cleanup safety classes
 
