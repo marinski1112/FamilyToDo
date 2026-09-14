@@ -126,10 +126,11 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
     if(rawUrl){try{const u=new URL(rawUrl);if(!['http:','https:'].includes(u.protocol))throw new Error();}catch{return bad('商品URLが不正です。');}}
     const now=nowJst();
     const created=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,quantity,category,memo,due,m.id,now,now,taskId,rawUrl||null).run();
+    const shoppingId=Number(created.meta.last_row_id);
     const privateParent=await privateParentOwner(ctx,taskId);
     if(privateParent.error)return privateParent.error;
-    await forcePrivateShoppingAssignee(ctx,Number(created.meta.last_row_id),privateParent.ownerId);
-    return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
+    await forcePrivateShoppingAssignee(ctx,shoppingId,privateParent.ownerId);
+    return commitSession(json({ok:true,id:shoppingId,name,category:category||'',due_date:due}),ctx.session,ctx.env.APP_SECRET);
   }
 
   return bad('未対応の操作です。');
