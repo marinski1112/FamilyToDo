@@ -56,7 +56,7 @@ const activityLabel=row=>{
 const polishMarker=marker=>{
   if(!(marker instanceof HTMLElement))return;
   const bubble=marker.querySelector('.location-family-map-marker-bubble');
-  if(bubble instanceof HTMLElement)bubble.style.setProperty('display','none','important');
+  if(bubble instanceof HTMLElement&&bubble.style.display!=='none')bubble.style.setProperty('display','none','important');
   const label=marker.querySelector('.location-family-map-marker-label');
   if(!(label instanceof HTMLElement))return;
   const name=String(label.textContent||'').trim();
@@ -69,7 +69,7 @@ const polishMarker=marker=>{
     statusNode.className='location-family-map-marker-status';
     marker.insertBefore(statusNode,label);
   }
-  statusNode.textContent=status;
+  if(statusNode.textContent!==status)statusNode.textContent=status;
   marker.style.gap='2px';
   marker.style.transform='translateY(8px)';
   statusNode.style.padding='2px 7px';
@@ -89,7 +89,10 @@ const polishMarker=marker=>{
 const run=()=>document.querySelectorAll('.location-family-map-marker').forEach(polishMarker);
 let queued=false;
 const queueRun=()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;run();});};
+const containsFamilyMarker=node=>node instanceof Element&&(node.matches('.location-family-map-marker')||Boolean(node.querySelector('.location-family-map-marker')));
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
-new MutationObserver(queueRun).observe(document.body,{childList:true,subtree:true,characterData:true});
+new MutationObserver(records=>{
+  if(records.some(record=>[...record.addedNodes].some(containsFamilyMarker)))queueRun();
+}).observe(document.body,{childList:true,subtree:true});
 setInterval(run,60000);
 })();
