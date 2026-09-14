@@ -57,6 +57,15 @@ try{
  await assert.rejects(()=>call({action:'foods_apply',subject_id:10,foods:[{...foods[0],first_tried_on:'2025-02-30'}]}));
  // Existing synced journals enqueue deletion; pending photos remain durable.
  execute([{sql:'UPDATE family_log_journal_entries SET google_sync_enabled=1'},{sql:"INSERT INTO family_log_media(family_id,log_id,subject_id,storage_key,mime_type,byte_size,created_by,created_at) VALUES(1,1,10,'synthetic-test-only','image/jpeg',10,1,'x')"}]);
+ const diaryModule=load('./imported-family-diary');
+ const beforeRead=execute([{sql:'SELECT * FROM family_logs'},{sql:'SELECT * FROM family_log_media'}]);
+ const diary=await diaryModule.importedFamilyDiary(DB,1,'2025-09','2025-10-01','',1);
+ assert.equal(diary.counts.get('2025-09-01'),1);assert.match(diary.html,/笑った/);assert.match(diary.html,/media=1/);
+ assert.ok(!(await diaryModule.importedFamilyDiary(DB,2,'2025-09','2025-10-01','',1)).html.includes('笑った'));
+ assert.ok(!(await diaryModule.importedFamilyDiary(DB,1,'2025-09','2025-10-01','2025-09-02',1)).html.includes('笑った'));
+ const ordinary=execute([{sql:`SELECT l.import_external_id FROM family_logs l WHERE l.family_id=1 AND l.deleted_at IS NULL AND NOT ${diaryModule.IMPORTED_FAMILY_DIARY_SQL}`}])[0].results;
+ assert.equal(ordinary.length,1);assert.equal(ordinary[0].import_external_id,'meal-1');
+ assert.deepEqual(execute([{sql:'SELECT * FROM family_logs'},{sql:'SELECT * FROM family_log_media'}]),beforeRead,'destination routing must not mutate content or photo IDs');
  const reset=await call({action:'reset_preview',subject_id:10});
  execute([{sql:"INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,created_at,updated_at) VALUES(1,10,'MEMO','2025-09-02','x','x'),(2,20,'MEMO','2025-09-02','x','x')"}]);
  await assert.rejects(()=>call({...reset,action:'reset_apply',subject_id:10,confirmation:'wrong',delete_foods:false}));

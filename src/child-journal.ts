@@ -1,3 +1,4 @@
+import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';
 import { childJournalMemo } from './child-journal-memo';
 import { html, redirect } from './response';
 import { AuthRequired, Forbidden } from './errors';
@@ -62,7 +63,7 @@ export async function childJournalPage(request:Request,ctx:AppContext):Promise<R
   const from=`${month}-01`;const to=`${shiftMonth(month,1)}-01`;
   const entries=subjectId?await ctx.env.DB.prepare(`SELECT j.log_id,j.entry_kind,j.milestone_code,l.log_type,l.occurred_at,l.amount,l.unit,l.value_text,l.note,s.name subject_name
     FROM family_log_journal_entries j JOIN family_logs l ON l.id=j.log_id AND l.family_id=j.family_id AND l.subject_id=j.subject_id AND l.deleted_at IS NULL JOIN family_log_subjects s ON s.id=j.subject_id AND s.family_id=j.family_id
-    WHERE j.family_id=? AND j.subject_id=? AND substr(l.occurred_at,1,10)>=? AND substr(l.occurred_at,1,10)<? ORDER BY l.occurred_at,l.id`).bind(member.family_id,subjectId,from,to).all<Row>():{results:[] as Row[]};
+    WHERE j.family_id=? AND j.subject_id=? AND NOT ${IMPORTED_FAMILY_DIARY_SQL} AND substr(l.occurred_at,1,10)>=? AND substr(l.occurred_at,1,10)<? ORDER BY l.occurred_at,l.id`).bind(member.family_id,subjectId,from,to).all<Row>():{results:[] as Row[]};
   const byDate=new Map<string,Row[]>();for(const row of entries.results){const date=String(row.occurred_at||'').slice(0,10);const list=byDate.get(date)||[];list.push(row);byDate.set(date,list);}
   const totalDays=daysInMonth(month),firstDow=new Date(`${month}-01T00:00:00Z`).getUTCDay();const cells:string[]=[];for(let i=0;i<firstDow;i++)cells.push('<div class="child-journal-day muted"></div>');
   for(let day=1;day<=totalDays;day++){const date=`${month}-${String(day).padStart(2,'0')}`;const rows=byDate.get(date)||[];cells.push(`<div class="child-journal-day${date===today?' today':''}"><strong>${day}</strong>${rows.map(row=>`<div class="child-journal-entry"><span>${esc(journalLabel(row))}</span>${row.note&&String(row.note)!==String(row.value_text||'')?`<small>${esc(row.note)}</small>`:''}</div>`).join('')}</div>`);}

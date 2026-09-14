@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 const read=path=>fs.readFileSync(path,'utf8');
 const journal=read('src/family-daily-journal.ts');
+const importedDiary=read('src/imported-family-diary.ts');
+const homeDashboard=read('src/home-dashboard.ts');
 const migration=read('migrations/0078_family_daily_journal.sql');
 const routes=read('src/page-routes.ts');
 const index=read('src/index.ts');
@@ -21,7 +23,7 @@ const checks=[
   [journal.includes('readSharedLocationMemberIds')&&journal.includes('d.enabled=1')&&journal.includes('d.sharing_enabled=1')&&journal.includes('d.revoked_at IS NULL')&&journal.includes('m.active=1'),'journal has a current active sharing/revoke gate'],
   [journal.includes('a.local_date=? AND EXISTS (SELECT 1 FROM location_devices d')&&journal.includes('s.local_date=? AND EXISTS (SELECT 1 FROM members m JOIN location_devices d'),'new Location journal evidence is gated by current sharing state'],
   [journal.includes('.filter(member=>sharedLocationMembers.has(member.memberId))'),'persisted Location journal evidence is filtered by current sharing state at read time'],
-  [journal.includes('calendar(month,byDate,selectedDate,sharedLocationMembers)')&&journal.includes('function calendar(month:string,rows:Map<string,Row>,selected:string,sharedLocationMembers:Set<number>)'),'calendar Location counts respect current sharing state'],
+  [journal.includes('calendar(month,byDate,selectedDate,sharedLocationMembers,imported.counts)')&&journal.includes('function calendar(month:string,rows:Map<string,Row>,selected:string,sharedLocationMembers:Set<number>,diaryCounts:Map<string,number>)'),'calendar Location counts respect current sharing state'],
   [journal.includes('safeSelectedSummary=selected?summary(location,tasks,housework)')&&!journal.includes('esc(selected.summary_text)'),'selected journal summary is recomputed from currently visible evidence'],
   [journal.includes('MAX_SEARCH_YEAR_ROWS=366')&&journal.includes('journal_date>=? AND journal_date<?')&&journal.includes('searchFrom,searchTo,MAX_SEARCH_YEAR_ROWS'),'free-text search reads at most one indexed calendar year'],
   [journal.includes('safe_summary:summary(location,tasks,housework)')&&journal.includes('.filter(row=>String(row.safe_summary).toLocaleLowerCase().includes(normalizedQuery))'),'search matches a recomputed privacy-filtered summary'],
@@ -41,6 +43,8 @@ const checks=[
   [!calendarPage.includes('SELECT summary_text FROM family_daily_journals')&&!calendarPage.includes('SELECT location_json FROM family_daily_journals'),'Calendar does not duplicate journal evidence into its day payload'],
   [calendarJs.includes('journalDates.has(d)')&&calendarJs.includes('/app/family_journal.php?month=')&&calendarJs.includes('&date='),'Calendar day detail links only dates with an existing journal row'],
   [!locationArchive.includes('DELETE FROM member_location_history'),'journal generation does not force raw deletion'],
+  [importedDiary.includes('JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id')&&!importedDiary.includes("s.subject_kind IN ('BABY','CHILD')"),'rerouted imported diaries remain visible after later subject-kind edits'],
+  [homeDashboard.includes("import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';")&&homeDashboard.includes('AND NOT ${IMPORTED_FAMILY_DIARY_SQL}'),'home Family Log count excludes the same rerouted imported diary subset'],
 ];
 const failed=checks.filter(([ok])=>!ok).map(([,label])=>label);
 if(failed.length){console.error('Family daily journal contract failed:\n- '+failed.join('\n- '));process.exit(1);}
