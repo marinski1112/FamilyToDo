@@ -42,13 +42,30 @@
     border-radius:0 0 16px 16px!important;
   }
 
-  /* Keep recorder in the upper-right and keep short log values on the title line. */
+  /* Recorder stays in the upper-right. Only very short values stay on the heading line. */
   .family-log-page .family-log-row{position:relative}
-  .family-log-page .family-log-main{min-width:0;padding-right:64px}
-  .family-log-page .family-log-main>div:first-child,
-  .family-log-page .family-log-main>.family-log-value{display:inline}
-  .family-log-page .family-log-main>.family-log-value{margin-left:7px}
-  .family-log-page .family-log-main>.family-log-value::before{content:""}
+  .family-log-page .family-log-main{min-width:0;padding-right:0}
+  .family-log-page .family-log-main>div:first-child{
+    display:block;
+    padding-right:64px;
+    box-sizing:border-box;
+  }
+  .family-log-page .family-log-main>.family-log-value{
+    display:block;
+    width:100%;
+    margin:2px 0 0!important;
+    padding-right:0;
+    box-sizing:border-box;
+    overflow-wrap:anywhere;
+  }
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>div:first-child,
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>.family-log-value{
+    display:inline;
+  }
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>.family-log-value{
+    width:auto;
+    margin-left:7px!important;
+  }
   .family-log-page .family-log-main>.family-log-recorder{
     position:absolute;top:10px;right:12px;margin:0!important;
     font-size:10.5px;line-height:1.2;white-space:nowrap;color:#64748b
