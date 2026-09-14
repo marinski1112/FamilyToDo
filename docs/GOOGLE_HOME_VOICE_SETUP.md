@@ -1,0 +1,1 @@
+architecture/GOOGLE_HOME_FUNCTION_MAP.md
