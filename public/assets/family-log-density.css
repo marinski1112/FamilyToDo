@@ -42,17 +42,73 @@
     border-radius:0 0 16px 16px!important;
   }
 
-  /* Keep recorder in the upper-right and keep short log values on the title line. */
+  /* Recorder stays in the upper-right. Compact values stay on line one. */
   .family-log-page .family-log-row{position:relative}
-  .family-log-page .family-log-main{min-width:0;padding-right:64px}
-  .family-log-page .family-log-main>div:first-child,
-  .family-log-page .family-log-main>.family-log-value{display:inline}
-  .family-log-page .family-log-main>.family-log-value{margin-left:7px}
-  .family-log-page .family-log-main>.family-log-value::before{content:""}
+  .family-log-page .family-log-main{min-width:0;padding-right:0}
+  .family-log-page .family-log-main>div:first-child{
+    display:block;
+    padding-right:74px;
+    box-sizing:border-box;
+  }
+  .family-log-page .family-log-main>.family-log-value{
+    display:block;
+    width:100%;
+    margin:2px 0 0!important;
+    padding-right:0;
+    box-sizing:border-box;
+    overflow-wrap:anywhere;
+  }
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>div:first-child,
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>.family-log-value{
+    display:inline;
+  }
+  .family-log-page .family-log-row.family-log-row-compact-value .family-log-main>.family-log-value{
+    width:auto;
+    margin-left:7px!important;
+  }
   .family-log-page .family-log-main>.family-log-recorder{
     position:absolute;top:10px;right:12px;margin:0!important;
     font-size:10.5px;line-height:1.2;white-space:nowrap;color:#64748b
   }
+
+  /* Meal rows: line 1 = type/detail/recorder, line 2 = subject/description. */
+  .family-log-page .family-log-row-chat .family-log-main>div:first-child{
+    padding-right:86px;
+    white-space:nowrap;
+  }
+  .family-log-page .family-log-title-detail{
+    display:inline-block;
+    margin-left:10px;
+    font-weight:700;
+  }
+  .family-log-page .family-log-description-line{
+    display:flex!important;
+    align-items:baseline;
+    gap:10px;
+    width:100%;
+    margin-top:3px;
+    padding:0!important;
+    box-sizing:border-box;
+    min-width:0;
+  }
+  .family-log-page .family-log-description-subject{
+    flex:0 0 auto;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    color:inherit!important;
+    font-size:inherit!important;
+    font-weight:700;
+    line-height:inherit!important;
+  }
+  .family-log-page .family-log-description-text{
+    flex:1 1 auto;
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+  .family-log-page .family-log-row-chat .family-log-value[hidden]{display:none!important}
   .family-log-page .family-log-main>.meta:not(.family-log-recorder),
   .family-log-page .family-log-main>.family-log-link{display:block;clear:both}
 
