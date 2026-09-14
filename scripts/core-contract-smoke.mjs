@@ -34,8 +34,8 @@ assert.ok(!/(INSERT|UPDATE|DELETE)\s+/i.test(checklistDraft),'checklist draft pa
 assert.ok(!/GEMINI_API_KEY|generativelanguage\.googleapis\.com|:generateContent/.test(checklistDraft),'deterministic draft contract must not call Gemini');
 
 for(const marker of [
-  "ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite'",
-  "ROUGH_INPUT_GEMINI_MODEL_FALLBACK='gemini-3.5-flash'",
+  "import { resolveFeatureModels } from './ai-model-routing';",
+  "context.modelFeature||'ROUGH_INPUT',member.role",
   'const MAX_CHARS=4000',
   'const MAX_ITEMS=20',
   "fields[0]?.destination!==primaryType",
@@ -95,7 +95,7 @@ assert.equal(parseMultiplierFixture('サイズ 2×3'),null,'dimension-like multi
 assert.equal(parseMultiplierFixture('型番X2'),null,'model-like X2 text must not be treated as an explicit quantity');
 assert.equal(parseMultiplierFixture('牛乳 ×0'),null,'non-positive multiplier quantity must remain unresolved');
 const deterministicGate=roughInputApi.indexOf("if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');");
-const modelLoop=roughInputApi.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
+const modelLoop=roughInputApi.indexOf('for(const model of routedModels)');
 const reserveCall=roughInputApi.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
 const modelCall=roughInputApi.indexOf('const response=await geminiFetch(env,model,bodyForModel);');
