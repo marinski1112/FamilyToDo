@@ -21,6 +21,8 @@ const quickActions=Array.isArray(payload.quickActions)?payload.quickActions:[];
 const quickActionById=new Map(quickActions.map(action=>[Number(action?.id||0),action]));
 const logById=payload.logs&&typeof payload.logs==='object'?payload.logs:{};
 const compactValueTypes=new Set(['MILK','DIAPER','TOILET']);
+const chatLayoutTypes=new Set(['MEAL']);
+const detailLabels={BREAKFAST:'朝食',LUNCH:'昼食',DINNER:'夕食',SNACK:'おやつ',OTHER:'その他',BABY_FOOD:'離乳食'};
 let runningSubjects=new Map();
 let runningLoaded=false;
 
@@ -90,6 +92,50 @@ const summaryHref=()=>{
   return url.pathname+url.search+url.hash;
 };
 
+const applyTimelineLayout=(row,log)=>{
+  if(!(row instanceof HTMLElement)||!log)return;
+  const type=String(log.log_type||'').toUpperCase();
+  row.classList.toggle('family-log-row-compact-value',compactValueTypes.has(type));
+  if(!chatLayoutTypes.has(type)||row.dataset.chatLayout==='1')return;
+  const main=row.querySelector('.family-log-main');
+  const title=main?.querySelector(':scope > div:first-child');
+  const value=main?.querySelector(':scope > .family-log-value');
+  if(!(main instanceof HTMLElement)||!(title instanceof HTMLElement))return;
+
+  const detail=detailLabels[String(log.detail_code||'').toUpperCase()]||'';
+  if(detail&&!title.querySelector('.family-log-title-detail')){
+    const detailNode=document.createElement('span');
+    detailNode.className='family-log-title-detail';
+    detailNode.textContent=detail;
+    title.appendChild(detailNode);
+  }
+
+  const pieces=[];
+  if(log.amount!==null&&log.amount!==undefined)pieces.push(`${log.amount}${String(log.unit||'')}`);
+  if(log.duration_minutes!==null&&log.duration_minutes!==undefined)pieces.push(`${log.duration_minutes}分`);
+  if(String(log.value_text||'').trim())pieces.push(String(log.value_text).trim());
+  const badge=title.querySelector('.family-log-subject-badge');
+  const subject=String(badge?.textContent||'').trim();
+  if(subject||pieces.length){
+    const line=document.createElement('div');
+    line.className='family-log-description-line';
+    if(badge instanceof HTMLElement){
+      badge.classList.add('family-log-description-subject');
+      line.appendChild(badge);
+    }
+    if(pieces.length){
+      const description=document.createElement('span');
+      description.className='family-log-description-text';
+      description.textContent=pieces.join(' ・ ');
+      line.appendChild(description);
+    }
+    title.insertAdjacentElement('afterend',line);
+  }
+  if(value instanceof HTMLElement)value.hidden=true;
+  row.classList.add('family-log-row-chat');
+  row.dataset.chatLayout='1';
+};
+
 const enhance=()=>{
   const page=document.querySelector('.family-log-page');if(!page)return;
   page.querySelector(':scope > .family-log-timer-card')?.remove();
@@ -98,8 +144,7 @@ const enhance=()=>{
 
   page.querySelectorAll('.family-log-row[data-id]').forEach(row=>{
     const log=logById[String(row.dataset.id||'')];
-    const type=String(log?.log_type||'').toUpperCase();
-    row.classList.toggle('family-log-row-compact-value',compactValueTypes.has(type));
+    applyTimelineLayout(row,log);
   });
 
   const dashboard=page.querySelector(':scope > .family-log-dashboard');
