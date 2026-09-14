@@ -92,4 +92,3 @@ assert.equal(2+lookupSize*2,100,'derived duplicate lookup must never bind more t
 assert.equal(lookupSize,49,'current canonical+legacy lookup budget must resolve to 49 records per query');
 
 console.log('family-log Piyolog import: preview-first records, in-place generic-meal promotion, duplicate prevention, privacy-safe photo failure stages, unambiguous private baby-food photo resolution, record-free photo retry, tenant/admin/CSRF and no server PDF/AI parsing contracts pass');
-
