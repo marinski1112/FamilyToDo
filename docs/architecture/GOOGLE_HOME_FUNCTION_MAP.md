@@ -42,7 +42,7 @@ For development verification, use Google Home Developer Console **Test integrati
 
 ## LINE Login continuation
 
-Google Home account linking uses the LINE Login OAuth v2.1 Authorization Code flow with PKCE for an unauthenticated FamilyToDo user. Configure the existing LINE Login channel callback as:
+Google Home account linking uses the LINE Login OAuth v2.1 Authorization Code flow with PKCE for an unauthenticated FamilyToDo user. Configure **LINE Login channel → Basic settings** and set the callback to:
 
 `https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback`
 
@@ -55,6 +55,17 @@ The Login channel credentials are distinct from the Messaging API credentials:
 
 Do not replace the LIFF endpoint with the Google Home callback. The account-linking continuation and ordinary LIFF entrypoints are separate routes.
 
+Current LIFF entry examples remain:
+
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fcalendar.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php%23shopping-checklist`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ffamily_log.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fmessages.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fsettings.php`
+
+Path-style LIFF routes are also supported, including `https://liff.line.me/{LIFF_ID}/calendar`. Keep the slash before `?next=` when using the query-style form.
+
 ## HomeGraph Request Sync
 
 When catalog changes must be pushed without relinking, enable the HomeGraph API for the Google Home project, create the required service account, and store its JSON credential only in Cloudflare Worker Secret `GOOGLE_HOME_SERVICE_ACCOUNT_JSON`. Use 管理 -> Google Home -> Google Homeへ操作一覧を再同期 to invoke the existing Request Sync path.
@@ -66,6 +77,8 @@ Google Home credentials are separate from Google Calendar credentials. Do not su
 ## Scene and recorder rules
 
 Active BABY/CHILD subjects can project child sleep, toilet/diaper and fixed Child Journal milestone Scenes; PET uses its dedicated quick operations, and family quick chores are separate shared Scenes. Eligibility is revalidated at EXECUTE time. Disabled or no-longer-eligible catalog entries fail closed instead of writing a record.
+
+The fixed Child Journal 成長日記 Scene set is `立った`, `歩いた`, `最初の歯`, and `歯`. Google Home Scene activation does not accept 身長・体重 numeric values, arbitrary times/amounts, or free-form memo text; those require another input path.
 
 The FamilyToDo member linked during Account Linking is the trusted recorder identity. Do not infer a speaker or Voice Match identity from a shared Google Home device. `external_command_receipts` remains the idempotency boundary for duplicate Google request IDs.
 
