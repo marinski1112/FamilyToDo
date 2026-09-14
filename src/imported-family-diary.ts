@@ -9,7 +9,7 @@ export async function importedFamilyDiary(db:D1Database,familyId:number,month:st
  const from=`${month}-01`,limit=100;
  const counts=await db.prepare(`SELECT substr(l.occurred_at,1,10) day,COUNT(*) count FROM family_logs l WHERE l.family_id=? AND l.deleted_at IS NULL AND l.occurred_at>=? AND l.occurred_at<? AND ${IMPORTED_FAMILY_DIARY_SQL} GROUP BY substr(l.occurred_at,1,10)`).bind(familyId,from,to).all<Row>();
  const rows=await db.prepare(`SELECT l.id,l.occurred_at,l.value_text,l.note,s.name subject_name,fm.id media_id FROM family_logs l
- JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id AND s.subject_kind IN ('BABY','CHILD')
+ JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
  LEFT JOIN family_log_media fm ON fm.log_id=l.id AND fm.family_id=l.family_id AND fm.subject_id=l.subject_id
  WHERE l.family_id=? AND l.deleted_at IS NULL AND l.occurred_at>=? AND l.occurred_at<? AND (?='' OR substr(l.occurred_at,1,10)=?) AND ${IMPORTED_FAMILY_DIARY_SQL}
  ORDER BY l.occurred_at DESC,l.id DESC LIMIT ? OFFSET ?`).bind(familyId,from,to,date,date,limit+1,(page-1)*limit).all<Row>();
