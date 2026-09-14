@@ -6,11 +6,11 @@ const file=document.getElementById('importFile'),subject=document.getElementById
 if(!file||!subject||!status||!out)return;
 let documentValue=null,lastBatch=0,lastPreview=null;
 const MAX_MEDIA_ITEMS=250,MAX_IMAGE_BYTES=4*1024*1024,IMAGE_TYPES=new Set(['image/jpeg','image/png','image/webp']);
-const SAFE_MEDIA_CODES=new Set(['AUTH_REQUIRED','CSRF_FAILED','INVALID_LOG','BABY_FOOD_LOG_NOT_FOUND','PHOTO_ALREADY_EXISTS','UNSUPPORTED_IMAGE_TYPE','FILE_TOO_LARGE','INVALID_IMAGE','BABY_FOOD_LOG_CHANGED','MEDIA_UPLOAD_FAILED','METHOD_NOT_ALLOWED','TARGET_RESOLUTION_FAILED','API_ERROR']);
+const SAFE_MEDIA_CODES=new Set(['AUTH_REQUIRED','CSRF_FAILED','INVALID_LOG','BABY_FOOD_LOG_NOT_FOUND','PHOTO_ALREADY_EXISTS','UNSUPPORTED_IMAGE_TYPE','FILE_TOO_LARGE','INVALID_IMAGE','BABY_FOOD_LOG_CHANGED','MEDIA_UPLOAD_FAILED','METHOD_NOT_ALLOWED','TARGET_RESOLUTION_FAILED','API_ERROR','SOURCE_TOO_LARGE','DECODE_FAILED','ENCODE_FAILED','UPLOAD_TIMEOUT']);
 
 const mediaNotice=document.createElement('div');
 mediaNotice.className='notice';
-mediaNotice.textContent='ぴよログPDF自体はFamilyToDoへ送信・解析しません。このチャットで変換した標準JSONと、必要に応じて抽出済みの離乳食写真を選択してください。';
+mediaNotice.textContent='ぴよログPDF自体はFamilyToDoへ送信・解析しません。このチャットで変換した標準JSONと、必要に応じて抽出済みの離乳食写真を選択してください。写真は端末内で最大辺800pxのJPEGに変換して送信します。';
 file.parentElement?.insertBefore(mediaNotice,file);
 const mediaLabel=document.createElement('label');mediaLabel.textContent='離乳食写真（変換データに写真指定がある場合・複数選択可）';
 const mediaFiles=document.createElement('input');mediaFiles.id='importMediaFiles';mediaFiles.type='file';mediaFiles.multiple=true;mediaFiles.accept='image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
@@ -35,7 +35,7 @@ function manifest(){
   if(String(documentValue?.source||'').trim().toLowerCase()!=='piyolog')throw new Error('piyolog_mediaはsourceがpiyologの変換データだけで使用できます。');
   if(!Array.isArray(raw)||raw.length>MAX_MEDIA_ITEMS)throw new Error(`離乳食写真指定は${MAX_MEDIA_ITEMS}件以内にしてください。`);
   const records=Array.isArray(documentValue?.records)?documentValue.records:[],recordsById=new Map();
-  for(const record of records){const id=cleanName(record?.external_id);if(id)recordsById.set(id,record);}
+  for(const record of records){const id=cleanName(record?.external_id);if(id){if(recordsById.has(id))throw new Error('external_idが重複しています。変換データを確認してください。');recordsById.set(id,record);}}
   const ids=new Set(),names=new Set();
   return raw.map((entry,index)=>{
     if(!entry||typeof entry!=='object'||Array.isArray(entry))throw new Error(`写真指定${index+1}件目が不正です。`);
@@ -67,11 +67,36 @@ function renderPreview(d){
   updateMediaSelection();
 }
 
+// Decode and re-encode locally: metadata is not forwarded to private storage.
+async function prepareImportPhoto(fileValue){
+  if(fileValue.size<=0||fileValue.size>20*1024*1024)throw mediaError('client_file','SOURCE_TOO_LARGE',0,'元画像は20MB以内にしてください。');
+  const url=URL.createObjectURL(fileValue),img=new Image();
+  try{
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{img.src='';reject(mediaError('client_decode','DECODE_FAILED',0,'画像の読み込みが完了しませんでした。'));},15000);
+      img.onload=()=>{clearTimeout(timer);resolve();};
+      img.onerror=()=>{clearTimeout(timer);reject(mediaError('client_decode','DECODE_FAILED',0,'JPEG・PNG・WebP画像を選択してください。'));};
+      img.src=url;
+    });
+    if(!img.naturalWidth||!img.naturalHeight)throw mediaError('client_decode','DECODE_FAILED',0,'画像を読み込めませんでした。');
+    const scale=Math.min(1,800/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw mediaError('client_encode','ENCODE_FAILED',0,'画像を変換できませんでした。');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    const blob=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(mediaError('client_encode','ENCODE_FAILED',0,'画像変換が完了しませんでした。')),15000);canvas.toBlob(value=>{clearTimeout(timer);value?resolve(value):reject(mediaError('client_encode','ENCODE_FAILED',0,'画像を変換できませんでした。'));},'image/jpeg',.84);});
+    if(blob.type!=='image/jpeg'||blob.size<=0||blob.size>MAX_IMAGE_BYTES)throw mediaError('client_encode','FILE_TOO_LARGE',0,'変換後の画像サイズを確認してください。');
+    return blob;
+  }finally{img.onload=null;img.onerror=null;URL.revokeObjectURL(url);}
+}
+
 async function uploadPhoto(fileValue,target){
-  if(!IMAGE_TYPES.has(fileValue.type))throw mediaError('client_file','UNSUPPORTED_IMAGE_TYPE',0,'対応していない画像形式です。');
-  if(fileValue.size<=0||fileValue.size>MAX_IMAGE_BYTES)throw mediaError('client_file','FILE_TOO_LARGE',0,'画像は4MB以内にしてください。');
-  const response=await fetch('/api/family-log-media',{method:'POST',headers:{'content-type':fileValue.type,'x-csrf-token':String(config.csrf||''),'x-family-log-id':String(target.log_id)},body:fileValue});
-  let data=null;try{data=await response.json();}catch{}
+  if(fileValue.type&&!IMAGE_TYPES.has(fileValue.type))throw mediaError('client_file','UNSUPPORTED_IMAGE_TYPE',0,'対応していない画像形式です。');
+  const blob=await prepareImportPhoto(fileValue);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  let response,data=null;
+  try{response=await fetch('/api/family-log-media',{method:'POST',headers:{'content-type':'image/jpeg','x-csrf-token':String(config.csrf||''),'x-family-log-id':String(target.log_id)},body:blob,signal:controller.signal});try{data=await response.json();}catch(error){if(controller.signal.aborted)throw error;}}
+  catch(error){if(controller.signal.aborted)throw mediaError('upload_api','UPLOAD_TIMEOUT',0,'送信結果不明です。写真だけ再試行すると保存済みか確認します。');throw error;}
+  finally{clearTimeout(timer);}
   if(response.status===409&&data?.error==='PHOTO_ALREADY_EXISTS')return 'existing';
   if(!response.ok||!data?.ok)throw mediaError('upload_api',data?.error||'API_ERROR',response.status,data?.error||`写真アップロードに失敗しました（HTTP ${response.status}）。`);
   return 'uploaded';
@@ -93,7 +118,7 @@ async function uploadPhotos(button,explicitRetry=false){
     if(!target){targetMissing++;continue;}
     if(target.has_media){existing++;continue;}
     try{const result=await uploadPhoto(selected,target);result==='uploaded'?uploaded++:existing++;}
-    catch(error){if(error instanceof TypeError){uncertain++;}else{failed++;const diagnostic=mediaDiagnostic(error);failureDiagnostics.set(diagnostic,(failureDiagnostics.get(diagnostic)||0)+1);}}
+    catch(error){if(error instanceof TypeError||error?.mediaCode==='UPLOAD_TIMEOUT'){uncertain++;}else{failed++;const diagnostic=mediaDiagnostic(error);failureDiagnostics.set(diagnostic,(failureDiagnostics.get(diagnostic)||0)+1);}}
   }
   const unresolved=unselected+targetMissing+failed+uncertain;
   const failureSummary=[...failureDiagnostics.entries()].map(([diagnostic,count])=>`${diagnostic} ×${count}`).join('、');
