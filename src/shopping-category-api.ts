@@ -18,14 +18,12 @@ async function readOrder(ctx:AppContext,familyId:number):Promise<string[]>{
   }catch{return [];}
 }
 
-/** Reusable Shopping categories plus checklist rename/reorder support. */
+/** Reusable Shopping category catalog plus checklist display ordering. */
 export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promise<Response>{
   const member=ctx.member;
   if(!member)return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
 
-  if(request.method==='GET'){
-    return json({ok:true,order:await readOrder(ctx,member.family_id)});
-  }
+  if(request.method==='GET')return json({ok:true,order:await readOrder(ctx,member.family_id)});
   if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);
 
   let body:Record<string,unknown>;
@@ -36,9 +34,7 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
   }
 
   if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();
-  if(typeof body.csrf!=='string'||body.csrf!==ctx.session.csrfToken){
-    return json({ok:false,error:'CSRF検証に失敗しました。',code:'FORBIDDEN'},403);
-  }
+  if(typeof body.csrf!=='string'||body.csrf!==ctx.session.csrfToken)return json({ok:false,error:'CSRF検証に失敗しました。',code:'FORBIDDEN'},403);
 
   if(body.action==='reorder'){
     const raw=Array.isArray(body.order)?body.order:[];
@@ -47,25 +43,6 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
     await ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?)
       ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at`).bind(member.family_id,ORDER_KEY,JSON.stringify(order),now).run();
     return commitSession(json({ok:true,order}),ctx.session,ctx.env.APP_SECRET);
-  }
-
-  if(body.action==='rename'){
-    const oldName=normalizeShoppingCategoryName(body.name);
-    const newName=normalizeShoppingCategoryName(body.new_name);
-    if(!isValidShoppingCategoryName(oldName)||!isValidShoppingCategoryName(newName))return bad('カテゴリー名は1〜255文字で入力してください。');
-    if(shoppingCategoryKey(oldName)===shoppingCategoryKey(newName))return commitSession(json({ok:true,name:newName}),ctx.session,ctx.env.APP_SECRET);
-    await ctx.env.DB.batch([
-      ctx.env.DB.prepare('UPDATE shopping_items SET category=?,updated_at=CURRENT_TIMESTAMP WHERE family_id=? AND category=? COLLATE NOCASE').bind(newName,member.family_id,oldName),
-      ctx.env.DB.prepare(`INSERT OR IGNORE INTO shopping_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
-        VALUES(?,?,1,1,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).bind(member.family_id,newName,member.id),
-      ctx.env.DB.prepare('UPDATE shopping_category_catalog SET enabled=0,updated_at=CURRENT_TIMESTAMP WHERE family_id=? AND name=? COLLATE NOCASE').bind(member.family_id,oldName),
-    ]);
-    const order=(await readOrder(ctx,member.family_id)).map(v=>shoppingCategoryKey(v)===shoppingCategoryKey(oldName)?newName:v);
-    if(order.length){
-      await ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
-        ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at`).bind(member.family_id,ORDER_KEY,JSON.stringify([...new Set(order)])).run();
-    }
-    return commitSession(json({ok:true,name:newName,old_name:oldName}),ctx.session,ctx.env.APP_SECRET);
   }
 
   const name=normalizeShoppingCategoryName(body.name);
