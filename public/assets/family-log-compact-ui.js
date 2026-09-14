@@ -90,6 +90,7 @@ const buildToolbar=()=>{
     const diaryNav=document.createElement('nav');diaryNav.className='family-log-bottom-journal';diaryNav.setAttribute('aria-label','日記');
     journal.textContent='📓 成長日記';diaryNav.appendChild(journal);
     head.querySelectorAll('.family-log-journal-link').forEach(link=>diaryNav.appendChild(link));
+    const foods=document.createElement('a');foods.href='/app/child_foods.php';foods.textContent='🥕 食材リスト';diaryNav.appendChild(foods);
     page.appendChild(diaryNav);page.classList.add('family-log-has-bottom-journal');
   }
   const manage=head.querySelector('.family-log-gear');

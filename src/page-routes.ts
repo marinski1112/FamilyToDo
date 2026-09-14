@@ -6,6 +6,7 @@ import { shoppingNew, shoppingEdit } from './shopping-page-handlers';
 import { locationPage } from './location-page';
 import { familyLog } from './family-log-page-handler';
 import { settings, settingsContent, settingsDiagnostics, settingsMembers, settingsNotifications, settingsLocation, recurring } from './settings-page-handlers';
+import { childFoodListPage } from './child-food-list';
 import { childJournalPage } from './child-journal';
 import { familyDailyJournalPageWithAi } from './family-daily-journal-ai-page';
 import { familyLogPiyologImportPage } from './family-log-piyolog-import-page';
@@ -40,6 +41,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/messages.php') return await messages(request,context);
   if(url.pathname==='/app/location.php') return await locationPage(request,context,env);
   if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
+  if(url.pathname==='/app/child_foods.php') return await childFoodListPage(request,context);
   if(url.pathname==='/app/child_journal.php') return await childJournalPage(request,context);
   if(url.pathname==='/app/family_journal.php') return await familyDailyJournalPageWithAi(request,context);
   if(url.pathname==='/app/family_log_import.php') return await familyLogPiyologImportPage(context);
