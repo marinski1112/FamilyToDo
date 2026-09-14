@@ -24,9 +24,17 @@ Google Tasks uses the OAuth callback `https://familytodo.marinski1112.workers.de
 
 Credential ownership is separate from Google Home. `GOOGLE_TASKS_CLIENT_ID`, `GOOGLE_TASKS_CLIENT_SECRET` and `GOOGLE_TASKS_TOKEN_KEY` may fall back to their Google Calendar counterparts where current source permits it. Secrets and raw refresh tokens must remain server-side and must not be copied into documentation or issue comments.
 
-After authorization, each FamilyToDo member explicitly selects the single Google Tasks list used for inbound sync. Do not import every list or assume which list Google Home/Assistant chose. Create a harmless voice task on the real device when list discovery is needed, then select the observed destination list in FamilyToDo settings.
+After authorization, each FamilyToDo member explicitly selects the single Google Tasks list used for inbound sync. Do not import every list or assume which list Google Home/Assistant chose. Create a harmless voice task on the real device when list discovery is needed, then select the observed destination list in FamilyToDo settings. FamilyToDo does not promise a particular list as the Google Home voice destination.
 
-Ordinary imported tasks are PRIVATE by default unless the linked account explicitly opts into FAMILY visibility. Google Tasks due values are date-only; FamilyToDo must not invent a time-of-day. Google Calendar remains the timed-event integration.
+Ordinary imported tasks are PRIVATE by default unless the linked account explicitly opts into FAMILY visibility. Google Tasks due values are date-only; time is not preserved or invented. FamilyToDo must not invent a time-of-day; Google Calendar remains the timed-event integration.
+
+## Voice bridge and Child Journal contract
+
+The voice bridge uses the official Google Home / Gemini for Home -> Google Tasks -> Google Tasks API path. FamilyToDo receives neither a voice print nor the Google account email; recorder identity is the FamilyToDo member bound to the inbound OAuth account. Ordinary Google Tasks import consumes zero Gemini inference, and bounded marked Child Journal recording also uses zero Gemini inference.
+
+Child Journal promotion is explicit: the command must include `成長日記と明示` rather than silently reclassifying an ordinary Family Log entry. Supported examples include `FT 成長日記 身長 82.5`, `FT 成長日記 体重 10.25`, and `FT 成長日記 メモ 初めて靴を履いた`. With multiple child subjects, the current marked grammar includes the subject name. Relative past time is bounded to 最大24時間前; future-time phrases are rejected for review.
+
+The Child Journal adapter reuses canonical `family_logs` and `family_log_journal_entries` persistence and the existing external command receipt boundary. It does not create a second journal store. Where the dedicated Child Journal projection is enabled, FamilyToDo -> Google Calendar remains the separate one-way calendar projection; Google Tasks itself is not a timed-event substitute.
 
 ## Persistence lineage
 
