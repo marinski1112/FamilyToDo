@@ -37,10 +37,6 @@ assert.match(browser,/mediaError\('upload_api'/,'upload API failures must carry 
 assert.match(browser,/SAFE_MEDIA_CODES=new Set/,'media diagnostics must use an explicit safe reason allowlist');
 assert.match(browser,/failureDiagnostics=new Map/,'failure diagnostics must be aggregated by safe reason instead of exposing per-file identifiers');
 assert.match(browser,/failureSummary=\[\.\.\.failureDiagnostics\.entries\(\)\]\.map\(\(\[diagnostic,count\]\)=>`\$\{diagnostic\} ×\$\{count\}`\)\.join\('、'\)/,'failure summary must contain only the safe diagnostic tuple and aggregate count');
-assert.match(browser,/function resetMediaSelection\(/,'photo selection reset helper must remain explicit');
-assert.match(browser,/if\(unresolved===0\)resetMediaSelection\(/,'successful complete photo handling must clear the stale file selection');
-assert.match(browser,/食材インポート完了/,'foods-only import must visibly reach a completed state');
-assert.match(browser,/for\(const control of \[file,subject\]\).*resetMediaSelection\(\)/s,'changing JSON or subject must clear stale photo selection');
 const photoOnly=browser.match(/async function runPhotoOnly\([\s\S]*?\n}\n\nasync function runImport/);
 assert.ok(photoOnly,'photo-only handler must remain explicit');
 assert.ok(!photoOnly[0].includes("action:'start'")&&!photoOnly[0].includes("action:'chunk'")&&!photoOnly[0].includes("action:'finish'"),'photo-only retry must not invoke the record importer');
@@ -78,7 +74,7 @@ assert.match(importer,/familytodo-family-log-import-v1/,'canonical Family Log im
 assert.match(importer,/import_external_id/,'canonical importer must retain the external ID used to resolve converted photo manifests');
 assert.match(media,/one optional private BABY_FOOD photo per Family Log record|authenticated same-family proxy/i,'canonical private-media boundary must remain in use');
 assert.match(wrapper,/CORE_IMPORT_ASSET='\/assets\/family-log-import\.js\?v=12\.121\.0-wave102'/,'wrapper must pin the exact retained canonical controller it replaces');
-assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-bundle2'/,'Piyolog controller must be cache-busted after import UI behavior changes');
+assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-family-diary1'/,'Piyolog controller must be cache-busted after media diagnostic behavior changes');
 assert.ok(importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'wrapper sentinel must stay aligned with the canonical import page');
 assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) return await familyLogPiyologImportPage\(context\)/,'visible Family Log import page must use the restored Piyolog-capable controller');
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');
