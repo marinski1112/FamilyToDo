@@ -45,7 +45,7 @@ for(const marker of [
   'recurrence_occurrence_id:Number(occ.id)',
 ])if(!recurrence.includes(marker))throw new Error(`retained recurrence projection marker missing: ${marker}`);
 if(!api.includes('export async function familyLogApi'))throw new Error('retained Family Log mutation API missing');
-if(!shell.includes('family-log-layout.css?v=${APP_VERSION}-mobile1'))throw new Error('Family Log scoped layout override is not loaded');
+if(!shell.includes('family-log-layout.css?v=${APP_VERSION}-mobile2'))throw new Error('Family Log scoped layout override is not loaded');
 if(!shell.includes('family-log-success-recovery.js?v=${APP_VERSION}-post-save1'))throw new Error('Family Log post-save recovery asset is not loaded');
 for(const marker of [
   '.family-log-quick-grid > .family-log-quick',
@@ -131,13 +131,12 @@ for(const marker of [
   "const dateLinks=[...date.querySelectorAll('a[href]')]",
   "previous.setAttribute('aria-label','前の日')",
   "next.setAttribute('aria-label','次の日')",
-  "journal.textContent='📓 成長記録'",
+  "journal.textContent='📓 成長日記'",
   "manage.textContent='⚙️'",
   "manage.setAttribute('aria-label','家族ログ管理')",
   "manage.title='家族ログ管理'",
   "chore.maxLength=6",
   "input.maxLength=4",
-  "button.querySelector(':scope > span')?.remove()",
 ])if(!familyLogCompactUi.includes(marker))throw new Error(`Family Log compact UI marker missing: ${marker}`);
 for(const marker of [
   '.family-log-page .family-log-compact-toolbar{',

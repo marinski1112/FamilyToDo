@@ -12,7 +12,6 @@ const renameHousework=()=>{
 };
 const compactQuickCards=()=>{
   document.querySelectorAll('.family-quick-chore-record').forEach(button=>{
-    button.querySelector(':scope > span')?.remove();
     const label=button.querySelector('strong');
     if(label){label.classList.add('family-log-compact-label');label.querySelectorAll('br').forEach(br=>br.replaceWith(''));}
   });
@@ -87,12 +86,46 @@ const buildToolbar=()=>{
   if(next&&next!==previous){next.textContent='›';next.setAttribute('aria-label','次の日');next.title='次の日';}
   toolbar.appendChild(date);
   const journal=head.querySelector('.family-log-journal-link');
-  if(journal){journal.textContent='📓 成長記録';journal.classList.add('family-log-compact-link');toolbar.appendChild(journal);}
+  if(journal){journal.textContent='📓 成長日記';journal.classList.add('family-log-compact-link');toolbar.appendChild(journal);}
   const manage=head.querySelector('.family-log-gear');
   if(manage){manage.textContent='⚙️';manage.classList.add('family-log-compact-link','family-log-manage-link');manage.setAttribute('aria-label','家族ログ管理');manage.title='家族ログ管理';toolbar.appendChild(manage);}
   head.replaceWith(toolbar);subjects.remove();
 };
-const enhance=()=>{renameHousework();compactQuickCards();constrainEditors();buildToolbar();};
+// Move the already-bound controls; never clone buttons or attach save handlers.
+const buildInputDock=()=>{
+  if(location.pathname!==DAILY_PATH)return;
+  const page=document.querySelector('.family-log-page');
+  if(!page||page.querySelector('.family-log-input-dock'))return;
+  const growth=[...page.querySelectorAll(':scope > .family-log-overview-quick,:scope > .family-log-quick-card')];
+  const chores=[...page.querySelectorAll(':scope > .family-quick-chore-card')];
+  if(!growth.length&&!chores.length)return;
+  const dock=document.createElement('section');dock.className='family-log-input-dock';dock.setAttribute('aria-label','記録を追加');
+  const tabs=document.createElement('div');tabs.className='family-log-input-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','入力カテゴリ');
+  const entries=[];
+  for(const [key,label,nodes] of [['growth','成長記録',growth],['chores','家事',chores]]){
+    if(!nodes.length)continue;
+    const tab=document.createElement('button');tab.type='button';tab.id=`family-log-input-tab-${key}`;tab.textContent=label;tab.setAttribute('role','tab');
+    const panel=document.createElement('div');panel.id=`family-log-input-panel-${key}`;panel.className='family-log-input-panel';panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',tab.id);
+    tab.setAttribute('aria-controls',panel.id);
+    entries.push({tab,panel,nodes});tabs.appendChild(tab);
+  }
+  const select=index=>entries.forEach(({tab,panel},i)=>{tab.setAttribute('aria-selected',String(i===index));tab.tabIndex=i===index?0:-1;panel.hidden=i!==index;});
+  entries.forEach(({tab},index)=>{
+    tab.addEventListener('click',()=>select(index));
+    tab.addEventListener('keydown',event=>{
+      const next=event.key==='ArrowRight'?(index+1)%entries.length:event.key==='ArrowLeft'?(index+entries.length-1)%entries.length:event.key==='Home'?0:event.key==='End'?entries.length-1:null;
+      if(next===null)return;
+      event.preventDefault();select(next);entries[next].tab.focus();
+    });
+  });
+  dock.appendChild(tabs);
+  entries.forEach(({panel})=>dock.appendChild(panel));
+  select(0);
+  page.appendChild(dock);
+  entries.forEach(({panel,nodes})=>nodes.forEach(node=>panel.appendChild(node)));
+  page.classList.add('family-log-has-input-dock');
+};
+const enhance=()=>{renameHousework();compactQuickCards();constrainEditors();buildToolbar();buildInputDock();};
 enhance();
 let queued=false;
 new MutationObserver(()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;renameHousework();compactQuickCards();constrainEditors();});}).observe(document.body,{childList:true,subtree:true});
