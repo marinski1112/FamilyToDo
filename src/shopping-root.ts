@@ -79,6 +79,17 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
     return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
   }
 
+  if(action==='update_category'){
+    const id=Number(b.id||0);
+    if(!Number.isInteger(id)||id<=0)return bad('買い物項目が不正です。');
+    const category=String(b.category??'').trim();
+    if(category.length>255)return bad('カテゴリー名は255文字以内で入力してください。');
+    const current=await ctx.env.DB.prepare(`SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=? AND ${taskChildVisibilitySql('s')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+    if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+    await ctx.env.DB.prepare('UPDATE shopping_items SET category=?,updated_at=? WHERE id=? AND family_id=?').bind(category||null,nowJst(),id,m.family_id).run();
+    return commitSession(json({ok:true,id,category}),ctx.session,ctx.env.APP_SECRET);
+  }
+
   if(action==='add_batch'){
     const products=Array.isArray(b.products)?b.products as unknown[]:[];
     const normalized=products.map(v=>({name:String((v as any)?.name??'').trim(),quantity:String((v as any)?.quantity??'1').trim()||'1',url:String((v as any)?.url??'').trim()})).filter(v=>v.name);

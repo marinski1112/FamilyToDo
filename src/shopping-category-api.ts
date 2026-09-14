@@ -8,10 +8,22 @@ function bad(message:string):Response{
   return json({ok:false,error:message,code:'BAD_REQUEST'},400);
 }
 
-/** Register/re-enable reusable Shopping categories, and let OWNER/ADMIN remove them from future selectors. */
+const ORDER_KEY='shopping_category_order';
+
+async function readOrder(ctx:AppContext,familyId:number):Promise<string[]>{
+  const row=await ctx.env.DB.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1').bind(familyId,ORDER_KEY).first<{setting_value?:string}>();
+  try{
+    const parsed=JSON.parse(String(row?.setting_value||'[]'));
+    return Array.isArray(parsed)?parsed.map(v=>String(v).trim()).filter(Boolean).slice(0,100):[];
+  }catch{return [];}
+}
+
+/** Reusable Shopping category catalog plus checklist display ordering. */
 export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promise<Response>{
   const member=ctx.member;
   if(!member)return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
+
+  if(request.method==='GET')return json({ok:true,order:await readOrder(ctx,member.family_id)});
   if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);
 
   let body:Record<string,unknown>;
@@ -22,8 +34,15 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
   }
 
   if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();
-  if(typeof body.csrf!=='string'||body.csrf!==ctx.session.csrfToken){
-    return json({ok:false,error:'CSRF検証に失敗しました。',code:'FORBIDDEN'},403);
+  if(typeof body.csrf!=='string'||body.csrf!==ctx.session.csrfToken)return json({ok:false,error:'CSRF検証に失敗しました。',code:'FORBIDDEN'},403);
+
+  if(body.action==='reorder'){
+    const raw=Array.isArray(body.order)?body.order:[];
+    const order=[...new Set(raw.map(v=>normalizeShoppingCategoryName(v)).filter(isValidShoppingCategoryName))].slice(0,100);
+    const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace('T',' ');
+    await ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?)
+      ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at`).bind(member.family_id,ORDER_KEY,JSON.stringify(order),now).run();
+    return commitSession(json({ok:true,order}),ctx.session,ctx.env.APP_SECRET);
   }
 
   const name=normalizeShoppingCategoryName(body.name);

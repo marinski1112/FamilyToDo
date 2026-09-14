@@ -38,6 +38,7 @@ import { messages } from './messages-api';
 import { settings } from './settings-root';
 import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
+import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
 import { locationDeviceApi } from './location-device-api';
 import { locationLatestApi } from './location-latest-api';
 import { locationHistoryApi,locationHistorySearchApi,locationStayAddressApi } from './location-history-api';
@@ -63,6 +64,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/message-immediate-notify') return await messageImmediateNotifyApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
   if(url.pathname==='/api/shopping-categories') return await shoppingCategoryApi(request,context);
+  if(url.pathname==='/api/shopping-category-mutation') return await shoppingCategoryMutationApi(request,context);
   if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);
   if(url.pathname==='/api/location/latest') return await locationLatestApi(request,context);
   if(url.pathname==='/api/location/history') return await locationHistoryApi(request,context);
