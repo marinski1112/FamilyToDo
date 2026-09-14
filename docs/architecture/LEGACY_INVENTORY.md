@@ -46,7 +46,8 @@ A filename containing `wave`, an old version number, or a zero-result GitHub sea
 | `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
 | numbered `migrations/*.sql` | ACTIVE/SCHEMA | migration history is the canonical D1 schema lineage; never delete as Wave-document cleanup |
 | active architecture maps/runbooks under `docs/architecture/` | ACTIVE | maintained navigation, ownership and cleanup contracts; source wins if they drift |
-| `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md` | ACTIVE | canonical Google Home ownership plus current operator/setup reference; active Google Home voice contract validates this map |
+| `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md` | ACTIVE | canonical Google Home ownership plus current operator/setup reference; active Google Home contracts validate this map |
+| `docs/GOOGLE_HOME_VOICE_SETUP.md` | COMPAT | one-line symlink to `architecture/GOOGLE_HOME_FUNCTION_MAP.md`; preserves the legacy filename for any remaining contract/caller without duplicating historical Wave content |
 | `README.md`, `database/README.md` | ACTIVE | current repository/database operating guidance; keep |
 | `docs/EXTERNAL_SERVICE_COSTS.md` | ACTIVE | dated external-service cost/privacy guardrail; retain while maintained and revalidate changing provider limits |
 | `docs/import/piyolog-conversion-prompt.md` | ACTIVE | current Family Log/PiyoLog import workflow input; keep with the import contract |
@@ -88,7 +89,7 @@ Classification rationale:
 
 ### Subsequent operator-doc consolidation
 
-`docs/GOOGLE_HOME_VOICE_SETUP.md` was a cumulative Wave114/120/121/122/124 setup history. It contained still-useful operator values alongside statements superseded later in the same file, including pre-Request-Sync guidance. Current stable Console, LINE Login continuation, Scene capability, recorder identity, HomeGraph Request Sync and credential-separation guidance is consolidated into `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md`; the active Google Home voice regression contract is repointed there. The Wave-specific setup file is therefore HISTORICAL and removed, with Git history as the archive.
+`docs/GOOGLE_HOME_VOICE_SETUP.md` was a cumulative Wave114/120/121/122/124 setup history. Its still-current Console, LINE Login continuation, Scene capability, recorder identity, HomeGraph Request Sync and credential-separation guidance is consolidated into `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md`. The historical Markdown body is removed and preserved only in Git history; the legacy path remains as a one-line COMPAT symlink to the canonical map so any residual filename consumer does not require duplicate documentation. Google Home regression contracts are being repointed to the canonical map directly.
 
 ### Earlier historical removals
 
