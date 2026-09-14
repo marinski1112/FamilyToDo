@@ -16,6 +16,7 @@ import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calenda
 import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';
 import { calendarSharedStampPublishAdminApi } from './calendar-shared-stamp-publish-api';
 import { messageStampApi } from './message-stamp-api';
+import { messageImmediateNotifyApi } from './message-immediate-notify-api';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAction } from './google-tasks';
 import { calendarBackfill, calendarDisconnect, calendarRetryFailed } from './google-calendar';
@@ -26,6 +27,7 @@ import { familyLogImportMediaBoundary as familyLogImportApi } from './family-log
 import { familyLogImportMediaTargetsApi } from './family-log-import-media-targets';
 import { familyLogDuplicatePreviewApi } from './family-log-duplicate-preview';
 import { familyLogMutationBoundary } from './family-log-mutation-boundary';
+import { familyLogBreastfeedTimerApi } from './family-log-breastfeed-timer-api';
 import { familyLogMediaApi } from './family-log-media-api';
 import { recordOccurrenceFamilyLog } from './family-log-occurrence-api';
 import { calendarImportPreview, calendarImportNormalizationPreview, calendarImportPrepare, calendarImportStatus, calendarImportApply, calendarImportRollback } from './calendar-ics-import';
@@ -56,6 +58,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);
   if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
+  if(url.pathname==='/api/message-immediate-notify') return await messageImmediateNotifyApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
   if(url.pathname==='/api/shopping-categories') return await shoppingCategoryApi(request,context);
   if(url.pathname==='/api/location/devices') return await locationDeviceApi(request,context);
@@ -68,6 +71,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/location/places') return await locationPlacesApi(request,context);
   if(url.pathname==='/api/location/home') return await locationHomeApi(request,context);
   if(url.pathname==='/api/family-log') return await familyLogMutationBoundary(request,context);
+  if(url.pathname==='/api/family-log-breastfeed-timer') return await familyLogBreastfeedTimerApi(request,context);
   if(url.pathname==='/api/family-log-media') return await familyLogMediaApi(request,context);
   if(url.pathname==='/api/family-log-import-media-targets') return await familyLogImportMediaTargetsApi(request,context);
   if(url.pathname==='/api/family-log-duplicate-preview') return await familyLogDuplicatePreviewApi(request,context);
