@@ -5,7 +5,7 @@ const home=fs.readFileSync('src/google-home.ts','utf8');
 const diagnostics=fs.readFileSync('src/google-home-execute-diagnostics.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const pageRoutes=fs.readFileSync('src/page-routes.ts','utf8');
-const docs=fs.readFileSync('docs/GOOGLE_HOME_VOICE_SETUP.md','utf8');
+const docs=fs.readFileSync('docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md','utf8');
 
 for(const value of ['oauth-redirect.googleusercontent.com/r/${project}','oauth-redirect-sandbox.googleusercontent.com/r/${project}','GOOGLE_HOME_REDIRECT_URI','safeEqual(clientId',"responseType==='code'",'CODE_SECONDS=300','ACCESS_SECONDS=3600'])assert.ok(home.includes(value),value);
 assert.match(home,/subject_kind IN \('BABY','CHILD'\)/);
@@ -44,6 +44,6 @@ assert.ok(!diagnostics.includes('request.headers.get(\'authorization\')'),'diagn
 assert.match(publicRoutes,/googleFulfillmentWithExecuteDiagnostics/,'public fulfillment route must pass through the privacy-safe diagnostic wrapper');
 assert.match(pageRoutes,/googleHomeSettingsWithExecuteDiagnostics/,'Google Home settings page must render the receive-envelope diagnostic');
 
-for(const value of ['family-todo-home','Test integration','Home Graph/Test Suite','再linkまたはGoogle側の再同期','certification/release対象外','GOOGLE_CALENDAR_CLIENT_ID','架空device type/traitは追加しません','Report State非対応'])assert.ok(docs.includes(value),value);
+for(const value of ['family-todo-home','Test integration','Home Graph/Test Suite','LINE_LOGIN_CHANNEL_ID','GOOGLE_HOME_SERVICE_ACCOUNT_JSON','Report State','Google Calendar credentials','Historical Wave114/120/121/122/124 setup notes'])assert.ok(docs.includes(value),value);
 
-console.log('google-home-voice-contract: OAuth lifecycle, bounded Scene SYNC, idempotent voice execution, privacy-safe received-envelope diagnostics, documented capability bounds, and refresh-race guards ok');
+console.log('google-home-voice-contract: OAuth lifecycle, bounded Scene SYNC, idempotent voice execution, privacy-safe received-envelope diagnostics, canonical operator setup, and refresh-race guards ok');
