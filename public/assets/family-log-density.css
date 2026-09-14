@@ -1,0 +1,79 @@
+/* Family Log density overrides.
+ * Keep the existing Family Log layout/behavior intact and only reduce vertical chrome.
+ */
+@media (max-width:720px){
+  .wrap:has(.family-log-page){
+    padding-top:calc(8px + var(--nav-safe-top,0px))!important;
+  }
+
+  /* Join the compact subject/date toolbar directly to the history card. */
+  .family-log-page .family-log-compact-toolbar{
+    margin:0!important;
+    padding:4px 8px 3px!important;
+    min-height:0!important;
+    background:#fff;
+    border-radius:16px 16px 0 0;
+    box-sizing:border-box;
+  }
+  .family-log-page .family-log-subject-select{
+    height:32px!important;
+    min-height:32px!important;
+  }
+  .family-log-page .family-log-compact-toolbar .family-log-date-head{
+    height:32px!important;
+  }
+  .family-log-page .family-log-compact-toolbar .family-log-date-head>a{
+    min-height:32px!important;
+    height:32px!important;
+  }
+  .family-log-page .family-log-compact-toolbar .family-log-date-picker-label,
+  .family-log-page .family-log-compact-toolbar .family-log-date-head .native-control-shell,
+  .family-log-page .family-log-compact-toolbar .family-log-date-head input[type="date"]{
+    height:32px!important;
+    min-height:32px!important;
+  }
+  .family-log-page .family-log-compact-link{
+    height:32px!important;
+    min-height:32px!important;
+  }
+  .family-log-page .family-log-timeline{
+    margin-top:0!important;
+    padding-top:2px!important;
+    border-radius:0 0 16px 16px!important;
+  }
+
+  /* Shorter fixed quick-entry dock: same horizontal behavior, less vertical occlusion. */
+  .family-log-page .family-log-input-dock{
+    height:74px!important;
+    padding:3px 4px!important;
+  }
+  .family-log-page .family-log-input-panel{
+    height:66px!important;
+  }
+  .family-log-page .family-log-input-swap{
+    height:52px!important;
+    font-size:21px!important;
+  }
+  .family-log-page .family-log-input-dock .family-log-quick,
+  .family-log-page .family-log-input-dock .family-quick-chore-record{
+    height:58px!important;
+    min-height:58px!important;
+    padding:3px 2px!important;
+    gap:2px!important;
+  }
+  .family-log-page .family-log-input-dock .family-log-quick>span,
+  .family-log-page .family-log-input-dock .family-quick-chore-record>span{
+    font-size:22px!important;
+  }
+  .family-log-page .family-log-input-dock strong.family-log-compact-label{
+    font-size:10.5px!important;
+    line-height:1.1!important;
+    max-height:23px!important;
+  }
+  .family-log-page.family-log-has-input-dock{
+    padding-bottom:86px!important;
+  }
+  .family-log-page.family-log-has-input-dock.family-log-has-bottom-journal{
+    padding-bottom:122px!important;
+  }
+}
