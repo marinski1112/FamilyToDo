@@ -80,7 +80,7 @@ assert.equal(validateSharedDueFixture('これ全部8/10まで',[
 const splitIndex=api.indexOf('function splitSharedDueDirective');
 const parseIndex=api.indexOf('function parseRequestBody');
 const modelGateIndex=api.indexOf('if(field.sharedDueDirective)return true;');
-const modelLoopIndex=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
+const modelLoopIndex=api.indexOf('for(const model of routedModels)');
 assert.ok(splitIndex>=0&&splitIndex<parseIndex&&parseIndex<modelGateIndex&&modelGateIndex<modelLoopIndex,'shared scope must be proven before the existing bounded model loop');
 assert.ok(api.includes("const items=preserveProse(deterministicItems(parsed.fields));"),'fallback must still derive only parsed item blocks');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'shared deadline support must not add a Gemini call site');

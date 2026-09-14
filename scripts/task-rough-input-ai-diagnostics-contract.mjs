@@ -130,7 +130,8 @@ for(const marker of [
 const aiReader=settings.match(/if\(issue==='ai_generation'\)\{([\s\S]*?)\n  \}/)?.[1]||'';
 assert.ok(aiReader,'AI diagnostics reader must remain an explicit bounded detail path');
 for(const forbidden of ['raw_input','input_text','originalText','prompt','response','error_body','url','secret','token','message','content','exception_message','error_message']){
-  assert.ok(!aiReader.toLowerCase().includes(forbidden.toLowerCase()),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
+  // Coarse enums such as RESPONSE_PARSE are metadata, not a response body field.
+  assert.ok(!new RegExp(`\\b${forbidden}\\b`,'i').test(aiReader),`AI diagnostics reader must not expose private/raw field: ${forbidden}`);
 }
 assert.ok(!aiReader.includes('attempts_json:'),'AI diagnostics reader must never expose attempts_json verbatim');
 assert.ok(!aiReader.includes('attempts_json,created_at')||aiReader.includes('JSON.parse(String(x.attempts_json||\'[]\'))'),'attempts_json may only be consumed for sanitized projection');

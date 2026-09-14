@@ -124,7 +124,7 @@ assert.equal(extractExplicitDueFixture(['牛乳','期限: 2026-09-10','https://e
 assert.equal(dueNeedsModelFixture(['牛乳','期限: 2026-09-10','https://example.com/2025/12/31']),false,'URL-only date text must not trigger a paid model call');
 
 const deterministicGate=api.indexOf("if(!parsed.summarize&&!needsModel(parsed.fields))return fallback('SIMPLE_INPUT');");
-const modelLoop=api.indexOf('for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK])');
+const modelLoop=api.indexOf('for(const model of routedModels)');
 const reserveCall=api.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=api.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
 const modelCall=api.indexOf('const response=await geminiFetch(env,model,bodyForModel);');

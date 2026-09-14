@@ -19,6 +19,7 @@ import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
 import { json } from './response';
 import { settingsPwaBranding } from './settings-pwa-branding-page';
 import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
+import { settingsAiModelRouting } from './settings-ai-model-routing';
 
 export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/manifest.webmanifest') return await familyPwaManifest(request,context);
@@ -49,6 +50,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/settings_google_tasks.php') return await googleTasksSettings(request,context);
   if(url.pathname==='/app/settings_google_home.php') return await googleHomeSettingsWithExecuteDiagnostics(request,context);
   if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
+  if(url.pathname==='/app/settings_ai_models.php') return await settingsAiModelRouting(request,context);
   if(url.pathname==='/app/message_new.php') return await messageNew(context);
   if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
   if(url.pathname==='/app/settings_content.php') return await settingsContent(context);
