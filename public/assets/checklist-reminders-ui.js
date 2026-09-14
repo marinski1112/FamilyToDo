@@ -65,7 +65,7 @@ if(dailyHead&&!q('.reminders-quick-entry')){
         });
         const data=await response.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした。'}));
         if(!response.ok||!data.ok)throw new Error(data.error||'保存に失敗しました。');
-        input.value='';status.textContent='追加しました';sync();
+        input.value='';status.textContent='追加しました';
         const next=new URL(location.href);next.searchParams.set('date',selectedDate);location.replace(next.toString());
       }catch(error){
         status.textContent=error?.message||String(error)||'保存に失敗しました。';
