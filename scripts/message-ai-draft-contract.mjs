@@ -19,7 +19,7 @@ const context=vm.createContext({Request,Response,URL,console,
   reserveTaskRoughInputAiRequest:async(_db,_family,date)=>{reserved.push(date);return budget;},blockTaskRoughInputAiAfter429:async()=>{},
   geminiFetch:async(_env,_model,body)=>{calls++;prompt=body.contents[0].parts[0].text;return{ok:responseStatus===200,status:responseStatus,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(modelResult)}]}}]})};},
 });
-vm.runInContext(code('src/task-rough-input-api.ts')+'\n'+code('src/message-ai-draft.ts'),context);
+vm.runInContext(code('src/ai-model-routing.ts')+'\n'+code('src/task-rough-input-api.ts')+'\n'+code('src/message-ai-draft.ts'),context);
 const ctx={env:{DB:db,GEMINI_API_KEY:'fixture'},member:{id:1,family_id:42,family_timezone:'Asia/Tokyo'},session:{csrfToken:'fixture'}};
 const draft=await (await context.messageAiDraft(ctx,1)).json();
 assert.equal(draft.suggestedTaskId,11);assert.equal(draft.item.title,'遠足の持ち物を準備');assert.equal(draft.originalText,original);

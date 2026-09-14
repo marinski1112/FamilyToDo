@@ -35,7 +35,7 @@ export async function messageAiDraft(ctx:AppContext,messageId:number):Promise<Re
     ORDER BY CASE WHEN COALESCE(t.start_at,t.due_at) IS NULL THEN 1 ELSE 0 END,abs(julianday(COALESCE(t.start_at,t.due_at))-julianday(?)),t.id DESC LIMIT 40`)
     .bind(member.family_id,referenceDate,referenceDate,referenceDate,referenceDate).all<Row>();
   const candidates:RoughTaskCandidate[]=rows.results.map(row=>({id:Number(row.id),title:String(row.title).slice(0,200),date:row.task_date?String(row.task_date):null}));
-  const response=await analyzeTaskRoughInput(ctx,{primaryType:'task',fields:[{destination:'task',text}],summarize:true},{referenceDate,taskCandidates:candidates});
+  const response=await analyzeTaskRoughInput(ctx,{primaryType:'task',fields:[{destination:'task',text}],summarize:true},{referenceDate,taskCandidates:candidates,modelFeature:'MESSAGE_DRAFT'});
   const draft=await response.json() as any;if(!response.ok||!draft?.ok)return json(draft,response.status);
   const title=String(draft.items?.[0]?.title||'');
   const ranked=candidates.map(candidate=>({...candidate,score:Math.max(messageTaskSimilarity(title,candidate.title),messageTaskSimilarity(text,candidate.title))})).sort((a,b)=>b.score-a.score);

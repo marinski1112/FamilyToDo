@@ -6,8 +6,7 @@ import { blockTaskRoughInputAiAfter429, reserveTaskRoughInputAiRequest } from '.
 import { enrichShoppingProductLinkPreviewsWithDiagnostics, firstPublicProductUrl, resolveProductLinkModelTitle, type ProductLinkDiagnostic, type ProductLinkPreviewBlock } from './task-rough-input-product-link';
 import { familyDate, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 
-export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
-export const ROUGH_INPUT_GEMINI_MODEL_FALLBACK='gemini-3.5-flash';
+import { resolveFeatureModels } from './ai-model-routing';
 const MAX_CHARS=4000;
 const MAX_ITEMS=20;
 const DESTINATIONS=['task','event','shopping','item','child_task'] as const;
@@ -19,7 +18,7 @@ type RoughItemValidationReason='TOP_LEVEL_CONTAINER_INVALID'|'ITEMS_PROPERTY_NOT
 type RoughItemValidationMeta={itemOrdinal?:number|null;sourceIndex?:number|null;expectedCount?:number|null;actualCount?:number|null};
 type RoughItemValidationResult={items:RoughItem[];reasonCode:null}|({items:null;reasonCode:RoughItemValidationReason}&RoughItemValidationMeta);
 export type RoughTaskCandidate={id:number;title:string;date:string|null};
-type RoughContext={referenceDate?:string;taskCandidates?:RoughTaskCandidate[];productLinkPreview?:boolean};
+type RoughContext={referenceDate?:string;taskCandidates?:RoughTaskCandidate[];productLinkPreview?:boolean;modelFeature?:'MESSAGE_DRAFT'};
 
 const clean=(value:unknown,max:number)=>String(value??'').replace(/[\r\n]+/g,' ').trim().slice(0,max);
 const enabled=(value:unknown)=>!['0','false','off','disabled'].includes(String(value??'1').trim().toLowerCase());
@@ -354,7 +353,9 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
   const timezone=String(member.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE),today=familyDate(timezone);
   const hasShopping=parsed.fields.some(field=>field.destination==='shopping');
   let allowedShoppingCategories=new Map<string,string>(),shoppingCategoryCatalogLoaded=false;
-  for(const model of [ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK]){
+  let routedModels:string[];
+  try{routedModels=(await resolveFeatureModels(env.DB,Number(member.family_id),context.modelFeature||'ROUGH_INPUT',member.role)).models;}catch{return fallback('STORAGE');}
+  for(const model of routedModels){
     let reserved=false;
     try{reserved=await reserveTaskRoughInputAiRequest(env.DB,Number(member.family_id),today,env);}catch{return fallback('STORAGE');}
     if(!reserved)return fallback('BUDGET');
