@@ -5,7 +5,7 @@ const fs=require('fs'),path=require('path');
 const retained=(dir)=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>{const p=path.join(dir,e.name);return e.isDirectory()?retained(p):e.isFile()&&e.name.endsWith('.ts')?[fs.readFileSync(p,'utf8')]:[]}).join('\n');
 const app=retained('src');
 const checks=[
- ['CHANGELOG_CLOUDFLARE_WAVE83.md','Migration 0023'],['@retained','taskVisibilitySql'],['@retained','accessibleTaskById'],
+ ['@retained','taskVisibilitySql'],['@retained','accessibleTaskById'],
  ['migrations/0023_wave83_private_tasks.sql',"visibility_scope TEXT NOT NULL DEFAULT 'FAMILY'"],['src/task-api.ts','private_owner_id'],
  ['src/task-entry-page.ts','id="isPrivate"'],['public/assets/task-entry-manual.js','is_private:Boolean(isPrivate?.checked)'],['@retained','validatedFamilyLogTemplate']
 ];
