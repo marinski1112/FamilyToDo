@@ -1,3 +1,4 @@
+import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';
 import type { AppContext } from './app-context';
 import { recurringForDate } from './recurrence-projection';
 import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
@@ -137,7 +138,7 @@ export async function loadHomeDashboard(ctx:AppContext,today:string):Promise<Hom
         AND COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL
         AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))<date(?)`)
       .bind(familyId,memberId,today).first<Row>(),
-    ctx.env.DB.prepare("SELECT count(*) c FROM family_logs WHERE family_id=? AND deleted_at IS NULL AND date(occurred_at)=date(?)")
+    ctx.env.DB.prepare(`SELECT count(*) c FROM family_logs l WHERE l.family_id=? AND l.deleted_at IS NULL AND date(l.occurred_at)=date(?) AND NOT ${IMPORTED_FAMILY_DIARY_SQL}`)
       .bind(familyId,today).first<Row>(),
     ctx.env.DB.prepare(`SELECT count(*) c FROM tasks t
       WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
