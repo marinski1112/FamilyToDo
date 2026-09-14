@@ -6,7 +6,7 @@ const stripLeadingPinFromElement=element=>{
   for(const node of [...element.childNodes]){
     if(node.nodeType!==Node.TEXT_NODE)continue;
     const text=String(node.textContent||'');
-    const cleaned=text.replace(/^\s*📌\s*/u,'');
+    const cleaned=text.replace(/📌\s*/gu,'');
     if(cleaned!==text)node.textContent=cleaned;
   }
   for(const attr of ['title','aria-label']){
@@ -39,15 +39,22 @@ const fixChecklistFab=()=>{
   for(const [name,value] of Object.entries(forced))fab.style.setProperty(name.replace(/[A-Z]/g,m=>`-${m.toLowerCase()}`),value,'important');
 };
 
+const observeCalendarPins=()=>{
+  if(location.pathname!=='/app/calendar.php')return;
+  const grid=document.querySelector('.calendar-grid');
+  if(grid instanceof HTMLElement){
+    new MutationObserver(stripEventPins).observe(grid,{childList:true,subtree:true,characterData:true});
+  }
+  const modal=document.getElementById('dayModal');
+  if(modal instanceof HTMLElement){
+    new MutationObserver(stripEventPins).observe(modal,{childList:true,subtree:true,characterData:true});
+  }
+};
+
 const run=()=>{
   fixChecklistFab();
   stripEventPins();
-  if(location.pathname==='/app/calendar.php'){
-    const modal=document.getElementById('dayModal');
-    if(modal instanceof HTMLElement){
-      new MutationObserver(stripEventPins).observe(modal,{childList:true,subtree:true,characterData:true});
-    }
-  }
+  observeCalendarPins();
 };
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});
