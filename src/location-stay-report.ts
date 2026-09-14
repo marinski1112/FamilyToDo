@@ -12,7 +12,7 @@ function placeUncertainty(point:LocationPoint,place:KnownLocationPlace){
   return pointAccuracy+placeAccuracy;
 }
 function insideRadius(uncertainty:number){return 150+Math.min(75,uncertainty*.5);}
-function insideExitRadius(uncertainty:number){return 240+Math.min(90,uncertainty*.5);}
+function insideExitRadius(uncertainty:number){return 220+Math.min(90,uncertainty*.5);}
 function approachRadius(uncertainty:number){return 450+Math.min(100,uncertainty*.5);}
 function approachExitRadius(uncertainty:number){return 600+Math.min(100,uncertainty*.5);}
 /** Accuracy-aware registered-place match for stay/journal projections. The UNKNOWN band avoids boundary jitter. */
