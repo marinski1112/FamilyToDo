@@ -100,25 +100,23 @@ const buildInputDock=()=>{
   const chores=[...page.querySelectorAll(':scope > .family-quick-chore-card')];
   if(!growth.length&&!chores.length)return;
   const dock=document.createElement('section');dock.className='family-log-input-dock';dock.setAttribute('aria-label','記録を追加');
-  const tabs=document.createElement('div');tabs.className='family-log-input-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','入力カテゴリ');
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='family-log-input-swap';toggle.textContent='🔄';
   const entries=[];
   for(const [key,label,nodes] of [['growth','成長記録',growth],['chores','家事',chores]]){
     if(!nodes.length)continue;
-    const tab=document.createElement('button');tab.type='button';tab.id=`family-log-input-tab-${key}`;tab.textContent=label;tab.setAttribute('role','tab');
-    const panel=document.createElement('div');panel.id=`family-log-input-panel-${key}`;panel.className='family-log-input-panel';panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',tab.id);
-    tab.setAttribute('aria-controls',panel.id);
-    entries.push({tab,panel,nodes});tabs.appendChild(tab);
+    const panel=document.createElement('div');panel.id=`family-log-input-panel-${key}`;panel.className='family-log-input-panel';panel.setAttribute('role','group');panel.setAttribute('aria-label',label);
+    entries.push({panel,nodes,label});
   }
-  const select=index=>entries.forEach(({tab,panel},i)=>{tab.setAttribute('aria-selected',String(i===index));tab.tabIndex=i===index?0:-1;panel.hidden=i!==index;});
-  entries.forEach(({tab},index)=>{
-    tab.addEventListener('click',()=>select(index));
-    tab.addEventListener('keydown',event=>{
-      const next=event.key==='ArrowRight'?(index+1)%entries.length:event.key==='ArrowLeft'?(index+entries.length-1)%entries.length:event.key==='Home'?0:event.key==='End'?entries.length-1:null;
-      if(next===null)return;
-      event.preventDefault();select(next);entries[next].tab.focus();
-    });
-  });
-  dock.appendChild(tabs);
+  let active=0;
+  const select=index=>{
+    active=index;
+    entries.forEach(({panel},i)=>{panel.hidden=i!==index;});
+    const label=`${entries[index].label}を表示中。${entries[(index+1)%entries.length].label}へ切り替え`;
+    toggle.setAttribute('aria-label',label);toggle.title=label;
+  };
+  toggle.addEventListener('click',()=>select((active+1)%entries.length));
+  toggle.hidden=entries.length<2;
+  dock.appendChild(toggle);
   entries.forEach(({panel})=>dock.appendChild(panel));
   select(0);
   page.appendChild(dock);

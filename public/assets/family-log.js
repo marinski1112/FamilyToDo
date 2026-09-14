@@ -129,7 +129,7 @@ const loadCore=()=>{
     window.familyLogDiagnostic?.mark('CORE_LOADED');
     syncBabyFoodFields();
     if(location.pathname==='/app/settings_family_log.php')load('/assets/family-log-management-ui.js?v=wave128-fix18');
-    else load('/assets/family-log-compact-ui.js?v=compact4-dock1');
+    else load('/assets/family-log-compact-ui.js?v=compact5-row1');
   },()=>window.familyLogDiagnostic?.mark('CORE_LOAD_FAILED'));
 };
 window.familyLogDiagnostic?.mark('PHOTO_LOAD_START');
