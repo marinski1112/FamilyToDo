@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 const read=path=>fs.readFileSync(path,'utf8');
 const journal=read('src/family-daily-journal.ts');
+const importedDiary=read('src/imported-family-diary.ts');
+const homeDashboard=read('src/home-dashboard.ts');
 const migration=read('migrations/0078_family_daily_journal.sql');
 const routes=read('src/page-routes.ts');
 const index=read('src/index.ts');
@@ -41,6 +43,8 @@ const checks=[
   [!calendarPage.includes('SELECT summary_text FROM family_daily_journals')&&!calendarPage.includes('SELECT location_json FROM family_daily_journals'),'Calendar does not duplicate journal evidence into its day payload'],
   [calendarJs.includes('journalDates.has(d)')&&calendarJs.includes('/app/family_journal.php?month=')&&calendarJs.includes('&date='),'Calendar day detail links only dates with an existing journal row'],
   [!locationArchive.includes('DELETE FROM member_location_history'),'journal generation does not force raw deletion'],
+  [importedDiary.includes('JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id')&&!importedDiary.includes("s.subject_kind IN ('BABY','CHILD')"),'rerouted imported diaries remain visible after later subject-kind edits'],
+  [homeDashboard.includes("import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';")&&homeDashboard.includes('AND NOT ${IMPORTED_FAMILY_DIARY_SQL}'),'home Family Log count excludes the same rerouted imported diary subset'],
 ];
 const failed=checks.filter(([ok])=>!ok).map(([,label])=>label);
 if(failed.length){console.error('Family daily journal contract failed:\n- '+failed.join('\n- '));process.exit(1);}
