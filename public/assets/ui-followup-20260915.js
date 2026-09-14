@@ -31,6 +31,12 @@ const fixChecklistFab=()=>{
   fab.innerHTML='<span class="reminders-plus" aria-hidden="true">＋</span>';
   fab.setAttribute('aria-label','詳細を指定して追加');
   fab.title='担当・時間・繰り返しなどを指定して追加';
+  const forced={
+    position:'fixed',left:'auto',right:'calc(16px + env(safe-area-inset-right, 0px))',bottom:'calc(var(--nav-box-h) + 14px)',
+    width:'58px',minWidth:'58px',maxWidth:'58px',height:'58px',minHeight:'58px',padding:'0',margin:'0',borderRadius:'50%',
+    display:'flex',alignItems:'center',justifyContent:'center',zIndex:'70',background:'#4f46e5',color:'#fff',textDecoration:'none',
+  };
+  for(const [name,value] of Object.entries(forced))fab.style.setProperty(name.replace(/[A-Z]/g,m=>`-${m.toLowerCase()}`),value,'important');
 };
 
 const run=()=>{
