@@ -16,7 +16,10 @@ style.textContent=`
 .shopping-product-link:active{background:#dcecff}
 .linked-shopping-row.same-category-sort-target{box-shadow:inset 0 2px 0 rgba(0,122,255,.45)}
 @media(max-width:820px){
-  .checklist-page.reminders-ui .shopping-checklist-section{
+  .checklist-page.reminders-ui .task-section,
+  .checklist-page.reminders-ui .shopping-checklist-section,
+  .checklist-page.reminders-ui .item-section,
+  .checklist-page.reminders-ui .unorganized-section{
     width:calc(100% + 24px)!important;
     max-width:none!important;
     margin-left:-12px!important;
