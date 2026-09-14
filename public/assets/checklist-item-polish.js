@@ -15,6 +15,36 @@ style.textContent=`
 .shopping-product-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border-radius:50%;background:#f0f7ff;color:#007aff;text-decoration:none;font-size:21px;font-weight:700;line-height:1}
 .shopping-product-link:active{background:#dcecff}
 .linked-shopping-row.same-category-sort-target{box-shadow:inset 0 2px 0 rgba(0,122,255,.45)}
+@media(max-width:820px){
+  .checklist-page.reminders-ui .shopping-checklist-section{
+    width:calc(100% + 24px)!important;
+    max-width:none!important;
+    margin-left:-12px!important;
+    margin-right:-12px!important;
+    border-left:0!important;
+    border-right:0!important;
+    border-radius:0!important;
+  }
+  .reminders-add-button{
+    left:auto!important;
+    right:16px!important;
+    width:58px!important;
+    min-width:58px!important;
+    height:58px!important;
+    min-height:58px!important;
+    padding:0!important;
+    border-radius:50%!important;
+    justify-content:center!important;
+    gap:0!important;
+    background:#4f46e5!important;
+    color:#fff!important;
+    box-shadow:0 6px 18px rgba(79,70,229,.26)!important;
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+  }
+  .reminders-add-button>span:not(.reminders-plus){display:none!important}
+  .reminders-add-button .reminders-plus{font-size:38px!important;font-weight:300!important;line-height:1!important}
+}
 `;
 document.head.append(style);
 
