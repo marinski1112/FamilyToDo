@@ -1,0 +1,172 @@
+/* iPhone Reminders-inspired presentation for the existing unified checklist.
+ * Presentation only: existing task/item/shopping controls and links remain canonical.
+ */
+@media (max-width: 820px){
+  body:has(.checklist-page.reminders-ui){background:#f2f2f7}
+  .wrap:has(.checklist-page.reminders-ui){
+    padding-top:calc(10px + var(--nav-safe-top,0px))!important;
+    padding-left:12px!important;
+    padding-right:12px!important;
+    padding-bottom:calc(var(--nav-box-h) + 88px)!important;
+  }
+  .checklist-page.reminders-ui{max-width:720px;margin:0 auto;color:#1c1c1e}
+
+  .checklist-page.reminders-ui .daily-head{
+    align-items:flex-end!important;margin:0 4px 12px!important;gap:10px!important;
+  }
+  .checklist-page.reminders-ui .daily-head h1{
+    font-size:30px!important;line-height:1.05!important;font-weight:800!important;
+    letter-spacing:-.7px;white-space:normal!important;color:#1c1c1e;
+  }
+  .checklist-page.reminders-ui .checklist-date{
+    display:block;margin:5px 0 0!important;font-size:13px!important;font-weight:600!important;
+    color:#8e8e93!important;letter-spacing:0;font-variant-numeric:tabular-nums;
+  }
+  .checklist-page.reminders-ui .date-nav{gap:7px!important}
+  .checklist-page.reminders-ui .date-nav .btn{
+    width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;
+    padding:0!important;border:0!important;border-radius:18px!important;background:#fff!important;
+    color:#007aff!important;font-size:28px!important;line-height:34px!important;
+    box-shadow:0 0 0 .5px rgba(60,60,67,.2);
+  }
+
+  .reminders-smart-grid{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 18px;
+  }
+  .reminders-smart-card{
+    display:grid;grid-template-columns:38px 1fr auto;grid-template-rows:auto auto;align-items:center;
+    min-height:76px;padding:10px 12px;background:#fff;border-radius:14px;text-decoration:none!important;
+    color:#1c1c1e;box-shadow:0 0 0 .5px rgba(60,60,67,.15);
+  }
+  .reminders-smart-icon{
+    grid-row:1;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    font-size:17px;color:#fff;font-weight:700;
+  }
+  .reminders-smart-card[data-tone="blue"] .reminders-smart-icon{background:#007aff}
+  .reminders-smart-card[data-tone="orange"] .reminders-smart-icon{background:#ff9500}
+  .reminders-smart-card[data-tone="red"] .reminders-smart-icon{background:#ff3b30}
+  .reminders-smart-card[data-tone="gray"] .reminders-smart-icon{background:#8e8e93}
+  .reminders-smart-count{grid-column:3;grid-row:1;font-size:25px;line-height:1;font-weight:700;color:#3a3a3c}
+  .reminders-smart-label{grid-column:1/4;grid-row:2;margin-top:4px;font-size:14px;font-weight:700;color:#636366}
+
+  .reminders-list-heading{
+    margin:0 6px 8px;font-size:21px;line-height:1.15;font-weight:800;letter-spacing:-.35px;color:#1c1c1e;
+  }
+
+  .checklist-page.reminders-ui .card,
+  .checklist-page.reminders-ui .section-card,
+  .checklist-page.reminders-ui details.expired-tasks,
+  .checklist-page.reminders-ui details.expired-shopping{
+    padding:0!important;margin:0 0 12px!important;border:0!important;border-radius:14px!important;
+    overflow:hidden;background:#fff!important;box-shadow:0 0 0 .5px rgba(60,60,67,.15)!important;
+  }
+  .checklist-page.reminders-ui .section-card>.section-head{
+    min-height:48px;margin:0!important;padding:11px 14px 8px!important;border:0!important;
+  }
+  .checklist-page.reminders-ui .section-card>.section-head h2{
+    margin:0!important;font-size:18px!important;line-height:1.2!important;font-weight:750!important;
+    color:#007aff!important;letter-spacing:-.2px;
+  }
+  .checklist-page.reminders-ui .section-card>.section-head .meta{font-size:12px!important;color:#8e8e93!important}
+  .checklist-page.reminders-ui .section-card>.empty{margin:0;padding:4px 14px 14px;color:#8e8e93;font-size:14px}
+
+  .checklist-page.reminders-ui .row,
+  .checklist-page.reminders-ui .expired-row,
+  .checklist-page.reminders-ui .linked-shopping-row{
+    position:relative;margin:0!important;padding:10px 12px 10px 14px!important;border:0!important;
+    border-radius:0!important;background:#fff!important;min-height:48px;box-sizing:border-box;
+  }
+  .checklist-page.reminders-ui .row::after,
+  .checklist-page.reminders-ui .expired-row::after,
+  .checklist-page.reminders-ui .linked-shopping-row::after{
+    content:"";position:absolute;left:50px;right:0;bottom:0;height:.5px;background:rgba(60,60,67,.22);
+  }
+  .checklist-page.reminders-ui .row:last-child::after,
+  .checklist-page.reminders-ui .expired-row:last-child::after,
+  .checklist-page.reminders-ui .linked-shopping-row:last-child::after{display:none}
+
+  .checklist-page.reminders-ui .task-main-row,
+  .checklist-page.reminders-ui .checklist-row-line{gap:8px!important;align-items:flex-start!important}
+  .checklist-page.reminders-ui .task-main,
+  .checklist-page.reminders-ui .shopping-check-row,
+  .checklist-page.reminders-ui .expired-task-main{
+    gap:10px!important;align-items:flex-start!important;min-width:0;line-height:1.28;
+  }
+  .checklist-page.reminders-ui input.check.toggle{
+    -webkit-appearance:none;appearance:none;flex:0 0 23px;width:23px;height:23px!important;min-height:23px!important;
+    margin:0!important;border:1.7px solid #c7c7cc!important;border-radius:50%!important;background:#fff!important;
+    display:grid;place-items:center;box-shadow:none!important;
+  }
+  .checklist-page.reminders-ui input.check.toggle:checked{background:#007aff!important;border-color:#007aff!important}
+  .checklist-page.reminders-ui input.check.toggle:checked::after{
+    content:"✓";color:#fff;font-size:15px;font-weight:800;line-height:1;
+  }
+  .checklist-page.reminders-ui .task-main>span,
+  .checklist-page.reminders-ui .shopping-check-row>span,
+  .checklist-page.reminders-ui .expired-task-main>span{font-size:16px;line-height:1.3;color:#1c1c1e}
+  .checklist-page.reminders-ui .done{color:#8e8e93!important;text-decoration:line-through}
+  .checklist-page.reminders-ui .meta,
+  .checklist-page.reminders-ui .expired-meta{margin-top:3px!important;font-size:12px!important;line-height:1.35!important;color:#8e8e93!important}
+
+  .checklist-page.reminders-ui .checklist-row-actions{gap:5px!important;align-items:center}
+  .checklist-page.reminders-ui .checklist-row-action{
+    display:grid!important;place-items:center;width:26px;height:26px;min-width:26px;padding:0!important;
+    border:0!important;border-radius:50%;background:#eef6ff!important;color:#007aff!important;
+    font-size:0!important;text-decoration:none!important;
+  }
+  .checklist-page.reminders-ui .checklist-row-action::after{content:"i";font-size:14px;font-weight:800;font-family:ui-sans-serif,system-ui,sans-serif}
+  .checklist-page.reminders-ui .task-shopping-add{
+    width:28px;height:28px;border-radius:14px;background:#f2f2f7;display:grid;place-items:center;text-decoration:none!important;
+  }
+  .checklist-page.reminders-ui .task-shopping-count{font-size:11px!important;white-space:nowrap}
+
+  .checklist-page.reminders-ui .shopping-group{margin:0!important}
+  .checklist-page.reminders-ui .shopping-group-head{
+    padding:7px 14px 5px!important;background:#f8f8fa;border:0!important;color:#636366;
+  }
+  .checklist-page.reminders-ui .shopping-group-head strong{font-size:13px}
+  .checklist-page.reminders-ui .task-shopping{margin:8px 0 0 33px!important;border:0!important}
+  .checklist-page.reminders-ui .task-shopping>summary{font-size:12px;color:#007aff;padding:4px 0}
+  .checklist-page.reminders-ui .checklist-more{margin:0 14px!important;border-top:.5px solid rgba(60,60,67,.18)!important}
+  .checklist-page.reminders-ui .checklist-more>summary{min-height:38px!important;padding:10px 0!important;color:#8e8e93!important}
+
+  .checklist-page.reminders-ui details.expired-tasks>summary,
+  .checklist-page.reminders-ui details.expired-shopping>summary{
+    min-height:48px;padding:13px 14px;box-sizing:border-box;list-style:none;font-size:16px;font-weight:700;color:#ff3b30;
+  }
+  .checklist-page.reminders-ui details.expired-tasks>summary::-webkit-details-marker,
+  .checklist-page.reminders-ui details.expired-shopping>summary::-webkit-details-marker{display:none}
+  .checklist-page.reminders-ui details.expired-tasks>summary::after,
+  .checklist-page.reminders-ui details.expired-shopping>summary::after{content:"›";float:right;color:#c7c7cc;font-size:24px;line-height:18px;transform:rotate(90deg)}
+  .checklist-page.reminders-ui details[open]>summary::after{transform:rotate(-90deg)}
+
+  .checklist-page.reminders-ui .reminders-section-icon{
+    display:inline-grid;place-items:center;width:28px;height:28px;margin-right:7px;border-radius:50%;
+    color:#fff;font-size:14px;vertical-align:-6px;
+  }
+  .checklist-page.reminders-ui .task-section .reminders-section-icon{background:#007aff}
+  .checklist-page.reminders-ui .shopping-checklist-section .reminders-section-icon{background:#ff9500}
+  .checklist-page.reminders-ui .item-section .reminders-section-icon{background:#5856d6}
+  .checklist-page.reminders-ui .unorganized-section .reminders-section-icon{background:#8e8e93}
+
+  .checklist-page.reminders-ui~.reminders-add-button,
+  .reminders-add-button{
+    position:fixed!important;z-index:45;left:16px!important;right:16px!important;width:auto!important;
+    bottom:calc(var(--nav-box-h) + 8px)!important;height:48px!important;min-height:48px!important;
+    border-radius:15px!important;background:rgba(255,255,255,.96)!important;color:#007aff!important;
+    display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:7px;
+    padding:0 16px!important;font-size:16px!important;font-weight:700!important;text-decoration:none!important;
+    box-shadow:0 2px 14px rgba(0,0,0,.10),0 0 0 .5px rgba(60,60,67,.15)!important;
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  }
+  .reminders-add-button .reminders-plus{font-size:25px;font-weight:400;line-height:1}
+
+  .checklist-page.reminders-ui .occurrence-family-log{margin:7px 0 0 33px!important;border-radius:9px!important;font-size:12px!important}
+}
+
+@media (min-width:821px){
+  .reminders-smart-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+  .reminders-smart-card{padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;text-decoration:none;color:inherit}
+  .reminders-smart-icon{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#64748b;color:#fff}
+  .reminders-smart-count{float:right;font-size:22px;font-weight:700}.reminders-smart-label{display:block;margin-top:8px;font-weight:700}.reminders-list-heading{margin:16px 2px 8px}
+}
