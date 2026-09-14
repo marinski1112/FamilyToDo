@@ -31,3 +31,22 @@ assert 8 not in [x[0] for x in d.execute(q,(1,))], 'subject mismatch rejected'
 print('journal photo SQL: valid membership, tenant/subject/deleted/type boundaries ok')
 `],{input:JSON.stringify(predicate),encoding:'utf8'});
 assert.equal(test.status,0,test.stderr);process.stdout.write(test.stdout);
+
+// Exercise the actual optional thumbnail loader: failures retain the existing button.
+const {runInNewContext}=await import('node:vm');
+const client=fs.readFileSync('public/assets/child-journal-photo.js','utf8');
+const loader=client.slice(client.indexOf('  const loadThumbnail='),client.indexOf("  if('IntersectionObserver'"));
+for(const outcome of ['ok','denied','invalid','network']){
+  let replaced=false,calls=0,image;
+  const button={dataset:{journalPhoto:'2'},replaceChildren(){replaced=true;}};
+  const ctx={AbortController,setTimeout,clearTimeout,document:{createElement(){image={addEventListener(name,fn){this[name]=fn;}};return image;}},fetch:async(url,options)=>{
+    calls++;assert.equal(url,'/api/family-log-media?log=2');assert.equal(options.credentials,'same-origin');
+    if(outcome==='network')throw new Error('network');
+    return {ok:outcome!=='denied',json:async()=>({ok:true,media:{id:outcome==='invalid'?'unsafe':3,url:'https://untrusted.invalid/'}})};
+  }};
+  const load=runInNewContext(loader+';loadThumbnail',ctx);await load(button);
+  assert.equal(calls,1);assert.equal(replaced,false);
+  if(outcome==='ok'){assert.equal(image.src,'/api/family-log-media?media=3');image.load();assert.equal(replaced,true);}
+  else assert.equal(image,undefined);
+}
+console.log('journal thumbnail: authenticated URL, invalid/network/denied fallback, no automatic retry ok');
