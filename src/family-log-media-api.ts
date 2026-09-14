@@ -11,7 +11,7 @@ const JOURNAL_PARENT_SQL=`EXISTS (SELECT 1 FROM family_log_journal_entries j WHE
   (j.entry_kind='MILESTONE' AND l.log_type='MEMO' AND l.detail_code IN ('JOURNAL_STAND','JOURNAL_FIRST_STEP','JOURNAL_FIRST_TOOTH','JOURNAL_TOOTH')) OR
   (j.entry_kind='MEASUREMENT' AND ((l.log_type='HEIGHT' AND l.detail_code='JOURNAL_HEIGHT') OR (l.log_type='WEIGHT' AND l.detail_code='JOURNAL_WEIGHT')))
 ))`;
-const PHOTO_PARENT_SQL=`((l.log_type='MEAL' AND l.detail_code='BABY_FOOD') OR ${JOURNAL_PARENT_SQL})`;
+export const PHOTO_PARENT_SQL=`((l.log_type='MEAL' AND l.detail_code='BABY_FOOD') OR ${JOURNAL_PARENT_SQL})`;
 
 type CleanupPurpose='ORPHAN'|'DELETE';
 
