@@ -23,6 +23,11 @@ try {
   const MAX_MEMO_UNITS=2000;
   const MAX_CSRF_UNITS=512;
   const csrf=String(payload.csrf||'');
+  const fallbackReturn=()=>{const date=new URL(location.href).searchParams.get('date')||'';return date?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';};
+  const safeReturnTarget=()=>{try{if(!document.referrer)return fallbackReturn();const url=new URL(document.referrer);if(url.origin!==location.origin)return fallbackReturn();if(url.pathname==='/app/shopping_new.php'||url.pathname==='/app/shopping.php')return fallbackReturn();return url.pathname+url.search+url.hash;}catch{return fallbackReturn();}};
+  const returnTarget=safeReturnTarget();
+  const backLink=[...document.querySelectorAll('.page-head a[href]')].find(a=>String(a.textContent||'').trim()==='戻る');
+  if(backLink)backLink.setAttribute('href',returnTarget);
   const safeEntityId=value=>{const id=Number(value);return Number.isSafeInteger(id)&&id>0?id:0};
   const safeProductUrl=value=>{const raw=String(value??'').trim();if(!raw)return '';if(raw.length>2048)return null;try{const parsed=new URL(raw);if(parsed.username||parsed.password)return null;return parsed.protocol==='http:'||parsed.protocol==='https:'?raw:null;}catch{return null;}};
   const safeDueDate=value=>{const raw=String(value??'').trim();if(!raw)return '';if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const date=new Date(`${raw}T00:00:00Z`);return Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==raw?null:raw;};
@@ -114,7 +119,7 @@ try {
         if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
       }
       const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');
-      location.href=dueDate?`/app/tasks.php?date=${encodeURIComponent(dueDate)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
+      location.replace(returnTarget);
     }
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
     finally{if(button)button.disabled=false;}

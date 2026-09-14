@@ -59,7 +59,10 @@ for(const marker of [
   "const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;",
   "fetch('/api/shopping-categories'",
   "const body={action:'add_batch'",
-  "location.href=dueDate?`/app/tasks.php?date=${encodeURIComponent(dueDate)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';",
+  "const safeReturnTarget=()=>",
+  "url.pathname==='/app/shopping_new.php'||url.pathname==='/app/shopping.php'",
+  "if(backLink)backLink.setAttribute('href',returnTarget);",
+  'location.replace(returnTarget);',
 ]) if(!newJs.includes(marker)) throw new Error(`Shopping new behavior lost marker: ${marker}`);
 
 for(const marker of [
@@ -107,4 +110,4 @@ for(const marker of [
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 
-console.log('Shopping API/new/edit boundary contract ok; active new/edit flows return directly to the canonical checklist');
+console.log('Shopping API/new/edit boundary contract ok; active new flow returns to a safe same-origin entry page with canonical checklist fallback');
