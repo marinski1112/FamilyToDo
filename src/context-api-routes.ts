@@ -6,6 +6,7 @@ import { apiMe } from './api-me';
 import { taskApi } from './task-api';
 import { taskChildrenApi } from './task-children-api';
 import { taskRoughInputApi } from './task-rough-input-api';
+import { checklistInlineTitleApi } from './checklist-inline-title-api';
 import { normalizeEventRoughInputRequest } from './task-rough-input-event-normalize';
 import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
@@ -55,6 +56,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);
   if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request),context);
+  if(url.pathname==='/api/checklist/inline-title') return await checklistInlineTitleApi(request,context);
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);
   if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
