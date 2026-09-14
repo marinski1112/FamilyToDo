@@ -91,6 +91,12 @@ Runtime Worker secrets belong in Cloudflare Worker runtime configuration, not in
 
 The LINE Login credentials used by Google Home account-linking continuation are distinct from LINE Messaging API credentials. Do not reuse one channel's secret as the other.
 
+### Environment recovery
+
+If deployment or configuration values are lost, recover them from the last known-good Cloudflare deployment/configuration and the current repository definitions. Do not guess or regenerate credentials merely to make a health check green. Check `wrangler.jsonc`, `.dev.vars.example`, the owning integration module, and the privacy-safe health surfaces such as `/__cf/integrations-health` and `/__cf/secrets-health`.
+
+Do not rotate Google Calendar/Tasks token-encryption keys or the VAPID keypair as a recovery shortcut: changing an encryption key can make stored refresh tokens undecryptable, and changing the VAPID keypair can invalidate existing push subscriptions. Never paste raw secrets, authorization codes, refresh/access tokens, private keys, or cookies into repository documentation, issues, or diagnostic logs.
+
 ## Database and data ownership
 
 D1 is the active application database. Current schema behavior is defined by the migration chain and current runtime queries; historical Wave documentation is not authoritative.
