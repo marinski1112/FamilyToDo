@@ -39,6 +39,7 @@ export function layout(title: string, body: string, active = ''): string {
   const extra=calendarExtra+familyLogExtra+locationDiagnosticsExtra+locationExtra+messageExtra;
   const compactBody=body.replace(/<input\b([^>]*\btype=["'](date|time|datetime-local)["'][^>]*)>/gi,(_all,attrs,type)=>`<span class="native-control-shell native-${type==='datetime-local'?'datetime':type}-shell"><input${attrs}></span>`)
     .replace(/\/assets\/messages\.js\?v=[^"'<>\s]+/g,`/assets/messages.js?v=${APP_VERSION}-message3`)
+    .replace(/\/assets\/shopping-new\.js\?v=[^"'<>\s]+/g,`/assets/shopping-new.js?v=${APP_VERSION}-return-origin1`)
     .replace(/\/assets\/location-history-ui\.js\?v=[^"'<>\s]+/g,`/assets/location-history-ui.js?v=${APP_VERSION}-history9`)
     .replace(/\/assets\/task-edit\.js\?v=[^"'<>\s]+/g,`/assets/task-edit.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`)
     .replace(/\/assets\/task-view\.js\?v=[^"'<>\s]+/g,`/assets/task-view.js?v=${APP_VERSION}-${TASK_CHILD_UI_REVISION}`)
