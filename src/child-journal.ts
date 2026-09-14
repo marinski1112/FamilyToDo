@@ -1,3 +1,4 @@
+import { childJournalMemo } from './child-journal-memo';
 import { html, redirect } from './response';
 import { AuthRequired, Forbidden } from './errors';
 import { layout } from './app-shell';
@@ -38,7 +39,7 @@ export async function childJournalApi(request:Request,ctx:AppContext):Promise<Re
   if(MILESTONES[kind]){const milestone=MILESTONES[kind];detailCode=`JOURNAL_${milestone.code}`;valueText=milestone.label;entryKind='MILESTONE';milestoneCode=milestone.code;}
   else if(kind==='HEIGHT'){const value=Number(rawValue);if(!Number.isFinite(value)||value<20||value>250)return new Response('身長は20〜250cmで入力してください。',{status:400});logType='HEIGHT';detailCode='JOURNAL_HEIGHT';amount=Math.round(value*10)/10;unit='cm';valueText=null;entryKind='MEASUREMENT';}
   else if(kind==='WEIGHT'){const value=Number(rawValue);if(!Number.isFinite(value)||value<0.2||value>300)return new Response('体重は0.2〜300kgで入力してください。',{status:400});logType='WEIGHT';detailCode='JOURNAL_WEIGHT';amount=Math.round(value*100)/100;unit='kg';valueText=null;entryKind='MEASUREMENT';}
-  else if(form.has('title')){if(!title)return new Response('タイトルを入力してください。',{status:400});valueText=title;}
+  else if(form.has('title')){const memo=childJournalMemo(title,note);if(!memo)return new Response('タイトルを入力してください。',{status:400});valueText=memo.valueText;}
   else if(!note)return new Response('メモを入力してください。',{status:400});
 
   const inserted=await ctx.env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL,?,?,NULL,NULL,?,?,?,NULL)')

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import './family-log-duplicate-preview-contract.mjs';
 import './import-photo-preparation-contract.mjs';
+import './family-log-import-bundle-contract.mjs';
+import './family-log-import-bundle-ui-contract.mjs';
 
 const read=path=>fs.readFileSync(path,'utf8');
 const browser=read('public/assets/family-log-import-piyolog.js');
@@ -24,7 +26,7 @@ assert.match(browser,/promotionCall\('promotion_preview'\)/,'preview must check 
 assert.match(browser,/promotionCall\('promotion_apply'\)/,'confirmed import must promote generic meals before canonical record import');
 assert.match(browser,/actual_new_count/,'preview must separate true new records from in-place baby-food promotions');
 assert.match(browser,/既存のぴよログ「食事」.*同じ時刻の記録を新規追加せず離乳食として上書き/s,'UI must explain in-place promotion instead of duplicate creation');
-assert.match(browser,/if\(actualNew>0\)/,'promotion-only runs must not create a redundant canonical import batch');
+assert.match(browser,/if\(actualNew>0\|\|hasJournal\(\)\)/,'promotion-only runs must not create a redundant canonical import batch');
 assert.match(browser,/fetch\('\/api\/family-log-media'/,'photo bytes must use the existing authenticated private Family Log media endpoint');
 assert.match(browser,/if\(target\.has_media\)\{existing\+\+;continue;\}/,'existing private photos must never be overwritten');
 assert.match(browser,/if\(error instanceof TypeError\|\|error\?\.mediaCode==='UPLOAD_TIMEOUT'\)\{uncertain\+\+;/,'ambiguous network outcomes must be tracked separately');
@@ -47,7 +49,7 @@ for(const marker of [
   "String(body.csrf||'')!==String(context.session.csrfToken||'')",
   "subject_kind IN ('BABY','CHILD')",
   "l.family_id=? AND l.subject_id=? AND l.deleted_at IS NULL",
-  "l.log_type='MEAL' AND l.detail_code='BABY_FOOD'",
+  'AND ${PHOTO_PARENT_SQL}',
   "lower(b.source)='piyolog'",
   'l.import_external_id IN',
   "action==='promotion_preview'",
@@ -72,7 +74,7 @@ assert.match(importer,/familytodo-family-log-import-v1/,'canonical Family Log im
 assert.match(importer,/import_external_id/,'canonical importer must retain the external ID used to resolve converted photo manifests');
 assert.match(media,/one optional private BABY_FOOD photo per Family Log record|authenticated same-family proxy/i,'canonical private-media boundary must remain in use');
 assert.match(wrapper,/CORE_IMPORT_ASSET='\/assets\/family-log-import\.js\?v=12\.121\.0-wave102'/,'wrapper must pin the exact retained canonical controller it replaces');
-assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-media4'/,'Piyolog controller must be cache-busted after media diagnostic behavior changes');
+assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-bundle1'/,'Piyolog controller must be cache-busted after media diagnostic behavior changes');
 assert.ok(importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'wrapper sentinel must stay aligned with the canonical import page');
 assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) return await familyLogPiyologImportPage\(context\)/,'visible Family Log import page must use the restored Piyolog-capable controller');
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');

@@ -5,14 +5,18 @@ const config=JSON.parse(payloadEl.textContent||'{}');
 const file=document.getElementById('importFile'),subject=document.getElementById('importSubject'),status=document.getElementById('importStatus'),out=document.getElementById('importPreviewOut');
 if(!file||!subject||!status||!out)return;
 let documentValue=null,lastBatch=0,lastPreview=null;
+let operationBusy=false;
+async function withOperation(work){if(operationBusy)return;operationBusy=true;const controls=[...document.querySelectorAll('input,select,button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);try{return await work();}catch(error){status.textContent=error?.message||'処理できませんでした。';}finally{controls.forEach(([el,disabled])=>el.disabled=disabled);operationBusy=false;}}
+const hasJournal=()=>Array.isArray(documentValue?.records)&&documentValue.records.some(r=>r?.journal===true);
+const foods=()=>documentValue?.foods??[];
 const MAX_MEDIA_ITEMS=250,MAX_IMAGE_BYTES=4*1024*1024,IMAGE_TYPES=new Set(['image/jpeg','image/png','image/webp']);
 const SAFE_MEDIA_CODES=new Set(['AUTH_REQUIRED','CSRF_FAILED','INVALID_LOG','BABY_FOOD_LOG_NOT_FOUND','PHOTO_ALREADY_EXISTS','UNSUPPORTED_IMAGE_TYPE','FILE_TOO_LARGE','INVALID_IMAGE','BABY_FOOD_LOG_CHANGED','MEDIA_UPLOAD_FAILED','METHOD_NOT_ALLOWED','TARGET_RESOLUTION_FAILED','API_ERROR','SOURCE_TOO_LARGE','DECODE_FAILED','ENCODE_FAILED','UPLOAD_TIMEOUT']);
 
 const mediaNotice=document.createElement('div');
 mediaNotice.className='notice';
-mediaNotice.textContent='ぴよログPDF自体はFamilyToDoへ送信・解析しません。このチャットで変換した標準JSONと、必要に応じて抽出済みの離乳食写真を選択してください。写真は端末内で最大辺800pxのJPEGに変換して送信します。';
+mediaNotice.textContent='ぴよログPDF自体はFamilyToDoへ送信・解析しません。このチャットで変換した標準JSONと、必要に応じて抽出済みの離乳食・成長日記の写真を選択してください。写真は端末内で最大辺800pxのJPEGに変換して送信します。';
 file.parentElement?.insertBefore(mediaNotice,file);
-const mediaLabel=document.createElement('label');mediaLabel.textContent='離乳食写真（変換データに写真指定がある場合・複数選択可）';
+const mediaLabel=document.createElement('label');mediaLabel.textContent='記録写真（変換データに写真指定がある場合・複数選択可）';
 const mediaFiles=document.createElement('input');mediaFiles.id='importMediaFiles';mediaFiles.type='file';mediaFiles.multiple=true;mediaFiles.accept='image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 const mediaStatus=document.createElement('div');mediaStatus.id='importMediaStatus';mediaStatus.className='small';mediaStatus.setAttribute('aria-live','polite');
 file.insertAdjacentElement('afterend',mediaStatus);file.insertAdjacentElement('afterend',mediaFiles);file.insertAdjacentElement('afterend',mediaLabel);
@@ -33,7 +37,7 @@ function manifest(){
   const raw=documentValue?.piyolog_media;
   if(raw==null)return [];
   if(String(documentValue?.source||'').trim().toLowerCase()!=='piyolog')throw new Error('piyolog_mediaはsourceがpiyologの変換データだけで使用できます。');
-  if(!Array.isArray(raw)||raw.length>MAX_MEDIA_ITEMS)throw new Error(`離乳食写真指定は${MAX_MEDIA_ITEMS}件以内にしてください。`);
+  if(!Array.isArray(raw)||raw.length>MAX_MEDIA_ITEMS)throw new Error(`記録写真指定は${MAX_MEDIA_ITEMS}件以内にしてください。`);
   const records=Array.isArray(documentValue?.records)?documentValue.records:[],recordsById=new Map();
   for(const record of records){const id=cleanName(record?.external_id);if(id){if(recordsById.has(id))throw new Error('external_idが重複しています。変換データを確認してください。');recordsById.set(id,record);}}
   const ids=new Set(),names=new Set();
@@ -44,26 +48,26 @@ function manifest(){
     if(ids.has(external_id))throw new Error(`同じ離乳食記録に複数の写真指定があります: ${external_id}`);
     if(names.has(file_name))throw new Error(`同じ写真ファイル名が重複しています: ${file_name}`);
     const record=recordsById.get(external_id);
-    if(!record||String(record.log_type||'').toUpperCase()!=='MEAL'||String(record.detail_code||'').toUpperCase()!=='BABY_FOOD')throw new Error(`写真指定に対応する離乳食記録がありません: ${external_id}`);
+    if(!record||!((String(record.log_type||'').toUpperCase()==='MEAL'&&String(record.detail_code||'').toUpperCase()==='BABY_FOOD')||(record.journal===true&&record.log_type==='MEMO'&&record.detail_code==='JOURNAL_MEMO')))throw new Error(`写真指定に対応する離乳食・成長日記の記録がありません: ${external_id}`);
     ids.add(external_id);names.add(file_name);return {external_id,file_name};
   });
 }
 function selectedFiles(){const map=new Map();for(const selected of Array.from(mediaFiles.files||[]))map.set(selected.name,selected);return map;}
-function updateMediaSelection(){try{const list=manifest(),chosen=selectedFiles(),matched=list.filter(item=>chosen.has(item.file_name)).length;mediaStatus.textContent=list.length?`離乳食写真 ${list.length}件指定 / 選択済み ${matched}件${matched<list.length?'（不足分は記録だけ取り込み、あとから写真だけ再試行できます）':''}`:'このJSONには離乳食写真の指定はありません。';}catch(e){mediaStatus.textContent=e.message;}}
+function updateMediaSelection(){try{const list=manifest(),chosen=selectedFiles(),matched=list.filter(item=>chosen.has(item.file_name)).length;mediaStatus.textContent=list.length?`記録写真 ${list.length}件指定 / 選択済み ${matched}件${matched<list.length?'（不足分は記録だけ取り込み、あとから写真だけ再試行できます）':''}`:'このJSONには記録写真の指定はありません。';}catch(e){mediaStatus.textContent=e.message;}}
 mediaFiles.addEventListener('change',updateMediaSelection);
 
 function renderPreview(d){
-  lastPreview=d;out.replaceChildren();
+  lastPreview=d;out.replaceChildren();out.appendChild(node('p',`食材: 新規 ${d.foods?.new_count||0} / 登録済み ${d.foods?.existing_count||0}（既存は保持） / 成長日記 ${documentValue.records.filter(r=>r.journal===true).length}件`));
   const promoteIndices=new Set(d.promotion?.promote_indices||[]),promotionCount=Number(d.promotion?.promote_count||0),actualNew=Math.max(0,Number(d.new_count||0)-promotionCount);d.actual_new_count=actualNew;
   const counts=node('div',undefined,'import-counts');[['全件',d.record_count,''],['新規',actualNew,'is-new'],['離乳食へ更新',promotionCount,'is-new'],['重複',d.duplicate_count,'is-duplicate'],['エラー',d.error_count,'is-error']].forEach(([label,n,c])=>counts.appendChild(node('b',`${label} ${n}`,c)));
   out.appendChild(node('div',`対象: ${config.subjects[String(subject.value)]||'—'}`,'small'));out.appendChild(node('div',`source: ${d.source||'—'}`,'small'));out.appendChild(counts);out.appendChild(node('div',`対象期間: ${d.date_from||'—'} ～ ${d.date_to||'—'}`,'small'));out.appendChild(node('div',`種類別: ${Object.entries(d.type_counts||{}).map(([t,n])=>`${config.types[t]?.label||'その他'} ${n}`).join(' / ')||'なし'}`,'small'));
   d.rows.forEach(x=>{const row=node('div',undefined,`import-preview-row ${x.status}`);if(x.status==='error'){row.append(node('span','—'),node('span',`未対応 / ${x.error}`),node('b','エラー'));}else{const meta=config.types[x.value.log_type]||{icon:'',label:x.value.log_type},promote=promoteIndices.has(Number(x.index));row.append(node('span',x.value.occurred_at),node('span',`${meta.icon} ${meta.label} ${displayValue(x.value)}`),node('b',promote?'離乳食へ更新':x.status==='new'?'新規':'重複'));}out.appendChild(row);});
   if(promotionCount)out.appendChild(node('div',`既存のぴよログ「食事」${promotionCount}件は、同じ時刻の記録を新規追加せず離乳食として上書きします。`,'notice'));
-  const media=manifest();if(media.length)out.appendChild(node('div',`📷 離乳食写真 ${media.length}件（既存写真がある記録は上書きしません）`,'notice'));
+  const media=manifest();if(media.length)out.appendChild(node('div',`📷 記録写真 ${media.length}件（既存写真がある記録は上書きしません）`,'notice'));
   const progress=node('div',undefined,'import-progress');progress.hidden=true;progress.append(node('div','インポート中…','import-progress-label'),node('progress'));out.appendChild(progress);
-  const actionable=actualNew>0||promotionCount>0;
-  const button=node('button',actualNew>0?'インポート確定':promotionCount>0?'離乳食分類を更新':'写真のみ取り込む');button.type='button';button.disabled=!actionable&&!media.length;button.onclick=()=>actionable?runImport(d,button,progress):runPhotoOnly(button,progress);out.appendChild(button);
-  const retry=node('button','写真だけ再試行','btn gray');retry.type='button';retry.hidden=true;retry.onclick=()=>uploadPhotos(retry,true);out.appendChild(retry);progress.dataset.mediaRetryButton='1';progress._retryButton=retry;
+  const actionable=actualNew>0||promotionCount>0||hasJournal()||Number(d.foods?.new_count||0)>0;
+  const button=node('button',actionable?'インポート確定':'写真のみ取り込む');button.type='button';button.disabled=!actionable&&!media.length;button.onclick=()=>withOperation(()=>actionable?runImport(d,button,progress):runPhotoOnly(button,progress));out.appendChild(button);
+  const retry=node('button','写真だけ再試行','btn gray');retry.type='button';retry.hidden=true;retry.onclick=()=>withOperation(()=>uploadPhotos(retry,true));out.appendChild(retry);progress.dataset.mediaRetryButton='1';progress._retryButton=retry;
   updateMediaSelection();
 }
 
@@ -105,7 +109,7 @@ async function uploadPhoto(fileValue,target){
 async function uploadPhotos(button,explicitRetry=false){
   const list=manifest();if(!list.length)return {uploaded:0,existing:0,unselected:0,targetMissing:0,failed:0,uncertain:0};
   const chosen=selectedFiles();
-  if(!chosen.size){mediaStatus.textContent=`家族ログは取り込み済みです。離乳食写真 ${list.length}件は未選択です。写真を選んで「写真だけ再試行」を押してください。`;if(button)button.hidden=false;return {uploaded:0,existing:0,unselected:list.length,targetMissing:0,failed:0,uncertain:0};}
+  if(!chosen.size){mediaStatus.textContent=`家族ログは取り込み済みです。記録写真 ${list.length}件は未選択です。写真を選んで「写真だけ再試行」を押してください。`;if(button)button.hidden=false;return {uploaded:0,existing:0,unselected:list.length,targetMissing:0,failed:0,uncertain:0};}
   let resolved;
   try{resolved=await mediaTargets(list.map(item=>item.external_id));}
   catch(error){mediaStatus.textContent=`写真対象の確認に失敗しました（${mediaDiagnostic(error)}）。記録は再インポートしていません。`;throw error;}
@@ -131,7 +135,7 @@ async function uploadPhotos(button,explicitRetry=false){
 async function runPhotoOnly(button,progress){
   const media=manifest();if(!media.length)return;
   const chosen=selectedFiles(),matched=media.filter(item=>chosen.has(item.file_name)).length;
-  if(!confirm(`Family Log記録はすべて既存です。記録の再インポートは行わず、離乳食写真だけ確認・追加します。\n写真指定: ${media.length}件 / 選択済み: ${matched}件\n\n続けますか？`))return;
+  if(!confirm(`Family Log記録はすべて既存です。記録の再インポートは行わず、記録写真だけ確認・追加します。\n写真指定: ${media.length}件 / 選択済み: ${matched}件\n\n続けますか？`))return;
   button.disabled=true;progress.hidden=false;const label=progress.querySelector('.import-progress-label');label.textContent='既存記録と写真を確認しています…';
   try{await uploadPhotos(button,true);label.textContent='写真確認完了';}
   catch(e){status.textContent=e?.message||'写真を確認できませんでした。';label.textContent='写真確認に失敗しました';button.hidden=false;}
@@ -141,26 +145,49 @@ async function runPhotoOnly(button,progress){
 async function runImport(preview,button,progress){
   const media=manifest(),chosen=selectedFiles(),matched=media.filter(item=>chosen.has(item.file_name)).length,promotionCount=Number(preview.promotion?.promote_count||0),actualNew=Number(preview.actual_new_count||0);
   const warning=preview.error_count>0?`\n\nエラー${preview.error_count}件は取り込まれません。`:'';
-  const photoWarning=media.length?`\n離乳食写真: ${media.length}件指定 / ${matched}件選択${matched<media.length?'（不足分は後から写真だけ追加できます）':''}`:'';
-  const detail=`対象: ${config.subjects[String(subject.value)]||'—'}\nsource: ${preview.source}\n対象期間: ${preview.date_from||'—'} ～ ${preview.date_to||'—'}\n全件: ${preview.record_count}\n新規: ${actualNew}\n既存の食事→離乳食へ更新: ${promotionCount}\n重複: ${preview.duplicate_count}\nエラー: ${preview.error_count}\n種類別: ${Object.entries(preview.type_counts||{}).map(([t,n])=>`${config.types[t]?.label||t} ${n}`).join(' / ')}${photoWarning}`;
+  const photoWarning=media.length?`\n記録写真: ${media.length}件指定 / ${matched}件選択${matched<media.length?'（不足分は後から写真だけ追加できます）':''}`:'';
+  const detail=`対象: ${config.subjects[String(subject.value)]||'—'}\nsource: ${preview.source}\n対象期間: ${preview.date_from||'—'} ～ ${preview.date_to||'—'}\n全件: ${preview.record_count}\n新規: ${actualNew}\n既存の食事→離乳食へ更新: ${promotionCount}\n重複: ${preview.duplicate_count}\nエラー: ${preview.error_count}\n種類別: ${Object.entries(preview.type_counts||{}).map(([t,n])=>`${config.types[t]?.label||t} ${n}`).join(' / ')}${photoWarning}\n食材: 新規 ${preview.foods?.new_count||0} / 登録済み ${preview.foods?.existing_count||0}（上書きしません）\n成長日記は日記一覧にも表示し、Googleカレンダーへ自動送信しません。`;
   if(!confirm(`${detail}${warning}\n\n既存のぴよログ食事は同じ記録IDのまま離乳食へ補正します。続けますか？`))return;
   button.disabled=true;progress.hidden=false;const bar=progress.querySelector('progress'),label=progress.querySelector('.import-progress-label'),retry=progress._retryButton||out.querySelector('.btn.gray');
   try{
     let promoted=0;
     if(promotionCount){label.textContent='既存の食事記録を離乳食へ補正しています…';const result=await promotionCall('promotion_apply');promoted=Number(result.promoted_count||0);if(promoted!==promotionCount)throw new Error('離乳食分類の更新対象が変わりました。再度プレビューしてください。');}
-    if(actualNew>0){
+    if(actualNew>0||hasJournal()){
       const started=await call({action:'start',subject_id:Number(subject.value),source_filename:file.files[0].name,document:documentValue});lastBatch=Number(started.batch_id);let offset=Number(started.processed_count||0),latest=started;bar.max=started.record_count;
       while(offset<documentValue.records.length){const records=documentValue.records.slice(offset,offset+started.chunk_size);latest=await call({action:'chunk',batch_id:lastBatch,offset,records});offset=Number(latest.processed_count);bar.value=offset;label.textContent=`インポート中… ${offset} / ${latest.record_count}`;await new Promise(resolve=>setTimeout(resolve,0));}
       latest=await call({action:'finish',batch_id:lastBatch});const duplicateOnly=Math.max(0,Number(latest.skipped_count||0)-promoted);label.textContent=`記録完了 ${latest.record_count} / ${latest.record_count}`;status.textContent=`新規 ${latest.imported_count} / 離乳食へ更新 ${promoted} / 重複 ${duplicateOnly} / エラー ${latest.error_count}`;
-    }else{label.textContent='離乳食分類の更新完了';status.textContent=`離乳食へ更新 ${promoted}件。新しいFamily Log記録は追加していません。`;}
+    }else{label.textContent='既存記録の確認完了';status.textContent=`離乳食へ更新 ${promoted}件。`;}
+    if(foods().length){const result=await call({action:'foods_apply',subject_id:Number(subject.value),foods:foods()});status.textContent+=` / 食材 追加 ${result.added}・既存 ${result.existing}`;}
     button.textContent='記録完了';
-    if(media.length){label.textContent='離乳食写真を確認しています…';await uploadPhotos(retry,false);label.textContent='完了';}
+    if(media.length){label.textContent='記録写真を確認しています…';await uploadPhotos(retry,false);label.textContent='完了';}
   }catch(e){label.textContent='処理を完了できませんでした';status.textContent=`${e?.message||'処理に失敗しました。'} 再度プレビューして状態を確認してください。`;button.textContent='再試行';button.disabled=false;}
 }
 
-document.getElementById('importPreview').onclick=async()=>{try{const selected=file.files[0];if(!subject.value||!selected)throw new Error('対象とJSONファイルを選択してください。');if(selected.size>config.maxBytes)throw new Error('JSONは3MB以内にしてください。');documentValue=JSON.parse(await selected.text());manifest();status.textContent='検証しています…';const d=await call({action:'preview',subject_id:Number(subject.value),document:documentValue});let promotion={promote_count:0,already_baby_food_count:0,ambiguous_count:0,promote_indices:[]};if(String(documentValue?.source||'').trim().toLowerCase()==='piyolog'&&promotionRecords().length)promotion=await promotionCall('promotion_preview');if(Number(promotion.ambiguous_count||0)>0)throw new Error('同じ時刻の既存食事記録が複数あります。誤上書きを防ぐため、該当記録を確認してください。');d.promotion=promotion;renderPreview(d);status.textContent='プレビューを確認してください。DBはまだ変更されていません。';}catch(e){status.textContent=e?.message||'プレビューできませんでした。';out.replaceChildren();documentValue=null;lastPreview=null;}};
+document.getElementById('importPreview').onclick=()=>withOperation(async()=>{try{const selected=file.files[0];if(!subject.value||!selected)throw new Error('対象とJSONファイルを選択してください。');if(selected.size>config.maxBytes)throw new Error('JSONは3MB以内にしてください。');documentValue=JSON.parse(await selected.text());manifest();if(!Array.isArray(foods()))throw new Error('foodsは配列です。');status.textContent='検証しています…';const d=await call({action:'preview',subject_id:Number(subject.value),document:documentValue});let promotion={promote_count:0,already_baby_food_count:0,ambiguous_count:0,promote_indices:[]};if(String(documentValue?.source||'').trim().toLowerCase()==='piyolog'&&promotionRecords().length)promotion=await promotionCall('promotion_preview');if(Number(promotion.ambiguous_count||0)>0)throw new Error('同じ時刻の既存食事記録が複数あります。誤上書きを防ぐため、該当記録を確認してください。');d.foods=foods().length?await call({action:'foods_preview',subject_id:Number(subject.value),foods:foods()}):{new_count:0,existing_count:0};d.promotion=promotion;renderPreview(d);status.textContent='プレビューを確認してください。DBはまだ変更されていません。';}catch(e){status.textContent=e?.message||'プレビューできませんでした。';out.replaceChildren();documentValue=null;lastPreview=null;}});
 
-document.querySelectorAll('.import-rollback').forEach(button=>button.onclick=async()=>{if(!confirm('未編集のインポート記録だけを取り消します。編集済み記録は残ります。関連する離乳食写真もFamily Logの既存クリーンアップ規則に従います。続けますか？'))return;try{const d=await call({action:'rollback',batch_id:Number(button.dataset.id)});alert(`取消 ${d.deleted_count}件 / 編集済みのため保持 ${d.edited_count}件`);location.reload();}catch(e){alert(e.message);}});
+for(const control of [file,subject])control.addEventListener('change',()=>{out.replaceChildren();documentValue=null;lastPreview=null;status.textContent='対象・JSONを確認して再度プレビューしてください。';});
+
+document.querySelectorAll('.import-rollback').forEach(button=>button.onclick=async()=>{if(!confirm('未編集のインポート記録だけを取り消します。編集済み記録は残ります。関連する記録写真もFamily Logの既存クリーンアップ規則に従います。続けますか？'))return;try{const d=await call({action:'rollback',batch_id:Number(button.dataset.id)});alert(`取消 ${d.deleted_count}件 / 編集済みのため保持 ${d.edited_count}件`);location.reload();}catch(e){alert(e.message);}});
 document.querySelectorAll('.import-time-repair').forEach(button=>button.addEventListener('click',async()=>{try{status.textContent='時刻補正プレビューを取得しています…';const batch_id=Number(button.dataset.id),preview=await call({action:'repair_preview',batch_id}),samples=preview.samples.map(x=>`${x.before} → ${x.after}`).join('\n');status.textContent=preview.target_count?`時刻補正対象 ${preview.target_count}件（編集済み除外 ${preview.skipped_edited_count}件）`:preview.offset_minutes===0?'補正不要です。':'時刻補正の対象はありません。';if(!preview.target_count)return;if(!confirm(`時刻補正プレビュー\n全件: ${preview.total_count??preview.target_count+preview.skipped_edited_count}件\n対象: ${preview.target_count}件\n編集済みのため除外: ${preview.skipped_edited_count}件\n現在timezone: ${preview.timezone}\n補正offset: ${preview.offset_minutes}分\n\n${samples}\n\n適用しますか？`))return;await call({action:'repair_apply',batch_id});location.reload();}catch(e){status.textContent='時刻補正プレビューを取得できませんでした。時間をおいて再度お試しください。';alert(e?.message||'時刻補正に失敗しました。');}}));
 document.querySelectorAll('.import-time-repair-rollback').forEach(button=>button.addEventListener('click',async()=>{if(!confirm('この時刻補正だけを元に戻しますか？'))return;try{status.textContent='時刻補正を元に戻しています…';await call({action:'repair_rollback',batch_id:Number(button.dataset.id)});location.reload();}catch(e){status.textContent='時刻補正を元に戻せませんでした。時間をおいて再度お試しください。';alert(e?.message||'時刻補正の取消に失敗しました。');}}));
+const resetBox=node('details',undefined,'card');resetBox.appendChild(node('summary','取り込み直す前に全ログを削除'));
+resetBox.appendChild(node('p','上で選択した子供の全ログ（手入力・成長日記を含む）と添付写真が対象です。子供の登録・タスク・移動履歴は残ります。確認後に新しく追加されたログは残します。同期済みの成長日記はGoogle側からも削除されます。取り消せません。'));
+const resetPreview=node('button','削除対象を確認','btn danger');resetPreview.type='button';resetBox.appendChild(resetPreview);
+const resetOut=node('div');resetBox.appendChild(resetOut);out.parentElement.insertAdjacentElement('afterend',resetBox);
+resetPreview.onclick=()=>withOperation(async()=>{
+  if(!subject.value)throw new Error('上で対象の子供を選択してください。');
+  const subjectId=Number(subject.value),preview=await call({action:'reset_preview',subject_id:subjectId});resetOut.replaceChildren();
+  resetOut.appendChild(node('p',`${preview.subject_name}: 全ログ ${preview.log_count}件 / 写真 ${preview.photo_count}件 / 食材 ${preview.food_count}件`));
+  const label=node('label'),check=node('input');check.type='checkbox';label.append(check,document.createTextNode(' 食材リストも削除する'));resetOut.appendChild(label);
+  const text=node('input');text.type='text';text.placeholder=`${preview.subject_name}の全ログを削除`;resetOut.appendChild(node('p',`確認文字「${text.placeholder}」を入力してください。`));resetOut.appendChild(text);
+  const apply=node('button','この対象の全ログを削除','btn danger');apply.type='button';resetOut.appendChild(apply);
+  apply.onclick=()=>withOperation(async()=>{
+    if(Number(subject.value)!==subjectId)throw new Error('対象が変わりました。削除対象を再確認してください。');
+    if(text.value!==text.placeholder)throw new Error('確認文字が一致しません。');
+    if(!confirm(`${preview.subject_name}のログ ${preview.log_count}件と添付写真${check.checked?'、食材リスト':''}を削除します。実行しますか？`))return;
+    let remaining=preview.log_count;
+    do{const result=await call({action:'reset_apply',subject_id:subjectId,confirmation:text.value,cutoff:preview.cutoff,batch_cutoff:preview.batch_cutoff,food_cutoff:preview.food_cutoff,delete_foods:check.checked});remaining=result.remaining;status.textContent=`削除中: 残り ${remaining}件`;}while(remaining>0);
+    resetOut.replaceChildren(node('p','ログの削除が完了しました。写真は既存の削除キューで処理されます。'));out.replaceChildren();documentValue=null;status.textContent='JSONを選び、再度プレビューしてください。';
+  });
+});
 })();

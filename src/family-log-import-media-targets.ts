@@ -1,3 +1,4 @@
+import {PHOTO_PARENT_SQL} from './family-log-media-api';
 import type {AppContext} from './app-context';
 import {json} from './response';
 import {AuthRequired,BadRequest,Forbidden} from './errors';
@@ -106,7 +107,7 @@ export async function familyLogImportMediaTargetsApi(request:Request,context:App
   if(!isAdmin(m.role))throw new Forbidden('インポートはOWNER / ADMINのみ行えます。');
   if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
   const body=await requestBody(request);
-  if(String(body.csrf||'')!==String(context.session.csrfToken||''))throw new Forbidden('CSRF検証に失敗しました。');
+  if(!body.csrf||!context.session.csrfToken||String(body.csrf||'')!==String(context.session.csrfToken||''))throw new Forbidden('CSRF検証に失敗しました。');
   const action=String(body.action||'media_targets');
   if(action==='promotion_preview')return promotionResponse(context,body,false);
   if(action==='promotion_apply')return promotionResponse(context,body,true);
@@ -124,7 +125,7 @@ export async function familyLogImportMediaTargetsApi(request:Request,context:App
       FROM family_logs l
       JOIN family_log_import_batches b ON b.id=l.import_batch_id AND b.family_id=l.family_id AND b.subject_id=l.subject_id
       WHERE l.family_id=? AND l.subject_id=? AND l.deleted_at IS NULL
-        AND l.log_type='MEAL' AND l.detail_code='BABY_FOOD'
+        AND ${PHOTO_PARENT_SQL}
         AND lower(b.source)='piyolog' AND l.import_external_id IN (${marks})
       ORDER BY l.id DESC`).bind(m.family_id,subjectId,...part).all<Row>();
     const grouped=new Map<string,Row[]>();for(const row of rows.results||[]){const id=String(row.import_external_id||'');if(!id)continue;const values=grouped.get(id)||[];values.push(row);grouped.set(id,values);}
