@@ -46,8 +46,8 @@ A filename containing `wave`, an old version number, or a zero-result GitHub sea
 | `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
 | numbered `migrations/*.sql` | ACTIVE/SCHEMA | migration history is the canonical D1 schema lineage; never delete as Wave-document cleanup |
 | active architecture maps/runbooks under `docs/architecture/` | ACTIVE | maintained navigation, ownership and cleanup contracts; source wins if they drift |
+| `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md` | ACTIVE | canonical Google Home ownership plus current operator/setup reference; active Google Home voice contract validates this map |
 | `README.md`, `database/README.md` | ACTIVE | current repository/database operating guidance; keep |
-| `docs/GOOGLE_HOME_VOICE_SETUP.md` | ACTIVE | current external-integration operator setup; keep and update instead of adding Wave-specific setup notes |
 | `docs/EXTERNAL_SERVICE_COSTS.md` | ACTIVE | dated external-service cost/privacy guardrail; retain while maintained and revalidate changing provider limits |
 | `docs/import/piyolog-conversion-prompt.md` | ACTIVE | current Family Log/PiyoLog import workflow input; keep with the import contract |
 
@@ -57,7 +57,7 @@ A full Markdown audit was performed from exact main `93c56e97ceff0b74f5f261576d0
 
 ### Removed as HISTORICAL
 
-The following **17** point-in-time or superseded documents are archived by Git history and removed from the working tree:
+The following **17** point-in-time or superseded documents were archived by Git history and removed from the working tree in the full Markdown audit:
 
 - `CHANGELOG_CLOUDFLARE_WAVE78.md`
 - `CHANGELOG_CLOUDFLARE_WAVE93.md`
@@ -86,6 +86,10 @@ Classification rationale:
 - `docs/rough-input-event-calendar-cleanup.md` describes one completed bounded change and a deferred route audit. Current `ROUTE_MAP.md` and source now own those boundaries.
 - `docs/architecture/ASTRA_AI_JOURNAL_PHASE1_AUDIT.md` explicitly records an older baseline and phased backlog. Current Family AI/Google Home/Google Tasks maps plus current source/contracts supersede the snapshot.
 
+### Subsequent operator-doc consolidation
+
+`docs/GOOGLE_HOME_VOICE_SETUP.md` was a cumulative Wave114/120/121/122/124 setup history. It contained still-useful operator values alongside statements superseded later in the same file, including pre-Request-Sync guidance. Current stable Console, LINE Login continuation, Scene capability, recorder identity, HomeGraph Request Sync and credential-separation guidance is consolidated into `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md`; the active Google Home voice regression contract is repointed there. The Wave-specific setup file is therefore HISTORICAL and removed, with Git history as the archive.
+
 ### Earlier historical removals
 
 Earlier bounded cleanup PRs removed other proven historical Wave changelogs/residual analyses, including Wave31/33 documentation and the Wave37–78 residual-analysis batches. Detailed per-file justification remains in Git/PR history and is intentionally not duplicated here. The associated numbered migrations were preserved.
@@ -96,8 +100,8 @@ Do not create a new Wave-specific Markdown file for current operating instructio
 
 - root `README.md` for repository-wide development, secrets and recovery guidance;
 - `database/README.md` for schema-source rules;
-- `docs/GOOGLE_HOME_VOICE_SETUP.md` for current external voice/home setup;
-- domain ownership maps under `docs/architecture/` for current implementation boundaries;
+- `docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md` for current Google Home ownership and operator setup;
+- domain ownership maps under `docs/architecture/` for other current implementation boundaries;
 - `docs/import/` for actively used import instructions.
 
 Historical implementation notes belong in Git/PR history once their current guidance has been consolidated.
