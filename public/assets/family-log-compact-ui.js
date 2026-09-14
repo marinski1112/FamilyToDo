@@ -86,10 +86,17 @@ const buildToolbar=()=>{
   if(next&&next!==previous){next.textContent='›';next.setAttribute('aria-label','次の日');next.title='次の日';}
   toolbar.appendChild(date);
   const journal=head.querySelector('.family-log-journal-link');
-  if(journal){journal.textContent='📓 成長日記';journal.classList.add('family-log-compact-link');toolbar.appendChild(journal);}
+  if(journal){
+    const diaryNav=document.createElement('nav');diaryNav.className='family-log-bottom-journal';diaryNav.setAttribute('aria-label','日記');
+    journal.textContent='📓 成長日記';diaryNav.appendChild(journal);
+    head.querySelectorAll('.family-log-journal-link').forEach(link=>diaryNav.appendChild(link));
+    page.appendChild(diaryNav);page.classList.add('family-log-has-bottom-journal');
+  }
   const manage=head.querySelector('.family-log-gear');
   if(manage){manage.textContent='⚙️';manage.classList.add('family-log-compact-link','family-log-manage-link');manage.setAttribute('aria-label','家族ログ管理');manage.title='家族ログ管理';toolbar.appendChild(manage);}
   head.replaceWith(toolbar);subjects.remove();
+  const timeline=page.querySelector(':scope > .family-log-timeline');
+  if(timeline)toolbar.insertAdjacentElement('afterend',timeline);
 };
 // Move the already-bound controls; never clone buttons or attach save handlers.
 const buildInputDock=()=>{
@@ -105,9 +112,15 @@ const buildInputDock=()=>{
     if(labels.length){
       const bar=document.createElement('div');
       bar.className='family-log-overview-subject-bar';
-      bar.setAttribute('aria-label','クイック記録の対象');
-      if(bar.style)bar.style.cssText='grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;';
+      bar.setAttribute('aria-label','記録の対象');
+      bar.hidden=true;
+      if(bar.style)bar.style.cssText='display:none;';
+      const names=labels.map(label=>String(label.textContent||'').replace(/\s+クイック$/,'').trim());
+      const subjectSelect=toolbar.querySelector('.family-log-subject-select');
+      const allOption=subjectSelect?.querySelector('option');
+      if(allOption&&names.length)allOption.textContent=names.join('・')+'（すべて）';
       labels.forEach(label=>{
+        label.textContent=String(label.textContent||'').replace(/\s+クイック$/,'').trim();
         label.classList?.add('family-log-overview-subject-name');
         if(label.style)label.style.cssText='flex:0 0 auto;margin:0;padding:2px 8px;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;color:#475569;font-size:12px;line-height:1.4;white-space:nowrap;';
         bar.appendChild(label);

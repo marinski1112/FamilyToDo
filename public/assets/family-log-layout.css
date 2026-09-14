@@ -130,3 +130,20 @@
   .family-log-page .family-log-input-dock{position:fixed;left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px);bottom:var(--nav-box-h,calc(72px + env(safe-area-inset-bottom,0px)));z-index:90;box-shadow:0 -4px 16px #0f172a0d}
   body:has(.family-log-backdrop.open) .family-log-input-dock{visibility:hidden}
 }
+
+/* Subject/date header and diary navigation belong to the daily Family Log only. */
+.family-log-page .family-log-compact-toolbar{grid-template-columns:minmax(0,1fr) 132px 36px}
+.family-log-page .family-log-subject-select{font-size:14px;font-weight:700}
+.family-log-page .family-log-overview-subject-bar[hidden]{display:none!important}
+.family-log-page .family-log-bottom-journal{display:flex;align-items:center;justify-content:center;min-height:36px;box-sizing:border-box;background:#fff;color:#4338ca;font-size:13px;font-weight:700;text-decoration:none;border-top:1px solid #e2e8f0}
+@media(max-width:720px){
+ .family-log-page .family-log-bottom-journal{position:fixed;left:0;right:0;bottom:var(--nav-box-h,72px);height:36px;z-index:90}
+ .family-log-page.family-log-has-bottom-journal .family-log-input-dock{bottom:calc(var(--nav-box-h,72px) + 36px)}
+ .family-log-page.family-log-has-input-dock.family-log-has-bottom-journal{padding-bottom:140px}
+ .family-log-page.family-log-has-bottom-journal:not(.family-log-has-input-dock){padding-bottom:48px}
+ body:has(.family-log-backdrop.open) .family-log-bottom-journal{visibility:hidden}
+}
+@media(max-width:360px){.family-log-page .family-log-compact-toolbar{grid-template-columns:minmax(0,1fr) 124px 34px}}
+
+.family-log-page .family-log-bottom-journal{gap:20px}
+.family-log-page .family-log-bottom-journal a{min-height:36px;font-size:13px;text-decoration:none;display:flex;align-items:center}
