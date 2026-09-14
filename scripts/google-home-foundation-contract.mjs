@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 
 const home=fs.readFileSync('src/google-home.ts','utf8');
 const externalDomain=fs.readFileSync('src/family-external-domain.ts','utf8');
-const docs=fs.readFileSync('docs/GOOGLE_HOME_VOICE_SETUP.md','utf8');
+const docs=fs.readFileSync('docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
@@ -20,7 +20,7 @@ for(const marker of [
 for(const marker of ['recordQuickChoreDomain','startDedicatedSleepDomain','stopDedicatedSleepDomain','supportsDedicatedSleep']) assert.ok(externalDomain.includes(marker),marker);
 assert.ok(exceptionRoutes.includes('/oauth/google/authorize'),'/oauth/google/authorize');
 for(const marker of ['/oauth/google/token','/api/google-home/fulfillment','/__cf/google-home-health']) assert.ok(publicRoutes.includes(marker),marker);
-for(const marker of ['assistant.event.OkGoogle','device.command.ActivateScene','home.execution.Webhook','動的読み上げ']) assert.ok(docs.includes(marker),marker);
+for(const marker of ['action.devices.types.SCENE','ActivateScene','arbitrary speech/NLU transport','dynamic text-to-speech output']) assert.ok(docs.includes(marker),marker);
 
 const db=path.join(os.tmpdir(),`familytodo-google-home-foundation-${process.pid}-${Date.now()}.sqlite`);
 try {

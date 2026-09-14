@@ -1,8 +1,6 @@
-# Google Home ownership map
+# Google Home ownership and operator map
 
-Verified against main `96d35fa4b6c5419f32f1af81c75a24603117663d`.
-
-This map records the current Google Home runtime ownership boundaries. Historical Wave/setup documents remain useful configuration references, but current source, migrations and active regression contracts are authoritative.
+Verified against current source at the FamilyToDo v1.00 cleanup baseline. Runtime source, migrations, `wrangler.jsonc`, and active regression contracts are authoritative; this document is the canonical navigation and operator reference for Google Home.
 
 ## Canonical boundaries
 
@@ -19,6 +17,70 @@ This map records the current Google Home runtime ownership boundaries. Historica
 | Custom Scene aliases | `src/google-home-aliases.ts` | settings page; merged during scene catalog generation | validates bounded phrases, preserves built-ins, prevents family-level phrase collisions, atomically replaces a scene's custom aliases in `google_home_aliases`; no Google network call occurs during alias edit | `scripts/google-home-aliases-contract.mjs` |
 | HomeGraph Request Sync | `src/google-home-request-sync.ts` | admin settings action `request_sync` -> `requestGoogleHomeSyncForFamily()` | locally validates `GOOGLE_HOME_SERVICE_ACCOUNT_JSON`, creates a HomeGraph-scoped service-account JWT, obtains a Google access token and requests sync once for each currently linked member; records only safe status in activity log | Google Home request-sync/service-account contracts |
 | Health/readiness | `src/google-home.ts#googleHomeHealth()` plus request-sync readiness helpers | `/__cf/google-home-health` via `src/public-routes.ts`; settings page | reports bounded integration/readiness state without exposing secrets | public integration health/privacy contracts |
+
+## Current operator setup
+
+Google Home Cloud-to-cloud must be configured to match the runtime projection rather than an invented physical device model.
+
+| Setting | Current value / rule |
+| --- | --- |
+| Integration | `Family TODO` |
+| Device type | `SCENE` / `action.devices.types.SCENE` |
+| Trait | `action.devices.traits.Scene` |
+| Client ID | `Family_ToDo`, matching `GOOGLE_HOME_CLIENT_ID` |
+| Client secret | Cloudflare runtime secret `GOOGLE_HOME_CLIENT_SECRET` |
+| Project ID | `family-todo-home` |
+| Authorization URL | `https://familytodo.marinski1112.workers.dev/oauth/google/authorize` |
+| Token URL | `https://familytodo.marinski1112.workers.dev/oauth/google/token` |
+| Fulfillment URL | `https://familytodo.marinski1112.workers.dev/api/google-home/fulfillment` |
+| Scope | `devices` |
+| App Flip / Local fulfillment | not used |
+
+Do not configure Computer, Speaker, Tablet, Window, or another physical type merely to make the integration appear in the console. FamilyToDo publishes SCENE devices and does not implement Report State for them. `ActivateScene` is an allowlisted command boundary, not an arbitrary speech/NLU transport, and the Scene integration does not provide dynamic text-to-speech output.
+
+For development verification, use Google Home Developer Console **Test integration** and confirm the projected Scene catalog in the Home app or **Home Graph/Test Suite**. The acceptance boundary is one successful end-to-end path: voice activation -> `action.devices.commands.ActivateScene` EXECUTE -> canonical FamilyToDo record -> SUCCESS diagnostic for the linked recorder member. A device tile by itself is not acceptance.
+
+## LINE Login continuation
+
+Google Home account linking uses the LINE Login OAuth v2.1 Authorization Code flow with PKCE for an unauthenticated FamilyToDo user. Configure **LINE Login channel → Basic settings** and set the callback to:
+
+`https://familytodo.marinski1112.workers.dev/oauth/line/google-home/callback`
+
+The Login channel credentials are distinct from the Messaging API credentials:
+
+- `LINE_LOGIN_CHANNEL_ID` is the LINE Login channel ID.
+- `LINE_LOGIN_CHANNEL_SECRET` is the corresponding Cloudflare runtime secret.
+- `LINE_CHANNEL_SECRET` remains the Messaging API webhook-signature secret.
+- `LINE_ACCESS_TOKEN` remains the Messaging API delivery token.
+
+Do not replace the LIFF endpoint with the Google Home callback. The account-linking continuation and ordinary LIFF entrypoints are separate routes.
+
+Current LIFF entry examples remain:
+
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fcalendar.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ftasks.php%23shopping-checklist`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Ffamily_log.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fmessages.php`
+- `https://liff.line.me/{LIFF_ID}/?next=%2Fapp%2Fsettings.php`
+
+Path-style LIFF routes are also supported, including `https://liff.line.me/{LIFF_ID}/calendar`. Keep the slash before `?next=` when using the query-style form.
+
+## HomeGraph Request Sync
+
+When catalog changes must be pushed without relinking, enable the HomeGraph API for the Google Home project, create the required service account, and store its JSON credential only in Cloudflare Worker Secret `GOOGLE_HOME_SERVICE_ACCOUNT_JSON`. Use 管理 -> Google Home -> Google Homeへ操作一覧を再同期 to invoke the existing Request Sync path.
+
+Never commit the service-account JSON, private key, access token, JWT, OAuth client secret, or raw authorization state. If `GOOGLE_HOME_SERVICE_ACCOUNT_JSON` is absent, Request Sync is `NOT_CONFIGURED`; Account Linking, OAuth, SYNC and EXECUTE remain separate capabilities.
+
+Google Home credentials are separate from Google Calendar credentials. Do not substitute `GOOGLE_CALENDAR_CLIENT_ID` for the Google Home client configuration merely because both integrations use Google services.
+
+## Scene and recorder rules
+
+Active BABY/CHILD subjects can project child sleep, toilet/diaper and fixed Child Journal milestone Scenes; PET uses its dedicated quick operations, and family quick chores are separate shared Scenes. Eligibility is revalidated at EXECUTE time. Disabled or no-longer-eligible catalog entries fail closed instead of writing a record.
+
+The fixed Child Journal 成長日記 Scene set is `立った`, `歩いた`, `最初の歯`, and `歯`. Google Home Scene activation does not accept 身長・体重 numeric values, arbitrary times/amounts, or free-form memo text; those require another input path.
+
+The FamilyToDo member linked during Account Linking is the trusted recorder identity. Do not infer a speaker or Voice Match identity from a shared Google Home device. `external_command_receipts` remains the idempotency boundary for duplicate Google request IDs.
 
 ## Persistence lineage
 
@@ -38,5 +100,5 @@ This map records the current Google Home runtime ownership boundaries. Historica
 - EXECUTE diagnostics deliberately store field presence/counts and bounded command names/keys rather than raw payload text or values. Preserve that privacy boundary when extending diagnostics.
 - Alias editing is local catalog metadata. It does not itself call Google; after catalog changes, HomeGraph Request Sync is the explicit propagation path when configured.
 - `GOOGLE_HOME_SERVICE_ACCOUNT_JSON` is only for HomeGraph Request Sync. Account Linking OAuth uses the separate Google Home client credentials and remains functional independently of Request Sync configuration.
-- `docs/GOOGLE_HOME_VOICE_SETUP.md` contains Wave-by-Wave operational history. Statements from an earlier section can be superseded by later runtime additions such as Request Sync; use current source and this map for ownership decisions.
+- Historical Wave114/120/121/122/124 setup notes are archived in Git history. Do not recreate a new Wave-specific setup document; keep current operator guidance here.
 - A zero-result repository search is not proof that a Google Home component is absent or dead. Require direct route/runtime/build/contract evidence before classifying DEAD.

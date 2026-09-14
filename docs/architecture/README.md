@@ -27,14 +27,14 @@ When source and this index disagree, source wins and the index must be updated i
 - `CALENDAR_FUNCTION_MAP.md` — calendar rendering, task/event projection and related ownership.
 - `NOTIFICATION_FUNCTION_MAP.md` — notification creation, scheduling, delivery and diagnostics ownership.
 - `FAMILY_AI_FUNCTION_MAP.md` — Family AI planning/provider/action ownership and safety boundaries.
-- `GOOGLE_HOME_FUNCTION_MAP.md` — Google Home account linking, SYNC/EXECUTE and Scene ownership.
+- `GOOGLE_HOME_FUNCTION_MAP.md` — Google Home account linking, operator setup, LINE continuation, SYNC/EXECUTE, Request Sync and Scene ownership.
 - `GOOGLE_TASKS_FUNCTION_MAP.md` — Google Tasks OAuth, inbound synchronization, routing and voice-command ownership.
 - `PIYOLOG_IMPORT_FUNCTION_MAP.md` — PiyoLog/Family Log import parsing, duplicate/media and persistence boundaries.
 - `LEGACY_INVENTORY.md` — classification rules for active, compatibility, historical, dead, and unknown files.
 - `CLEANUP_AUTOMATION_RUNBOOK.md` — one-bounded-change cleanup execution contract, lease/CI/Workers flow, source-reconstruction prohibition, and autonomous-task prompt contract.
 - `FIVE_WORKER_AUTONOMY.md` — five-task lane split, global lease/collision rules, staggered schedule, and final read-only auditor contract.
 
-Current operator/setup documentation that is intentionally outside this directory includes `../GOOGLE_HOME_VOICE_SETUP.md`, `../EXTERNAL_SERVICE_COSTS.md`, and `../import/piyolog-conversion-prompt.md`.
+Current operator/workflow documentation that is intentionally outside this directory includes `../EXTERNAL_SERVICE_COSTS.md` and `../import/piyolog-conversion-prompt.md`. Google Home operator setup is maintained in `GOOGLE_HOME_FUNCTION_MAP.md`; `../GOOGLE_HOME_VOICE_SETUP.md` is only a compatibility symlink for residual filename consumers and contains no separate Wave-specific documentation.
 
 ## Cleanup safety classes
 
