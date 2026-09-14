@@ -17,13 +17,15 @@ const {locationAlertDecision}=load('src/location-arrival-push.ts',['locationAler
 // Registered-place matching is wider than the old distance+uncertainty<=150 rule, but remains accuracy bounded.
 assert.equal(placePresence(point(0,160,20),place),'IN','ordinary GPS drift at HOME stays classified inside');
 assert.equal(placePresence(point(0,180,120),place),'IN','poor-but-usable accuracy receives bounded tolerance');
-assert.equal(placePresence(point(0,250,20),place),'UNKNOWN','boundary jitter remains uncertain');
+assert.equal(placePresence(point(0,230,20),place),'UNKNOWN','boundary jitter remains uncertain after the 20m tighter exit threshold');
+assert.equal(placePresence(point(0,250,20),place),'OUT','the tightened exit threshold classifies a clearly departed point outside');
 assert.equal(placePresence(point(0,400,20),place),'OUT');
 assert.equal(placePresence(point(0,0,151),place),'UNKNOWN','unusable accuracy fails closed');
 assert.equal(placeProximity(point(0,350,20),place,'OUTSIDE'),'APPROACHING');
 assert.equal(placeProximity(point(0,520,20),place,'APPROACHING'),'APPROACHING','approach hysteresis prevents outer-boundary oscillation');
 assert.equal(placeProximity(point(0,700,20),place,'APPROACHING'),'OUTSIDE');
-assert.equal(placeProximity(point(0,245,20),place,'INSIDE'),'INSIDE','inside exit threshold prevents HOME jitter');
+assert.equal(placeProximity(point(0,230,20),place,'INSIDE'),'INSIDE','inside hysteresis still tolerates small HOME jitter');
+assert.equal(placeProximity(point(0,245,20),place,'INSIDE'),'APPROACHING','20m tighter exit threshold leaves HOME sooner');
 
 const base=(phase,minute,extra={})=>({place_version:'1',recorded_at:time(minute),state:phase==='INSIDE'?'IN':'OUT',last_arrival_at:null,pending_since:null,phase,pending_phase:null,last_approach_at:null,last_leave_at:null,...extra});
 assert.equal(locationAlertDecision(null,'INSIDE','1',time(0)).notify,false,'initial inside is baseline and never arrival-notifies');
