@@ -45,7 +45,7 @@ for(const marker of [
   'recurrence_occurrence_id:Number(occ.id)',
 ])if(!recurrence.includes(marker))throw new Error(`retained recurrence projection marker missing: ${marker}`);
 if(!api.includes('export async function familyLogApi'))throw new Error('retained Family Log mutation API missing');
-if(!shell.includes('family-log-layout.css?v=${APP_VERSION}-mobile3'))throw new Error('Family Log scoped layout override is not loaded');
+if(!shell.includes('family-log-layout.css?v=${APP_VERSION}-mobile4'))throw new Error('Family Log scoped layout override is not loaded');
 if(!shell.includes('family-log-success-recovery.js?v=${APP_VERSION}-post-save1'))throw new Error('Family Log post-save recovery asset is not loaded');
 for(const marker of [
   '.family-log-quick-grid > .family-log-quick',
