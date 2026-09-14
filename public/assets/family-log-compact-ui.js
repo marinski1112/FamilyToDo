@@ -91,6 +91,23 @@ const buildToolbar=()=>{
   if(manage){manage.textContent='⚙️';manage.classList.add('family-log-compact-link','family-log-manage-link');manage.setAttribute('aria-label','家族ログ管理');manage.title='家族ログ管理';toolbar.appendChild(manage);}
   head.replaceWith(toolbar);subjects.remove();
 };
+const moveOverviewSubjectLabels=(page,growth)=>{
+  const toolbar=page.querySelector(':scope > .family-log-compact-toolbar');
+  if(!(toolbar instanceof HTMLElement))return;
+  const labels=growth.flatMap(node=>[...node.querySelectorAll(':scope > .family-log-overview-group > h2')]);
+  if(!labels.length)return;
+  const bar=document.createElement('div');
+  bar.className='family-log-overview-subject-bar';
+  bar.setAttribute('aria-label','クイック記録の対象');
+  bar.style.cssText='grid-column:1/-1;display:flex;align-items:center;gap:6px;min-width:0;overflow-x:auto;';
+  labels.forEach(label=>{
+    if(!(label instanceof HTMLElement))return;
+    label.classList.add('family-log-overview-subject-name');
+    label.style.cssText='flex:0 0 auto;margin:0;padding:2px 8px;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;color:#475569;font-size:12px;line-height:1.4;white-space:nowrap;';
+    bar.appendChild(label);
+  });
+  if(bar.childElementCount)toolbar.appendChild(bar);
+};
 // Move the already-bound controls; never clone buttons or attach save handlers.
 const buildInputDock=()=>{
   if(location.pathname!==DAILY_PATH)return;
@@ -99,6 +116,7 @@ const buildInputDock=()=>{
   const growth=[...page.querySelectorAll(':scope > .family-log-overview-quick,:scope > .family-log-quick-card')];
   const chores=[...page.querySelectorAll(':scope > .family-quick-chore-card')];
   if(!growth.length&&!chores.length)return;
+  moveOverviewSubjectLabels(page,growth);
   const dock=document.createElement('section');dock.className='family-log-input-dock';dock.setAttribute('aria-label','記録を追加');
   const toggle=document.createElement('button');toggle.type='button';toggle.className='family-log-input-swap';toggle.textContent='🔄';
   const entries=[];
