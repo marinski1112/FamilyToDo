@@ -29,7 +29,11 @@ const count=(selector,root=page)=>qa(selector,root).length;
 const payload=(()=>{try{return JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}');}catch{return {};}})();
 const selectedDate=(()=>{
   const raw=new URLSearchParams(location.search).get('date');
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(raw||''))?String(raw):new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  if(/^\d{4}-\d{2}-\d{2}$/.test(String(raw||'')))return String(raw);
+  const compact=String(q('.checklist-date')?.textContent||'').trim();
+  const match=compact.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if(match)return `${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`;
+  return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 })();
 
 const dailyHead=q('.daily-head');
