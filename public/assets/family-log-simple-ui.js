@@ -19,6 +19,8 @@ try{payload=JSON.parse(document.getElementById('familyLogPayload')?.textContent|
 const csrf=String(payload.csrf||'');
 const quickActions=Array.isArray(payload.quickActions)?payload.quickActions:[];
 const quickActionById=new Map(quickActions.map(action=>[Number(action?.id||0),action]));
+const logById=payload.logs&&typeof payload.logs==='object'?payload.logs:{};
+const compactValueTypes=new Set(['MILK','DIAPER','TOILET']);
 let runningSubjects=new Map();
 let runningLoaded=false;
 
@@ -93,6 +95,12 @@ const enhance=()=>{
   page.querySelector(':scope > .family-log-timer-card')?.remove();
   page.querySelector(':scope > .family-chore-history')?.remove();
   page.querySelector(':scope > .family-log-timeline > .section-head')?.remove();
+
+  page.querySelectorAll('.family-log-row[data-id]').forEach(row=>{
+    const log=logById[String(row.dataset.id||'')];
+    const type=String(log?.log_type||'').toUpperCase();
+    row.classList.toggle('family-log-row-compact-value',compactValueTypes.has(type));
+  });
 
   const dashboard=page.querySelector(':scope > .family-log-dashboard');
   if(dashboard instanceof HTMLDetailsElement){
