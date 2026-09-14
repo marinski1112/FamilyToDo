@@ -5,7 +5,7 @@ const home=fs.readFileSync('src/google-home.ts','utf8');
 const domain=fs.readFileSync('src/child-journal-google-home.ts','utf8');
 const schema=fs.readFileSync('src/child-journal-schema.ts','utf8');
 const bundle=fs.readFileSync('scripts/feature-contract-bundle.mjs','utf8');
-const docs=fs.readFileSync('docs/GOOGLE_HOME_VOICE_SETUP.md','utf8');
+const docs=fs.readFileSync('docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md','utf8');
 
 for(const marker of [
   "export type ChildJournalVoiceMilestone = 'STAND'|'FIRST_STEP'|'FIRST_TOOTH'|'TOOTH'",

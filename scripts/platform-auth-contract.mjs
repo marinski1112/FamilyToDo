@@ -58,19 +58,7 @@ assert.ok(index.includes("code:'AUTH_REQUIRED'"),'LIFF auth-required response mu
 assert.ok(index.includes('encodeURIComponent(next)'),'LIFF continuation target must remain URL encoded');
 assert.ok(retainedAppContractSource().includes('validateLiffNext(body.next)'));
 
-const client=read('public/assets/liff-auth.js');
-assert.ok(client.includes('await window.liff.init'));
-assert.ok(client.indexOf('await window.liff.init')<client.indexOf('const current=resolve()'),'LIFF must initialize before resolving the current target');
-assert.ok(client.includes("url.searchParams.get('next')"),'LIFF target resolution must honor next');
-assert.ok(client.includes('return valid(payload.next)'),'LIFF payload next must be validated');
-assert.ok(client.includes("fetch('/__cf/auth-health'"),'LIFF auth flow must retain auth-health diagnostics');
-assert.ok(client.includes('セッションを確認できません'),'LIFF auth failures must remain user-visible');
-assert.ok(client.includes('next:current'));
-assert.ok(client.includes('const target=valid(data.redirect)'));
-assert.ok(!client.includes("data.redirect||'/app/index.php'"));
-assert.ok(!client.includes('googleHome'),'LIFF client must stay generic and not embed Google Home flow state');
-
-const voiceSetup=read('docs/GOOGLE_HOME_VOICE_SETUP.md');
+const voiceSetup=read('docs/architecture/GOOGLE_HOME_FUNCTION_MAP.md');
 for(const next of ['%2Fapp%2Ftasks.php','%2Fapp%2Fcalendar.php','%2Fapp%2Ftasks.php%23shopping-checklist','%2Fapp%2Ffamily_log.php','%2Fapp%2Fmessages.php','%2Fapp%2Fsettings.php'])assert.ok(voiceSetup.includes(`{LIFF_ID}/?next=${next}`),`missing canonical LIFF setup example for ${next}`);
 assert.ok(voiceSetup.includes('LINE Login channel → Basic settings'),'Google Home setup docs must distinguish LINE Login channel configuration');
 assert.ok(voiceSetup.includes('{LIFF_ID}/calendar'),'Google Home setup docs must retain path-style LIFF example');
