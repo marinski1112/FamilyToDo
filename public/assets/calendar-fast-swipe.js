@@ -15,10 +15,29 @@ const calendarKey=input=>{
   }catch{return '';}
 };
 const requestUrl=(month,view)=>`/app/calendar.php?view=${encodeURIComponent(view||'all')}&month=${encodeURIComponent(month)}`;
+const sanitizeCalendarHtml=text=>{
+  try{
+    const doc=new DOMParser().parseFromString(String(text||''),'text/html');
+    doc.querySelectorAll('.calendar-item,.calendar-band').forEach(element=>{
+      for(const node of [...element.childNodes]){
+        if(node.nodeType!==Node.TEXT_NODE)continue;
+        const value=String(node.textContent||'');
+        const cleaned=value.replace(/^\s*📌\s*/u,'');
+        if(cleaned!==value)node.textContent=cleaned;
+      }
+      for(const attr of ['title','aria-label']){
+        const value=element.getAttribute(attr);
+        if(value&&value.includes('📌'))element.setAttribute(attr,value.replace(/\s*📌\s*/gu,' '));
+      }
+    });
+    return '<!doctype html>'+doc.documentElement.outerHTML;
+  }catch{return text;}
+};
 const remember=(key,text)=>{
   if(!key||!text)return;
+  const safeText=sanitizeCalendarHtml(text);
   htmlCache.delete(key);
-  htmlCache.set(key,text);
+  htmlCache.set(key,safeText);
   while(htmlCache.size>MAX_CACHE)htmlCache.delete(htmlCache.keys().next().value);
 };
 const cachedResponse=key=>{
@@ -55,12 +74,13 @@ window.fetch=async function(input,init){
     if(warmed)return warmed;
   }
   const response=await nativeFetch(input,init);
-  if(response.ok){
-    response.clone().text().then(text=>{
-      if(text.includes('id="calendarPayload"')&&text.includes('class="calendar-grid"'))remember(key,text);
-    }).catch(()=>{});
+  if(!response.ok)return response;
+  const text=await response.text();
+  if(!text.includes('id="calendarPayload"')||!text.includes('class="calendar-grid"')){
+    return new Response(text,{status:response.status,statusText:response.statusText,headers:response.headers});
   }
-  return response;
+  remember(key,text);
+  return cachedResponse(key)||new Response(sanitizeCalendarHtml(text),{status:response.status,statusText:response.statusText,headers:response.headers});
 };
 
 const currentView=()=>new URL(location.href).searchParams.get('view')||'all';
