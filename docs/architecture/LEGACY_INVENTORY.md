@@ -2,106 +2,108 @@
 
 Baseline label: **FamilyToDo v1.00**. This is a development-stability baseline, not a package-version reset.
 
-The repository has accumulated historical Wave-era files and compatibility paths. Cleanup should reduce active search space without deleting live runtime or regression behavior.
+Current `main`, runtime source, migrations, `wrangler.jsonc`, and active regression contracts are authoritative. This inventory records cleanup rules and the current classification boundary; Git history is the archive for artifacts already proven historical and removed.
 
 ## Evidence-first classification
 
-Every candidate must be assigned one of these states before removal:
+Every deletion/consolidation candidate must be classified before removal:
 
-- **ACTIVE** — reached by current Worker dispatch, scheduled execution, current imports, build/static asset flow, or active feature path.
+- **ACTIVE** — reached by current Worker dispatch, scheduled execution, imports, build/static-asset flow, or an actively maintained operational/development path.
 - **COMPAT** — old-looking path or adapter that still serves a current compatibility URL/caller.
 - **TEST/CONTRACT** — protects current behavior even when not part of runtime imports.
-- **HISTORICAL** — retained only as a historical artifact; Git history is sufficient replacement.
+- **HISTORICAL** — point-in-time documentation/artifact with no current runtime/build/contract role; Git history is sufficient replacement.
 - **DEAD** — proven unreachable from runtime, build, static assets, active routes, scheduled execution, contracts/tests, and known dynamic dispatch.
 - **UNKNOWN** — evidence is incomplete; do not delete.
 
 ## Required proof before deletion
 
-A Wave/history file is removable only after checking, as applicable:
+Check the relevant current-main boundaries before removing a candidate:
 
-1. current `src/index.ts` dispatch/scheduled graph;
-2. route owner modules;
-3. TypeScript imports/exports;
-4. public/static asset references;
-5. package scripts and regression manifest/contracts;
-6. migrations/schema references;
-7. string/dynamic dispatch and URL compatibility aliases;
-8. Google/LINE/LIFF callbacks or external webhook URLs;
-9. Cloudflare build/config entrypoints.
+1. `src/index.ts` request and scheduled dispatch;
+2. route owner modules and imports/exports;
+3. public/static asset and service-worker references;
+4. package scripts, regression manifest and active contracts/tests;
+5. migration/schema dependencies;
+6. string/dynamic dispatch and compatibility aliases;
+7. Google/LINE/LIFF/OAuth/webhook/external callback URLs;
+8. Cloudflare build/config entrypoints.
 
-The fact that a file is old, contains `wave`, or is not found by GitHub code search is insufficient evidence. GitHub search can be incomplete.
+A filename containing `wave`, an old version number, or a zero-result GitHub search is not deletion evidence by itself. A small re-export/barrel module is also not automatically dead.
 
-A small re-export module is not automatically dead. Barrel modules can be intentional route ownership boundaries and must be checked from current importers before consolidation or removal.
+## Current verified active/compatibility boundaries
 
-## Consolidation strategy
+| Path / pattern | Class | Evidence / action |
+| --- | --- | --- |
+| `src/index.ts` | ACTIVE | Worker entrypoint and scheduled dispatcher; keep |
+| `src/public-routes.ts` | ACTIVE | first request dispatcher; keep |
+| `src/context-api-routes.ts` | ACTIVE | authenticated API dispatcher; keep |
+| `src/page-routes.ts` | ACTIVE | page dispatcher; keep |
+| `src/exception-routes.ts` | ACTIVE/COMPAT | owns live early/prelude/fallback and compatibility routes; audit per route before any retirement |
+| `src/auth-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
+| `src/task-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
+| `src/message-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
+| `src/shopping-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
+| `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts`; keep |
+| numbered `migrations/*.sql` | ACTIVE/SCHEMA | migration history is the canonical D1 schema lineage; never delete as Wave-document cleanup |
+| active architecture maps/runbooks under `docs/architecture/` | ACTIVE | maintained navigation, ownership and cleanup contracts; source wins if they drift |
+| `README.md`, `database/README.md` | ACTIVE | current repository/database operating guidance; keep |
+| `docs/GOOGLE_HOME_VOICE_SETUP.md` | ACTIVE | current external-integration operator setup; keep and update instead of adding Wave-specific setup notes |
+| `docs/EXTERNAL_SERVICE_COSTS.md` | ACTIVE | dated external-service cost/privacy guardrail; retain while maintained and revalidate changing provider limits |
+| `docs/import/piyolog-conversion-prompt.md` | ACTIVE | current Family Log/PiyoLog import workflow input; keep with the import contract |
 
-Use small, reviewable PRs:
+## Historical Markdown audit
 
-1. documentation/index only;
-2. proven duplicate helper/config consolidation;
-3. proven DEAD/HISTORICAL top-level artifacts;
-4. compatibility-route retirement only after caller migration/evidence;
-5. optional CI drift checks for architecture ownership.
+A full Markdown audit was performed from exact main `93c56e97ceff0b74f5f261576d01af68c23cf2a4`. The repository had **36 Markdown files** at that boundary. Each removal below was actual-read and checked against current source/config/routes/migrations/contracts as applicable; search misses were supplemental evidence only.
 
-Do not combine mass deletion with functional bug fixes.
+### Removed as HISTORICAL
 
-## Current verified compatibility warning
+The following **17** point-in-time or superseded documents are archived by Git history and removed from the working tree:
 
-`src/exception-routes.ts` contains live exceptional/compatibility paths, including recurring authentication handling, OAuth/LIFF prelude handling, check/reorder aliases, webhook aliases, task delete/occurrence conversion, and new-entry pages. It is therefore ACTIVE/COMPAT at module level; individual routes require separate classification.
+- `CHANGELOG_CLOUDFLARE_WAVE78.md`
+- `CHANGELOG_CLOUDFLARE_WAVE93.md`
+- `FAMILY_LOG_DESIGN_WAVE78.md`
+- `MIGRATION_PROGRESS_WAVE11.md`
+- `MIGRATION_PROGRESS_WAVE12.md`
+- `MIGRATION_PROGRESS_WAVE13.md`
+- `MIGRATION_PROGRESS_WAVE14.md`
+- `MIGRATION_PROGRESS_WAVE15.md`
+- `MIGRATION_PROGRESS_WAVE17.md`
+- `MIGRATION_PROGRESS_WAVE18.md`
+- `MIGRATION_PROGRESS_WAVE19.md`
+- `README_WAVE15.md`
+- `WAVE36_ANALYSIS.md`
+- `docs/ENVIRONMENT_RECOVERY_WAVE117.md`
+- `docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md`
+- `docs/rough-input-event-calendar-cleanup.md`
+- `docs/architecture/ASTRA_AI_JOURNAL_PHASE1_AUDIT.md`
 
-## Current verified active barrel modules
+Classification rationale:
 
-At baseline `aa8a49bbec8505d358525f40d335e76f9ecce395`, `src/page-routes.ts` directly imports the following re-export/barrel modules:
+- `CHANGELOG_*`, `MIGRATION_PROGRESS_*`, `README_WAVE15.md`, and `WAVE36_ANALYSIS.md` are release/progress/parity snapshots. Current source, migrations, route/owner maps and contracts represent the live behavior.
+- `FAMILY_LOG_DESIGN_WAVE78.md` mixes a historical domain snapshot and then-future backlog. Current Family Log/Journal source, migration chain and active contracts supersede it.
+- `docs/ENVIRONMENT_RECOVERY_WAVE117.md` is a one-time recovery snapshot with Wave/version-specific assumptions. Stable recovery safety guidance is consolidated into the root `README.md`.
+- `docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md` is superseded by current Google Tasks source/migrations and `GOOGLE_TASKS_FUNCTION_MAP.md`; stable OAuth/list-selection/operator guidance is consolidated there.
+- `docs/rough-input-event-calendar-cleanup.md` describes one completed bounded change and a deferred route audit. Current `ROUTE_MAP.md` and source now own those boundaries.
+- `docs/architecture/ASTRA_AI_JOURNAL_PHASE1_AUDIT.md` explicitly records an older baseline and phased backlog. Current Family AI/Google Home/Google Tasks maps plus current source/contracts supersede the snapshot.
 
-- `src/auth-page-handlers.ts`
-- `src/task-page-handlers.ts`
-- `src/message-page-handlers.ts`
-- `src/shopping-page-handlers.ts`
-- `src/settings-page-handlers.ts`
+### Earlier historical removals
 
-They are **ACTIVE** at module level. Their wrapper-only shape is not unused-code evidence. Any future consolidation must be treated as an intentional route/module-ownership refactor and revalidated against current source.
+Earlier bounded cleanup PRs removed other proven historical Wave changelogs/residual analyses, including Wave31/33 documentation and the Wave37–78 residual-analysis batches. Detailed per-file justification remains in Git/PR history and is intentionally not duplicated here. The associated numbered migrations were preserved.
 
-## Inventory table
+## Consolidation rule
 
-Populate this table from current-main evidence during cleanup PRs. Keep UNKNOWN entries rather than guessing.
+Do not create a new Wave-specific Markdown file for current operating instructions when an existing canonical document can own the information. Prefer:
 
-| Path / pattern | Class | Evidence | Canonical replacement | Action |
-| --- | --- | --- | --- | --- |
-| `src/index.ts` | ACTIVE | Worker entrypoint and scheduled dispatch | — | keep |
-| `src/public-routes.ts` | ACTIVE | first request dispatcher | — | keep |
-| `src/context-api-routes.ts` | ACTIVE | authenticated API dispatcher | — | keep |
-| `src/page-routes.ts` | ACTIVE | page dispatcher | — | keep |
-| `src/exception-routes.ts` | ACTIVE/COMPAT | early/prelude/fallback live routes | route-specific | audit per route |
-| `src/auth-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying auth/onboarding/home page modules | keep; do not classify as dead wrapper |
-| `src/task-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying task/item page modules | keep; do not classify as dead wrapper |
-| `src/message-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying message page modules | keep; do not classify as dead wrapper |
-| `src/shopping-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying shopping page modules | keep; do not classify as dead wrapper |
-| `src/settings-page-handlers.ts` | ACTIVE | directly imported by `src/page-routes.ts` | underlying settings page modules | keep; do not classify as dead wrapper |
-| `CHANGELOG_CLOUDFLARE_WAVE10.md` | HISTORICAL | documentation-only v12.35/Wave10 migration notes; exact filename has no current repository references; root README does not link it; package/CI do not consume top-level Markdown; static-asset contract scans only ts/js/mjs/html | Git history | removed in bounded W4 cleanup |
-| `WAVE31_UPDATE_README.md` | HISTORICAL | one-time Wave30→31 ZIP placement/deploy instruction; it references the Wave31 changelog, migration progress note, source snapshot paths, and migration 0008 only as update-package contents; current runtime/build/deploy ownership is in current source/config/CI and does not consume this instruction | Git history; current source/config/CI | removed in corrected Wave31/33 cleanup |
-| `MIGRATION_PROGRESS_WAVE31.md` | HISTORICAL | checked-off Wave31 implementation progress snapshot; its intentionally-retained events/event_members state was superseded by later migration 0009 and current schema/runtime | Git history; retained migrations 0008/0009 and current source/schema | removed in corrected Wave31/33 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE31.md` | HISTORICAL | documentation-only Wave31 task-only/LIFF migration notes; the remaining explicit reference was from `WAVE31_UPDATE_README.md`, which is itself a historical one-time update instruction; migration 0008 and current task/LIFF behavior remain independently represented | Git history; retained migration 0008 and current task/LIFF source/contracts | removed in corrected Wave31/33 cleanup |
-| `migrations/0008_wave31_task_only.sql` | ACTIVE/SCHEMA | current migration chain migrates legacy event-backed rows into tasks and task-linked child references, then clears legacy event_id references before later physical removal | current migration chain | keep; never delete as changelog cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE33.md` | HISTORICAL | documentation-only Wave33 legacy-event-removal/lifecycle/UI notes; physical removal remains represented by migration 0009 and current task/schema/runtime contracts | Git history; retained migration 0009 and current task/schema/contracts | removed in corrected Wave31/33 cleanup |
-| `migrations/0009_wave33_drop_legacy_events.sql` | ACTIVE/SCHEMA | current migration chain clears remaining legacy event references/indexes and physically drops event_members and events after the Wave31 task migration boundary | current migration chain | keep; never delete as changelog cleanup |
-| `WAVE37_RESIDUAL_ANALYSIS.md` … `WAVE46_RESIDUAL_ANALYSIS.md` | HISTORICAL | ten point-in-time residual-analysis snapshots recording fixes and then-current follow-up targets; all ten were actual-read on exact main before removal. Current README declares current source/migrations/config/contracts authoritative, package scripts/CI do not consume these top-level Markdown files, and exact-filename searches found no current repository references as supplemental evidence | Git history; current source/migrations/contracts and architecture maps | removed in bounded Wave37-46 residual cleanup |
-| `WAVE{47,48,49,50,52,53,54,55,56,57}_RESIDUAL_ANALYSIS.md` | HISTORICAL | ten point-in-time residual/fix-analysis snapshots covering already-landed recurrence, D1, calendar, shopping, invitation and mobile-form changes plus then-current follow-up targets; all ten were actual-read on exact main before removal. Current README declares current source/migrations/config/contracts authoritative, CI consumes executable source/assets/migrations/contracts rather than top-level Markdown, and exact-filename searches found no current repository references as supplemental evidence | Git history; current source/migrations/contracts and architecture maps | removed in bounded Wave47-57 residual cleanup |
-| `WAVE58_RESIDUAL_ANALYSIS.md` … `WAVE67_RESIDUAL_ANALYSIS.md` | HISTORICAL | ten point-in-time residual/fix-analysis snapshots covering already-landed calendar, recurrence, D1, shopping, invitation, browser-script and mobile UI changes plus then-current follow-up targets; all ten were actual-read on exact main before removal. Current README declares current source/migrations/config/contracts authoritative, CI consumes executable source/assets/migrations/contracts rather than top-level Markdown, and exact-filename searches found no current repository references as supplemental evidence | Git history; current source/migrations/contracts and architecture maps | removed in bounded Wave58-67 residual cleanup |
-| `WAVE{68,69,70,72,73,74,75,76,77,78}_RESIDUAL_ANALYSIS.md` | HISTORICAL | ten point-in-time residual/fix-analysis and production-QA snapshots covering calendar/recurrence lifecycle, events, PWA/Web Push, Family Log rollout, subject profiles and diagnostics plus then-current follow-up targets; all ten were actual-read on exact main before removal. Current README declares current main/runtime source/migrations/config/contracts authoritative and explicitly says historical Wave documentation is not authoritative; exact-filename searches found no current repository references as supplemental evidence | Git history; current source/migrations/contracts and architecture maps | removed in bounded Wave68-78 residual cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE100.md` | HISTORICAL | documentation-only 12.119.0/Wave100 operational and migration notes; Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; sole CI workflow runs npm/script checks only; static-asset contract scans ts/js/mjs/html; regression manifest contains executable checks only and does not consume this Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE101.md` | HISTORICAL | documentation-only 12.120.0/Wave101 behavior and follow-up notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; sole CI workflow runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume this Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE102.md` | HISTORICAL | documentation-only 12.121.0/Wave102 reliability/status notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; sole CI workflow runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume this Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE103.md` | HISTORICAL | documentation-only 12.122.0/Wave103 Calendar/Family AI hardening notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; sole CI workflow runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume this Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE104.md` | HISTORICAL | documentation-only 12.123.0/Wave104 Gemini/Google Home connection notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; sole CI workflow runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume this Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE105.md` | HISTORICAL | documentation-only Wave105 Family AI/Google Calendar/Google Home regression notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; CI runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume top-level Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded W4 cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE106.md` | HISTORICAL | documentation-only 12.125.0/Wave106 Family AI provider/configuration and operations notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; root README does not link it; CI runs npm/script checks only; static-asset contract scans only ts/js/mjs/html; regression suite executes manifest-defined checks and does not consume top-level Markdown; exact-filename search had no references as supplemental evidence | Git history | removed in bounded manual cleanup |
-| `CHANGELOG_CLOUDFLARE_WAVE107.md` | HISTORICAL | documentation-only Wave107 Family AI signed-write architecture/operations notes; current Worker entrypoint is `src/index.ts`; Workers assets are `./public`; CI/regression consume executable source/contracts rather than this Markdown; exact-filename search had no references as supplemental evidence; referenced migration `migrations/0035_wave107_family_ai_actions.sql` exists separately and is preserved | Git history; retained migration/current source/contracts | remove changelog only; keep migration 0035 |
-| `migrations/0035_wave107_family_ai_actions.sql` | ACTIVE/SCHEMA | current migration creates `family_ai_action_receipts` and index used by Wave107-era signed action persistence | current migration chain | keep; never delete as changelog cleanup |
-| top-level `*wave*` / Wave-era artifacts | UNKNOWN | remaining artifacts not yet reachability-audited | TBD | do not delete yet |
-| former duplicate local `asDateOffset()` helpers | canonicalized duplicate | identical ACTIVE callers and helper semantics verified before centralization | `src/timezone.ts#asDateOffset()` | keep canonical helper; no local copies |
+- root `README.md` for repository-wide development, secrets and recovery guidance;
+- `database/README.md` for schema-source rules;
+- `docs/GOOGLE_HOME_VOICE_SETUP.md` for current external voice/home setup;
+- domain ownership maps under `docs/architecture/` for current implementation boundaries;
+- `docs/import/` for actively used import instructions.
+
+Historical implementation notes belong in Git/PR history once their current guidance has been consolidated.
 
 ## Git-history principle
 
-Once a file is proven HISTORICAL or DEAD and its current behavior is represented by canonical source/contracts, repository history is the archive. Keeping every historical implementation in the working tree increases search noise and should not be the default.
+Once a file is proven HISTORICAL or DEAD and its current behavior or stable operating guidance is represented by canonical source/contracts/docs, Git history is the archive. Keeping every point-in-time implementation note in the working tree increases search noise and should not be the default.
 
-The execution guardrails for any autonomous cleanup are defined in `CLEANUP_AUTOMATION_RUNBOOK.md`.
+The execution guardrails for autonomous cleanup are defined in `CLEANUP_AUTOMATION_RUNBOOK.md`; the lane/collision policy is defined in `FIVE_WORKER_AUTONOMY.md`.

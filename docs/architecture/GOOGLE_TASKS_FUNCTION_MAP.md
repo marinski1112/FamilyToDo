@@ -2,7 +2,7 @@
 
 Verified against main `399ae858d72f16687e2727aa03663dea1e647848`.
 
-This map records the current Google Tasks runtime ownership boundaries. Historical Wave documents remain useful setup/history references, but current source, migrations and active regression contracts are authoritative.
+This map records the current Google Tasks runtime ownership boundaries. Historical Wave documents are archived in Git history; current source, migrations, configuration and active regression contracts are authoritative.
 
 ## Canonical boundaries
 
@@ -17,6 +17,24 @@ This map records the current Google Tasks runtime ownership boundaries. Historic
 | Typed inquiry envelope | `src/google-tasks-inquiry-command.ts#executeGoogleTasksInquiryCommand()` | `applyGoogleTask()` before generic marked voice command execution | revalidates active account/member tenant integrity; uses `external_google_voice_commands` as exactly-once ledger; delegates canonical visibility-aware reads, movement inquiry and push delivery without duplicating domain queries | `google-voice-inquiry-gemini-fallback-contract.mjs` plus Google integration contracts |
 | Child Journal voice delegation | `src/child-journal-google-tasks.ts#recordExternalChildJournalGoogleTasksDomain()` | marked Google Tasks voice-command path in `src/google-tasks.ts` | validates BABY/CHILD subject and bounded measurement/memo input, then writes canonical `family_logs` plus `family_log_journal_entries`; activity log marks `google_tasks_child_journal` source | Child Journal / Google integration contracts |
 | Shared credential crypto dependency | `src/google-tasks.ts` imports token encryption/decryption helpers from `src/google-calendar.ts` | OAuth/token storage/access-token refresh | implementation dependency only. Google Tasks account/list/sync ownership remains separate from Google Calendar calendar-account/projection ownership | config/integration contracts |
+
+## Operator setup (current)
+
+Google Tasks uses the OAuth callback `https://familytodo.marinski1112.workers.dev/oauth/google-tasks/callback` and requires the Google Tasks scope `https://www.googleapis.com/auth/tasks`. The redirect URI is also represented by `GOOGLE_TASKS_REDIRECT_URI` in `wrangler.jsonc`; do not invent a second callback.
+
+Credential ownership is separate from Google Home. `GOOGLE_TASKS_CLIENT_ID`, `GOOGLE_TASKS_CLIENT_SECRET` and `GOOGLE_TASKS_TOKEN_KEY` may fall back to their Google Calendar counterparts where current source permits it. Secrets and raw refresh tokens must remain server-side and must not be copied into documentation or issue comments.
+
+After authorization, each FamilyToDo member explicitly selects the single Google Tasks list used for inbound sync. Do not import every list or assume which list Google Home/Assistant chose. Create a harmless voice task on the real device when list discovery is needed, then select the observed destination list in FamilyToDo settings. FamilyToDo does not promise a particular list as the Google Home voice destination.
+
+Ordinary imported tasks are PRIVATE by default unless the linked account explicitly opts into FAMILY visibility. Google Tasks due values are date-only; time is not preserved or invented. FamilyToDo must not invent a time-of-day; Google Calendar remains the timed-event integration.
+
+## Voice bridge and Child Journal contract
+
+The voice bridge uses the official Google Home / Gemini for Home -> Google Tasks -> Google Tasks API path. FamilyToDo receives neither a voice print nor the Google account email; recorder identity is the FamilyToDo member bound to the inbound OAuth account. Ordinary Google Tasks import consumes zero Gemini inference, and bounded marked Child Journal recording also uses zero Gemini inference.
+
+Child Journal promotion is explicit: the command must include `成長日記と明示` rather than silently reclassifying an ordinary Family Log entry. Supported examples include `FT 成長日記 身長 82.5`, `FT 成長日記 体重 10.25`, and `FT 成長日記 メモ 初めて靴を履いた`. With multiple child subjects, the current marked grammar includes the subject name. Relative past time is bounded to 最大24時間前; future-time phrases are rejected for review.
+
+The Child Journal adapter reuses canonical `family_logs` and `family_log_journal_entries` persistence and the existing external command receipt boundary. It does not create a second journal store. Where the dedicated Child Journal projection is enabled, FamilyToDo -> Google Calendar remains the separate one-way calendar projection; Google Tasks itself is not a timed-event substitute.
 
 ## Persistence lineage
 
@@ -39,5 +57,5 @@ Current Google Tasks state is the result of several migrations; do not infer own
 - Google Tasks due values are date/all-day input. Do not invent a time-of-day or use this bridge as a substitute for timed Google Calendar events.
 - Child Journal recording through Google Tasks is an adapter into canonical Family Log/Journal persistence; it is not a separate journal store.
 - Google Tasks can fall back to Google Calendar OAuth credential/token-key configuration, and currently reuses calendar token crypto helpers. That code reuse does not make Google Calendar the owner of Google Tasks sync/account semantics.
-- `docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md` and `docs/GOOGLE_TASKS_VOICE_COMMANDS_WAVE116.md` describe historical setup/wave behavior. Use this map plus current source for present ownership decisions.
+- Wave115/Wave116 setup notes are historical and remain available in Git history. Use this map plus current source/configuration for present ownership and setup decisions.
 - A zero-result repository search is not proof that a source or contract is absent. Classify a component DEAD only after direct runtime/build/contract reachability evidence.

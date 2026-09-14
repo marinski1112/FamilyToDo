@@ -7,7 +7,7 @@ const webpush=fs.readFileSync('src/webpush.ts','utf8');
 const migration=fs.readFileSync('migrations/0038_wave115_google_tasks_voice_inbox.sql','utf8');
 const commandTypes=fs.readFileSync('migrations/0044_google_voice_command_types.sql','utf8');
 const shoppingAddIdempotency=fs.readFileSync('migrations/0046_google_voice_shopping_add_idempotency.sql','utf8');
-const docs=fs.readFileSync('docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md','utf8');
+const docs=fs.readFileSync('docs/architecture/GOOGLE_TASKS_FUNCTION_MAP.md','utf8');
 
 for(const value of ['HMAC','encryptRefreshToken','/users/@me/lists','updatedMin',"showCompleted:'true'","showDeleted:'true'",'OVERLAP_MS','external_etag',"'CONFLICT'","'TOMBSTONE'","'PRIVATE'",'calendar_visible','sync_lease_token','MAX_ACCOUNTS','MAX_TASKS_PER_INVOCATION'])assert.ok(tasks.includes(value),value);
 for(const value of ["type:'TASK_CREATE'","command.type==='TASK_CREATE'","command_type='TASK_CREATE'","target_type='task'",'MISSING_TASK_TITLE',"INSERT OR IGNORE INTO task_assignees(task_id,member_id)"])assert.ok(tasks.includes(value),value);
@@ -22,6 +22,6 @@ for(const value of ['export async function sendMemberWebPush','member_id=? AND f
 assert.ok(!webpush.includes('WHERE family_id=? AND enabled=1 ORDER BY id DESC LIMIT ?'),'member push helper must never fan out across a whole family');
 assert.ok(!webpush.includes("timeZone:'Asia/Tokyo'"),'Web Push transport metadata must not use family-local/JST wall clock');
 assert.ok(!webpush.includes('nowJstSql'),'legacy JST transport timestamp helper must stay removed');
-for(const value of ['voice print','time is not preserved or invented','zero Gemini','does not promise a particular list'])assert.ok(docs.includes(value),value);
+for(const value of ['Google Tasks ownership map','single Google Tasks list','date-only','PRIVATE by default','Child Journal voice delegation','Wave115/Wave116 setup notes are historical'])assert.ok(docs.includes(value),value);
 
-console.log('google-tasks-voice-contract: bounded Google Tasks sync, private projection guards, typed task/shopping creation and completion, corrected SHOPPING_ADD idempotency, family-log voice bridge, inquiry-safe member Web Push foundation with UTC transport metadata, schema uniqueness, and voice-import semantics ok');
+console.log('google-tasks-voice-contract: bounded Google Tasks sync, private projection guards, typed task/shopping creation and completion, corrected SHOPPING_ADD idempotency, family-log voice bridge, inquiry-safe member Web Push foundation with UTC transport metadata, schema uniqueness, and canonical voice-import documentation boundaries ok');

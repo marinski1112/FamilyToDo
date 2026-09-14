@@ -6,7 +6,7 @@ const domain=fs.readFileSync('src/child-journal-google-tasks.ts','utf8');
 const schema=fs.readFileSync('src/child-journal-schema.ts','utf8');
 const commandTypes=fs.readFileSync('migrations/0044_google_voice_command_types.sql','utf8');
 const bundle=fs.readFileSync('scripts/feature-contract-bundle.mjs','utf8');
-const docs=fs.readFileSync('docs/GOOGLE_TASKS_VOICE_BRIDGE_WAVE115.md','utf8');
+const docs=fs.readFileSync('docs/architecture/GOOGLE_TASKS_FUNCTION_MAP.md','utf8');
 
 for(const marker of [
   "kind:'HEIGHT'",
@@ -57,6 +57,6 @@ assert.ok(tasks.includes("subject.subjectKind==='PET'"),'Child Journal voice com
 assert.ok(commandTypes.includes("'FAMILY_LOG_RECORD'"),'Existing receipt enum must retain FAMILY_LOG_RECORD');
 assert.ok(!commandTypes.includes("'CHILD_JOURNAL_RECORD'"),'No new D1 command_type enum should be introduced for Child Journal voice');
 assert.ok(bundle.includes("['child-journal-google-tasks-voice',['node','scripts/child-journal-google-tasks-voice-contract.mjs']]"),'Google integration bundle must run Child Journal Google Tasks voice contract');
-for(const phrase of ['FT 成長日記 身長 82.5','FT 成長日記 体重 10.25','FT 成長日記 メモ 初めて靴を履いた','成長日記と明示','最大24時間前','Google Calendar'])assert.ok(docs.includes(phrase),`Google Tasks voice docs missing Child Journal boundary: ${phrase}`);
+for(const phrase of ['Child Journal voice delegation','BABY/CHILD','bounded measurement/memo input','family_logs','family_log_journal_entries','Google Calendar'])assert.ok(docs.includes(phrase),`Canonical Google Tasks docs missing Child Journal boundary: ${phrase}`);
 
 console.log('child-journal-google-tasks-voice-contract: bounded explicit journal grammar, canonical journal promotion, existing receipt idempotency, and privacy bounds ok');
