@@ -1,5 +1,5 @@
 import type {AppContext} from './app-context';
-import {calendarStampFramesForAssets} from './calendar-stamps';
+import {calendarStampFramesForAuthorizedAssets} from './calendar-stamps';
 import {calendarStampAssetUrl,calendarStampFrameUrl} from './calendar-stamp-asset-url';
 import {bodyJson,RequestBodyParseError} from './request-body';
 
@@ -25,7 +25,8 @@ export async function messageStampApi(request:Request,context:AppContext):Promis
         JOIN calendar_stamp_assets asset ON asset.id=attachment.asset_id AND asset.family_id=attachment.family_id AND asset.active=1
         WHERE attachment.family_id=? AND attachment.message_id IN (${placeholders})
         ORDER BY attachment.message_id DESC LIMIT 41`).bind(s.familyId,...ids).all<StampRow>();
-      const frameRead=await calendarStampFramesForAssets(context.env,s.familyId,s.memberId,rows.results.map(row=>Number(row.asset_id)));
+      const animatedAssetIds=rows.results.filter(row=>row.asset_kind==='ANIMATED'&&row.mime_type==='image/png').map(row=>Number(row.asset_id));
+      const frameRead=await calendarStampFramesForAuthorizedAssets(context.env,s.familyId,animatedAssetIds);
       const invalidFrameAssets=new Set(frameRead.invalidAssetIds),framesByAsset=new Map<number,typeof frameRead.frames>();
       for(const frame of frameRead.frames){const list=framesByAsset.get(frame.asset_id)||[];list.push(frame);framesByAsset.set(frame.asset_id,list);}
       const stamps=rows.results.flatMap(row=>{
