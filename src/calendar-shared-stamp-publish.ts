@@ -14,6 +14,7 @@ import {
   calendarStampManagedUploadObjectKey,
   normalizeCalendarStampStorageKey,
 } from './calendar-stamp-storage';
+import { withCalendarStampAdmission } from './calendar-stamp-global-cleanup';
 
 const PNG_SIGNATURE=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a] as const;
 const MIN_FRAMES=2;
@@ -161,7 +162,7 @@ export async function publishCalendarStampToShared(
   const existingRef=await calendarSharedStampRefForAsset(env,familyId,memberId,assetId);
   if(existingRef){
     if(existingRef.representation!=='FRAME_SEQUENCE')throw new CalendarSharedStampPublishIncompatibleError();
-    return result(assetId,existingRef.shared_stamp_id,true);
+    return withCalendarStampAdmission(env.DB,existingRef.shared_stamp_id,async()=>result(assetId,existingRef.shared_stamp_id,true));
   }
 
   const asset=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,active
@@ -180,6 +181,9 @@ export async function publishCalendarStampToShared(
   const normalizedByteSize=frames.reduce((sum,frame)=>sum+frame.bytes.byteLength,0);
   const sharedStampId=await sequenceSharedId(frames);
   const expected={sharedId:sharedStampId,width,height,normalizedByteSize};
+
+  return withCalendarStampAdmission(env.DB,sharedStampId,async (_remember,rememberAsset)=>{
+  await rememberAsset(assetId,familyId);
 
   let remote:FamilySharedStampCatalogItem|null=await client.get(sharedStampId);
   let reused=Boolean(remote);
@@ -231,4 +235,5 @@ export async function publishCalendarStampToShared(
     reused=true;
   }
   return result(assetId,sharedStampId,reused);
+  });
 }
