@@ -146,7 +146,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
         if(claim.state==='mismatch')return conversionMismatch();
         let sid=claim.targetId;
         if(!sid){
-          await ctx.env.DB.prepare("INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url,source_message_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?,?)").bind(m.family_id,name,quantity,category,memo,dueRaw||null,m.id,now,now,taskId,productUrl,id).run();
+          await ctx.env.DB.prepare("INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url,source_message_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,quantity,category,memo,dueRaw||null,m.id,now,now,taskId,productUrl,id).run();
           const created=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE family_id=? AND source_message_id=? LIMIT 1').bind(m.family_id,id).first<Row>();
           sid=Number(created?.id||0)||null;
           if(!sid)return json({ok:false,error:'買い物の変換先を確定できませんでした。'},500);
