@@ -34,8 +34,34 @@ export type StayReportEntry={kind:'STAY'|'MOVE'|'GAP'|'UNCERTAIN';from:string;to
 type InternalStayReportEntry=StayReportEntry&{knownPlaceKey?:string;unknownAnchor?:LocationPoint};
 const UNKNOWN_STAY_CLUSTER_METERS=120;
 const MAX_STAY_POINT_ACCURACY_METERS=150;
+const STAY_MERGE_GAP_MS=5*60*1000;
 const reliablePoint=(point:LocationPoint)=>Number.isFinite(point.accuracyMeters)&&Number(point.accuracyMeters)>=0&&Number(point.accuracyMeters)<=MAX_STAY_POINT_ACCURACY_METERS;
 const publicAnchor=(point:LocationPoint)=>({latitude:point.latitude,longitude:point.longitude});
+function mergeShortStayGaps(entries:InternalStayReportEntry[]):InternalStayReportEntry[]{
+  const merged:InternalStayReportEntry[]=[];
+  for(const entry of entries){
+    if(entry.kind!=='STAY'){merged.push(entry);continue;}
+    let priorIndex=merged.length-1;
+    while(priorIndex>=0&&merged[priorIndex].kind!=='STAY')priorIndex--;
+    const prior=priorIndex>=0?merged[priorIndex]:undefined;
+    if(!prior){merged.push(entry);continue;}
+    const gapMs=Date.parse(entry.from)-Date.parse(prior.to);
+    const intervening=merged.slice(priorIndex+1);
+    const shortGap=Number.isFinite(gapMs)&&gapMs>=0&&gapMs<=STAY_MERGE_GAP_MS;
+    const safeGap=intervening.every(item=>item.kind==='UNCERTAIN'||item.kind==='GAP');
+    const sameKnown=Boolean(prior.knownPlaceKey&&entry.knownPlaceKey&&prior.knownPlaceKey===entry.knownPlaceKey);
+    const sameUnknown=Boolean(!prior.knownPlaceKey&&!entry.knownPlaceKey&&prior.unknownAnchor&&entry.unknownAnchor&&locationDistance(prior.unknownAnchor,entry.unknownAnchor)<=UNKNOWN_STAY_CLUSTER_METERS);
+    if(shortGap&&safeGap&&(sameKnown||sameUnknown)){
+      const gapMinutes=Math.max(0,Math.floor(gapMs/60000));
+      merged.splice(priorIndex+1);
+      prior.to=entry.to;
+      prior.minutes+=gapMinutes+entry.minutes;
+      continue;
+    }
+    merged.push(entry);
+  }
+  return merged;
+}
 /** Observations only: never infer travel mode, street address or time outside the sampled interval. */
 export function buildLocationStayReport(points:readonly LocationPoint[],places:readonly KnownLocationPlace[]):StayReportEntry[]{
   const entries:InternalStayReportEntry[]=[];
@@ -71,5 +97,5 @@ export function buildLocationStayReport(points:readonly LocationPoint[],places:r
       entries.push({kind,from:a.recordedAt,to:b.recordedAt,minutes,place,...(kind==='MOVE'?{meters:Math.round(meters)}:{}),...(knownPlaceKey?{knownPlaceKey}:{}),...(unknownAnchor?{unknownAnchor,anchor:publicAnchor(unknownAnchor)}:{})});
     }
   }
-  return entries.map(({knownPlaceKey:_knownPlaceKey,unknownAnchor:_unknownAnchor,...entry})=>entry);
+  return mergeShortStayGaps(entries).map(({knownPlaceKey:_knownPlaceKey,unknownAnchor:_unknownAnchor,...entry})=>entry);
 }
