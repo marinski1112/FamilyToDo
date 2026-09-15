@@ -57,4 +57,3 @@ export function mountGlobalStampDeletion(host, options) {
   });
   return ()=>{disposed=true;section.remove();};
 }
-
