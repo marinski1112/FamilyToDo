@@ -51,3 +51,4 @@ const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||''
 if(/\bmessages\b/.test(appImport)) throw new Error('context API dispatcher must not import messages from app.ts');
 
 console.log('Messages retained page/API boundary contract ok');
+await import('./message-conversion-idempotency-contract.mjs');
