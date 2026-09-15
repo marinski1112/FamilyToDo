@@ -4,6 +4,8 @@ const page=fs.readFileSync('src/task-events-page.ts','utf8');
 const handlers=fs.readFileSync('src/task-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-events.js','utf8');
+const categoryUx=fs.readFileSync('public/assets/checklist-category-followup.js','utf8');
+const shell=fs.readFileSync('src/app-shell.ts','utf8');
 
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
@@ -95,4 +97,17 @@ for(const marker of [
   "moveCompletedTaskRow(el,serverCompleted)",
 ])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification and completion transport ok');
+for(const marker of [
+  "section.querySelector(':scope > .checklist-more')?.remove();",
+  "group.classList.add('category-collapsed');",
+  "toggle.textContent=collapsed?'展開':'閉じる';",
+  "button.textContent='＋ 買い物を追加';",
+  "quickForm.addEventListener('submit',syncFormCategory,true);",
+  "const pending=rows.filter(row=>!rowCompleted(row));",
+  "const completed=rows.filter(row=>rowCompleted(row));",
+  ".shopping-checklist-section input.check.toggle{-webkit-appearance:none;appearance:none;border-radius:5px!important}",
+])if(!categoryUx.includes(marker))throw new Error(`Shopping category UX marker missing: ${marker}`);
+if(categoryUx.includes('clearLegacyCategory'))throw new Error('Shopping category entry must preserve its selected category instead of clearing it');
+if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup2'))throw new Error('Shopping category UX asset revision must change when the behavior changes');
+
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, and Shopping category UX contracts ok');
