@@ -78,3 +78,10 @@ CREATE TRIGGER calendar_stamp_global_no_message_update
 BEFORE UPDATE OF asset_id ON message_stamp_attachments
 WHEN EXISTS(SELECT 1 FROM calendar_stamp_global_deleted_assets WHERE asset_id=NEW.asset_id)
 BEGIN SELECT RAISE(ABORT,'stamp permanently deleted'); END;
+CREATE TABLE calendar_stamp_delete_approvals (
+  shared_id TEXT PRIMARY KEY,
+  family_id INTEGER NOT NULL,
+  member_id INTEGER NOT NULL,
+  approval TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
