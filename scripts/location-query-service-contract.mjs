@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 const source=await readFile(new URL('../src/location-query-service.ts',import.meta.url),'utf8');
 
 assert.match(source,/implements LocationQueryService/,'D1 read layer must implement the retained provider-neutral LocationQueryService');
-assert.match(source,/const MAX_HISTORY_LIMIT=500;/,'history must retain a hard browser-safe bound');
+assert.match(source,/const MAX_HISTORY_LIMIT=1440;/,'history must retain a hard one-day candidate bound');
 assert.match(source,/const MAX_BATCH_SUBJECTS=12;/,'family batch history must retain the family-member cap');
 assert.match(source,/JOIN members subject[\s\S]*subject\.family_id=l\.family_id[\s\S]*subject\.active=1/,'latest must require an active subject in the same family');
 assert.match(source,/JOIN location_devices device[\s\S]*device\.id=l\.device_id[\s\S]*device\.family_id=l\.family_id[\s\S]*device\.member_id=l\.member_id[\s\S]*device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'latest must remain visible after permanent credential revoke while temporary sharing-off remains hidden');
@@ -33,4 +33,4 @@ assert.doesNotMatch(source,/device\.enabled=1[\s\S]{0,80}device\.revoked_at IS N
 assert.doesNotMatch(source,/SELECT \*/,'Location reads must project only fields required by the provider-neutral point contract');
 assert.doesNotMatch(source,/secret_hash|authorization|raw_payload|console\.(?:log|info|warn|error)/i,'Location query layer must not touch credentials, raw provider payloads, or logs');
 
-console.log('location-query-service-contract: revoked credentials retain accepted history; temporary share-off and family privacy boundaries remain enforced');
+console.log('location-query-service-contract: 1440-point candidate bound; revoked credentials retain accepted history and privacy boundaries remain enforced');
