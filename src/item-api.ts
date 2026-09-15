@@ -132,16 +132,6 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     await writeCategoryOrder(ctx,m.family_id,replaced);
     return json({ok:true,name:newName});
   }
-  if(action==='update_category'){
-    const id=Number(b.id||0);if(!Number.isInteger(id)||id<=0)return bad('持ち物が不正です。');
-    const category=normalizeCategory(b.category);if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
-    const current=(await ctx.env.DB.prepare(`SELECT i.id FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
-      WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')}) LIMIT 1`).bind(id,m.family_id,m.id).first()) as Row|null;
-    if(!current)return json({ok:false,error:'持ち物が見つかりません。'},404);
-    await ctx.env.DB.prepare('UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?').bind(category||null,nowJst(),id,m.family_id).run();
-    if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
-    return json({ok:true,id,category});
-  }
   if(action!=='add')return bad('未対応の操作です。');
 
   const name=String(b.name??'').trim(); const date=String(b.date??'').trim();

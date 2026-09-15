@@ -32,7 +32,6 @@ for(const sentinel of [
   "action==='category_add'",
   "action==='category_disable'",
   "action==='category_rename'",
-  "action==='update_category'",
   "const clientRequestId=String(b.client_request_id??'').trim();",
   "visibleRequestRow(ctx,m.family_id,m.id,clientRequestId)",
   "INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id)",
@@ -43,6 +42,7 @@ for(const sentinel of [
 ]){
   if(!itemApi.includes(sentinel)) throw new Error(`item API behavior sentinel missing: ${sentinel}`);
 }
+if(itemApi.includes("action==='update_category'"))throw new Error('category-only mutation must stay on the permission-checked item edit path');
 
 for(const sentinel of [
   'ALTER TABLE items ADD COLUMN category TEXT;',
