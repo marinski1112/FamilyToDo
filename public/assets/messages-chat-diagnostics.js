@@ -2,7 +2,7 @@
 'use strict';
 const script=document.currentScript,scope=String(script?.dataset.family||''),adminMode=script?.dataset.admin==='1',KEY='message-chat-one-shot-v1';
 const MODES=new Set(['stamp','dismiss']);
-const STAGES=new Set(['PAGE_READY','STAMP_FETCH_START','STAMP_FETCH_RESPONSE','STAMP_FETCH_FAILED','STAMP_DATA_READY','STAMP_RENDER_DONE','UNREAD_FOUND','UNREAD_NONE','THUMBNAIL_LOADED','AUTO_PLAY_START','TAP_PLAY_START','ANIMATION_START','ANIMATION_STATIC','FIRST_FRAME_LOADED','FIRST_FRAME_FAILED','CYCLE_1_DONE','CYCLE_2_DONE','THUMBNAIL_RESTORED','OUTSIDE_TAP','DISMISS_START','TEXT_CLEARED','BLUR_REQUESTED','FOCUS_RELEASED','TOOLS_CLOSED','STAMP_PICKER_CLOSED','SCHEDULE_CLOSED','SCHEDULE_VALUE_CLEARED','DISMISS_DONE','JS_ERROR','UNHANDLED_REJECTION','PAGEHIDE']);
+const STAGES=new Set(['PAGE_READY','STAMP_FETCH_START','STAMP_FETCH_RESPONSE','STAMP_FETCH_FAILED','STAMP_DATA_READY','STAMP_RENDER_DONE','UNREAD_FOUND','UNREAD_NONE','THUMBNAIL_LOADED','AUTO_PLAY_START','TAP_PLAY_START','ANIMATION_START','ANIMATION_STATIC','FIRST_FRAME_LOADED','FIRST_FRAME_FAILED','CYCLE_1_DONE','CYCLE_2_DONE','THUMBNAIL_RESTORED','TEXT_WAS_PRESENT','FOCUS_WAS_ACTIVE','TOOLS_WAS_OPEN','STAMP_PICKER_WAS_OPEN','SCHEDULE_WAS_OPEN','SCHEDULE_VALUE_WAS_PRESENT','OUTSIDE_TAP','DISMISS_START','TEXT_CLEARED','BLUR_REQUESTED','FOCUS_RELEASED','TOOLS_CLOSED','STAMP_PICKER_CLOSED','SCHEDULE_CLOSED','SCHEDULE_VALUE_CLEARED','DISMISS_DONE','JS_ERROR','UNHANDLED_REJECTION','PAGEHIDE']);
 const ERROR_NAMES=new Set(['TypeError','ReferenceError','SyntaxError','RangeError','SecurityError','AbortError']);
 let record=null;
 const getStorage=name=>{try{return window[name]||null;}catch{return null;}};
@@ -15,7 +15,7 @@ const normalize=v=>{
 const readStorage=storage=>{if(!storage)return null;try{const raw=storage.getItem(KEY);if(!raw)return null;const value=normalize(JSON.parse(raw));if(!value)storage.removeItem(KEY);return value;}catch{return null;}};
 const read=()=>{const a=readStorage(getStorage('sessionStorage')),b=readStorage(getStorage('localStorage'));if(!a)return b;if(!b)return a;if(a.updated!==b.updated)return a.updated>b.updated?a:b;return a.events.length>=b.events.length?a:b;};
 const writeStorage=(storage,text)=>{if(!storage)return false;try{storage.setItem(KEY,text);return true;}catch{return false;}};
-const save=()=>{if(!record)return false;try{record.updated=Date.now();const text=JSON.stringify({...record,events:safeEvents(record.events)});return writeStorage(getStorage('sessionStorage'),text)||writeStorage(getStorage('localStorage'),text);}catch{return false;}};
+const save=()=>{if(!record)return false;try{record.updated=Date.now();const text=JSON.stringify({...record,events:safeEvents(record.events)}),sessionSaved=writeStorage(getStorage('sessionStorage'),text),localSaved=writeStorage(getStorage('localStorage'),text);return sessionSaved||localSaved;}catch{return false;}};
 const mark=(stage,status,reason)=>{if(!record||!record.armed||record.expires<=Date.now()||!STAGES.has(stage)||record.events.length>=80)return;record.events.push(...safeEvents([{stage,ms:Math.min(600000,Math.max(0,Date.now()-record.started)),status,reason}]));save();};
 const clear=()=>{for(const name of ['sessionStorage','localStorage']){const storage=getStorage(name);try{storage?.removeItem(KEY);}catch{}}record=null;};
 const append=(parent,tag,text)=>{const el=document.createElement(tag);el.textContent=text;parent.append(el);return el;};
@@ -40,13 +40,16 @@ const resultLabel=r=>{
 const render=(out,r)=>{
   out.replaceChildren();
   if(!r){append(out,'p','診断記録はありません。下の診断開始を押し、伝言ページで1回だけ操作してください。');return;}
-  const box=append(out,'details','');box.open=true;
+  const has=s=>r.events.some(e=>e.stage===s),box=append(out,'details','');box.open=true;
   append(box,'summary',`${r.mode==='stamp'?'スタンプ':'画面外タップ'}：${resultLabel(r)}`);
   append(box,'p',`端末最終段階：${r.events.at(-1)?.stage||'証拠なし'} ／ 経過：${r.events.at(-1)?.ms??'—'}ms`);
   if(r.mode==='stamp'){
     const fetchStart=r.events.find(e=>e.stage==='STAMP_FETCH_START')?.ms,fetchEnd=r.events.find(e=>e.stage==='STAMP_FETCH_RESPONSE')?.ms,first=r.events.find(e=>e.stage==='FIRST_FRAME_LOADED')?.ms,auto=r.events.find(e=>e.stage==='AUTO_PLAY_START')?.ms;
     append(box,'p',`スタンプAPI：${fetchStart!=null&&fetchEnd!=null?`${Math.max(0,fetchEnd-fetchStart)}ms`:'未確認'} ／ 自動再生→初回frame：${auto!=null&&first!=null?`${Math.max(0,first-auto)}ms`:'未確認'}`);
-  }else append(box,'p','キーボード自体の可視状態は取得せず、textareaのfocus解放だけをprivacy-safeに確認します。');
+  }else{
+    const exercised=[['文字入力',has('TEXT_WAS_PRESENT')],['入力focus',has('FOCUS_WAS_ACTIVE')],['＋メニュー',has('TOOLS_WAS_OPEN')],['スタンプ一覧',has('STAMP_PICKER_WAS_OPEN')],['予約欄',has('SCHEDULE_WAS_OPEN')],['予約日時',has('SCHEDULE_VALUE_WAS_PRESENT')]].filter(([,v])=>v).map(([k])=>k);
+    append(box,'p',`今回実際に開いていた/入力されていた対象：${exercised.join('・')||'なし'}。キーボードの可視状態は取得せず、textareaのfocus解放だけを確認します。`);
+  }
   const ol=append(box,'ol','');for(const e of r.events)append(ol,'li',`${e.stage} +${e.ms}ms${e.status?' HTTP '+e.status:''}${e.reason?' '+e.reason:''}`);
   append(out,'p','保存内容は段階名・経過時間・HTTP status・例外種別だけです。伝言本文、スタンプID/URL、画像、token、位置情報は保存しません。10分で失効します。');
 };
