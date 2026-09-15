@@ -99,10 +99,9 @@ export async function withCalendarStampAdmission<T>(
       }
       // Record the exact destination before its R2 write, even if the eventual
       // asset/ref transaction fails. Active admissions delay snapshotting.
-      const result = await db.prepare(`INSERT INTO calendar_stamp_global_materializations(shared_stamp_id,object_key)
+      await db.prepare(`INSERT INTO calendar_stamp_global_materializations(shared_stamp_id,object_key)
         SELECT shared_stamp_id,? FROM calendar_stamp_global_operations WHERE operation_id=?
         ON CONFLICT DO NOTHING`).bind(key,operationId).run();
-      if (!result.success) throw new Error('stamp destination journal failed');
       if (!await db.prepare('SELECT 1 FROM calendar_stamp_global_operations WHERE operation_id=?').bind(operationId).first()) {
         throw new Error('stamp operation already ended');
       }
