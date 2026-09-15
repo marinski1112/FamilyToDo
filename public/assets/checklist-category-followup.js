@@ -50,7 +50,8 @@ const updateToggle=group=>{
   const toggle=group.querySelector(':scope > .shopping-category-title > .shopping-category-toggle');
   if(!(toggle instanceof HTMLButtonElement))return;
   const collapsed=group.classList.contains('category-collapsed');
-  toggle.textContent=collapsed?'展開':'閉じる';
+  const label=collapsed?'展開':'閉じる';
+  if(toggle.textContent!==label)toggle.textContent=label;
   toggle.setAttribute('aria-expanded',collapsed?'false':'true');
   toggle.setAttribute('aria-label',`${categoryOf(group)}を${collapsed?'展開':'閉じる'}（${rowsOf(group).length}件）`);
 };
