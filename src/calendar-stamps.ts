@@ -138,19 +138,12 @@ export async function calendarStampPlacementsForRange(
   return placements;
 }
 
-/**
- * Reads ordered PNG-frame metadata for already privacy-authorized assets.
- * Any malformed persisted row marks its whole asset invalid so the browser never
- * receives a silently truncated animation sequence.
- */
-export async function calendarStampFramesForAssets(
+async function readCalendarStampFramesForAuthorizedAssets(
   env:Env,
   familyId:number,
-  memberId:number,
   assetIds:number[],
 ):Promise<CalendarStampFrameReadResult>{
-  if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid calendar stamp scope');
-  await assertActiveMember(env,familyId,memberId);
+  if(!Number.isSafeInteger(familyId)||familyId<=0)throw new Error('invalid calendar stamp scope');
   const ids=[...new Set(assetIds.filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,MAX_ROWS);
   if(!ids.length)return {frames:[],invalidAssetIds:[]};
   const frames:CalendarStampFrame[]=[];
@@ -171,4 +164,33 @@ export async function calendarStampFramesForAssets(
     }
   }
   return {frames:frames.filter(frame=>!invalidAssetIds.has(frame.asset_id)),invalidAssetIds:[...invalidAssetIds]};
+}
+
+/**
+ * Reads ordered PNG-frame metadata after the caller has already established the
+ * active member boundary for the same family. Keep this narrow: callers that
+ * have not already authenticated the member must use calendarStampFramesForAssets.
+ */
+export async function calendarStampFramesForAuthorizedAssets(
+  env:Env,
+  familyId:number,
+  assetIds:number[],
+):Promise<CalendarStampFrameReadResult>{
+  return readCalendarStampFramesForAuthorizedAssets(env,familyId,assetIds);
+}
+
+/**
+ * Reads ordered PNG-frame metadata for already privacy-authorized assets.
+ * Any malformed persisted row marks its whole asset invalid so the browser never
+ * receives a silently truncated animation sequence.
+ */
+export async function calendarStampFramesForAssets(
+  env:Env,
+  familyId:number,
+  memberId:number,
+  assetIds:number[],
+):Promise<CalendarStampFrameReadResult>{
+  if(!Number.isSafeInteger(familyId)||familyId<=0||!Number.isSafeInteger(memberId)||memberId<=0)throw new Error('invalid calendar stamp scope');
+  await assertActiveMember(env,familyId,memberId);
+  return readCalendarStampFramesForAuthorizedAssets(env,familyId,assetIds);
 }
