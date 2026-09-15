@@ -1,5 +1,5 @@
 import { cleanupFamilySharedStamp } from './calendar-stamp-global-cleanup';
-import { authenticStampParticipant, stampDeletionTransport } from './calendar-stamp-deletion-transport';
+import { authenticStampParticipant, stampDeletionTransport, verifiedStampDeletionState } from './calendar-stamp-deletion-transport';
 import { familySharedStampRegistryConfigFromEnv } from './calendar-shared-stamp-registry';
 import { bodyJson } from './request-body';
 
@@ -29,7 +29,7 @@ export async function calendarStampDeletionInternal(request:Request,env:Env):Pro
       if (!env.MEDIA) return reply({error:'STORAGE_UNAVAILABLE'},503);
       const result=await cleanupFamilySharedStamp({db:env.DB,bucket:env.MEDIA,sharedId,
         confirmRegistryDeletion:async id=>{
-          const state=await registry(env)(`/v1/stamps/${id}/deletion`);
+          const state=verifiedStampDeletionState(await registry(env)(`/v1/stamps/${id}/deletion`),id);
           return state.sharedId===id && (state.state==='pending'||state.state==='completed');
         }});
       return reply({sharedId,...result});
@@ -63,7 +63,7 @@ export async function calendarStampGlobalDeleteAdmin(request:Request,context:any
       VALUES(?,?,?,?,unixepoch()+300) ON CONFLICT(shared_id) DO UPDATE SET family_id=excluded.family_id,
       member_id=excluded.member_id,approval=excluded.approval,expires_at=excluded.expires_at`)
       .bind(body.sharedId,familyId,memberId,approval).run();
-    const state=await remote(`/v1/stamps/${body.sharedId}`,'DELETE',approval);
+    const state=verifiedStampDeletionState(await remote(`/v1/stamps/${body.sharedId}`,'DELETE',approval),body.sharedId);
     return reply(state,state.deleted===true?200:202);
   } catch { return reply({error:'STAMP_DELETE_RETRY_REQUIRED'},503); }
 }

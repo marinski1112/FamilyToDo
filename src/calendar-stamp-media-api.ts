@@ -84,7 +84,7 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
     const objectKey=calendarStampManagedUploadObjectKey(s.familyId,referenced.storageKey);
     const object=await context.env.MEDIA.get(objectKey);
     if(!object)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
-    const headers=new Headers({'content-type':referenced.mimeType,'cache-control':'private, no-store','x-content-type-options':'nosniff'});
+    const headers=new Headers({'content-type':referenced.mimeType,'cache-control':'private, max-age=0, must-revalidate','x-content-type-options':'nosniff'});
     const etag=object.httpEtag?String(object.httpEtag):'';
     if(etag)headers.set('etag',etag);
     if(etag&&matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});

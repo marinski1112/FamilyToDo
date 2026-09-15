@@ -22,16 +22,20 @@ Implemented:
   remains pending rather than silently breaking it. Explicit reconciliation or
   preserving that other identity's copy is still needed for that edge case.
 
+Connected after the foundation:
+- Durable short-lived admin approval and authenticated cross-app cleanup endpoints.
+- Identical global-deletion UI with explicit confirmation, disabled entries,
+  pagination, bounded continuation and retry after unknown results.
+- Tombstone checks before media responses/304 and picker filtering. Media uses
+  conditional revalidation; previous downloaded/cache copies cannot be recalled.
+
 Remaining before rollout:
-- Server-verified admin approvals and cross-app cleanup/receipt endpoints.
-- Identical management UI confirmation/progress/retry controls and deleted
-  placeholders; no delete control is added by this foundation.
-- Enforce deleted-state checks in picker/media/placement read paths and clear
-  app caches. Legacy cached/downloaded image bytes cannot be remotely recalled.
-- Recovery policy for interrupted admissions and pre-migration untracked orphan
-  copies. Do not claim these have been inventoried or erased.
-- Complete manual shared Worker bundle, migration/deployment ordering, browser
-  and production verification. Existing credentials/flags/Cron remain unchanged.
+- Apply additive migrations, merge only after current-head checks, and install
+  the manual shared Worker bundle in Mitenya PR #439.
+- See that PR's shared-stamps/COMPLETE-DELETION-DEPLOYMENT.md for exact ordering.
+- Real browser/production E2E remains unverified. Interrupted admissions and
+  cross-identity file reuse stay pending until safely reconciled; old untracked
+  orphans cannot be claimed deleted without identity evidence.
 
 Validation uses actual stamp migrations with disposable SQLite and fake R2 failure
 injection, wired into the existing regression suite. No production DB or R2 data
