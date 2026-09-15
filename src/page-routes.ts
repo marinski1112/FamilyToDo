@@ -1,7 +1,7 @@
 import { loginPage, createFamilyPage, invitePage, home } from './auth-page-handlers';
 import { taskEvents, taskView, taskEdit, itemEdit } from './task-page-handlers';
 import { calendar } from './calendar-page-handler';
-import { messageNew } from './message-page-handlers';
+import { messages, messageNew } from './message-page-handlers';
 import { messagesChatPage } from './messages-chat-page';
 import { shoppingNew, shoppingEdit } from './shopping-page-handlers';
 import { locationPage } from './location-page';
@@ -22,6 +22,10 @@ import { json } from './response';
 import { settingsPwaBranding } from './settings-pwa-branding-page';
 import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
 import { settingsAiModelRouting } from './settings-ai-model-routing';
+
+// Keep the canonical messages handler import above as the retained page/API boundary;
+// the group-chat renderer is intentionally isolated so rollback stays one route change.
+void messages;
 
 export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{
   if(url.pathname==='/manifest.webmanifest') return await familyPwaManifest(request,context);
