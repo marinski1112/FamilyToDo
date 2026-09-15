@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS message_conversion_claims (
     family_id INTEGER NOT NULL,
     conversion_type TEXT NOT NULL CHECK (conversion_type IN ('shopping','task')),
     conversion_mode TEXT NOT NULL,
+    source_updated_at TEXT NOT NULL,
     target_id INTEGER NULL,
     status TEXT NOT NULL DEFAULT 'PROCESSING' CHECK (status IN ('PROCESSING','DONE')),
     lease_token TEXT NULL,
