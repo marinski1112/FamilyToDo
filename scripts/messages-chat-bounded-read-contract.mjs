@@ -50,7 +50,26 @@ for(const marker of [
 ]) if(!diagnostic.includes(marker)) throw new Error(`message chat diagnostic marker lost: ${marker}`);
 if(/fetch\s*\(|XMLHttpRequest|indexedDB|sendBeacon/.test(diagnostic))throw new Error('message chat device diagnostics must not transmit or persist outside short-lived web storage');
 if(/latitude|longitude|authorization|bearer|messageId|stampId|thumbnailUrl|fullUrl/i.test(diagnostic))throw new Error('message chat diagnostics must not capture identifiers, URLs, auth or coordinates');
+
+const stampApi=fs.readFileSync('src/message-stamp-api.ts','utf8');
+const sharedStamps=fs.readFileSync('src/calendar-stamps.ts','utf8');
+for(const marker of [
+  "import {calendarStampFramesForAuthorizedAssets} from './calendar-stamps';",
+  "const animatedAssetIds=rows.results.filter(row=>row.asset_kind==='ANIMATED'&&row.mime_type==='image/png').map(row=>Number(row.asset_id));",
+  'calendarStampFramesForAuthorizedAssets(context.env,s.familyId,animatedAssetIds)',
+]) if(!stampApi.includes(marker))throw new Error(`message stamp bounded-read optimization lost: ${marker}`);
+if(stampApi.includes('calendarStampFramesForAssets(context.env,s.familyId,s.memberId'))throw new Error('message stamp GET must not repeat the active-member D1 read inside frame lookup');
+for(const marker of [
+  'export async function calendarStampFramesForAuthorizedAssets(',
+  'return readCalendarStampFramesForAuthorizedAssets(env,familyId,assetIds);',
+  'export async function calendarStampFramesForAssets(',
+  'await assertActiveMember(env,familyId,memberId);',
+  'return readCalendarStampFramesForAuthorizedAssets(env,familyId,assetIds);',
+]) if(!sharedStamps.includes(marker))throw new Error(`shared stamp authorization boundary lost: ${marker}`);
+const legacyFrameReader=sharedStamps.slice(sharedStamps.indexOf('export async function calendarStampFramesForAssets('));
+if(!legacyFrameReader.includes('await assertActiveMember(env,familyId,memberId);'))throw new Error('general stamp frame reader must retain active-member authorization');
+
 for(const file of ['public/assets/messages-chat.js','public/assets/messages-chat-diagnostics.js']){
   const syntax=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});if(syntax.status!==0)throw new Error(syntax.stderr||`${file} syntax check failed`);
 }
-console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic contract ok');
+console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic/stamp-read contract ok');
