@@ -100,14 +100,16 @@ for(const marker of [
 for(const marker of [
   "section.querySelector(':scope > .checklist-more')?.remove();",
   "group.classList.add('category-collapsed');",
-  "toggle.textContent=collapsed?'展開':'閉じる';",
+  "const label=collapsed?'展開':'閉じる';",
+  "if(toggle.textContent!==label)toggle.textContent=label;",
   "button.textContent='＋ 買い物を追加';",
   "quickForm.addEventListener('submit',syncFormCategory,true);",
   "const pending=rows.filter(row=>!rowCompleted(row));",
   "const completed=rows.filter(row=>rowCompleted(row));",
   ".shopping-checklist-section input.check.toggle{-webkit-appearance:none;appearance:none;border-radius:5px!important}",
 ])if(!categoryUx.includes(marker))throw new Error(`Shopping category UX marker missing: ${marker}`);
+if(categoryUx.includes("toggle.textContent=collapsed?'展開':'閉じる';"))throw new Error('Shopping category observer must not unconditionally rewrite toggle textContent');
 if(categoryUx.includes('clearLegacyCategory'))throw new Error('Shopping category entry must preserve its selected category instead of clearing it');
-if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup2'))throw new Error('Shopping category UX asset revision must change when the behavior changes');
+if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup3'))throw new Error('Shopping category freeze hotfix must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, and Shopping category UX contracts ok');
