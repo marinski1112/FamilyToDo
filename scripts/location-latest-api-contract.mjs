@@ -27,13 +27,16 @@ assert.doesNotMatch(source,/navigator\.geolocation|GOOGLE_MAPS_|Routes API/i);
 assert.match(routes,/import \{ locationLatestApi \} from '\.\/location-latest-api';/);
 assert.match(routes,/url\.pathname==='\/api\/location\/latest'\) return await locationLatestApi\(request,context\)/);
 
-assert.match(history,/const HISTORY_LIMIT=500;/);
+assert.match(history,/const HISTORY_CANDIDATE_LIMIT=1440;/);
+assert.match(history,/const HISTORY_DISPLAY_LIMIT=500;/);
 assert.match(history,/const MAX_HISTORY_WINDOW_MS=31\*24\*60\*60\*1000;/);
 assert.match(history,/if\(!requester\)return fail\(401,'AUTH_REQUIRED'/);
 assert.match(history,/request\.method!=='GET'/);
 assert.match(history,/new D1LocationQueryService\(ctx\.env\.DB\)/,'raw/live history must retain provider-neutral query service');
-assert.match(history,/service\.history\(\{[\s\S]*scope:\{familyId,requesterMemberId\}[\s\S]*subjectMemberId[\s\S]*from[\s\S]*to[\s\S]*limit:HISTORY_LIMIT/);
-assert.match(history,/points:points\.map\([^\n]*point[\s\S]*latitude:point\.latitude[\s\S]*longitude:point\.longitude[\s\S]*recordedAt:point\.recordedAt/,'history responses must expose only map-required point fields');
+assert.match(history,/service\.history\(\{[\s\S]*scope:\{familyId,requesterMemberId\}[\s\S]*subjectMemberId[\s\S]*from[\s\S]*to[\s\S]*limit:HISTORY_CANDIDATE_LIMIT/);
+assert.match(history,/const displayPoints=simplifyHistoryForDisplay\(points\)/,'map response must use bounded simplified projection');
+assert.match(history,/points:displayPoints\.map\([^\n]*point[\s\S]*latitude:point\.latitude[\s\S]*longitude:point\.longitude[\s\S]*recordedAt:point\.recordedAt/,'history responses must expose only simplified map-required point fields');
+assert.match(history,/buildLocationStayReport\(points,/,'stay reporting must use the unsimplified live candidate set');
 assert.match(history,/readArchivedDay[\s\S]*location_history_archive_days/,'durable archived days may be read directly');
 assert.match(history,/location_devices d[\s\S]*d\.enabled=1[\s\S]*d\.sharing_enabled=1[\s\S]*d\.revoked_at IS NULL/,'archived Location reads must preserve current sharing/revoke gate');
 assert.match(history,/'cache-control':'no-store'/);
@@ -42,4 +45,4 @@ assert.doesNotMatch(history,/\bprovider\s*[:=]/i,'history HTTP boundary must not
 assert.match(routes,/import \{ locationHistoryApi[^}]*\} from '\.\/location-history-api';/);
 assert.match(routes,/url\.pathname==='\/api\/location\/history'\) return await locationHistoryApi\(request,context\)/);
 
-console.log('location-latest-api-contract: latest + bounded live/archive history ok');
+console.log('location-latest-api-contract: latest + 1440-candidate bounded live/archive history ok');
