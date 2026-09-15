@@ -1,7 +1,8 @@
 import { loginPage, createFamilyPage, invitePage, home } from './auth-page-handlers';
 import { taskEvents, taskView, taskEdit, itemEdit } from './task-page-handlers';
 import { calendar } from './calendar-page-handler';
-import { messages, messageNew } from './message-page-handlers';
+import { messageNew } from './message-page-handlers';
+import { messagesChatPage } from './messages-chat-page';
 import { shoppingNew, shoppingEdit } from './shopping-page-handlers';
 import { locationPage } from './location-page';
 import { familyLog } from './family-log-page-handler';
@@ -38,7 +39,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
     return await taskEvents(request,context,date);
   }
   if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));
-  if(url.pathname==='/app/messages.php') return await messages(request,context);
+  if(url.pathname==='/app/messages.php') return await messagesChatPage(request,context);
   if(url.pathname==='/app/location.php') return await locationPage(request,context,env);
   if(url.pathname==='/app/family_log.php'||url.pathname==='/app/settings_family_log.php') return await familyLog(request,context);
   if(url.pathname==='/app/child_foods.php') return await childFoodListPage(request,context);
