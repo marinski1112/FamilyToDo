@@ -53,7 +53,7 @@ for(const token of [
   "AND a.active=1 AND a.asset_kind='ANIMATED' AND a.mime_type='image/png'",
   'const ids=[...new Set(assetIds.filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,MAX_ROWS);',
   'for(let offset=0;offset<ids.length;offset+=FRAME_QUERY_CHUNK)',
-  'LIMIT ?`,
+  'LIMIT ?',
 ]) assert.ok(sharedStamps.includes(token),`shared Calendar stamp frame boundary missing: ${token}`);
 const generalReader=sharedStamps.slice(sharedStamps.indexOf('export async function calendarStampFramesForAssets('));
 assert.ok(generalReader.includes('await assertActiveMember(env,familyId,memberId);'),'general Calendar stamp frame reader must retain active-member authorization');
