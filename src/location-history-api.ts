@@ -6,7 +6,10 @@ import {constantTimeEqual} from './security';
 import { json } from './response';
 import type {LocationPoint} from './location-providers';
 
-const HISTORY_LIMIT=500;
+const HISTORY_CANDIDATE_LIMIT=1440;
+const HISTORY_DISPLAY_LIMIT=500;
+const STATIONARY_SAMPLE_MS=10*60*1000;
+const MOVEMENT_SAMPLE_METERS=30;
 const MAX_HISTORY_WINDOW_MS=31*24*60*60*1000;
 const SEARCH_LIMIT=50;
 
@@ -24,6 +27,40 @@ const dayRange=(date:string)=>{
 
 function fail(status:number,code:string,message:string):Response{
   return json({ok:false,error:message,code},status,{'cache-control':'no-store'});
+}
+
+const distanceMeters=(a:LocationPoint,b:LocationPoint):number=>{
+  const radians=(degrees:number)=>degrees*Math.PI/180;
+  const lat1=radians(a.latitude),lat2=radians(b.latitude);
+  const dLat=lat2-lat1,dLon=radians(b.longitude-a.longitude);
+  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(Math.max(0,1-h)));
+};
+
+/** Keep movement detail while collapsing stationary GPS chatter to one point per
+ * ten minutes. If a full moving day still exceeds the browser budget, retain a
+ * chronological, endpoint-preserving uniform projection. Raw accepted points
+ * remain in D1; this only shapes the response used for map drawing. */
+function simplifyHistoryForDisplay(points:readonly LocationPoint[]):LocationPoint[]{
+  if(points.length<=2)return [...points];
+  const kept:LocationPoint[]=[points[0]];
+  for(let index=1;index<points.length-1;index++){
+    const point=points[index],last=kept[kept.length-1];
+    const elapsed=Date.parse(point.recordedAt)-Date.parse(last.recordedAt);
+    if(distanceMeters(last,point)>=MOVEMENT_SAMPLE_METERS||elapsed>=STATIONARY_SAMPLE_MS)kept.push(point);
+  }
+  const last=points[points.length-1];
+  if(kept[kept.length-1]!==last)kept.push(last);
+  if(kept.length<=HISTORY_DISPLAY_LIMIT)return kept;
+  const projected:LocationPoint[]=[];
+  const lastIndex=kept.length-1;
+  for(let slot=0;slot<HISTORY_DISPLAY_LIMIT;slot++){
+    const index=Math.round(slot*lastIndex/(HISTORY_DISPLAY_LIMIT-1));
+    const point=kept[index];
+    if(projected[projected.length-1]!==point)projected.push(point);
+  }
+  if(projected[projected.length-1]!==kept[lastIndex])projected[projected.length-1]=kept[lastIndex];
+  return projected;
 }
 
 type ArchiveDayRow={route_json:string;raw_point_count:number;route_point_count:number;started_at:string;ended_at:string};
@@ -110,14 +147,15 @@ export async function locationHistoryApi(request:Request,ctx:AppContext):Promise
   }
 
   const service=new D1LocationQueryService(ctx.env.DB);
-  const points=await service.history({scope:{familyId,requesterMemberId},subjectMemberId,from,to,limit:HISTORY_LIMIT});
+  const points=await service.history({scope:{familyId,requesterMemberId},subjectMemberId,from,to,limit:HISTORY_CANDIDATE_LIMIT});
+  const displayPoints=simplifyHistoryForDisplay(points);
   let report:ReturnType<typeof buildLocationStayReport>=[],reportAvailable=true;
   try{report=buildLocationStayReport(points,await readKnownLocationPlaces(ctx.env.DB,familyId)).filter(entry=>entry.kind==='STAY');}
   catch{reportAvailable=false;}
   return json({
     ok:true,archived:false,report:report.slice(0,100),reportAvailable,reportTruncated:report.length>100,
-    memberId:subjectMemberId,...(date?{date}:{from,to}),limit:HISTORY_LIMIT,
-    points:points.map(point=>({latitude:point.latitude,longitude:point.longitude,recordedAt:point.recordedAt,...(point.accuracyMeters===undefined?{}:{accuracyMeters:point.accuracyMeters})})),
+    memberId:subjectMemberId,...(date?{date}:{from,to}),limit:HISTORY_CANDIDATE_LIMIT,displayLimit:HISTORY_DISPLAY_LIMIT,rawPointCount:points.length,
+    points:displayPoints.map(point=>({latitude:point.latitude,longitude:point.longitude,recordedAt:point.recordedAt,...(point.accuracyMeters===undefined?{}:{accuracyMeters:point.accuracyMeters})})),
   },200,{'cache-control':'no-store'});
 }
 

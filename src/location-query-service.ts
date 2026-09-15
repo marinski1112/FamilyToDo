@@ -8,7 +8,7 @@ import type {
 } from './location-providers';
 
 const DEFAULT_HISTORY_LIMIT=250;
-const MAX_HISTORY_LIMIT=500;
+const MAX_HISTORY_LIMIT=1440;
 const MAX_BATCH_SUBJECTS=12;
 
 type LocationRow=Readonly<{
@@ -58,7 +58,8 @@ const historyLimit=(value:number|undefined):number|null=>{
  * revocation stops future ingest and must not erase today's retained history.
  * History returns the newest bounded points in the requested interval,
  * re-sorted chronologically for map rendering; no unbounded raw history is
- * exposed.
+ * exposed. The hard 1440-point ceiling lets a one-day API inspect up to one
+ * candidate per minute before its browser projection is simplified.
  */
 export class D1LocationQueryService implements LocationQueryService{
   constructor(private readonly db:D1Database){}

@@ -3,6 +3,15 @@
 if(location.pathname!=='/app/location.php')return;
 
 const STORAGE_PREFIX='familytodo:location-marker-stay:';
+const STAY_BUCKETS=[
+  [3*24*60,'3日以上滞在中'],
+  [24*60,'1日以上滞在中'],
+  [6*60,'6時間以上滞在中'],
+  [3*60,'3時間以上滞在中'],
+  [60,'1時間以上滞在中'],
+  [30,'30分以上滞在中'],
+  [10,'10分以上滞在中'],
+];
 
 const memberRowByName=name=>[...document.querySelectorAll('.location-member-row')].find(row=>{
   const node=row.querySelector('.location-member-name');
@@ -25,15 +34,22 @@ const isStaying=row=>{
   return meta.includes('自宅内')||meta.includes('最終確認：🏠 自宅内')||meta.includes('に滞在中');
 };
 
-const stagedStayLabel=minutes=>{
-  if(minutes>=3*24*60)return '3日以上滞在中';
-  if(minutes>=24*60)return '1日以上滞在中';
-  if(minutes>=6*60)return '6時間以上滞在中';
-  if(minutes>=3*60)return '3時間以上滞在中';
-  if(minutes>=60)return '1時間以上滞在中';
-  if(minutes>=30)return '30分以上滞在中';
-  if(minutes>=10)return '10分以上滞在中';
+const bucketLabel=minutes=>{
+  if(!Number.isFinite(minutes)||minutes<10)return '滞在中';
+  for(const [threshold,label] of STAY_BUCKETS){if(minutes>=threshold)return label;}
   return '滞在中';
+};
+
+const signalAgeMinutes=row=>{
+  const direct=Number(row?.dataset.ageMinutes);
+  if(Number.isFinite(direct)&&direct>=0)return Math.floor(direct);
+  const meta=String(row?.querySelector('.location-member-meta')?.textContent||'');
+  const hours=meta.match(/(\d+)時間以上前/u);
+  if(hours)return Number(hours[1])*60;
+  const minutes=meta.match(/(\d+)分前/u);
+  if(minutes)return Number(minutes[1]);
+  if(meta.includes('たった今'))return 0;
+  return null;
 };
 
 const stayLabel=(row,context)=>{
@@ -47,8 +63,14 @@ const stayLabel=(row,context)=>{
     saved={context,since:now};
     try{localStorage.setItem(key,JSON.stringify(saved))}catch{}
   }
-  const minutes=Math.floor((now-Number(saved.since))/60000);
-  return stagedStayLabel(minutes);
+  let minutes=Math.floor((now-Number(saved.since))/60000);
+  // HOME is intentionally sticky when the signal goes stale. The age of the
+  // last HOME fix is therefore a safe lower bound for the displayed stay bucket.
+  if(context==='HOME'&&String(row.dataset.state||'')==='STALE'){
+    const ageMinutes=signalAgeMinutes(row);
+    if(Number.isFinite(ageMinutes)&&ageMinutes>=0)minutes=Math.max(minutes,ageMinutes);
+  }
+  return bucketLabel(minutes);
 };
 
 const activityLabel=row=>{
