@@ -36,6 +36,6 @@ export async function messagesChatPage(request:Request,ctx:AppContext):Promise<R
   <div class="chat-tools" id="chatTools"><div class="chat-tools-grid"><button type="button" id="chatStamp">スタンプ</button><button type="button" id="chatSchedule">送信予約</button><button type="button" id="chatImage" disabled aria-disabled="true">画像</button></div><div class="chat-schedule-row" id="chatScheduleRow"><input type="datetime-local" id="chatScheduleAt"><div class="chat-image-note">予約時刻までは他の家族には表示されません</div></div><div class="chat-image-note">画像メッセージは、みてにゃとのメディア保存設計を確定するまで保留しています。</div></div>
   <div class="chat-stamp-picker" id="chatStampPicker" aria-label="スタンプ"></div>
   <div class="chat-menu-backdrop" id="chatMenuBackdrop" aria-hidden="true"><div class="chat-menu" id="chatMenu"></div></div>
-  <script type="application/json" id="messagesChatPayload">${payload}</script><script src="/assets/messages-chat.js?v=${APP_VERSION}-chat3"></script>`;
+  <script type="application/json" id="messagesChatPayload">${payload}</script><script src="/assets/messages-chat-diagnostics.js?v=${APP_VERSION}-chatdiag1" data-family="${Number(m.family_id)}"></script><script src="/assets/messages-chat.js?v=${APP_VERSION}-chat3"></script>`;
   return html(layout('伝言',body,'/app/messages.php'));
 }
