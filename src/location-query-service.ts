@@ -8,7 +8,7 @@ import type {
 } from './location-providers';
 
 const DEFAULT_HISTORY_LIMIT=250;
-const MAX_HISTORY_LIMIT=500;
+const MAX_HISTORY_LIMIT=1440;
 const MAX_BATCH_SUBJECTS=12;
 
 type LocationRow=Readonly<{
@@ -56,9 +56,11 @@ const historyLimit=(value:number|undefined):number|null=>{
  * supplied family. A temporarily share-off/disabled source remains hidden, but
  * already accepted points from a permanently revoked credential remain readable:
  * revocation stops future ingest and must not erase today's retained history.
- * History returns the newest bounded points in the requested interval,
- * re-sorted chronologically for map rendering; no unbounded raw history is
- * exposed.
+ * One-day history samples at most one accepted fix per UTC minute before applying
+ * the 1440-point response bound. Dense Overland ingress therefore cannot push the
+ * morning out of a same-day stay report merely because more than 1440 raw fixes
+ * arrived later. The selected minute fixes are returned chronologically; raw
+ * accepted history remains unchanged in D1.
  */
 export class D1LocationQueryService implements LocationQueryService{
   constructor(private readonly db:D1Database){}
@@ -106,27 +108,35 @@ export class D1LocationQueryService implements LocationQueryService{
     const result=await this.db.prepare(`
       SELECT latitude,longitude,recorded_at,accuracy_meters
       FROM (
-        SELECT h.id,h.latitude,h.longitude,h.recorded_at,h.accuracy_meters
-        FROM member_location_history h
-        JOIN members subject
-          ON subject.id=h.member_id
-          AND subject.family_id=h.family_id
-          AND subject.active=1
-        JOIN location_devices device
-          ON device.id=h.device_id
-          AND device.family_id=h.family_id
-          AND device.member_id=h.member_id
-          AND (
-            device.revoked_at IS NOT NULL OR
-            (device.enabled=1 AND device.sharing_enabled=1)
-          )
-        WHERE h.family_id=? AND h.member_id=?
-          AND h.recorded_at>=? AND h.recorded_at<=?
-          AND EXISTS (
-            SELECT 1 FROM members requester
-            WHERE requester.id=? AND requester.family_id=? AND requester.active=1
-          )
-        ORDER BY h.recorded_at DESC,h.id DESC
+        SELECT id,latitude,longitude,recorded_at,accuracy_meters
+        FROM (
+          SELECT h.id,h.latitude,h.longitude,h.recorded_at,h.accuracy_meters,
+            ROW_NUMBER() OVER (
+              PARTITION BY substr(h.recorded_at,1,16)
+              ORDER BY h.recorded_at DESC,h.id DESC
+            ) AS minute_rank
+          FROM member_location_history h
+          JOIN members subject
+            ON subject.id=h.member_id
+            AND subject.family_id=h.family_id
+            AND subject.active=1
+          JOIN location_devices device
+            ON device.id=h.device_id
+            AND device.family_id=h.family_id
+            AND device.member_id=h.member_id
+            AND (
+              device.revoked_at IS NOT NULL OR
+              (device.enabled=1 AND device.sharing_enabled=1)
+            )
+          WHERE h.family_id=? AND h.member_id=?
+            AND h.recorded_at>=? AND h.recorded_at<=?
+            AND EXISTS (
+              SELECT 1 FROM members requester
+              WHERE requester.id=? AND requester.family_id=? AND requester.active=1
+            )
+        ) minute_sampled
+        WHERE minute_rank=1
+        ORDER BY recorded_at DESC,id DESC
         LIMIT ?
       ) bounded
       ORDER BY recorded_at ASC,id ASC

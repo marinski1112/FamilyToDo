@@ -13,6 +13,7 @@ for(const marker of [
   'みてにゃとのメディア保存設計を確定するまで保留',
   'data-updated-at="${esc(r.updated_at)}"',
   '/assets/messages-chat-diagnostics.js',
+  '/assets/messages-chat.js?v=${APP_VERSION}-chat5',
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
 if(/SELECT[\s\S]{0,300}FROM tasks/i.test(page)) throw new Error('messages chat must not preload tasks');
@@ -31,9 +32,15 @@ for(const marker of [
   "'CYCLE_2_DONE'",
   "diag?.mark('THUMBNAIL_RESTORED')",
   "stampTimers.set(img,setTimeout(()=>{stampTimers.delete(img);img.src=stamp.thumbnailUrl||frames[0].url;diag?.mark('THUMBNAIL_RESTORED');},duration))",
-]) if(!client.includes(marker)) throw new Error(`messages chat AI/diagnostic contract lost: ${marker}`);
+  'const firstFramePreloads=new Map();',
+  "url=String(frames[0]?.url||'')",
+  'if(frames.length<2||!url||firstFramePreloads.has(url))return;',
+  "preload.decoding='async';preload.src=url;",
+  'bubble.append(img);preloadFirstFrame(s);',
+]) if(!client.includes(marker)) throw new Error(`messages chat AI/diagnostic/preload contract lost: ${marker}`);
 if(client.includes("action:'convert_shopping',id:Number(row.dataset.messageId),name:String(row.dataset.text||'')")) throw new Error('shopping conversion must not bypass the rough-input draft');
 if(/const convertTask=async[\s\S]*?await post\('\/api\/messages',\{action:'convert_task'[\s\S]*?requireConfirmation\(draft\)/.test(client)) throw new Error('task conversion must confirm the draft before mutation');
+if(/for\s*\([^)]*frames[^)]*\)[\s\S]{0,200}new Image/.test(client))throw new Error('message stamp optimization must not preload every animation frame');
 const diagnostic=fs.readFileSync('public/assets/messages-chat-diagnostics.js','utf8');
 for(const marker of [
   "KEY='message-chat-one-shot-v1'",
@@ -72,4 +79,4 @@ if(!legacyFrameReader.includes('await assertActiveMember(env,familyId,memberId);
 for(const file of ['public/assets/messages-chat.js','public/assets/messages-chat-diagnostics.js']){
   const syntax=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});if(syntax.status!==0)throw new Error(syntax.stderr||`${file} syntax check failed`);
 }
-console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic/stamp-read contract ok');
+console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic/stamp-read/first-frame-preload contract ok');

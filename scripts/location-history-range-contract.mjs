@@ -9,7 +9,10 @@ assert.match(client,/dateMs\(value\)[\s\S]*date>today/,'future/invalid history d
 assert.match(client,/new URLSearchParams\(\{memberId:String\(memberId\),date\}\)/,'active history UI must issue one-day requests');
 assert.ok(client.includes("root.querySelector('.location-history-presets')?.setAttribute('hidden','')"),'legacy multi-day presets must stay hidden');
 assert.match(api,/const MAX_HISTORY_WINDOW_MS=31\*24\*60\*60\*1000/,'legacy rolling clients retain a bounded compatibility window');
-assert.match(api,/HISTORY_LIMIT=500/);assert.match(api,/service\.history\(/);
+assert.match(api,/HISTORY_CANDIDATE_LIMIT=1440/,'live day must admit up to one point per minute before display simplification');
+assert.match(api,/HISTORY_DISPLAY_LIMIT=500/,'browser map projection must remain bounded');
+assert.match(api,/simplifyHistoryForDisplay/,'live history must simplify stationary chatter before map projection');
+assert.match(api,/service\.history\(/);
 assert.match(api,/url\.searchParams\.get\('date'\)/,'history API must support one-day reads');
 assert.match(api,/readArchivedDay/,'older days must be able to use the durable archive');
 assert.match(map,/slice\(0,500\)/);
@@ -19,4 +22,4 @@ const overlay=page.slice(page.indexOf('<div class="location-map-head">'),page.in
 assert.ok(overlay.includes('data-location-refresh'));
 assert.doesNotMatch(overlay,/<h1>|data-location-status|表示中は|location-auto-note/);
 assert.ok(!page.includes('基盤実装済み'));
-console.log('location history: one-day UI, bounded legacy compatibility, durable archive reads and compact map overlay ok');
+console.log('location history: one-day UI, 1440 live candidates, bounded simplified map, durable archive reads and compact map overlay ok');
