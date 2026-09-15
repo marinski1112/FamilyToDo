@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const migration=fs.readFileSync('migrations/0050_message_stamp_attachments.sql','utf8');
 const api=fs.readFileSync('src/message-stamp-api.ts','utf8');
+const sharedStamps=fs.readFileSync('src/calendar-stamps.ts','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const compose=fs.readFileSync('public/assets/message-new.js','utf8');
 const messages=fs.readFileSync('public/assets/messages.js','utf8');
@@ -20,12 +21,14 @@ for(const token of [
 assert.doesNotMatch(migration,/CREATE TABLE\s+.*stamp.*asset/i,'Messages must reference the canonical Calendar stamp asset catalog rather than creating another asset catalog');
 
 for(const token of [
-  "import {calendarStampFramesForAssets} from './calendar-stamps'",
+  "import {calendarStampFramesForAuthorizedAssets} from './calendar-stamps'",
   "import {calendarStampAssetUrl,calendarStampFrameUrl} from './calendar-stamp-asset-url'",
   'export async function messageStampApi',
   'SELECT id FROM members WHERE id=? AND family_id=? AND active=1 LIMIT 1',
+  'if(!(await activeActor(context.env,s.familyId,s.memberId)))',
   'JOIN calendar_stamp_assets asset ON asset.id=attachment.asset_id AND asset.family_id=attachment.family_id AND asset.active=1',
-  'calendarStampFramesForAssets(context.env,s.familyId,s.memberId',
+  "const animatedAssetIds=rows.results.filter(row=>row.asset_kind==='ANIMATED'&&row.mime_type==='image/png').map(row=>Number(row.asset_id));",
+  'calendarStampFramesForAuthorizedAssets(context.env,s.familyId,animatedAssetIds)',
   "calendarStampAssetUrl(row,'thumbnail')",
   "calendarStampAssetUrl(row,'full')",
   'calendarStampFrameUrl(row.storage_provider,row.asset_id,frame.frame_index,frame.storage_key)',
@@ -36,6 +39,27 @@ for(const token of [
   "const text=rawText||'スタンプ'",
   "'cache-control':'private, no-store'",
 ]) assert.ok(api.includes(token),`message stamp API boundary missing: ${token}`);
+const actorCheck=api.indexOf('if(!(await activeActor(context.env,s.familyId,s.memberId)))');
+const getBranch=api.indexOf("if(request.method==='GET')",actorCheck);
+const authorizedFrameRead=api.indexOf('calendarStampFramesForAuthorizedAssets(context.env,s.familyId,animatedAssetIds)',getBranch);
+assert.ok(actorCheck>=0&&getBranch>actorCheck&&authorizedFrameRead>getBranch,'message stamp authorized frame read must remain after the active-member gate');
+assert.ok(!api.includes('calendarStampFramesForAssets(context.env,s.familyId,s.memberId'),'message stamp GET must not repeat the active-member D1 read inside frame lookup');
+
+for(const token of [
+  'async function readCalendarStampFramesForAuthorizedAssets(',
+  'export async function calendarStampFramesForAuthorizedAssets(',
+  'export async function calendarStampFramesForAssets(',
+  'await assertActiveMember(env,familyId,memberId);',
+  "AND a.active=1 AND a.asset_kind='ANIMATED' AND a.mime_type='image/png'",
+  'const ids=[...new Set(assetIds.filter(id=>Number.isSafeInteger(id)&&id>0))].slice(0,MAX_ROWS);',
+  'for(let offset=0;offset<ids.length;offset+=FRAME_QUERY_CHUNK)',
+  'LIMIT ?`,
+]) assert.ok(sharedStamps.includes(token),`shared Calendar stamp frame boundary missing: ${token}`);
+const generalReader=sharedStamps.slice(sharedStamps.indexOf('export async function calendarStampFramesForAssets('));
+assert.ok(generalReader.includes('await assertActiveMember(env,familyId,memberId);'),'general Calendar stamp frame reader must retain active-member authorization');
+const authorizedReader=sharedStamps.slice(sharedStamps.indexOf('export async function calendarStampFramesForAuthorizedAssets('),sharedStamps.indexOf('export async function calendarStampFramesForAssets('));
+assert.doesNotMatch(authorizedReader,/assertActiveMember/,'authorized helper must not silently add the duplicate member D1 read back');
+
 const projectionStart=api.indexOf('return [{messageId:Number(row.message_id)');
 const projectionEnd=projectionStart>=0?api.indexOf('}];',projectionStart):-1;
 assert.ok(projectionStart>=0&&projectionEnd>projectionStart,'message stamp projection marker missing');
@@ -86,4 +110,4 @@ assert.doesNotMatch(messages,/stamp_play|Date\.now\(\)/,'Messages stamp playback
 assert.ok(messages.includes('catch{/* stamp enhancement is optional; normal Messages stay usable */}'),'stamp read enhancement must fail closed without breaking normal Messages');
 assert.doesNotMatch(messages,/row\.querySelectorAll\('\.convert-shopping,\.convert-task,\.edit-message'\).*hidden=true/,'stamp enhancement must not create a client-only action restriction that can be bypassed while attachment state is loading');
 
-console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with bounded attachment, retryable compose, transparent cache-friendly playback and sequential-PNG semantics');
+console.log('message stamp sharing contract: Messages reuse the tenant-safe canonical Calendar stamp catalog with one active-member gate, bounded authorized frame reads, retryable compose, transparent cache-friendly playback and sequential-PNG semantics');
