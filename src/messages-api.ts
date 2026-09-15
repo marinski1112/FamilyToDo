@@ -9,6 +9,7 @@ import { buildStoredTaskRange } from './task-range-safety';
 import { validateLiffNext } from './liff-target';
 import { APP_VERSION } from './version';
 import { messageAiDraft } from './message-ai-draft';
+import { acquireMessageConversionClaim,attachMessageConversionTarget,finalizeMessageConversionClaimStatement } from './message-conversion-claim';
 
 type Row=Record<string,unknown>;
 
@@ -41,6 +42,9 @@ function csrfResponse(ctx:AppContext,token:unknown):Response|null{
   if(typeof token!=='string'||token!==ctx.session.csrfToken)return json({ok:false,error:'CSRF検証に失敗しました。',code:'FORBIDDEN'},403);
   return null;
 }
+
+const conversionBusy=()=>json({ok:false,error:'この伝言の変換処理が進行中です。少し後にもう一度開いて確認してください。'},409);
+const conversionMismatch=()=>json({ok:false,error:'伝言または変換方法が更新されています。画面を開き直して下書きを作り直してください。'},409);
 
 /** Canonical messages page/API handler retained independently from the legacy app.ts monolith. */
 export async function messages(request:Request,ctx:AppContext):Promise<Response>{
@@ -106,7 +110,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       if(action==='convert_shopping'&&msg.converted_to_shopping_id)return json({ok:true,id:Number(msg.converted_to_shopping_id),already:true});
       if(action==='convert_task'&&msg.converted_to_task_id)return json({ok:true,id:Number(msg.converted_to_task_id),already:true});
       if((typeof b.message_updated_at==='string'&&b.message_updated_at!==String(msg.updated_at||''))||(typeof b.message_original_text==='string'&&b.message_original_text!==String(msg.text||'').trim()))return json({ok:false,error:'伝言が更新されました。下書きを作り直してください。'},409);
-      const target=Number(msg.target_member_id||0)||null;
+      const target=Number(msg.target_member_id||0)||null,sourceUpdatedAt=String(msg.updated_at||'');
 
       if(action==='convert_shopping'){
         const name=String(b.name||msg.text||'').trim();
@@ -136,26 +140,52 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
           const ids=new Set(valid.results.map(x=>Number(x.id)));
           if(assignees.some(x=>!ids.has(x)))return bad('担当者に無効なメンバーが含まれています。');
         }
-        const r=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,name,quantity,category,memo,dueRaw||null,m.id,now,now,taskId,productUrl).run();
-        const sid=Number(r.meta.last_row_id);
-        if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id)));
-        await ctx.env.DB.prepare('UPDATE messages SET converted_to_shopping_id=?,updated_at=? WHERE id=? AND family_id=?').bind(sid,now,id,m.family_id).run();
+        const claim=await acquireMessageConversionClaim(ctx.env.DB,m.family_id,id,'shopping','shopping',sourceUpdatedAt);
+        if(claim.state==='done')return claim.targetId?json({ok:true,id:claim.targetId,already:true}):conversionMismatch();
+        if(claim.state==='busy')return conversionBusy();
+        if(claim.state==='mismatch')return conversionMismatch();
+        let sid=claim.targetId;
+        if(!sid){
+          await ctx.env.DB.prepare("INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url,source_message_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)").bind(m.family_id,name,quantity,category,memo,dueRaw||null,m.id,now,now,taskId,productUrl,id).run();
+          const created=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE family_id=? AND source_message_id=? LIMIT 1').bind(m.family_id,id).first<Row>();
+          sid=Number(created?.id||0)||null;
+          if(!sid)return json({ok:false,error:'買い物の変換先を確定できませんでした。'},500);
+          if(!await attachMessageConversionTarget(ctx.env.DB,m.family_id,id,'shopping',claim.token,sid))return conversionBusy();
+        }
+        const mutations=assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(sid,mid,m.family_id));
+        mutations.push(
+          ctx.env.DB.prepare('UPDATE messages SET converted_to_shopping_id=?,updated_at=? WHERE id=? AND family_id=? AND converted_to_shopping_id IS NULL').bind(sid,now,id,m.family_id),
+          finalizeMessageConversionClaimStatement(ctx.env.DB,m.family_id,id,'shopping',claim.token,sid),
+        );
+        await ctx.env.DB.batch(mutations);
         await logActivity(ctx,'CONVERTED','message',id,{to:'shopping',shopping_item_id:sid});
         return commitSession(json({ok:true,id:sid}),ctx.session,ctx.env.APP_SECRET);
       }
 
       const mode=String(b.mode||'new');
       if(mode==='existing'){
-        const taskId=Number(b.task_id||0);
-        if(!taskId)return bad('追加先のタスクを選択してください。');
+        const requestedTaskId=Number(b.task_id||0);
+        if(!requestedTaskId)return bad('追加先のタスクを選択してください。');
+        const requestedTask=await ctx.env.DB.prepare("SELECT id FROM tasks WHERE id=? AND family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(requestedTaskId,m.family_id).first<Row>();
+        if(!requestedTask)return bad('追加先のタスクが見つかりません。');
+        const claim=await acquireMessageConversionClaim(ctx.env.DB,m.family_id,id,'task','existing',sourceUpdatedAt,requestedTaskId);
+        if(claim.state==='done')return claim.targetId?json({ok:true,id:claim.targetId,mode:'existing',already:true}):conversionMismatch();
+        if(claim.state==='busy')return conversionBusy();
+        if(claim.state==='mismatch')return conversionMismatch();
+        const taskId=claim.targetId||requestedTaskId;
         const task=await ctx.env.DB.prepare("SELECT id,description FROM tasks WHERE id=? AND family_id=? AND visibility_scope='FAMILY' AND status<>'completed' AND (task_kind IS NULL OR lower(task_kind) NOT IN ('recurring','recurrence_template')) LIMIT 1").bind(taskId,m.family_id).first<Row>();
         if(!task)return bad('追加先のタスクが見つかりません。');
+        const mutations=[];
         if(b.append_message!==false&&String(b.append_message)!=='0'){
           const current=String(task.description||'').trim();
           const addition=String(msg.text||'').trim();
-          if(addition&&!current.includes(addition))await ctx.env.DB.prepare('UPDATE tasks SET description=?,updated_at=? WHERE id=? AND family_id=?').bind(current?`${current}\n\n【伝言から追加】\n${addition}`:`【伝言から追加】\n${addition}`,now,taskId,m.family_id).run();
+          if(addition&&!current.includes(addition))mutations.push(ctx.env.DB.prepare('UPDATE tasks SET description=?,updated_at=? WHERE id=? AND family_id=?').bind(current?`${current}\n\n【伝言から追加】\n${addition}`:`【伝言から追加】\n${addition}`,now,taskId,m.family_id));
         }
-        await ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(taskId,now,id,m.family_id).run();
+        mutations.push(
+          ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=? AND converted_to_task_id IS NULL').bind(taskId,now,id,m.family_id),
+          finalizeMessageConversionClaimStatement(ctx.env.DB,m.family_id,id,'task',claim.token,taskId),
+        );
+        await ctx.env.DB.batch(mutations);
         await logActivity(ctx,'CONVERTED','message',id,{to:'existing_task',task_id:taskId});
         try{await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,taskId);}catch{/* local mutation remains authoritative */}
         return commitSession(json({ok:true,id:taskId,mode:'existing'}),ctx.session,ctx.env.APP_SECRET);
@@ -199,14 +229,28 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       }
       const due=noDate?null:(endAt||startAt||`${date} 00:00:00`);
       const description=String(b.description||msg.text||'').trim()||null;
-      const r=await ctx.env.DB.prepare("INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(m.family_id,title,description,due,'pending',completionMode,m.id,now,now,startAt,endAt,String(b.location||'').trim()||null,allDay?1:0,calendarVisible,calendarColor,isEvent?'EVENT':'TASK',0,reminderAt).run();
-      const tid=Number(r.meta.last_row_id);
-      if(assignees.length)await ctx.env.DB.batch(assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(tid,mid,m.family_id)));
+      const claim=await acquireMessageConversionClaim(ctx.env.DB,m.family_id,id,'task','new',sourceUpdatedAt);
+      if(claim.state==='done')return claim.targetId?json({ok:true,id:claim.targetId,mode:'new',already:true}):conversionMismatch();
+      if(claim.state==='busy')return conversionBusy();
+      if(claim.state==='mismatch')return conversionMismatch();
+      let tid=claim.targetId;
+      if(!tid){
+        await ctx.env.DB.prepare("INSERT OR IGNORE INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,source_message_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(m.family_id,title,description,due,'pending',completionMode,m.id,now,now,startAt,endAt,String(b.location||'').trim()||null,allDay?1:0,calendarVisible,calendarColor,isEvent?'EVENT':'TASK',0,reminderAt,id).run();
+        const created=await ctx.env.DB.prepare('SELECT id FROM tasks WHERE family_id=? AND source_message_id=? LIMIT 1').bind(m.family_id,id).first<Row>();
+        tid=Number(created?.id||0)||null;
+        if(!tid)return json({ok:false,error:'タスクの変換先を確定できませんでした。'},500);
+        if(!await attachMessageConversionTarget(ctx.env.DB,m.family_id,id,'task',claim.token,tid))return conversionBusy();
+      }
+      const mutations=assignees.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(tid,mid,m.family_id));
       if(reminderAt&&assignees.length){
         const rs=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();
-        if(rs.results.length)await ctx.env.DB.batch(rs.results.map(x=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(x.id),'task_reminder','task',tid,reminderAt,'pending',`【タスク】${title}\n${description||'詳細なし'}`,now)));
+        mutations.push(...rs.results.map(x=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(x.id),'task_reminder','task',tid,reminderAt,'pending',`【タスク】${title}\n${description||'詳細なし'}`,now)));
       }
-      await ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(tid,now,id,m.family_id).run();
+      mutations.push(
+        ctx.env.DB.prepare('UPDATE messages SET converted_to_task_id=?,updated_at=? WHERE id=? AND family_id=? AND converted_to_task_id IS NULL').bind(tid,now,id,m.family_id),
+        finalizeMessageConversionClaimStatement(ctx.env.DB,m.family_id,id,'task',claim.token,tid),
+      );
+      await ctx.env.DB.batch(mutations);
       await logActivity(ctx,'CONVERTED','message',id,{to:'new_task',task_id:tid});
       try{await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,tid);}catch{/* local mutation remains authoritative */}
       return commitSession(json({ok:true,id:tid,mode:'new'}),ctx.session,ctx.env.APP_SECRET);

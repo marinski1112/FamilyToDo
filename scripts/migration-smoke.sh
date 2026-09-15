@@ -38,3 +38,10 @@ echo 'location persistence migration smoke: ok'
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='google_calendar_inbound_sync_state'")" = 1
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('google_calendar_inbound_sync_state') WHERE name IN ('family_id','calendar_id','phase','sync_token','page_token','bootstrap_since','last_synced_at','last_error','lease_token','lease_expires_at','created_at','updated_at')")" = 12
 echo 'google calendar inbound auto-sync migration smoke: ok'
+
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='message_conversion_claims'")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('shopping_items') WHERE name='source_message_id'")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='source_message_id'")" = 1
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('message_conversion_claims') WHERE name IN ('message_id','family_id','conversion_type','conversion_mode','source_updated_at','target_id','status','lease_token','lease_expires_at')")" = 9
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('idx_shopping_items_source_message','idx_tasks_source_message')")" = 2
+echo 'message conversion idempotency migration smoke: ok'
