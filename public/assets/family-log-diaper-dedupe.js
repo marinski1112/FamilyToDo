@@ -1,20 +1,27 @@
 (()=>{
 'use strict';
 if(location.pathname!=='/app/family_log.php')return;
-let payload={};
-try{payload=JSON.parse(document.getElementById('familyLogPayload')?.textContent||'{}')}catch{}
-const logs=payload.logs&&typeof payload.logs==='object'?payload.logs:{};
+
+const normalize=value=>String(value||'').replace(/\s+/g,'').trim();
+const diaperLabels=new Set(['おしっこ','うんち','両方']);
+
 const dedupe=()=>{
   document.querySelectorAll('.family-log-row[data-id]').forEach(row=>{
-    const log=logs[String(row.dataset.id||'')];
-    const type=String(log?.log_type||row.dataset.familyLogType||'').toUpperCase();
-    const detail=String(log?.detail_code||'').toUpperCase();
-    if(!['DIAPER','TOILET'].includes(type)||!['WET','DIRTY','BOTH'].includes(detail))return;
-    const value=row.querySelector('.family-log-main > .family-log-inline-value');
-    if(value instanceof HTMLElement)value.remove();
+    const titleDetail=row.querySelector('.family-log-title-detail');
+    const inlineValue=row.querySelector('.family-log-main > .family-log-inline-value');
+    if(!(titleDetail instanceof HTMLElement)||!(inlineValue instanceof HTMLElement))return;
+    const detail=normalize(titleDetail.textContent);
+    const value=normalize(inlineValue.textContent);
+    if(!diaperLabels.has(detail))return;
+    if(value===detail||diaperLabels.has(value))inlineValue.remove();
   });
 };
+
 dedupe();
 let queued=false;
-new MutationObserver(()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;dedupe()})}).observe(document.body,{childList:true,subtree:true});
+new MutationObserver(()=>{
+  if(queued)return;
+  queued=true;
+  queueMicrotask(()=>{queued=false;dedupe();});
+}).observe(document.body,{childList:true,subtree:true,characterData:true});
 })();
