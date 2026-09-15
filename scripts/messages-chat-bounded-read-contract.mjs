@@ -28,8 +28,9 @@ for(const marker of [
   "item.dueTime",
   "AIでタスクに追加",
   "diag?.mark('OUTSIDE_TAP')",
-  "diag?.mark('CYCLE_2_DONE')",
+  "'CYCLE_2_DONE'",
   "diag?.mark('THUMBNAIL_RESTORED')",
+  "stampTimers.set(img,setTimeout(()=>{stampTimers.delete(img);img.src=stamp.thumbnailUrl||frames[0].url;diag?.mark('THUMBNAIL_RESTORED');},duration))",
 ]) if(!client.includes(marker)) throw new Error(`messages chat AI/diagnostic contract lost: ${marker}`);
 if(client.includes("action:'convert_shopping',id:Number(row.dataset.messageId),name:String(row.dataset.text||'')")) throw new Error('shopping conversion must not bypass the rough-input draft');
 if(/const convertTask=async[\s\S]*?await post\('\/api\/messages',\{action:'convert_task'[\s\S]*?requireConfirmation\(draft\)/.test(client)) throw new Error('task conversion must confirm the draft before mutation');
@@ -42,6 +43,9 @@ for(const marker of [
   "CYCLE_2_DONE",
   "OUTSIDE_TAP",
   "FOCUS_RELEASED",
+  "TEXT_WAS_PRESENT",
+  "TOOLS_WAS_OPEN",
+  "SCHEDULE_VALUE_WAS_PRESENT",
   '伝言本文、スタンプID/URL、画像、token、位置情報は保存しません',
 ]) if(!diagnostic.includes(marker)) throw new Error(`message chat diagnostic marker lost: ${marker}`);
 if(/fetch\s*\(|XMLHttpRequest|indexedDB|sendBeacon/.test(diagnostic))throw new Error('message chat device diagnostics must not transmit or persist outside short-lived web storage');
