@@ -25,6 +25,17 @@ const isStaying=row=>{
   return meta.includes('自宅内')||meta.includes('最終確認：🏠 自宅内')||meta.includes('に滞在中');
 };
 
+const stagedStayLabel=minutes=>{
+  if(minutes>=3*24*60)return '3日以上滞在中';
+  if(minutes>=24*60)return '1日以上滞在中';
+  if(minutes>=6*60)return '6時間以上滞在中';
+  if(minutes>=3*60)return '3時間以上滞在中';
+  if(minutes>=60)return '1時間以上滞在中';
+  if(minutes>=30)return '30分以上滞在中';
+  if(minutes>=10)return '10分以上滞在中';
+  return '滞在中';
+};
+
 const stayLabel=(row,context)=>{
   const memberId=String(row?.dataset.memberId||'').trim();
   if(!memberId||!context)return '滞在中';
@@ -37,7 +48,7 @@ const stayLabel=(row,context)=>{
     try{localStorage.setItem(key,JSON.stringify(saved))}catch{}
   }
   const minutes=Math.floor((now-Number(saved.since))/60000);
-  return minutes>0?`${minutes}分以上滞在中`:'滞在中';
+  return stagedStayLabel(minutes);
 };
 
 const activityLabel=row=>{
