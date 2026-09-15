@@ -23,7 +23,7 @@ const validUrl=(raw:string)=>{
 };
 
 async function readCategoryOrder(ctx:any,familyId:number):Promise<string[]>{
-  const row=await ctx.env.DB.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1').bind(familyId,CATEGORY_ORDER_KEY).first<Row>();
+  const row=(await ctx.env.DB.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1').bind(familyId,CATEGORY_ORDER_KEY).first()) as Row|null;
   if(!row?.setting_value)return [];
   try{const parsed=JSON.parse(String(row.setting_value));return uniqueNames(Array.isArray(parsed)?parsed:[]);}catch{return [];}
 }
@@ -40,10 +40,10 @@ async function upsertCatalogCategory(ctx:any,familyId:number,memberId:number,nam
 }
 async function visibleRequestRow(ctx:any,familyId:number,memberId:number,requestId:string):Promise<Row|null>{
   if(!requestId)return null;
-  return await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.due_at,i.task_id
+  return (await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.due_at,i.task_id
     FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
     WHERE i.family_id=? AND i.client_request_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')}) LIMIT 1`)
-    .bind(familyId,requestId,memberId).first<Row>();
+    .bind(familyId,requestId,memberId).first()) as Row|null;
 }
 function sameRequest(row:Row,name:string,memo:string,url:string,category:string,dueDate:string|null,taskId:number|null):boolean{
   return String(row.name??'')===name
@@ -57,19 +57,21 @@ function sameRequest(row:Row,name:string,memo:string,url:string,category:string,
 async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
   const url=new URL(request.url);
   const date=String(url.searchParams.get('date')||'');
-  const [catalog,order]=await Promise.all([
-    ctx.env.DB.prepare('SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all<Row>(),
+  const [catalogResult,order]=await Promise.all([
+    ctx.env.DB.prepare('SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
     readCategoryOrder(ctx,m.family_id),
   ]);
+  const catalog=(catalogResult?.results||[]) as Row[];
   let items:Row[]=[];
   if(/^\d{4}-\d{2}-\d{2}$/.test(date)){
-    items=(await ctx.env.DB.prepare(`SELECT i.id,i.category,i.memo,i.url,i.status
+    const result=await ctx.env.DB.prepare(`SELECT i.id,i.category,i.memo,i.url,i.status
       FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
       WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')})
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
-      ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all<Row>()).results;
+      ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
+    items=(result?.results||[]) as Row[];
   }
-  return json({ok:true,categories:catalog.results.map(row=>String(row.name||'')).filter(Boolean),order,items});
+  return json({ok:true,categories:catalog.map((row:Row)=>String(row.name||'')).filter(Boolean),order,items});
 }
 
 export async function itemApi(request:Request,ctx:any):Promise<Response>{
@@ -133,8 +135,8 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
   if(action==='update_category'){
     const id=Number(b.id||0);if(!Number.isInteger(id)||id<=0)return bad('持ち物が不正です。');
     const category=normalizeCategory(b.category);if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
-    const current=await ctx.env.DB.prepare(`SELECT i.id FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
-      WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')}) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+    const current=(await ctx.env.DB.prepare(`SELECT i.id FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
+      WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')}) LIMIT 1`).bind(id,m.family_id,m.id).first()) as Row|null;
     if(!current)return json({ok:false,error:'持ち物が見つかりません。'},404);
     await ctx.env.DB.prepare('UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?').bind(category||null,nowJst(),id,m.family_id).run();
     if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
