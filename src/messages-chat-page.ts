@@ -31,11 +31,11 @@ export async function messagesChatPage(request:Request,ctx:AppContext):Promise<R
   const archive=before?'<div class="chat-archive-label">過去のメッセージ</div>':'';
   const older=hasOlder&&oldest?`<a class="chat-archive-link" href="/app/messages.php?before=${oldest}">さらに以前のメッセージ</a>`:'';
   const back=before?'<a class="chat-latest-link" href="/app/messages.php">最新のメッセージに戻る</a>':'';
-  const body=`<link rel="stylesheet" href="/assets/messages-chat.css?v=${APP_VERSION}-chat3"><main class="messages-chat-page"><header class="messages-chat-head"><h1>家族</h1><div class="sub">家族グループ</div></header>${archive}${older}<section id="chatMessages">${messages||'<div class="chat-empty">まだメッセージはありません</div>'}</section>${back}</main>
+  const body=`<link rel="stylesheet" href="/assets/messages-chat.css?v=${APP_VERSION}-chat5"><main class="messages-chat-page"><header class="messages-chat-head"><h1>家族</h1><div class="sub">家族グループ</div></header>${archive}${older}<section id="chatMessages">${messages||'<div class="chat-empty">まだメッセージはありません</div>'}</section>${back}</main>
   <form class="chat-composer" id="chatComposer"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="chat-icon-btn" type="button" id="chatPlus" aria-label="メニュー">＋</button><textarea name="text" rows="1" maxlength="5000" placeholder="メッセージ" aria-label="メッセージ"></textarea><button class="chat-send-btn" type="submit">送信</button></form>
   <div class="chat-tools" id="chatTools"><div class="chat-tools-grid"><button type="button" id="chatStamp">スタンプ</button><button type="button" id="chatSchedule">送信予約</button><button type="button" id="chatImage" disabled aria-disabled="true">画像</button></div><div class="chat-schedule-row" id="chatScheduleRow"><input type="datetime-local" id="chatScheduleAt"><div class="chat-image-note">予約時刻までは他の家族には表示されません</div></div><div class="chat-image-note">画像メッセージは、みてにゃとのメディア保存設計を確定するまで保留しています。</div></div>
   <div class="chat-stamp-picker" id="chatStampPicker" aria-label="スタンプ"></div>
   <div class="chat-menu-backdrop" id="chatMenuBackdrop" aria-hidden="true"><div class="chat-menu" id="chatMenu"></div></div>
-  <script type="application/json" id="messagesChatPayload">${payload}</script><script src="/assets/messages-chat-diagnostics.js?v=${APP_VERSION}-chatdiag1" data-family="${Number(m.family_id)}"></script><script src="/assets/messages-chat.js?v=${APP_VERSION}-chat4"></script>`;
+  <script type="application/json" id="messagesChatPayload">${payload}</script><script src="/assets/messages-chat-diagnostics.js?v=${APP_VERSION}-chatdiag1" data-family="${Number(m.family_id)}"></script><script src="/assets/messages-chat.js?v=${APP_VERSION}-chat5"></script>`;
   return html(layout('伝言',body,'/app/messages.php'));
 }
