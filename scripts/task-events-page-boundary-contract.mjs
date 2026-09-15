@@ -1,11 +1,16 @@
 import fs from 'node:fs';
+import {spawnSync} from 'node:child_process';
 
 const page=fs.readFileSync('src/task-events-page.ts','utf8');
 const handlers=fs.readFileSync('src/task-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 const categoryUx=fs.readFileSync('public/assets/checklist-category-followup.js','utf8');
+const shoppingRoot=fs.readFileSync('src/shopping-root.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
+
+const categorySyntax=spawnSync(process.execPath,['--check','public/assets/checklist-category-followup.js'],{encoding:'utf8'});
+if(categorySyntax.status!==0)throw new Error(`Shopping category UX syntax invalid: ${categorySyntax.stderr||categorySyntax.stdout}`);
 
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
@@ -99,17 +104,39 @@ for(const marker of [
 
 for(const marker of [
   "section.querySelector(':scope > .checklist-more')?.remove();",
-  "group.classList.add('category-collapsed');",
+  "section.querySelector(':scope > .section-quick-entry')?.remove();",
+  "group.classList.add('category-collapsed')",
   "const label=collapsed?'展開':'閉じる';",
   "if(toggle.textContent!==label)toggle.textContent=label;",
-  "button.textContent='＋ 買い物を追加';",
-  "quickForm.addEventListener('submit',syncFormCategory,true);",
+  "shopping-continuous-composer",
+  "shopping-continuous-name",
+  "shopping-continuous-memo",
+  "shopping-continuous-url",
+  "改行で保存して、次の項目を続けて入力できます",
+  "sessionStorage.setItem(draftKey(category),JSON.stringify(draft))",
+  "sessionStorage.getItem(draftKey(category))",
+  "fetch('/api/shopping'",
+  "action:'add',name:itemName,quantity:'1'",
+  "memo,url:productUrl",
+  "nameInput.addEventListener('keydown'",
+  "if(event.key==='Enter')",
+  "clearDraft(category);nameInput.value='';memoInput.value='';urlInput.value='';",
+  "group.insertBefore(row,footer instanceof HTMLElement?footer:null);",
+  "button.textContent='＋ 買い物を追加'",
+  "button.textContent='入力を閉じる'",
   "const pending=rows.filter(row=>!rowCompleted(row));",
   "const completed=rows.filter(row=>rowCompleted(row));",
   ".shopping-checklist-section input.check.toggle{-webkit-appearance:none;appearance:none;border-radius:5px!important}",
-])if(!categoryUx.includes(marker))throw new Error(`Shopping category UX marker missing: ${marker}`);
+])if(!categoryUx.includes(marker))throw new Error(`Shopping continuous-entry UX marker missing: ${marker}`);
 if(categoryUx.includes("toggle.textContent=collapsed?'展開':'閉じる';"))throw new Error('Shopping category observer must not unconditionally rewrite toggle textContent');
+if(categoryUx.includes('due_date'))throw new Error('Category quick-entry Shopping must remain undated so pending items persist across checklist dates');
 if(categoryUx.includes('clearLegacyCategory'))throw new Error('Shopping category entry must preserve its selected category instead of clearing it');
-if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup3'))throw new Error('Shopping category freeze hotfix must use a fresh asset revision');
+for(const marker of [
+  "const memo=String(b.memo??'').trim()||null;",
+  "const rawUrl=String(b.url??'').trim();",
+  "if(!['http:','https:'].includes(u.protocol))throw new Error();",
+  "INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url)",
+])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
+if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup4'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, and Shopping category UX contracts ok');
