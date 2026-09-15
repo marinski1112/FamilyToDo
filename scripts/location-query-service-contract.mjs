@@ -13,7 +13,8 @@ assert.match(source,/requester\.id=\? AND requester\.family_id=\? AND requester\
 assert.match(source,/JOIN location_devices device[\s\S]*device\.id=h\.device_id[\s\S]*device\.family_id=h\.family_id[\s\S]*device\.member_id=h\.member_id[\s\S]*device\.revoked_at IS NOT NULL OR[\s\S]*device\.enabled=1 AND device\.sharing_enabled=1/,'history must retain accepted points after permanent credential revoke');
 assert.match(source,/WHERE h\.family_id=\? AND h\.member_id=\?/,'history must scope raw points by family and subject');
 assert.match(source,/h\.recorded_at>=\? AND h\.recorded_at<=\?/,'history must use an explicit time window');
-assert.match(source,/ORDER BY h\.recorded_at DESC,h\.id DESC[\s\S]*LIMIT \?/,'history must select only the newest bounded points in the interval');
+assert.match(source,/ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY substr\(h\.recorded_at,1,16\)[\s\S]*ORDER BY h\.recorded_at DESC,h\.id DESC[\s\S]*AS minute_rank/,'dense history must select at most one representative fix per minute before the response bound');
+assert.match(source,/WHERE minute_rank=1[\s\S]*ORDER BY recorded_at DESC,id DESC[\s\S]*LIMIT \?/,'history must apply the 1440 bound after minute sampling so later dense ingress cannot evict earlier same-day minutes');
 assert.match(source,/ORDER BY recorded_at ASC,id ASC/,'bounded history must be returned chronologically for map rendering');
 assert.match(source,/if\(!canonicalIso\(query\.from\)\|\|!canonicalIso\(query\.to\)\|\|query\.from>query\.to\)return \[\];/,'invalid or reversed history windows must fail closed');
 
@@ -33,4 +34,4 @@ assert.doesNotMatch(source,/device\.enabled=1[\s\S]{0,80}device\.revoked_at IS N
 assert.doesNotMatch(source,/SELECT \*/,'Location reads must project only fields required by the provider-neutral point contract');
 assert.doesNotMatch(source,/secret_hash|authorization|raw_payload|console\.(?:log|info|warn|error)/i,'Location query layer must not touch credentials, raw provider payloads, or logs');
 
-console.log('location-query-service-contract: 1440-point candidate bound; revoked credentials retain accepted history and privacy boundaries remain enforced');
+console.log('location-query-service-contract: one fix/minute preserves full-day coverage within the 1440-point bound; revoke/privacy boundaries remain enforced');
