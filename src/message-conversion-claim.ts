@@ -22,7 +22,7 @@ export async function acquireMessageConversionClaim(db:D1Database,familyId:numbe
   if(!existing)return{state:'busy',targetId:null,mode};
   const storedMode=asMode(existing.conversion_mode),targetId=asTarget(existing.target_id);
   if(String(existing.status||'')==='DONE')return{state:'done',targetId,mode:storedMode};
-  if(storedMode!==mode||String(existing.source_updated_at||'')!==sourceUpdatedAt)return{state:'mismatch',targetId,mode:storedMode};
+  if(storedMode!==mode||String(existing.source_updated_at||'')!==sourceUpdatedAt||(mode==='existing'&&initialTargetId&&targetId&&targetId!==initialTargetId))return{state:'mismatch',targetId,mode:storedMode};
 
   const reclaimed=await db.prepare(`UPDATE message_conversion_claims SET lease_token=?,lease_expires_at=datetime('now','+5 minutes'),updated_at=datetime('now')
     WHERE message_id=? AND family_id=? AND conversion_type=? AND status='PROCESSING' AND source_updated_at=? AND COALESCE(lease_expires_at,'')<datetime('now')
