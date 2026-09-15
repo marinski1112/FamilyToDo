@@ -11,6 +11,7 @@ import { normalizeEventRoughInputRequest } from './task-rough-input-event-normal
 import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
 import { calendarStampReadApi } from './calendar-stamp-api';
+import { calendarStampGlobalDeleteAdmin } from './calendar-stamp-global-delete-api';
 import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';
 import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
 import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';
@@ -85,6 +86,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/calendar-stamp-placement') return await calendarStampPlacementApi(request,context);
   if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);
+  if(url.pathname==='/api/calendar-stamp-admin/global-deletion') return await calendarStampGlobalDeleteAdmin(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/shared-publish') return await calendarSharedStampPublishAdminApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/upload') return await calendarStampMediaUploadApi(request,context);

@@ -1,4 +1,5 @@
 import { json } from './response';
+import { calendarStampDeletionInternal } from './calendar-stamp-global-delete-api';
 import { makeContext } from './app-context';
 import { authHealth } from './auth-health';
 import { dbSchemaHealth, dbRuntimeHealth } from './runtime-diagnostics';
@@ -15,6 +16,7 @@ import { overlandLocationIngress } from './location-overland-ingress';
 import { privacyPage, termsPage } from './legal-pages';
 
 export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionContext,url:URL):Promise<Response|null>{
+  if(url.pathname.startsWith('/api/internal/shared-stamp-deletion/')) return calendarStampDeletionInternal(request,env);
   if(url.pathname==='/privacy') return privacyPage();
   if(url.pathname==='/terms') return termsPage();
   if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});

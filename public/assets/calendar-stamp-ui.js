@@ -18,6 +18,11 @@ try{
   const viewerImage=viewer.querySelector('.calendar-stamp-viewer-image'),viewerSave=viewer.querySelector('.calendar-stamp-viewer-save'),viewerDelete=viewer.querySelector('.calendar-stamp-viewer-delete'),viewerDate=viewer.querySelector('.calendar-stamp-viewer-date'),viewerScope=viewer.querySelector('.calendar-stamp-viewer-scope'),viewerSort=viewer.querySelector('.calendar-stamp-viewer-sort'),viewerStatus=viewer.querySelector('.calendar-stamp-viewer-status');
   const reducedMotion=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   let viewerTimer=0,viewerRun=0,currentViewerStamp=null,deleting=false,updating=false;
+  viewerImage?.addEventListener('error',()=>{
+    viewerRun+=1;clearTimeout(viewerTimer);viewerTimer=0;
+    viewerImage.removeAttribute('src');viewerImage.alt='スタンプ画像なし';
+    if(viewerStatus)viewerStatus.textContent='画像は削除済み、または読み込めません。配置の履歴は残っています。';
+  });
   const closeViewer=()=>{if(deleting||updating)return;viewerRun+=1;clearTimeout(viewerTimer);viewerTimer=0;currentViewerStamp=null;viewer.classList.remove('open');if(viewerImage)viewerImage.removeAttribute('src');if(viewerStatus)viewerStatus.textContent='';};
   const normalizedFrames=stamp=>Array.isArray(stamp?.frames)?stamp.frames.map(frame=>({url:safeAssetPath(frame?.url),durationMs:Number(frame?.durationMs)})).filter(frame=>frame.url&&Number.isInteger(frame.durationMs)&&frame.durationMs>=40&&frame.durationMs<=2000):[];
   const setViewerControls=stamp=>{const visibilityScope=String(stamp?.visibilityScope||''),sortOrder=Number(stamp?.sortOrder);if(viewerDate instanceof HTMLInputElement)viewerDate.value=safeDate(stamp?.date)?String(stamp.date):'';if(viewerScope instanceof HTMLSelectElement)viewerScope.value=['FAMILY','PRIVATE'].includes(visibilityScope)?visibilityScope:'FAMILY';if(viewerSort instanceof HTMLInputElement)viewerSort.value=Number.isSafeInteger(sortOrder)?String(sortOrder):'0';};

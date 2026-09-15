@@ -78,10 +78,13 @@ export async function calendarStampMediaReadApi(request:Request,context:AppConte
   try{
     const referenced=await referencedUploadKey(context.env,s.familyId,assetId,url);
     if(!referenced)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
+    if(await context.env.DB.prepare('SELECT 1 FROM calendar_stamp_global_deleted_assets WHERE asset_id=? AND family_id=?').bind(assetId,s.familyId).first()) {
+      return json({ok:false,error:'STAMP_DELETED'},410,{'cache-control':'private, no-store'});
+    }
     const objectKey=calendarStampManagedUploadObjectKey(s.familyId,referenced.storageKey);
     const object=await context.env.MEDIA.get(objectKey);
     if(!object)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
-    const headers=new Headers({'content-type':referenced.mimeType,'cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
+    const headers=new Headers({'content-type':referenced.mimeType,'cache-control':'private, max-age=0, must-revalidate','x-content-type-options':'nosniff'});
     const etag=object.httpEtag?String(object.httpEtag):'';
     if(etag)headers.set('etag',etag);
     if(etag&&matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});
