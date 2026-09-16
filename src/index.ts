@@ -1,4 +1,4 @@
-import {redeemPhotoTransfer} from './photo-transfer-api';
+import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupLocationArrivals} from './location-arrival-push';
 import {archiveLocationHistory} from './location-history-archive';
 import {generateFamilyDailyJournals} from './family-daily-journal';
@@ -27,6 +27,7 @@ export default {
     const url=new URL(request.url);
     try{
       if(url.pathname==='/api/photo-transfer/redeem')return redeemPhotoTransfer(request,env);
+      if(url.pathname==='/api/photo-transfer/consume')return consumePhotoTransferRequest(request,env);
       const publicResponse=await dispatchPublicRoute(request,env,ctx,url);
       if(publicResponse) return publicResponse;
       const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);
