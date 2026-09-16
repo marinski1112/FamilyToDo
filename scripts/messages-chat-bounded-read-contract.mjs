@@ -9,15 +9,15 @@ for(const marker of [
   "rows.results.slice(0,PAGE_SIZE).reverse()",
   'さらに以前のメッセージ',
   '最新のメッセージに戻る',
-  'id="chatImage" disabled',
-  'みてにゃとのメディア保存設計を確定するまで保留',
+  'id="chatImage"',
+  '/assets/message-photo-upload.js',
   'data-updated-at="${esc(r.updated_at)}"',
   '/assets/messages-chat-diagnostics.js',
   '/assets/messages-chat.js?v=${APP_VERSION}-chat5',
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
 if(/SELECT[\s\S]{0,300}FROM tasks/i.test(page)) throw new Error('messages chat must not preload tasks');
-if(/MEDIA\.(put|get|delete)/.test(page)) throw new Error('message image storage must remain deferred until Mitenya media design is settled');
+if(/MEDIA\.(put|get|delete)/.test(page)) throw new Error('message page must not access R2 directly');
 const client=fs.readFileSync('public/assets/messages-chat.js','utf8');
 for(const marker of [
   "post('/api/task-rough-input'",
@@ -80,3 +80,8 @@ for(const file of ['public/assets/messages-chat.js','public/assets/messages-chat
   const syntax=spawnSync(process.execPath,['--check',file],{encoding:'utf8'});if(syntax.status!==0)throw new Error(syntax.stderr||`${file} syntax check failed`);
 }
 console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic/stamp-read/first-frame-preload contract ok');
+await import('./message-photos-contract.mjs');
+
+await import('./photo-transfer-contract.mjs');
+
+await import('./photo-share-ui-contract.mjs');

@@ -1,4 +1,7 @@
+import {mintPhotoTransfer} from './photo-transfer-api';
 import type { AppContext } from './app-context';
+import { messagePhotoApi } from './message-photo-api';
+import { drainDeletedMessagePhotos } from './message-photo-service';
 import { layout } from './app-shell';
 import { logActivity } from './activity-log';
 import { normalizeCalendarColor } from './calendar-colors';
@@ -50,6 +53,8 @@ const conversionMismatch=()=>json({ok:false,error:'伝言または変換方法�
 export async function messages(request:Request,ctx:AppContext):Promise<Response>{
   const m=ctx.member;
   if(!m)return authRequiredResponse(ctx);
+  if(new URL(request.url).searchParams.has('photo_transfer'))return mintPhotoTransfer(request,ctx);
+  if(new URL(request.url).searchParams.has('photo'))return messagePhotoApi(request,ctx);
 
   if(request.method==='POST'){
     const parsed=await requireBody(request);
@@ -72,6 +77,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
         ctx.env.DB.prepare('DELETE FROM messages WHERE id=? AND family_id=?').bind(id,m.family_id),
       ]);
       await logActivity(ctx,'DELETED','message',id);
+      await drainDeletedMessagePhotos(ctx.env.DB,ctx.env.MEDIA,m.family_id).catch(()=>{});
       return json({ok:true});
     }
 

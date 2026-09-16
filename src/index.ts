@@ -1,3 +1,4 @@
+import {redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupLocationArrivals} from './location-arrival-push';
 import {archiveLocationHistory} from './location-history-archive';
 import {generateFamilyDailyJournals} from './family-daily-journal';
@@ -25,6 +26,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/api/photo-transfer/redeem')return redeemPhotoTransfer(request,env);
       const publicResponse=await dispatchPublicRoute(request,env,ctx,url);
       if(publicResponse) return publicResponse;
       const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);
