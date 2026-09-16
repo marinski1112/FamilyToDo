@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const api=fs.readFileSync('src/family-log-media-api.ts','utf8');
+const client=fs.readFileSync('public/assets/family-log-baby-food-media.js','utf8');
 const routes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const boundary=fs.readFileSync('src/family-log-mutation-boundary.ts','utf8');
 const importBoundary=fs.readFileSync('src/family-log-import-media-boundary.ts','utf8');
@@ -19,6 +20,8 @@ const checks=[
   [api.includes('families/${s.familyId}/family-log/subjects/${Number(parent.subject_id)}/logs/${logId}/'),'tenant/subject/log R2 namespace is missing'],
   [api.includes("url:`/api/family-log-media?media=${Number(row.id)}`")&&!api.includes('storageKey:String(row.storage_key)'),'public projection must use authenticated proxy URL and hide storage key'],
   [api.includes("JOIN family_logs l ON l.id=m.log_id AND l.family_id=m.family_id AND l.subject_id=m.subject_id"),'media reads must retain parent family/subject scope'],
+  [client.includes('exifEpoch')&&client.includes('file.slice(0,Math.min(file.size,512*1024))')&&client.includes("headers['x-photo-captured-at']=String(capturedAt)"),'journal photo client must preserve bounded pre-resize EXIF capture date'],
+  [api.includes("request.headers.get('x-photo-captured-at')")&&api.includes('customMetadata:{capturedAt:String(capturedAt)}')&&api.includes("headers.set('x-photo-captured-at',String(capturedAt))"),'journal capture date must round-trip through private R2 custom metadata'],
   [boundary.includes("action==='delete'")&&boundary.includes('cleanupFamilyLogMediaForLog'),'Family Log delete lifecycle cleanup hook is missing'],
   [boundary.includes("action==='save'")&&boundary.includes('reconcileFamilyLogMediaForLog'),'Family Log edit lifecycle reconciliation hook is missing'],
   [boundary.includes("action==='subject_update'")&&boundary.includes("UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND subject_id=?")&&boundary.includes('drainPendingFamilyLogMedia'),'subject-kind changes must explicitly mark and drain affected media without relying on D1 triggers'],
