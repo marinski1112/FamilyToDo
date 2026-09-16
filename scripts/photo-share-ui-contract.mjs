@@ -12,7 +12,7 @@ class Element {
  getBoundingClientRect(){return {left:0,top:0,right:400,bottom:400};}
 }
 function fixture(){const body=new Element('body');let resolve,calls=[];const payload={textContent:JSON.stringify({csrf:'test-session'})};
- const context={document:{body,createElement:tag=>new Element(tag),getElementById:id=>id==='messagesChatPayload'?payload:null,querySelectorAll:()=>[]},window:{},URL,Error,JSON,Number,Date,
+ const context={document:{body,createElement:tag=>new Element(tag),getElementById:id=>id==='messagesChatPayload'?payload:null,querySelectorAll:()=>[],addEventListener:()=>{},activeElement:null},window:{addEventListener:()=>{}},navigator:{},URL,Error,JSON,Number,Date,
  fetch:(url,init)=>{calls.push({url,init});return new Promise(r=>{resolve=r;});}};
  vm.runInNewContext(source,context);const opener=new Element('button');context.window.openMitenyaPhotoShare('message',42,opener);
  const dialog=body.children[0],caption=dialog.children[2].children[0],next=dialog.children[4];
