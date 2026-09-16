@@ -17,6 +17,7 @@ function scope(context:any):{familyId:number;memberId:number}|null{
 
 function adminError(error:unknown):Response{
   const message=String((error as {message?:unknown})?.message||'');
+  if(message.includes('stamp permanently deleted'))return json({ok:false,error:'STAMP_DELETED'},410);
   if(message.includes('admin required'))return json({ok:false,error:'ADMIN_REQUIRED'},403);
   if(message.startsWith('invalid '))return json({ok:false,error:'INVALID_REQUEST'},400);
   return json({ok:false,error:'STAMP_ADMIN_FAILED'},500);
@@ -47,6 +48,12 @@ async function sharedPublishProjection(context:any,familyId:number,assetIds:numb
     // and publication stays hidden/fail-closed until the projection table exists.
     return {ready:false,published:new Set()};
   }
+}
+
+async function globallyDeletedAsset(env:Env,familyId:number,assetId:number):Promise<boolean>{
+  const row=await env.DB.prepare(`SELECT 1 FROM calendar_stamp_global_deleted_assets
+    WHERE asset_id=? AND family_id=? LIMIT 1`).bind(assetId,familyId).first();
+  return Boolean(row);
 }
 
 export async function calendarStampAdminAssetsApi(request:Request,context:any):Promise<Response>{
@@ -85,6 +92,7 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
   const assetId=Number(body.assetId),active=body.active;
   if(!Number.isSafeInteger(assetId)||assetId<=0||typeof active!=='boolean')return json({ok:false,error:'INVALID_REQUEST'},400);
   try{
+    if(await globallyDeletedAsset(context.env,s.familyId,assetId))return json({ok:false,error:'STAMP_DELETED'},410);
     const changed=await setCalendarStampAssetActive(context.env,s.familyId,s.memberId,assetId,active);
     return changed?json({ok:true,assetId,active}):json({ok:false,error:'ASSET_NOT_FOUND'},404);
   }catch(error){return adminError(error);}
