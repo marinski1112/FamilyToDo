@@ -6,6 +6,24 @@
 -- cleanup batch to remove the stamp master itself.
 DROP TRIGGER IF EXISTS calendar_stamp_global_keep_asset_history;
 
+-- A cascaded message-photo purge must not retain the photo row (which contains
+-- member, digest, MIME, size and object metadata), but removing it entirely would
+-- let a delayed retry recreate the deleted post under the same upload identity.
+-- Keep only the opaque client-generated upload ID as a replay guard. It has no
+-- shared-stamp ID, object key or user content attached to it.
+CREATE TABLE IF NOT EXISTS message_photo_replay_guards (
+  upload_id TEXT PRIMARY KEY
+);
+
+CREATE TRIGGER IF NOT EXISTS message_photo_replay_guard_insert
+BEFORE INSERT ON message_photos
+WHEN EXISTS(
+  SELECT 1 FROM message_photo_replay_guards g WHERE g.upload_id=NEW.upload_id
+)
+BEGIN
+  SELECT RAISE(ABORT,'photo upload deleted');
+END;
+
 -- Photo-transfer capabilities are source-bound. Deleting a message must erase
 -- capabilities that can no longer be redeemed, including message deletion
 -- initiated by shared-stamp cascade cleanup rather than the normal message API.
