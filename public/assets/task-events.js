@@ -79,4 +79,18 @@
     script.async=true;
     document.head.append(script);
   }
+  if(!document.getElementById('belongingsReusableSetStyle')){
+    const link=document.createElement('link');
+    link.id='belongingsReusableSetStyle';
+    link.rel='stylesheet';
+    link.href='/assets/checklist-belongings-reusable-sets.css?v=belongings-set1';
+    document.head.append(link);
+  }
+  if(!document.getElementById('belongingsReusableSetScript')){
+    const script=document.createElement('script');
+    script.id='belongingsReusableSetScript';
+    script.src='/assets/checklist-belongings-reusable-sets.js?v=belongings-set1';
+    script.async=true;
+    document.head.append(script);
+  }
 })();
