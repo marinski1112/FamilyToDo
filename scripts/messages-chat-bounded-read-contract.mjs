@@ -13,7 +13,7 @@ for(const marker of [
   '/assets/message-photo-upload.js',
   'data-updated-at="${esc(r.updated_at)}"',
   '/assets/messages-chat-diagnostics.js',
-  '/assets/messages-chat.js?v=${APP_VERSION}-chat5',
+  '/assets/messages-chat.js?v=${APP_VERSION}-chat6',
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
 if(/SELECT[\s\S]{0,300}FROM tasks/i.test(page)) throw new Error('messages chat must not preload tasks');
