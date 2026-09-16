@@ -54,20 +54,22 @@ function journalTarget(target){
 }
 let pressTimer=0,pressX=0,pressY=0,pressRow=null;
 const stopPress=()=>{if(pressTimer)clearTimeout(pressTimer);pressTimer=0;pressRow=null;};
-document.addEventListener('pointerdown',e=>{
- const target=journalTarget(e.target);if(!target||e.button!==0)return;
- stopPress();pressX=e.clientX;pressY=e.clientY;pressRow=target.row;
- pressTimer=setTimeout(()=>{pressTimer=0;suppressRow=target.row;suppressUntil=Date.now()+1200;navigator.vibrate?.(20);openJournalMenu(target.row,target.id,target.image);},600);
-});
-document.addEventListener('pointermove',e=>{if(pressTimer&&Math.hypot(e.clientX-pressX,e.clientY-pressY)>10)stopPress();},{passive:true});
-for(const name of ['pointerup','pointercancel'])document.addEventListener(name,stopPress,{passive:true});
-document.addEventListener('click',e=>{if(Date.now()<suppressUntil&&suppressRow&&e.target instanceof Node&&suppressRow.contains(e.target)){suppressUntil=0;suppressRow=null;e.preventDefault();e.stopImmediatePropagation();}},true);
-document.addEventListener('contextmenu',e=>{const target=journalTarget(e.target);if(!target)return;e.preventDefault();openJournalMenu(target.row,target.id,target.image);});
-document.addEventListener('keydown',e=>{
- if(!(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')))return;
- const focused=document.activeElement;if(!(focused instanceof Element))return;
- const row=focused.closest('[data-mitenya-log]');if(!row)return;const id=Number(row.getAttribute('data-mitenya-log'));if(!Number.isSafeInteger(id)||id<1)return;
- e.preventDefault();openJournalMenu(row,id,focused);
-});
-window.addEventListener('pagehide',()=>{stopPress();closeActionMenu();if(dialog?.open)dialog.close();},{once:true});
+if(typeof document.addEventListener==='function'){
+ document.addEventListener('pointerdown',e=>{
+  const target=journalTarget(e.target);if(!target||e.button!==0)return;
+  stopPress();pressX=e.clientX;pressY=e.clientY;pressRow=target.row;
+  pressTimer=setTimeout(()=>{pressTimer=0;suppressRow=target.row;suppressUntil=Date.now()+1200;navigator.vibrate?.(20);openJournalMenu(target.row,target.id,target.image);},600);
+ });
+ document.addEventListener('pointermove',e=>{if(pressTimer&&Math.hypot(e.clientX-pressX,e.clientY-pressY)>10)stopPress();},{passive:true});
+ for(const name of ['pointerup','pointercancel'])document.addEventListener(name,stopPress,{passive:true});
+ document.addEventListener('click',e=>{if(Date.now()<suppressUntil&&suppressRow&&e.target instanceof Node&&suppressRow.contains(e.target)){suppressUntil=0;suppressRow=null;e.preventDefault();e.stopImmediatePropagation();}},true);
+ document.addEventListener('contextmenu',e=>{const target=journalTarget(e.target);if(!target)return;e.preventDefault();openJournalMenu(target.row,target.id,target.image);});
+ document.addEventListener('keydown',e=>{
+  if(!(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')))return;
+  const focused=document.activeElement;if(!(focused instanceof Element))return;
+  const row=focused.closest('[data-mitenya-log]');if(!row)return;const id=Number(row.getAttribute('data-mitenya-log'));if(!Number.isSafeInteger(id)||id<1)return;
+  e.preventDefault();openJournalMenu(row,id,focused);
+ });
+}
+if(typeof window.addEventListener==='function')window.addEventListener('pagehide',()=>{stopPress();closeActionMenu();if(dialog?.open)dialog.close();},{once:true});
 })();
