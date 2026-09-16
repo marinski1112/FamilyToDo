@@ -64,7 +64,7 @@ for(const token of [
 ]) assert.ok(media.includes(token),`R2 stamp media transport missing: ${token}`);
 assert.match(media,/frame\.family_id=\?[\s\S]*frame\.asset_id=\?[\s\S]*asset\.active=1[\s\S]*asset\.storage_provider='UPLOAD'/,'frame reads must be tenant-scoped and limited to active UPLOAD assets');
 assert.match(media,/WHERE id=\? AND family_id=\? AND active=1 AND storage_provider='UPLOAD'/,'asset reads must be tenant-scoped and limited to active UPLOAD assets');
-assert.match(media,/cache-control':'private, max-age=300'[\s\S]*const etag=object\.httpEtag\?String\(object\.httpEtag\):''[\s\S]*headers\.set\('etag',etag\)[\s\S]*matchesIfNoneMatch\(request\.headers\.get\('if-none-match'\),etag\)[\s\S]*new Response\(null,\{status:304,headers\}\)/,'private stamp media must use the HTTP-formatted R2 ETag so normal quoted browser validators can return 304 without sending PNG bytes again');
+assert.match(media,/cache-control':'private, max-age=0, must-revalidate'[\s\S]*const etag=object\.httpEtag\?String\(object\.httpEtag\):''[\s\S]*headers\.set\('etag',etag\)[\s\S]*matchesIfNoneMatch\(request\.headers\.get\('if-none-match'\),etag\)[\s\S]*new Response\(null,\{status:304,headers\}\)/,'private stamp media must use the HTTP-formatted R2 ETag so normal quoted browser validators can return 304 without sending PNG bytes again');
 const authIndex=media.indexOf('await activeMember(context.env,s.familyId,s.memberId)');
 const familyLookupIndex=media.indexOf('await referencedUploadKey(context.env,s.familyId,assetId,url)');
 const objectReadIndex=media.indexOf('await context.env.MEDIA.get(objectKey)');

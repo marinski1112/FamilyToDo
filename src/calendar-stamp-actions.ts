@@ -102,6 +102,7 @@ export async function calendarStampAssetsForPicker(env:Env,familyId:number,membe
   const rows=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,storage_key,thumbnail_storage_key,width,height
     FROM calendar_stamp_assets
     WHERE family_id=? AND active=1
+      AND NOT EXISTS(SELECT 1 FROM calendar_stamp_global_deleted_assets deleted WHERE deleted.asset_id=calendar_stamp_assets.id)
     ORDER BY id
     LIMIT ?`).bind(familyId,boundedLimit).all<CalendarStampAssetOption>();
   return rows.results;
