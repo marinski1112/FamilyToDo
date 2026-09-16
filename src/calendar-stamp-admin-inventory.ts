@@ -31,8 +31,10 @@ async function assertActiveAdmin(env:Env,familyId:number,memberId:number):Promis
 /**
  * Bounded admin inventory for future settings UI. Unlike the ordinary picker,
  * this intentionally includes soft-disabled assets so they can be re-enabled.
- * Creator/member identity and placement/private data are never selected.
- * Pass the final row's {active,id} as cursor to continue in stable keyset order.
+ * Permanently deleted assets are tombstoned and must not expose reversible
+ * active-state controls. Creator/member identity and placement/private data are
+ * never selected. Pass the final row's {active,id} as cursor to continue in
+ * stable keyset order.
  */
 export async function calendarStampAssetsForAdmin(
   env:Env,
@@ -52,6 +54,10 @@ export async function calendarStampAssetsForAdmin(
   const rows=await env.DB.prepare(`SELECT id,name,asset_kind,mime_type,storage_provider,storage_key,thumbnail_storage_key,width,height,active
     FROM calendar_stamp_assets
     WHERE family_id=?
+      AND NOT EXISTS(
+        SELECT 1 FROM calendar_stamp_global_deleted_assets deleted
+        WHERE deleted.asset_id=calendar_stamp_assets.id
+      )
       AND (? IS NULL OR active<? OR (active=? AND id>?))
     ORDER BY active DESC,id
     LIMIT ?`).bind(familyId,cursorActive,cursorActive??0,cursorActive??0,cursor?.id??0,boundedLimit).all<CalendarStampAdminAssetOption>();
