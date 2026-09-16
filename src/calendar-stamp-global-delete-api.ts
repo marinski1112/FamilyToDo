@@ -10,6 +10,10 @@ function registry(env:Env) {
   if (!config) throw new Error('not configured');
   return stampDeletionTransport({...config,fetcher:config.fetchImpl});
 }
+function diagnostic(error:unknown):string{
+  if(error instanceof Error)return `${error.name}: ${error.message}`.slice(0,160);
+  return 'unknown';
+}
 
 export async function calendarStampDeletionInternal(request:Request,env:Env):Promise<Response> {
   if (!await authenticStampParticipant(request,env.SHARED_STAMPS_SERVICE_TOKEN)) return reply({error:'UNAUTHORIZED'},401);
@@ -65,5 +69,8 @@ export async function calendarStampGlobalDeleteAdmin(request:Request,context:any
       .bind(body.sharedId,familyId,memberId,approval).run();
     const state=verifiedStampDeletionState(await remote(`/v1/stamps/${body.sharedId}`,'DELETE',approval),body.sharedId);
     return reply(state,state.deleted===true?200:202);
-  } catch { return reply({error:'STAMP_DELETE_RETRY_REQUIRED'},503); }
+  } catch(error) {
+    console.error('calendar stamp global deletion failed',diagnostic(error));
+    return reply({error:'STAMP_DELETE_RETRY_REQUIRED'},503);
+  }
 }

@@ -19,13 +19,16 @@ export function stampDeletionTransport(config: {baseUrl: string; token: string; 
     if (!/^\/v1\/stamps(?:\/|$)/u.test(path)) throw new Error('invalid registry path');
     const headers = new Headers({authorization:`Bearer ${config.token}`,accept:'application/json'});
     if (approval) headers.set('x-stamp-deletion-approval',approval);
-    const init:RequestInit={method,headers,redirect:'error'};
-    // Custom fetchers are used for Cloudflare Service Bindings. Passing a timed
-    // AbortSignal across that Worker boundary requires experimental signal RPC
-    // serialization, so keep the timeout only on ordinary outbound fetch().
-    if (!config.fetcher) init.signal=AbortSignal.timeout(45000);
+    const init:RequestInit={method,headers};
+    // Cloudflare Service Binding fetchers should receive only the request fields
+    // needed by the downstream Worker. Redirect/AbortSignal state is retained on
+    // ordinary outbound fetch() where the browser-compatible semantics apply.
+    if (!config.fetcher) {
+      init.redirect='error';
+      init.signal=AbortSignal.timeout(45000);
+    }
     const response = await (config.fetcher ?? fetch)(`${base.toString().replace(/\/$/u,'')}${path}`,init);
-    if (!response.ok) throw new Error('stamp deletion retry required');
+    if (!response.ok) throw new Error(`stamp deletion retry required (${response.status})`);
     return await response.json() as Record<string, unknown>;
   };
 }
