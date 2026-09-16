@@ -1,5 +1,6 @@
 import { taskVisibilitySql } from './task-visibility';
 import { json } from './response';
+import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';
 
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 const UNCLASSIFIED='未分類';
@@ -76,12 +77,17 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
 
 export async function itemApi(request:Request,ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return json({ok:false,error:'ログインが必要です。'},401);
-  if(request.method==='GET')return await readCategories(request,ctx,m);
+  if(request.method==='GET'){
+    if(new URL(request.url).searchParams.get('view')==='reusable_sets')return await readItemReusableSets(ctx,m);
+    return await readCategories(request,ctx,m);
+  }
   if(request.method!=='POST') return json({ok:false,error:'POST only'},405);
   const b=await request.json().catch(()=>null) as Record<string,unknown>|null;
   if(!b)return json({ok:false,error:'JSONが不正です。'},400);
   if(String(b.csrf||'')!==String(ctx.session.csrfToken||'')) return json({ok:false,error:'CSRF検証に失敗しました。'},403);
   const action=String(b.action??'add');
+  const reusableSetResponse=await handleItemReusableSetAction(ctx,m,b);
+  if(reusableSetResponse)return reusableSetResponse;
 
   if(action==='category_reorder'){
     const order=uniqueNames(Array.isArray(b.order)?b.order:[]);
