@@ -1,13 +1,14 @@
 (()=>{
   'use strict';
-  const form=document.getElementById('chatComposer'),button=document.getElementById('chatImage');
+  const form=document.getElementById('chatComposer'),button=document.getElementById('chatImage'),toolButton=document.getElementById('chatToolImage');
   if(!form||!button)return;
   const input=document.createElement('input');input.type='file';input.accept='image/jpeg,image/png,image/webp,image/heic';input.hidden=true;
-  const status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-  const remove=document.createElement('button');remove.type='button';remove.textContent='画像の選択を取り消す';remove.hidden=true;
-  form.append(input,status,remove);
+  const status=document.createElement('p');status.className='chat-photo-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
+  form.append(input,status);
   let selected=null,normalized=null,capturedAt=0,uploadId='',snapshot='',busy=false;
   const csrf=()=>String(form.querySelector('[name="csrf"]')?.value??'');
+  const setDraftState=()=>{form.dataset.photoDraft=selected?'1':'0';form.classList.toggle('has-photo',Boolean(selected));status.hidden=!selected;};
+  const clearSelection=()=>{if(busy)return;selected=null;normalized=null;capturedAt=0;uploadId='';snapshot='';input.value='';status.textContent='';setDraftState();};
   const exifEpoch=async file=>{
     try{
       const bytes=new Uint8Array(await file.slice(0,Math.min(file.size,512*1024)).arrayBuffer());
@@ -28,40 +29,23 @@
       }
     }catch{}return 0;
   };
-  button.addEventListener('click',()=>{if(!busy)input.click();});
+  const choose=()=>{if(!busy)input.click();};button.addEventListener('click',choose);toolButton?.addEventListener('click',choose);
   input.addEventListener('change',async()=>{
-    selected=input.files?.[0]??null;normalized=null;capturedAt=0;uploadId='';snapshot='';form.dataset.photoDraft=selected?'1':'0';
-    if(selected&&selected.size>20*1024*1024){selected=null;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='元画像は20 MiB以内を選んでください。';return;}
-    remove.hidden=!selected;status.textContent=selected?'画像を選択しました。送信時に最大辺800pxへ調整します。':'';
-    if(selected)capturedAt=await exifEpoch(selected);
+    selected=input.files?.[0]??null;normalized=null;capturedAt=0;uploadId='';snapshot='';
+    if(selected&&selected.size>20*1024*1024){selected=null;input.value='';status.hidden=false;status.textContent='元画像は20 MiB以内を選んでください。';setTimeout(()=>{if(!selected){status.textContent='';status.hidden=true;}},2500);setDraftState();return;}
+    status.textContent=selected?'写真を選択中':'';setDraftState();if(selected)capturedAt=await exifEpoch(selected);
   });
-  remove.addEventListener('click',()=>{if(busy)return;selected=null;normalized=null;capturedAt=0;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='';});
+  document.addEventListener('pointerdown',event=>{if(!selected||busy)return;const target=event.target;if(target instanceof Node&&(form.contains(target)||document.getElementById('chatTools')?.contains(target)||document.getElementById('chatStampPicker')?.contains(target)))return;clearSelection();},{passive:true});
   async function normalize(file) {
     const url=URL.createObjectURL(file);
-    try {
-      const image=new Image();image.src=url;await image.decode();
-      const scale=Math.min(1,800/Math.max(image.naturalWidth,image.naturalHeight));
-      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
-      const ctx=canvas.getContext('2d');if(!ctx)throw new Error();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
-      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.88));
-      if(!blob||blob.size>4*1024*1024)throw new Error();return blob;
-    } finally {URL.revokeObjectURL(url);}
+    try {const image=new Image();image.src=url;await image.decode();const scale=Math.min(1,800/Math.max(image.naturalWidth,image.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));const ctx=canvas.getContext('2d');if(!ctx)throw new Error();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.88));if(!blob||blob.size>4*1024*1024)throw new Error();return blob;} finally {URL.revokeObjectURL(url);}
   }
   form.addEventListener('submit',async event=>{
-    if(!selected)return;
-    event.preventDefault();event.stopImmediatePropagation();if(busy)return;
-    busy=true;remove.disabled=true;button.disabled=true;
-    const token=csrf(),caption=String(form.querySelector('textarea')?.value??'').trim(),reminder=String(document.getElementById('chatScheduleAt')?.value??'');
-    const current=JSON.stringify([caption,reminder]);if(snapshot!==current||!uploadId){snapshot=current;uploadId=crypto.randomUUID();}
-    try {
-      status.textContent='画像を準備しています…';normalized??=await normalize(selected);
-      if(csrf()!==token)throw new Error();
-      const body=new FormData();body.set('file',normalized,'photo.jpg');body.set('caption',caption);body.set('reminder_at',reminder);body.set('upload_id',uploadId);if(capturedAt>0)body.set('captured_at',String(capturedAt));
-      status.textContent='画像を送信しています…';
-      const response=await fetch('/api/messages?photo=upload',{method:'POST',credentials:'same-origin',headers:{'x-csrf-token':token},body});
-      const payload=await response.json();if(!response.ok||!payload.ok)throw new Error();
-      if(csrf()===token)location.href='/app/messages.php';
-    } catch {status.textContent='送信を確認できませんでした。画像と入力は保持しています。同じ内容で再試行できます。';}
-    finally {busy=false;remove.disabled=false;button.disabled=false;}
+    if(!selected)return;event.preventDefault();event.stopImmediatePropagation();if(busy)return;
+    busy=true;button.disabled=true;if(toolButton)toolButton.disabled=true;
+    const token=csrf(),caption=String(form.querySelector('textarea')?.value??'').trim(),reminder=String(document.getElementById('chatScheduleAt')?.value??'');const current=JSON.stringify([caption,reminder]);if(snapshot!==current||!uploadId){snapshot=current;uploadId=crypto.randomUUID();}
+    try {status.hidden=false;status.textContent='写真を送信中…';normalized??=await normalize(selected);if(csrf()!==token)throw new Error();const body=new FormData();body.set('file',normalized,'photo.jpg');body.set('caption',caption);body.set('reminder_at',reminder);body.set('upload_id',uploadId);if(capturedAt>0)body.set('captured_at',String(capturedAt));const response=await fetch('/api/messages?photo=upload',{method:'POST',credentials:'same-origin',headers:{'x-csrf-token':token},body});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error();if(csrf()===token)location.href='/app/messages.php';}
+    catch {status.textContent='送信できませんでした。写真は保持しています。';}
+    finally {busy=false;button.disabled=false;if(toolButton)toolButton.disabled=false;}
   },true);
 })();
