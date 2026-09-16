@@ -85,6 +85,18 @@ function fixture() {
   return { sql,db,bucket,objects,batches,seed,seedMessagePhoto,seedTransfer,clean };
 }
 
+function assertPhotoPhysicallyPurged(f, photo) {
+  assert.equal(f.objects.has(photo.key),false,'target message photo bytes must be erased');
+  assert.equal(f.sql.prepare('SELECT count(*) AS n FROM message_photos WHERE upload_id=?').get(photo.uploadId).n,0,
+    'photo metadata row must be physically erased');
+  assert.equal(f.sql.prepare('SELECT upload_id FROM message_photo_replay_guards WHERE upload_id=?').get(photo.uploadId).upload_id,
+    photo.uploadId,'only the opaque upload id may remain as anti-replay state');
+  assert.throws(()=>f.sql.prepare(`INSERT INTO message_photos(upload_id,family_id,member_id,object_key,sha256,mime_type,byte_size,
+    caption,reminder_at,state,writers,created_at) VALUES(?,?,?,?,?,'image/jpeg',4,'late',NULL,'ready',0,'test')`)
+    .run(photo.uploadId,1,1,photo.key,'0'.repeat(64)),/photo upload deleted/,
+    'a delayed upload replay cannot recreate the deleted post');
+}
+
 test('complete deletion removes target posts, photo bytes, capabilities, stamp rows and purge journals', async () => {
   const f = fixture();
   try {
@@ -106,7 +118,7 @@ test('complete deletion removes target posts, photo bytes, capabilities, stamp r
 
     const result = await f.clean('target');
     assert.deepEqual(result,{complete:true,cleanupPending:false});
-    assert.equal(f.objects.has(photo.key),false,'target message photo bytes must be erased');
+    assertPhotoPhysicallyPurged(f,photo);
     assert.equal(f.objects.size,2,'only unrelated stamp content/thumbnail remain');
     assert.deepEqual(f.sql.prepare('SELECT id FROM calendar_stamp_assets ORDER BY id').all().map(row=>row.id),[3]);
     assert.deepEqual(f.sql.prepare('SELECT id FROM messages ORDER BY id').all().map(row=>row.id),[3]);
@@ -124,8 +136,6 @@ test('complete deletion removes target posts, photo bytes, capabilities, stamp r
     assert.deepEqual(f.sql.prepare('SELECT id FROM activity_logs ORDER BY id').all().map(row=>row.id),[2]);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM message_conversion_claims').get().n,0);
     assert.deepEqual(f.sql.prepare('SELECT token_hash FROM photo_transfers ORDER BY token_hash').all().map(row=>row.token_hash),['other-transfer']);
-    const photoRow=f.sql.prepare('SELECT state,caption,reminder_at,writers FROM message_photos WHERE upload_id=?').get(photo.uploadId);
-    assert.equal(photoRow.state,'deleted'); assert.equal(photoRow.caption,''); assert.equal(photoRow.reminder_at,null); assert.equal(photoRow.writers,0);
     for (const table of ['calendar_stamp_global_cleanup_keys','calendar_stamp_global_materializations',
       'calendar_stamp_global_sources','calendar_stamp_global_deleted_assets','calendar_stamp_global_operations',
       'calendar_stamp_global_deletions','calendar_stamp_delete_approvals']) {
@@ -178,8 +188,7 @@ test('a live message-photo writer delays only its photo object and retry complet
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM calendar_stamp_assets WHERE id=1').get().n,1,'stamp master waits for all R2 cleanup');
     f.sql.prepare('UPDATE message_photos SET writers=0 WHERE upload_id=?').run(photo.uploadId);
     assert.equal((await f.clean('target')).complete,true);
-    assert.equal(f.objects.has(photo.key),false);
-    assert.equal(f.sql.prepare('SELECT state FROM message_photos WHERE upload_id=?').get(photo.uploadId).state,'deleted');
+    assertPhotoPhysicallyPurged(f,photo);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM calendar_stamp_assets WHERE id=1').get().n,0);
   } finally { f.sql.close(); }
 });
@@ -236,7 +245,7 @@ test('upgrades a legacy captured deletion by additionally removing a target mess
     const photo=f.seedMessagePhoto(1,1,0);
     for(const key of [...f.objects.keys()])if(key.includes('/calendar-stamps/'))f.objects.delete(key);
     assert.equal((await f.clean('target')).complete,true);
-    assert.equal(f.objects.has(photo.key),false);
+    assertPhotoPhysicallyPurged(f,photo);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM messages WHERE id=1').get().n,0);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM calendar_stamp_assets WHERE id=1').get().n,0);
   } finally { f.sql.close(); }
