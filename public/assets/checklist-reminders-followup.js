@@ -14,10 +14,12 @@ document.head.append(style);
 
 const editableTitle=label=>label?.querySelector(':scope > span.reminders-inline-title,:scope > span');
 const checklistLabelSelector='label.task-main,label.shopping-check-row,.item-section .row label,.expired-task-main';
+let forwardingTitleClick=false;
 
-// A label normally toggles its checkbox when any blank area is tapped. In the Reminders-style
-// list only the checkbox itself is a completion target; title/spacing taps enter title editing.
+// Only the checkbox is a completion target. Forward blank label taps to the title once,
+// while allowing a real title click through to the existing inline editor unchanged.
 page.addEventListener('click',event=>{
+  if(forwardingTitleClick)return;
   const raw=event.target;
   if(!(raw instanceof Element))return;
   const label=raw.closest(checklistLabelSelector);
@@ -25,8 +27,10 @@ page.addEventListener('click',event=>{
   if(raw.closest('input.toggle'))return;
   const title=editableTitle(label);
   if(!(title instanceof HTMLElement))return;
+  if(raw===title||title.contains(raw))return;
   event.preventDefault();event.stopPropagation();
-  title.click();
+  forwardingTitleClick=true;
+  try{title.click();}finally{forwardingTitleClick=false;}
 },true);
 
 const shoppingGroups=()=>[...page.querySelectorAll('.shopping-category-group')].filter(node=>node instanceof HTMLElement&&!node.classList.contains('shopping-category-draft'));
@@ -37,16 +41,15 @@ const refreshCategoryCount=group=>{
   const pending=[...group.querySelectorAll(':scope > .linked-shopping-row input.toggle[data-type="shopping"]')].filter(input=>input instanceof HTMLInputElement&&!input.checked).length;
   let badge=title.querySelector('.shopping-category-pending-count');
   if(!(badge instanceof HTMLElement)){badge=document.createElement('span');badge.className='shopping-category-pending-count';badge.setAttribute('aria-label','未チェック件数');toggle.insertAdjacentElement('beforebegin',badge);}
-  badge.textContent=String(pending);
-  badge.hidden=pending===0;
+  const next=String(pending);if(badge.textContent!==next)badge.textContent=next;
+  const hidden=pending===0;if(badge.hidden!==hidden)badge.hidden=hidden;
   const category=String(group.dataset.category||'未分類');
-  toggle.setAttribute('aria-label',`${category}を${group.classList.contains('category-collapsed')?'展開':'閉じる'}（未チェック${pending}件）`);
+  const aria=`${category}を${group.classList.contains('category-collapsed')?'展開':'閉じる'}（未チェック${pending}件）`;
+  if(toggle.getAttribute('aria-label')!==aria)toggle.setAttribute('aria-label',aria);
 };
 const refreshCounts=()=>shoppingGroups().forEach(refreshCategoryCount);
 refreshCounts();
 
-// Category composer already saves on Enter and keeps focus. Make the transition visibly behave
-// as a fresh next row by clearing transient status immediately after a successful save.
 page.addEventListener('keydown',event=>{
   const input=event.target;
   if(!(input instanceof HTMLTextAreaElement)||!input.classList.contains('shopping-continuous-name'))return;
@@ -60,8 +63,6 @@ page.addEventListener('change',event=>{
   if(!(input instanceof HTMLInputElement)||!input.matches('input.toggle'))return;
   const group=input.closest('.shopping-category-group');
   if(group instanceof HTMLElement)queueMicrotask(()=>refreshCategoryCount(group));
-  // New standalone shopping rows created by the category composer have no due date by design.
-  // Once completed, remove them from the active list instead of leaving a completed no-date row.
   if(input.dataset.type==='shopping'&&input.checked){
     const row=input.closest('.linked-shopping-row');
     if(row instanceof HTMLElement&&row.classList.contains('reminders-new-row')){
@@ -72,5 +73,13 @@ page.addEventListener('change',event=>{
   }
 },true);
 
-new MutationObserver(()=>queueMicrotask(refreshCounts)).observe(page,{subtree:true,childList:true,attributes:true,attributeFilter:['checked','class']});
+// Refresh only when checklist rows/groups are structurally added or removed. Do not observe
+// class/checked mutations: count rendering itself changes the DOM and previously fed the observer
+// back into itself, starving taps while compositor scrolling still appeared responsive.
+let refreshQueued=false;
+new MutationObserver(records=>{
+  if(!records.some(record=>record.addedNodes.length||record.removedNodes.length))return;
+  if(refreshQueued)return;refreshQueued=true;
+  requestAnimationFrame(()=>{refreshQueued=false;refreshCounts();});
+}).observe(page,{subtree:true,childList:true});
 })();
