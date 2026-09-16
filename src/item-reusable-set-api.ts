@@ -1,4 +1,4 @@
-import { taskVisibilitySql } from './task-visibility';
+import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
 import { json } from './response';
 
 type Row=Record<string,unknown>;
@@ -20,7 +20,7 @@ const parseIds=(value:unknown)=>{try{const parsed=JSON.parse(String(value??'[]')
 async function readCategoryOrder(ctx:any,familyId:number):Promise<string[]>{
   const row=(await ctx.env.DB.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1').bind(familyId,CATEGORY_ORDER_KEY).first()) as Row|null;
   if(!row?.setting_value)return [];
-  try{return (Array.isArray(JSON.parse(String(row.setting_value)))?JSON.parse(String(row.setting_value)):[]).map((value:unknown)=>String(value??'').trim()).filter(Boolean);}catch{return [];}
+  try{const parsed=JSON.parse(String(row.setting_value));return (Array.isArray(parsed)?parsed:[]).map((value:unknown)=>String(value??'').trim()).filter(Boolean);}catch{return [];}
 }
 async function ensureCategories(ctx:any,familyId:number,memberId:number,categories:string[]):Promise<void>{
   const unique:string[]=[];const seen=new Set<string>();
@@ -38,10 +38,10 @@ async function ensureCategories(ctx:any,familyId:number,memberId:number,categori
   if(changed)await ctx.env.DB.prepare("INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?) ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(familyId,CATEGORY_ORDER_KEY,JSON.stringify(order),nowJst()).run();
 }
 
-async function rowsByIds(ctx:any,familyId:number,ids:number[]):Promise<Row[]>{
+async function rowsByIds(ctx:any,familyId:number,memberId:number,ids:number[]):Promise<Row[]>{
   if(!ids.length)return [];
   const placeholders=ids.map(()=>'?').join(',');
-  const result=await ctx.env.DB.prepare(`SELECT id,name,category FROM items WHERE family_id=? AND id IN (${placeholders})`).bind(familyId,...ids).all();
+  const result=await ctx.env.DB.prepare(`SELECT i.id,i.name,i.category FROM items i WHERE i.family_id=? AND i.id IN (${placeholders}) AND ${taskChildVisibilitySql('i')}`).bind(familyId,...ids,memberId).all();
   const byId=new Map(((result?.results||[]) as Row[]).map(row=>[Number(row.id),row]));
   return ids.map(id=>byId.get(id)).filter(Boolean) as Row[];
 }
@@ -116,11 +116,11 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   const requestId=String(b.client_request_id??'').trim();
   if(!requestId)return bad('リクエストIDが必要です。');
   if(requestId.length>72)return bad('リクエストIDが長すぎます。');
-  const existing=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
+  const existing=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
   if(existing){
-    if(Number(existing.set_id_snapshot)!==setId||String(existing.due_date)!==date)return bad('同じリクエストIDが別のセット呼び出しに使用されています。',409,'IDEMPOTENCY_CONFLICT');
+    if(Number(existing.created_by_member_id)!==Number(m.id)||Number(existing.set_id_snapshot)!==setId||String(existing.due_date)!==date)return bad('同じリクエストIDが別のセット呼び出しに使用されています。',409,'IDEMPOTENCY_CONFLICT');
     const recorded=parseIds(existing.created_item_ids);
-    if(recorded.length){const rows=await rowsByIds(ctx,m.family_id,recorded);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
+    if(recorded.length){const rows=await rowsByIds(ctx,m.family_id,m.id,recorded);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
   }
   const setRow=(await ctx.env.DB.prepare('SELECT id,name FROM item_reusable_sets WHERE id=? AND family_id=? LIMIT 1').bind(setId,m.family_id).first()) as Row|null;
   if(!setRow)return bad('セットが見つかりません。',404,'NOT_FOUND');
@@ -131,10 +131,10 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   const now=nowJst();
   await ctx.env.DB.prepare(`INSERT OR IGNORE INTO item_reusable_set_invocations(family_id,set_id_snapshot,due_date,client_request_id,created_by_member_id,created_item_ids,created_at,updated_at)
     VALUES(?,?,?,?,?,'[]',?,?)`).bind(m.family_id,setId,date,requestId,m.id,now,now).run();
-  const ledger=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
-  if(!ledger||Number(ledger.set_id_snapshot)!==setId||String(ledger.due_date)!==date)return bad('セット呼び出しの重複を安全に確認できませんでした。',409,'IDEMPOTENCY_CONFLICT');
+  const ledger=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
+  if(!ledger||Number(ledger.created_by_member_id)!==Number(m.id)||Number(ledger.set_id_snapshot)!==setId||String(ledger.due_date)!==date)return bad('セット呼び出しの重複を安全に確認できませんでした。',409,'IDEMPOTENCY_CONFLICT');
   const already=parseIds(ledger.created_item_ids);
-  if(already.length){const rows=await rowsByIds(ctx,m.family_id,already);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
+  if(already.length){const rows=await rowsByIds(ctx,m.family_id,m.id,already);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
   const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);
   try{
     await ctx.env.DB.batch(entries.map((row,index)=>ctx.env.DB.prepare(`INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id)
