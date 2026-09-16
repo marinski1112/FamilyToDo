@@ -74,6 +74,7 @@ export async function cleanupFamilySharedStamp(options: {
       JOIN messages m ON m.id=msa.message_id AND m.family_id=msa.family_id
       JOIN message_photos p ON p.upload_id=m.image_upload_id AND p.family_id=m.family_id
       WHERE d.shared_stamp_id=? AND m.image_upload_id IS NOT NULL
+        AND p.object_key='families/'||p.family_id||'/message-photos/'||p.upload_id
       ON CONFLICT DO NOTHING`).bind(sharedId),
     // Converted task/shopping rows are independent user content. Preserve them,
     // but sever provenance to a message that is being erased.
@@ -126,17 +127,22 @@ export async function cleanupFamilySharedStamp(options: {
     const blocked = new Set(blockedRows.results.map(row=>row.object_key));
     const deletable = keys.filter(key=>!blocked.has(key));
     if (deletable.length) {
+      const photoKeys=deletable.filter(key=>MESSAGE_PHOTO_OBJECT.test(key));
+      if (photoKeys.length) {
+        // Install the minimal opaque replay guard before removing bytes. If R2
+        // deletion fails, the richer photo row remains and retry is safe; if the
+        // DB cleanup fails after R2, the guard already prevents resurrection.
+        await db.batch(photoKeys.map(key=>db.prepare(`INSERT INTO message_photo_replay_guards(upload_id)
+          SELECT upload_id FROM message_photos
+          WHERE object_key=? AND state IN ('delete_pending','deleted') AND writers=0
+          ON CONFLICT(upload_id) DO NOTHING`).bind(key)));
+      }
       await bucket.delete(deletable);
       const finish:D1PreparedStatement[]=[];
       for (const key of deletable) {
         if (MESSAGE_PHOTO_OBJECT.test(key)) {
-          // Retain only the independent upload-id anti-replay record. The image
-          // bytes, caption, reminder, source message and transfer capabilities
-          // are gone; removing the row itself would let a delayed upload replay
-          // recreate the message under the same upload ID.
-          finish.push(db.prepare(`UPDATE message_photos
-            SET state='deleted',caption='',reminder_at=NULL
-            WHERE object_key=? AND state='delete_pending' AND writers=0`).bind(key));
+          finish.push(db.prepare(`DELETE FROM message_photos
+            WHERE object_key=? AND state IN ('delete_pending','deleted') AND writers=0`).bind(key));
         }
         finish.push(db.prepare(`DELETE FROM calendar_stamp_global_cleanup_keys
           WHERE shared_stamp_id=? AND object_key=?`).bind(sharedId,key));
