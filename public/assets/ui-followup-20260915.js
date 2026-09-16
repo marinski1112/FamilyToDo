@@ -53,6 +53,11 @@ const fixChecklistFab=()=>{
   for(const [name,value] of Object.entries(forced))fab.style.setProperty(name.replace(/[A-Z]/g,m=>`-${m.toLowerCase()}`),value,'important');
 };
 
+const loadChecklistFollowup=()=>{
+  if(location.pathname!=='/app/tasks.php'||document.querySelector('script[data-checklist-followup="1"]'))return;
+  const script=document.createElement('script');script.src='/assets/checklist-reminders-followup.js?v=followup1';script.defer=true;script.dataset.checklistFollowup='1';document.head.append(script);
+};
+
 const observeCalendarPins=()=>{
   if(location.pathname!=='/app/calendar.php')return;
   const grid=document.querySelector('.calendar-grid');
@@ -67,6 +72,7 @@ const observeCalendarPins=()=>{
 
 const run=()=>{
   fixChecklistFab();
+  loadChecklistFollowup();
   stripEventPins();
   stripEventTypeLabels();
   observeCalendarPins();
