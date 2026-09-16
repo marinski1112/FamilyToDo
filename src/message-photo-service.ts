@@ -32,9 +32,14 @@ export async function createMessagePhoto(db:D1Database,bucket:R2Bucket,input:Mes
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO messages(family_id,sender_id,target_member_id,text,reminder_at,created_at,updated_at,image_upload_id)
       SELECT family_id,member_id,NULL,CASE WHEN caption='' THEN '画像' ELSE caption END,reminder_at,?, ?,upload_id
-      FROM message_photos WHERE upload_id=? AND state<>'delete_pending'`).bind(now,now,uploadId),
-    db.prepare(`UPDATE message_photos SET state='ready' WHERE upload_id=? AND state<>'delete_pending'
+      FROM message_photos WHERE upload_id=? AND state IN ('staging','ready')`).bind(now,now,uploadId),
+    db.prepare(`UPDATE message_photos SET state='ready' WHERE upload_id=? AND state IN ('staging','ready')
       AND EXISTS(SELECT 1 FROM messages WHERE image_upload_id=?)`).bind(uploadId,uploadId),
+    db.prepare(`INSERT INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at)
+      SELECT msg.family_id,m.id,'message_reminder','message',msg.id,COALESCE(msg.reminder_at,?),'pending','【伝言・写真】' || char(10) || msg.text,?
+      FROM messages msg JOIN members m ON m.family_id=msg.family_id AND m.active=1 AND m.id<>msg.sender_id
+      WHERE msg.image_upload_id=? AND NOT EXISTS(SELECT 1 FROM notifications n WHERE n.family_id=msg.family_id AND n.member_id=m.id AND n.target_type='message' AND n.target_id=msg.id)`)
+      .bind(now,now,uploadId),
   ]);
   const saved=await db.prepare('SELECT id FROM messages WHERE image_upload_id=? AND family_id=?').bind(uploadId,familyId).first<{id:number}>();
   if(!saved)throw new MessagePhotoError('PHOTO_RETRY_REQUIRED');

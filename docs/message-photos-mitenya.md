@@ -1,30 +1,70 @@
-# 伝言の画像と、日記からみてにゃへの投稿
+# Message photos and Mitenya handoff
 
-状態: 実装途中 / draft。公開・migration適用はまだ行わない。
+## Behavior
 
-## 保存と権限
+Messages can attach one JPEG/PNG/WebP photo (browser input up to 20 MiB,
+normalized to JPEG up to 2048 px and 4 MiB before upload). Images remain in
+FamilyToDo's existing private MEDIA bucket, behind same-family authentication.
+Scheduled messages retain their existing visibility rule.
 
-- FamilyToDoの原本は既存private R2 `MEDIA` に保存。公開URLやobject keyをブラウザへ返さない。
-- Mitenyaへの投稿はコピーとして扱い、Mitenyaの既存管理者認証・子ども選択・公開範囲確認・写真登録を使う。
-- 共有R2の直接参照にはしない。片方の削除や権限変更で他方の公開済み写真を壊さない。
-- 家族日記には位置情報などがあるため、日記全体を自動送信しない。選択した画像と確認済みコメントのみ転送する。
-- 長押し以外に通常のメニューボタンを提供する。日記に画像がない場合は写真選択を案内する。
+Long-press an image message or a photo-bearing growth/family journal entry to
+open sharing actions. The ordinary “みてにゃへ” button is the keyboard alternative.
+Only the selected photo and an explicitly entered caption are shared. No daily
+location summaries or full diary text are exported automatically. Journal entries
+without a photo must have one attached before sharing.
 
-## 今回の画像伝言基盤
+The user opens Mitenya, authenticates as an administrator, chooses a child and
+checks access restrictions and caption before submitting its existing photo form.
+LINE notification is unchecked initially. Receiving a draft creates neither a
+Mitenya media row nor a LINE notification. Confirming a post copies the photo
+into Mitenya's private PHOTOS bucket. Deleting the FamilyToDo source does not
+delete an independently published Mitenya copy, and vice versa.
 
-- ブラウザで画像を最大2048pxのJPEGへ変換し、4 MiB以内に制限。元ファイルは20 MiBまで。
-- APIはmultipart全体を上限付きで読み、画像のサイズ・MIME/signature・CSRF・active memberを検証。
-- upload IDとhashを使い、並行再送や応答消失でも同じ伝言を返す。異なる家族・内容によるID再利用は拒否する。
-- R2 put前にD1へ記録し、失敗しても再試行対象を失わない。
-- 伝言削除triggerがR2 cleanupを記録。並行書込みの終了前には削除完了にしない。
-- 予約画像は既存の伝言同様、送信者以外には時刻前に返さない。
+## Security and retries
 
-## 残る実装
+- Existing message upload ID + content identity makes concurrent/response-loss
+  retries create one message. A durable operation record precedes R2 writes.
+- Message deletion marks a cleanup journal. An in-flight identical writer delays
+  cleanup; failed deletes remain available for a bounded subsequent drain.
+  Crashed staging writers are deliberately retained for reconciliation rather
+  than reclaimed with a guessed timeout.
+- Message notification intents are committed in the same D1 batch. Existing
+  notification delivery processes them (normally the next scheduled batch, or
+  the selected reminder time); the client never blindly resends LINE messages.
+- Sharing creates a 256-bit random capability, SHA-256 stored only, expiring in
+  five minutes with at most three redemption attempts including failed reads.
+- The capability is scoped to one source photo and its initiating active member
+  and family. Canonical source authorization is checked at mint and redemption.
+  Deleted photos or revoked family membership cannot be read on redemption.
+- The link uses a URL fragment, immediately cleared by Mitenya; no token in query,
+  localStorage/sessionStorage, application logging, or R2 key in a public DTO.
+  A login redirect can discard this in-memory draft; reopen sharing after login.
+- Redemption body is bounded to 128 bytes. Image transfer is bounded to 4 MiB
+  (6 MiB encoded JSON), caption to 2000 characters. No video path is added.
+- Expired capability records are removed in batches of at most 100 on mint.
+  No new Cron or speculative cache is introduced.
 
-1. Mitenyaへ渡す短時間・画像限定の転送と、その受信・投稿確認UI。
-2. 伝言・成長日記・家族日記の長押し/通常メニュー接続。
-3. 通知の既存契約との整合、実ブラウザ/LIFFでの遷移確認。
-4. 両アプリCI/preview、追加migrationとデプロイの確認。
+## Cloudflare transport and deployment
 
-新規migration0084はスタンプ削除PRの0083に依存しない。既存open PRの共通router/manifestには変更を重ねない。
-本番D1操作、secrets、YouTube設定、Cronは変更しない。
+Mitenya MUST use a Service Binding named FAMILYTODO_SERVICE targeting the
+`familytodo` Worker. No same-account public-fetch fallback. Binding calls pass
+only method, headers and body; no redirect/AbortSignal. No new shared secret is
+needed: the short-lived selected-photo capability authorizes the read, and
+Mitenya independently requires admin authentication for the preview and final post.
+
+Apply FamilyToDo migrations 0084_message_photos.sql and 0087_photo_transfers.sql
+using its existing migration/deploy pipeline. Preserve 0083, 0085 and 0086 from
+other work. Deploy the Mitenya receiving endpoint/binding before exposing source
+UI to users, then deploy FamilyToDo. No shared stamp Worker changes are required.
+Do not run production SQL manually or alter secrets/YouTube flags/Cron.
+
+## Verification
+
+Disposable SQLite fixtures exercise upload replay, parallel writers, failed R2,
+delete/retry, capability expiry and atomic redemption budgets. Mitenya route
+fixtures cover admin-only preview, no storage mutation, no global-fetch fallback,
+and a Service Binding accepting only portable request fields.
+
+Live cross-Worker photo transfer, iOS LINE LIFF navigation, VoiceOver/TalkBack,
+and real-device long press require authenticated preview/production verification;
+unit/DOM tests alone do not establish these outcomes.

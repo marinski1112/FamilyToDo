@@ -31,7 +31,8 @@ export async function messagePhotoApi(request:Request,ctx:AppContext):Promise<Re
     if(request.method!=='POST'||value!=='upload')return reply({ok:false,error:'INVALID_REQUEST'},400);
     const csrf=request.headers.get('x-csrf-token');if(!csrf||csrf!==ctx.session.csrfToken)return reply({ok:false,error:'CSRF_FAILED'},403);
     const form=await boundedForm(request),file=form.get('file');
-    if(!(file instanceof File)||file.size>MESSAGE_PHOTO_MAX_BYTES)throw new MessagePhotoError('INVALID_PHOTO');
+    if(!(file instanceof File))throw new MessagePhotoError('INVALID_PHOTO');
+    if(file.size>MESSAGE_PHOTO_MAX_BYTES)throw new MessagePhotoError('PHOTO_TOO_LARGE');
     const caption=String(form.get('caption')??'').trim(),reminderRaw=String(form.get('reminder_at')??'').trim();
     const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date());
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;

@@ -81,3 +81,5 @@ for(const file of ['public/assets/messages-chat.js','public/assets/messages-chat
 }
 console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnostic/stamp-read/first-frame-preload contract ok');
 await import('./message-photos-contract.mjs');
+
+await import('./photo-transfer-contract.mjs');

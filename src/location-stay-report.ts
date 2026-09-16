@@ -35,8 +35,17 @@ type InternalStayReportEntry=StayReportEntry&{knownPlaceKey?:string;unknownAncho
 const UNKNOWN_STAY_CLUSTER_METERS=120;
 const MAX_STAY_POINT_ACCURACY_METERS=150;
 const STAY_MERGE_GAP_MS=5*60*1000;
+const MIN_VISIBLE_STAY_MINUTES=5;
 const reliablePoint=(point:LocationPoint)=>Number.isFinite(point.accuracyMeters)&&Number(point.accuracyMeters)>=0&&Number(point.accuracyMeters)<=MAX_STAY_POINT_ACCURACY_METERS;
-const publicAnchor=(point:LocationPoint)=>({latitude:point.latitude,longitude:point.longitude});
+const publicAnchor=(point:{latitude:number;longitude:number})=>({latitude:point.latitude,longitude:point.longitude});
+function representativeAnchor(points:readonly LocationPoint[],from:string,to:string){
+  const start=Date.parse(from),end=Date.parse(to);
+  const candidates=points.filter(point=>{const at=Date.parse(point.recordedAt);return Number.isFinite(at)&&at>=start&&at<=end&&reliablePoint(point);});
+  if(!candidates.length)return undefined;
+  const latitude=[...candidates].sort((a,b)=>a.latitude-b.latitude)[Math.floor(candidates.length/2)].latitude;
+  const longitude=[...candidates].sort((a,b)=>a.longitude-b.longitude)[Math.floor(candidates.length/2)].longitude;
+  return {latitude,longitude};
+}
 function mergeShortStayGaps(entries:InternalStayReportEntry[]):InternalStayReportEntry[]{
   const merged:InternalStayReportEntry[]=[];
   for(const entry of entries){
@@ -94,8 +103,11 @@ export function buildLocationStayReport(points:readonly LocationPoint[],places:r
       stayPrevious.to=b.recordedAt;
       stayPrevious.minutes+=minutes;
     }else{
-      entries.push({kind,from:a.recordedAt,to:b.recordedAt,minutes,place,...(kind==='MOVE'?{meters:Math.round(meters)}:{}),...(knownPlaceKey?{knownPlaceKey}:{}),...(unknownAnchor?{unknownAnchor,anchor:publicAnchor(unknownAnchor)}:{})});
+      entries.push({kind,from:a.recordedAt,to:b.recordedAt,minutes,place,...(kind==='MOVE'?{meters:Math.round(meters)}:{}),...(knownPlaceKey?{knownPlaceKey}:{}),...(unknownAnchor?{unknownAnchor}: {})});
     }
   }
-  return mergeShortStayGaps(entries).map(({knownPlaceKey:_knownPlaceKey,unknownAnchor:_unknownAnchor,...entry})=>entry);
+  return mergeShortStayGaps(entries).filter(entry=>entry.kind!=='STAY'||entry.minutes>=MIN_VISIBLE_STAY_MINUTES).map(({knownPlaceKey:_knownPlaceKey,unknownAnchor,...entry})=>{
+    if(entry.kind==='STAY'&&!_knownPlaceKey){const anchor=representativeAnchor(points,entry.from,entry.to)||unknownAnchor;return {...entry,...(anchor?{anchor:publicAnchor(anchor)}:{})};}
+    return entry;
+  });
 }

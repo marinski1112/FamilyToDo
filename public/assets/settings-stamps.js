@@ -275,4 +275,22 @@
   });
 
   void loadInventory();
+  const sessionCsrf=csrf();
+  void import('./global-stamp-deletion-ui.js').then(({mountGlobalStampDeletion})=>{
+    if(!inventory||!sessionCsrf)return;
+    const host=document.createElement('div');inventory.after(host);
+    const call=async(method,body,after)=>{
+      const response=await fetch('/api/calendar-stamp-admin/global-deletion'+(after?'?after='+encodeURIComponent(after):''),{
+        method,credentials:'same-origin',headers:{'content-type':'application/json'},
+        ...(body?{body:JSON.stringify({...body,csrf:sessionCsrf})}:{}),
+      });
+      if(!response.ok)throw new Error('stamp deletion request failed');
+      return response.json();
+    };
+    mountGlobalStampDeletion(host,{
+      isCurrent:()=>form.isConnected&&csrf()===sessionCsrf,
+      list:after=>call('GET',null,after),
+      remove:sharedId=>call('POST',{sharedId,confirm:'permanent'}),
+    });
+  }).catch(()=>setInventoryStatus('完全削除の操作画面を読み込めませんでした。再読み込みしてください。'));
 })();

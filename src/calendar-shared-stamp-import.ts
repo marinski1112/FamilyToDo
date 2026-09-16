@@ -15,6 +15,7 @@ import {
   normalizeCalendarSharedStampVersion,
 } from './calendar-shared-stamp-ref';
 import { calendarStampManagedUploadObjectKey } from './calendar-stamp-storage';
+import { withCalendarStampAdmission } from './calendar-stamp-global-cleanup';
 
 const MIN_FRAME_DURATION_MS=40;
 const MAX_FRAME_DURATION_MS=2000;
@@ -82,7 +83,8 @@ async function boundedImageBytes(
   return bytes;
 }
 
-async function putManagedMedia(env:Env,familyId:number,storageKey:string,bytes:ArrayBuffer,mimeType:string):Promise<void>{
+async function putManagedMedia(env:Env,familyId:number,storageKey:string,bytes:ArrayBuffer,mimeType:string,remember:(key:string)=>Promise<void>):Promise<void>{
+  await remember(calendarStampManagedUploadObjectKey(familyId,storageKey));
   await env.MEDIA.put(calendarStampManagedUploadObjectKey(familyId,storageKey),bytes,{httpMetadata:{contentType:mimeType}});
 }
 
@@ -122,6 +124,7 @@ async function materializeSingleFile(
   client:RegistryClient,
   item:FamilySharedStampCatalogItem,
   fetchImpl:typeof fetch,
+  remember:(key:string)=>Promise<void>,
 ):Promise<number>{
   if(!LOCAL_SINGLE_FILE_MIME_TYPES.has(item.mimeType)||!item.contentPath)throw new Error('calendar shared stamp mime unsupported');
   const extension=singleFileExtension(item.mimeType);
@@ -129,7 +132,7 @@ async function materializeSingleFile(
   const response=await fetchImpl(client.publicUrl(item.contentPath),{headers:{accept:item.mimeType}});
   const bytes=await boundedImageBytes(response,item.mimeType,FAMILY_SHARED_STAMP_MAX_NORMALIZED_BYTES);
   if(bytes.byteLength!==item.normalizedByteSize)throw new Error('calendar shared stamp byte size mismatch');
-  await putManagedMedia(env,familyId,storageKey,bytes,item.mimeType);
+  await putManagedMedia(env,familyId,storageKey,bytes,item.mimeType,remember);
   return registerCalendarStampAsset(env,familyId,memberId,{
     name:localName(item.name),
     assetKind:item.kind,
@@ -149,6 +152,7 @@ async function materializeFrameSequence(
   client:RegistryClient,
   item:FamilySharedStampCatalogItem,
   fetchImpl:typeof fetch,
+  remember:(key:string)=>Promise<void>,
 ):Promise<number>{
   if(item.mimeType!=='image/png'||item.representation!=='FRAME_SEQUENCE')throw new Error('calendar shared stamp frame mime unsupported');
   const frames=await fetchFrames(client,item,fetchImpl);
@@ -161,7 +165,7 @@ async function materializeFrameSequence(
     if(bytes.byteLength!==frame.byteSize)throw new Error('calendar shared stamp frame byte size mismatch');
     downloadedBytes+=bytes.byteLength;
     if(downloadedBytes>FAMILY_SHARED_STAMP_MAX_NORMALIZED_BYTES)throw new Error('calendar shared stamp frame budget exceeded');
-    await putManagedMedia(env,familyId,storageKey,bytes,'image/png');
+    await putManagedMedia(env,familyId,storageKey,bytes,'image/png',remember);
     localFrames.push({storageKey,durationMs:frame.durationMs});
   }
   if(downloadedBytes!==item.normalizedByteSize)throw new Error('calendar shared stamp byte size mismatch');
@@ -195,6 +199,8 @@ export async function materializeCalendarSharedStamp(
   const sharedVersion=normalizeCalendarSharedStampVersion(sharedVersionInput);
   await assertActiveAdmin(env,familyId,memberId);
 
+  return withCalendarStampAdmission(env.DB,sharedStampId,async (remember,rememberAsset)=>{
+
   const existing=await existingProjection(env,familyId,sharedStampId,sharedVersion);
   if(existing){
     if(Number(existing.active)!==1)throw new Error('calendar shared stamp projection disabled');
@@ -207,8 +213,9 @@ export async function materializeCalendarSharedStamp(
   if(item.width<1||item.height<1||Math.max(item.width,item.height)>FAMILY_SHARED_STAMP_MAX_EDGE||item.normalizedByteSize<1||item.normalizedByteSize>FAMILY_SHARED_STAMP_MAX_NORMALIZED_BYTES)throw new Error('calendar shared stamp bounds invalid');
 
   const assetId=item.representation==='SINGLE_FILE'
-    ?await materializeSingleFile(env,familyId,memberId,client,item,fetchImpl)
-    :await materializeFrameSequence(env,familyId,memberId,client,item,fetchImpl);
+    ?await materializeSingleFile(env,familyId,memberId,client,item,fetchImpl,remember)
+    :await materializeFrameSequence(env,familyId,memberId,client,item,fetchImpl,remember);
+  await rememberAsset(assetId,familyId);
   try{
     await attachCalendarSharedStampRef(env,familyId,memberId,assetId,{
       sharedStampId,
@@ -221,4 +228,5 @@ export async function materializeCalendarSharedStamp(
     return {assetId:Number(raced.asset_id),sharedStampId,sharedVersion,representation:raced.representation,reused:true};
   }
   return {assetId,sharedStampId,sharedVersion,representation:item.representation,reused:false};
+  });
 }

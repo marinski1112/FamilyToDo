@@ -1,3 +1,4 @@
+import {mintPhotoTransfer} from './photo-transfer-api';
 import type { AppContext } from './app-context';
 import { messagePhotoApi } from './message-photo-api';
 import { drainDeletedMessagePhotos } from './message-photo-service';
@@ -52,6 +53,7 @@ const conversionMismatch=()=>json({ok:false,error:'伝言または変換方法�
 export async function messages(request:Request,ctx:AppContext):Promise<Response>{
   const m=ctx.member;
   if(!m)return authRequiredResponse(ctx);
+  if(new URL(request.url).searchParams.has('photo_transfer'))return mintPhotoTransfer(request,ctx);
   if(new URL(request.url).searchParams.has('photo'))return messagePhotoApi(request,ctx);
 
   if(request.method==='POST'){
