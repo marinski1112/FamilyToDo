@@ -12,7 +12,7 @@ const MAX_SOURCE_BYTES=20*1024*1024;
 const MAX_EDGE=800;
 const TARGET_BYTES=3600*1024;
 const mediaCache=new Map();
-let existingMedia=null,pendingBlob=null,pendingUrl='',loadedLogId=0,loadToken=0;
+let existingMedia=null,pendingBlob=null,pendingUrl='',pendingCapturedAt=0,loadedLogId=0,loadToken=0;
 let generation=0,preparing=false,saving=false,contextKey='',savedSignature='',savedId=0,saveUncertain=false;
 const field=name=>form.elements.namedItem(name);
 const logId=()=>Number(field('id')?.value||0)||0;
@@ -27,14 +27,14 @@ const viewer=document.createElement('div');viewer.className='family-log-media-vi
 const viewerImg=viewer.querySelector('img');const closeViewer=()=>{viewer.classList.remove('open');viewer.setAttribute('aria-hidden','true');viewerImg.removeAttribute('src');};viewer.querySelector('button').addEventListener('click',closeViewer);viewer.addEventListener('click',e=>{if(e.target===viewer)closeViewer();});
 const openViewer=url=>{if(!url)return;viewerImg.src=url;viewer.classList.add('open');viewer.setAttribute('aria-hidden','false');};
 
-const wrap=document.createElement('section');wrap.id='familyLogBabyFoodMedia';wrap.className='family-log-baby-food-media';wrap.hidden=true;wrap.innerHTML='<strong>📷 離乳食の写真（任意）</strong><div class="family-log-media-preview" id="familyLogMediaPreview"></div><div class="family-log-media-picker" id="familyLogMediaPicker"><label>写真から選ぶ<input id="familyLogMediaInput" type="file" accept="image/*"></label><label>カメラで撮る<input id="familyLogMediaCamera" type="file" accept="image/*" capture="environment"></label></div><small class="family-log-media-note">1記録に1枚。写真を選んだ後、下の「保存する」で送信します。最大辺800pxに縮小し、EXIFメタデータは引き継ぎません。</small><div class="family-log-media-status small" id="familyLogMediaStatus" aria-live="polite"></div>';
+const wrap=document.createElement('section');wrap.id='familyLogBabyFoodMedia';wrap.className='family-log-baby-food-media';wrap.hidden=true;wrap.innerHTML='<strong>📷 離乳食の写真（任意）</strong><div class="family-log-media-preview" id="familyLogMediaPreview"></div><div class="family-log-media-picker" id="familyLogMediaPicker"><label>写真から選ぶ<input id="familyLogMediaInput" type="file" accept="image/*"></label><label>カメラで撮る<input id="familyLogMediaCamera" type="file" accept="image/*" capture="environment"></label></div><small class="family-log-media-note">1記録に1枚。写真を選んだ後、下の「保存する」で送信します。最大辺800pxに縮小し、EXIFメタデータは引き継ぎません。撮影日時を取得できた場合は日時だけ別に保持します。</small><div class="family-log-media-status small" id="familyLogMediaStatus" aria-live="polite"></div>';
 wrap.innerHTML=wrap.innerHTML.replaceAll('離乳食',photoLabel);
 const advanced=document.getElementById('familyLogAdvanced');advanced?.insertAdjacentElement('beforebegin',wrap);
 const preview=wrap.querySelector('#familyLogMediaPreview'),picker=wrap.querySelector('#familyLogMediaPicker'),input=wrap.querySelector('#familyLogMediaInput'),status=wrap.querySelector('#familyLogMediaStatus');
 const camera=wrap.querySelector('#familyLogMediaCamera');
 style.textContent+='.family-log-media-picker{display:flex;flex-wrap:wrap;gap:8px;width:100%}.family-log-media-picker label{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;flex:1 1 120px;padding:8px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px}.family-log-media-picker input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.family-log-media-picker label:focus-within{outline:2px solid #4f46e5;outline-offset:2px}';
 
-function revokePending(){if(pendingUrl)URL.revokeObjectURL(pendingUrl);pendingUrl='';pendingBlob=null;if(input)input.value='';if(camera)camera.value='';}
+function revokePending(){if(pendingUrl)URL.revokeObjectURL(pendingUrl);pendingUrl='';pendingBlob=null;pendingCapturedAt=0;if(input)input.value='';if(camera)camera.value='';}
 function resetPhotoContext(){generation++;loadToken++;preparing=false;existingMedia=null;loadedLogId=0;savedSignature='';savedId=0;saveUncertain=false;revokePending();status.textContent='';}
 const updateSubmit=()=>{const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=preparing||saving||saveUncertain;};
 function render(){
@@ -56,6 +56,26 @@ async function sync(){
   const token=++loadToken;status.textContent='写真を確認しています…';picker.hidden=true;const media=await fetchMedia(id);if(token!==loadToken)return;loadedLogId=id;existingMedia=media;status.textContent='';render();
 }
 
+const exifEpoch=async file=>{
+  try{
+    const bytes=new Uint8Array(await file.slice(0,Math.min(file.size,512*1024)).arrayBuffer());
+    if(bytes.length<14||bytes[0]!==0xff||bytes[1]!==0xd8)return 0;
+    const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    for(let p=2;p+4<=bytes.length;){
+      if(bytes[p]!==0xff){p++;continue;}const code=bytes[p+1];if(code===0xd9||code===0xda)break;
+      if(code===0x00||code===0x01||(code>=0xd0&&code<=0xd8)){p+=2;continue;}
+      const len=(bytes[p+2]<<8)|bytes[p+3];if(len<2||p+2+len>bytes.length)break;const start=p+4;
+      if(code===0xe1&&len>=14&&String.fromCharCode(...bytes.subarray(start,start+6))==='Exif\0\0'){
+        const tiff=start+6,little=bytes[tiff]===0x49&&bytes[tiff+1]===0x49;if(!little&&!(bytes[tiff]===0x4d&&bytes[tiff+1]===0x4d))return 0;
+        const u16=o=>o+2<=bytes.length?view.getUint16(o,little):NaN,u32=o=>o+4<=bytes.length?view.getUint32(o,little):NaN;if(u16(tiff+2)!==42)return 0;
+        const ifd=rel=>{const map=new Map(),base=tiff+rel,count=u16(base);if(!Number.isInteger(rel)||rel<0||!Number.isInteger(count)||count>512)return map;for(let i=0;i<count;i++){const e=base+2+i*12;if(e+12>bytes.length)break;map.set(u16(e),e);}return map;};
+        const ascii=e=>{if(e===undefined||u16(e+2)!==2)return '';const count=u32(e+4);if(!Number.isInteger(count)||count<1||count>128)return '';const pos=count<=4?e+8:tiff+u32(e+8);if(!Number.isInteger(pos)||pos<0||pos+count>bytes.length)return '';return String.fromCharCode(...bytes.subarray(pos,pos+count)).replace(/\0.*$/u,'').trim();};
+        const zero=ifd(u32(tiff+4)),ptr=zero.get(0x8769),exif=ptr===undefined?new Map():ifd(u32(ptr+8));const text=ascii(exif.get(0x9003))||ascii(exif.get(0x9004))||ascii(zero.get(0x0132));
+        const m=/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/u.exec(text);if(!m)return 0;const off=ascii(exif.get(0x9011)),zone=/^[+-]\d{2}:\d{2}$/u.test(off)?off:'+09:00',ms=Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${zone}`);return Number.isFinite(ms)&&ms>0?Math.floor(ms/1000):0;
+      }p+=2+len;
+    }
+  }catch{}return 0;
+};
 function canvasBlob(canvas,quality){return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('ENCODE_FAILED')),'image/jpeg',quality));}
 async function decodeImage(file){
   if('createImageBitmap'in window){try{return await createImageBitmap(file,{imageOrientation:'from-image'});}catch{} }
@@ -73,7 +93,7 @@ async function prepareImage(file){
 async function selectPhoto(event){
   const file=event.currentTarget.files?.[0];if(!file||saving)return;
   const ticket=++generation;preparing=true;status.textContent='写真を準備しています…';updateSubmit();render();
-  try{const blob=await prepareImage(file);if(ticket!==generation)return;revokePending();pendingBlob=blob;pendingUrl=URL.createObjectURL(blob);status.textContent='写真を選択しました。下の「保存する」で記録と写真を送信します。';}
+  try{const [blob,capturedAt]=await Promise.all([prepareImage(file),exifEpoch(file)]);if(ticket!==generation)return;revokePending();pendingBlob=blob;pendingCapturedAt=capturedAt;pendingUrl=URL.createObjectURL(blob);status.textContent='写真を選択しました。下の「保存する」で記録と写真を送信します。';}
   catch{if(ticket!==generation)return;revokePending();status.textContent='写真を読み込めませんでした。「写真から選ぶ」で別の写真を選んでください。';}
   finally{if(ticket===generation){preparing=false;updateSubmit();render();}}
 }
@@ -88,8 +108,9 @@ async function saveLog(fd){
   const body={action:'save',id:Number(fd.get('id')||0),subject_id:Number(fd.get('subject_id')||0),log_type:String(fd.get('log_type')||''),occurred_at:String(fd.get('occurred_at')||''),detail_code:String(fd.get('detail_code')||''),amount:String(fd.get('amount')||''),unit:String(fd.get('unit')||''),duration_minutes:String(fd.get('duration_minutes')||''),value_text:String(fd.get('value_text')||''),note:String(fd.get('note')||''),linked_target:String(fd.get('linked_target')||''),csrf};
   const r=await fetch('/api/family-log',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('LOG_SAVE_FAILED');return d;
 }
-async function uploadPhoto(id,blob){
-  const r=await fetch('/api/family-log-media',{method:'POST',credentials:'same-origin',headers:{accept:'application/json','content-type':'image/jpeg','x-csrf-token':csrf,'x-family-log-id':String(id)},body:blob}),d=await r.json().catch(()=>null);if(!r.ok||!d?.ok){const error=new Error('MEDIA_UPLOAD_FAILED');error.httpStatus=r.status;throw error;}return d.media;
+async function uploadPhoto(id,blob,capturedAt){
+  const headers={accept:'application/json','content-type':'image/jpeg','x-csrf-token':csrf,'x-family-log-id':String(id)};if(capturedAt>0)headers['x-photo-captured-at']=String(capturedAt);
+  const r=await fetch('/api/family-log-media',{method:'POST',credentials:'same-origin',headers,body:blob}),d=await r.json().catch(()=>null);if(!r.ok||!d?.ok){const error=new Error('MEDIA_UPLOAD_FAILED');error.httpStatus=r.status;throw error;}return d.media;
 }
 document.addEventListener('submit',async e=>{
   if(e.target!==form)return;
@@ -98,7 +119,7 @@ document.addEventListener('submit',async e=>{
   e.preventDefault();e.stopImmediatePropagation();
   if(preparing){status.textContent='写真の準備が終わってから保存してください。';return;}
   if(saving||saveUncertain)return;
-  const ticket=generation,blob=pendingBlob,fd=new FormData(form);
+  const ticket=generation,blob=pendingBlob,capturedAt=pendingCapturedAt,fd=new FormData(form);
   const signature=JSON.stringify([...fd.entries()].filter(([key])=>key!=='id'));
   saving=true;updateSubmit();render();
   try{
@@ -118,7 +139,7 @@ document.addEventListener('submit',async e=>{
       if(saved?.linked_completion?.ok===false&&saved.linked_completion.message)alert(saved.linked_completion.message);
     }
     status.textContent='写真を送信しています…';
-    try{await uploadPhoto(id,blob);}catch(err){
+    try{await uploadPhoto(id,blob,capturedAt);}catch(err){
       if(ticket===generation){loadedLogId=id;status.textContent=`記録は保存済みです。写真の送信に失敗しました${Number.isInteger(err?.httpStatus)?'（HTTP '+err.httpStatus+'）':''}。「保存する」で写真だけ再試行できます。`;}
       return;
     }

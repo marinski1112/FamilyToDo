@@ -26,6 +26,12 @@ function positiveId(value:string|null):number|null{
   return Number.isSafeInteger(id)&&id>0?id:null;
 }
 
+function positiveEpoch(value:string|null|undefined):number|null{
+  if(!value)return null;
+  const seconds=Number(value);
+  return Number.isSafeInteger(seconds)&&seconds>0?seconds:null;
+}
+
 async function activeMember(env:Env,familyId:number,memberId:number):Promise<boolean>{
   return Boolean(await env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1 AND deleted_at IS NULL LIMIT 1').bind(memberId,familyId).first());
 }
@@ -217,6 +223,8 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
         const object=await context.env.MEDIA.get(String(row.storage_key));
         if(!object)return json({ok:false,error:'MEDIA_NOT_FOUND'},404);
         const headers=new Headers({'content-type':mime,'cache-control':'private, max-age=300','x-content-type-options':'nosniff'});
+        const capturedAt=positiveEpoch(object.customMetadata?.capturedAt);
+        if(capturedAt)headers.set('x-photo-captured-at',String(capturedAt));
         const etag=object.httpEtag?String(object.httpEtag):'';
         if(etag)headers.set('etag',etag);
         if(matchesIfNoneMatch(request.headers.get('if-none-match'),etag))return new Response(null,{status:304,headers});
@@ -242,6 +250,8 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
     if(await mediaByLog(context.env,s.familyId,logId))return json({ok:false,error:'PHOTO_ALREADY_EXISTS'},409);
     const mime=imageMime(request.headers.get('content-type'));
     if(!mime)return json({ok:false,error:'UNSUPPORTED_IMAGE_TYPE'},415);
+    const captureHeader=request.headers.get('x-photo-captured-at'),capturedAt=positiveEpoch(captureHeader);
+    if(captureHeader&&!capturedAt)return json({ok:false,error:'INVALID_CAPTURE_DATE'},400);
     const declared=Number(request.headers.get('content-length')||0);
     if(Number.isFinite(declared)&&declared>MAX_IMAGE_BYTES)return json({ok:false,error:'FILE_TOO_LARGE'},413);
     try{
@@ -253,7 +263,7 @@ export async function familyLogMediaApi(request:Request,context:AppContext):Prom
       const objectKey=`families/${s.familyId}/family-log/subjects/${Number(parent.subject_id)}/logs/${logId}/${crypto.randomUUID()}.${extensionFor(mime)}`;
       await queueObjectCleanup(context.env,s.familyId,objectKey,'ORPHAN');
       try{
-        await context.env.MEDIA.put(objectKey,buffer,{httpMetadata:{contentType:mime}});
+        await context.env.MEDIA.put(objectKey,buffer,{httpMetadata:{contentType:mime},...(capturedAt?{customMetadata:{capturedAt:String(capturedAt)}}:{})});
         const result=await context.env.DB.prepare(`INSERT INTO family_log_media(family_id,log_id,subject_id,storage_key,mime_type,byte_size,created_by,created_at,reconcile_pending)
           VALUES(?,?,?,?,?,?,?,?,1)`).bind(s.familyId,logId,Number(parent.subject_id),objectKey,mime,buffer.byteLength,s.memberId,new Date().toISOString()).run();
         await context.env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(s.familyId,objectKey).run();
