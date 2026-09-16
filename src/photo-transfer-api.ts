@@ -24,7 +24,62 @@ async function parseTransferToken(request:Request):Promise<string|null> {
  const {token}=JSON.parse(new TextDecoder().decode(await readTransferBody(request,128)));
  return typeof token==='string'&&/^[a-f0-9]{64}$/u.test(token)?token:null;
 }
-type ResolvedPhoto={ok:true;mime:string;bytes:Uint8Array;caption:string}|{ok:false;response:Response};
+function epochSeconds(value:string|null):number|null {
+ const raw=String(value||'').trim();if(!raw)return null;
+ let iso=raw;
+ if(/^\d{4}-\d{2}-\d{2}$/u.test(raw))iso=`${raw}T00:00:00+09:00`;
+ else if(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/u.test(raw))iso=`${raw.replace(' ','T')}${raw.length===16?':00':''}+09:00`;
+ const ms=Date.parse(iso);if(!Number.isFinite(ms)||ms<=0)return null;
+ return Math.floor(ms/1000);
+}
+function exifCapturedAt(bytes:Uint8Array,mime:string):number|null {
+ if(mime!=='image/jpeg'||bytes.length<14||bytes[0]!==0xff||bytes[1]!==0xd8)return null;
+ const read16=(offset:number,little:boolean)=>offset+2<=bytes.length?(little?bytes[offset]!|(bytes[offset+1]!<<8):(bytes[offset]!<<8)|bytes[offset+1]!):NaN;
+ const read32=(offset:number,little:boolean)=>{
+  if(offset+4>bytes.length)return NaN;
+  if(little)return (bytes[offset]!|(bytes[offset+1]!<<8)|(bytes[offset+2]!<<16)|(bytes[offset+3]!<<24))>>>0;
+  return ((bytes[offset]!<<24)|(bytes[offset+1]!<<16)|(bytes[offset+2]!<<8)|bytes[offset+3]!)>>>0;
+ };
+ for(let marker=2;marker+4<=bytes.length;){
+  if(bytes[marker]!==0xff){marker++;continue;}
+  const code=bytes[marker+1]!;if(code===0xd9||code===0xda)break;
+  if(code===0x00||code===0x01||(code>=0xd0&&code<=0xd8)){marker+=2;continue;}
+  const segmentLength=(bytes[marker+2]!<<8)|bytes[marker+3]!;if(segmentLength<2||marker+2+segmentLength>bytes.length)break;
+  const dataStart=marker+4;
+  if(code===0xe1&&segmentLength>=14&&String.fromCharCode(...bytes.subarray(dataStart,dataStart+6))==='Exif\0\0'){
+   const tiff=dataStart+6,little=bytes[tiff]===0x49&&bytes[tiff+1]===0x49,big=bytes[tiff]===0x4d&&bytes[tiff+1]===0x4d;
+   if(!little&&!big)return null;if(read16(tiff+2,little)!==42)return null;
+   const readIfd=(relative:number)=>{
+    const result=new Map<number,number>(),base=tiff+relative;if(!Number.isSafeInteger(relative)||relative<0||base+2>bytes.length)return result;
+    const count=read16(base,little);if(!Number.isSafeInteger(count)||count<0||count>512)return result;
+    for(let i=0;i<count;i++){const entry=base+2+i*12;if(entry+12>bytes.length)break;result.set(read16(entry,little),entry);}return result;
+   };
+   const ascii=(entry:number|undefined)=>{
+    if(entry===undefined||read16(entry+2,little)!==2)return '';
+    const count=read32(entry+4,little);if(!Number.isSafeInteger(count)||count<1||count>128)return '';
+    const start=count<=4?entry+8:tiff+read32(entry+8,little);if(!Number.isSafeInteger(start)||start<0||start+count>bytes.length)return '';
+    return String.fromCharCode(...bytes.subarray(start,start+count)).replace(/\0.*$/u,'').trim();
+   };
+   const ifd0=readIfd(read32(tiff+4,little));
+   const exifPointer=ifd0.get(0x8769),exifIfd=exifPointer===undefined?new Map<number,number>():readIfd(read32(exifPointer+8,little));
+   const dateText=ascii(exifIfd.get(0x9003))||ascii(exifIfd.get(0x9004))||ascii(ifd0.get(0x0132));
+   const match=/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/u.exec(dateText);if(!match)return null;
+   const offset=ascii(exifIfd.get(0x9011));const zone=/^[+-]\d{2}:\d{2}$/u.test(offset)?offset:'+09:00';
+   return epochSeconds(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}${zone}`);
+  }
+  marker+=2+segmentLength;
+ }
+ return null;
+}
+async function parentCapturedAt(env:Env,familyId:number,kind:string,id:number):Promise<number|null> {
+ if(kind==='message'){
+  const row=await env.DB.prepare('SELECT COALESCE(reminder_at,created_at) AS captured_at FROM messages WHERE id=? AND family_id=? LIMIT 1').bind(id,familyId).first<{captured_at:string|null}>();
+  return epochSeconds(row?.captured_at??null);
+ }
+ const row=await env.DB.prepare('SELECT occurred_at AS captured_at FROM family_logs WHERE id=? AND family_id=? AND deleted_at IS NULL LIMIT 1').bind(id,familyId).first<{captured_at:string|null}>();
+ return epochSeconds(row?.captured_at??null);
+}
+type ResolvedPhoto={ok:true;mime:string;bytes:Uint8Array;caption:string;capturedAt:number}|{ok:false;response:Response};
 async function resolveTransferPhoto(request:Request,env:Env,row:PhotoTransfer):Promise<ResolvedPhoto> {
  const member=await memberById(env,row.member_id);
  if(!member||member.family_id!==row.family_id)return {ok:false,response:reply({ok:false},404)};
@@ -35,15 +90,17 @@ async function resolveTransferPhoto(request:Request,env:Env,row:PhotoTransfer):P
  if(!['image/jpeg','image/png','image/webp'].includes(mime)){await photo.body?.cancel();return {ok:false,response:reply({ok:false},404)};}
  const bytes=await readTransferBody(photo,MAX_BYTES);
  if(await photoSha256(bytes)!==row.sha256)return {ok:false,response:reply({ok:false,error:'SOURCE_CHANGED'},409)};
- return {ok:true,mime,bytes,caption:row.caption};
+ const capturedAt=exifCapturedAt(bytes,mime)??await parentCapturedAt(env,row.family_id,row.source_kind,row.source_id);
+ if(!capturedAt)return {ok:false,response:reply({ok:false,error:'SOURCE_DATE_UNAVAILABLE'},409)};
+ return {ok:true,mime,bytes,caption:row.caption,capturedAt};
 }
 function sameTransfer(a:PhotoTransfer,b:PhotoTransfer):boolean {
  return a.family_id===b.family_id&&a.member_id===b.member_id&&a.source_kind===b.source_kind&&a.source_id===b.source_id&&a.caption===b.caption&&a.sha256===b.sha256;
 }
-function encodeTransferPhoto(photo:{mime:string;bytes:Uint8Array;caption:string}):Response {
+function encodeTransferPhoto(photo:{mime:string;bytes:Uint8Array;caption:string;capturedAt:number}):Response {
  let binary='';
  for(let offset=0;offset<photo.bytes.length;offset+=8192)binary+=String.fromCharCode(...photo.bytes.subarray(offset,offset+8192));
- return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption});
+ return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption,capturedAt:photo.capturedAt});
 }
 export async function mintPhotoTransfer(request:Request,ctx:AppContext):Promise<Response> {
  if(request.method!=='POST')return reply({ok:false},405);
