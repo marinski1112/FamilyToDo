@@ -12,14 +12,14 @@
   input.addEventListener('change',()=>{
     selected=input.files?.[0]??null;normalized=null;uploadId='';snapshot='';form.dataset.photoDraft=selected?'1':'0';
     if(selected&&selected.size>20*1024*1024){selected=null;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='元画像は20 MiB以内を選んでください。';return;}
-    remove.hidden=!selected;status.textContent=selected?'画像を選択しました。送信時にサイズを調整します。':'';
+    remove.hidden=!selected;status.textContent=selected?'画像を選択しました。送信時に最大辺800pxへ調整します。':'';
   });
   remove.addEventListener('click',()=>{if(busy)return;selected=null;normalized=null;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='';});
   async function normalize(file) {
     const url=URL.createObjectURL(file);
     try {
       const image=new Image();image.src=url;await image.decode();
-      const scale=Math.min(1,2048/Math.max(image.naturalWidth,image.naturalHeight));
+      const scale=Math.min(1,800/Math.max(image.naturalWidth,image.naturalHeight));
       const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
       const ctx=canvas.getContext('2d');if(!ctx)throw new Error();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.88));
