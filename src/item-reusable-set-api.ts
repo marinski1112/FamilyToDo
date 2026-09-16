@@ -2,6 +2,7 @@ import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
 import { json } from './response';
 
 type Row=Record<string,unknown>;
+type EditableSetEntry={name:string;memo:string;url:string;category:string};
 const UNCLASSIFIED='未分類';
 const CATEGORY_ORDER_KEY='item_category_order';
 const MAX_SET_ITEMS=100;
@@ -16,6 +17,22 @@ const uniquePositiveIds=(value:unknown)=>{
   return out;
 };
 const parseIds=(value:unknown)=>{try{const parsed=JSON.parse(String(value??'[]'));return uniquePositiveIds(parsed);}catch{return [];}};
+const canManageSet=(m:any,row:Row)=>{const role=String(m.role||'').toUpperCase();return Number(row.created_by_member_id)===Number(m.id)||role==='OWNER'||role==='ADMIN';};
+const parseEditableEntries=(value:unknown):{entries:EditableSetEntry[];error:string}=>{
+  if(!Array.isArray(value)||!value.length)return {entries:[],error:'セットには1件以上の持ち物が必要です。'};
+  if(value.length>MAX_SET_ITEMS)return {entries:[],error:`1つのセットは${MAX_SET_ITEMS}件までです。`};
+  const entries:EditableSetEntry[]=[];
+  for(const raw of value){
+    const row=(raw&&typeof raw==='object'?raw:{}) as Row;
+    const name=String(row.name??'').trim(),memo=String(row.memo??'').trim(),url=String(row.url??'').trim(),category=normalizeCategory(row.category);
+    if(!name||name.length>200)return {entries:[],error:'持ち物名は1〜200文字で入力してください。'};
+    if(memo.length>2000)return {entries:[],error:'メモは2000文字以内で入力してください。'};
+    if(category.length>255)return {entries:[],error:'カテゴリ名は255文字以内で入力してください。'};
+    if(!validUrl(url))return {entries:[],error:'URLはhttp:// または https:// で入力してください。'};
+    entries.push({name,memo,url,category});
+  }
+  return {entries,error:''};
+};
 
 async function readCategoryOrder(ctx:any,familyId:number):Promise<string[]>{
   const row=(await ctx.env.DB.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1').bind(familyId,CATEGORY_ORDER_KEY).first()) as Row|null;
@@ -52,11 +69,19 @@ export async function readItemReusableSets(ctx:any,m:any):Promise<Response>{
     WHERE s.family_id=?
     GROUP BY s.id,s.name,s.created_by_member_id,s.updated_at
     ORDER BY s.updated_at DESC,s.id DESC`).bind(m.family_id).all();
-  const role=String(m.role||'').toUpperCase();
-  const sets=((result?.results||[]) as Row[]).map(row=>({
-    id:Number(row.id),name:String(row.name||''),item_count:Number(row.item_count||0),
-    can_delete:Number(row.created_by_member_id)===Number(m.id)||role==='OWNER'||role==='ADMIN',
-  }));
+  const entryResult=await ctx.env.DB.prepare(`SELECT e.set_id,e.position,e.name,e.memo,e.url,e.category
+    FROM item_reusable_set_entries e JOIN item_reusable_sets s ON s.id=e.set_id
+    WHERE s.family_id=? ORDER BY e.set_id,e.position,e.id`).bind(m.family_id).all();
+  const entriesBySet=new Map<number,EditableSetEntry[]>();
+  for(const row of (entryResult?.results||[]) as Row[]){
+    const setId=Number(row.set_id),entries=entriesBySet.get(setId)||[];
+    entries.push({name:String(row.name||''),memo:String(row.memo||''),url:String(row.url||''),category:normalizeCategory(row.category)});
+    entriesBySet.set(setId,entries);
+  }
+  const sets=((result?.results||[]) as Row[]).map(row=>{
+    const manageable=canManageSet(m,row),id=Number(row.id);
+    return {id,name:String(row.name||''),item_count:Number(row.item_count||0),can_edit:manageable,can_delete:manageable,entries:entriesBySet.get(id)||[]};
+  });
   return json({ok:true,sets});
 }
 
@@ -100,12 +125,37 @@ async function createSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   return json({ok:true,id:setId,name,item_count:ordered.length,skipped_private:skippedPrivate},201);
 }
 
+async function updateSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Response>{
+  const setId=Number(b.set_id||0);if(!Number.isInteger(setId)||setId<=0)return bad('セットが不正です。');
+  const name=String(b.name??'').trim();if(!name)return bad('セット名を入力してください。');if(name.length>120)return bad('セット名は120文字以内で入力してください。');
+  const parsed=parseEditableEntries(b.entries);if(parsed.error)return bad(parsed.error);
+  const row=(await ctx.env.DB.prepare('SELECT id,created_by_member_id FROM item_reusable_sets WHERE id=? AND family_id=? LIMIT 1').bind(setId,m.family_id).first()) as Row|null;
+  if(!row)return bad('セットが見つかりません。',404,'NOT_FOUND');
+  if(!canManageSet(m,row))return bad('このセットを編集する権限がありません。',403,'FORBIDDEN');
+  const conflict=await ctx.env.DB.prepare('SELECT id FROM item_reusable_sets WHERE family_id=? AND name=? COLLATE NOCASE AND id<>? LIMIT 1').bind(m.family_id,name,setId).first();
+  if(conflict)return bad('同じ名前のセットがあります。',409,'SET_NAME_CONFLICT');
+  const now=nowJst();
+  try{
+    const statements:any[]=[
+      ctx.env.DB.prepare('UPDATE item_reusable_sets SET name=?,updated_at=? WHERE id=? AND family_id=?').bind(name,now,setId,m.family_id),
+      ctx.env.DB.prepare('DELETE FROM item_reusable_set_entries WHERE set_id=?').bind(setId),
+      ...parsed.entries.map((entry,index)=>ctx.env.DB.prepare('INSERT INTO item_reusable_set_entries(set_id,position,name,memo,url,category) VALUES(?,?,?,?,?,?)')
+        .bind(setId,index,entry.name,entry.memo||null,entry.url||null,entry.category||null)),
+    ];
+    await ctx.env.DB.batch(statements);
+  }catch(error){
+    const message=String((error as Error)?.message||error||'');
+    if(/unique/i.test(message))return bad('同じ名前のセットがあります。',409,'SET_NAME_CONFLICT');
+    return bad('セットを更新できませんでした。',500,'SET_UPDATE_FAILED');
+  }
+  return json({ok:true,id:setId,name,item_count:parsed.entries.length,entries:parsed.entries});
+}
+
 async function deleteSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Response>{
   const setId=Number(b.set_id||0);if(!Number.isInteger(setId)||setId<=0)return bad('セットが不正です。');
   const row=(await ctx.env.DB.prepare('SELECT id,created_by_member_id FROM item_reusable_sets WHERE id=? AND family_id=? LIMIT 1').bind(setId,m.family_id).first()) as Row|null;
   if(!row)return bad('セットが見つかりません。',404,'NOT_FOUND');
-  const role=String(m.role||'').toUpperCase();
-  if(Number(row.created_by_member_id)!==Number(m.id)&&role!=='OWNER'&&role!=='ADMIN')return bad('このセットを削除する権限がありません。',403,'FORBIDDEN');
+  if(!canManageSet(m,row))return bad('このセットを削除する権限がありません。',403,'FORBIDDEN');
   await ctx.env.DB.prepare('DELETE FROM item_reusable_sets WHERE id=? AND family_id=?').bind(setId,m.family_id).run();
   return json({ok:true,id:setId});
 }
@@ -155,6 +205,7 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
 export async function handleItemReusableSetAction(ctx:any,m:any,b:Record<string,unknown>):Promise<Response|null>{
   const action=String(b.action??'');
   if(action==='reusable_set_create')return await createSet(ctx,m,b);
+  if(action==='reusable_set_update')return await updateSet(ctx,m,b);
   if(action==='reusable_set_delete')return await deleteSet(ctx,m,b);
   if(action==='reusable_set_invoke')return await invokeSet(ctx,m,b);
   return null;
