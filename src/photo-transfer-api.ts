@@ -32,6 +32,7 @@ function epochSeconds(value:string|null):number|null {
  const ms=Date.parse(iso);if(!Number.isFinite(ms)||ms<=0)return null;
  return Math.floor(ms/1000);
 }
+function capturedHeader(value:string|null):number|null {const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;}
 function exifCapturedAt(bytes:Uint8Array,mime:string):number|null {
  if(mime!=='image/jpeg'||bytes.length<14||bytes[0]!==0xff||bytes[1]!==0xd8)return null;
  const read16=(offset:number,little:boolean)=>offset+2<=bytes.length?(little?bytes[offset]!|(bytes[offset+1]!<<8):(bytes[offset]!<<8)|bytes[offset+1]!):NaN;
@@ -86,11 +87,11 @@ async function resolveTransferPhoto(request:Request,env:Env,row:PhotoTransfer):P
  const ctx={request,env,member,session:{}} as AppContext;
  const photo=await sourcePhoto(ctx,row.source_kind,row.source_id);
  if(!photo.ok){await photo.body?.cancel();return {ok:false,response:reply({ok:false},404)};}
- const mime=photo.headers.get('content-type')||'';
+ const mime=photo.headers.get('content-type')||'',preservedCapturedAt=capturedHeader(photo.headers.get('x-photo-captured-at'));
  if(!['image/jpeg','image/png','image/webp'].includes(mime)){await photo.body?.cancel();return {ok:false,response:reply({ok:false},404)};}
  const bytes=await readTransferBody(photo,MAX_BYTES);
  if(await photoSha256(bytes)!==row.sha256)return {ok:false,response:reply({ok:false,error:'SOURCE_CHANGED'},409)};
- const capturedAt=exifCapturedAt(bytes,mime)??await parentCapturedAt(env,row.family_id,row.source_kind,row.source_id);
+ const capturedAt=preservedCapturedAt??exifCapturedAt(bytes,mime)??await parentCapturedAt(env,row.family_id,row.source_kind,row.source_id);
  if(!capturedAt)return {ok:false,response:reply({ok:false,error:'SOURCE_DATE_UNAVAILABLE'},409)};
  return {ok:true,mime,bytes,caption:row.caption,capturedAt};
 }
