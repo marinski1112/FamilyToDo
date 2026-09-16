@@ -10,11 +10,11 @@
   const csrf=()=>String(form.querySelector('[name="csrf"]')?.value??'');
   button.addEventListener('click',()=>{if(!busy)input.click();});
   input.addEventListener('change',()=>{
-    selected=input.files?.[0]??null;normalized=null;uploadId='';snapshot='';
-    if(selected&&selected.size>20*1024*1024){selected=null;input.value='';status.textContent='元画像は20 MiB以内を選んでください。';return;}
+    selected=input.files?.[0]??null;normalized=null;uploadId='';snapshot='';form.dataset.photoDraft=selected?'1':'0';
+    if(selected&&selected.size>20*1024*1024){selected=null;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='元画像は20 MiB以内を選んでください。';return;}
     remove.hidden=!selected;status.textContent=selected?'画像を選択しました。送信時にサイズを調整します。':'';
   });
-  remove.addEventListener('click',()=>{if(busy)return;selected=null;normalized=null;input.value='';remove.hidden=true;status.textContent='';});
+  remove.addEventListener('click',()=>{if(busy)return;selected=null;normalized=null;input.value='';form.dataset.photoDraft='0';remove.hidden=true;status.textContent='';});
   async function normalize(file) {
     const url=URL.createObjectURL(file);
     try {

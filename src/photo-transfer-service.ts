@@ -14,4 +14,4 @@ export async function claimPhotoTransfer(db:D1Database,token:string,now=Math.flo
   RETURNING family_id,member_id,source_kind,source_id,caption,sha256`).bind(await hash(token),now).first<PhotoTransfer>();
 }
 
-export async function photoSha256(bytes:Uint8Array):Promise<string> {return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');}
+export async function photoSha256(bytes:Uint8Array):Promise<string> {return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(bytes).buffer)),b=>b.toString(16).padStart(2,'0')).join('');}
