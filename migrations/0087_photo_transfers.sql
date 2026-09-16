@@ -6,6 +6,7 @@ CREATE TABLE photo_transfers (
  source_kind TEXT NOT NULL CHECK(source_kind IN ('message','journal')),
  source_id INTEGER NOT NULL,
  caption TEXT NOT NULL,
+ sha256 TEXT NOT NULL,
  expires_at INTEGER NOT NULL,
  remaining_reads INTEGER NOT NULL DEFAULT 3 CHECK(remaining_reads >= 0)
 );

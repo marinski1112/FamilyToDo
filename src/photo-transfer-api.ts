@@ -2,7 +2,7 @@ import type {AppContext} from './app-context';
 import {memberById} from './app-context';
 import {familyLogMediaApi} from './family-log-media-api';
 import {messagePhotoApi} from './message-photo-api';
-import {createPhotoTransfer,claimPhotoTransfer} from './photo-transfer-service';
+import {createPhotoTransfer,claimPhotoTransfer,photoSha256} from './photo-transfer-service';
 const MAX_BYTES=4*1024*1024;
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'cache-control':'private, no-store','referrer-policy':'no-referrer'}});
 export async function readTransferBody(request:Request|Response,limit:number):Promise<Uint8Array> {
@@ -28,9 +28,10 @@ export async function mintPhotoTransfer(request:Request,ctx:AppContext):Promise<
   const input=JSON.parse(new TextDecoder().decode(await readTransferBody(request,12000)));
   const kind=input.kind,id=Number(input.id),caption=input.caption;
   if(!['message','journal'].includes(kind)||!Number.isSafeInteger(id)||id<1||typeof caption!=='string'||caption.length>2000)return reply({ok:false,error:'INVALID_REQUEST'},400);
-  const photo=await sourcePhoto(ctx,kind,id);await photo.body?.cancel();
-  if(!photo.ok)return reply({ok:false,error:'写真が見つかりません。先に写真を添付してください。'},404);
-  const token=await createPhotoTransfer(ctx.env.DB,{familyId:ctx.member.family_id,memberId:ctx.member.id,kind,id,caption});
+  const photo=await sourcePhoto(ctx,kind,id);
+  if(!photo.ok){await photo.body?.cancel();return reply({ok:false,error:'写真が見つかりません。先に写真を添付してください。'},404);}
+  const sha256=await photoSha256(await readTransferBody(photo,MAX_BYTES));
+  const token=await createPhotoTransfer(ctx.env.DB,{familyId:ctx.member.family_id,memberId:ctx.member.id,kind,id,caption,sha256});
   return reply({ok:true,url:`https://mitenya.marinski1112.workers.dev/#import-photo=${token}`,expiresIn:300});
  }catch{return reply({ok:false,error:'受け渡しを準備できませんでした。もう一度お試しください。'},400);}
 }
@@ -48,7 +49,9 @@ export async function redeemPhotoTransfer(request:Request,env:Env):Promise<Respo
   if(!photo.ok){await photo.body?.cancel();return reply({ok:false},404);}
   const mime=photo.headers.get('content-type')||'';
   if(!['image/jpeg','image/png','image/webp'].includes(mime)){await photo.body?.cancel();return reply({ok:false},404);}
-  const bytes=await readTransferBody(photo,MAX_BYTES);let binary='';
+  const bytes=await readTransferBody(photo,MAX_BYTES);
+  if(await photoSha256(bytes)!==row.sha256)return reply({ok:false,error:'SOURCE_CHANGED'},409);
+  let binary='';
   for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
   return reply({ok:true,mime,base64:btoa(binary),caption:row.caption});
  }catch{return reply({ok:false,error:'TRANSFER_UNAVAILABLE'},503);}

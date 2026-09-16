@@ -34,7 +34,7 @@ delete an independently published Mitenya copy, and vice versa.
 - Sharing creates a 256-bit random capability, SHA-256 stored only, expiring in
   five minutes with at most three redemption attempts including failed reads.
 - The capability is scoped to one source photo and its initiating active member
-  and family. Canonical source authorization is checked at mint and redemption.
+  and family, plus the selected image SHA-256. A photo replaced after mint is rejected. Canonical source authorization is checked at mint and redemption.
   Deleted photos or revoked family membership cannot be read on redemption.
 - The link uses a URL fragment, immediately cleared by Mitenya; no token in query,
   localStorage/sessionStorage, application logging, or R2 key in a public DTO.
