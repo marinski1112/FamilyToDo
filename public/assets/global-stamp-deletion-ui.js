@@ -25,7 +25,8 @@ export function mountGlobalStampDeletion(host, options) {
       if(result?.deleted===true) {
         button.textContent='削除完了'; button.dataset.completed='true';
         status.textContent='両アプリとR2の削除を完了しました。';
-        options.onDeleted?.();
+        if(typeof options.onDeleted==='function')options.onDeleted();
+        else globalThis.location?.reload?.();
       } else {
         button.textContent='完全削除を再試行';
         status.textContent='削除は未完了です。処理中または通信待ちのため、再試行してください。';
