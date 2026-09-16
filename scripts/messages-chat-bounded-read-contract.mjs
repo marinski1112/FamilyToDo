@@ -83,3 +83,5 @@ console.log('messages chat bounded-read/media-hold/AI-confirmation/LIFF-diagnost
 await import('./message-photos-contract.mjs');
 
 await import('./photo-transfer-contract.mjs');
+
+await import('./photo-share-ui-contract.mjs');

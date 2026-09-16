@@ -40,7 +40,7 @@ for(const row of document.querySelectorAll('[data-mitenya-log],.chat-message[dat
  if(!journal)continue;
  let timer=0,x=0,y=0,suppressUntil=0;
  const stop=()=>{clearTimeout(timer);timer=0;};
- row.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button,input,textarea'))return;x=e.clientX;y=e.clientY;timer=setTimeout(()=>{timer=0;suppressUntil=Date.now()+1200;open('journal',id,button);},600);});
+ row.addEventListener('pointerdown',e=>{if(e.button!==0)return;const control=e.target.closest('button,input,textarea');if(control&&!control.hasAttribute('data-journal-photo'))return;x=e.clientX;y=e.clientY;timer=setTimeout(()=>{timer=0;suppressUntil=Date.now()+1200;open('journal',id,button);},600);});
  row.addEventListener('pointermove',e=>{if(Math.hypot(e.clientX-x,e.clientY-y)>10)stop();});
  for(const name of ['pointerup','pointercancel','pointerleave'])row.addEventListener(name,stop);
  row.addEventListener('click',e=>{if(Date.now()<suppressUntil){suppressUntil=0;e.preventDefault();e.stopImmediatePropagation();}},true);
