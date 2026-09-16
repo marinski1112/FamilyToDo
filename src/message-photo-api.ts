@@ -11,6 +11,9 @@ async function boundedForm(request:Request):Promise<FormData> {
   const bytes=new Uint8Array(size);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.length;}
   return new Request(request.url,{method:'POST',headers:{'content-type':request.headers.get('content-type')??''},body:bytes}).formData();
 }
+function captureEpoch(value:unknown):number|null {
+  const parsed=Number(value);return Number.isSafeInteger(parsed)&&parsed>0?parsed:null;
+}
 export async function messagePhotoApi(request:Request,ctx:AppContext):Promise<Response> {
   const m=ctx.member;
   if(!m || !await ctx.env.DB.prepare('SELECT 1 FROM members WHERE id=? AND family_id=? AND active=1').bind(m.id,m.family_id).first())return reply({ok:false,error:'AUTH_REQUIRED'},401);
@@ -26,19 +29,22 @@ export async function messagePhotoApi(request:Request,ctx:AppContext):Promise<Re
         .bind(Number(value),m.family_id,now,m.id).first<{object_key:string;mime_type:string}>();
       if(!row)return reply({ok:false,error:'PHOTO_NOT_FOUND'},404);
       const object=await ctx.env.MEDIA.get(row.object_key);if(!object)return reply({ok:false,error:'PHOTO_NOT_FOUND'},404);
-      return new Response(object.body,{headers:{'content-type':row.mime_type,'cache-control':'private, no-store','x-content-type-options':'nosniff'}});
+      const headers=new Headers({'content-type':row.mime_type,'cache-control':'private, no-store','x-content-type-options':'nosniff'});
+      const capturedAt=captureEpoch(object.customMetadata?.capturedAt);if(capturedAt)headers.set('x-photo-captured-at',String(capturedAt));
+      return new Response(object.body,{headers});
     }
     if(request.method!=='POST'||value!=='upload')return reply({ok:false,error:'INVALID_REQUEST'},400);
     const csrf=request.headers.get('x-csrf-token');if(!csrf||csrf!==ctx.session.csrfToken)return reply({ok:false,error:'CSRF_FAILED'},403);
     const form=await boundedForm(request),file=form.get('file');
     if(!(file instanceof File))throw new MessagePhotoError('INVALID_PHOTO');
     if(file.size>MESSAGE_PHOTO_MAX_BYTES)throw new MessagePhotoError('PHOTO_TOO_LARGE');
-    const caption=String(form.get('caption')??'').trim(),reminderRaw=String(form.get('reminder_at')??'').trim();
+    const caption=String(form.get('caption')??'').trim(),reminderRaw=String(form.get('reminder_at')??'').trim(),captureRaw=String(form.get('captured_at')??'').trim();
+    const capturedAt=captureRaw?captureEpoch(captureRaw):null;if(captureRaw&&!capturedAt)throw new MessagePhotoError('INVALID_PHOTO');
     const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date());
     const reminderAt=reminderRaw&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
     if(reminderRaw&&(!reminderAt||reminderAt<=now))throw new MessagePhotoError('INVALID_REMINDER');
     const id=await createMessagePhoto(ctx.env.DB,ctx.env.MEDIA,{uploadId:String(form.get('upload_id')??''),familyId:m.family_id,memberId:m.id,
-      bytes:await file.arrayBuffer(),mime:file.type,caption,reminderAt,now});
+      bytes:await file.arrayBuffer(),mime:file.type,caption,reminderAt,capturedAt,now});
     return reply({ok:true,id},201);
   } catch(error) {
     if(error instanceof MessagePhotoError)return reply({ok:false,error:error.code},error.code==='PHOTO_TOO_LARGE'?413:error.code==='UPLOAD_CONFLICT'?409:400);
