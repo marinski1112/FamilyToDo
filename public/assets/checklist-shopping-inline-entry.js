@@ -13,6 +13,7 @@ style.textContent=`
 .shopping-category-toggle::after{font-size:28px;line-height:1}
 .shopping-category-toggle[aria-expanded="false"]::after{content:'›'}
 .shopping-category-toggle[aria-expanded="true"]::after{content:'⌄'}
+.cat-grip,.item-grip{display:none!important}
 .shopping-category-footer{padding:0 4px 2px!important;border-top:0!important}
 .shopping-category-add-item{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;min-height:48px!important;padding:0 4px!important;border:0!important;border-bottom:1px solid #f0f0f2!important;background:transparent!important;color:#8e8e93!important;text-align:left!important;font-size:0!important;font-weight:400!important}
 .shopping-category-add-item::before{content:'';width:22px;height:22px;flex:0 0 22px;border:1.7px solid #c7c7cc;border-radius:5px;box-sizing:border-box;background:#fff}
