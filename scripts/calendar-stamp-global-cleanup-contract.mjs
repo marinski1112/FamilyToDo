@@ -166,3 +166,12 @@ test('a retained remember callback cannot admit a write after its operation ends
     await assert.rejects(remember('families/1/calendar-stamps/late.png'),/already ended/);
   } finally { f.sql.close(); }
 });
+
+test('permanently deleted assets leave reversible admin controls immediately', () => {
+  const inventorySource=readFileSync('src/calendar-stamp-admin-inventory.ts','utf8');
+  const deletionUiSource=readFileSync('public/assets/global-stamp-deletion-ui.js','utf8');
+  assert.match(inventorySource,/calendar_stamp_global_deleted_assets[\s\S]*?deleted\.asset_id=calendar_stamp_assets\.id/,
+    'admin inventory must exclude tombstoned assets while retaining ordinary soft-disabled assets');
+  assert.match(deletionUiSource,/typeof options\.onDeleted==='function'[\s\S]*?globalThis\.location\?\.reload\?\.\(\)/,
+    'successful permanent deletion must refresh admin inventory when no explicit callback is supplied');
+});
