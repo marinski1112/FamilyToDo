@@ -1,5 +1,5 @@
 export const MESSAGE_PHOTO_MAX_BYTES=4*1024*1024;
-export type MessagePhotoInput={uploadId:string;familyId:number;memberId:number;bytes:ArrayBuffer;mime:string;caption:string;reminderAt:string|null;capturedAt:number|null;now:string};
+export type MessagePhotoInput={uploadId:string;familyId:number;memberId:number;bytes:ArrayBuffer;mime:string;caption:string;reminderAt:string|null;capturedAt?:number|null;now:string};
 type Photo={upload_id:string;family_id:number;member_id:number;object_key:string;sha256:string;mime_type:string;byte_size:number;caption:string;reminder_at:string|null;state:string};
 export class MessagePhotoError extends Error { constructor(readonly code:string){super(code);} }
 const digest=async(bytes:ArrayBuffer)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -10,7 +10,7 @@ function validImage(bytes:Uint8Array,mime:string) {
   return false;
 }
 export async function createMessagePhoto(db:D1Database,bucket:R2Bucket,input:MessagePhotoInput):Promise<number> {
-  const {uploadId,familyId,memberId,bytes,mime,caption,reminderAt,capturedAt,now}=input;
+  const {uploadId,familyId,memberId,bytes,mime,caption,reminderAt,now}=input,capturedAt=input.capturedAt??null;
   if(!/^[a-f0-9-]{36}$/u.test(uploadId)||!Number.isSafeInteger(familyId)||familyId<1||!Number.isSafeInteger(memberId)||memberId<1||caption.length>2000)throw new MessagePhotoError('INVALID_PHOTO');
   if(capturedAt!==null&&(!Number.isSafeInteger(capturedAt)||capturedAt<=0))throw new MessagePhotoError('INVALID_PHOTO');
   if(bytes.byteLength<1||bytes.byteLength>MESSAGE_PHOTO_MAX_BYTES)throw new MessagePhotoError('PHOTO_TOO_LARGE');
