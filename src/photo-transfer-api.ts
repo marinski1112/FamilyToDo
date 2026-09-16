@@ -2,7 +2,7 @@ import type {AppContext} from './app-context';
 import {memberById} from './app-context';
 import {familyLogMediaApi} from './family-log-media-api';
 import {messagePhotoApi} from './message-photo-api';
-import {createPhotoTransfer,claimPhotoTransfer,photoSha256} from './photo-transfer-service';
+import {createPhotoTransfer,claimPhotoTransfer,consumePhotoTransfer,inspectPhotoTransfer,photoSha256,type PhotoTransfer} from './photo-transfer-service';
 const MAX_BYTES=4*1024*1024;
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'cache-control':'private, no-store','referrer-policy':'no-referrer'}});
 export async function readTransferBody(request:Request|Response,limit:number):Promise<Uint8Array> {
@@ -19,6 +19,31 @@ async function sourcePhoto(ctx:AppContext,kind:string,id:number):Promise<Respons
  const data=await meta.json() as {media?:{id?:number}};
  if(!Number.isSafeInteger(data.media?.id))return reply({ok:false},404);
  return familyLogMediaApi(new Request(`https://internal/api/family-log-media?media=${data.media!.id}`),ctx);
+}
+async function parseTransferToken(request:Request):Promise<string|null> {
+ const {token}=JSON.parse(new TextDecoder().decode(await readTransferBody(request,128)));
+ return typeof token==='string'&&/^[a-f0-9]{64}$/u.test(token)?token:null;
+}
+type ResolvedPhoto={ok:true;mime:string;bytes:Uint8Array;caption:string}|{ok:false;response:Response};
+async function resolveTransferPhoto(request:Request,env:Env,row:PhotoTransfer):Promise<ResolvedPhoto> {
+ const member=await memberById(env,row.member_id);
+ if(!member||member.family_id!==row.family_id)return {ok:false,response:reply({ok:false},404)};
+ const ctx={request,env,member,session:{}} as AppContext;
+ const photo=await sourcePhoto(ctx,row.source_kind,row.source_id);
+ if(!photo.ok){await photo.body?.cancel();return {ok:false,response:reply({ok:false},404)};}
+ const mime=photo.headers.get('content-type')||'';
+ if(!['image/jpeg','image/png','image/webp'].includes(mime)){await photo.body?.cancel();return {ok:false,response:reply({ok:false},404)};}
+ const bytes=await readTransferBody(photo,MAX_BYTES);
+ if(await photoSha256(bytes)!==row.sha256)return {ok:false,response:reply({ok:false,error:'SOURCE_CHANGED'},409)};
+ return {ok:true,mime,bytes,caption:row.caption};
+}
+function sameTransfer(a:PhotoTransfer,b:PhotoTransfer):boolean {
+ return a.family_id===b.family_id&&a.member_id===b.member_id&&a.source_kind===b.source_kind&&a.source_id===b.source_id&&a.caption===b.caption&&a.sha256===b.sha256;
+}
+function encodeTransferPhoto(photo:{mime:string;bytes:Uint8Array;caption:string}):Response {
+ let binary='';
+ for(let offset=0;offset<photo.bytes.length;offset+=8192)binary+=String.fromCharCode(...photo.bytes.subarray(offset,offset+8192));
+ return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption});
 }
 export async function mintPhotoTransfer(request:Request,ctx:AppContext):Promise<Response> {
  if(request.method!=='POST')return reply({ok:false},405);
@@ -38,21 +63,27 @@ export async function mintPhotoTransfer(request:Request,ctx:AppContext):Promise<
 export async function redeemPhotoTransfer(request:Request,env:Env):Promise<Response> {
  if(request.method!=='POST')return reply({ok:false},405);
  try{
-  const {token}=JSON.parse(new TextDecoder().decode(await readTransferBody(request,128)));
-  if(typeof token!=='string'||!/^[a-f0-9]{64}$/u.test(token))return reply({ok:false},404);
+  const token=await parseTransferToken(request);
+  if(!token)return reply({ok:false},404);
   const row=await claimPhotoTransfer(env.DB,token);
   if(!row)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
-  const member=await memberById(env,row.member_id);
-  if(!member||member.family_id!==row.family_id)return reply({ok:false},404);
-  const ctx={request,env,member,session:{}} as AppContext;
-  const photo=await sourcePhoto(ctx,row.source_kind,row.source_id);
-  if(!photo.ok){await photo.body?.cancel();return reply({ok:false},404);}
-  const mime=photo.headers.get('content-type')||'';
-  if(!['image/jpeg','image/png','image/webp'].includes(mime)){await photo.body?.cancel();return reply({ok:false},404);}
-  const bytes=await readTransferBody(photo,MAX_BYTES);
-  if(await photoSha256(bytes)!==row.sha256)return reply({ok:false,error:'SOURCE_CHANGED'},409);
-  let binary='';
-  for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
-  return reply({ok:true,mime,base64:btoa(binary),caption:row.caption});
+  const photo=await resolveTransferPhoto(request,env,row);
+  if(!photo.ok)return photo.response;
+  return encodeTransferPhoto(photo);
+ }catch{return reply({ok:false,error:'TRANSFER_UNAVAILABLE'},503);}
+}
+export async function consumePhotoTransferRequest(request:Request,env:Env):Promise<Response> {
+ if(request.method!=='POST')return reply({ok:false},405);
+ try{
+  const token=await parseTransferToken(request);
+  if(!token)return reply({ok:false},404);
+  const inspected=await inspectPhotoTransfer(env.DB,token);
+  if(!inspected)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
+  const photo=await resolveTransferPhoto(request,env,inspected);
+  if(!photo.ok)return photo.response;
+  const consumed=await consumePhotoTransfer(env.DB,token);
+  if(!consumed)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
+  if(!sameTransfer(inspected,consumed))return reply({ok:false,error:'TRANSFER_CHANGED'},409);
+  return encodeTransferPhoto(photo);
  }catch{return reply({ok:false,error:'TRANSFER_UNAVAILABLE'},503);}
 }

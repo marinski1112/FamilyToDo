@@ -1,3 +1,4 @@
+import './photo-transfer-final-consume-contract.mjs';
 import fs from 'node:fs';
 
 const index=fs.readFileSync('src/index.ts','utf8');
