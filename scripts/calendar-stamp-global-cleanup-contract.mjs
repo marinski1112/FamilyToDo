@@ -108,24 +108,24 @@ test('complete deletion removes target posts, photo bytes, capabilities, stamp r
     assert.deepEqual(result,{complete:true,cleanupPending:false});
     assert.equal(f.objects.has(photo.key),false,'target message photo bytes must be erased');
     assert.equal(f.objects.size,2,'only unrelated stamp content/thumbnail remain');
-    assert.deepEqual(f.sql.prepare('SELECT id FROM calendar_stamp_assets ORDER BY id').all(),[{id:3}]);
-    assert.deepEqual(f.sql.prepare('SELECT id FROM messages ORDER BY id').all(),[{id:3}]);
+    assert.deepEqual(f.sql.prepare('SELECT id FROM calendar_stamp_assets ORDER BY id').all().map(row=>row.id),[3]);
+    assert.deepEqual(f.sql.prepare('SELECT id FROM messages ORDER BY id').all().map(row=>row.id),[3]);
     assert.equal(f.sql.prepare("SELECT count(*) AS n FROM message_stamp_attachments WHERE asset_id IN (1,2)").get().n,0);
-    assert.deepEqual(f.sql.prepare('SELECT asset_id FROM calendar_stamp_placements ORDER BY asset_id').all(),[{asset_id:3}]);
+    assert.deepEqual(f.sql.prepare('SELECT asset_id FROM calendar_stamp_placements ORDER BY asset_id').all().map(row=>row.asset_id),[3]);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM calendar_stamp_asset_frames WHERE asset_id IN (1,2)').get().n,0);
     assert.equal(f.sql.prepare("SELECT count(*) AS n FROM calendar_shared_stamp_refs WHERE shared_stamp_id='target'").get().n,0);
-    assert.deepEqual(f.sql.prepare('SELECT id,source_message_id FROM tasks ORDER BY id').all(),[
-      {id:1,source_message_id:null},{id:2,source_message_id:3},
+    assert.deepEqual(f.sql.prepare('SELECT id,source_message_id FROM tasks ORDER BY id').all().map(row=>[row.id,row.source_message_id]),[
+      [1,null],[2,3],
     ]);
-    assert.deepEqual(f.sql.prepare('SELECT id,source_message_id FROM shopping_items ORDER BY id').all(),[
-      {id:1,source_message_id:null},{id:2,source_message_id:3},
+    assert.deepEqual(f.sql.prepare('SELECT id,source_message_id FROM shopping_items ORDER BY id').all().map(row=>[row.id,row.source_message_id]),[
+      [1,null],[2,3],
     ]);
-    assert.deepEqual(f.sql.prepare('SELECT id FROM notifications ORDER BY id').all(),[{id:2}]);
-    assert.deepEqual(f.sql.prepare('SELECT id FROM activity_logs ORDER BY id').all(),[{id:2}]);
+    assert.deepEqual(f.sql.prepare('SELECT id FROM notifications ORDER BY id').all().map(row=>row.id),[2]);
+    assert.deepEqual(f.sql.prepare('SELECT id FROM activity_logs ORDER BY id').all().map(row=>row.id),[2]);
     assert.equal(f.sql.prepare('SELECT count(*) AS n FROM message_conversion_claims').get().n,0);
-    assert.deepEqual(f.sql.prepare('SELECT token_hash FROM photo_transfers ORDER BY token_hash').all(),[{token_hash:'other-transfer'}]);
-    assert.deepEqual(f.sql.prepare('SELECT state,caption,reminder_at,writers FROM message_photos WHERE upload_id=?').get(photo.uploadId),
-      {state:'deleted',caption:'',reminder_at:null,writers:0});
+    assert.deepEqual(f.sql.prepare('SELECT token_hash FROM photo_transfers ORDER BY token_hash').all().map(row=>row.token_hash),['other-transfer']);
+    const photoRow=f.sql.prepare('SELECT state,caption,reminder_at,writers FROM message_photos WHERE upload_id=?').get(photo.uploadId);
+    assert.equal(photoRow.state,'deleted'); assert.equal(photoRow.caption,''); assert.equal(photoRow.reminder_at,null); assert.equal(photoRow.writers,0);
     for (const table of ['calendar_stamp_global_cleanup_keys','calendar_stamp_global_materializations',
       'calendar_stamp_global_sources','calendar_stamp_global_deleted_assets','calendar_stamp_global_operations',
       'calendar_stamp_global_deletions','calendar_stamp_delete_approvals']) {
@@ -234,7 +234,6 @@ test('upgrades a legacy captured deletion by additionally removing a target mess
     f.seed(1,'target');
     f.sql.exec("INSERT INTO message_stamp_attachments(family_id,message_id,asset_id,created_by,created_at) VALUES(1,1,1,1,'test');\n      INSERT INTO calendar_stamp_global_deletions(shared_stamp_id,captured,complete) VALUES('target',1,1);\n      INSERT INTO calendar_stamp_global_deleted_assets(asset_id,shared_stamp_id,family_id) VALUES(1,'target',1);");
     const photo=f.seedMessagePhoto(1,1,0);
-    // Simulate old cleanup: stamp bytes are already gone and its cleanup journal is empty.
     for(const key of [...f.objects.keys()])if(key.includes('/calendar-stamps/'))f.objects.delete(key);
     assert.equal((await f.clean('target')).complete,true);
     assert.equal(f.objects.has(photo.key),false);
