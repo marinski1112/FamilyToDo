@@ -4,13 +4,17 @@ import {spawnSync} from 'node:child_process';
 const index=fs.readFileSync('src/index.ts','utf8');
 const apiRoutes=fs.readFileSync('src/context-api-routes.ts','utf8');
 const itemApi=fs.readFileSync('src/item-api.ts','utf8');
+const reusableSetApi=fs.readFileSync('src/item-reusable-set-api.ts','utf8');
 const itemEdit=fs.readFileSync('src/item-edit-page.ts','utf8');
 const taskEvents=fs.readFileSync('public/assets/task-events.js','utf8');
 const belongingsUi=fs.readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const belongingsCss=fs.readFileSync('public/assets/checklist-belongings-categories.css','utf8');
+const reusableSetUi=fs.readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
+const reusableSetCss=fs.readFileSync('public/assets/checklist-belongings-reusable-sets.css','utf8');
 const migration=fs.readFileSync('migrations/0085_item_category_catalog.sql','utf8');
+const reusableSetMigration=fs.readFileSync('migrations/0086_item_reusable_sets.sql','utf8');
 
-for(const asset of ['public/assets/task-events.js','public/assets/checklist-belongings-categories.js']){
+for(const asset of ['public/assets/task-events.js','public/assets/checklist-belongings-categories.js','public/assets/checklist-belongings-reusable-sets.js']){
   const syntax=spawnSync(process.execPath,['--check',asset],{encoding:'utf8'});
   if(syntax.status!==0)throw new Error(`${asset} syntax invalid: ${syntax.stderr||syntax.stdout}`);
 }
@@ -20,7 +24,10 @@ if(index.includes('async function itemApi(')) throw new Error('itemApi must not 
 if(!apiRoutes.includes("if(url.pathname==='/api/item') return await itemApi(request,context);")) throw new Error('item API route wiring changed');
 if(!itemApi.includes('export async function itemApi(request:Request,ctx:any):Promise<Response>{')) throw new Error('item API module must export itemApi');
 for(const sentinel of [
-  "if(request.method==='GET')return await readCategories(request,ctx,m);",
+  "import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';",
+  "if(new URL(request.url).searchParams.get('view')==='reusable_sets')return await readItemReusableSets(ctx,m);",
+  'const reusableSetResponse=await handleItemReusableSetAction(ctx,m,b);',
+  'if(reusableSetResponse)return reusableSetResponse;',
   "if(request.method!=='POST') return json({ok:false,error:'POST only'},405);",
   "String(b.csrf||'')!==String(ctx.session.csrfToken||'')",
   "taskVisibilitySql('t')",
@@ -56,6 +63,38 @@ for(const sentinel of [
 if(/UPDATE\s+items\s+SET\s+category/iu.test(migration))throw new Error('migration must not rewrite historical item categories; NULL/empty remains 未分類 at read time');
 
 for(const sentinel of [
+  'CREATE TABLE IF NOT EXISTS item_reusable_sets',
+  'CREATE TABLE IF NOT EXISTS item_reusable_set_entries',
+  'CREATE TABLE IF NOT EXISTS item_reusable_set_invocations',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_item_reusable_sets_family_name',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_item_reusable_set_invocations_family_request',
+  'set_id_snapshot INTEGER NOT NULL',
+  "created_item_ids TEXT NOT NULL DEFAULT '[]'",
+])if(!reusableSetMigration.includes(sentinel))throw new Error(`reusable belongings set migration marker missing: ${sentinel}`);
+const entriesSchema=reusableSetMigration.match(/CREATE TABLE IF NOT EXISTS item_reusable_set_entries\s*\(([\s\S]*?)\);/iu)?.[1]||'';
+if(/\b(status|completed|completion)\b/iu.test(entriesSchema))throw new Error('reusable set definition must not persist actual checklist completion state');
+
+for(const sentinel of [
+  "import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';",
+  'const MAX_SET_ITEMS=100;',
+  'WHERE s.family_id=?',
+  "filter(row=>String(row.visibility_scope||'FAMILY')!=='PRIVATE')",
+  "return bad('非公開タスクに紐づく持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY')",
+  "role==='OWNER'||role==='ADMIN'",
+  "action==='reusable_set_create'",
+  "action==='reusable_set_delete'",
+  "action==='reusable_set_invoke'",
+  "taskChildVisibilitySql('i')",
+  'Number(existing.created_by_member_id)!==Number(m.id)',
+  "const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);",
+  "VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)",
+  'task_id,category,url,client_request_id',
+  "INSERT OR IGNORE INTO item_reusable_set_invocations",
+  "UPDATE item_reusable_set_invocations SET created_item_ids=?,updated_at=?",
+])if(!reusableSetApi.includes(sentinel))throw new Error(`reusable belongings set API marker missing: ${sentinel}`);
+if(/recurrence_rules|recurring_occurrence|auto.?generate/iu.test(reusableSetApi))throw new Error('reusable belongings sets must not add recurrence or automatic generation');
+
+for(const sentinel of [
   "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=?,updated_at=?",
   "SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1",
   '<label>カテゴリ</label>',
@@ -69,6 +108,10 @@ for(const sentinel of [
   '/assets/checklist-belongings-categories.js?v=belongings-category1',
   "link.id='belongingsCategoryChecklistStyle'",
   "script.id='belongingsCategoryChecklistScript'",
+  '/assets/checklist-belongings-reusable-sets.css?v=belongings-set1',
+  '/assets/checklist-belongings-reusable-sets.js?v=belongings-set1',
+  "link.id='belongingsReusableSetStyle'",
+  "script.id='belongingsReusableSetScript'",
 ])if(!taskEvents.includes(sentinel))throw new Error(`belongings checklist asset wiring missing: ${sentinel}`);
 
 for(const sentinel of [
@@ -90,6 +133,7 @@ for(const sentinel of [
   "if(box.disabled&&++n<100)",
   "post({action:'category_reorder',order:named().map(g=>cat(g.dataset.category))})",
   "post({action:'category_rename',name:old,new_name:next})",
+  "section.addEventListener('belongings-items-added'",
 ])if(!belongingsUi.includes(sentinel))throw new Error(`belongings Reminders-style UX marker missing: ${sentinel}`);
 for(const sentinel of [
   '.belongings-category-name{flex:1;min-width:0;font-size:20px',
@@ -101,4 +145,24 @@ if(belongingsUi.includes('new MutationObserver'))throw new Error('belongings cat
 if(belongingsUi.includes('location.reload')||belongingsUi.includes('location.replace'))throw new Error('belongings inline add/toggle/category operations must not full-reload the checklist');
 if(belongingsUi.includes('△'))throw new Error('deprecated triangle state UI must not return');
 
-console.log('item API modularity contract: canonical belongings add/edit + family-scoped categories, idempotent direct entry, memo/url persistence, square checkbox, collapsed groups, completion ordering, privacy, and no-reload/no-observer UX ok');
+for(const sentinel of [
+  "open.textContent='セット'",
+  '現在の持ち物からセット保存',
+  "action:'reusable_set_create'",
+  'source_item_ids:ids',
+  "action:'reusable_set_invoke'",
+  "action:'reusable_set_delete'",
+  'client_request_id:rid',
+  'sessionStorage.setItem(key,created)',
+  "new CustomEvent('belongings-items-added'",
+  "if(++tries<100)setTimeout(attach,50)",
+])if(!reusableSetUi.includes(sentinel))throw new Error(`reusable belongings set UI marker missing: ${sentinel}`);
+for(const sentinel of [
+  '.belongings-set-overlay[hidden]{display:none!important}',
+  '.belongings-set-overlay{position:fixed',
+  '.belongings-set-sheet{position:relative',
+])if(!reusableSetCss.includes(sentinel))throw new Error(`reusable belongings set compact sheet marker missing: ${sentinel}`);
+if(reusableSetUi.includes('new MutationObserver'))throw new Error('reusable set UI must not add a MutationObserver self-loop risk');
+if(reusableSetUi.includes('location.reload')||reusableSetUi.includes('location.replace'))throw new Error('reusable set operations must not full-reload the checklist');
+
+console.log('item API modularity contract: canonical belongings add/edit + family-scoped categories + reusable snapshot sets, idempotent fresh pending invocation, memo/url persistence, square checkbox, collapsed groups, privacy, and no-reload/no-observer UX ok');
