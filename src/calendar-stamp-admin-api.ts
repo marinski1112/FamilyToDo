@@ -17,6 +17,7 @@ function scope(context:any):{familyId:number;memberId:number}|null{
 
 function adminError(error:unknown):Response{
   const message=String((error as {message?:unknown})?.message||'');
+  if(message.includes('stamp permanently deleted'))return json({ok:false,error:'STAMP_DELETED'},410);
   if(message.includes('admin required'))return json({ok:false,error:'ADMIN_REQUIRED'},403);
   if(message.startsWith('invalid '))return json({ok:false,error:'INVALID_REQUEST'},400);
   return json({ok:false,error:'STAMP_ADMIN_FAILED'},500);

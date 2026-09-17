@@ -82,6 +82,7 @@ assert.doesNotMatch(adminInventory,/SELECT\s+\*/i,'admin inventory must not use 
 assert.doesNotMatch(adminInventory,/console\.(?:log|warn|error)|request|cookie|authorization|token|line_user_id|member_name|family_name/i,'admin inventory must not handle or log sensitive identity/session content');
 assert.doesNotMatch(adminInventory,/calendar\(|renderCalendarPage|calendar_perf/,'admin inventory must remain disconnected from the Calendar renderer while 1102 is being re-profiled');
 
+assert.match(adminApi,/message\.includes\('stamp permanently deleted'\)[\s\S]*?STAMP_DELETED[\s\S]*?410/,'globally deleted stamp active-state mutations must map the durable tombstone trigger to 410 STAMP_DELETED');
 assert.match(adminApi,/body\.storageProvider!=null&&typeof body\.storageProvider!=='string'[\s\S]*?INVALID_STORAGE_PROVIDER[\s\S]*?400/,'PNG sequence admin boundary must reject non-string provider payloads before coercion');
 assert.match(adminApi,/const rawStorageProvider=String\(body\.storageProvider\?\?''\)\.trim\(\);/,'PNG sequence admin boundary must normalize only a validated provider string');
 assert.match(adminApi,/rawStorageProvider&&rawStorageProvider!=='ASSETS'&&rawStorageProvider!=='UPLOAD'[\s\S]*?INVALID_STORAGE_PROVIDER[\s\S]*?400/,'PNG sequence admin boundary must reject explicit unknown providers');
