@@ -63,15 +63,14 @@ page.addEventListener('change',event=>{
   if(!(input instanceof HTMLInputElement)||!input.matches('input.toggle'))return;
   const group=input.closest('.shopping-category-group');
   if(group instanceof HTMLElement)queueMicrotask(()=>refreshCategoryCount(group));
-  if(input.dataset.type==='shopping'&&input.checked){
-    const row=input.closest('.linked-shopping-row');
-    if(row instanceof HTMLElement&&row.classList.contains('reminders-new-row')){
-      const started=performance.now();
-      const settle=()=>{if(input.disabled&&performance.now()-started<12000){requestAnimationFrame(settle);return;}if(input.checked){row.remove();refreshCounts();}};
-      requestAnimationFrame(settle);
-    }
-  }
 },true);
+
+page.addEventListener('familytodo:toggle-success',event=>{
+  const input=event.target;
+  if(!(input instanceof HTMLInputElement)||input.dataset.type!=='shopping'||!event.detail?.completed)return;
+  const row=input.closest('.linked-shopping-row');
+  if(row instanceof HTMLElement&&row.classList.contains('reminders-new-row')){row.remove();refreshCounts();}
+});
 
 // Refresh only when checklist rows/groups are structurally added or removed. Do not observe
 // class/checked mutations: count rendering itself changes the DOM and previously fed the observer
