@@ -75,6 +75,17 @@ if(api.includes('担当者が設定されていないタスクは完了できま
 if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
 if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
+const taskBlock=api.match(/if\(type==='task'\)\{([\s\S]*?)\n  if\(type==='item'\)\{/u)?.[1]||'';
+if(!taskBlock) throw new Error('task completion block missing');
+for(const marker of [
+  'const taskCompletionMutation=completed',
+  'ON CONFLICT(task_id,member_id) DO NOTHING',
+  'const taskStateChanged=Number(taskCompletionMutation.meta?.changes||0)>0;',
+  'if(taskStateChanged){',
+]) if(!taskBlock.includes(marker)) throw new Error(`task retry idempotency marker missing: ${marker}`);
+if(taskBlock.includes('ON CONFLICT(task_id,member_id) DO UPDATE SET completed_at=excluded.completed_at')) throw new Error('same-state task completion retry must not refresh member completed_at');
+if(!/if\(taskStateChanged\)\{[\s\S]*UPDATE tasks SET status=[\s\S]*INSERT INTO task_completion_history[\s\S]*logActivity\(ctx,completed\?'COMPLETED':'UNCOMPLETED','task'/u.test(taskBlock)) throw new Error('task aggregate/history/activity writes must be gated by a real member completion transition');
+
 for(const marker of [
   "PRAGMA table_info(recurrence_occurrences)",
   "if(!columns.has('status'))throw new Error('recurrence_occurrences.status is required')",
@@ -92,4 +103,4 @@ if(!exceptionRoutes.includes("if(url.pathname==='/app/api/check.php'||url.pathna
 const appImport=exceptionRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\btoggle\b/.test(appImport)) throw new Error('exception routes must not import toggle from app.ts');
 
-console.log('toggle-api-boundary: retained routing, authorization, assignment fallback and D1 schema compatibility ok');
+console.log('toggle-api-boundary: retained routing, authorization, assignment fallback, task retry idempotency and D1 schema compatibility ok');
