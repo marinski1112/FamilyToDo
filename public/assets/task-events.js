@@ -59,6 +59,7 @@
         expiredRow.querySelector('.expired-task-main > span')?.classList.toggle('done',checked);
         expiredRow.dataset.serverCompleted=serverCompleted?'1':'0';
       }
+      el.dispatchEvent(new CustomEvent('familytodo:toggle-success',{bubbles:true,detail:{completed:serverCompleted}}));
     }catch(error){
       el.checked=!checked;
       alert(error?.message||String(error));
