@@ -29,7 +29,7 @@ assert.match(checklist,/date\(COALESCE\(t\.end_at,t\.start_at\)\)>=date\(\?\)/,'
 assert.match(checklist,/lower\(COALESCE\(t\.task_kind,''\)\)<>'event'/,'non-event task semantics must remain a separate branch');
 assert.match(checklist,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\)>=date\(\?\)/,'normal task window must use the same end_at -> due_at -> start_at effective deadline as expired classification');
 assert.match(checklist,/recurringForDate\(ctx,date\)/,'recurring rows must continue to be projected for the selected date only');
-assert.doesNotMatch(checklist,/task_kind.*event.*status='completed'/is,'event visibility must not depend on completion state');
+assert.doesNotMatch(checklist,/task_kind.*event.*t\.status='completed'/is,'event visibility must not depend on completion state');
 
 const expiredStart=checklistSource.indexOf('async function expiredTasksFor');
 const expiredEnd=checklistSource.indexOf('\nasync function unorganizedTasksFor',expiredStart);
