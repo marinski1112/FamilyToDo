@@ -8,6 +8,7 @@ const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 const categoryUx=fs.readFileSync('public/assets/checklist-category-followup.js','utf8');
 const shoppingRoot=fs.readFileSync('src/shopping-root.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
+const undatedRetentionMigration=fs.readFileSync('migrations/0089_shopping_undated_completed_retention.sql','utf8');
 
 const categorySyntax=spawnSync(process.execPath,['--check','public/assets/checklist-category-followup.js'],{encoding:'utf8'});
 if(categorySyntax.status!==0)throw new Error(`Shopping category UX syntax invalid: ${categorySyntax.stderr||categorySyntax.stdout}`);
@@ -18,6 +19,7 @@ if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task cla
 if(page.includes('<details class="card expired-shopping" open>'))throw new Error('overdue Shopping must stay collapsed by default to preserve Checklist information density');
 if(page.includes('task-event-summary meta')||page.includes('const summary=`<div class="task-event-summary'))throw new Error('Checklist header must not restore Task/Shopping count summary');
 if(page.includes('<div class="date-title">'))throw new Error('Checklist selected date must stay inline with the compact title');
+if(page.includes('OR (s.task_id IS NULL AND s.due_date IS NULL)'))throw new Error('undated Shopping must not fetch all historical completed rows');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
@@ -31,6 +33,15 @@ for(const marker of [
   "expiredTasksFor(ctx,date)",
   "recurringForDate(ctx,date)",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
+  "s.task_id IS NULL",
+  "s.due_date IS NULL",
+  "s.status<>'completed'",
+  "s.status='completed'",
+  "s.completed_at IS NOT NULL",
+  "s.completed_at >= CASE",
+  "WHEN strftime('%H','now','+9 hours')='00'",
+  "THEN datetime('now','+9 hours','start of day','-1 hour')",
+  "ELSE datetime('now','+9 hours','start of day')",
   "s.task_id IS NOT NULL",
   "NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
   "date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)",
@@ -71,6 +82,12 @@ for(const marker of [
   "<h1>✅ チェックリスト <span class=\"checklist-date\">${esc(compactDate)}</span></h1>",
   "return layout('チェックリスト',body,'/app/tasks.php');",
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
+
+for(const marker of [
+  'CREATE INDEX IF NOT EXISTS idx_shopping_undated_status_completed_at',
+  'ON shopping_items(family_id, status, completed_at)',
+  'WHERE task_id IS NULL AND due_date IS NULL',
+])if(!undatedRetentionMigration.includes(marker))throw new Error(`undated Shopping retention index marker missing: ${marker}`);
 
 for(const match of page.matchAll(/<label class="(?:task-main|shopping-check-row|expired-task-main)"[\s\S]*?<\/label>/g)){
   if(match[0].includes('<a '))throw new Error('completion checkbox labels must not contain navigation/edit anchors');
@@ -139,4 +156,4 @@ for(const marker of [
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup4'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
