@@ -44,6 +44,33 @@ for(const [value,expected] of [
   ['2026-12-31',true],
   ['2027-01-01',true],
 ])if(realDateFixture(value)!==expected)throw new Error(`unified checklist real-date fixture failed: ${value}`);
+const orphanLinkedItemFixture=(tasks,items)=>{
+  const renderedTaskLinkIds=new Set();
+  for(const task of tasks){
+    const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));
+    if(linkId>0)renderedTaskLinkIds.add(linkId);
+  }
+  return items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);}).map(item=>item.id);
+};
+const orphanFixture=orphanLinkedItemFixture(
+  [{id:10},{id:-50,task_id:20}],
+  [{id:1,task_id:null},{id:2,task_id:10},{id:3,task_id:20},{id:4,task_id:30}],
+);
+if(JSON.stringify(orphanFixture)!==JSON.stringify([4]))throw new Error('off-day linked Belonging fixture must surface only links whose task/template is not rendered');
+
+for(const marker of [
+  "const renderedTaskLinkIds=new Set<number>();",
+  "const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));",
+  "const orphanLinkedItems=data.items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);});",
+  "const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');",
+  "<strong>関連タスクの持ち物</strong>",
+  "const itemContent=\`\${itemRows}\${orphanItemRows?",
+  "FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id",
+  "WHERE i.family_id=? AND (i.task_id IS NULL OR \${taskVisibilitySql('pt')})",
+])if(!page.includes(marker))throw new Error(\`off-day linked Belonging visibility marker missing: \${marker}\`);
+
+if(page.includes('pt.title AS item_task_title'))throw new Error('off-day linked Belonging fallback must not expose parent task titles');
+
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
@@ -113,7 +140,7 @@ for(const marker of [
   "{priority:0,hasContent:Boolean(taskRows),html:taskSection}",
   "{priority:1,hasContent:data.shopping.length>0,html:shoppingSection}",
   "{priority:2,hasContent:Boolean(overdueSection),html:overdueSection}",
-  "{priority:3,hasContent:Boolean(itemRows),html:itemSection}",
+  "{priority:3,hasContent:Boolean(itemContent),html:itemSection}",
   "Number(b.hasContent)-Number(a.hasContent)||a.priority-b.priority",
   "<h1>✅ チェックリスト <span class=\"checklist-date\">${esc(compactDate)}</span></h1>",
   "return layout('チェックリスト',body,'/app/tasks.php');",
@@ -200,4 +227,4 @@ for(const marker of [
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup4'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, parent/child Task hierarchy with undated-child reload support, child-tail idempotent inline creation, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, off-day linked Belonging fallback without parent-title leakage, parent/child Task hierarchy with undated-child reload support, child-tail idempotent inline creation, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
