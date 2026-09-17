@@ -7,7 +7,7 @@ for(const marker of [
   "if(role!=='OWNER'&&role!=='ADMIN')",
   "const where:string[]=['a.family_id=?',activityLogVisibilitySql('a')]",
   "if(member>0){where.push('a.member_id=?');params.push(member);}",
-  "if(groups[type]){where.push(\`a.target_type IN (\${groups[type].map(()=>'?').join(',')})\`);params.push(...groups[type]);}",
+  "if(groups[type]){where.push(`a.target_type IN (${groups[type].map(()=>'?').join(',')})`);params.push(...groups[type]);}",
   "if(action&&action!=='OTHER'){where.push('a.action=?');params.push(action);}",
   "where.push(\"date(a.occurred_at) BETWEEN date(?) AND date(?)\")",
   "where.push(\"date(a.occurred_at)>=date(?,'-'||?||' days')\")",
@@ -17,7 +17,7 @@ for(const marker of [
   "formatStoredUtcForFamily(String(r.occurred_at||''),timeZone)",
   "q.set('page',String(page+1))",
   "prev.set('page',String(page-1))",
-])if(!page.includes(marker))throw new Error(\`activity log page behavior marker missing: \${marker}\`);
+])if(!page.includes(marker))throw new Error(`activity log page behavior marker missing: ${marker}`);
 
 for(const forbidden of [
   'SELECT a.*',
@@ -33,7 +33,7 @@ for(const forbidden of [
   'family_log_value_text',
   'family_log_subject_name',
   'target_subject_name',
-])if(page.includes(forbidden))throw new Error(\`activity log page restored unused Family Log projection/join: \${forbidden}\`);
+])if(page.includes(forbidden))throw new Error(`activity log page restored unused Family Log projection/join: ${forbidden}`);
 
 if(!manifest.includes("['activity-log-page-boundary','node scripts/activity-log-page-boundary-contract.mjs']"))throw new Error('activity log page boundary contract is not active');
 
