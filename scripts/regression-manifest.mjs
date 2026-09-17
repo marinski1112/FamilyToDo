@@ -56,6 +56,7 @@ export const activeRegressionGroups=[
       ['family-join-api-boundary','node scripts/family-join-api-boundary-contract.mjs'],
       ['family-invite-api-boundary','node scripts/family-invite-api-boundary-contract.mjs'],
       ['activity-log-writer-boundary','node scripts/activity-log-writer-boundary-contract.mjs'],
+      ['activity-log-page-boundary','node scripts/activity-log-page-boundary-contract.mjs'],
       ['family-log-linked-completion-boundary','node scripts/family-log-linked-completion-boundary-contract.mjs'],
       ['family-log-occurrence-api-boundary','node scripts/family-log-occurrence-api-boundary-contract.mjs'],
       ['family-log-api-boundary','node scripts/family-log-api-boundary-contract.mjs'],
