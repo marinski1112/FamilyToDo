@@ -26,6 +26,6 @@ const viewStart=checklist.indexOf('async function makeTaskEventsData(ctx:AppCont
 const viewEnd=checklist.indexOf('function renderTaskEventsPage',viewStart);
 if(viewStart<0||viewEnd<=viewStart)throw new Error('checklist view data boundary missing');
 const view=checklist.slice(viewStart,viewEnd);
-if(!view.includes('const taskRows=[...tasks.results,...recurring]'))throw new Error('recurrence occurrences must remain in normal checklist task projection');
+if(!view.includes('const taskRows=[...taskById.values(),...recurring]'))throw new Error('recurrence occurrences must remain in normal checklist task projection');
 if(!view.includes('expiredTasksFor(ctx,date)'))throw new Error('expired physical tasks must remain a separate selected-date checklist collection');
 console.log('recurrence overdue invariant: canonical templates and occurrences remain outside expired-task classification');
