@@ -22,7 +22,9 @@ assert.match(checklist,/date\(COALESCE\(t\.start_at,t\.due_at,t\.end_at\)\)<=dat
 assert.match(checklist,/date\(COALESCE\(s\.due_date,t\.end_at,t\.due_at,t\.start_at\)\)>=date\(\?\)/,'ordinary linked shopping window must remain visible through its effective shopping deadline');
 assert.match(checklist,/\(s\.task_id IS NULL AND s\.due_date IS NOT NULL AND date\(s\.due_date\)>=date\(\?\)\)/,'standalone shopping with a deadline must remain visible through the deadline date');
 assert.doesNotMatch(checklist,/\(s\.task_id IS NULL AND s\.due_date IS NOT NULL AND date\(s\.due_date\)=date\(\?\)\)/,'standalone shopping must not be limited to the deadline day');
-assert.match(checklist,/\(s\.task_id IS NULL AND s\.due_date IS NULL\)/,'standalone shopping without a deadline must remain continuously visible');
+assert.match(checklist,/s\.task_id IS NULL[\s\S]{0,80}s\.due_date IS NULL[\s\S]{0,100}s\.status<>'completed'/,'pending standalone shopping without a deadline must remain continuously visible');
+assert.match(checklist,/s\.status='completed'[\s\S]{0,120}s\.completed_at IS NOT NULL[\s\S]{0,120}s\.completed_at >= CASE/,'completed standalone shopping without a deadline must use the retention cutoff in the D1 read');
+assert.match(checklist,/WHEN strftime\('%H','now','\+9 hours'\)='00'[\s\S]{0,120}datetime\('now','\+9 hours','start of day','-1 hour'\)[\s\S]{0,120}datetime\('now','\+9 hours','start of day'\)/,'undated completion retention must keep previous-day 23:00 completions through 00:59 JST and use midnight otherwise');
 assert.match(checklist,/EXISTS\(SELECT 1 FROM recurrence_rules rr WHERE rr\.task_id=s\.task_id AND rr\.family_id=s\.family_id AND rr\.active=1\)[\s\S]{0,120}date\(s\.due_date\)=date\(\?\)/,'recurrence-linked shopping must fail closed to its explicit deadline instead of using the series template start date');
 assert.match(checklist,/通常タスクは関連日から期限まで、定期タスクは期限日に表示/,'checklist copy must describe the safe daily visibility behavior');
 assert.match(calendar,/s\.due_date BETWEEN \? AND \?/,'calendar shopping query must remain bounded to actual due dates in the visible calendar range');
