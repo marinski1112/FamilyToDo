@@ -8,6 +8,7 @@ const roughAi=fs.readFileSync('public/assets/task-rough-input-ai.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
+const taskCreate=fs.readFileSync('src/task-create.ts','utf8');
 const taskEditServer=fs.readFileSync('src/task-edit-page.ts','utf8');
 
 for(const marker of [
@@ -60,15 +61,20 @@ for(const marker of ['UPDATE notifications SET','UPDATE tasks SET','DELETE FROM 
 assert.ok(taskEditServer.includes("String(b.shopping_category||'').trim().length>255"),'legacy shared category fallback must be bounded before database mutations');
 assert.ok(taskEditServer.includes("(existingShopCategoryById.get(shoppingId)||fallbackCategory||'')"),'legacy task edit submissions must preserve each persisted category before using the shared fallback');
 
-assert.match(taskApi,shoppingInsertSql,'task creation must insert linked shopping with category support');
+// Create input validation stays in task-api; persistence is owned by the atomic task-create writer.
 assert.ok(taskApi.includes("Object.prototype.hasOwnProperty.call(v||{},'category')"),'task creation must distinguish explicit per-row category values from legacy shared-category submissions');
 assert.ok(taskApi.includes("String(v?.category??'').trim().length>255"),'task creation must bound per-row category metadata before database mutation');
 const createCategoryPreflight=taskApi.indexOf('const legacyShoppingCategory=');
-const createTaskInsert=taskApi.indexOf('INSERT INTO tasks(');
-assert.ok(createCategoryPreflight>=0&&createTaskInsert>createCategoryPreflight,'task creation shopping category validation must precede task database mutation');
+const createWriterCall=taskApi.indexOf('createTaskIdempotently(ctx.env.DB');
+assert.ok(createCategoryPreflight>=0&&createWriterCall>createCategoryPreflight,'task creation shopping category validation must precede the atomic database writer');
 assert.ok(taskApi.includes("const category=(Object.prototype.hasOwnProperty.call(v||{},'category')?String(v?.category??'').trim():legacyShoppingCategory)||null"),'task creation must prefer the row category while retaining a legacy shared-category fallback');
-assert.match(taskApi,/\.bind\(m\.family_id,name,qty,category,null,dueDate,m\.id,now2,now2,id,url\|\|null\)\.run\(\)/,'task creation must bind the newly-created task id and row category into shopping_items');
-assert.match(taskApi,/INSERT OR IGNORE INTO shopping_assignees\(shopping_item_id,member_id\)[\s\S]{0,260}?\.bind\(sid,mid,m\.family_id\)/,'task creation linked shopping must preserve assignee linkage');
+assert.ok(taskCreate.includes('INSERT INTO shopping_items(\n      family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url'),'atomic task creation must insert linked shopping with category support');
+assert.ok(taskCreate.includes("NULLIF(CAST(json_extract(j.value,'$.category') AS TEXT),'')"),'atomic task creation must persist each row category');
+assert.ok(taskCreate.includes("NULLIF(CAST(json_extract(j.value,'$.url') AS TEXT),'')"),'atomic task creation must persist each row URL');
+assert.ok(taskCreate.includes('JOIN task_create_requests r ON r.id=t.create_request_id'),'linked shopping must resolve the task through the guarded create request');
+assert.ok(taskCreate.includes('JOIN shopping_items s ON s.task_id=t.id AND s.family_id=t.family_id'),'linked shopping assignees must remain scoped to the newly-created task and family');
+assert.ok(taskCreate.includes('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id)'),'task creation linked shopping must preserve assignee linkage');
+assert.ok(taskCreate.includes("m.id=CAST(a.value AS INTEGER) AND m.family_id=? AND m.active=1"),'linked shopping assignees must be active members of the same family');
 
 const submitRegion=(source,startMarker,endMarker)=>{
   const start=source.indexOf(startMarker),end=source.indexOf(endMarker,start);
@@ -80,4 +86,4 @@ const eventShoppingDiscard=/if\s*\([^)]*(?:isEvent|editIsEvent)[^)]*\)\s*(?:\{[\
 assert.doesNotMatch(taskEditSubmit,eventShoppingDiscard,'task-edit must not discard shopping just because the record is an EVENT');
 assert.ok(!roughSave.includes("item.destination==='event'?[]"),'rough EVENT save must not discard related rows solely because the root is EVENT');
 
-console.log('task-event-shopping-integration-contract: unified Task/Event create and retained edit preserve canonical category handling, linked Shopping/Item behavior, child completion, and server task/shopping linkage');
+console.log('task-event-shopping-integration-contract: unified Task/Event create and retained edit preserve canonical category handling, linked Shopping/Item behavior, child completion, and atomic server task/shopping linkage');

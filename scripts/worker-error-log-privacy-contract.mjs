@@ -4,8 +4,9 @@ const index=fs.readFileSync(new URL('../src/index.ts',import.meta.url),'utf8');
 const observability=fs.readFileSync(new URL('../src/observability/errors.ts',import.meta.url),'utf8');
 const lineWebhook=fs.readFileSync(new URL('../src/line-webhook.ts',import.meta.url),'utf8');
 const taskApi=fs.readFileSync(new URL('../src/task-api.ts',import.meta.url),'utf8');
+const taskCreate=fs.readFileSync(new URL('../src/task-create.ts',import.meta.url),'utf8');
 const notificationDelivery=fs.readFileSync(new URL('../src/notification-delivery.ts',import.meta.url),'utf8');
-const workerOperational=index+lineWebhook+taskApi+notificationDelivery;
+const workerOperational=index+lineWebhook+taskApi+taskCreate+notificationDelivery;
 const manifest=fs.readFileSync(new URL('./regression-manifest.mjs',import.meta.url),'utf8');
 
 if(workerOperational.includes('console.error'))throw new Error('Worker operational modules must not directly forward exceptions to console.error');
@@ -22,7 +23,6 @@ for(const forbidden of [
 
 for(const required of [
   'logRequestFailure(e,request,url)',
-  'logTaskCreationCleanupFailure(cleanup)',
   "logLineWebhookFailure('reply',e)",
   "logLineWebhookFailure('handle',e)",
   'logNotificationFailure(e)',
@@ -30,6 +30,9 @@ for(const required of [
   const count=workerOperational.split(required).length-1;
   if(count!==1)throw new Error(`privacy logging wrapper must remain singular: ${required} (${count})`);
 }
+// Task creation is now one D1 batch transaction; there is no manual cleanup call to fail.
+if(workerOperational.includes('logTaskCreationCleanupFailure('))throw new Error('atomic task creation must not retain a manual cleanup logger call');
+if(!observability.includes('export function logTaskCreationCleanupFailure(error: unknown): void {'))throw new Error('legacy cleanup observability helper must remain privacy-safe while retained');
 
 const consoleCalls=(observability.match(/console\.error/g)||[]).length;
 if(consoleCalls!==1)throw new Error(`observability error boundary must have exactly one replaceable console.error sink, found ${consoleCalls}`);
