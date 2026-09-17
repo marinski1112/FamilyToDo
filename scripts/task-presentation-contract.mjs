@@ -8,6 +8,7 @@ const taskEvents=fs.readFileSync('public/assets/task-events.js','utf8');
 const css=fs.readFileSync('public/assets/family.css','utf8');
 
 assert.ok(checklist.includes('task-main-row'),'task rows must retain the main-row presentation hook');
+assert.ok(checklist.includes('task-child-row'),'task child rows must retain the hierarchy presentation hook');
 assert.ok(checklist.includes("childItems:linkedItems.length?"),'canonical checklist must continue to render linked child items');
 assert.ok(checklist.includes("shoppingCount:linkedShopping.length?"),'canonical checklist must continue to expose linked shopping state');
 assert.ok(taskEvents.includes("classList.toggle('completed',checked)"),'task completion must update row presentation in place');
