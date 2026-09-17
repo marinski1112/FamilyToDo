@@ -18,6 +18,7 @@ import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calenda
 import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';
 import { calendarSharedStampPublishAdminApi } from './calendar-shared-stamp-publish-api';
 import { messageStampApi } from './message-stamp-api';
+import { messageChatSyncApi } from './message-chat-sync-api';
 import { messageImmediateNotifyApi } from './message-immediate-notify-api';
 import { familyAiQuery, familyAiPlan, familyAiExecute, familyAiConnectionTest, familyAiModelProbe, familyAiModelCatalog, familyAiModelCompatibility, familyAiModelSelect, familyAiModelReset } from './family-ai';
 import { googleTasksAction } from './google-tasks';
@@ -62,6 +63,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);
   if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);
+  if(url.pathname==='/api/message-chat-sync') return await messageChatSyncApi(request,context);
   if(url.pathname==='/api/message-immediate-notify') return await messageImmediateNotifyApi(request,context);
   if(url.pathname==='/api/shopping') return await shopping(request,context);
   if(url.pathname==='/api/shopping-categories') return await shoppingCategoryApi(request,context);
