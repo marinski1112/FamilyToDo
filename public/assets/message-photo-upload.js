@@ -5,10 +5,11 @@
   const input=document.createElement('input');input.type='file';input.accept='image/jpeg,image/png,image/webp,image/heic';input.hidden=true;
   const status=document.createElement('p');status.className='chat-photo-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
   form.append(input,status);
-  let selected=null,normalized=null,capturedAt=0,uploadId='',snapshot='',busy=false;
+  let selected=null,normalized=null,capturedAt=0,sourceSha256='',uploadId='',snapshot='',busy=false;
   const csrf=()=>String(form.querySelector('[name="csrf"]')?.value??'');
   const setDraftState=()=>{form.dataset.photoDraft=selected?'1':'0';form.classList.toggle('has-photo',Boolean(selected));status.hidden=!selected&&!status.textContent;};
-  const clearSelection=()=>{if(busy)return;selected=null;normalized=null;capturedAt=0;uploadId='';snapshot='';input.value='';status.textContent='';setDraftState();};
+  const clearSelection=()=>{if(busy)return;selected=null;normalized=null;capturedAt=0;sourceSha256='';uploadId='';snapshot='';input.value='';status.textContent='';setDraftState();};
+  const sha256=async file=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
   const exifEpoch=async file=>{
     try{
       const bytes=new Uint8Array(await file.slice(0,Math.min(file.size,512*1024)).arrayBuffer());
@@ -31,9 +32,10 @@
   };
   const choose=()=>{if(!busy)input.click();};button.addEventListener('click',choose);toolButton?.addEventListener('click',choose);
   input.addEventListener('change',async()=>{
-    selected=input.files?.[0]??null;normalized=null;capturedAt=0;uploadId='';snapshot='';
+    selected=input.files?.[0]??null;normalized=null;capturedAt=0;sourceSha256='';uploadId='';snapshot='';
     if(selected&&selected.size>20*1024*1024){selected=null;input.value='';status.hidden=false;status.textContent='元画像は20 MiB以内を選んでください。';setTimeout(()=>{if(!selected){status.textContent='';status.hidden=true;}},2500);setDraftState();return;}
-    status.textContent=selected?'写真を選択中':'';setDraftState();if(selected)capturedAt=await exifEpoch(selected);
+    status.textContent=selected?'写真を選択中':'';setDraftState();
+    if(selected){const chosen=selected;try{const [capture,sourceHash]=await Promise.all([exifEpoch(chosen),sha256(chosen)]);if(selected===chosen){capturedAt=capture;sourceSha256=sourceHash;}}catch{if(selected===chosen)sourceSha256='';}}
   });
   document.addEventListener('pointerdown',event=>{if(!selected||busy)return;const target=event.target;if(target instanceof Node&&(form.contains(target)||document.getElementById('chatTools')?.contains(target)||document.getElementById('chatStampPicker')?.contains(target)))return;clearSelection();},{passive:true});
   async function normalize(file) {
@@ -44,7 +46,7 @@
     if(!selected)return;event.preventDefault();event.stopImmediatePropagation();if(busy)return;
     busy=true;button.disabled=true;if(toolButton)toolButton.disabled=true;
     const token=csrf(),caption=String(form.querySelector('textarea')?.value??'').trim(),reminder=String(document.getElementById('chatScheduleAt')?.value??'');const current=JSON.stringify([caption,reminder]);if(snapshot!==current||!uploadId){snapshot=current;uploadId=crypto.randomUUID();}
-    try {status.hidden=false;status.textContent='写真を送信中…';normalized??=await normalize(selected);if(csrf()!==token)throw new Error();const body=new FormData();body.set('file',normalized,'photo.jpg');body.set('caption',caption);body.set('reminder_at',reminder);body.set('upload_id',uploadId);if(capturedAt>0)body.set('captured_at',String(capturedAt));const response=await fetch('/api/messages?photo=upload',{method:'POST',credentials:'same-origin',headers:{'x-csrf-token':token},body});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error();if(csrf()===token)location.href='/app/messages.php';}
+    try {status.hidden=false;status.textContent='写真を送信中…';normalized??=await normalize(selected);if(csrf()!==token||!sourceSha256)throw new Error();const body=new FormData();body.set('file',normalized,'photo.jpg');body.set('caption',caption);body.set('reminder_at',reminder);body.set('upload_id',uploadId);body.set('source_sha256',sourceSha256);if(capturedAt>0)body.set('captured_at',String(capturedAt));const response=await fetch('/api/messages?photo=upload',{method:'POST',credentials:'same-origin',headers:{'x-csrf-token':token},body});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error();if(csrf()===token){const text=form.querySelector('textarea');if(text){text.value='';text.dispatchEvent(new Event('input',{bubbles:true}));}const schedule=document.getElementById('chatScheduleAt');if(schedule)schedule.value='';selected=null;normalized=null;capturedAt=0;sourceSha256='';uploadId='';snapshot='';input.value='';status.textContent='';setDraftState();window.dispatchEvent(new CustomEvent('familytodo:message-created',{detail:{id:Number(payload.id||0)}}));}}
     catch {status.textContent='送信できませんでした。写真は保持しています。';}
     finally {busy=false;button.disabled=false;if(toolButton)toolButton.disabled=false;}
   },true);
