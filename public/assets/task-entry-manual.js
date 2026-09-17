@@ -118,8 +118,8 @@ const init=()=>{
         if(!response.ok||!data?.ok){
           const code=String(data?.code||'');
           if(response.status<500&&!['IDEMPOTENCY_IN_PROGRESS','IDEMPOTENCY_LEASE_LOST'].includes(code))taskCreateKey=crypto.randomUUID();
-          throw new Error('登録に失敗しました。');
         }
+        if(!response.ok||!data?.ok)throw new Error('登録に失敗しました。');
         const savedDate=String(body.dateOnly||'');
         if(payload.returnTo==='calendar')location.href=!body.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='+encodeURIComponent(savedDate.slice(0,7))+'&date='+encodeURIComponent(savedDate):'/app/calendar.php?view='+encodeURIComponent(calendarReturnView);
         else location.href=body.noDate?'/app/tasks.php':'/app/tasks.php?date='+encodeURIComponent(savedDate);
