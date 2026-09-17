@@ -29,7 +29,8 @@ for(let hour=0;hour<24;hour++){
 
 const index=fs.readFileSync('src/index.ts','utf8');
 for(const marker of [
-  'scheduledDispatchPlanAt(controller.scheduledTime)',
+  "(controller as ScheduledController&{scheduledTime?:number}).scheduledTime",
+  "scheduledDispatchPlanAt(scheduledTime)",
   'if(plan.googleTasksInbound)',
   'if(plan.fiveMinuteCore)',
   'if(plan.hourlyCleanup)',
