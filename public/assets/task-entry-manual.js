@@ -22,6 +22,7 @@ const init=()=>{
     const requestedInitial=String(payload.initialType||'task');
     const initialRadio=form.querySelector(`[name=rough_primary_type][value="${requestedInitial==='event'?'event':'task'}"]`);
     if(initialRadio&&!initialRadio.checked){initialRadio.checked=true;initialRadio.dispatchEvent(new Event('change',{bubbles:true}));}
+    let taskCreateKey=crypto.randomUUID();
 
     const calendarReturnView=(()=>{try{const u=new URL(document.referrer);if(u.origin===location.origin&&u.pathname==='/app/calendar.php'){const v=String(u.searchParams.get('view')||'');if(['all','family','assigned','private'].includes(v))return v;}}catch{}return 'all';})();
     const syncDate=()=>{
@@ -113,12 +114,16 @@ const init=()=>{
       };
       const submit=form.querySelector('button[type=submit]'),old=submit?.textContent||'登録する';if(submit){submit.disabled=true;submit.textContent='登録中…';}
       try{
-        const response=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),data=await response.json().catch(()=>null);
-        if(!response.ok||!data?.ok)throw new Error('登録に失敗しました。');
+        const response=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':taskCreateKey},body:JSON.stringify(body)}),data=await response.json().catch(()=>null);
+        if(!response.ok||!data?.ok){
+          const code=String(data?.code||'');
+          if(response.status<500&&!['IDEMPOTENCY_IN_PROGRESS','IDEMPOTENCY_LEASE_LOST'].includes(code))taskCreateKey=crypto.randomUUID();
+          throw new Error(String(data?.error||'登録に失敗しました。'));
+        }
         const savedDate=String(body.dateOnly||'');
         if(payload.returnTo==='calendar')location.href=!body.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='+encodeURIComponent(savedDate.slice(0,7))+'&date='+encodeURIComponent(savedDate):'/app/calendar.php?view='+encodeURIComponent(calendarReturnView);
         else location.href=body.noDate?'/app/tasks.php':'/app/tasks.php?date='+encodeURIComponent(savedDate);
-      }catch(_error){alert('登録に失敗しました。');if(submit){submit.disabled=false;submit.textContent=old;}}
+      }catch(error){alert(error?.message||'登録に失敗しました。');if(submit){submit.disabled=false;submit.textContent=old;}}
     });
     document.documentElement.dataset.taskEntryManual='ready';
   }catch{document.documentElement.dataset.taskEntryManual='error';}
