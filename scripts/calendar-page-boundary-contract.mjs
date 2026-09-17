@@ -25,6 +25,7 @@ for(const marker of [
   'recurrence_occurrence_id:t.recurrence_occurrence_id??0',
   'id="calendarPayload"',
   '/assets/calendar.js?v=${APP_VERSION}',
+  '/assets/calendar-day-inline.js?v=${APP_VERSION}',
   '/assets/occurrence-family-log.js?v=${APP_VERSION}',
   'id="dayModal"',
   'id="calendarFab"',
