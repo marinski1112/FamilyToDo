@@ -2,8 +2,9 @@ import type {AppContext} from './app-context';
 import {memberById} from './app-context';
 import {familyLogMediaApi} from './family-log-media-api';
 import {messagePhotoApi} from './message-photo-api';
-import {createPhotoTransfer,claimPhotoTransfer,consumePhotoTransfer,inspectPhotoTransfer,photoSha256,type PhotoTransfer} from './photo-transfer-service';
+import {createPhotoTransfer,claimPhotoTransfer,consumePhotoTransfer,consumePhotoTransferRecovery,consumePhotoTransferWithRecovery,inspectPhotoTransfer,inspectPhotoTransferRecovery,photoSha256,type PhotoTransfer} from './photo-transfer-service';
 const MAX_BYTES=4*1024*1024;
+const TOKEN_PATTERN=/^[a-f0-9]{64}$/u;
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'cache-control':'private, no-store','referrer-policy':'no-referrer'}});
 export async function readTransferBody(request:Request|Response,limit:number):Promise<Uint8Array> {
  if(Number(request.headers.get('content-length'))>limit)throw Error('BODY_LIMIT');
@@ -22,7 +23,21 @@ async function sourcePhoto(ctx:AppContext,kind:string,id:number):Promise<Respons
 }
 async function parseTransferToken(request:Request):Promise<string|null> {
  const {token}=JSON.parse(new TextDecoder().decode(await readTransferBody(request,128)));
- return typeof token==='string'&&/^[a-f0-9]{64}$/u.test(token)?token:null;
+ return typeof token==='string'&&TOKEN_PATTERN.test(token)?token:null;
+}
+type ConsumeCapability={kind:'token';token:string;recoveryHash?:string}|{kind:'recovery';recoveryToken:string};
+async function parseConsumeCapability(request:Request):Promise<ConsumeCapability|null> {
+ const body=JSON.parse(new TextDecoder().decode(await readTransferBody(request,256))) as Record<string,unknown>;
+ if(!body||typeof body!=='object'||Array.isArray(body))return null;
+ const keys=Object.keys(body);
+ if(keys.length===1&&keys[0]==='recoveryToken'){
+  return typeof body.recoveryToken==='string'&&TOKEN_PATTERN.test(body.recoveryToken)?{kind:'recovery',recoveryToken:body.recoveryToken}:null;
+ }
+ if(!keys.includes('token')||keys.some((key)=>!['token','recoveryHash'].includes(key)))return null;
+ if(typeof body.token!=='string'||!TOKEN_PATTERN.test(body.token))return null;
+ if(body.recoveryHash===undefined)return {kind:'token',token:body.token};
+ if(typeof body.recoveryHash!=='string'||!TOKEN_PATTERN.test(body.recoveryHash))return null;
+ return {kind:'token',token:body.token,recoveryHash:body.recoveryHash};
 }
 function epochSeconds(value:string|null):number|null {
  const raw=String(value||'').trim();if(!raw)return null;
@@ -98,10 +113,10 @@ async function resolveTransferPhoto(request:Request,env:Env,row:PhotoTransfer):P
 function sameTransfer(a:PhotoTransfer,b:PhotoTransfer):boolean {
  return a.family_id===b.family_id&&a.member_id===b.member_id&&a.source_kind===b.source_kind&&a.source_id===b.source_id&&a.caption===b.caption&&a.sha256===b.sha256;
 }
-function encodeTransferPhoto(photo:{mime:string;bytes:Uint8Array;caption:string;capturedAt:number}):Response {
+function encodeTransferPhoto(photo:{mime:string;bytes:Uint8Array;caption:string;capturedAt:number},sourceSha256?:string):Response {
  let binary='';
  for(let offset=0;offset<photo.bytes.length;offset+=8192)binary+=String.fromCharCode(...photo.bytes.subarray(offset,offset+8192));
- return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption,capturedAt:photo.capturedAt});
+ return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption,capturedAt:photo.capturedAt,...(sourceSha256?{sourceSha256}:{})});
 }
 export async function mintPhotoTransfer(request:Request,ctx:AppContext):Promise<Response> {
  if(request.method!=='POST')return reply({ok:false},405);
@@ -133,15 +148,27 @@ export async function redeemPhotoTransfer(request:Request,env:Env):Promise<Respo
 export async function consumePhotoTransferRequest(request:Request,env:Env):Promise<Response> {
  if(request.method!=='POST')return reply({ok:false},405);
  try{
-  const token=await parseTransferToken(request);
-  if(!token)return reply({ok:false},404);
-  const inspected=await inspectPhotoTransfer(env.DB,token);
+  const capability=await parseConsumeCapability(request);
+  if(!capability)return reply({ok:false},404);
+  if(capability.kind==='recovery'){
+   const inspected=await inspectPhotoTransferRecovery(env.DB,capability.recoveryToken);
+   if(!inspected)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
+   const photo=await resolveTransferPhoto(request,env,inspected);
+   if(!photo.ok)return photo.response;
+   const consumed=await consumePhotoTransferRecovery(env.DB,capability.recoveryToken);
+   if(!consumed)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
+   if(!sameTransfer(inspected,consumed))return reply({ok:false,error:'TRANSFER_CHANGED'},409);
+   return encodeTransferPhoto(photo,consumed.sha256);
+  }
+  const inspected=await inspectPhotoTransfer(env.DB,capability.token);
   if(!inspected)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
   const photo=await resolveTransferPhoto(request,env,inspected);
   if(!photo.ok)return photo.response;
-  const consumed=await consumePhotoTransfer(env.DB,token);
+  const consumed=capability.recoveryHash
+   ?await consumePhotoTransferWithRecovery(env.DB,capability.token,capability.recoveryHash)
+   :await consumePhotoTransfer(env.DB,capability.token);
   if(!consumed)return reply({ok:false,error:'TRANSFER_EXPIRED'},410);
   if(!sameTransfer(inspected,consumed))return reply({ok:false,error:'TRANSFER_CHANGED'},409);
-  return encodeTransferPhoto(photo);
+  return encodeTransferPhoto(photo,consumed.sha256);
  }catch{return reply({ok:false,error:'TRANSFER_UNAVAILABLE'},503);}
 }
