@@ -239,8 +239,17 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   };
   const taskRows=rootTasks.map(renderRootTask).join('');
 
+  const renderedTaskLinkIds=new Set<number>();
+  for(const task of data.tasks){
+    const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));
+    if(linkId>0)renderedTaskLinkIds.add(linkId);
+  }
+  const renderItemRow=(item:Row)=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div><div class="meta">${item.assignees?'担当 '+esc(item.assignees):''}</div></div>`;
   const standaloneItems=data.items.filter(item=>!Number(item.task_id||0));
-  const itemRows=standaloneItems.map(item=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div><div class="meta">${item.assignees?'担当 '+esc(item.assignees):''}</div></div>`).join('');
+  const orphanLinkedItems=data.items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);});
+  const itemRows=standaloneItems.map(renderItemRow).join('');
+  const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');
+  const itemContent=`${itemRows}${orphanItemRows?`<div class="orphan-linked-items"><div class="meta"><strong>関連タスクの持ち物</strong></div>${orphanItemRows}</div>`:''}`;
   const unorganizedHtml=unorganizedRoots.length?`<div class="card section-card unorganized-section"><div class="section-head"><h2>📋 未整理</h2><span class="meta">期限なし ${unorganized.length}件</span></div>${unorganizedRoots.map(task=>{
     const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
     const children=unorganizedChildrenByParent.get(Number(task.id||0))||[];
@@ -256,12 +265,12 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const taskSection=`<div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>`;
   const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>表示ルール</summary><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
   const overdueSection=`${expiredShoppingHtml}${expiredHtml}`;
-  const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemRows||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
+  const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemContent||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
   const primarySections=[
     {priority:0,hasContent:Boolean(taskRows),html:taskSection},
     {priority:1,hasContent:data.shopping.length>0,html:shoppingSection},
     {priority:2,hasContent:Boolean(overdueSection),html:overdueSection},
-    {priority:3,hasContent:Boolean(itemRows),html:itemSection},
+    {priority:3,hasContent:Boolean(itemContent),html:itemSection},
   ].sort((a,b)=>Number(b.hasContent)-Number(a.hasContent)||a.priority-b.priority).map(section=>section.html).join('');
   const checklistStyle=`<style>
 .checklist-page .daily-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
