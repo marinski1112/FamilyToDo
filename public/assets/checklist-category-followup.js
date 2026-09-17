@@ -99,15 +99,20 @@ const updateToggle=group=>{
   toggle.setAttribute('aria-label',`${categoryOf(group)}を${collapsed?'展開':'閉じる'}（${rowsOf(group).length}件）`);
 };
 
+const keepFooterLast=group=>{
+  const footer=group.querySelector(':scope > .shopping-category-footer');
+  if(footer instanceof HTMLElement&&group.lastElementChild!==footer)group.append(footer);
+};
 const keepCompletedLast=group=>{
   const rows=rowsOf(group);
-  if(rows.length<2){updateToggle(group);return;}
-  const pending=rows.filter(row=>!rowCompleted(row));
-  const completed=rows.filter(row=>rowCompleted(row));
-  const desired=[...pending,...completed];
-  if(rows.every((row,index)=>row===desired[index])){updateToggle(group);return;}
   const footer=group.querySelector(':scope > .shopping-category-footer');
-  for(const row of desired)group.insertBefore(row,footer instanceof HTMLElement?footer:null);
+  if(rows.length>=2){
+    const pending=rows.filter(row=>!rowCompleted(row));
+    const completed=rows.filter(row=>rowCompleted(row));
+    const desired=[...pending,...completed];
+    if(!rows.every((row,index)=>row===desired[index]))for(const row of desired)group.insertBefore(row,footer instanceof HTMLElement?footer:null);
+  }
+  keepFooterLast(group);
   updateToggle(group);
 };
 
@@ -133,14 +138,11 @@ const addPersistedRow=(id,itemName,category,productUrl)=>{
   row.innerHTML=`<div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${id}"><span></span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${id}" aria-label="編集">編集</a></div><div class="meta"></div>`;
   const title=row.querySelector('.shopping-check-row>span');if(title)title.textContent=itemName;
   const meta=row.querySelector('.meta');
-  if(meta instanceof HTMLElement){
-    if(category!==UNCLASSIFIED)meta.append(document.createTextNode(category));
-    if(productUrl){if(meta.textContent)meta.append(document.createTextNode(' ・ '));const link=document.createElement('a');link.href=productUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent='商品ページ';meta.append(link);}
-  }
+  if(meta instanceof HTMLElement&&productUrl){const link=document.createElement('a');link.href=productUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent='商品ページ';meta.append(link);}
   const footer=group.querySelector(':scope > .shopping-category-footer');
   group.insertBefore(row,footer instanceof HTMLElement?footer:null);
   const count=page.querySelector('.reminders-smart-card[data-tone="orange"] .reminders-smart-count');if(count)count.textContent=String(section.querySelectorAll('input.toggle[data-type="shopping"]').length);
-  updateToggle(group);
+  keepCompletedLast(group);
 };
 
 const validProductUrl=value=>{if(!value)return true;try{const parsed=new URL(value);return parsed.protocol==='http:'||parsed.protocol==='https:';}catch{return false;}};
@@ -185,6 +187,7 @@ const installFooter=group=>{
     const button=document.createElement('button');button.type='button';button.className='shopping-category-add-item';button.textContent='＋ 買い物を追加';button.addEventListener('click',()=>activateComposer(group,button));
     footer.append(button);group.append(footer);
   }
+  keepFooterLast(group);
 };
 
 const decorateGroup=group=>{
