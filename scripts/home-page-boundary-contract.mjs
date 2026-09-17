@@ -43,6 +43,14 @@ for(const marker of [
   "storage_tier='HOT'",
   'journal_date=?',
   'LIMIT 1',
+  'SELECT journal_date,location_json,tasks_json,housework_json,ai_summary_text,ai_status,ai_location_member_ids_json',
+  'let row:Row|null=null,aiColumnsAvailable=true;',
+  'aiColumnsAvailable=false;',
+  'SELECT journal_date,location_json,tasks_json,housework_json',
+  'if(!aiColumnsAvailable)return fallback;',
+  'const narrative=String(row.ai_summary_text||\'\').trim();',
+  'const required=safeMemberIds(row.ai_location_member_ids_json);',
+  "if(String(row.ai_status||'')==='AI_OK'&&narrative&&sharingStillValid)",
   'd.sharing_enabled=1',
   'd.revoked_at IS NULL',
   'ai_location_member_ids_json',
@@ -53,6 +61,7 @@ for(const marker of [
 if(/\blatitude\b|\blongitude\b/i.test(dashboard))throw new Error('Home dashboard must not query or render raw Location coordinates');
 if(/LIKE\s+/i.test(dashboard))throw new Error('Home dashboard must not add historical free-text scans');
 if(dashboard.includes('SELECT * FROM family_daily_journals'))throw new Error('Home dashboard journal lookup must stay column-bounded');
+if(dashboard.includes('const ai=await db.prepare'))throw new Error('Home dashboard must not restore a normal-path second same-row journal read');
 
 if(handlers.includes("from './app'"))throw new Error('auth page handlers must not depend on app.ts');
 for(const marker of [
