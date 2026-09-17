@@ -18,6 +18,11 @@ const esc=(v:unknown)=>String(v??'')
 const dateOnly=(d=new Date())=>new Intl.DateTimeFormat('sv-SE',{
   timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',
 }).format(d);
+const isRealDateOnly=(value:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const parsed=new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
+};
 const compareShoppingRows=(a:Row,b:Row)=>{
   const status=String(a.status??'').localeCompare(String(b.status??''));if(status)return status;
   const nullDue=Number(a.due_date==null)-Number(b.due_date==null);if(nullDue)return nullDue;
@@ -295,7 +300,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 export async function taskEvents(_request:Request,ctx:AppContext,targetDate:string):Promise<Response>{
   const member=ctx.member;
   if(!member){const url=new URL(ctx.request.url);return redirect(`/login.php?next=${encodeURIComponent(url.pathname+url.search)}`);}
-  const safeDate=/^\d{4}-\d{2}-\d{2}$/.test(targetDate)?targetDate:dateOnly();
+  const safeDate=isRealDateOnly(targetDate)?targetDate:dateOnly();
   const [data,unorganized]=await Promise.all([makeTaskEventsData(ctx,safeDate),unorganizedTasksFor(ctx)]);
   return html(renderTaskEventsPage(ctx,safeDate,data,unorganized));
 }
