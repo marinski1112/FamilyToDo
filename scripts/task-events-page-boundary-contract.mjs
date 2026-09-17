@@ -64,10 +64,10 @@ for(const marker of [
   "const orphanLinkedItems=data.items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);});",
   "const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');",
   "<strong>関連タスクの持ち物</strong>",
-  "const itemContent=\`\${itemRows}\${orphanItemRows?",
+  "const itemContent=`${itemRows}${orphanItemRows?",
   "FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id",
-  "WHERE i.family_id=? AND (i.task_id IS NULL OR \${taskVisibilitySql('pt')})",
-])if(!page.includes(marker))throw new Error(\`off-day linked Belonging visibility marker missing: \${marker}\`);
+  "WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')})",
+])if(!page.includes(marker))throw new Error(`off-day linked Belonging visibility marker missing: ${marker}`);
 
 if(page.includes('pt.title AS item_task_title'))throw new Error('off-day linked Belonging fallback must not expose parent task titles');
 
