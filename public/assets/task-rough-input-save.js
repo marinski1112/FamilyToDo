@@ -30,7 +30,8 @@ try{
 
   const readRow=row=>{
     const destination=value(row,'.rough-draft-destination'),title=value(row,'.rough-draft-title');
-    const base={row,destination,title};
+    const taskCreateKey=['task','event','child_task'].includes(destination)?(row.dataset.taskCreateKey||(row.dataset.taskCreateKey=crypto.randomUUID())):'';
+    const base={row,destination,title,taskCreateKey};
     if(destination==='shopping')return {...base,quantity:value(row,'.rough-draft-quantity')||'1',category:categoryValue(row),url:value(row,'.rough-draft-url'),dueDate:value(row,'.rough-draft-due-date')};
     if(destination==='item')return {...base,dueDate:value(row,'.rough-draft-due-date'),assignees:selectedIds(row,'.rough-item-assignees input[type=checkbox]')};
     if(destination==='child_task')return {...base,dueDate:value(row,'.rough-draft-due-date'),dueTime:value(row,'.rough-draft-due-time'),completion:value(row,'.rough-child-completion')||'ANY',assignees:selectedIds(row,'.rough-child-assignees input[type=checkbox]')};
@@ -77,9 +78,10 @@ try{
     for(const id of [...ids].reverse()){try{await deleteTask(id);}catch{failed=true;}}
     return !failed;
   }
+  const resetTaskCreateKeys=rows=>rows.filter(item=>['task','event','child_task'].includes(item.destination)).forEach(item=>{delete item.row.dataset.taskCreateKey;});
 
   const taskPayload=(item,parentTaskId=null,parentPrivate=false)=>({
-    csrf:csrf(),title:item.title,description:item.description||'',is_event:item.destination==='event',is_private:parentTaskId?parentPrivate:Boolean(item.isPrivate),
+    csrf:csrf(),idempotency_key:item.taskCreateKey||'',title:item.title,description:item.description||'',is_event:item.destination==='event',is_private:parentTaskId?parentPrivate:Boolean(item.isPrivate),
     dateOnly:item.startDate||item.dueDate||'',endDateOnly:item.endDate||item.dueDate||item.startDate||'',noDate:item.destination!=='event'&&!(item.startDate||item.dueDate),allDay:item.destination==='child_task'?!item.dueTime:Boolean(item.allDay),startTime:item.destination==='child_task'?(item.dueTime||''):(item.startTime||''),endTime:item.destination==='child_task'?'':(item.endTime||''),location:item.location||'',calendar_visible:item.destination==='child_task'?Boolean(item.dueDate):Boolean(item.calendarVisible),calendar_color:item.calendarColor||'',completion_mode:item.completion||'ANY',assignees:parentTaskId&&parentPrivate?[]:(item.assignees||[]),reminderAt:item.reminderAt||'',parent_task_id:parentTaskId,
   });
 
@@ -102,13 +104,14 @@ try{
         if(error?.uncertain)throw error;
         const rolledBack=await rollbackTasks(createdTaskIds);
         if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`,true);
+        resetTaskCreateKeys(rows);
         throw error;
       }
       return {saved:1+children.length+shopping.length+items.length,date:parent.startDate||'',kind:parent.destination};
     }
     if(roots.length>1){
       try{for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}}
-      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`,true);throw error;}
+      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`,true);resetTaskCreateKeys(rows);throw error;}
       return {saved:roots.length,date:roots[0]?.startDate||'',kind:roots[0]?.destination||'task'};
     }
     let saved=0;
