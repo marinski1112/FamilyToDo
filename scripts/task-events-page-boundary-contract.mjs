@@ -26,14 +26,14 @@ if(page.includes('OR (s.task_id IS NULL AND s.due_date IS NULL)'))throw new Erro
 for(const marker of [
   "const isRealDateOnly=(value:string)=>{",
   "if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return false;",
-  "const parsed=new Date(\`${value}T00:00:00Z\`);",
+  "const parsed=new Date(`${value}T00:00:00Z`);",
   "return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;",
   "const safeDate=isRealDateOnly(targetDate)?targetDate:dateOnly();",
-])if(!page.includes(marker))throw new Error(\`unified checklist real-date validation marker missing: ${marker}\`);
+])if(!page.includes(marker))throw new Error(`unified checklist real-date validation marker missing: ${marker}`);
 
 const realDateFixture=(value)=>{
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value))return false;
-  const parsed=new Date(\`${value}T00:00:00Z\`);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const parsed=new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
 };
 for(const [value,expected] of [
@@ -43,7 +43,7 @@ for(const [value,expected] of [
   ['2026-99-99',false],
   ['2026-12-31',true],
   ['2027-01-01',true],
-])if(realDateFixture(value)!==expected)throw new Error(\`unified checklist real-date fixture failed: ${value}\`);
+])if(realDateFixture(value)!==expected)throw new Error(`unified checklist real-date fixture failed: ${value}`);
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
