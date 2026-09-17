@@ -51,8 +51,8 @@ const applyStoredOrder=()=>{
     const ordered=ids.map(Number).map(id=>byId.get(id)).filter(Boolean);
     for(const row of rows)if(!ordered.includes(row))ordered.push(row);
     if(!ordered.length)continue;
-    const first=rows[0];if(!first)continue;
-    for(const row of ordered)first.parentNode?.insertBefore(row,first);
+    const parent=rows[0]?.parentNode,anchor=rows.at(-1)?.nextSibling||null;if(!parent)continue;
+    for(const row of ordered)parent.insertBefore(row,anchor);
   }
 };
 const saveLocalOrder=type=>{
