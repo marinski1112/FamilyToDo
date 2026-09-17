@@ -25,13 +25,12 @@
     if(!(form instanceof HTMLFormElement)){form=createChildComposer(parentId,row.dataset.taskPrivate==='1');container.append(form);}
     form.hidden=checkbox.checked;
   };
-  taskSection?.querySelectorAll(':scope > .task-row:not(.event-task-row)').forEach(ensureRootChildComposer);
   if(taskSection){
     new MutationObserver(records=>{
       for(const record of records)for(const node of record.addedNodes){
         if(!(node instanceof HTMLElement))continue;
-        if(node.matches('.task-row:not(.event-task-row)'))ensureRootChildComposer(node);
-        node.querySelectorAll?.('.task-row:not(.event-task-row)').forEach(ensureRootChildComposer);
+        if(node.matches('.task-row.reminders-new-row:not(.event-task-row)'))ensureRootChildComposer(node);
+        node.querySelectorAll?.('.task-row.reminders-new-row:not(.event-task-row)').forEach(ensureRootChildComposer);
       }
     }).observe(taskSection,{childList:true,subtree:true});
   }
