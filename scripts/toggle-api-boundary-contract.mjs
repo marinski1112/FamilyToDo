@@ -75,6 +75,17 @@ if(api.includes('担当者が設定されていないタスクは完了できま
 if(api.includes('担当者が設定されていない持ち物は完了できません。')) throw new Error('unassigned item must remain completable by an active family member');
 if(api.includes('担当者が設定されていない買い物は完了できません。')) throw new Error('unassigned shopping must remain completable by an active family member');
 
+const recurrenceBlock=api.match(/if\(type==='recurrence'\)\{([\s\S]*?)\n  if\(type==='task'\)\{/u)?.[1]||'';
+if(!recurrenceBlock) throw new Error('recurrence completion block missing');
+for(const marker of [
+  'const recurrenceCompletionMutation=completed',
+  'ON CONFLICT(occurrence_id,member_id) DO NOTHING',
+  'const recurrenceStateChanged=Number(recurrenceCompletionMutation.meta?.changes||0)>0;',
+  'if(recurrenceStateChanged){',
+]) if(!recurrenceBlock.includes(marker)) throw new Error(`recurrence retry idempotency marker missing: ${marker}`);
+if(recurrenceBlock.includes('ON CONFLICT(occurrence_id,member_id) DO UPDATE SET completed_at=excluded.completed_at')) throw new Error('same-state recurrence completion retry must not refresh member completed_at');
+if(!/if\(recurrenceStateChanged\)\{[\s\S]*updateRecurrenceOccurrenceAggregateCompat\(ctx\.env\.DB[\s\S]*logActivity\(ctx,completed\?'COMPLETED':'UNCOMPLETED','recurrence'/u.test(recurrenceBlock)) throw new Error('recurrence aggregate/activity writes must be gated by a real member completion transition');
+
 const taskBlock=api.match(/if\(type==='task'\)\{([\s\S]*?)\n  if\(type==='item'\)\{/u)?.[1]||'';
 if(!taskBlock) throw new Error('task completion block missing');
 for(const marker of [
@@ -125,4 +136,4 @@ if(!exceptionRoutes.includes("if(url.pathname==='/app/api/check.php'||url.pathna
 const appImport=exceptionRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\btoggle\b/.test(appImport)) throw new Error('exception routes must not import toggle from app.ts');
 
-console.log('toggle-api-boundary: retained routing, authorization, assignment fallback, task/item/shopping retry idempotency and D1 schema compatibility ok');
+console.log('toggle-api-boundary: retained routing, authorization, assignment fallback, task/item/shopping/recurrence retry idempotency and D1 schema compatibility ok');
