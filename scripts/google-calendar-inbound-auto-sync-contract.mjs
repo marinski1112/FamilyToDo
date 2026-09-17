@@ -5,6 +5,7 @@ const auto=fs.readFileSync('src/google-calendar-inbound-auto.ts','utf8');
 const oneWay=fs.readFileSync('src/google-calendar-one-way.ts','utf8');
 const publicRoutes=fs.readFileSync('src/public-routes.ts','utf8');
 const index=fs.readFileSync('src/index.ts','utf8');
+const schedule=fs.readFileSync('src/scheduled-dispatch.ts','utf8');
 const tasks=fs.readFileSync('src/google-tasks.ts','utf8');
 const migration=fs.readFileSync('migrations/0075_google_calendar_inbound_auto_sync.sql','utf8');
 
@@ -38,10 +39,12 @@ assert.ok(oneWay.includes("import { processGoogleCalendarInboundAuto } from './g
 assert.ok(oneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'verified watch must only wake background auto-sync after channel authentication');
 assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'),'watch route must pass ExecutionContext for non-blocking wake-up');
 assert.ok(index.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env))'),'five-minute fallback must recover missed watch notifications');
-assert.ok(index.includes("controller.cron==='*/5 * * * *'"),'Calendar fallback cadence must remain bounded at five minutes');
+assert.ok(index.includes('if(plan.fiveMinuteCore)'),'Calendar fallback must remain on the consolidated five-minute dispatch path');
+assert.ok(schedule.includes('fiveMinuteCore: minute % 5 === 0'),'Calendar fallback cadence must remain bounded at five minutes');
 
-// Google Tasks already has its own independent five-minute inbound cadence; this Calendar change must not replace it.
-assert.ok(index.includes("controller.cron==='3,8,13,18,23,28,33,38,43,48,53,58 * * * *'"));
+// Google Tasks keeps its own independent minute-3 modulo-five cadence; this Calendar change must not replace it.
+assert.ok(index.includes('if(plan.googleTasksInbound)'));
+assert.ok(schedule.includes('googleTasksInbound: minute % 5 === 3'));
 assert.ok(index.includes('processGoogleTasksInbound(env)'));
 assert.ok(tasks.includes('processGoogleTasksInbound'));
 
