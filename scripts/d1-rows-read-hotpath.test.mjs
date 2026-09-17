@@ -7,6 +7,7 @@ const read=(path)=>fs.readFileSync(new URL(`../${path}`,import.meta.url),'utf8')
 const delivery=read('src/notification-delivery.ts');
 const lifecycle=read('src/notification-lifecycle.ts');
 const index=read('src/index.ts');
+const schedule=read('src/scheduled-dispatch.ts');
 const wrangler=read('wrangler.jsonc');
 const migration=read('migrations/0064_d1_scheduled_hotpath_indexes.sql');
 
@@ -25,13 +26,14 @@ test('five-minute notification path is bounded and does not run lifecycle mainte
   assert.equal(delivery.includes('SELECT COALESCE(attempt_count,0) attempt_count'),false);
   assert.match(delivery,/attempt_count=COALESCE\(attempt_count,0\)\+1/);
 
-  const fiveStart=index.indexOf("if(controller.cron==='*/5 * * * *')");
-  const hourlyStart=index.indexOf("if(controller.cron==='17 * * * *')");
+  const fiveStart=index.indexOf('if(plan.fiveMinuteCore)');
+  const hourlyStart=index.indexOf('if(plan.hourlyCleanup)');
   assert.ok(fiveStart>=0&&hourlyStart>fiveStart);
   const fiveBody=index.slice(fiveStart,hourlyStart);
   assert.equal(fiveBody.includes('cleanupNotificationLifecycle'),false);
   assert.equal(fiveBody.includes('auditNotificationLifecycle'),false);
   assert.match(fiveBody,/processNotifications\(env\)/);
+  assert.match(schedule,/fiveMinuteCore: minute % 5 === 0/);
 });
 
 test('cleanup and full integrity audit run at low frequency',()=>{
@@ -47,10 +49,11 @@ test('cleanup and full integrity audit run at low frequency',()=>{
   assert.match(auditBody,/-31 days/);
   assert.equal(/DELETE FROM (task_completion_history|item_completion_history|shopping_completion_history|family_logs|deleted_completion_history)/.test(auditBody),false);
 
-  assert.match(wrangler,/"17 \* \* \* \*"/);
-  assert.match(wrangler,/"29 18 \* \* \*"/);
-  assert.match(index,/controller\.cron==='17 \* \* \* \*'[\s\S]*cleanupNotificationLifecycle\(env\)/);
-  assert.match(index,/controller\.cron==='29 18 \* \* \*'[\s\S]*auditNotificationLifecycle\(env\)/);
+  assert.match(wrangler,/"\* \* \* \* \*"/);
+  assert.match(schedule,/hourlyCleanup: minute === 17/);
+  assert.match(schedule,/dailyNotificationAudit: hour === 18 && minute === 29/);
+  assert.match(index,/if\(plan\.hourlyCleanup\)[\s\S]*cleanupNotificationLifecycle\(env\)/);
+  assert.match(index,/if\(plan\.dailyNotificationAudit\)[\s\S]*auditNotificationLifecycle\(env\)/);
 });
 
 test('scheduled hot queries have additive indexes',()=>{

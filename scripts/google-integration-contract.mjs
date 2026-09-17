@@ -16,6 +16,7 @@ const calendarOneWay=read('src/google-calendar-one-way.ts');
 const inboundAuto=read('src/google-calendar-inbound-auto.ts');
 const calendar=calendarEntry+calendarCore;
 const index=read('src/index.ts');
+const schedule=read('src/scheduled-dispatch.ts');
 const publicRoutes=read('src/public-routes.ts');
 const apiRoutes=read('src/context-api-routes.ts');
 const wrangler=read('wrangler.jsonc');
@@ -71,8 +72,10 @@ assert.ok(calendarOneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAut
 assert.ok(index.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env))'),'five-minute Calendar inbound fallback must remain wired');
 assert.ok(inboundAuto.includes("a.provider=? AND a.status='ACTIVE'"),'auto inbound must stay scoped to the app-owned Family TODO calendar');
 assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'));
-assert.ok(index.includes("controller.cron==='7,37 * * * *'"));
-assert.ok(wrangler.includes('3,8,13,18,23,28,33,38,43,48,53,58'));
+assert.ok(index.includes('if(plan.calendarWatchRenewal)'));
+assert.ok(schedule.includes('calendarWatchRenewal: minute === 7 || minute === 37'));
+assert.ok(schedule.includes('googleTasksInbound: minute % 5 === 3'));
+assert.deepEqual(JSON.parse(wrangler).triggers?.crons,['* * * * *']);
 assert.ok(/12\.(?:146|147|148)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
 for(const ui of ['FamilyToDo → Google Calendar','Google Calendarからの予定取り込みは、明示的な読み取り許可を分離して行います。','使用モデル:'])assert.ok(calendar.includes(ui),ui);
