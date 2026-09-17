@@ -90,7 +90,22 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
         AND (
           (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
-          OR (s.task_id IS NULL AND s.due_date IS NULL)
+          OR (
+            s.task_id IS NULL
+            AND s.due_date IS NULL
+            AND (
+              s.status<>'completed'
+              OR (
+                s.status='completed'
+                AND s.completed_at IS NOT NULL
+                AND s.completed_at >= CASE
+                  WHEN strftime('%H','now','+9 hours')='00'
+                    THEN datetime('now','+9 hours','start of day','-1 hour')
+                  ELSE datetime('now','+9 hours','start of day')
+                END
+              )
+            )
+          )
           OR (
             s.task_id IS NOT NULL
             AND NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)
