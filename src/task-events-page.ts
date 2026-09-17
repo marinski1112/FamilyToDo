@@ -24,6 +24,20 @@ const compareShoppingRows=(a:Row,b:Row)=>{
   for(const key of ['due_date','category','name'] as const){const diff=String(a[key]??'').localeCompare(String(b[key]??''));if(diff)return diff;}
   return Number(a.id||0)-Number(b.id||0);
 };
+const taskListColumns='t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,t.parent_task_id,t.sort_order,t.task_kind';
+
+async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=false):Promise<Row[]>{
+  const member=ctx.member;if(!member||!parentIds.length)return [];
+  const statusSql=pendingOnly?"t.status='pending'":"t.status IN ('pending','completed')";
+  return (await ctx.env.DB.prepare(`SELECT ${taskListColumns},
+      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
+    FROM tasks t
+    WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND ${statusSql}
+      AND t.parent_task_id IN (${parentIds.map(()=>'?').join(',')})
+      AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')
+      AND t.start_at IS NULL AND t.end_at IS NULL AND t.due_at IS NULL
+    ORDER BY t.parent_task_id,t.sort_order,t.id`).bind(member.family_id,member.id,...parentIds).all<Row>()).results;
+}
 
 async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
@@ -38,14 +52,17 @@ async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
 
 async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
-  return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.description,t.created_at,t.created_by,COALESCE(GROUP_CONCAT(am.name,'、'),'') assignees
+  const roots=(await ctx.env.DB.prepare(`SELECT ${taskListColumns},t.description,t.created_at,t.created_by,
+      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
     FROM tasks t
-    LEFT JOIN task_assignees ta ON ta.task_id=t.id
-    LEFT JOIN members am ON am.id=ta.member_id AND am.active=1
     WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
       AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')
+      AND t.parent_task_id IS NULL
       AND t.start_at IS NULL AND t.end_at IS NULL AND t.due_at IS NULL
-    GROUP BY t.id ORDER BY t.sort_order,t.id DESC LIMIT 50`).bind(member.family_id,member.id).all<Row>()).results;
+    ORDER BY t.sort_order,t.id DESC LIMIT 50`).bind(member.family_id,member.id).all<Row>()).results;
+  const rootIds=roots.map(row=>Number(row.id||0)).filter(id=>Number.isInteger(id)&&id>0);
+  const children=await undatedChildrenFor(ctx,rootIds,true);
+  return [...roots,...children];
 }
 
 async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEventsData>{
@@ -83,7 +100,11 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       ORDER BY COALESCE(s.due_date,t.end_at,t.due_at,t.start_at),s.category,s.name,s.id`)
       .bind(member.family_id,member.id,date).all<Row>(),
   ]);
-  const taskRows=[...tasks.results,...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at)));
+  const rootIds=[...new Set<number>(tasks.results.filter(row=>Number(row.id||0)>0&&!Number(row.parent_task_id||0)).map(row=>Number(row.id)))];
+  const undatedChildren=await undatedChildrenFor(ctx,rootIds);
+  const taskById=new Map<number,Row>();
+  for(const row of [...tasks.results,...undatedChildren]){const id=Number(row.id||0);if(id>0)taskById.set(id,row);}
+  const taskRows=[...taskById.values(),...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at))||Number(a.sort_order||0)-Number(b.sort_order||0)||Number(a.id||0)-Number(b.id||0));
   const baseShopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
       (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
@@ -156,25 +177,72 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
       return `<div class="shopping-group">${groupHead}${rows}</div>`;
     }).join('');
   };
-  const taskRows=data.tasks.map(task=>{
+
+  const taskById=new Map<number,Row>();
+  for(const task of data.tasks){const id=Number(task.id||0);if(id>0)taskById.set(id,task);}
+  const childTasksByParent=new Map<number,Row[]>();
+  const rootTasks:Row[]=[];
+  for(const task of data.tasks){
+    const id=Number(task.id||0),parentId=Number(task.parent_task_id||0);
+    if(id>0&&parentId>0&&taskById.has(parentId)){const list=childTasksByParent.get(parentId)||[];list.push(task);childTasksByParent.set(parentId,list);}
+    else rootTasks.push(task);
+  }
+  for(const list of childTasksByParent.values())list.sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)||Number(a.id||0)-Number(b.id||0));
+
+  const unorganizedById=new Map<number,Row>();
+  for(const task of unorganized){const id=Number(task.id||0);if(id>0)unorganizedById.set(id,task);}
+  const unorganizedChildrenByParent=new Map<number,Row[]>();
+  const unorganizedRoots:Row[]=[];
+  for(const task of unorganized){
+    const id=Number(task.id||0),parentId=Number(task.parent_task_id||0);
+    if(id>0&&parentId>0&&unorganizedById.has(parentId)){const list=unorganizedChildrenByParent.get(parentId)||[];list.push(task);unorganizedChildrenByParent.set(parentId,list);}
+    else unorganizedRoots.push(task);
+  }
+  for(const list of unorganizedChildrenByParent.values())list.sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)||Number(a.id||0)-Number(b.id||0));
+
+  const taskMeta=(task:Row)=>`${esc(task.assignees||'')}${task.start_at?' ・ '+esc(String(task.start_at).slice(11,16)):task.due_at?' ・ '+(String(task.due_at).slice(11,16)==='00:00'?'終日':esc(String(task.due_at).slice(11,16))):''}${task.location?' ・ '+esc(task.location):''}`;
+  const childComposer=(task:Row,hidden=false)=>`<form class="task-child-composer" data-parent-task-id="${esc(task.id)}" data-parent-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"${hidden?' hidden':''}><div class="task-child-composer-line"><span class="task-child-branch" aria-hidden="true">└</span><input class="task-child-title" type="text" maxlength="255" autocomplete="off" enterkeyhint="done" placeholder="子タスクを追加" aria-label="子タスクを追加"><button class="btn small secondary task-child-add" type="submit">追加</button></div><div class="task-child-status" role="status" aria-live="polite"></div></form>`;
+  const renderLinkedTaskAccessories=(task:Row)=>{
     const templateId=Number(task.task_id||0)||Math.abs(Number(task.id));
     const linkedShopping=shoppingByTask.get(templateId)||shoppingByTask.get(Math.abs(Number(task.id)))||[];
     const linkedItems=itemsByTask.get(templateId)||itemsByTask.get(Math.abs(Number(task.id)))||[];
     const itemRows=linkedItems.map(item=>`<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">🎒 ${esc(item.name)}</span></label></div>`).join('');
-    const childItems=linkedItems.length?`<details class="task-shopping"><summary>🎒 持ち物 ${linkedItems.length}件</summary>${itemRows}</details>`:'';
-    const shoppingAdd=`<a class="task-shopping-add" href="/app/shopping_new.php?date=${encodeURIComponent(date)}&task_id=${templateId}" aria-label="この予定に買い物を追加" title="買い物を追加"><span aria-hidden="true">🛒</span><span class="shopping-plus-badge" aria-hidden="true">＋</span></a>`;
-    const shoppingCount=linkedShopping.length?`<a class="task-shopping-count" href="#shopping-checklist">🛒 ${linkedShopping.length}件</a>`:'';
-    const isEvent=String(task.task_kind||'').toLowerCase()==='event';
+    return {
+      childItems:linkedItems.length?`<details class="task-shopping"><summary>🎒 持ち物 ${linkedItems.length}件</summary>${itemRows}</details>`:'',
+      shoppingAdd:`<a class="task-shopping-add" href="/app/shopping_new.php?date=${encodeURIComponent(date)}&task_id=${templateId}" aria-label="この予定に買い物を追加" title="買い物を追加"><span aria-hidden="true">🛒</span><span class="shopping-plus-badge" aria-hidden="true">＋</span></a>`,
+      shoppingCount:linkedShopping.length?`<a class="task-shopping-count" href="#shopping-checklist">🛒 ${linkedShopping.length}件</a>`:'',
+    };
+  };
+  const renderChildTask=(task:Row,withShopping=true)=>{
     const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
-    const titleHtml=Number(task.id)<0?`<span>${esc(task.title)} <small>(定期)</small></span>`:`${privateBadge}${isEvent?`<a href="/task/view.php?id=${task.id}">📌 ${esc(task.title)}</a>`:esc(task.title)}`;
-    const detailAction=!isEvent&&Number(task.id)>=0?`<a class="checklist-row-action" href="/task/view.php?id=${task.id}" aria-label="${esc(task.title)}の詳細">詳細</a>`:'';
-    const mainHtml=isEvent?`<div class="task-main event-main"><span>${titleHtml} <small>(イベント)</small></span><div>${shoppingCount}${shoppingAdd}</div></div>`:`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="${Number(task.id)<0?'recurrence':'task'}" data-id="${esc(task.id)}" ${Number(task.id)<0?`data-occurrence-id="${esc(task.recurrence_occurrence_id)}"`:''} ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${titleHtml}</span></label><div class="checklist-row-actions">${detailAction}${shoppingCount}${shoppingAdd}</div></div>`;
-    const familyLogAction=Number(task.id)<0&&Number(task.family_log_template_id||0)?`<button type="button" class="btn small secondary occurrence-family-log" data-occurrence-id="${esc(task.recurrence_occurrence_id)}">🐣 記録して完了</button>`:'';
-    return `<div class="row task-row ${isEvent?'event-task-row':''}">${mainHtml}<div class="meta">${esc(task.assignees||'')}${task.start_at?' ・ '+esc(String(task.start_at).slice(11,16)):task.due_at?' ・ '+(String(task.due_at).slice(11,16)==='00:00'?'終日':esc(String(task.due_at).slice(11,16))):''}${task.location?' ・ '+esc(task.location):''}</div>${familyLogAction}${childItems}</div>`;
-  }).join('');
+    const accessories=withShopping?renderLinkedTaskAccessories(task):{childItems:'',shoppingAdd:'',shoppingCount:''};
+    return `<div class="row task-child-row" data-task-id="${esc(task.id)}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}" ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a>${accessories.shoppingCount}${accessories.shoppingAdd}</div></div><div class="meta">${taskMeta(task)}</div>${accessories.childItems}</div>`;
+  };
+  const renderRootTask=(task:Row)=>{
+    const taskId=Number(task.id||0),isEvent=String(task.task_kind||'').toLowerCase()==='event',storedChild=Number(task.parent_task_id||0)>0;
+    const {childItems,shoppingAdd,shoppingCount}=renderLinkedTaskAccessories(task);
+    const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
+    const titleHtml=taskId<0?`<span>${esc(task.title)} <small>(定期)</small></span>`:`${privateBadge}${isEvent?`<a href="/task/view.php?id=${task.id}">📌 ${esc(task.title)}</a>`:esc(task.title)}`;
+    const detailAction=!isEvent&&taskId>=0?`<a class="checklist-row-action" href="/task/view.php?id=${task.id}" aria-label="${esc(task.title)}の詳細">詳細</a>`:'';
+    const mainHtml=isEvent?`<div class="task-main event-main"><span>${titleHtml} <small>(イベント)</small></span><div>${shoppingCount}${shoppingAdd}</div></div>`:`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="${taskId<0?'recurrence':'task'}" data-id="${esc(task.id)}" ${taskId<0?`data-occurrence-id="${esc(task.recurrence_occurrence_id)}"`:''} ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${titleHtml}</span></label><div class="checklist-row-actions">${detailAction}${shoppingCount}${shoppingAdd}</div></div>`;
+    const familyLogAction=taskId<0&&Number(task.family_log_template_id||0)?`<button type="button" class="btn small secondary occurrence-family-log" data-occurrence-id="${esc(task.recurrence_occurrence_id)}">🐣 記録して完了</button>`:'';
+    const children=taskId>0?(childTasksByParent.get(taskId)||[]):[];
+    const childRows=children.map(child=>renderChildTask(child,true)).join('');
+    const composer=taskId>0&&!isEvent&&!storedChild?childComposer(task,task.status==='completed'):'';
+    const childSection=childRows||composer?`<div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div>`:'';
+    return `<div class="row task-row ${isEvent?'event-task-row':''}" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}">${mainHtml}<div class="meta">${taskMeta(task)}</div>${familyLogAction}${childItems}${childSection}</div>`;
+  };
+  const taskRows=rootTasks.map(renderRootTask).join('');
+
   const standaloneItems=data.items.filter(item=>!Number(item.task_id||0));
   const itemRows=standaloneItems.map(item=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div><div class="meta">${item.assignees?'担当 '+esc(item.assignees):''}</div></div>`).join('');
-  const unorganizedHtml=unorganized.length?`<div class="card section-card unorganized-section"><div class="section-head"><h2>📋 未整理</h2><span class="meta">期限なし ${unorganized.length}件</span></div>${unorganized.map(task=>`<div class="row"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${task.id}"><span>${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${task.id}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="meta">${esc(task.assignees||'')}</div></div>`).join('')}</div>`:'';
+  const unorganizedHtml=unorganizedRoots.length?`<div class="card section-card unorganized-section"><div class="section-head"><h2>📋 未整理</h2><span class="meta">期限なし ${unorganized.length}件</span></div>${unorganizedRoots.map(task=>{
+    const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
+    const children=unorganizedChildrenByParent.get(Number(task.id||0))||[];
+    const childRows=children.map(child=>renderChildTask(child,false)).join('');
+    const composer=childComposer(task,false);
+    return `<div class="row unorganized-task-row" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="meta">${esc(task.assignees||'')}</div><div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div></div>`;
+  }).join('')}</div>`:'';
   const expiredHtml=data.expiredTasks.length?`<details class="card expired-tasks"><summary>⚠️ 期限切れタスク ${data.expiredTasks.length}件</summary><div class="expired-list">${data.expiredTasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('')}</div></details>`:'';
   const expiredShoppingHtml=data.expiredShopping.length?`<details class="card expired-shopping"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>${shoppingRows(data.expiredShopping)}</details>`:'';
   const cursor=new Date(`${date}T12:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()-1);const prev=cursor.toISOString().slice(0,10);cursor.setUTCDate(cursor.getUTCDate()+2);const next=cursor.toISOString().slice(0,10);
@@ -205,13 +273,21 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 .checklist-page .checklist-row-line>label{flex:1;min-width:0}
 .checklist-page .checklist-row-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .checklist-page .checklist-row-action{display:inline-flex;align-items:center;min-height:34px;padding:0 6px;font-size:13px;font-weight:700;white-space:nowrap;text-decoration:none}
+.checklist-page .task-children{margin:8px 0 0 30px;padding-left:12px;border-left:2px solid #e2e8f0}
+.checklist-page .task-child-row{padding:7px 0}
+.checklist-page .task-child-composer{margin-top:6px}
+.checklist-page .task-child-composer-line{display:flex;align-items:center;gap:6px}
+.checklist-page .task-child-branch{color:#94a3b8;flex:0 0 auto}
+.checklist-page .task-child-title{flex:1;min-width:0;min-height:40px;border:0!important;border-bottom:1px solid #e2e8f0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:0 4px!important;font:inherit}
+.checklist-page .task-child-add{min-height:40px;white-space:nowrap}
+.checklist-page .task-child-status{min-height:1.2em;margin-top:3px;font-size:12px;color:#64748b}
 .checklist-page .empty{padding:0!important;margin:8px 0 2px!important;font-size:13px;line-height:1.5}
 .checklist-page .checklist-more{margin-top:8px;border-top:1px solid #e2e8f0}
 .checklist-page .checklist-more>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:11px 0;font-size:13px;color:#475569}
 .checklist-page .checklist-more .meta{font-size:13px;line-height:1.5;margin:8px 0 0}
-@media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}}
+@media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}.checklist-page .task-children{margin-left:20px;padding-left:8px}}
 </style>`;
-  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf,date}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
 
