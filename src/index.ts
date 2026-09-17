@@ -21,6 +21,7 @@ import { dispatchPageRoute } from './page-routes';
 import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
 import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
+import { scheduledDispatchPlanAt } from './scheduled-dispatch';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -55,31 +56,28 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
-    console.log(`[Family TODO LINE] scheduled ${controller.cron}`);
-    if(controller.cron==='3,8,13,18,23,28,33,38,43,48,53,58 * * * *'){
-      ctx.waitUntil(processGoogleTasksInbound(env));
-      return;
-    }
-    if(controller.cron==='*/5 * * * *'){
+    const plan=scheduledDispatchPlanAt(controller.scheduledTime);
+    console.log(`[Family TODO LINE] scheduled ${controller.cron} at ${new Date(controller.scheduledTime).toISOString()}`);
+
+    if(plan.googleTasksInbound) ctx.waitUntil(processGoogleTasksInbound(env));
+
+    if(plan.fiveMinuteCore){
       ctx.waitUntil(processNotifications(env));
       ctx.waitUntil(processLineDailyDigests(env));
       ctx.waitUntil(processLinePeriodicDigests(env));
       ctx.waitUntil(processCalendarOutbox(env));
       ctx.waitUntil(processGoogleCalendarInboundAuto(env));
       ctx.waitUntil(processChildJournalCalendarOutbox(env));
-      return;
     }
-    if(controller.cron==='17 * * * *'){
+
+    if(plan.hourlyCleanup){
       ctx.waitUntil(cleanupNotificationLifecycle(env));
       ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
       ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
       ctx.waitUntil(archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env)).then(()=>generateFamilyDailyJournalAi(env)).catch(()=>{}));
-      return;
     }
-    if(controller.cron==='29 18 * * *'){
-      ctx.waitUntil(auditNotificationLifecycle(env));
-      return;
-    }
-    if(controller.cron==='7,37 * * * *') ctx.waitUntil(renewCalendarWatches(env));
+
+    if(plan.dailyNotificationAudit) ctx.waitUntil(auditNotificationLifecycle(env));
+    if(plan.calendarWatchRenewal) ctx.waitUntil(renewCalendarWatches(env));
   }
 } satisfies ExportedHandler<Env>;

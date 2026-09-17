@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
         if: always()
+      - run: node scripts/scheduled-cron-consolidation-contract.mjs
+        if: always()
       - run: node scripts/calendar-stamp-deletion-transport-contract.mjs
         if: always()
       - run: npm run check:browser-js
