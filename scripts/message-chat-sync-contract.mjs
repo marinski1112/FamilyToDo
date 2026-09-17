@@ -1,0 +1,7 @@
+import fs from 'node:fs';
+const api=fs.readFileSync('src/message-chat-sync-api.ts','utf8'),routes=fs.readFileSync('src/context-api-routes.ts','utf8'),client=fs.readFileSync('public/assets/messages-chat.js','utf8');
+for(const marker of ["const PAGE_SIZE=40;","WHERE msg.family_id=?","msg.id>?","msg.sender_id<>? AND msg.reminder_at IS NOT NULL AND msg.reminder_at>? AND msg.reminder_at<=?","ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}","serverNow:now"]){if(!api.includes(marker))throw new Error(`message chat sync API lost: ${marker}`);}
+for(const forbidden of ['target_member_id=?','family_id='+"${"]){if(api.includes(forbidden))throw new Error(`message chat sync unsafe query interpolation/target narrowing: ${forbidden}`);}
+if(!routes.includes("import { messageChatSyncApi } from './message-chat-sync-api';")||!routes.includes("if(url.pathname==='/api/message-chat-sync') return await messageChatSyncApi(request,context);"))throw new Error('message chat sync route wiring lost');
+for(const marker of ["u.searchParams.set('after',String(cursor))","u.searchParams.set('released_after',releasedAfter)","if(archiveMode||syncBusy||document.hidden)return","setInterval(()=>{if(!document.hidden)syncMessages(false);},2500)","document.addEventListener('visibilitychange'",'appendMessages(d.messages||[],forceScroll)'])if(!client.includes(marker))throw new Error(`message chat client sync lost: ${marker}`);
+console.log('message chat incremental sync contract ok');
