@@ -7,7 +7,7 @@
   form.append(input,status);
   let selected=null,normalized=null,capturedAt=0,uploadId='',snapshot='',busy=false;
   const csrf=()=>String(form.querySelector('[name="csrf"]')?.value??'');
-  const setDraftState=()=>{form.dataset.photoDraft=selected?'1':'0';form.classList.toggle('has-photo',Boolean(selected));status.hidden=!selected;};
+  const setDraftState=()=>{form.dataset.photoDraft=selected?'1':'0';form.classList.toggle('has-photo',Boolean(selected));status.hidden=!selected&&!status.textContent;};
   const clearSelection=()=>{if(busy)return;selected=null;normalized=null;capturedAt=0;uploadId='';snapshot='';input.value='';status.textContent='';setDraftState();};
   const exifEpoch=async file=>{
     try{
