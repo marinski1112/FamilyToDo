@@ -18,11 +18,13 @@ function fixture(){
     CREATE TABLE notifications(family_id INTEGER,member_id INTEGER,type TEXT,target_type TEXT,target_id INTEGER,notify_at TEXT,status TEXT,message TEXT,created_at TEXT);`);
   const prepare=(query,values=[])=>({bind(...v){return prepare(query,v);},async first(){return sql.prepare(query).get(...values)||null;},async all(){return {results:sql.prepare(query).all(...values)};},async run(){return {meta:sql.prepare(query).run(...values)};}});
   let queue=Promise.resolve();const db={prepare,batch(statements){const run=queue.then(async()=>{sql.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());sql.exec('COMMIT');return results;}catch(e){sql.exec('ROLLBACK');throw e;}});queue=run.catch(()=>{});return run;}};
-  const objects=new Map();const bucket={async put(key,bytes){objects.set(key,bytes);},async delete(key){objects.delete(key);}};
-  const input={uploadId:crypto.randomUUID(),familyId:1,memberId:1,bytes:Uint8Array.from([255,216,255,1]).buffer,mime:'image/jpeg',caption:'写真',reminderAt:null,now:'2026-09-15 12:00:00'};
-  return {sql,db,bucket,objects,input};
+  const objects=new Map(),metadata=new Map();const bucket={async put(key,bytes,options={}){objects.set(key,bytes);metadata.set(key,options.customMetadata||{});},async delete(key){objects.delete(key);metadata.delete(key);}};
+  const input={uploadId:crypto.randomUUID(),familyId:1,memberId:1,bytes:Uint8Array.from([255,216,255,1]).buffer,mime:'image/jpeg',caption:'写真',reminderAt:null,sourceSha256:'a'.repeat(64),now:'2026-09-15 12:00:00'};
+  return {sql,db,bucket,objects,metadata,input};
 }
 test('duplicate delivery after response loss returns the same message',async()=>{const f=fixture();try{const first=await createMessagePhoto(f.db,f.bucket,f.input);assert.equal(await createMessagePhoto(f.db,f.bucket,f.input),first);assert.equal(f.sql.prepare('SELECT count(*) n FROM messages').get().n,1);assert.equal(f.objects.size,1);assert.equal(f.sql.prepare('SELECT count(*) n FROM notifications').get().n,1);}finally{f.sql.close();}});
+test('stores original source hash in R2 custom metadata without changing normalized D1 hash semantics',async()=>{const f=fixture();try{await createMessagePhoto(f.db,f.bucket,f.input);const row=f.sql.prepare('SELECT object_key,sha256 FROM message_photos').get();assert.equal(f.metadata.get(row.object_key).sourceSha256,f.input.sourceSha256);assert.notEqual(row.sha256,f.input.sourceSha256);}finally{f.sql.close();}});
+test('rejects malformed original source hash before object writes',async()=>{const f=fixture();try{await assert.rejects(createMessagePhoto(f.db,f.bucket,{...f.input,sourceSha256:'bad'}),/INVALID_PHOTO/);assert.equal(f.objects.size,0);}finally{f.sql.close();}});
 test('failed R2 upload keeps a durable retry identity without creating a message',async()=>{const f=fixture();try{await assert.rejects(createMessagePhoto(f.db,{...f.bucket,put:async()=>{throw new Error('R2');}},f.input));assert.equal(f.sql.prepare('SELECT count(*) n FROM messages').get().n,0);assert.equal(f.sql.prepare('SELECT writers FROM message_photos').get().writers,0);assert.ok(await createMessagePhoto(f.db,f.bucket,f.input));}finally{f.sql.close();}});
 test('rejects cross-family replay and changed bytes',async()=>{const f=fixture();try{await createMessagePhoto(f.db,f.bucket,f.input);await assert.rejects(createMessagePhoto(f.db,f.bucket,{...f.input,familyId:2}),/UPLOAD_CONFLICT/);await assert.rejects(createMessagePhoto(f.db,f.bucket,{...f.input,bytes:Uint8Array.from([255,216,255,2]).buffer}),/UPLOAD_CONFLICT/);}finally{f.sql.close();}});
 test('message deletion retains cleanup state after failure and cannot resurrect on replay',async()=>{const f=fixture();try{await createMessagePhoto(f.db,f.bucket,f.input);f.sql.exec('DELETE FROM messages');await drainDeletedMessagePhotos(f.db,{...f.bucket,delete:async()=>{throw new Error('R2');}},1);assert.equal(f.objects.size,1);await drainDeletedMessagePhotos(f.db,f.bucket,1);assert.equal(f.objects.size,0);assert.equal(f.sql.prepare('SELECT state FROM message_photos').get().state,'deleted');await assert.rejects(createMessagePhoto(f.db,f.bucket,f.input));}finally{f.sql.close();}});
@@ -32,7 +34,7 @@ test('a delayed duplicate write cannot recreate a deleted message or escape clea
   const f=fixture();let releaseFirst,releaseSecond,enteredFirst,enteredSecond;
   const firstEntered=new Promise(r=>{enteredFirst=r;}),secondEntered=new Promise(r=>{enteredSecond=r;});
   const firstGate=new Promise(r=>{releaseFirst=r;}),secondGate=new Promise(r=>{releaseSecond=r;});let count=0;
-  const bucket={...f.bucket,async put(key,bytes){if(++count===1){enteredFirst();await firstGate;}else{enteredSecond();await secondGate;}await f.bucket.put(key,bytes);}};
+  const bucket={...f.bucket,async put(key,bytes,options){if(++count===1){enteredFirst();await firstGate;}else{enteredSecond();await secondGate;}await f.bucket.put(key,bytes,options);}};
   try {
     const first=createMessagePhoto(f.db,bucket,f.input);await firstEntered;
     const second=createMessagePhoto(f.db,bucket,f.input),failure=assert.rejects(second,/PHOTO_RETRY_REQUIRED/);

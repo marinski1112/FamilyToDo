@@ -1,5 +1,5 @@
 export const MESSAGE_PHOTO_MAX_BYTES=4*1024*1024;
-export type MessagePhotoInput={uploadId:string;familyId:number;memberId:number;bytes:ArrayBuffer;mime:string;caption:string;reminderAt:string|null;capturedAt?:number|null;now:string};
+export type MessagePhotoInput={uploadId:string;familyId:number;memberId:number;bytes:ArrayBuffer;mime:string;caption:string;reminderAt:string|null;capturedAt?:number|null;sourceSha256?:string|null;now:string};
 type Photo={upload_id:string;family_id:number;member_id:number;object_key:string;sha256:string;mime_type:string;byte_size:number;caption:string;reminder_at:string|null;state:string};
 export class MessagePhotoError extends Error { constructor(readonly code:string){super(code);} }
 const digest=async(bytes:ArrayBuffer)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -10,9 +10,10 @@ function validImage(bytes:Uint8Array,mime:string) {
   return false;
 }
 export async function createMessagePhoto(db:D1Database,bucket:R2Bucket,input:MessagePhotoInput):Promise<number> {
-  const {uploadId,familyId,memberId,bytes,mime,caption,reminderAt,now}=input,capturedAt=input.capturedAt??null;
+  const {uploadId,familyId,memberId,bytes,mime,caption,reminderAt,now}=input,capturedAt=input.capturedAt??null,sourceSha256=input.sourceSha256??null;
   if(!/^[a-f0-9-]{36}$/u.test(uploadId)||!Number.isSafeInteger(familyId)||familyId<1||!Number.isSafeInteger(memberId)||memberId<1||caption.length>2000)throw new MessagePhotoError('INVALID_PHOTO');
   if(capturedAt!==null&&(!Number.isSafeInteger(capturedAt)||capturedAt<=0))throw new MessagePhotoError('INVALID_PHOTO');
+  if(sourceSha256!==null&&!/^[a-f0-9]{64}$/u.test(sourceSha256))throw new MessagePhotoError('INVALID_PHOTO');
   if(bytes.byteLength<1||bytes.byteLength>MESSAGE_PHOTO_MAX_BYTES)throw new MessagePhotoError('PHOTO_TOO_LARGE');
   if(!validImage(new Uint8Array(bytes),mime))throw new MessagePhotoError('INVALID_IMAGE');
   const sha=await digest(bytes),key=`families/${familyId}/message-photos/${uploadId}`;
@@ -29,7 +30,8 @@ export async function createMessagePhoto(db:D1Database,bucket:R2Bucket,input:Mes
   const admitted=await db.prepare("UPDATE message_photos SET writers=writers+1 WHERE upload_id=? AND state IN ('staging','ready') RETURNING upload_id").bind(uploadId).first();
   if(!admitted)throw new MessagePhotoError('PHOTO_DELETED');
   try {
-  await bucket.put(key,bytes,{httpMetadata:{contentType:mime},...(capturedAt?{customMetadata:{capturedAt:String(capturedAt)}}:{})});
+  const customMetadata:Record<string,string>={};if(capturedAt)customMetadata.capturedAt=String(capturedAt);if(sourceSha256)customMetadata.sourceSha256=sourceSha256;
+  await bucket.put(key,bytes,{httpMetadata:{contentType:mime},...(Object.keys(customMetadata).length?{customMetadata}:{})});
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO messages(family_id,sender_id,target_member_id,text,reminder_at,created_at,updated_at,image_upload_id)
       SELECT family_id,member_id,NULL,CASE WHEN caption='' THEN '画像' ELSE caption END,reminder_at,?, ?,upload_id
