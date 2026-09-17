@@ -12,6 +12,8 @@ const undatedRetentionMigration=fs.readFileSync('migrations/0089_shopping_undate
 
 const categorySyntax=spawnSync(process.execPath,['--check','public/assets/checklist-category-followup.js'],{encoding:'utf8'});
 if(categorySyntax.status!==0)throw new Error(`Shopping category UX syntax invalid: ${categorySyntax.stderr||categorySyntax.stdout}`);
+const taskEventsSyntax=spawnSync(process.execPath,['--check','public/assets/task-events.js'],{encoding:'utf8'});
+if(taskEventsSyntax.status!==0)throw new Error(`Task hierarchy UX syntax invalid: ${taskEventsSyntax.stderr||taskEventsSyntax.stdout}`);
 
 if(page.includes("from './app'"))throw new Error('unified task/shopping page must not depend on app.ts');
 if(page.includes("OR s.task_id IN (${baseTaskIds.map(()=>'?').join(',')})"))throw new Error('linked Shopping must not expand every displayed task id into one D1 statement');
@@ -27,11 +29,22 @@ for(const marker of [
   "import { taskVisibilitySql } from './task-visibility';",
   "export async function taskEvents(_request:Request,ctx:AppContext,targetDate:string):Promise<Response>{",
   "async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{",
+  "async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=false):Promise<Row[]>{",
   "t.status IN ('pending','completed')",
   "lower(COALESCE(t.task_kind,''))='event'",
   "date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)",
   "expiredTasksFor(ctx,date)",
   "recurringForDate(ctx,date)",
+  "t.parent_task_id IN (${parentIds.map(()=>'?').join(',')})",
+  "AND t.parent_task_id IS NULL",
+  "const undatedChildren=await undatedChildrenFor(ctx,rootIds);",
+  "const childTasksByParent=new Map<number,Row[]>();",
+  "const unorganizedChildrenByParent=new Map<number,Row[]>();",
+  "class=\"row task-child-row\"",
+  "class=\"task-child-composer\" data-parent-task-id=\"${esc(task.id)}\"",
+  "data-parent-private=\"${String(task.visibility_scope)==='PRIVATE'?'1':'0'}\"",
+  "const childSection=childRows||composer?",
+  "JSON.stringify({csrf,date})",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
   "s.task_id IS NULL",
   "s.due_date IS NULL",
@@ -61,12 +74,13 @@ for(const marker of [
   "<div class=\"shopping-group\">${groupHead}${rows}</div>",
   "data-type=\"shopping\"",
   "data-type=\"item\"",
-  "data-type=\"${Number(task.id)<0?'recurrence':'task'}\"",
+  "data-type=\"${taskId<0?'recurrence':'task'}\"",
   "const mainHtml=isEvent?",
   "class=\"checklist-row-action\" href=\"/app/shopping_edit.php?id=${esc(item.id)}\"",
-  "const detailAction=!isEvent&&Number(task.id)>=0?",
+  "const detailAction=!isEvent&&taskId>=0?",
   "<div class=\"checklist-row-actions\">${detailAction}${shoppingCount}${shoppingAdd}</div>",
   ".checklist-page .checklist-row-action{display:inline-flex",
+  ".checklist-page .task-children{margin:8px 0 0 30px",
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
   "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
@@ -116,8 +130,16 @@ for(const marker of [
   "completedTasks.className='completed-tasks'",
   "summary.textContent=`完了済み ${count}件`",
   "row.querySelector('.task-main-row .task-main > .toggle[data-type=\"task\"],.task-main-row .task-main > .toggle[data-type=\"recurrence\"]')",
+  "checkbox.closest('.task-child-row')",
+  "form.matches('.task-child-composer')",
+  "fetch('/api/task'",
+  "'Idempotency-Key':createKey",
+  "parent_task_id:parentId",
+  "noDate:true",
+  "calendar_visible:false",
+  "container.insertBefore(row,form)",
   "moveCompletedTaskRow(el,serverCompleted)",
-])if(!browser.includes(marker))throw new Error(`unified checklist completion transport missing: ${marker}`);
+])if(!browser.includes(marker))throw new Error(`unified checklist completion/hierarchy transport missing: ${marker}`);
 
 for(const marker of [
   "section.querySelector(':scope > .checklist-more')?.remove();",
@@ -156,4 +178,4 @@ for(const marker of [
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup4'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, parent/child Task hierarchy with undated-child reload support, child-tail idempotent inline creation, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
