@@ -28,9 +28,10 @@ for(let hour=0;hour<24;hour++){
 }
 
 const index=fs.readFileSync('src/index.ts','utf8');
+const workerTypes=fs.readFileSync('worker-configuration.d.ts','utf8');
+assert.ok(workerTypes.includes('interface ScheduledController { cron:string; scheduledTime:number; }'),'ScheduledController typing must expose Cloudflare scheduledTime');
 for(const marker of [
-  "(controller as ScheduledController&{scheduledTime?:number}).scheduledTime",
-  "scheduledDispatchPlanAt(scheduledTime)",
+  'scheduledDispatchPlanAt(controller.scheduledTime)',
   'if(plan.googleTasksInbound)',
   'if(plan.fiveMinuteCore)',
   'if(plan.hourlyCleanup)',

@@ -56,10 +56,8 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
-    const controllerScheduledTime=(controller as ScheduledController&{scheduledTime?:number}).scheduledTime;
-    const scheduledTime=typeof controllerScheduledTime==='number'&&Number.isFinite(controllerScheduledTime)?controllerScheduledTime:Date.now();
-    const plan=scheduledDispatchPlanAt(scheduledTime);
-    console.log(`[Family TODO LINE] scheduled ${controller.cron} at ${new Date(scheduledTime).toISOString()}`);
+    const plan=scheduledDispatchPlanAt(controller.scheduledTime);
+    console.log(`[Family TODO LINE] scheduled ${controller.cron} at ${new Date(controller.scheduledTime).toISOString()}`);
 
     if(plan.googleTasksInbound) ctx.waitUntil(processGoogleTasksInbound(env));
 
