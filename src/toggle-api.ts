@@ -110,8 +110,10 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     const itemTaskActorAssigned=itemDirectAssigned===0&&itemInheritedAssigned>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(itemLinkedTaskId,m.id).first<Row>():null;
     if(itemDirectAssigned>0&&!itemActorAssigned)return json({ok:false,error:'この持ち物の担当者ではありません。'},403);
     if(itemDirectAssigned===0&&itemInheritedAssigned>0&&!itemTaskActorAssigned)return json({ok:false,error:'この持ち物に紐づくタスクの担当者ではありません。'},403);
-    if(completed)await ctx.env.DB.prepare('INSERT INTO item_completions(item_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(item_id,member_id) DO UPDATE SET completed_at=excluded.completed_at').bind(id,m.id,now).run();
-    else await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id=?').bind(id,m.id).run();
+    const itemCompletionMutation=completed
+      ?await ctx.env.DB.prepare('INSERT INTO item_completions(item_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(item_id,member_id) DO NOTHING').bind(id,m.id,now).run()
+      :await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id=?').bind(id,m.id).run();
+    const itemStateChanged=Number(itemCompletionMutation.meta?.changes||0)>0;
     const itemMode=await ctx.env.DB.prepare('SELECT completion_mode FROM items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
     const itemEffectiveAssigned=itemDirectAssigned>0?itemDirectAssigned:itemInheritedAssigned;
     const done=itemDirectAssigned>0
@@ -128,9 +130,11 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
           ?await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN task_assignees ta ON ta.member_id=ic.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(itemLinkedTaskId,id).first<Row>()
           :await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
       :null;
-    await ctx.env.DB.prepare('UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(itemComplete?'completed':'pending',itemComplete?Number(latest?.member_id||0)||null:null,itemComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run();
-    await ctx.env.DB.prepare('INSERT INTO item_completion_history(item_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run();
-    await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','item',id,{status:itemComplete?'completed':'pending'});
+    if(itemStateChanged){
+      await ctx.env.DB.prepare('UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(itemComplete?'completed':'pending',itemComplete?Number(latest?.member_id||0)||null:null,itemComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run();
+      await ctx.env.DB.prepare('INSERT INTO item_completion_history(item_id,member_id,action,occurred_at) VALUES(?,?,?,?)').bind(id,m.id,completed?'COMPLETED':'UNCOMPLETED',now).run();
+      await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','item',id,{status:itemComplete?'completed':'pending'});
+    }
     return commitSession(json({ok:true,status:itemComplete?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);
   }
 
