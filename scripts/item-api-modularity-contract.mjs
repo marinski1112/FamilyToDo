@@ -136,8 +136,8 @@ for(const sentinel of [
   "section.addEventListener('belongings-items-added'",
 ])if(!belongingsUi.includes(sentinel))throw new Error(`belongings Reminders-style UX marker missing: ${sentinel}`);
 for(const sentinel of [
-  '.belongings-category-name{flex:1;min-width:0;font-size:20px',
-  '.belongings-category-toggle{min-width:72px}',
+  '.belongings-category-name{flex:1;min-width:0;font-size:19px',
+  '.belongings-category-toggle{display:inline-flex;align-items:center;justify-content:center;min-width:44px;width:44px;height:44px',
   'input.toggle[data-type="item"]{-webkit-appearance:none!important;appearance:none!important',
   'min-height:44px!important',
 ])if(!belongingsCss.includes(sentinel))throw new Error(`belongings checklist CSS marker missing: ${sentinel}`);
