@@ -11,9 +11,47 @@ export function formatFamilyDateTime(date:Date,timeZone:string){
 }
 export const familyNow=(timeZone:string)=>formatFamilyDateTime(new Date(),timeZone);
 export const familyDate=(timeZone:string)=>familyNow(timeZone).slice(0,10);
-export function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+export function isIsoCalendarDate(value:string){
+  const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return false;
+  const y=+m[1],mo=+m[2],d=+m[3],date=new Date(Date.UTC(y,mo-1,d));
+  return date.getUTCFullYear()===y&&date.getUTCMonth()===mo-1&&date.getUTCDate()===d;
+}
+export function addCalendarDays(value:string,days:number){
+  if(!isIsoCalendarDate(value)||!Number.isFinite(days))throw new Error('日付が不正です');
+  const [y,mo,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,mo-1,d)+Math.trunc(days)*86400000);
+  return date.toISOString().slice(0,10);
+}
+export function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){return addCalendarDays(familyDate(timeZone),days);}
 /** Infrastructure timestamps are UTC-naive SQL values, not family wall-clock values. */
 export const utcNow=(date=new Date())=>date.toISOString().slice(0,19).replace('T',' ');
+
+/**
+ * Convert a family-local calendar midnight to the UTC-naive SQL timestamp used
+ * by infrastructure tables. Iteration is required because the offset at the
+ * initial UTC guess can differ from the offset at local midnight on DST days.
+ */
+export function familyLocalMidnightUtc(value:string,timeZone:string){
+  if(!isIsoCalendarDate(value))throw new Error('日付が不正です');
+  const zone=validateTimezone(timeZone)?timeZone:DEFAULT_FAMILY_TIMEZONE;
+  const target=`${value} 00:00:00`,targetMs=Date.parse(target.replace(' ','T')+'Z');
+  let instantMs=targetMs;
+  for(let i=0;i<4;i++){
+    const observed=formatFamilyDateTime(new Date(instantMs),zone);
+    const observedMs=Date.parse(observed.replace(' ','T')+'Z');
+    const delta=observedMs-targetMs;
+    if(delta===0)break;
+    instantMs-=delta;
+  }
+  if(formatFamilyDateTime(new Date(instantMs),zone)!==target)throw new Error('日付境界をUTCへ変換できません');
+  return new Date(instantMs).toISOString().slice(0,19).replace('T',' ');
+}
+export function familyLocalDateRangeUtc(fromDate:string,toDateInclusive:string,timeZone:string){
+  if(!isIsoCalendarDate(fromDate)||!isIsoCalendarDate(toDateInclusive))throw new Error('日付が不正です');
+  return {
+    start:familyLocalMidnightUtc(fromDate,timeZone),
+    endExclusive:familyLocalMidnightUtc(addCalendarDays(toDateInclusive,1),timeZone),
+  };
+}
 
 /**
  * Operational/infrastructure values (activity/sync/retry timestamps) are stored
