@@ -68,7 +68,8 @@ for(const [needle,label] of [
   ['task-delete-minus','minus task deletion'],
   ["method:'DELETE'",'task delete transport'],
   ['task-add-top','top-right task add'],
-  ['section.append(cluster)','zero category cluster after active content'],
+  ["if(zero.length){cluster=document.createElement('details')",'empty category cluster only when needed'],
+  ['section.append(add)','direct unclassified add route'],
   ['refreshCounts','completed tab count refresh'],
   ['zero-category-cluster','zero category grouping'],
   ['task-child-count-toggle','parent child count toggle'],
@@ -86,10 +87,11 @@ requireText(css,'/* Final compact polish */','final compact checklist polish');
 requireText(css,'/* Approved minus-delete interaction */','minus delete interaction styles');
 requireText(css,'/* Final reference alignment */','final reference alignment');
 requireText(css,'/* iPhone reference follow-up */','iPhone reference alignment');
-requireText(css,'body:has(.checklist-page) .calendar-fab','robust checklist FAB suppression');
+requireText(css,'/* Unified checklist interaction contract */','unified checklist interaction contract');
 requireText(shoppingCategoryUi,"groups().some(group=>categoryOf(group)===UNCLASSIFIED)",'persistent unclassified shopping group');
 requireText(taskPage,"start&&start!=='00:00'",'suppress placeholder midnight time');
 requireText(taskPage,'checklist-heading-icon','compact heading icons');
+forbidText(taskPage,'class="fab calendar-fab"','legacy checklist FAB');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
 requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
 requireText(taskPage,'appVersion:APP_VERSION','checklist release revision payload');
