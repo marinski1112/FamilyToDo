@@ -88,9 +88,10 @@ export async function familyLogImportApi(request:Request,ctx:AppContext):Promise
 
       const imported=await actualImported(ctx,batch),processed=transition.nextProcessedCount,processedErrors=errorsThrough(manifest,processed),skipped=processed-processedErrors-imported;
       if(skipped<0)throw new Error('import outcome count invariant failed');
-      await ctx.env.DB.prepare("UPDATE family_log_import_batches SET status='IMPORTING',processed_count=?,imported_count=?,skipped_count=?,failed_at=NULL WHERE id=? AND family_id=? AND processed_count=?").bind(processed,imported,skipped,batch.id,m.family_id,offset).run();
+      const progressResult=await ctx.env.DB.prepare("UPDATE family_log_import_batches SET status='IMPORTING',processed_count=?,imported_count=?,skipped_count=?,failed_at=NULL WHERE id=? AND family_id=? AND processed_count=? AND rolled_back_at IS NULL AND status IN ('PREVIEWED','IMPORTING','FAILED')").bind(processed,imported,skipped,batch.id,m.family_id,offset).run();
+      if(Number(progressResult.meta.changes||0)!==1)throw new BadRequest('このbatchは取り込めません。');
       return json({ok:true,batch_id:Number(batch.id),status:'IMPORTING',processed_count:processed,record_count:Number(batch.record_count),imported_count:imported,skipped_count:skipped,error_count:Number(batch.error_count)});
-    }catch(e){await ctx.env.DB.prepare("UPDATE family_log_import_batches SET status='FAILED',failed_at=? WHERE id=? AND family_id=?").bind(now,batch.id,m.family_id).run();throw e;}
+    }catch(e){await ctx.env.DB.prepare("UPDATE family_log_import_batches SET status='FAILED',failed_at=? WHERE id=? AND family_id=? AND rolled_back_at IS NULL AND status IN ('PREVIEWED','IMPORTING','FAILED')").bind(now,batch.id,m.family_id).run();throw e;}
   }
   if(action==='finish'){
     const batch=await getBatch(ctx,Number(b.batch_id||0)),imported=await actualImported(ctx,batch),manifest=manifestOf(batch),processed=Number(batch.processed_count),recordCount=Number(batch.record_count),errors=errorsThrough(manifest,processed),skipped=processed-errors-imported;
