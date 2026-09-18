@@ -6,6 +6,7 @@ const nowJst = (date = new Date()) => new Intl.DateTimeFormat('sv-SE',{timeZone:
 const leaseIso = (date = new Date()) => date.toISOString();
 const leaseExpiryIso = (date = new Date()) => new Date(date.getTime()+NOTIFICATION_DELIVERY_LEASE_MS).toISOString();
 const reportNotificationFailure = (e: unknown) => { logNotificationFailure(e); };
+type PushSubscriptionRow = { id: unknown; endpoint: unknown; p256dh: unknown; auth: unknown };
 
 async function recordSubscriptionState(write: Promise<unknown>): Promise<void> {
   await write.catch((e)=>{ reportNotificationFailure(e); });
@@ -91,6 +92,7 @@ export async function processNotifications(env: Env): Promise<void> {
       )
     ORDER BY n.notify_at,n.id
     LIMIT 50`).bind(nowJst(dueNow),leaseIso(dueNow)).all();
+  const subscriptionCache=new Map<string,PushSubscriptionRow[]>();
   for(const n of due.results) {
     const leaseToken=crypto.randomUUID();
     try {
@@ -113,14 +115,24 @@ export async function processNotifications(env: Env): Promise<void> {
       if(Number(claim.meta.changes || 0)!==1)continue;
 
       if(!webPushConfigured(env))throw new Error('Web Push VAPID configuration is missing.');
-      const subs=await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT 10').bind(Number(n.member_id),Number(n.family_id)).all();
-      if(!subs.results.length)throw new Error('Web Push subscription is not registered.');
+      const familyId=Number(n.family_id),memberId=Number(n.member_id),subscriptionKey=`${familyId}:${memberId}`;
+      let subs=subscriptionCache.get(subscriptionKey);
+      if(subs===undefined){
+        const rows=await env.DB.prepare('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE member_id=? AND family_id=? AND enabled=1 ORDER BY id DESC LIMIT 10').bind(memberId,familyId).all<PushSubscriptionRow>();
+        subs=rows.results;
+        subscriptionCache.set(subscriptionKey,subs);
+      }
+      if(!subs.length)throw new Error('Web Push subscription is not registered.');
       let sent=0;
-      for(const sub of subs.results){
+      for(const sub of [...subs]){
         const messageTarget=String(n.target_type||'').startsWith('message');
         const result=await sendWebPush(env,{id:Number(sub.id),endpoint:String(sub.endpoint),p256dh:String(sub.p256dh),auth:String(sub.auth)},{title:'Family TODO LINE',body:String(n.message||'Family TODO LINEからのお知らせです。'),url:messageTarget?'/app/messages.php':'/app/tasks.php',tag:`familytodo-${String(n.target_type||'notice')}-${String(n.target_id||n.id)}`});
         if(result.ok){sent++;await recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?,last_error=NULL,failure_count=0,updated_at=? WHERE id=?').bind(nowJst(),nowJst(),Number(sub.id)).run());}
-        else if(result.gone){await recordSubscriptionState(env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=?').bind(Number(sub.id)).run());}
+        else if(result.gone){
+          await recordSubscriptionState(env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=?').bind(Number(sub.id)).run());
+          const cached=subscriptionCache.get(subscriptionKey),index=cached?.findIndex(row=>Number(row.id)===Number(sub.id))??-1;
+          if(cached&&index>=0)cached.splice(index,1);
+        }
         else{await recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),nowJst(),Number(sub.id)).run());}
       }
       if(sent===0)throw new Error('Web Push delivery failed for all subscriptions.');
