@@ -14,6 +14,7 @@ const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup
 const shoppingUi=shoppingCategoryUi;
 const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
+const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.css','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -128,3 +129,12 @@ requireText(js,'openCategoryComposer(section,kind,U)','unclassified add route us
 requireText(shoppingUi,"if(category===UNCLASSIFIED){location.reload()", 'authoritative unclassified Shopping reload');
 requireText(belongingsUi,"if(category===U){g.hidden=false", 'unclassified Belongings is visibly retained after save');
 requireText(css,'Empty named categories: name edits','empty category action styling');
+
+requireText(belongingsUi,"g.className='belongings-category-group shopping-category-group'",'Belongings mirrors Shopping group structure');
+requireText(belongingsUi,'belongings-category-footer shopping-category-footer','Belongings category-local add footer');
+requireText(belongingsUi,"f.hidden=true",'Belongings composer deferred like Shopping');
+forbidText(belongingsUi,'カテゴリを上へ','Belongings reorder arrows removed');
+forbidText(belongingsUi,'カテゴリを下へ','Belongings reorder arrows removed');
+requireText(js,"live.querySelector('.belongings-category-add-item')",'empty/unclassified Belongings routes use category-local add');
+requireText(belongingsCss,'Belongings intentionally mirrors Shopping presentation','Shopping-equivalent Belongings CSS');
+requireText(belongingsCss,'border-radius:5px!important','square Belongings checkbox');
