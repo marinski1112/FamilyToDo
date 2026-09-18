@@ -94,7 +94,8 @@ const updateToggle=group=>{
   if(!(toggle instanceof HTMLButtonElement))return;
   const collapsed=group.classList.contains('category-collapsed');
   const label=collapsed?'展開':'閉じる';
-  if(toggle.textContent!==label)toggle.textContent=label;
+  const symbol=collapsed?'›':'⌄';
+  if(toggle.textContent!==symbol)toggle.textContent=symbol;
   toggle.setAttribute('aria-expanded',collapsed?'false':'true');
   toggle.setAttribute('aria-label',`${categoryOf(group)}を${collapsed?'展開':'閉じる'}（${rowsOf(group).length}件）`);
 };
