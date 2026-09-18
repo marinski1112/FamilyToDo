@@ -183,3 +183,13 @@
 .checklist-page .task-section>.section-head>h2{flex:1 1 auto!important;min-width:0!important}
 .checklist-page .task-section>.section-head .checklist-section-tools{flex:0 0 auto!important;margin-left:auto!important;gap:2px!important}
 .checklist-page .task-section .task-add-top{order:99!important;border:0!important;background:transparent!important;border-radius:0!important;padding:0 4px!important;min-width:auto!important;height:42px!important;font-size:15px!important}
+
+/* Populated 未分類 is a first-class category, not an empty-category utility row */
+.checklist-page .shopping-category-group[data-category="未分類"]:not([hidden])>.shopping-category-title,
+.checklist-page .belongings-category-group[data-category="未分類"]:not([hidden])>.belongings-category-head{
+ display:flex!important;align-items:center!important;min-height:58px!important;padding:0 12px!important
+}
+.checklist-page .shopping-category-group[data-category="未分類"]:not([hidden]) .shopping-category-name,
+.checklist-page .belongings-category-group[data-category="未分類"]:not([hidden]) .belongings-category-name{
+ display:block!important;flex:1 1 auto!important;font-size:19px!important;font-weight:800!important;color:#1f2937!important;text-align:left!important
+}
