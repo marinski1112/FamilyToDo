@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 
 const page=fs.readFileSync('src/task-events-page.ts','utf8');
 const browser=fs.readFileSync('public/assets/overdue-task-pagination.js','utf8');
+const loader=fs.readFileSync('public/assets/occurrence-family-log.js','utf8');
 const migration=fs.readFileSync('migrations/0093_task_overdue_seek.sql','utf8');
+const browserSyntax=spawnSync(process.execPath,['--check','public/assets/overdue-task-pagination.js'],{encoding:'utf8'});
+assert.equal(browserSyntax.status,0,browserSyntax.stderr||browserSyntax.stdout||'overdue Task browser syntax invalid');
 
 for(const marker of [
   'const OVERDUE_TASK_PAGE_SIZE=50;',
@@ -17,7 +21,6 @@ for(const marker of [
   "requestUrl.searchParams.get('cursor_id')",
   'renderExpiredTaskRows(visibleExpiredTasks)',
   'class="btn secondary expired-task-more"',
-  '/assets/overdue-task-pagination.js?v=${APP_VERSION}',
 ])assert.ok(page.includes(marker),`overdue Task paging marker missing: ${marker}`);
 for(const marker of [
   "document.querySelector('.expired-task-more')",
@@ -27,6 +30,11 @@ for(const marker of [
   "insertAdjacentHTML('beforeend',String(data.html||''))",
   "alert('期限切れタスクの続きを読み込めませんでした。')",
 ])assert.ok(browser.includes(marker),`overdue Task browser paging marker missing: ${marker}`);
+for(const marker of [
+  "document.querySelector('.expired-task-more')",
+  "script.id='overdueTaskPaginationScript'",
+  "script.src='/assets/overdue-task-pagination.js?v=overdue-task-keyset1'",
+])assert.ok(loader.includes(marker),`overdue Task loader marker missing: ${marker}`);
 for(const marker of [
   'CREATE INDEX idx_tasks_overdue_seek',
   'ON tasks(family_id, COALESCE(end_at,due_at,start_at), id)',
@@ -96,4 +104,4 @@ for(let i=1;i<combined.length;i++){
 }
 assert.ok(combined.every(row=>Number(row.id)%97!==0||Number(row.id)%194===0),'overdue pages must retain PRIVATE owner filtering');
 
-console.log('overdue Task pagination contract: bounded 50+sentinel pages, keyset continuation, PRIVATE filtering, and seek-index plan ok');
+console.log('overdue Task pagination contract: bounded 50+sentinel pages, keyset continuation, PRIVATE filtering, loader/client syntax, and seek-index plan ok');
