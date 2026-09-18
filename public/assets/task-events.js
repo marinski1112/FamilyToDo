@@ -149,6 +149,42 @@
     }finally{el.disabled=false;}
   });
 
+  const overdueTaskMore=document.querySelector('.expired-task-more');
+  if(overdueTaskMore instanceof HTMLButtonElement){
+    overdueTaskMore.addEventListener('click',async()=>{
+      const section=overdueTaskMore.closest('details.expired-tasks');
+      const list=section?.querySelector('.expired-list');
+      const count=section?.querySelector('.expired-task-count');
+      if(!(list instanceof HTMLElement)||overdueTaskMore.disabled)return;
+      overdueTaskMore.disabled=true;
+      overdueTaskMore.textContent='読み込み中…';
+      try{
+        const query=new URLSearchParams({
+          date:String(payload.date||''),
+          overdue:'tasks',
+          cursor_due:overdueTaskMore.dataset.cursorDue||'',
+          cursor_id:overdueTaskMore.dataset.cursorId||'',
+        });
+        const response=await fetch(`/app/tasks.php?${query}`,{credentials:'same-origin',headers:{accept:'application/json'}});
+        const data=await response.json().catch(()=>null);
+        if(!response.ok||!data?.ok)throw new Error('overdue task page failed');
+        list.insertAdjacentHTML('beforeend',String(data.html||''));
+        const loaded=section?.querySelectorAll('[data-expired-task-id]').length||0;
+        if(count)count.textContent=`${loaded}件表示${data.hasMore?'（続きあり）':''}`;
+        if(data.hasMore&&data.cursor?.due&&Number(data.cursor?.id)>0){
+          overdueTaskMore.dataset.cursorDue=String(data.cursor.due);
+          overdueTaskMore.dataset.cursorId=String(data.cursor.id);
+          overdueTaskMore.disabled=false;
+          overdueTaskMore.textContent='続きを表示';
+        }else overdueTaskMore.remove();
+      }catch{
+        overdueTaskMore.disabled=false;
+        overdueTaskMore.textContent='続きを表示';
+        alert('期限切れタスクの続きを読み込めませんでした。');
+      }
+    });
+  }
+
   if(!document.getElementById('belongingsCategoryChecklistStyle')){
     const link=document.createElement('link');
     link.id='belongingsCategoryChecklistStyle';
