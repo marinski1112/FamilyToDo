@@ -10,6 +10,7 @@ const index=read('src/index.ts');
 const schedule=read('src/scheduled-dispatch.ts');
 const wrangler=read('wrangler.jsonc');
 const migration=read('migrations/0064_d1_scheduled_hotpath_indexes.sql');
+const recurrenceProjection=read('src/recurrence-projection.ts');
 
 test('five-minute notification path is bounded and does not run lifecycle maintenance',()=>{
   assert.equal(delivery.includes('cleanupNotificationLifecycle'),false);
@@ -72,4 +73,13 @@ test('scheduled hot queries have additive indexes',()=>{
     'ON recurrence_rules(task_id,family_id,active,deleted_at)',
   ])assert.ok(migration.includes(marker),`missing D1 hot-path index marker: ${marker}`);
   assert.equal(/DROP\s+(?:INDEX|TABLE)/i.test(migration),false);
+});
+
+test('recurrence assignee reads stay inside the already-projected task set',()=>{
+  assert.match(recurrenceProjection,/projectedTaskIds=\[\.\.\.new Set\(projected\.map\(\(\{rule\}\)=>Number\(rule\.task_id\)\)\.filter\(Number\.isInteger\)\)\]/);
+  assert.match(recurrenceProjection,/WHERE ta\.task_id IN \(\$\{projectedTaskPlaceholders\}\) GROUP BY ta\.task_id`\)\.bind\(\.\.\.projectedTaskIds\)/);
+  assert.equal(recurrenceProjection.includes("const assigneeOverlapSql=recurrenceOverlapSql('rr','rt')"),false);
+  assert.equal(recurrenceProjection.includes('WHERE EXISTS(SELECT 1 FROM recurrence_rules rr JOIN tasks rt'),false);
+  assert.match(recurrenceProjection,/taskVisibilitySql\('t'\)/);
+  assert.match(recurrenceProjection,/JOIN members am ON am\.id=ta\.member_id AND am\.active=1/);
 });
