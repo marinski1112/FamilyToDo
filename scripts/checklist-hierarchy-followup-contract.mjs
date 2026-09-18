@@ -126,5 +126,5 @@ requireText(js,'zero-category-add-item','empty named category direct add');
 requireText(js,"void renameCategory(kind,name,title)",'empty named category inline rename');
 requireText(js,'openCategoryComposer(section,kind,U)','unclassified add route uses shared composer opener');
 requireText(shoppingUi,"if(category===UNCLASSIFIED){location.reload()", 'authoritative unclassified Shopping reload');
-requireText(belongingsUi,"if(category===U){location.reload()", 'authoritative unclassified Belongings reload');
+requireText(belongingsUi,"if(category===U){g.hidden=false", 'unclassified Belongings is visibly retained after save');
 requireText(css,'Empty named categories: name edits','empty category action styling');
