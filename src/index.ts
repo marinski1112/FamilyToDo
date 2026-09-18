@@ -7,6 +7,7 @@ import {generateFamilyDailyJournals} from './family-daily-journal';
 import {generateFamilyDailyJournalAi} from './family-daily-journal-ai';
 import { json, redirect } from './response';
 import { cleanupFamilyLogDiagnostics } from './family-log-diagnostics';
+import { cleanupCompletedTaskCreateRequests } from './task-create-idempotency';
 import { AuthRequired, BadRequest, Forbidden } from './errors';
 import { makeContext } from './app-context';
 import { processGoogleTasksInbound } from './google-tasks';
@@ -77,6 +78,7 @@ export default {
       ctx.waitUntil(drainDeletedMessagePhotosGlobal(env.DB,env.MEDIA));
       ctx.waitUntil(cleanupNotificationLifecycle(env));
       ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
+      ctx.waitUntil(cleanupCompletedTaskCreateRequests(env.DB));
       ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
       ctx.waitUntil(archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env)).then(()=>generateFamilyDailyJournalAi(env)).catch(()=>{}));
     }
