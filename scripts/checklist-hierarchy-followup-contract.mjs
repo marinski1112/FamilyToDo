@@ -56,6 +56,11 @@ for(const [needle,label] of [
   ["data-status=\"pending\"",'pending tab'],
   ["data-status=\"completed\"",'completed tab'],
   ['checklist-status-hidden','status row filtering'],
+  ['task-child-composer-deferred','deferred child composer'],
+  ['task-child-add-reveal','compact child add reveal'],
+  ['checklist-trash-icon','non-emoji trash icon'],
+  ['section.append(cluster)','zero category cluster after active content'],
+  ['refreshCounts','completed tab count refresh'],
   ['zero-category-cluster','zero category grouping'],
   ['task-child-count-toggle','parent child count toggle'],
   ['input[name="assignees"]','assignee UI suppression'],
@@ -65,6 +70,12 @@ forbidText(ui,'new MutationObserver','additional UI mutation observer');
 requireText(css,'.shopping-category-name,.belongings-category-name{font-weight:800!important}','bold category headings');
 requireText(css,'border-radius:5px','square checklist control styling');
 requireText(css,'.checklist-status-tabs','compact status tab styling');
+requireText(css,'/* Dense checklist alignment */','dense checklist alignment');
+requireText(css,'.task-child-composer-deferred','deferred child composer styling');
+requireText(css,'.checklist-trash-icon','trash line icon styling');
+requireText(css,'/* Final reference alignment */','final reference alignment');
+requireText(taskPage,"start&&start!=='00:00'",'suppress placeholder midnight time');
+requireText(taskPage,'checklist-heading-icon','compact heading icons');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
 requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
 requireText(taskPage,'appVersion:APP_VERSION','checklist release revision payload');
