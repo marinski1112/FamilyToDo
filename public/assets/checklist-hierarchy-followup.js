@@ -1,205 +1,88 @@
 (()=>{
 'use strict';
-
 const parsePayload=id=>{try{return JSON.parse(document.getElementById(id)?.textContent||'{}');}catch{return {};}};
-const dailyPayload=parsePayload('dailyPayload');
-const taskViewPayload=parsePayload('taskViewPayload');
-const csrf=String(dailyPayload.csrf||taskViewPayload.csrf||'');
-const UNCLASSIFIED='未分類';
-const key=value=>String(value??'').trim().toLocaleLowerCase('ja-JP');
-const uniqueNames=values=>{const out=[],seen=new Set();for(const value of values||[]){const name=String(value??'').trim();const k=key(name);if(!name||name===UNCLASSIFIED||seen.has(k))continue;seen.add(k);out.push(name);}return out;};
+const dailyPayload=parsePayload('dailyPayload'),taskViewPayload=parsePayload('taskViewPayload');
+const csrf=String(dailyPayload.csrf||taskViewPayload.csrf||''),U='未分類';
+const key=v=>String(v??'').trim().toLocaleLowerCase('ja-JP');
+const hide=n=>{if(n instanceof HTMLElement){n.hidden=true;n.classList.add('task-link-ui-hidden');}};
+const requestJson=async(url,body)=>{const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(body)}),d=await r.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした。'}));if(!r.ok||!d?.ok)throw new Error(d?.error||'更新に失敗しました。');return d;};
 
-const hideNode=node=>{if(node instanceof HTMLElement){node.hidden=true;node.classList.add('task-link-ui-hidden');}};
-const hideLegacyControls=()=>{
-  for(const input of document.querySelectorAll('input[name="assignees"],select[name="completion_mode"]')){
-    const shell=input.closest('[data-assignee-section],.assignee-grid,.assignees-field,.completion-mode-field,fieldset')||input.closest('label');
-    hideNode(shell);
-  }
-  for(const select of document.querySelectorAll('select[name="task_id"]')){
-    const shell=select.closest('.shopping-related-task-block,.task-link-section,details')||select.closest('label');
-    hideNode(shell);
-  }
-  document.querySelectorAll('.task-shopping-add,.task-shopping-count,.task-shopping,.task-linked-items,.task-linked-shopping').forEach(hideNode);
-  for(const heading of document.querySelectorAll('.card h2')){
-    const text=String(heading.textContent||'');
-    if(text.includes('このタスクの買い物')||text.includes('このタスクの持ち物'))hideNode(heading.closest('.card'));
-  }
-  for(const paragraph of document.querySelectorAll('p')){
-    if(/^担当[：:]/.test(String(paragraph.textContent||'').trim()))hideNode(paragraph);
-  }
-  for(const meta of document.querySelectorAll('.task-row > .meta,.task-child-row > .meta')){
-    const raw=String(meta.textContent||'');
-    const parts=raw.split(' ・ ');
-    if(parts.length>1&&parts[0].trim()){
-      parts.shift();
-      meta.textContent=parts.join(' ・ ').replace(/^\s*・\s*/,'');
-    }else if(parts.length===1&&raw.trim()&&!/^\d{1,2}:\d{2}$/.test(raw.trim())){
-      meta.textContent='';
-    }
-  }
-  for(const meta of document.querySelectorAll('#taskDirectChildren .meta,.expired-meta')){
-    meta.textContent=String(meta.textContent||'').replace(/\s*・\s*担当\s*[^・]+/g,'').replace(/担当\s*[^・]+\s*・?\s*/g,'');
-  }
-};
-
-const decorateParentRows=()=>{
-  for(const row of document.querySelectorAll('.task-row[data-task-id]')){
-    if(!(row instanceof HTMLElement))continue;
-    const children=row.querySelector(':scope > .task-children');
-    if(!(children instanceof HTMLElement))continue;
-    const childRows=[...children.querySelectorAll(':scope > .task-child-row')];
-    if(!childRows.length)continue;
-    row.classList.add('task-parent-row');
-    let button=row.querySelector(':scope > .task-main-row .task-child-count-toggle');
-    if(!(button instanceof HTMLButtonElement)){
-      button=document.createElement('button');button.type='button';button.className='task-child-count-toggle';
-      const actions=row.querySelector(':scope > .task-main-row .checklist-row-actions');
-      if(actions instanceof HTMLElement)actions.prepend(button);else row.querySelector(':scope > .task-main-row')?.append(button);
-      button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();children.hidden=!children.hidden;button.setAttribute('aria-expanded',children.hidden?'false':'true');button.textContent=`${childRows.length} ${children.hidden?'›':'⌄'}`;});
-    }
-    button.setAttribute('aria-label',`子タスク${childRows.length}件を開閉`);
-    button.setAttribute('aria-expanded',children.hidden?'false':'true');
-    button.textContent=`${childRows.length} ${children.hidden?'›':'⌄'}`;
-  }
-};
-
-const requestJson=async(url,body)=>{
-  const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify(body)});
-  const data=await response.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした。'}));
-  if(!response.ok||!data?.ok){const error=new Error(data?.error||'更新に失敗しました。');error.code=String(data?.code||'');throw error;}
-  return data;
+const hideLegacy=()=>{
+ document.querySelectorAll('input[name="assignees"],select[name="completion_mode"],.task-shopping-add,.task-shopping-count,.task-shopping,.task-linked-items,.task-linked-shopping').forEach(n=>hide(n.closest?.('[data-assignee-section],.assignee-grid,.assignees-field,.completion-mode-field,fieldset,label')||n));
+ document.querySelectorAll('select[name="task_id"]').forEach(n=>hide(n.closest('.shopping-related-task-block,.task-link-section,details,label')));
+ document.querySelectorAll('.card h2').forEach(h=>{const t=String(h.textContent||'');if(t.includes('このタスクの買い物')||t.includes('このタスクの持ち物'))hide(h.closest('.card'));});
+ document.querySelectorAll('p').forEach(p=>{if(/^担当[：:]/.test(String(p.textContent||'').trim()))hide(p);});
+ document.querySelectorAll('.task-row>.meta,.task-child-row>.meta,.unorganized-task-row>.meta').forEach(m=>{m.textContent=String(m.textContent||'').replace(/^\s*[^・]*\s*・\s*/,'').replace(/\s*・\s*担当\s*[^・]+/g,'').trim();});
 };
 
 const chooseChildPolicy=count=>new Promise(resolve=>{
-  const backdrop=document.createElement('div');backdrop.className='parent-completion-choice-backdrop';
-  const sheet=document.createElement('div');sheet.className='parent-completion-choice';sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');
-  sheet.innerHTML=`<h2>未完了の子タスクが${Number(count)}件あります</h2><p>親タスクを完了するときの扱いを選んでください。</p><button type="button" class="parent-completion-complete">未完了の子タスクを全て完了にする</button><button type="button" class="parent-completion-promote">未完了の子タスクを親タスクとして残す</button><button type="button" class="parent-completion-cancel">キャンセル</button>`;
-  backdrop.append(sheet);document.body.append(backdrop);
-  const finish=value=>{backdrop.remove();resolve(value);};
-  sheet.querySelector('.parent-completion-complete')?.addEventListener('click',()=>finish('complete'));
-  sheet.querySelector('.parent-completion-promote')?.addEventListener('click',()=>finish('promote'));
-  sheet.querySelector('.parent-completion-cancel')?.addEventListener('click',()=>finish(null));
-  backdrop.addEventListener('click',event=>{if(event.target===backdrop)finish(null);});
+ const b=document.createElement('div');b.className='checklist-dialog-backdrop';b.innerHTML=`<div class="checklist-dialog" role="dialog" aria-modal="true"><h2>親タスクを完了しますか？</h2><p>未完了の子タスクが${Number(count)}件あります。</p><button data-v="complete">未完了の子タスクを全て完了にする<small>親・子も完了します</small></button><button data-v="promote">未完了の子タスクを親タスクとして残す<small>子タスクをトップレベルへ移動します</small></button><button data-v="" class="cancel">キャンセル</button></div>`;
+ document.body.append(b);const done=v=>{b.remove();resolve(v||null)};b.addEventListener('click',e=>{const x=e.target.closest?.('button[data-v]');if(x)done(x.dataset.v);else if(e.target===b)done(null);});
+});
+const parentCandidate=t=>{if(!(t instanceof HTMLInputElement)||!t.checked)return null;if(t.id==='done'){const id=Number(taskViewPayload.id||0);return String(taskViewPayload.toggleType||'')==='task'&&id>0?{id,target:t}:null;}if(!t.matches('input.toggle[data-type="task"]')||t.closest('.task-child-row'))return null;const row=t.closest('.task-row[data-task-id],.unorganized-task-row[data-task-id]'),id=Number(row?.dataset.taskId||t.dataset.id||0);return row&&id>0?{id,target:t}:null;};
+document.addEventListener('change',e=>{const c=parentCandidate(e.target);if(!c)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();c.target.checked=false;c.target.disabled=true;void(async()=>{try{const i=await requestJson('/api/task-parent-completion',{csrf,id:c.id,action:'inspect'}),n=Number(i.incomplete_children||0);if(n<=0)await requestJson('/api/toggle',{csrf,type:'task',id:c.id,completed:true});else{const p=await chooseChildPolicy(n);if(!p)return;await requestJson('/api/task-parent-completion',{csrf,id:c.id,action:'complete',child_policy:p});}location.reload();}catch(err){alert(err?.message||String(err));}finally{c.target.disabled=false;}})();},true);
+
+const decorateParents=()=>{
+ document.querySelectorAll('.task-row[data-task-id],.unorganized-task-row[data-task-id]').forEach(row=>{
+  const children=row.querySelector(':scope>.task-children');if(!(children instanceof HTMLElement))return;
+  const childRows=[...children.querySelectorAll(':scope>.task-child-row')];if(!childRows.length)return;
+  row.classList.add('task-parent-row');children.hidden=true;
+  let btn=row.querySelector(':scope>.task-main-row .task-child-count-toggle');if(!(btn instanceof HTMLButtonElement)){btn=document.createElement('button');btn.type='button';btn.className='task-child-count-toggle';const a=row.querySelector(':scope>.task-main-row .checklist-row-actions');(a||row.querySelector(':scope>.task-main-row'))?.prepend(btn);btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();children.hidden=!children.hidden;sync();});}
+  const sync=()=>{btn.textContent=`${childRows.length} ${children.hidden?'›':'⌄'}`;btn.setAttribute('aria-expanded',children.hidden?'false':'true');btn.setAttribute('aria-label',`子タスク${childRows.length}件を開閉`);};sync();
+ });
+};
+
+const installSearch=section=>{
+ const head=section.querySelector(':scope>.section-head');if(!(head instanceof HTMLElement)||head.querySelector('.checklist-search-toggle'))return;
+ const tools=document.createElement('div');tools.className='checklist-section-tools';const btn=document.createElement('button');btn.type='button';btn.className='checklist-icon-button checklist-search-toggle';btn.textContent='⌕';btn.setAttribute('aria-label','検索');
+ const box=document.createElement('input');box.type='search';box.className='checklist-inline-search';box.placeholder='検索';box.hidden=true;tools.append(btn,box);head.append(tools);
+ btn.addEventListener('click',()=>{box.hidden=!box.hidden;if(!box.hidden)box.focus();else{box.value='';box.dispatchEvent(new Event('input'));}});
+ box.addEventListener('input',()=>{const q=key(box.value);section.querySelectorAll(':scope>.task-row,:scope>.unorganized-task-row,:scope>.shopping-category-group,:scope>.belongings-category-group').forEach(row=>{if(row instanceof HTMLElement)row.classList.toggle('checklist-search-hidden',Boolean(q)&&!key(row.textContent).includes(q));});});
+ return tools;
+};
+
+const deleteChoice=(names,kind)=>new Promise(resolve=>{
+ const label=names.length===1?`「${names[0]}」カテゴリを削除しますか？`:`${names.length}個のカテゴリを削除しますか？`;
+ const noun=kind==='shopping'?'買い物':'持ち物';const b=document.createElement('div');b.className='checklist-dialog-backdrop';b.innerHTML=`<div class="checklist-dialog" role="dialog" aria-modal="true"><h2>${label}</h2><p>カテゴリ内の${noun}の扱いを選んでください。</p><button data-v="unclassified">中の${noun}を未分類に移動して削除</button><button data-v="delete" class="danger">カテゴリと中の${noun}をすべて削除</button><button data-v="" class="cancel">キャンセル</button></div>`;document.body.append(b);const done=v=>{b.remove();resolve(v||null)};b.addEventListener('click',e=>{const x=e.target.closest?.('button[data-v]');if(x)done(x.dataset.v);else if(e.target===b)done(null);});
 });
 
-const parentCandidate=target=>{
-  if(!(target instanceof HTMLInputElement)||!target.checked)return null;
-  if(target.id==='done'){
-    const id=Number(taskViewPayload.id||0);
-    return String(taskViewPayload.toggleType||'')==='task'&&id>0?{id,target}:null;
-  }
-  if(!target.matches('input.toggle[data-type="task"]'))return null;
-  if(target.closest('.task-child-row'))return null;
-  const row=target.closest('.task-row[data-task-id]');
-  const id=Number(row?.getAttribute('data-task-id')||target.dataset.id||0);
-  return row&&id>0?{id,target}:null;
+const categoryName=group=>String(group?.dataset?.category||U).trim()||U;
+const addDeleteBox=(head,name,selected)=>{
+ if(name===U||head.querySelector('.category-delete-select'))return;const label=document.createElement('label');label.className='category-delete-select';const b=document.createElement('input');b.type='checkbox';b.value=name;b.addEventListener('change',()=>b.checked?selected.add(name):selected.delete(name));label.append(b);head.prepend(label);
+};
+const renameCategory=async(kind,oldName)=>{
+ const raw=prompt('カテゴリ名を変更',oldName);if(raw===null)return;const next=String(raw).trim();if(!next||next===U||key(next)===key(oldName))return;
+ if(kind==='shopping')await requestJson('/api/shopping-category-mutation',{csrf,action:'rename',name:oldName,new_name:next});
+ else await requestJson('/api/item',{csrf,action:'category_rename',name:oldName,new_name:next});
+ location.reload();
 };
 
-const completeParent=async(candidate)=>{
-  const target=candidate.target;
-  target.checked=false;target.disabled=true;
-  try{
-    const inspection=await requestJson('/api/task-parent-completion',{csrf,id:candidate.id,action:'inspect'});
-    const count=Number(inspection.incomplete_children||0);
-    if(count<=0){
-      await requestJson('/api/toggle',{csrf,type:'task',id:candidate.id,completed:true});
-      location.reload();return;
-    }
-    const policy=await chooseChildPolicy(count);
-    if(!policy)return;
-    await requestJson('/api/task-parent-completion',{csrf,id:candidate.id,action:'complete',child_policy:policy});
-    location.reload();
-  }catch(error){alert(error?.message||String(error));}
-  finally{target.disabled=false;}
+const installCategoryUi=async(section,kind,categories,canManage)=>{
+ const tools=installSearch(section)||section.querySelector(':scope>.section-head .checklist-section-tools');if(!(tools instanceof HTMLElement))return;
+ const existingAdd=[...section.querySelectorAll('button')].find(b=>/カテゴリ/.test(String(b.textContent||''))&&/(追加|\＋|\+)/.test(String(b.textContent||'')));
+ if(existingAdd instanceof HTMLButtonElement){existingAdd.classList.add('checklist-compact-action');existingAdd.textContent='＋ カテゴリ';tools.append(existingAdd);}
+ section.querySelector(':scope>.belongings-category-toolbar')?.remove();
+ const selected=new Set(),trash=document.createElement('button');trash.type='button';trash.className='checklist-icon-button category-delete-mode';trash.textContent='♲';trash.setAttribute('aria-label','カテゴリ削除');trash.title='カテゴリ削除';if(canManage)tools.insertBefore(trash,tools.firstChild);
+ const groups=[...section.querySelectorAll(kind==='shopping'?':scope>.shopping-category-group':':scope>.belongings-category-group')].filter(g=>g instanceof HTMLElement);
+ const active=new Set();
+ for(const g of groups){const name=categoryName(g),head=g.querySelector(kind==='shopping'?':scope>.shopping-category-title':':scope>.belongings-category-head');const rows=g.querySelectorAll(kind==='shopping'?':scope>.linked-shopping-row':':scope>.belongings-category-body>.belongings-category-row');const count=rows.length;if(count)active.add(key(name));
+  if(head instanceof HTMLElement){const nameNode=head.querySelector(kind==='shopping'?'.shopping-category-name':'.belongings-category-name');if(nameNode instanceof HTMLElement&&name!==U){nameNode.classList.add('category-name-editable');nameNode.title='カテゴリ名を編集';nameNode.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();void renameCategory(kind,name).catch(err=>alert(err?.message||String(err)));});}
+   let countBtn=head.querySelector('.checklist-category-count-toggle');if(!(countBtn instanceof HTMLButtonElement)){countBtn=document.createElement('button');countBtn.type='button';countBtn.className='checklist-category-count-toggle';const native=head.querySelector(kind==='shopping'?'.shopping-category-toggle':'.belongings-category-toggle');head.insertBefore(countBtn,native||null);countBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const n=head.querySelector(kind==='shopping'?'.shopping-category-toggle':'.belongings-category-toggle');if(n instanceof HTMLButtonElement)n.click();});}countBtn.textContent=String(count);}
+  if(!count&&name!==U)g.hidden=true;
+ }
+ const zero=categories.filter(n=>n&&n!==U&&!active.has(key(n)));let cluster=section.querySelector(':scope>.zero-category-cluster');cluster?.remove();
+ if(zero.length){cluster=document.createElement('details');cluster.className='zero-category-cluster';cluster.innerHTML=`<summary><span>0件のカテゴリ</span><span>${zero.length}</span></summary><div class="zero-category-cluster-list"></div>`;const list=cluster.querySelector('.zero-category-cluster-list');zero.forEach(name=>{const row=document.createElement('div');row.className='zero-category-cluster-row';const title=document.createElement('button');title.type='button';title.className='zero-category-name';title.textContent=name;title.addEventListener('click',()=>void renameCategory(kind,name).catch(err=>alert(err?.message||String(err))));row.append(title);list.append(row);});const add=document.createElement('button');add.type='button';add.className='zero-unclassified-add';add.textContent=kind==='shopping'?'＋ 未分類に買い物を追加':'＋ 未分類に持ち物を追加';add.addEventListener('click',()=>{const u=groups.find(g=>categoryName(g)===U);if(u instanceof HTMLElement){u.hidden=false;u.classList.remove('category-collapsed');u.querySelector(kind==='shopping'?'.shopping-continuous-name':'.belongings-composer-name')?.focus({preventScroll:false});u.scrollIntoView({behavior:'smooth',block:'center'});}});list.append(add);section.querySelector(':scope>.section-head')?.insertAdjacentElement('afterend',cluster);}
+ const setMode=on=>{section.classList.toggle('category-delete-mode-active',on);selected.clear();section.querySelectorAll('.category-delete-select').forEach(n=>n.remove());if(on){groups.forEach(g=>{const n=categoryName(g),h=g.querySelector(kind==='shopping'?':scope>.shopping-category-title':':scope>.belongings-category-head');if(h instanceof HTMLElement&&n!==U){g.hidden=false;addDeleteBox(h,n,selected);}});cluster?.querySelectorAll('.zero-category-cluster-row').forEach(row=>{const n=String(row.querySelector('.zero-category-name')?.textContent||'');if(n)addDeleteBox(row,n,selected);});if(cluster instanceof HTMLDetailsElement)cluster.open=true;}};
+ trash.addEventListener('click',async()=>{if(!section.classList.contains('category-delete-mode-active')){setMode(true);trash.textContent='完了';trash.classList.add('text-button');return;}const names=[...selected];if(!names.length){setMode(false);trash.textContent='♲';trash.classList.remove('text-button');return;}const policy=await deleteChoice(names,kind);if(!policy)return;try{await requestJson('/api/shopping-category-mutation',{csrf,action:'delete_many',kind,names,item_policy:policy});location.reload();}catch(err){alert(err?.message||String(err));}});
 };
 
-document.addEventListener('change',event=>{
-  const candidate=parentCandidate(event.target);
-  if(!candidate)return;
-  event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-  void completeParent(candidate);
-},true);
-
-const waitFor=async(test,frames=120)=>{
-  for(let i=0;i<frames;i++){const value=test();if(value)return value;await new Promise(resolve=>requestAnimationFrame(resolve));}
-  return test();
+const setup=async()=>{
+ if(location.pathname!=='/app/tasks.php')return;hideLegacy();decorateParents();
+ const task=document.querySelector('.task-section');if(task instanceof HTMLElement)installSearch(task);
+ const shopping=document.querySelector('.shopping-checklist-section'),items=document.querySelector('.item-section');
+ let sc={categories:[],canManageCategories:false},ic={categories:[]};try{sc=await (await fetch('/api/shopping-categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}try{ic=await (await fetch('/api/item?view=categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}
+ if(shopping instanceof HTMLElement)await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));
+ if(items instanceof HTMLElement)await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));
 };
-
-const addCountToggle=(group,count,toggleSelector)=>{
-  if(!(group instanceof HTMLElement))return;
-  const head=group.querySelector(':scope > .shopping-category-title,:scope > .belongings-category-head');
-  if(!(head instanceof HTMLElement))return;
-  let button=head.querySelector('.checklist-category-count-toggle');
-  if(!(button instanceof HTMLButtonElement)){
-    button=document.createElement('button');button.type='button';button.className='checklist-category-count-toggle';
-    const nativeToggle=head.querySelector(toggleSelector);head.insertBefore(button,nativeToggle||null);
-    button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const native=head.querySelector(toggleSelector);if(native instanceof HTMLButtonElement)native.click();});
-  }
-  button.textContent=String(count);button.setAttribute('aria-label',`${String(group.dataset.category||UNCLASSIFIED)} ${count}件を開閉`);
-};
-
-const renderZeroCluster=(section,kind,names)=>{
-  section.querySelector(`:scope > .zero-category-cluster[data-kind="${kind}"]`)?.remove();
-  if(!names.length)return;
-  const details=document.createElement('details');details.className='zero-category-cluster';details.dataset.kind=kind;
-  const summary=document.createElement('summary');summary.innerHTML=`<span>0件のカテゴリ</span><span>${names.length}</span>`;details.append(summary);
-  const list=document.createElement('div');list.className='zero-category-cluster-list';
-  for(const name of names){const row=document.createElement('div');row.className='zero-category-cluster-row';row.textContent=name;list.append(row);}details.append(list);
-  const head=section.querySelector(':scope > .section-head');if(head)head.insertAdjacentElement('afterend',details);else section.prepend(details);
-};
-
-const installDeletePanel=(section,kind,categories,canManage)=>{
-  if(!canManage||!categories.length||section.querySelector(`.category-bulk-delete-open[data-kind="${kind}"]`))return;
-  const button=document.createElement('button');button.type='button';button.className='category-bulk-delete-open';button.dataset.kind=kind;button.textContent='🗑️ カテゴリ削除';
-  const addButton=[...section.querySelectorAll('button')].find(node=>/カテゴリ/.test(String(node.textContent||''))&&/(追加|\＋|\+)/.test(String(node.textContent||'')));
-  if(addButton instanceof HTMLElement)addButton.insertAdjacentElement('afterend',button);else section.querySelector(':scope > .section-head')?.append(button);
-  const panel=document.createElement('div');panel.className='category-delete-panel';panel.hidden=true;
-  const list=document.createElement('div');list.className='category-delete-panel-list';
-  for(const name of categories){const label=document.createElement('label'),box=document.createElement('input'),span=document.createElement('span');box.type='checkbox';box.value=name;span.textContent=name;label.append(box,span);list.append(label);}panel.append(list);
-  const actions=document.createElement('div');actions.className='category-delete-panel-actions';actions.innerHTML='<button type="button" class="category-delete-cancel">キャンセル</button><button type="button" class="category-delete-confirm">選択したカテゴリを削除</button>';panel.append(actions);button.insertAdjacentElement('afterend',panel);
-  button.addEventListener('click',()=>{panel.hidden=!panel.hidden;});
-  panel.querySelector('.category-delete-cancel')?.addEventListener('click',()=>{panel.hidden=true;for(const box of panel.querySelectorAll('input[type="checkbox"]'))box.checked=false;});
-  panel.querySelector('.category-delete-confirm')?.addEventListener('click',async()=>{
-    const names=[...panel.querySelectorAll('input[type="checkbox"]:checked')].map(box=>String(box.value||'')).filter(Boolean);if(!names.length)return;
-    if(!confirm(`${names.length}個のカテゴリを削除します。中の項目は未分類へ移動します。`))return;
-    try{await requestJson('/api/shopping-category-mutation',{csrf,action:'delete_many',kind,names});location.reload();}catch(error){alert(error?.message||String(error));}
-  });
-};
-
-const setupCategoryUx=async()=>{
-  if(location.pathname!=='/app/tasks.php')return;
-  const shoppingSection=document.querySelector('.shopping-checklist-section');
-  const itemSection=document.querySelector('.item-section,#itemSec');
-  const date=String(new URLSearchParams(location.search).get('date')||dailyPayload.date||'');
-  let shoppingData={ok:false,categories:[],canManageCategories:false},itemData={ok:false,categories:[],items:[]};
-  try{const r=await fetch('/api/shopping-categories',{credentials:'same-origin',headers:{accept:'application/json'},cache:'no-store'});shoppingData=await r.json();}catch{}
-  try{const suffix=/^\d{4}-\d{2}-\d{2}$/.test(date)?`&date=${encodeURIComponent(date)}`:'';const r=await fetch(`/api/item?view=categories${suffix}`,{credentials:'same-origin',headers:{accept:'application/json'},cache:'no-store'});itemData=await r.json();}catch{}
-
-  if(shoppingSection instanceof HTMLElement){
-    await waitFor(()=>shoppingSection.querySelector('.shopping-category-group')||shoppingSection.querySelector('.shopping-category-add'));
-    const active=new Set();
-    for(const group of shoppingSection.querySelectorAll(':scope > .shopping-category-group')){
-      if(!(group instanceof HTMLElement))continue;const count=group.querySelectorAll(':scope > .linked-shopping-row').length;const name=String(group.dataset.category||UNCLASSIFIED).trim()||UNCLASSIFIED;
-      if(count>0){active.add(key(name));group.hidden=false;addCountToggle(group,count,'.shopping-category-toggle');}else if(name!==UNCLASSIFIED)group.hidden=true;
-    }
-    const categories=uniqueNames(shoppingData.categories||[]);const zero=categories.filter(name=>!active.has(key(name)));
-    renderZeroCluster(shoppingSection,'shopping',zero);
-    installDeletePanel(shoppingSection,'shopping',categories,Boolean(shoppingData.canManageCategories));
-  }
-
-  if(itemSection instanceof HTMLElement){
-    await waitFor(()=>itemSection.querySelector('.belongings-category-toolbar')||itemSection.querySelector('.belongings-category-group'));
-    const active=new Set((Array.isArray(itemData.items)?itemData.items:[]).map(item=>key(String(item?.category||'').trim()||UNCLASSIFIED)));
-    for(const group of itemSection.querySelectorAll(':scope > .belongings-category-group')){
-      if(!(group instanceof HTMLElement))continue;const name=String(group.dataset.category||UNCLASSIFIED).trim()||UNCLASSIFIED;const count=group.querySelectorAll(':scope > .belongings-category-body > .belongings-category-row').length;
-      if(count>0||name===UNCLASSIFIED){group.hidden=false;if(count>0)addCountToggle(group,count,'.belongings-category-toggle');}else group.hidden=true;
-    }
-    const categories=uniqueNames(itemData.categories||[]);const zero=categories.filter(name=>!active.has(key(name)));
-    renderZeroCluster(itemSection,'item',zero);
-    installDeletePanel(itemSection,'item',categories,Boolean(shoppingData.canManageCategories));
-  }
-};
-
-const boot=()=>{hideLegacyControls();decorateParentRows();void setupCategoryUx();};
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>void setup(),0)},{once:true});else setTimeout(()=>void setup(),0);
 })();
