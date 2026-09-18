@@ -31,6 +31,19 @@ const install=()=>{
     if(!(section instanceof HTMLElement))continue;
     const form=section.querySelector(':scope > .section-quick-entry, :scope > .section-add-disclosure .section-quick-entry');
     if(!(form instanceof HTMLFormElement))continue;
+    if(klass==='task-section'){
+      section.querySelector(':scope > .section-add-disclosure')?.remove();
+      let button=section.querySelector(':scope > .section-head .task-add-top');
+      if(!(button instanceof HTMLButtonElement)){
+        button=document.createElement('button');button.type='button';button.className='checklist-compact-action task-add-top';button.textContent='＋ タスクを追加';
+        button.addEventListener('click',()=>{form.hidden=false;form.scrollIntoView({behavior:'smooth',block:'nearest'});const input=form.querySelector('input,textarea');if(input instanceof HTMLElement)input.focus({preventScroll:false});});
+      }
+      let tools=section.querySelector(':scope > .section-head .checklist-section-tools');
+      if(!(tools instanceof HTMLElement)){tools=document.createElement('div');tools.className='checklist-section-tools';section.querySelector(':scope > .section-head')?.append(tools);}
+      if(button.parentElement!==tools)tools.append(button);
+      form.hidden=true;if(form.parentElement!==section)section.append(form);
+      continue;
+    }
     let details=section.querySelector(':scope > .section-add-disclosure');
     if(!(details instanceof HTMLDetailsElement)){
       details=document.createElement('details');
