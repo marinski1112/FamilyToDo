@@ -33,6 +33,10 @@ for(const marker of [
   'if(!subjectsWithQuickActions.has(subjectId))',
   'if(insertedQuickActionDefaults)quickActionRows=await loadQuickActions();',
   'const quickActions={results:quickActionRows.results.filter(row=>Number(row.active)===1)};',
+  'const activeSubjectIds=subjects.results.map(subject=>Number(subject.id)).filter(id=>id>0);',
+  "subject_id IN (${activeSubjectIds.map(()=>'?').join(',')}) AND log_type='MILK' AND deleted_at IS NULL",
+  'activeSubjectIds.length?await ctx.env.DB.prepare',
+  '.bind(m.family_id,...activeSubjectIds).all<Row>():{results:[] as Row[]}',
   'ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC,id DESC)',
   'dashboardDays>1096',
   'ORDER BY l.occurred_at DESC,l.id DESC LIMIT 51 OFFSET ?',
@@ -45,6 +49,7 @@ for(const marker of [
   'family-ai-query',
 ])if(!page.includes(marker))throw new Error(`Family Log retained page marker missing: ${marker}`);
 if(page.includes("const delegated=await ctx.env.DB.prepare(\"SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'\")"))throw new Error('Family Log admin path must not unconditionally read delegated quick-chore permission');
+if(page.includes("FROM family_logs WHERE family_id=? AND log_type='MILK' AND deleted_at IS NULL AND subject_id IS NOT NULL"))throw new Error('Family Log latest MILK read must not scan all family subjects when only active subjects are selectable');
 if(page.includes("SELECT COUNT(*) c FROM family_log_quick_actions WHERE family_id=? AND subject_id=?"))throw new Error('Family Log page must not issue one quick-action COUNT query per BABY subject');
 if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? AND \(active=1 OR subject_id IN/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable active-or-BABY read query site');
 for(const marker of [
