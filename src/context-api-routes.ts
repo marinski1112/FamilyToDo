@@ -5,6 +5,7 @@ import { inviteCreate } from './family-invite-api';
 import { apiMe } from './api-me';
 import { taskApi } from './task-api';
 import { taskChildrenApi } from './task-children-api';
+import { taskParentCompletionApi } from './task-parent-completion-api';
 import { taskRoughInputApi } from './task-rough-input-api';
 import { checklistInlineTitleApi } from './checklist-inline-title-api';
 import { normalizeEventRoughInputRequest } from './task-rough-input-event-normalize';
@@ -58,6 +59,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);
+  if(url.pathname==='/api/task-parent-completion') return await taskParentCompletionApi(request,context);
   if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request),context);
   if(url.pathname==='/api/checklist/inline-title') return await checklistInlineTitleApi(request,context);
   if(url.pathname==='/api/item') return await itemApi(request,context);
