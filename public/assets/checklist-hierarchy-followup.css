@@ -130,3 +130,24 @@
 .checklist-page .checklist-category-count-toggle{min-width:24px!important;width:auto!important;padding:0 2px!important}
 .checklist-page .shopping-category-toggle,.checklist-page .belongings-category-toggle{margin-left:0!important}
 .checklist-page .calendar-fab,.checklist-page~.calendar-fab,body:has(.checklist-page) .calendar-fab{display:none!important}
+
+/* Final compact polish */
+.checklist-page .section-card{margin-bottom:8px!important;padding-top:8px!important;padding-bottom:6px!important;border-top:1px solid #e6e9ee!important;border-bottom:1px solid #e6e9ee!important}
+.checklist-page .section-head{margin-bottom:1px!important}
+.checklist-page .section-head h2{font-size:18px!important;line-height:1.2!important}
+.checklist-page .task-main-row{min-height:40px!important}
+.checklist-page .task-row,.checklist-page .unorganized-task-row{padding-top:1px!important;padding-bottom:1px!important}
+.checklist-page .shopping-category-name,.checklist-page .belongings-category-name{font-size:16px!important;line-height:1.2!important}
+.checklist-page .shopping-category-title,.checklist-page .belongings-category-head{padding-left:2px!important;padding-right:2px!important}
+.checklist-page .checklist-category-count-toggle{display:inline-flex!important;align-items:center!important;justify-content:flex-end!important;gap:0!important}
+.checklist-page .shopping-category-toggle,.checklist-page .belongings-category-toggle{font-size:18px!important;line-height:1!important}
+.checklist-page .checklist-status-tabs{min-width:0!important;max-width:none!important}
+.checklist-page .checklist-status-tabs button{min-width:76px!important;height:29px!important;padding:0 10px!important}
+.checklist-page .zero-category-cluster-row{padding-left:4px!important;padding-right:4px!important}
+.checklist-page .zero-unclassified-add{padding-left:4px!important}
+.checklist-page .task-child-add-reveal{margin-left:0!important;padding-left:0!important}
+@media(max-width:430px){
+ .checklist-page .section-card{padding-left:8px!important;padding-right:8px!important}
+ .checklist-page .checklist-section-tools{gap:0!important}
+ .checklist-page .checklist-compact-action{padding-left:4px!important;padding-right:4px!important}
+}
