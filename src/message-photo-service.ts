@@ -53,14 +53,29 @@ export async function createMessagePhoto(db:D1Database,bucket:R2Bucket,input:Mes
   }
 }
 
+type PendingMessagePhotoDeletion={upload_id:string;family_id:number;object_key:string};
+const MESSAGE_PHOTO_GLOBAL_CLEANUP_LIMIT=24;
+
+async function deletePendingMessagePhoto(db:D1Database,bucket:R2Bucket,row:PendingMessagePhotoDeletion) {
+  if(row.object_key!==`families/${row.family_id}/message-photos/${row.upload_id}`)return;
+  try {
+    await bucket.delete(row.object_key);
+    await db.prepare("UPDATE message_photos SET state='deleted',caption='' WHERE upload_id=? AND family_id=? AND state='delete_pending' AND writers=0")
+      .bind(row.upload_id,row.family_id).run();
+    // Keep the upload ID tombstone against replay. No staging timeout.
+  } catch { /* Durable marker survives for a later bounded retry. */ }
+}
+
 export async function drainDeletedMessagePhotos(db:D1Database,bucket:R2Bucket,familyId:number) {
-  const rows=await db.prepare("SELECT upload_id,object_key FROM message_photos WHERE family_id=? AND state='delete_pending' AND writers=0 ORDER BY created_at LIMIT 8")
-    .bind(familyId).all<{upload_id:string;object_key:string}>();
-  for(const row of rows.results) {
-    if(row.object_key!==`families/${familyId}/message-photos/${row.upload_id}`)continue;
-    try {await bucket.delete(row.object_key);
-      await db.prepare("UPDATE message_photos SET state='deleted',caption='' WHERE upload_id=? AND state='delete_pending' AND writers=0").bind(row.upload_id).run();
-      // Keep the upload ID tombstone against replay. No staging timeout.
-    } catch { /* Durable marker survives for a later bounded retry. */ }
-  }
+  const rows=await db.prepare("SELECT upload_id,family_id,object_key FROM message_photos WHERE family_id=? AND state='delete_pending' AND writers=0 ORDER BY created_at,upload_id LIMIT 8")
+    .bind(familyId).all<PendingMessagePhotoDeletion>();
+  for(const row of rows.results)await deletePendingMessagePhoto(db,bucket,row);
+}
+
+export async function drainDeletedMessagePhotosGlobal(db:D1Database,bucket:R2Bucket) {
+  const rows=await db.prepare(`SELECT upload_id,family_id,object_key FROM message_photos
+    WHERE state='delete_pending' AND writers=0
+    ORDER BY created_at,upload_id LIMIT ${MESSAGE_PHOTO_GLOBAL_CLEANUP_LIMIT}`)
+    .all<PendingMessagePhotoDeletion>();
+  for(const row of rows.results)await deletePendingMessagePhoto(db,bucket,row);
 }
