@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 
 const page=fs.readFileSync('src/task-events-page.ts','utf8');
-const browser=fs.readFileSync('public/assets/task-events.js','utf8');
+const browser=fs.readFileSync('public/assets/overdue-task-pagination.js','utf8');
 const migration=fs.readFileSync('migrations/0093_task_overdue_seek.sql','utf8');
 
 for(const marker of [
@@ -17,6 +17,7 @@ for(const marker of [
   "requestUrl.searchParams.get('cursor_id')",
   'renderExpiredTaskRows(visibleExpiredTasks)',
   'class="btn secondary expired-task-more"',
+  '/assets/overdue-task-pagination.js?v=${APP_VERSION}',
 ])assert.ok(page.includes(marker),`overdue Task paging marker missing: ${marker}`);
 for(const marker of [
   "document.querySelector('.expired-task-more')",
