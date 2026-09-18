@@ -189,13 +189,13 @@
     const link=document.createElement('link');
     link.id='belongingsCategoryChecklistStyle';
     link.rel='stylesheet';
-    link.href='/assets/checklist-belongings-categories.css?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}';
+    link.href=`/assets/checklist-belongings-categories.css?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}`;
     document.head.append(link);
   }
   if(!document.getElementById('belongingsCategoryChecklistScript')){
     const script=document.createElement('script');
     script.id='belongingsCategoryChecklistScript';
-    script.src='/assets/checklist-belongings-categories.js?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}';
+    script.src=`/assets/checklist-belongings-categories.js?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}`;
     script.async=true;
     document.head.append(script);
   }
@@ -203,13 +203,13 @@
     const link=document.createElement('link');
     link.id='belongingsReusableSetStyle';
     link.rel='stylesheet';
-    link.href='/assets/checklist-belongings-reusable-sets.css?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}';
+    link.href=`/assets/checklist-belongings-reusable-sets.css?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}`;
     document.head.append(link);
   }
   if(!document.getElementById('belongingsReusableSetScript')){
     const script=document.createElement('script');
     script.id='belongingsReusableSetScript';
-    script.src='/assets/checklist-belongings-reusable-sets.js?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}';
+    script.src=`/assets/checklist-belongings-reusable-sets.js?v=${encodeURIComponent(String(payload.appVersion||'checklist'))}`;
     script.async=true;
     document.head.append(script);
   }
