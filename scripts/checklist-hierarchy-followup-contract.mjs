@@ -52,6 +52,10 @@ for(const [needle,label] of [
   ['カテゴリと中の${noun}をすべて削除','delete-category-and-items choice'],
   ['checklist-inline-search','compact checklist search'],
   ['zero-unclassified-add','unclassified add route'],
+  ['checklist-status-tabs','pending/completed tab control'],
+  ["data-status=\"pending\"",'pending tab'],
+  ["data-status=\"completed\"",'completed tab'],
+  ['checklist-status-hidden','status row filtering'],
   ['zero-category-cluster','zero category grouping'],
   ['task-child-count-toggle','parent child count toggle'],
   ['input[name="assignees"]','assignee UI suppression'],
@@ -60,6 +64,7 @@ for(const [needle,label] of [
 forbidText(ui,'new MutationObserver','additional UI mutation observer');
 requireText(css,'.shopping-category-name,.belongings-category-name{font-weight:800!important}','bold category headings');
 requireText(css,'border-radius:5px','square checklist control styling');
+requireText(css,'.checklist-status-tabs','compact status tab styling');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
 requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
 requireText(taskPage,'appVersion:APP_VERSION','checklist release revision payload');
