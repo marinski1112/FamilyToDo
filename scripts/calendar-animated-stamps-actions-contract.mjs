@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const source=fs.readFileSync('src/calendar-stamp-actions.ts','utf8');
 const adminInventory=fs.readFileSync('src/calendar-stamp-admin-inventory.ts','utf8');
 const adminApi=fs.readFileSync('src/calendar-stamp-admin-api.ts','utf8');
+const settingsUi=fs.readFileSync('public/assets/settings-stamps.js','utf8');
 
 for(const token of [
   'calendarStampAssetsForPicker',
@@ -89,4 +90,21 @@ assert.match(adminApi,/rawStorageProvider&&rawStorageProvider!=='ASSETS'&&rawSto
 assert.match(adminApi,/const storageProvider=\(rawStorageProvider\|\|'ASSETS'\) as 'ASSETS'\|'UPLOAD';/,'PNG sequence admin boundary must preserve the absent/empty ASSETS default and explicit UPLOAD');
 assert.doesNotMatch(adminApi,/body\.storageProvider==='UPLOAD'\?'UPLOAD':'ASSETS'/,'PNG sequence admin boundary must not silently coerce unknown providers to ASSETS');
 
-console.log('calendar animated stamps actions contract: bounded tenant-safe member-authorized picker, atomically authorized asset registry, paginated admin inventory, strict typed PNG provider boundary and creator-owned placement mutations ok');
+assert.match(adminApi,/failedSharedCleanupAvailable:shared\.failedSource\.has\(Number\(asset\.id\)\)&&!sharedPublished[\s\S]*?asset\.storage_provider==='UPLOAD'/,
+  'admin inventory must expose local cleanup only for unshared UPLOAD assets recorded by a failed shared operation');
+assert.match(adminApi,/request\.method==='DELETE'[\s\S]*?body\.confirm!=='permanent'[\s\S]*?CONFIRM_REQUIRED/,
+  'failed-share local purge must require an explicit permanent-delete confirmation');
+assert.match(adminApi,/FROM calendar_stamp_global_sources source[\s\S]*?source\.asset_id=\?[\s\S]*?source\.family_id=\?[\s\S]*?NOT EXISTS\(SELECT 1 FROM calendar_shared_stamp_refs ref WHERE ref\.asset_id=asset\.id\)/,
+  'failed-share local purge must be family-scoped and must reject assets that acquired a shared ref');
+assert.match(adminApi,/EXISTS\(SELECT 1 FROM members actor[\s\S]*?actor\.id=\?[\s\S]*?actor\.family_id=\?[\s\S]*?actor\.active=1 AND actor\.role IN \('OWNER','ADMIN'\)\)/,
+  'failed-share local purge must atomically require an active same-family admin');
+assert.match(adminApi,/cleanupFamilySharedStamp\([\s\S]*?verifiedStampDeletionState[\s\S]*?state\.state==='pending'\|\|state\.state==='completed'/,
+  'failed-share local purge must reuse guarded participant cleanup only after central deletion is verified');
+assert.match(settingsUi,/failedSharedCleanupAvailable===true[\s\S]*?ローカル完全削除/,
+  'settings UI must offer a local permanent cleanup action for failed shared sources');
+assert.match(settingsUi,/method:'DELETE'[\s\S]*?confirm:'permanent'/,
+  'settings UI local cleanup must use the explicit permanent-delete API contract');
+assert.match(settingsUi,/ローカル画像・配置・対象投稿も削除され、元に戻せません/,
+  'settings UI must warn about the destructive local cleanup scope');
+
+console.log('calendar animated stamps actions contract: bounded tenant-safe member-authorized picker, atomically authorized asset registry, paginated admin inventory, failed-share local purge recovery, strict typed PNG provider boundary and creator-owned placement mutations ok');

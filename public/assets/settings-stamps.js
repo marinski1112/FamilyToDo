@@ -175,6 +175,34 @@
     }catch(error){setInventoryStatus(error instanceof Error?error.message:'共有に失敗しました。');button.disabled=false;}
   };
 
+  const purgeFailedSharedAsset=async(asset,button)=>{
+    const name=text(asset?.name)||`スタンプ #${asset?.id}`;
+    if(!window.confirm(`「${name}」をFamilyToDoから完全削除します。\n削除済みの共有IDに紐づくローカル画像・配置・対象投稿も削除され、元に戻せません。続けますか？`))return;
+    button.disabled=true;setInventoryStatus('ローカルの残存データを完全削除しています…');
+    try{
+      let payload=null,response=null;
+      for(let step=0;step<4;step++){
+        response=await fetch('/api/calendar-stamp-admin/assets',{
+          method:'DELETE',credentials:'same-origin',headers:{'content-type':'application/json'},
+          body:JSON.stringify({csrf:csrf(),assetId:Number(asset.id),confirm:'permanent'}),
+        });
+        try{payload=await response.json();}catch{payload=null;}
+        if(!response.ok)break;
+        if(payload?.ok===true&&payload?.deleted===true)break;
+      }
+      if(response?.ok&&payload?.ok===true&&payload?.deleted===true){
+        setInventoryStatus('ローカルの残存データを完全削除しました。',true);
+        await loadInventory();
+        return;
+      }
+      const code=text(payload?.error);
+      if(response?.status===403||code==='ADMIN_REQUIRED'||code==='CSRF_FAILED')throw new Error('削除権限を確認して、ページを再読み込みしてください。');
+      if(response?.status===409||code==='LOCAL_PURGE_NOT_AVAILABLE'||code==='LOCAL_PURGE_AMBIGUOUS')throw new Error('このスタンプはローカル残存データとして安全に削除できません。共有スタンプの完全削除を使用してください。');
+      if(response?.status===503||code==='LOCAL_PURGE_RETRY_REQUIRED'||code==='SHARED_STAMPS_UNAVAILABLE')throw new Error('共有側の完全削除状態を確認できませんでした。時間をおいて再試行してください。');
+      throw new Error('ローカルの完全削除を完了できませんでした。');
+    }catch(error){setInventoryStatus(error instanceof Error?error.message:'ローカルの完全削除に失敗しました。');button.disabled=false;}
+  };
+
   const renderInventory=(assets,sharedPublishingReady)=>{
     if(!inventory)return;
     inventory.replaceChildren();
@@ -197,6 +225,10 @@
       if(asset.canPublishShared===true){
         const publish=document.createElement('button');publish.type='button';publish.className='btn small';publish.textContent='みてにゃと共有';
         publish.addEventListener('click',()=>{void publishAsset(asset,publish);});actions.append(publish);
+      }
+      if(asset.failedSharedCleanupAvailable===true){
+        const purge=document.createElement('button');purge.type='button';purge.className='btn gray small';purge.textContent='ローカル完全削除';
+        purge.addEventListener('click',()=>{void purgeFailedSharedAsset(asset,purge);});actions.append(purge);
       }
       const button=document.createElement('button');button.type='button';button.className='btn gray small';button.textContent=asset.active?'無効化':'有効化';
       button.addEventListener('click',async()=>{
