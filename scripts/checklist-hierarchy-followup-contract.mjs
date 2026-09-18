@@ -11,6 +11,7 @@ const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation
 const taskEvents=readFileSync('public/assets/task-events.js','utf8');
 const taskPage=readFileSync('src/task-events-page.ts','utf8');
 const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup.js','utf8');
+const shoppingUi=shoppingCategoryUi;
 const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 
@@ -120,3 +121,10 @@ requireText(belongingsUi,"g.hidden=false;g.classList.remove('checklist-status-gr
 
 requireText(js,"else if(name===U){g.hidden=false", 'populated unclassified groups forced visible');
 requireText(css,'Populated 未分類 is a first-class category','populated unclassified full-row styling');
+
+requireText(js,'zero-category-add-item','empty named category direct add');
+requireText(js,"void renameCategory(kind,name,title)",'empty named category inline rename');
+requireText(js,'openCategoryComposer(section,kind,U)','unclassified add route uses shared composer opener');
+requireText(shoppingUi,"if(category===UNCLASSIFIED){location.reload()", 'authoritative unclassified Shopping reload');
+requireText(belongingsUi,"if(category===U){location.reload()", 'authoritative unclassified Belongings reload');
+requireText(css,'Empty named categories: name edits','empty category action styling');
