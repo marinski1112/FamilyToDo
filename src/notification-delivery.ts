@@ -5,9 +5,10 @@ const NOTIFICATION_DELIVERY_LEASE_MS = 15 * 60 * 1000;
 const nowJst = (date = new Date()) => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(date).replace(' ',' ');
 const leaseIso = (date = new Date()) => date.toISOString();
 const leaseExpiryIso = (date = new Date()) => new Date(date.getTime()+NOTIFICATION_DELIVERY_LEASE_MS).toISOString();
+const reportNotificationFailure = (e: unknown) => { logNotificationFailure(e); };
 
 async function recordSubscriptionState(write: Promise<unknown>): Promise<void> {
-  await write.catch((e)=>{ logNotificationFailure(e); });
+  await write.catch((e)=>{ reportNotificationFailure(e); });
 }
 
 async function finalizeAcceptedNotification(env: Env, notificationId: number, leaseToken: string): Promise<boolean> {
@@ -38,14 +39,14 @@ async function finalizeAcceptedNotification(env: Env, notificationId: number, le
       WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
       .bind('Web Push accepted; sent finalization could not be confirmed.',nowJst(quarantineNow),notificationId,leaseToken).run();
     if(Number(quarantine.meta.changes || 0)===1){
-      logNotificationFailure(lastError || new Error('Web Push accepted but sent finalization was quarantined.'));
+      reportNotificationFailure(lastError || new Error('Web Push accepted but sent finalization was quarantined.'));
       return false;
     }
   }catch(e){
-    logNotificationFailure(e);
+    reportNotificationFailure(e);
     if(lastError==null)lastError=e;
   }
-  logNotificationFailure(lastError || new Error('Web Push accepted but sent finalization could not be confirmed.'));
+  reportNotificationFailure(lastError || new Error('Web Push accepted but sent finalization could not be confirmed.'));
   return false;
 }
 
@@ -134,7 +135,7 @@ export async function processNotifications(env: Env): Promise<void> {
             last_error=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?
         WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
         .bind(String(e instanceof Error?e.message:e).slice(0,1000),nowJst(failedNow),n.id,leaseToken).run().catch(()=>{});
-      logNotificationFailure(e);
+      reportNotificationFailure(e);
     }
   }
 }
