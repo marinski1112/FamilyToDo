@@ -47,12 +47,14 @@ export async function importExtras(ctx:AppContext,b:Row):Promise<Response>{
   if([cutoff,batchCutoff,foodCutoff].some(x=>!Number.isSafeInteger(x)||x<0)||typeof b.delete_foods!=='boolean')throw new BadRequest('削除範囲を再確認してください。');
   const selection='SELECT id FROM family_logs WHERE family_id=? AND subject_id=? AND id<=? AND deleted_at IS NULL ORDER BY id LIMIT 100';
   const statements=[
-    ctx.env.DB.prepare("UPDATE family_log_import_batches SET status='ROLLED_BACK',rolled_back_at=?,rolled_back_by=? WHERE family_id=? AND subject_id=? AND id<=? AND rolled_back_at IS NULL").bind(now,m.id,m.family_id,subjectId,batchCutoff),
+    ctx.env.DB.prepare(`UPDATE family_log_import_batches SET status='ROLLING_BACK' WHERE family_id=? AND subject_id=? AND id<=? AND (rolled_back_at IS NULL OR EXISTS(SELECT 1 FROM family_logs l WHERE l.import_batch_id=family_log_import_batches.id AND l.family_id=? AND l.subject_id=? AND l.id<=? AND l.deleted_at IS NULL))`).bind(m.family_id,subjectId,batchCutoff,m.family_id,subjectId,cutoff),
     ctx.env.DB.prepare(`UPDATE family_log_media SET reconcile_pending=1 WHERE family_id=? AND log_id IN (${selection})`).bind(m.family_id,m.family_id,subjectId,cutoff),
     ctx.env.DB.prepare(`UPDATE family_logs SET deleted_at=?,updated_at=? WHERE family_id=? AND subject_id=? AND id IN (${selection})`).bind(now,now,m.family_id,subjectId,m.family_id,subjectId,cutoff),
   ];
   if(b.delete_foods)statements.push(ctx.env.DB.prepare('DELETE FROM child_food_entries WHERE family_id=? AND subject_id=? AND id<=?').bind(m.family_id,subjectId,foodCutoff));
   await ctx.env.DB.batch(statements);
   const remaining=await ctx.env.DB.prepare('SELECT COUNT(*) count FROM family_logs WHERE family_id=? AND subject_id=? AND id<=? AND deleted_at IS NULL').bind(m.family_id,subjectId,cutoff).first<Row>();
-  return json({ok:true,remaining:Number(remaining?.count||0)});
+  const remainingCount=Number(remaining?.count||0);
+  if(remainingCount===0)await ctx.env.DB.prepare(`UPDATE family_log_import_batches SET status='ROLLED_BACK',rolled_back_by=CASE WHEN rolled_back_at IS NULL THEN ? ELSE rolled_back_by END,rolled_back_at=COALESCE(rolled_back_at,?) WHERE family_id=? AND subject_id=? AND id<=? AND status='ROLLING_BACK'`).bind(m.id,now,m.family_id,subjectId,batchCutoff).run();
+  return json({ok:true,remaining:remainingCount});
 }

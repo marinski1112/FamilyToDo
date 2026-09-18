@@ -78,18 +78,32 @@ try{
  await assert.rejects(()=>call({action:'chunk',batch_id:started.batch_id,offset:0,records}));
  assert.equal((await call({action:'preview',subject_id:10,document})).new_count,2,'reset permits reimport');
  await call({...resetArgs,delete_foods:true});assert.equal(execute([{sql:'SELECT id FROM child_food_entries'}])[0].results.length,0);
- // More than one reset request is required; the immutable cutoff must finish.
- execute([{sql:"WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<105) INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,created_at,updated_at) SELECT 1,10,'MEMO','2025-09-02','x','x' FROM n"}]);
+ // More than one reset request is required; batch metadata must remain nonterminal until the immutable cutoff is empty.
+ const manyBatch=execute([{sql:"INSERT INTO family_log_import_batches(family_id,subject_id,source,source_hash,record_count,imported_count,skipped_count,error_count,created_by,created_at,status,processed_count,chunk_manifest_json) VALUES(1,10,'piyolog','reset-many',105,105,0,0,1,'x','COMPLETED',105,'[]')"}])[0].meta.last_row_id;
+ execute([{sql:`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<105) INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,created_at,updated_at,import_batch_id) SELECT 1,10,'MEMO','2025-09-02','x','x',${manyBatch} FROM n`}]);
  const many=await call({action:'reset_preview',subject_id:10});
  const manyArgs={...many,action:'reset_apply',subject_id:10,confirmation:'childの全ログを削除',delete_foods:false};
- assert.equal((await call(manyArgs)).remaining,6);assert.equal((await call(manyArgs)).remaining,0);
- // Simulate a reset between a chunk's pre-read and its atomic batch write.
- const laterRecords=[{...records[0],external_id:'later',occurred_at:'2025-09-03T12:00:00+09:00'}];
+ const firstMany=await call(manyArgs);assert.equal(firstMany.remaining,6);
+ const rolling=execute([{sql:'SELECT status,rolled_back_at FROM family_log_import_batches WHERE id=?',args:[manyBatch]},{sql:'SELECT COUNT(*) count FROM family_logs WHERE import_batch_id=? AND deleted_at IS NULL',args:[manyBatch]}]);
+ assert.equal(rolling[0].results[0].status,'ROLLING_BACK');assert.equal(rolling[0].results[0].rolled_back_at,null);assert.equal(rolling[1].results[0].count,6,'partial reset must retain active rows while metadata is nonterminal');
+ await assert.rejects(()=>call({action:'rollback',batch_id:manyBatch}),'per-import rollback must not compete with an in-progress full reset');
+ assert.equal((await call(manyArgs)).remaining,0);
+ const rolled=execute([{sql:'SELECT status,rolled_back_at FROM family_log_import_batches WHERE id=?',args:[manyBatch]}])[0].results[0];
+ assert.equal(rolled.status,'ROLLED_BACK');assert.ok(rolled.rolled_back_at,'terminal rollback metadata is written only after the reset cutoff is empty');
+ // Simulate a partial reset between a chunk's pre-read and its atomic batch write.
+ const laterRecords=[{...records[1],external_id:'later',occurred_at:'2025-09-03T12:00:00+09:00'}];
  const later=await call({action:'start',subject_id:10,document:{...document,records:laterRecords}});
+ execute([{sql:"WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<101) INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,created_at,updated_at) SELECT 1,10,'MEMO','2025-09-03','x','x' FROM n"}]);
  const snapshot=await call({action:'reset_preview',subject_id:10});
+ const snapshotArgs={...snapshot,action:'reset_apply',subject_id:10,confirmation:'childの全ログを削除',delete_foods:false};
  const originalBatch=DB.batch;let raced=false;
- DB.batch=async q=>{if(!raced){raced=true;DB.batch=originalBatch;await call({...snapshot,action:'reset_apply',subject_id:10,confirmation:'childの全ログを削除',delete_foods:false});}return execute(q);};
+ DB.batch=async q=>{if(!raced){raced=true;DB.batch=originalBatch;const partial=await call(snapshotArgs);assert.equal(partial.remaining,1);}return execute(q);};
  await assert.rejects(()=>call({action:'chunk',batch_id:later.batch_id,offset:0,records:laterRecords}));
- assert.equal(execute([{sql:'SELECT id FROM family_logs WHERE family_id=1 AND deleted_at IS NULL'}])[0].results.length,0,'retired in-flight chunk must not resurrect data');
+ const fenced=execute([{sql:'SELECT status,rolled_back_at FROM family_log_import_batches WHERE id=?',args:[later.batch_id]},{sql:'SELECT COUNT(*) count FROM family_logs WHERE family_id=1 AND subject_id=10 AND deleted_at IS NULL'}]);
+ assert.equal(fenced[0].results[0].status,'ROLLING_BACK');assert.equal(fenced[0].results[0].rolled_back_at,null);assert.equal(fenced[1].results[0].count,1);
+ await assert.rejects(()=>call({action:'chunk',batch_id:later.batch_id,offset:0,records:laterRecords}));
+ assert.equal((await call(snapshotArgs)).remaining,0);
+ const retired=execute([{sql:'SELECT status,rolled_back_at FROM family_log_import_batches WHERE id=?',args:[later.batch_id]},{sql:'SELECT id FROM family_logs WHERE family_id=1 AND deleted_at IS NULL'}]);
+ assert.equal(retired[0].results[0].status,'ROLLED_BACK');assert.ok(retired[0].results[0].rolled_back_at);assert.equal(retired[1].results.length,0,'retired in-flight chunk must not resurrect data');
  console.log('bundle API + all migrations: journal canonical storage, photo targets, food idempotency, auth/CSRF/tenant, reset cutoff, cleanup/outbox, reimport PASS');
 }finally{fs.rmSync(dir,{recursive:true,force:true});}
