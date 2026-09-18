@@ -1,10 +1,9 @@
 import { layout } from './app-shell';
 import { activityLogVisibilitySql } from './task-visibility';
 import { html, redirect } from './response';
-import { DEFAULT_FAMILY_TIMEZONE, formatStoredUtcForFamily } from './timezone';
+import { DEFAULT_FAMILY_TIMEZONE, addCalendarDays, familyDate, familyLocalDateRangeUtc, formatStoredUtcForFamily, isIsoCalendarDate } from './timezone';
 
-const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;');
-const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
+const esc = (v: unknown) => String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'","&#39;");
 
 export async function logsPage(ctx:any):Promise<Response>{
   const m=ctx.member;if(!m)return redirect('/login.php');
@@ -12,18 +11,25 @@ export async function logsPage(ctx:any):Promise<Response>{
   if(role!=='OWNER'&&role!=='ADMIN') return html(layout('活動ログ','<div class="card"><h1>📊 家族の活動ログ</h1><p>活動ログを見るには管理者権限が必要です。</p><a class="btn" href="/app/settings.php">管理へ戻る</a></div>','/app/settings.php'));
   const u=new URL(ctx.request.url), days=String(u.searchParams.get('days')||'7'), member=Number(u.searchParams.get('member')||0), type=String(u.searchParams.get('type')||''), action=String(u.searchParams.get('action')||''), page=Math.max(1,Number(u.searchParams.get('page')||1)||1);
   const from=String(u.searchParams.get('from')||''),to=String(u.searchParams.get('to')||'');
+  const timeZone=String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);
+  const today=familyDate(timeZone);
   const where:string[]=['a.family_id=?',activityLogVisibilitySql('a')], params:any[]=[m.family_id,m.id,m.id,m.id];
   if(member>0){where.push('a.member_id=?');params.push(member);}
   const groups:Record<string,string[]>= {task:['task'],item:['item'],shopping:['shopping'],message:['message'],family_log:['family_log','family_log_subject'],chore:['family_quick_chore'],recurring:['recurrence_rule','recurrence_occurrence'],admin:['member','family','invitation','settings']};
   if(groups[type]){where.push(`a.target_type IN (${groups[type].map(()=>'?').join(',')})`);params.push(...groups[type]);}
   const actions:Record<string,string[]>= {CREATED:['CREATED'],UPDATED:['UPDATED'],COMPLETED:['COMPLETED'],UNCOMPLETED:['UNCOMPLETED'],DELETED:['DELETED'],OTHER:['CREATED','UPDATED','COMPLETED','UNCOMPLETED','DELETED']};
   if(action&&action!=='OTHER'){where.push('a.action=?');params.push(action);}else if(action==='OTHER'){where.push(`a.action NOT IN (${actions.OTHER.map(()=>'?').join(',')})`);params.push(...actions.OTHER);}
-  if(days==='custom'&&/^\d{4}-\d{2}-\d{2}$/.test(from)&&/^\d{4}-\d{2}-\d{2}$/.test(to)){where.push("date(a.occurred_at) BETWEEN date(?) AND date(?)");params.push(from,to);}
-  else {const n=days==='today'?0:([7,30].includes(Number(days))?Number(days)-1:6);where.push("date(a.occurred_at)>=date(?,'-'||?||' days')");params.push(nowJst(),n);}
+  if(days==='custom'&&isIsoCalendarDate(from)&&isIsoCalendarDate(to)){
+    const range=familyLocalDateRangeUtc(from,to,timeZone);
+    where.push("a.occurred_at>=? AND a.occurred_at<?");params.push(range.start,range.endExclusive);
+  }else{
+    const n=days==='today'?0:([7,30].includes(Number(days))?Number(days)-1:6);
+    const range=familyLocalDateRangeUtc(addCalendarDays(today,-n),today,timeZone);
+    where.push("a.occurred_at>=? AND a.occurred_at<?");params.push(range.start,range.endExclusive);
+  }
   const rows=await ctx.env.DB.prepare(`SELECT a.action,a.occurred_at,a.target_type,a.target_id,m.name member_name FROM activity_logs a LEFT JOIN members m ON m.id=a.member_id WHERE ${where.join(' AND ')} ORDER BY a.occurred_at DESC,a.id DESC LIMIT 51 OFFSET ?`).bind(...params,(page-1)*50).all();
   const hasMore=rows.results.length>50;rows.results=rows.results.slice(0,50);
   const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? ORDER BY id').bind(m.family_id).all();
-  const timeZone=String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);
   const label=(x:string)=>({COMPLETED:'完了',UNCOMPLETED:'未完了に戻す',CREATED:'作成',UPDATED:'更新',DELETED:'削除'} as Record<string,string>)[x]||x;
   const rowHtml=(rows.results as any[]).map(r=>`<div class="row"><strong>${esc(label(String(r.action||'')))}</strong><div class="meta">${esc(r.member_name||'不明')} ・ ${esc(formatStoredUtcForFamily(String(r.occurred_at||''),timeZone))}</div><div class="meta">${esc(r.target_type||'')}${r.target_id?` #${esc(r.target_id)}`:''}</div></div>`).join('');
   const selected=(v:any,x:any)=>String(v)===String(x)?'selected':'';
