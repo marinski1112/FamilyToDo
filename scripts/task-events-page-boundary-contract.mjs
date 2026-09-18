@@ -131,7 +131,7 @@ for(const marker of [
   ".checklist-page .checklist-row-action{display:inline-flex",
   ".checklist-page .task-children{margin:8px 0 0 30px",
   "id=\"shopping-checklist\"",
-  "<h2>🛒 買い物</h2>",
+  "<h2><span class=\"checklist-heading-icon shopping\" aria-hidden=\"true\">▣</span>買い物</h2>",
   "const visibleExpiredShopping=data.expiredShopping.slice(0,OVERDUE_SHOPPING_PAGE_SIZE);",
   "const expiredShoppingHasMore=data.expiredShopping.length>OVERDUE_SHOPPING_PAGE_SIZE;",
   "renderOverdueShoppingRows(visibleExpiredShopping)",
