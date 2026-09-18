@@ -29,6 +29,8 @@ jobs:
         if: always()
       - run: node scripts/calendar-stamp-deletion-transport-contract.mjs
         if: always()
+      - run: node scripts/overdue-task-pagination-contract.mjs
+        if: always()
       - run: npm run check:browser-js
         if: always()
       - run: npm run check:pwa-family-branding
