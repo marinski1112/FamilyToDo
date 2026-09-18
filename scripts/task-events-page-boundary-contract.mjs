@@ -213,7 +213,7 @@ for(const marker of [
   "section.querySelector(':scope > .section-quick-entry')?.remove();",
   "group.classList.add('category-collapsed')",
   "const label=collapsed?'展開':'閉じる';",
-  "if(toggle.textContent!==label)toggle.textContent=label;",
+  "if(toggle.textContent!==symbol)toggle.textContent=symbol;",
   "shopping-continuous-composer",
   "shopping-continuous-name",
   "shopping-continuous-memo",
