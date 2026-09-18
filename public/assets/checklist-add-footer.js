@@ -29,6 +29,7 @@ const install=()=>{
   for(const [klass,label] of labels){
     const section=page.querySelector(`.${klass}`);
     if(!(section instanceof HTMLElement))continue;
+    if(klass==='item-section'){section.querySelector(':scope > .section-add-disclosure')?.remove();section.querySelector(':scope > .section-quick-entry')?.remove();continue;}
     const form=section.querySelector(':scope > .section-quick-entry, :scope > .section-add-disclosure .section-quick-entry');
     if(!(form instanceof HTMLFormElement))continue;
     if(klass==='task-section'){
