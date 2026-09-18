@@ -22,7 +22,9 @@ if(!routes.includes("url.pathname==='/app/family_log.php'||url.pathname==='/app/
 if(!page.includes("if(request.method==='POST')return familyLogApi(request,ctx);"))throw new Error('retained page compatibility POST path changed');
 for(const marker of [
   "pathname==='/app/settings_family_log.php'",
-  "permission_key='MANAGE_QUICK_CHORES'",
+  "const familyLogIsAdmin=role==='OWNER'||role==='ADMIN';",
+  "const delegated=familyLogIsAdmin?null:await ctx.env.DB.prepare(\"SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'\")",
+  'const canManageQuickChores=familyLogIsAdmin||Boolean(delegated);',
   'ensureFamilyLogMemberSubjects',
   'family_log_milk_amount_presets',
   "const babySubjects=subjects.results.filter(x=>familyLogSubjectKind(x.subject_kind)==='BABY'),babySubjectIds=babySubjects.map(subject=>Number(subject.id)).filter(id=>id>0);",
@@ -42,6 +44,7 @@ for(const marker of [
   'familyLogSettingsModal',
   'family-ai-query',
 ])if(!page.includes(marker))throw new Error(`Family Log retained page marker missing: ${marker}`);
+if(page.includes("const delegated=await ctx.env.DB.prepare(\"SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'\")"))throw new Error('Family Log admin path must not unconditionally read delegated quick-chore permission');
 if(page.includes("SELECT COUNT(*) c FROM family_log_quick_actions WHERE family_id=? AND subject_id=?"))throw new Error('Family Log page must not issue one quick-action COUNT query per BABY subject');
 if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? AND \(active=1 OR subject_id IN/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable active-or-BABY read query site');
 for(const marker of [
