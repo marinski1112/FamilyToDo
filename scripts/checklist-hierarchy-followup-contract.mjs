@@ -53,6 +53,8 @@ for(const [needle,label] of [
   ['カテゴリと中の${noun}をすべて削除','delete-category-and-items choice'],
   ['checklist-inline-search','compact checklist search'],
   ['zero-unclassified-add','unclassified add route'],
+  ["const live=[...section.querySelectorAll",'live unclassified group lookup'],
+  ["btn.textContent='🔍'",'visible search icon'],
   ['checklist-status-tabs','pending/completed tab control'],
   ["data-status=\"pending\"",'pending tab'],
   ["data-status=\"completed\"",'completed tab'],
@@ -61,7 +63,7 @@ for(const [needle,label] of [
   ['task-child-add-reveal','compact child add reveal'],
   ['category-inline-rename','inline category rename'],
   ["<span>空のカテゴリ</span>",'clear empty-category label'],
-  ['checklist-trash-icon','non-emoji trash icon'],
+  ["trash.textContent='🗑️'",'emoji trash control'],
   ['section.append(cluster)','zero category cluster after active content'],
   ['refreshCounts','completed tab count refresh'],
   ['zero-category-cluster','zero category grouping'],
@@ -75,10 +77,10 @@ requireText(css,'border-radius:5px','square checklist control styling');
 requireText(css,'.checklist-status-tabs','compact status tab styling');
 requireText(css,'/* Dense checklist alignment */','dense checklist alignment');
 requireText(css,'.task-child-composer-deferred','deferred child composer styling');
-requireText(css,'.checklist-trash-icon','trash line icon styling');
+requireText(css,'/* iPhone screenshot follow-up 2 */','second iPhone screenshot alignment');
 requireText(css,'/* Final reference alignment */','final reference alignment');
 requireText(css,'/* iPhone reference follow-up */','iPhone reference alignment');
-requireText(css,'.checklist-page+.calendar-fab,.checklist-page~.calendar-fab','checklist FAB suppression');
+requireText(css,'body:has(.checklist-page) .calendar-fab','robust checklist FAB suppression');
 requireText(shoppingCategoryUi,"groups().some(group=>categoryOf(group)===UNCLASSIFIED)",'persistent unclassified shopping group');
 requireText(taskPage,"start&&start!=='00:00'",'suppress placeholder midnight time');
 requireText(taskPage,'checklist-heading-icon','compact heading icons');
