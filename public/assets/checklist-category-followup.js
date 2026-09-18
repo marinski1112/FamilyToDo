@@ -198,10 +198,12 @@ const decorateGroup=group=>{
 };
 
 const ensureUnclassifiedGroup=()=>{
-  if(groups().length)return;
+  if(groups().some(group=>categoryOf(group)===UNCLASSIFIED))return;
   const group=document.createElement('div');group.className='shopping-category-group';group.dataset.category=UNCLASSIFIED;
-  const head=document.createElement('div');head.className='shopping-category-title';head.textContent=UNCLASSIFIED;group.append(head);
-  const anchor=section.querySelector(':scope > .section-head');anchor?.insertAdjacentElement('afterend',group);
+  const head=document.createElement('div');head.className='shopping-category-title';
+  const name=document.createElement('strong');name.className='shopping-category-name';name.textContent=UNCLASSIFIED;
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='shopping-category-toggle';toggle.addEventListener('click',()=>{group.classList.toggle('category-collapsed');updateToggle(group);});head.append(name,toggle);group.append(head);
+  const anchor=groups().at(-1)||section.querySelector(':scope > .section-head');anchor?.insertAdjacentElement('afterend',group);
 };
 
 ensureUnclassifiedGroup();groups().forEach(decorateGroup);
