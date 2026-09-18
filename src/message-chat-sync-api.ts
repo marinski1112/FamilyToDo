@@ -40,9 +40,9 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
     :null;
   const statements=[newStatement];
   if(releasedStatement)statements.push(releasedStatement);
-  const results=await ctx.env.DB.batch<SyncRow>(statements);
+  const results=await ctx.env.DB.batch(statements);
   const byId=new Map<number,SyncRow>();
-  for(const row of results.flatMap(result=>result.results))byId.set(Number(row.id),row);
+  for(const row of results.flatMap(result=>result.results))byId.set(Number(row.id),row as SyncRow);
   const rows=[...byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,PAGE_SIZE);
   return reply({
     ok:true,
