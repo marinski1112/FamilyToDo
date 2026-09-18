@@ -160,8 +160,8 @@ const submitComposer=async()=>{
     const id=Number(data.id||0);if(!id)throw new Error('保存結果を確認できませんでした。');
     addPersistedRow(id,itemName,category,productUrl);
     clearDraft(category);nameInput.value='';memoInput.value='';urlInput.value='';resizeName();
-    status.dataset.error='0';status.textContent='保存しました。続けて入力できます。';
-    return true;
+    status.dataset.error='0';status.textContent='保存しました。';
+    if(category===UNCLASSIFIED){location.reload();return true;}status.textContent='保存しました。続けて入力できます。';return true;
   }catch(error){status.dataset.error='1';status.textContent=error?.message||String(error)||'保存に失敗しました。';writeDraft();return false;}
   finally{saving=false;saveButton.disabled=false;nameInput.disabled=false;memoInput.disabled=false;urlInput.disabled=false;requestAnimationFrame(()=>nameInput.focus({preventScroll:true}));}
 };
