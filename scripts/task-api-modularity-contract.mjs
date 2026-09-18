@@ -32,6 +32,8 @@ for(const sentinel of [
   "visibility_scope,private_owner_id",
   'createTaskIdempotently(ctx.env.DB',
   "result.state==='CONFLICT'",
+  "result.state==='GONE'",
+  "IDEMPOTENCY_TARGET_DELETED",
   "result.state==='BUSY'",
   "result.state==='LEASE_LOST'",
   "replayed:result.state==='REPLAY'",
@@ -42,6 +44,10 @@ for(const sentinel of [
 for(const sentinel of [
   "export const TASK_CREATE_SCOPE = 'TASK_CREATE_V1'",
   'TASK_CREATE_LEASE_MS = 120000',
+  "| { state: 'GONE' }",
+  'LEFT JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id',
+  'task_exists',
+  'JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id',
   'UNIQUE (family_id, member_id, scope, idempotency_key)',
   'idx_tasks_create_request',
 ]){
@@ -103,8 +109,17 @@ assert old==0
 new=con.execute("INSERT INTO tasks(family_id,title,created_by,create_request_id) SELECT 1,'new-writer',10,r.id FROM task_create_requests r WHERE r.idempotency_key='stale-key' AND r.lease_token='new-token'").rowcount
 assert new==1
 assert con.execute("SELECT COUNT(*) FROM tasks WHERE title IN ('old-writer','new-writer')").fetchone()[0]==1
+con.execute(sql,(1,10,'TASK_CREATE_V1','deleted-key','hash-c','PROCESSING','token-c','2099-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z'))
+deleted_request_id=con.execute("SELECT id FROM task_create_requests WHERE idempotency_key='deleted-key'").fetchone()[0]
+con.execute("INSERT INTO tasks(family_id,title,created_by,create_request_id) VALUES(1,'delete-me',10,?)",(deleted_request_id,))
+deleted_task_id=con.execute("SELECT id FROM tasks WHERE create_request_id=?",(deleted_request_id,)).fetchone()[0]
+con.execute("UPDATE task_create_requests SET status='DONE',task_id=?,lease_token=NULL,lease_expires_at=NULL WHERE id=?",(deleted_task_id,deleted_request_id))
+con.execute("DELETE FROM tasks WHERE id=?",(deleted_task_id,))
+assert con.execute("SELECT status,task_id FROM task_create_requests WHERE id=?",(deleted_request_id,)).fetchone()==('DONE',deleted_task_id)
+assert con.execute("""SELECT r.task_id FROM task_create_requests r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id
+  WHERE r.family_id=1 AND r.member_id=10 AND r.scope='TASK_CREATE_V1' AND r.idempotency_key='deleted-key' AND r.request_hash='hash-c' AND r.status='DONE'""").fetchone() is None
 `;
 const sqlite=spawnSync('python3',['-c',python],{encoding:'utf8'});
 if(sqlite.status!==0) throw new Error(`task idempotency SQLite regression failed: ${sqlite.stderr||sqlite.stdout}`);
 
-console.log('task API modularity/idempotency contract: claim uniqueness, replay, hash conflict, stale lease fencing, atomic writer markers, and client key reuse ok');
+console.log('task API modularity/idempotency contract: claim uniqueness, live replay, deleted-target tombstone conflict, hash conflict, stale lease fencing, atomic writer markers, and client key reuse ok');
