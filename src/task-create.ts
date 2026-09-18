@@ -43,6 +43,7 @@ export type TaskCreateInput = {
 export type TaskCreateResult =
   | { state: 'CREATED'; taskId: number }
   | { state: 'REPLAY'; taskId: number }
+  | { state: 'GONE' }
   | { state: 'BUSY' }
   | { state: 'CONFLICT' }
   | { state: 'LEASE_LOST' };
@@ -82,6 +83,7 @@ export async function createTaskIdempotently(db: D1Database, input: TaskCreateIn
   const requestHash = await taskCreateRequestHash(requestFingerprint(input));
   const claim = await acquireTaskCreateClaim(db, input.familyId, input.memberId, input.idempotencyKey, requestHash);
   if (claim.state === 'REPLAY') return { state: 'REPLAY', taskId: claim.taskId };
+  if (claim.state === 'GONE') return { state: 'GONE' };
   if (claim.state === 'BUSY') return { state: 'BUSY' };
   if (claim.state === 'CONFLICT') return { state: 'CONFLICT' };
 
