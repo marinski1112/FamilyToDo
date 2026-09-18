@@ -12,7 +12,9 @@ let suppressClickUntil=0,dragState=null,enhanceQueued=false;
 
 const style=document.createElement('style');
 style.textContent=`
-#dayModal .calendar-inline-title-text{cursor:text;-webkit-touch-callout:none}
+#dayModal .calendar-inline-title-text{appearance:none;border:0;background:transparent;padding:0;margin:0;color:inherit;font:inherit;font-weight:inherit;line-height:inherit;text-align:left;cursor:text;-webkit-touch-callout:none}
+#dayModal .calendar-inline-title-text:focus-visible{outline:2px solid #007aff;outline-offset:2px;border-radius:4px}
+#dayModal .modal-row.is-completed .calendar-inline-title-text{text-decoration:line-through;text-decoration-thickness:1px}
 #dayModal .calendar-inline-title-input{width:100%;min-width:0;border:0;border-bottom:1.5px solid #007aff;border-radius:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;line-height:1.35;padding:1px 0;outline:0;box-shadow:none}
 #dayModal .calendar-detail-link{display:inline-grid;place-items:center;flex:0 0 32px;width:32px;height:32px;margin-left:auto;border-radius:50%;background:#eef6ff;color:#007aff;text-decoration:none;font-size:16px;font-weight:800}
 #dayModal .calendar-day-draggable{touch-action:pan-y}
@@ -76,6 +78,27 @@ const postTitle=async(type,id,title)=>{
   return String(data.title||title);
 };
 
+const editableTitleButton=(type,id,title)=>{
+  const node=document.createElement('button');
+  node.type='button';
+  node.className='calendar-inline-title-text';
+  node.dataset.inlineType=type;
+  node.dataset.inlineId=String(id);
+  node.textContent=title;
+  node.setAttribute('aria-label',title+'を編集');
+  return node;
+};
+const separateChecklistTitle=(check,strong,title)=>{
+  const label=strong.closest('label.modal-check-row');
+  if(label instanceof HTMLLabelElement){
+    const shell=document.createElement('div');
+    shell.className=label.className;
+    label.replaceWith(shell);
+    shell.append(check,document.createTextNode(' '),strong);
+  }
+  check.setAttribute('aria-label',title+'を完了にする');
+};
+
 const decorateTask=row=>{
   const rawId=Number(row.dataset.taskRow||0);
   const anchor=row.querySelector('.modal-task-copy>strong>a');
@@ -86,15 +109,18 @@ const decorateTask=row=>{
     apiType='recurrence';
   }
   if(!apiId)return;
+  const detailHref=anchor.href;
   const small=anchor.querySelector('small')?.cloneNode(true);
   const text=[...anchor.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent||'').join('').trim();
   const icon=text.startsWith('📌')?'📌':'📝';
   const title=text.replace(/^[📌📝]\s*/u,'').trim();
-  anchor.textContent='';anchor.append(document.createTextNode(icon+' '));
-  const titleNode=document.createElement('span');titleNode.className='calendar-inline-title-text';titleNode.dataset.inlineType=apiType;titleNode.dataset.inlineId=String(apiId);titleNode.textContent=title;anchor.append(titleNode);
-  if(small){anchor.append(document.createTextNode(' '));anchor.append(small)}
+  const shell=document.createElement('span');shell.className='calendar-inline-task-title';shell.append(document.createTextNode(icon+' '),editableTitleButton(apiType,apiId,title));
+  if(small){shell.append(document.createTextNode(' '));shell.append(small)}
+  anchor.replaceWith(shell);
+  const taskToggle=row.querySelector('.calendar-task-toggle');
+  if(taskToggle instanceof HTMLInputElement)taskToggle.setAttribute('aria-label',title+'を完了にする');
   if(!row.querySelector(':scope .calendar-detail-link')){
-    const info=document.createElement('a');info.className='calendar-detail-link';info.href=anchor.href;info.textContent='i';info.setAttribute('aria-label','詳細を開く');info.title='詳細';
+    const info=document.createElement('a');info.className='calendar-detail-link';info.href=detailHref;info.textContent='i';info.setAttribute('aria-label','詳細を開く');info.title='詳細';
     row.querySelector('.modal-row-main')?.append(info);
   }
   if(rawId>0)row.classList.add('calendar-day-draggable');
@@ -104,16 +130,18 @@ const decorateShopping=row=>{
   if(!(check instanceof HTMLInputElement)||!(strong instanceof HTMLElement))return;
   const raw=String(strong.textContent||'').trim().replace(/^🛒\s*/u,'');
   const match=raw.match(/^(.*?)(\s+×\s+.+)?$/u),title=String(match?.[1]||raw).trim(),suffix=String(match?.[2]||'');
+  separateChecklistTitle(check,strong,title);
   strong.textContent='🛒 ';
-  const node=document.createElement('span');node.className='calendar-inline-title-text';node.dataset.inlineType='shopping';node.dataset.inlineId=String(check.dataset.id||'');node.dataset.inlineSuffix=suffix;node.textContent=title;strong.append(node);if(suffix)strong.append(document.createTextNode(suffix));
+  const node=editableTitleButton('shopping',Number(check.dataset.id||0),title);node.dataset.inlineSuffix=suffix;strong.append(node);if(suffix)strong.append(document.createTextNode(suffix));
   row.classList.add('calendar-day-draggable');
 };
 const decorateItem=row=>{
   const check=row.querySelector('.calendar-item-toggle[data-id]'),strong=row.querySelector('.modal-check-row strong');
   if(!(check instanceof HTMLInputElement)||!(strong instanceof HTMLElement))return;
   const title=String(strong.textContent||'').trim().replace(/^🎒\s*/u,'');
+  separateChecklistTitle(check,strong,title);
   strong.textContent='🎒 ';
-  const node=document.createElement('span');node.className='calendar-inline-title-text';node.dataset.inlineType='item';node.dataset.inlineId=String(check.dataset.id||'');node.textContent=title;strong.append(node);
+  strong.append(editableTitleButton('item',Number(check.dataset.id||0),title));
   row.classList.add('calendar-day-draggable');
 };
 
@@ -136,7 +164,7 @@ const startEdit=node=>{
   const input=document.createElement('input');input.className='calendar-inline-title-input';input.type='text';input.maxLength=200;input.value=original;input.setAttribute('aria-label','名前を編集');
   node.replaceWith(input);input.focus();input.select();
   let settled=false;
-  const restore=value=>{const fresh=node;fresh.textContent=value;delete fresh.dataset.editing;input.replaceWith(fresh)};
+  const restore=value=>{const fresh=node,refocus=document.activeElement===input;fresh.textContent=value;fresh.setAttribute('aria-label',value+'を編集');delete fresh.dataset.editing;input.replaceWith(fresh);const toggle=fresh.closest('.modal-row')?.querySelector('input[type="checkbox"]');if(toggle instanceof HTMLInputElement)toggle.setAttribute('aria-label',value+'を完了にする');if(refocus)queueMicrotask(()=>fresh.focus())};
   const commit=async()=>{
     if(settled)return;settled=true;
     const title=input.value.trim();if(!title){settled=false;input.focus();return}
