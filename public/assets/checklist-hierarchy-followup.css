@@ -1,0 +1,33 @@
+.checklist-page input.check.toggle[data-type="task"],
+.checklist-page input.check.toggle[data-type="shopping"],
+.checklist-page input.check.toggle[data-type="item"],
+#done,.task-child-toggle{-webkit-appearance:none;appearance:none;width:22px;height:22px;min-width:22px;border:1.7px solid #aeb6c2;border-radius:5px;background:#fff;vertical-align:middle;position:relative}
+.checklist-page input.check.toggle:checked,#done:checked,.task-child-toggle:checked{background:#2563eb;border-color:#2563eb}
+.checklist-page input.check.toggle:checked::after,#done:checked::after,.task-child-toggle:checked::after{content:"";position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.task-parent-row>.task-main-row .task-main>span,.task-parent-row>.task-main-row .task-main>span>a{font-weight:800}
+.task-child-count-toggle,.checklist-category-count-toggle{border:0;background:transparent;color:#64748b;font:inherit;font-weight:800;min-width:34px;min-height:36px;padding:0 6px;border-radius:8px}
+.task-child-count-toggle:focus-visible,.checklist-category-count-toggle:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.shopping-category-name,.belongings-category-name{font-weight:800!important}
+.shopping-category-pending-count{display:none!important}
+#taskEditForm .assignee-list,#taskForm .assignee-list,#taskEditForm label:has(+ .assignee-list),#taskForm label:has(+ .assignee-list),#taskEditForm .sub-card:has(#shopToggle),#taskEditForm .sub-card:has(#itemToggle){display:none!important}
+.zero-category-cluster{margin:8px 0 12px;border:1px solid #e3e8ef;border-radius:12px;background:#fafbfc;overflow:hidden}
+.zero-category-cluster>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:800;color:#475569;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.zero-category-cluster>summary::-webkit-details-marker{display:none}
+.zero-category-cluster-list{border-top:1px solid #e8edf2;padding:5px 12px}
+.zero-category-cluster-row{min-height:38px;display:flex;align-items:center;padding:0 2px;border-bottom:1px solid #eef1f4;color:#475569}
+.zero-category-cluster-row:last-child{border-bottom:0}
+.category-bulk-delete-open{margin-left:8px;border:0;background:#f2f2f7;color:#b42318;border-radius:9px;min-height:38px;padding:0 11px;font:inherit;font-weight:800}
+.category-delete-panel{margin:8px 0 12px;padding:10px 12px;border:1px solid #f0c9c7;border-radius:12px;background:#fff8f7}
+.category-delete-panel[hidden]{display:none!important}
+.category-delete-panel-list{display:grid;gap:4px;margin:8px 0}
+.category-delete-panel label{display:flex;align-items:center;gap:8px;min-height:36px}
+.category-delete-panel input[type="checkbox"]{width:20px;height:20px}
+.category-delete-panel-actions{display:flex;justify-content:flex-end;gap:8px}
+.category-delete-panel-actions button{min-height:38px;border:0;border-radius:9px;padding:0 12px;font:inherit;font-weight:800}
+.category-delete-confirm{background:#b42318;color:#fff}.category-delete-cancel{background:#eef1f4;color:#334155}
+.parent-completion-choice-backdrop{position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.38);display:flex;align-items:flex-end;justify-content:center;padding:16px env(safe-area-inset-right) calc(16px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.parent-completion-choice{width:min(560px,calc(100% - 24px));background:#fff;border-radius:18px;padding:16px;box-shadow:0 16px 50px rgba(15,23,42,.25)}
+.parent-completion-choice h2{font-size:18px;margin:0 0 8px}.parent-completion-choice p{font-size:14px;color:#64748b;margin:0 0 12px}
+.parent-completion-choice button{display:block;width:100%;min-height:48px;border:0;border-radius:11px;font:inherit;font-weight:800;margin-top:8px;padding:8px 12px;text-align:left}
+.parent-completion-complete{background:#2563eb;color:#fff}.parent-completion-promote{background:#eef2ff;color:#3730a3}.parent-completion-cancel{background:#f2f2f7;color:#475569;text-align:center!important}
+.task-link-ui-hidden{display:none!important}

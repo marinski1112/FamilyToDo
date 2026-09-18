@@ -1,0 +1,58 @@
+import {readFileSync} from 'node:fs';
+
+const parentApi=readFileSync('src/task-parent-completion-api.ts','utf8');
+const categoryMutation=readFileSync('src/shopping-category-mutation-api.ts','utf8');
+const categoryApi=readFileSync('src/shopping-category-api.ts','utf8');
+const routes=readFileSync('src/context-api-routes.ts','utf8');
+const shell=readFileSync('src/app-shell.ts','utf8');
+const ui=readFileSync('public/assets/checklist-hierarchy-followup.js','utf8');
+const css=readFileSync('public/assets/checklist-hierarchy-followup.css','utf8');
+const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation.sql','utf8');
+
+const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
+const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
+
+for(const [needle,label] of [
+  ["action==='inspect'",'parent inspection'],
+  ["policy!=='complete'&&policy!=='promote'",'explicit child policy'],
+  ["UPDATE tasks SET parent_task_id=NULL,updated_at=?",'pending child promotion'],
+  ["WHERE family_id=? AND parent_task_id=? AND status<>'completed'",'incomplete-only promotion'],
+  ["UPDATE tasks SET status='completed',completed_by=?,completed_at=?,updated_at=?",'child completion'],
+  ['await ctx.env.DB.batch(statements);','single mutation batch'],
+])requireText(parentApi,needle,label);
+requireText(routes,"if(url.pathname==='/api/task-parent-completion') return await taskParentCompletionApi(request,context);",'parent completion route');
+
+for(const [needle,label] of [
+  ["action==='delete_many'",'bulk category delete action'],
+  ["role!=='OWNER'&&role!=='ADMIN'",'admin category deletion'],
+  ['UPDATE shopping_items SET category=NULL,updated_at=?','shopping uncategorized reassignment'],
+  ['UPDATE items SET category=NULL,updated_at=?','belongings uncategorized reassignment'],
+  ['UPDATE shopping_category_catalog SET enabled=0','shopping catalog disable'],
+  ['UPDATE item_category_catalog SET enabled=0','item catalog disable'],
+  ['await ctx.env.DB.batch(statements);','category mutation batch'],
+])requireText(categoryMutation,needle,label);
+forbidText(categoryMutation,'DELETE FROM shopping_items','shopping item deletion');
+forbidText(categoryMutation,'DELETE FROM items','belongings item deletion');
+requireText(categoryApi,'canManageCategories','category management capability');
+requireText(categoryApi,'SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1','enabled category catalog read');
+
+requireText(hierarchyMigration,'REFERENCES tasks(id) ON DELETE SET NULL','parent deletion preserves children');
+forbidText(hierarchyMigration,'REFERENCES tasks(id) ON DELETE CASCADE','parent deletion cascade');
+
+for(const [needle,label] of [
+  ['未完了の子タスクを全て完了にする','complete children choice'],
+  ['未完了の子タスクを親タスクとして残す','promote children choice'],
+  ["'/api/task-parent-completion'",'parent completion browser boundary'],
+  ["action:'delete_many'",'category bulk delete browser action'],
+  ['zero-category-cluster','zero category grouping'],
+  ['task-child-count-toggle','parent child count toggle'],
+  ['input[name="assignees"]','assignee UI suppression'],
+  ['select[name="task_id"]','task-link UI suppression'],
+])requireText(ui,needle,label);
+forbidText(ui,'new MutationObserver','additional UI mutation observer');
+requireText(css,'.shopping-category-name,.belongings-category-name{font-weight:800!important}','bold category headings');
+requireText(css,'border-radius:5px','square checklist control styling');
+requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
+requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
+
+console.log('checklist hierarchy follow-up contract ok');
