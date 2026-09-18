@@ -14,6 +14,7 @@ const media=read('src/family-log-media-api.ts');
 const pageRoutes=read('src/page-routes.ts');
 const apiRoutes=read('src/context-api-routes.ts');
 const pkg=JSON.parse(read('package.json'));
+const versionSource=read('src/version.ts');
 
 // FamilyToDo receives only the already-converted JSON + extracted image bundle.
 assert.match(browser,/ぴよログPDF自体はFamilyToDoへ送信・解析しません/,'UI must state that the source PDF is not uploaded for server parsing');
@@ -77,9 +78,13 @@ assert.match(targets,/MAX_BODY_BYTES=256\*1024/,'target resolver body must stay 
 assert.match(importer,/familytodo-family-log-import-v1/,'canonical Family Log import format must remain the record ingress');
 assert.match(importer,/import_external_id/,'canonical importer must retain the external ID used to resolve converted photo manifests');
 assert.match(media,/one optional private BABY_FOOD photo per Family Log record|authenticated same-family proxy/i,'canonical private-media boundary must remain in use');
-assert.match(wrapper,/CORE_IMPORT_ASSET='\/assets\/family-log-import\.js\?v=12\.121\.0-wave102'/,'wrapper must pin the exact retained canonical controller it replaces');
+assert.ok(importer.includes("import { APP_VERSION } from './version';"),'canonical import page must use the release version authority');
+assert.ok(importer.includes('/assets/family-log-import.js?v=${APP_VERSION}'),'canonical import controller must use APP_VERSION cache busting');
+assert.ok(!importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'canonical import page must not retain the stale fixed controller revision');
+assert.ok(wrapper.includes("import {APP_VERSION} from './version';"),'Piyolog wrapper must share the canonical release version authority');
+assert.ok(wrapper.includes('const CORE_IMPORT_ASSET=`/assets/family-log-import.js?v=${APP_VERSION}`;'),'wrapper sentinel must follow the canonical APP_VERSION controller URL');
 assert.match(wrapper,/PIYOLOG_IMPORT_ASSET='\/assets\/family-log-import-piyolog\.js\?v=piyolog-family-diary1'/,'Piyolog controller must be cache-busted after import UI behavior changes');
-assert.ok(importer.includes('/assets/family-log-import.js?v=12.121.0-wave102'),'wrapper sentinel must stay aligned with the canonical import page');
+assert.ok(versionSource.includes(`APP_VERSION='${pkg.version}'`),'Family Log import APP_VERSION must match package release authority');
 assert.match(pageRoutes,/url\.pathname==='\/app\/family_log_import\.php'\) return await familyLogPiyologImportPage\(context\)/,'visible Family Log import page must use the restored Piyolog-capable controller');
 assert.match(apiRoutes,/url\.pathname==='\/api\/family-log-import-media-targets'\) return await familyLogImportMediaTargetsApi\(request,context\)/,'Piyolog helper must remain routed through the authenticated context dispatcher');
 assert.match(String(pkg.scripts?.['check:browser-js']||''),/family-log-import-piyolog\.js/,'Piyolog browser controller must be syntax checked in CI');
