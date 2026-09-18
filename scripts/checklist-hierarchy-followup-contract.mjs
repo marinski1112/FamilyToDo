@@ -8,6 +8,8 @@ const shell=readFileSync('src/app-shell.ts','utf8');
 const ui=readFileSync('public/assets/checklist-hierarchy-followup.js','utf8');
 const css=readFileSync('public/assets/checklist-hierarchy-followup.css','utf8');
 const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation.sql','utf8');
+const taskEvents=readFileSync('public/assets/task-events.js','utf8');
+const taskPage=readFileSync('src/task-events-page.ts','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -60,5 +62,9 @@ requireText(css,'.shopping-category-name,.belongings-category-name{font-weight:8
 requireText(css,'border-radius:5px','square checklist control styling');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
 requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
+requireText(taskPage,'appVersion:APP_VERSION','checklist release revision payload');
+requireText(taskEvents,"payload.appVersion||'checklist'",'belongings child release revision');
+forbidText(taskEvents,'belongings-category1','fixed belongings category revision');
+forbidText(taskEvents,'belongings-set1','fixed belongings set revision');
 
 console.log('checklist hierarchy follow-up contract ok');
