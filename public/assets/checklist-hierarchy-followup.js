@@ -42,7 +42,7 @@ const installStatusTabs=(section,kind)=>{
   rows.forEach(row=>{if(!(row instanceof HTMLElement))return;const box=row.querySelector('input.toggle');const done=Boolean(box?.checked);row.classList.toggle('checklist-status-hidden',status==='completed'?!done:done);});
   if(kind!=='task')section.querySelectorAll(kind==='shopping'?'.shopping-category-group':'.belongings-category-group').forEach(g=>{if(g instanceof HTMLElement){const visible=[...g.querySelectorAll(kind==='shopping'?'.linked-shopping-row':'.belongings-category-row')].some(r=>r instanceof HTMLElement&&!r.classList.contains('checklist-status-hidden')&&!r.classList.contains('checklist-search-hidden'));g.classList.toggle('checklist-status-group-empty',!visible);}});
  };
- tabs.addEventListener('click',e=>{const b=e.target.closest?.('button[data-status]');if(b)apply(b.dataset.status||'pending');});apply('pending');
+ const refreshCounts=()=>{let done=0;const rows=section.querySelectorAll(kind==='task'?'.task-row,.unorganized-task-row':kind==='shopping'?'.linked-shopping-row':'.belongings-category-row');rows.forEach(row=>{if(row.querySelector('input.toggle')?.checked)done++;});const b=tabs.querySelector('[data-status="completed"]');if(b)b.textContent=done?`完了済み ${done}`:'完了済み';};tabs.addEventListener('click',e=>{const b=e.target.closest?.('button[data-status]');if(b)apply(b.dataset.status||'pending');});section.addEventListener('familytodo:toggle-success',()=>requestAnimationFrame(()=>{refreshCounts();apply(section.dataset.statusTab||'pending');}));refreshCounts();apply('pending');
 };
 
 const installSearch=section=>{
