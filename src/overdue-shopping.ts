@@ -1,4 +1,5 @@
 import type { AppContext } from './app-context';
+import { taskVisibilitySql } from './task-visibility';
 
 type Row=Record<string,unknown>;
 
@@ -37,7 +38,6 @@ const cursorBindings=(cursor?:OverdueShoppingCursor):unknown[]=>cursor
 
 const selectColumns=`s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
   (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees`;
-const parentVisible=`(COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))`;
 
 export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
@@ -46,6 +46,7 @@ export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:
   const parentDueCursor=cursorSql('COALESCE(t.end_at,t.due_at,t.start_at)',cursor);
   const ownCursorBindings=cursorBindings(cursor);
   const parentCursorBindings=cursorBindings(cursor);
+  const parentVisible=taskVisibilitySql('t');
   const [unlinkedOwnDue,linkedOwnDue,parentFallback]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.*,NULL AS task_title,NULL AS task_start_at,NULL AS task_end_at,NULL AS task_due_at,
         s.due_date AS effective_due,
