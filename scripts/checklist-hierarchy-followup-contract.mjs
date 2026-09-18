@@ -64,6 +64,10 @@ for(const [needle,label] of [
   ['category-inline-rename','inline category rename'],
   ["<span>空のカテゴリ</span>",'clear empty-category label'],
   ["trash.textContent='🗑️'",'emoji trash control'],
+  ['category-delete-minus','minus category deletion'],
+  ['task-delete-minus','minus task deletion'],
+  ["method:'DELETE'",'task delete transport'],
+  ['task-add-top','top-right task add'],
   ['section.append(cluster)','zero category cluster after active content'],
   ['refreshCounts','completed tab count refresh'],
   ['zero-category-cluster','zero category grouping'],
@@ -79,6 +83,7 @@ requireText(css,'/* Dense checklist alignment */','dense checklist alignment');
 requireText(css,'.task-child-composer-deferred','deferred child composer styling');
 requireText(css,'/* iPhone screenshot follow-up 2 */','second iPhone screenshot alignment');
 requireText(css,'/* Final compact polish */','final compact checklist polish');
+requireText(css,'/* Approved minus-delete interaction */','minus delete interaction styles');
 requireText(css,'/* Final reference alignment */','final reference alignment');
 requireText(css,'/* iPhone reference follow-up */','iPhone reference alignment');
 requireText(css,'body:has(.checklist-page) .calendar-fab','robust checklist FAB suppression');
