@@ -113,3 +113,20 @@
 .checklist-page .section-head{min-height:40px!important}
 .checklist-page .section-head h2{font-size:18px!important}
 .checklist-page .checklist-heading-icon{width:26px!important;height:26px!important;margin-right:6px!important}
+
+/* iPhone screenshot follow-up 2 */
+.checklist-page .checklist-icon-button{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;font-size:22px!important;line-height:1!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
+.checklist-page .checklist-search-toggle{font-size:20px!important}
+.checklist-page .category-delete-mode{font-size:21px!important}
+.checklist-page .checklist-section-tools{gap:2px!important;align-items:center!important}
+.checklist-page .checklist-compact-action{min-height:42px!important;height:42px!important;font-size:15px!important;padding:0 6px!important}
+.checklist-page .belongings-category-head,.checklist-page .belongings-category-name,.checklist-page .zero-category-cluster-row,.checklist-page .zero-category-name{text-align:left!important}
+.checklist-page .belongings-category-name,.checklist-page .zero-category-name{margin-left:0!important;justify-self:start!important}
+.checklist-page .belongings-category-head{justify-content:flex-start!important}
+.checklist-page .belongings-category-head .checklist-category-count-toggle{margin-left:auto!important}
+.checklist-page .task-children:not([hidden])>.task-child-add-reveal{display:block!important}
+.checklist-page .task-child-add-reveal{width:auto!important;text-align:left!important;color:#087bff!important;font-size:14px!important}
+.checklist-page .shopping-category-title,.checklist-page .belongings-category-head{min-height:40px!important}
+.checklist-page .checklist-category-count-toggle{min-width:24px!important;width:auto!important;padding:0 2px!important}
+.checklist-page .shopping-category-toggle,.checklist-page .belongings-category-toggle{margin-left:0!important}
+.checklist-page .calendar-fab,.checklist-page~.calendar-fab,body:has(.checklist-page) .calendar-fab{display:none!important}
