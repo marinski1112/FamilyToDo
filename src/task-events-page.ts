@@ -212,7 +212,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   }
   for(const list of unorganizedChildrenByParent.values())list.sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0)||Number(a.id||0)-Number(b.id||0));
 
-  const taskMeta=(task:Row)=>`${esc(task.assignees||'')}${task.start_at?' ・ '+esc(String(task.start_at).slice(11,16)):task.due_at?' ・ '+(String(task.due_at).slice(11,16)==='00:00'?'終日':esc(String(task.due_at).slice(11,16))):''}${task.location?' ・ '+esc(task.location):''}`;
+  const taskMeta=(task:Row)=>{const parts:string[]=[];const start=String(task.start_at||'').slice(11,16),due=String(task.due_at||'').slice(11,16);if(start&&start!=='00:00')parts.push(esc(start));else if(!start&&due&&due!=='00:00')parts.push(esc(due));if(task.location)parts.push(esc(task.location));return parts.join(' ・ ');};
   const childComposer=(task:Row,hidden=false)=>`<form class="task-child-composer" data-parent-task-id="${esc(task.id)}" data-parent-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"${hidden?' hidden':''}><div class="task-child-composer-line"><span class="task-child-branch" aria-hidden="true">└</span><input class="task-child-title" type="text" maxlength="255" autocomplete="off" enterkeyhint="done" placeholder="子タスクを追加" aria-label="子タスクを追加"><button class="btn small secondary task-child-add" type="submit">追加</button></div><div class="task-child-status" role="status" aria-live="polite"></div></form>`;
   const renderLinkedTaskAccessories=(task:Row)=>{
     const templateId=Number(task.task_id||0)||Math.abs(Number(task.id));
@@ -276,10 +276,10 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const cursor=new Date(`${date}T12:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()-1);const prev=cursor.toISOString().slice(0,10);cursor.setUTCDate(cursor.getUTCDate()+2);const next=cursor.toISOString().slice(0,10);
   const [year,month,day]=date.split('-');
   const compactDate=year&&month&&day?`${year}.${Number(month)}.${Number(day)}`:date;
-  const taskSection=`<div class="card section-card task-section"><div class="section-head"><h2>📝 タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>`;
-  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2>🛒 買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>表示ルール</summary><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
+  const taskSection=`<div class="card section-card task-section"><div class="section-head"><h2><span class="checklist-heading-icon" aria-hidden="true">✓</span>タスク・イベント</h2></div>${taskRows||'<p class="empty">対象日のタスク・イベントはありません。</p>'}</div>`;
+  const shoppingSection=`<div class="card section-card shopping-checklist-section" id="shopping-checklist"><div class="section-head"><div><h2><span class="checklist-heading-icon shopping" aria-hidden="true">▣</span>買い物</h2></div></div>${shoppingRows(data.shopping)||'<p class="empty">対象日の買い物はありません。</p>'}<details class="checklist-more"><summary>表示ルール</summary><p class="meta">通常タスクは関連日から期限まで、定期タスクは期限日に表示</p></details></div>`;
   const overdueSection=`${expiredShoppingHtml}${expiredHtml}`;
-  const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2>🎒 持ち物</h2></div>${itemContent||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
+  const itemSection=`<div class="card section-card item-section"><div class="section-head"><h2><span class="checklist-heading-icon belongings" aria-hidden="true">◆</span>持ち物</h2></div>${itemContent||'<p class="empty">対象日の持ち物はありません。</p>'}</div>`;
   const primarySections=[
     {priority:0,hasContent:Boolean(taskRows),html:taskSection},
     {priority:1,hasContent:data.shopping.length>0,html:shoppingSection},
