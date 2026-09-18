@@ -45,3 +45,7 @@ test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE nam
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM pragma_table_info('message_conversion_claims') WHERE name IN ('message_id','family_id','conversion_type','conversion_mode','source_updated_at','target_id','status','lease_token','lease_expires_at')")" = 9
 test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('idx_shopping_items_source_message','idx_tasks_source_message')")" = 2
 echo 'message conversion idempotency migration smoke: ok'
+test "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_message_photos_global_cleanup'")" = 1
+message_photo_cleanup_plan="$(sqlite3 "$db" "EXPLAIN QUERY PLAN SELECT upload_id,family_id,object_key FROM message_photos WHERE state='delete_pending' AND writers=0 ORDER BY created_at,upload_id LIMIT 24")"
+[[ "$message_photo_cleanup_plan" == *"idx_message_photos_global_cleanup"* ]]
+echo 'message photo global cleanup migration smoke: ok'
