@@ -7,6 +7,8 @@ import {
   familySharedStampRegistryConfigFromEnv,
 } from './calendar-shared-stamp-registry';
 import { publishCalendarStampToShared } from './calendar-shared-stamp-publish';
+import { cleanupFamilySharedStamp } from './calendar-stamp-global-cleanup';
+import { stampDeletionTransport, verifiedStampDeletionState } from './calendar-stamp-deletion-transport';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 
@@ -26,6 +28,7 @@ function adminError(error:unknown):Response{
 async function sharedPublishProjection(context:any,familyId:number,assetIds:number[]):Promise<{
   ready:boolean;
   published:Set<number>;
+  failedSource:Set<number>;
 }>{
   let configured=false;
   try{
@@ -35,18 +38,30 @@ async function sharedPublishProjection(context:any,familyId:number,assetIds:numb
       configured=true;
     }
   }catch{configured=false;}
-  if(!assetIds.length)return {ready:false,published:new Set()};
+  if(!assetIds.length)return {ready:false,published:new Set(),failedSource:new Set()};
   try{
-    const placeholders=assetIds.map(()=>'?').join(',');
-    const rows=await context.env.DB.prepare(`SELECT asset_id FROM calendar_shared_stamp_refs
-      WHERE family_id=? AND asset_id IN (${placeholders})`)
-      .bind(familyId,...assetIds).all();
-    const publishedRows=(rows.results??[]) as Array<{asset_id:number}>;
-    return {ready:configured,published:new Set(publishedRows.map((row:{asset_id:number})=>Number(row.asset_id)).filter(Number.isSafeInteger))};
+    const requested=assetIds.map(()=>'(?)').join(',');
+    const rows=await context.env.DB.prepare(`WITH requested(asset_id) AS (VALUES ${requested})
+      SELECT requested.asset_id,
+        EXISTS(SELECT 1 FROM calendar_shared_stamp_refs ref
+          WHERE ref.family_id=? AND ref.asset_id=requested.asset_id) AS published,
+        EXISTS(SELECT 1 FROM calendar_stamp_global_sources source
+          WHERE source.family_id=? AND source.asset_id=requested.asset_id) AS source_seen
+      FROM requested`)
+      .bind(...assetIds,familyId,familyId).all();
+    const published=new Set<number>();
+    const failedSource=new Set<number>();
+    for(const row of (rows.results??[]) as Array<{asset_id:number;published:number;source_seen:number}>){
+      const assetId=Number(row.asset_id);
+      if(!Number.isSafeInteger(assetId)||assetId<=0)continue;
+      if(Number(row.published)===1)published.add(assetId);
+      else if(Number(row.source_seen)===1)failedSource.add(assetId);
+    }
+    return {ready:configured,published,failedSource};
   }catch{
     // 0054 may not be deployed yet. Existing local stamp management remains usable
-    // and publication stays hidden/fail-closed until the projection table exists.
-    return {ready:false,published:new Set()};
+    // and publication/local cleanup stay hidden and fail-closed until shared tables exist.
+    return {ready:false,published:new Set(),failedSource:new Set()};
   }
 }
 
@@ -74,17 +89,60 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
           sharedPublished,
           sharedPublishCandidate,
           canPublishShared:shared.ready&&!sharedPublished&&sharedPublishCandidate,
+          failedSharedCleanupAvailable:shared.failedSource.has(Number(asset.id))&&!sharedPublished
+            &&asset.storage_provider==='UPLOAD',
         };
       })},200,{'cache-control':'private, no-store'});
     }catch(error){return adminError(error);}
   }
-  if(request.method!=='POST')return json({ok:false,error:'GET or POST only'},405);
+  if(request.method!=='POST'&&request.method!=='DELETE')return json({ok:false,error:'GET, POST or DELETE only'},405);
   let body:Record<string,unknown>;
   try{body=await bodyJson(request);}catch(error){if(error instanceof RequestBodyParseError)return json({ok:false,error:'INVALID_BODY'},400);throw error;}
   const csrf=String(body.csrf||''),expected=String(context.session?.csrfToken||'');
   if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);
-  const assetId=Number(body.assetId),active=body.active;
-  if(!Number.isSafeInteger(assetId)||assetId<=0||typeof active!=='boolean')return json({ok:false,error:'INVALID_REQUEST'},400);
+  const assetId=Number(body.assetId);
+  if(!Number.isSafeInteger(assetId)||assetId<=0)return json({ok:false,error:'INVALID_REQUEST'},400);
+
+  if(request.method==='DELETE'){
+    if(body.confirm!=='permanent')return json({ok:false,error:'CONFIRM_REQUIRED'},400);
+    try{
+      const rows=await context.env.DB.prepare(`SELECT source.shared_stamp_id
+        FROM calendar_stamp_global_sources source
+        JOIN calendar_stamp_assets asset
+          ON asset.id=source.asset_id AND asset.family_id=source.family_id
+        WHERE source.asset_id=? AND source.family_id=? AND asset.storage_provider='UPLOAD'
+          AND NOT EXISTS(SELECT 1 FROM calendar_shared_stamp_refs ref WHERE ref.asset_id=asset.id)
+          AND EXISTS(SELECT 1 FROM members actor
+            WHERE actor.id=? AND actor.family_id=? AND actor.active=1 AND actor.role IN ('OWNER','ADMIN'))
+        ORDER BY source.shared_stamp_id
+        LIMIT 2`).bind(assetId,s.familyId,s.memberId,s.familyId).all();
+      const sourceIds=((rows.results??[]) as Array<{shared_stamp_id:string}>)
+        .map((row:{shared_stamp_id:string})=>String(row.shared_stamp_id||'')).filter(Boolean);
+      if(sourceIds.length===0)return json({ok:false,error:'LOCAL_PURGE_NOT_AVAILABLE'},409);
+      if(sourceIds.length!==1)return json({ok:false,error:'LOCAL_PURGE_AMBIGUOUS'},409);
+      if(!context.env.MEDIA)return json({ok:false,error:'STORAGE_UNAVAILABLE'},503);
+      const config=familySharedStampRegistryConfigFromEnv(context.env);
+      if(!config)return json({ok:false,error:'SHARED_STAMPS_UNAVAILABLE'},503);
+      const remote=stampDeletionTransport({...config,fetcher:config.fetchImpl});
+      const sharedId=sourceIds[0]!;
+      const result=await cleanupFamilySharedStamp({
+        db:context.env.DB,
+        bucket:context.env.MEDIA,
+        sharedId,
+        confirmRegistryDeletion:async id=>{
+          const state=verifiedStampDeletionState(await remote(`/v1/stamps/${id}/deletion`),id);
+          return state.sharedId===id&&(state.state==='pending'||state.state==='completed');
+        },
+      });
+      return json({ok:true,assetId,deleted:result.complete,cleanupPending:result.cleanupPending},
+        result.complete?200:202,{'cache-control':'private, no-store'});
+    }catch{
+      return json({ok:false,error:'LOCAL_PURGE_RETRY_REQUIRED'},503);
+    }
+  }
+
+  const active=body.active;
+  if(typeof active!=='boolean')return json({ok:false,error:'INVALID_REQUEST'},400);
   try{
     const changed=await setCalendarStampAssetActive(context.env,s.familyId,s.memberId,assetId,active);
     return changed?json({ok:true,assetId,active}):json({ok:false,error:'ASSET_NOT_FOUND'},404);
