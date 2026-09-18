@@ -1,11 +1,12 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { recurringForDate } from './recurrence-projection';
-import { html, redirect } from './response';
+import { html, json, redirect } from './response';
 import { taskVisibilitySql } from './task-visibility';
 import { APP_VERSION } from './version';
 
 type Row=Record<string,unknown>;
+type OverdueTaskCursor={due:string;id:number};
 
 type TaskEventsData={tasks:Row[];items:Row[];shopping:Row[];expiredTasks:Row[];expiredShopping:Row[]};
 
@@ -30,6 +31,7 @@ const compareShoppingRows=(a:Row,b:Row)=>{
   return Number(a.id||0)-Number(b.id||0);
 };
 const taskListColumns='t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,t.parent_task_id,t.sort_order,t.task_kind';
+const OVERDUE_TASK_PAGE_SIZE=50;
 
 async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=false):Promise<Row[]>{
   const member=ctx.member;if(!member||!parentIds.length)return [];
@@ -44,15 +46,24 @@ async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=
     ORDER BY t.parent_task_id,t.sort_order,t.id`).bind(member.family_id,member.id,...parentIds).all<Row>()).results;
 }
 
-async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
+async function expiredTaskPageFor(ctx:AppContext,date:string,cursor?:OverdueTaskCursor):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
+  const cursorSql=cursor?' AND (COALESCE(t.end_at,t.due_at,t.start_at),t.id) > (?,?)':'';
+  const bindings:unknown[]=[member.family_id,member.id,date];
+  if(cursor)bindings.push(cursor.due,cursor.id);
   return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,
+      COALESCE(t.end_at,t.due_at,t.start_at) AS effective_due,
       (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
     FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
       AND (t.task_kind IS NULL OR lower(t.task_kind)='task')
       AND COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL
-      AND date(COALESCE(t.end_at,t.due_at,t.start_at)) < date(?)
-    ORDER BY COALESCE(t.end_at,t.due_at,t.start_at),t.id`).bind(member.family_id,member.id,date).all<Row>()).results;
+      AND date(COALESCE(t.end_at,t.due_at,t.start_at)) < date(?)${cursorSql}
+    ORDER BY COALESCE(t.end_at,t.due_at,t.start_at),t.id
+    LIMIT ${OVERDUE_TASK_PAGE_SIZE+1}`).bind(...bindings).all<Row>()).results;
+}
+
+async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
+  return expiredTaskPageFor(ctx,date);
 }
 
 async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]>{
@@ -154,6 +165,8 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   const shopping=[...shoppingById.values()].sort(compareShoppingRows);
   return {tasks:taskRows,items:items.results,shopping,expiredTasks,expiredShopping:expiredShopping.results};
 }
+
+const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('');
 
 function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,unorganized:Row[]):string{
   const csrf=ctx.session.csrfToken??'';
@@ -257,7 +270,10 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
     const composer=childComposer(task,false);
     return `<div class="row unorganized-task-row" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="meta">${esc(task.assignees||'')}</div><div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div></div>`;
   }).join('')}</div>`:'';
-  const expiredHtml=data.expiredTasks.length?`<details class="card expired-tasks"><summary>⚠️ 期限切れタスク ${data.expiredTasks.length}件</summary><div class="expired-list">${data.expiredTasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('')}</div></details>`:'';
+  const visibleExpiredTasks=data.expiredTasks.slice(0,OVERDUE_TASK_PAGE_SIZE);
+  const expiredTaskHasMore=data.expiredTasks.length>OVERDUE_TASK_PAGE_SIZE;
+  const lastExpiredTask=visibleExpiredTasks.at(-1);
+  const expiredHtml=visibleExpiredTasks.length?`<details class="card expired-tasks" id="expired-tasks"><summary>⚠️ 期限切れタスク <span class="expired-task-count">${visibleExpiredTasks.length}件表示${expiredTaskHasMore?'（続きあり）':''}</span></summary><div class="expired-list">${renderExpiredTaskRows(visibleExpiredTasks)}</div>${expiredTaskHasMore&&lastExpiredTask?`<button type="button" class="btn secondary expired-task-more" data-cursor-due="${esc(lastExpiredTask.effective_due||lastExpiredTask.end_at||lastExpiredTask.due_at||lastExpiredTask.start_at)}" data-cursor-id="${esc(lastExpiredTask.id)}">続きを表示</button>`:''}</details>`:'';
   const expiredShoppingHtml=data.expiredShopping.length?`<details class="card expired-shopping"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>${shoppingRows(data.expiredShopping)}</details>`:'';
   const cursor=new Date(`${date}T12:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()-1);const prev=cursor.toISOString().slice(0,10);cursor.setUTCDate(cursor.getUTCDate()+2);const next=cursor.toISOString().slice(0,10);
   const [year,month,day]=date.split('-');
@@ -310,6 +326,17 @@ export async function taskEvents(_request:Request,ctx:AppContext,targetDate:stri
   const member=ctx.member;
   if(!member){const url=new URL(ctx.request.url);return redirect(`/login.php?next=${encodeURIComponent(url.pathname+url.search)}`);}
   const safeDate=isRealDateOnly(targetDate)?targetDate:dateOnly();
+  const requestUrl=new URL(_request.url);
+  if(requestUrl.searchParams.get('overdue')==='tasks'){
+    const cursorDue=String(requestUrl.searchParams.get('cursor_due')||'').trim();
+    const cursorId=Number(requestUrl.searchParams.get('cursor_id')||0);
+    if(cursorDue.length>64||!Number.isSafeInteger(cursorId)||cursorId<=0)return json({ok:false,error:'期限切れタスクの続きを取得できませんでした。'},400);
+    const pageRows=await expiredTaskPageFor(ctx,safeDate,{due:cursorDue,id:cursorId});
+    const visible=pageRows.slice(0,OVERDUE_TASK_PAGE_SIZE);
+    const hasMore=pageRows.length>OVERDUE_TASK_PAGE_SIZE;
+    const last=visible.at(-1);
+    return json({ok:true,html:renderExpiredTaskRows(visible),hasMore,cursor:last?{due:String(last.effective_due||last.end_at||last.due_at||last.start_at||''),id:Number(last.id||0)}:null});
+  }
   const [data,unorganized]=await Promise.all([makeTaskEventsData(ctx,safeDate),unorganizedTasksFor(ctx)]);
   return html(renderTaskEventsPage(ctx,safeDate,data,unorganized));
 }

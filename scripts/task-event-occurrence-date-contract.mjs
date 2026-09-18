@@ -21,7 +21,7 @@ assert.equal(visibleOn({task_kind:'task',start_at:'2026-08-29 10:00:00',due_at:'
 assert.equal(visibleOn({task_kind:'task',start_at:'2026-09-01 10:00:00',due_at:null,end_at:null},'2026-09-02'),false,'start-only task must use its start date as the same fallback deadline used by expired classification');
 
 const makeViewStart=checklistSource.indexOf('async function makeTaskEventsData');
-const makeViewEnd=checklistSource.indexOf('\nfunction renderTaskEventsPage',makeViewStart);
+const makeViewEnd=checklistSource.indexOf('\nconst renderExpiredTaskRows',makeViewStart);
 assert.ok(makeViewStart>=0&&makeViewEnd>makeViewStart,'makeTaskEventsData must remain present');
 const checklist=checklistSource.slice(makeViewStart,makeViewEnd);
 assert.match(checklist,/lower\(COALESCE\(t\.task_kind,''\)\)='event'/,'checklist query must explicitly separate event semantics');
@@ -31,13 +31,14 @@ assert.match(checklist,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\)>=dat
 assert.match(checklist,/recurringForDate\(ctx,date\)/,'recurring rows must continue to be projected for the selected date only');
 assert.doesNotMatch(checklist,/task_kind.*event.*t\.status='completed'/is,'event visibility must not depend on completion state');
 
-const expiredStart=checklistSource.indexOf('async function expiredTasksFor');
-const expiredEnd=checklistSource.indexOf('\nasync function unorganizedTasksFor',expiredStart);
+const expiredStart=checklistSource.indexOf('async function expiredTaskPageFor');
+const expiredEnd=checklistSource.indexOf('\nasync function expiredTasksFor',expiredStart);
 assert.ok(expiredStart>=0&&expiredEnd>expiredStart,'expired task query must remain present');
 const expired=checklistSource.slice(expiredStart,expiredEnd);
 assert.match(expired,/lower\(t\.task_kind\)='task'/,'overdue section must remain task-only');
 assert.match(expired,/t\.status='pending'/,'overdue pending-task path must remain active');
 assert.match(expired,/date\(COALESCE\(t\.end_at,t\.due_at,t\.start_at\)\) < date\(\?\)/,'expired classification must keep the same effective deadline order as the normal task window');
+assert.match(expired,/LIMIT \$\{OVERDUE_TASK_PAGE_SIZE\+1\}/,'expired physical task query must stay bounded for keyset paging');
 
 assert.match(ics,/e\.startAt,e\.endAt/,'ICS import must continue to persist both normalized event boundaries');
 assert.match(ics,/'EVENT'/,'ICS import must continue to classify imported rows as events');
