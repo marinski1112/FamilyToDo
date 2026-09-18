@@ -117,3 +117,6 @@ requireText(js,"toolbars.slice(1)",'single consolidated Task toolbar');
 requireText(js,"tools.append(taskAdd)",'Task add is rightmost');
 requireText(css,'one toolbar, rightmost Task add','Task toolbar screenshot styling');
 requireText(belongingsUi,"g.hidden=false;g.classList.remove('checklist-status-group-empty','checklist-search-hidden')",'new unclassified Belongings becomes visible');
+
+requireText(js,"else if(name===U){g.hidden=false", 'populated unclassified groups forced visible');
+requireText(css,'Populated 未分類 is a first-class category','populated unclassified full-row styling');
