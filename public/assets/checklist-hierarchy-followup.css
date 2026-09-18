@@ -193,3 +193,7 @@
 .checklist-page .belongings-category-group[data-category="未分類"]:not([hidden]) .belongings-category-name{
  display:block!important;flex:1 1 auto!important;font-size:19px!important;font-weight:800!important;color:#1f2937!important;text-align:left!important
 }
+
+/* Empty named categories: name edits, plus opens that category's composer */
+.checklist-page .zero-category-add-item{flex:0 0 auto;min-width:64px;min-height:38px;border:0;background:transparent;color:#087bff;font:inherit;font-size:15px;font-weight:800;padding:0 6px}
+.checklist-page .zero-category-name{cursor:text}
