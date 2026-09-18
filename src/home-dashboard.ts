@@ -74,32 +74,35 @@ function deterministicJournalSnapshot(row:Row,date:string,shared:Set<number>):Ho
 }
 
 async function yesterdayJournal(db:D1Database,familyId:number,date:string):Promise<HomeJournalSnapshot|null>{
-  let row:Row|null=null;
+  let row:Row|null=null,aiColumnsAvailable=true;
   try{
-    row=await db.prepare(`SELECT journal_date,location_json,tasks_json,housework_json
+    row=await db.prepare(`SELECT journal_date,location_json,tasks_json,housework_json,ai_summary_text,ai_status,ai_location_member_ids_json
       FROM family_daily_journals
       WHERE family_id=? AND journal_date=? AND storage_tier='HOT'
       LIMIT 1`).bind(familyId,date).first<Row>();
-  }catch{return null;}
+  }catch{
+    // Migration 0080 may not yet exist in every runtime. Keep the deterministic
+    // journal available there without paying a second same-row read normally.
+    aiColumnsAvailable=false;
+    try{
+      row=await db.prepare(`SELECT journal_date,location_json,tasks_json,housework_json
+        FROM family_daily_journals
+        WHERE family_id=? AND journal_date=? AND storage_tier='HOT'
+        LIMIT 1`).bind(familyId,date).first<Row>();
+    }catch{return null;}
+  }
   if(!row)return null;
 
   const shared=await sharedLocationMemberIds(db,familyId);
   const fallback=deterministicJournalSnapshot(row,date,shared);
+  if(!aiColumnsAvailable)return fallback;
 
-  // Migration 0080 may not yet exist in every runtime. AI is additive only:
-  // any schema/read problem falls back to the privacy-filtered deterministic view.
-  try{
-    const ai=await db.prepare(`SELECT ai_summary_text,ai_status,ai_location_member_ids_json
-      FROM family_daily_journals
-      WHERE family_id=? AND journal_date=? AND storage_tier='HOT'
-      LIMIT 1`).bind(familyId,date).first<Row>();
-    const narrative=String(ai?.ai_summary_text||'').trim();
-    const required=safeMemberIds(ai?.ai_location_member_ids_json);
-    const sharingStillValid=required.every(id=>shared.has(id));
-    if(String(ai?.ai_status||'')==='AI_OK'&&narrative&&sharingStillValid){
-      return {...fallback,text:narrative,isAi:true};
-    }
-  }catch{}
+  const narrative=String(row.ai_summary_text||'').trim();
+  const required=safeMemberIds(row.ai_location_member_ids_json);
+  const sharingStillValid=required.every(id=>shared.has(id));
+  if(String(row.ai_status||'')==='AI_OK'&&narrative&&sharingStillValid){
+    return {...fallback,text:narrative,isAi:true};
+  }
   return fallback;
 }
 
