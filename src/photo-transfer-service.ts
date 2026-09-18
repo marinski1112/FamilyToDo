@@ -2,9 +2,13 @@ const hash=async(token:string)=>Array.from(new Uint8Array(await crypto.subtle.di
 const validToken=(token:string)=>/^[a-f0-9]{64}$/u.test(token);
 const RECOVERY_TTL_SECONDS=120;
 export type PhotoTransfer={family_id:number;member_id:number;source_kind:string;source_id:number;caption:string;sha256:string};
+export async function cleanupExpiredPhotoTransfers(db:D1Database,now=Math.floor(Date.now()/1000)):Promise<number> {
+ const result=await db.prepare('DELETE FROM photo_transfers WHERE token_hash IN (SELECT token_hash FROM photo_transfers WHERE expires_at<=? ORDER BY expires_at,token_hash LIMIT 100)').bind(now).run();
+ return Number(result.meta.changes||0);
+}
 export async function createPhotoTransfer(db:D1Database,input:{familyId:number;memberId:number;kind:string;id:number;caption:string;sha256:string},now=Math.floor(Date.now()/1000)) {
  const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
- await db.prepare('DELETE FROM photo_transfers WHERE token_hash IN (SELECT token_hash FROM photo_transfers WHERE expires_at<=? ORDER BY expires_at LIMIT 100)').bind(now).run();
+ await cleanupExpiredPhotoTransfers(db,now);
  await db.prepare('INSERT INTO photo_transfers(token_hash,family_id,member_id,source_kind,source_id,caption,sha256,expires_at) VALUES(?,?,?,?,?,?,?,?)')
   .bind(await hash(token),input.familyId,input.memberId,input.kind,input.id,input.caption,input.sha256,now+300).run();
  return token;
