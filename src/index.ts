@@ -1,5 +1,6 @@
 import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
+import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
 import {cleanupLocationArrivals} from './location-arrival-push';
 import {archiveLocationHistory} from './location-history-archive';
 import {generateFamilyDailyJournals} from './family-daily-journal';
@@ -73,6 +74,7 @@ export default {
 
     if(plan.hourlyCleanup){
       ctx.waitUntil(cleanupExpiredPhotoTransfers(env.DB));
+      ctx.waitUntil(drainDeletedMessagePhotosGlobal(env.DB,env.MEDIA));
       ctx.waitUntil(cleanupNotificationLifecycle(env));
       ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
       ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
