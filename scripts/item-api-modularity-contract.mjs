@@ -118,7 +118,7 @@ for(const sentinel of [
   "const U='未分類'",
   "g.classList.toggle('category-collapsed',v)",
   "label=closed?'展開':'閉じる'",
-  "if(b.textContent!==label)b.textContent=label",
+  "if(b.textContent!==symbol)b.textContent=symbol",
   'belongings-composer-name',
   'belongings-composer-memo',
   'belongings-composer-url',
