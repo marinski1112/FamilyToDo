@@ -10,6 +10,7 @@ const css=readFileSync('public/assets/checklist-hierarchy-followup.css','utf8');
 const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation.sql','utf8');
 const taskEvents=readFileSync('public/assets/task-events.js','utf8');
 const taskPage=readFileSync('src/task-events-page.ts','utf8');
+const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup.js','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -58,6 +59,8 @@ for(const [needle,label] of [
   ['checklist-status-hidden','status row filtering'],
   ['task-child-composer-deferred','deferred child composer'],
   ['task-child-add-reveal','compact child add reveal'],
+  ['category-inline-rename','inline category rename'],
+  ["<span>空のカテゴリ</span>",'clear empty-category label'],
   ['checklist-trash-icon','non-emoji trash icon'],
   ['section.append(cluster)','zero category cluster after active content'],
   ['refreshCounts','completed tab count refresh'],
@@ -74,6 +77,9 @@ requireText(css,'/* Dense checklist alignment */','dense checklist alignment');
 requireText(css,'.task-child-composer-deferred','deferred child composer styling');
 requireText(css,'.checklist-trash-icon','trash line icon styling');
 requireText(css,'/* Final reference alignment */','final reference alignment');
+requireText(css,'/* iPhone reference follow-up */','iPhone reference alignment');
+requireText(css,'.checklist-page+.calendar-fab,.checklist-page~.calendar-fab','checklist FAB suppression');
+requireText(shoppingCategoryUi,"groups().some(group=>categoryOf(group)===UNCLASSIFIED)",'persistent unclassified shopping group');
 requireText(taskPage,"start&&start!=='00:00'",'suppress placeholder midnight time');
 requireText(taskPage,'checklist-heading-icon','compact heading icons');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
