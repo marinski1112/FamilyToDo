@@ -12,6 +12,7 @@ const taskEvents=readFileSync('public/assets/task-events.js','utf8');
 const taskPage=readFileSync('src/task-events-page.ts','utf8');
 const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup.js','utf8');
 const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
+const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -110,3 +111,9 @@ requireText(js,"if(!count)g.hidden=true",'empty unclassified hidden while direct
 requireText(js,"if(count&&name!==U)active.add(key(name))",'unclassified excluded from empty-category semantics');
 requireText(addFooter,"button.textContent='＋ タスク'",'compact top-right task label');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
+
+requireText(addFooter,"if(klass==='item-section')",'global Belongings add suppressed at owner');
+requireText(js,"toolbars.slice(1)",'single consolidated Task toolbar');
+requireText(js,"tools.append(taskAdd)",'Task add is rightmost');
+requireText(css,'one toolbar, rightmost Task add','Task toolbar screenshot styling');
+requireText(belongingsUi,"g.hidden=false;g.classList.remove('checklist-status-group-empty','checklist-search-hidden')",'new unclassified Belongings becomes visible');
