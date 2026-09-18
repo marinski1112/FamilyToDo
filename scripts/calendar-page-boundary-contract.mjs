@@ -18,6 +18,8 @@ for(const marker of [
   "const recurRows=await recurringForRange(ctx,from,to);",
   "taskVisibilitySql('t')",
   "taskVisibilitySql('pt')",
+  "SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title",
+  "SELECT i.id,i.name,i.status,i.due_at",
   'safeCalendarDateRange(t.start_at||t.due_at,t.end_at||t.start_at||t.due_at)',
   'jpHolidayName(d)',
   '--calendar-day-band-rows:',
@@ -32,6 +34,9 @@ for(const marker of [
   "layout('カレンダー',body,'/app/calendar.php')",
 ]) if(!page.includes(marker)) throw new Error(`calendar retained page lost behavior marker: ${marker}`);
 
+
+if(/SELECT\s+s\.\*/i.test(page)) throw new Error('calendar shopping projection must stay explicit');
+if(/SELECT\s+i\.\*/i.test(page)) throw new Error('calendar item projection must stay explicit');
 if(page.includes("from './app'")) throw new Error('calendar retained page must not depend on app.ts');
 if(!handler.includes("export { calendar } from './calendar-page';")) throw new Error('calendar handler must route through retained page');
 if(handler.includes("from './app'")) throw new Error('calendar handler must not depend on app.ts');
