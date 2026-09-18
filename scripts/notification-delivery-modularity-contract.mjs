@@ -47,6 +47,12 @@ for(const marker of [
   'Web Push accepted; sent finalization could not be confirmed.',
   'await finalizeAcceptedNotification(env,Number(n.id),leaseToken);',
   'await recordSubscriptionState(',
+  'const subscriptionCache=new Map<string,PushSubscriptionRow[]>();',
+  'let subs=subscriptionCache.get(subscriptionKey);',
+  'if(subs===undefined){',
+  'subscriptionCache.set(subscriptionKey,subs);',
+  'for(const sub of [...subs]){',
+  'if(cached&&index>=0)cached.splice(index,1);',
 ]) if(!delivery.includes(marker)) throw new Error(`notification delivery behavior marker missing: ${marker}`);
 
 for(const marker of [
@@ -64,4 +70,9 @@ const finalizerCallPos=delivery.indexOf('await finalizeAcceptedNotification(env,
 if(finalizerCallPos<sendPos) throw new Error('accepted delivery finalization must happen after provider send');
 if(!delivery.includes("recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?")) throw new Error('subscription success bookkeeping must be best-effort after provider acceptance');
 if(delivery.includes('SELECT COALESCE(attempt_count,0) attempt_count')) throw new Error('failed delivery must not add a read-before-write attempt counter query');
-console.log('notification delivery modularity contract: bounded due query, atomic lease claim, best-effort subscription bookkeeping, verified sent finalization and fenced retry updates ok');
+if((delivery.match(/SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions/g)||[]).length!==1) throw new Error('notification delivery must retain one subscription query site behind the per-run member cache');
+const cacheGetPos=delivery.indexOf('let subs=subscriptionCache.get(subscriptionKey);');
+const subscriptionReadPos=delivery.indexOf('SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions');
+const cacheSetPos=delivery.indexOf('subscriptionCache.set(subscriptionKey,subs);');
+if(cacheGetPos<0||subscriptionReadPos<cacheGetPos||cacheSetPos<subscriptionReadPos) throw new Error('subscription D1 read must be guarded by the per-run family/member cache');
+console.log('notification delivery modularity contract: bounded due query, atomic lease claim, per-run tenant subscription read cache, best-effort subscription bookkeeping, verified sent finalization and fenced retry updates ok');
