@@ -25,7 +25,8 @@ for(const marker of [
   "permission_key='MANAGE_QUICK_CHORES'",
   'ensureFamilyLogMemberSubjects',
   'family_log_milk_amount_presets',
-  "const loadQuickActions=()=>ctx.env.DB.prepare('SELECT * FROM family_log_quick_actions WHERE family_id=? ORDER BY subject_id,sort_order,id')",
+  "const babySubjects=subjects.results.filter(x=>familyLogSubjectKind(x.subject_kind)==='BABY'),babySubjectIds=babySubjects.map(subject=>Number(subject.id)).filter(id=>id>0);",
+  "const loadQuickActions=()=>ctx.env.DB.prepare(`SELECT * FROM family_log_quick_actions WHERE family_id=? AND (active=1 OR subject_id IN (${babySubjectIds.map(()=>'?').join(',')||'NULL'})) ORDER BY subject_id,sort_order,id`)",
   'const subjectsWithQuickActions=new Set(quickActionRows.results.map(row=>Number(row.subject_id)).filter(id=>id>0))',
   'if(!subjectsWithQuickActions.has(subjectId))',
   'if(insertedQuickActionDefaults)quickActionRows=await loadQuickActions();',
@@ -42,7 +43,7 @@ for(const marker of [
   'family-ai-query',
 ])if(!page.includes(marker))throw new Error(`Family Log retained page marker missing: ${marker}`);
 if(page.includes("SELECT COUNT(*) c FROM family_log_quick_actions WHERE family_id=? AND subject_id=?"))throw new Error('Family Log page must not issue one quick-action COUNT query per BABY subject');
-if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? ORDER BY subject_id,sort_order,id/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable family-scoped read query site');
+if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? AND \(active=1 OR subject_id IN/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable active-or-BABY read query site');
 for(const marker of [
   "taskVisibilitySql('t')",
   "INSERT OR IGNORE INTO recurrence_occurrences",
