@@ -31,8 +31,9 @@ for(const [needle,label] of [
   ['UPDATE item_category_catalog SET enabled=0','item catalog disable'],
   ['await ctx.env.DB.batch(statements);','category mutation batch'],
 ])requireText(categoryMutation,needle,label);
-forbidText(categoryMutation,'DELETE FROM shopping_items','shopping item deletion');
-forbidText(categoryMutation,'DELETE FROM items','belongings item deletion');
+requireText(categoryMutation,"itemPolicy!=='unclassified'&&itemPolicy!=='delete'",'explicit category item policy');
+requireText(categoryMutation,'DELETE FROM shopping_items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed shopping item deletion');
+requireText(categoryMutation,'DELETE FROM items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed belongings item deletion');
 requireText(categoryApi,'canManageCategories','category management capability');
 requireText(categoryApi,'SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1','enabled category catalog read');
 
@@ -44,6 +45,11 @@ for(const [needle,label] of [
   ['未完了の子タスクを親タスクとして残す','promote children choice'],
   ["'/api/task-parent-completion'",'parent completion browser boundary'],
   ["action:'delete_many'",'category bulk delete browser action'],
+  ["item_policy:policy",'category delete item policy'],
+  ['中の${noun}を未分類に移動して削除','move-to-unclassified choice'],
+  ['カテゴリと中の${noun}をすべて削除','delete-category-and-items choice'],
+  ['checklist-inline-search','compact checklist search'],
+  ['zero-unclassified-add','unclassified add route'],
   ['zero-category-cluster','zero category grouping'],
   ['task-child-count-toggle','parent child count toggle'],
   ['input[name="assignees"]','assignee UI suppression'],
