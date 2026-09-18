@@ -93,12 +93,16 @@ async function yesterdayJournal(db:D1Database,familyId:number,date:string):Promi
   }
   if(!row)return null;
 
-  const shared=await sharedLocationMemberIds(db,familyId);
+  const locationMemberIds=parseArray<JournalLocationMember>(row.location_json)
+    .map(member=>Number(member.memberId))
+    .filter(id=>Number.isSafeInteger(id)&&id>0);
+  const required=aiColumnsAvailable?safeMemberIds(row.ai_location_member_ids_json):[];
+  const needsSharingLookup=locationMemberIds.length>0||required.length>0;
+  const shared=needsSharingLookup?await sharedLocationMemberIds(db,familyId):new Set<number>();
   const fallback=deterministicJournalSnapshot(row,date,shared);
   if(!aiColumnsAvailable)return fallback;
 
   const narrative=String(row.ai_summary_text||'').trim();
-  const required=safeMemberIds(row.ai_location_member_ids_json);
   const sharingStillValid=required.every(id=>shared.has(id));
   if(String(row.ai_status||'')==='AI_OK'&&narrative&&sharingStillValid){
     return {...fallback,text:narrative,isAi:true};

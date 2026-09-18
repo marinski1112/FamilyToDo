@@ -49,7 +49,11 @@ for(const marker of [
   'SELECT journal_date,location_json,tasks_json,housework_json',
   'if(!aiColumnsAvailable)return fallback;',
   'const narrative=String(row.ai_summary_text||\'\').trim();',
-  'const required=safeMemberIds(row.ai_location_member_ids_json);',
+  'const locationMemberIds=parseArray<JournalLocationMember>(row.location_json)',
+  '.filter(id=>Number.isSafeInteger(id)&&id>0);',
+  'const required=aiColumnsAvailable?safeMemberIds(row.ai_location_member_ids_json):[];',
+  'const needsSharingLookup=locationMemberIds.length>0||required.length>0;',
+  'const shared=needsSharingLookup?await sharedLocationMemberIds(db,familyId):new Set<number>();',
   "if(String(row.ai_status||'')==='AI_OK'&&narrative&&sharingStillValid)",
   'd.sharing_enabled=1',
   'd.revoked_at IS NULL',
@@ -62,6 +66,7 @@ if(/\blatitude\b|\blongitude\b/i.test(dashboard))throw new Error('Home dashboard
 if(/LIKE\s+/i.test(dashboard))throw new Error('Home dashboard must not add historical free-text scans');
 if(dashboard.includes('SELECT * FROM family_daily_journals'))throw new Error('Home dashboard journal lookup must stay column-bounded');
 if(dashboard.includes('const ai=await db.prepare'))throw new Error('Home dashboard must not restore a normal-path second same-row journal read');
+if(dashboard.includes('const shared=await sharedLocationMemberIds(db,familyId);'))throw new Error('Home journal must not unconditionally query current Location sharing');
 
 if(handlers.includes("from './app'"))throw new Error('auth page handlers must not depend on app.ts');
 for(const marker of [
