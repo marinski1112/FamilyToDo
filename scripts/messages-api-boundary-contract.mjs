@@ -50,5 +50,23 @@ if(!pages.includes("export { messages } from './messages-api';")) throw new Erro
 const appImport=routes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\bmessages\b/.test(appImport)) throw new Error('context API dispatcher must not import messages from app.ts');
 
+
+const explicitlyLabelledControls=[
+  'messageCreateTarget','messageCreateText','messageCreateReminder',
+  'messageShoppingName','messageShoppingQuantity','messageShoppingCategory','messageShoppingDueDate','messageShoppingTask','messageShoppingMemo','messageShoppingUrl',
+  'messageTaskMode','messageTaskExistingTarget','messageTaskTitle','messageTaskDescription','messageTaskStartTime','messageTaskEndTime','messageTaskLocation','messageTaskCompletion','messageTaskReminder','messageTaskCalendarColor',
+  'messageEditTarget','messageEditText','messageEditReminder',
+];
+for(const id of explicitlyLabelledControls){
+  if(!handler.includes(`for="${id}"`)||!handler.includes(`id="${id}"`))throw new Error(`Messages form control lost explicit label association: ${id}`);
+}
+for(const [id,labelId] of [
+  ['messageTaskStartDate','messageTaskStartDateLabel'],
+  ['messageTaskEndDate','messageTaskEndDateLabel'],
+]){
+  if(!handler.includes(`id="${labelId}"`)||!handler.includes(`id="${id}" aria-labelledby="${labelId}"`))throw new Error(`Messages date control lost accessible label association: ${id}`);
+}
+if(/<label>[^<]+<\/label><(?:input|select|textarea)\b/.test(handler))throw new Error('Messages forms must not leave visible labels adjacent to unassociated form controls');
+
 console.log('Messages retained page/API boundary contract ok');
 await import('./message-conversion-idempotency-contract.mjs');
