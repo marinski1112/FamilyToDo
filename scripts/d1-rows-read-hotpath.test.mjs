@@ -8,6 +8,7 @@ const delivery=read('src/notification-delivery.ts');
 const lifecycle=read('src/notification-lifecycle.ts');
 const index=read('src/index.ts');
 const schedule=read('src/scheduled-dispatch.ts');
+const recurrence=read('src/recurrence-projection.ts');
 const wrangler=read('wrangler.jsonc');
 const migration=read('migrations/0064_d1_scheduled_hotpath_indexes.sql');
 
@@ -60,6 +61,15 @@ test('cleanup and full integrity audit run at low frequency',()=>{
   assert.match(schedule,/dailyNotificationAudit: hour === 18 && minute === 29/);
   assert.match(index,/if\(plan\.hourlyCleanup\)[\s\S]*cleanupNotificationLifecycle\(env\)/);
   assert.match(index,/if\(plan\.dailyNotificationAudit\)[\s\S]*auditNotificationLifecycle\(env\)/);
+});
+
+test('recurrence assignee reads reuse the projected task set',()=>{
+  assert.ok(recurrence.includes("projectedTaskIds=[...new Set(projected.map(({rule})=>Number(rule.task_id)).filter(Number.isInteger))]"));
+  assert.ok(recurrence.includes('WHERE ta.task_id IN (${projectedTaskPlaceholders}) GROUP BY ta.task_id`).bind(...projectedTaskIds).all<Row>()'));
+  assert.equal(recurrence.includes("const assigneeOverlapSql=recurrenceOverlapSql('rr','rt');"),false);
+  assert.equal(recurrence.includes('WHERE EXISTS(SELECT 1 FROM recurrence_rules rr JOIN tasks rt'),false);
+  assert.ok(recurrence.includes("r.family_id=? AND ${taskVisibilitySql('t')} AND r.active=1"));
+  assert.ok(recurrence.includes('Scheduled family summaries use memberId=0 for FAMILY-only visibility.'));
 });
 
 test('scheduled hot queries have additive indexes',()=>{
