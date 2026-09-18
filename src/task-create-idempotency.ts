@@ -8,11 +8,13 @@ type ClaimRow = {
   status: 'PROCESSING' | 'DONE' | 'ERROR';
   lease_token: string | null;
   lease_expires_at: string | null;
+  task_exists: number;
 };
 
 export type TaskCreateClaim =
   | { state: 'ACQUIRED'; token: string }
   | { state: 'REPLAY'; taskId: number }
+  | { state: 'GONE' }
   | { state: 'BUSY' }
   | { state: 'CONFLICT' };
 
@@ -34,9 +36,11 @@ export async function taskCreateRequestHash(value: unknown): Promise<string> {
 }
 
 async function readClaim(db: D1Database, familyId: number, memberId: number, key: string): Promise<ClaimRow | null> {
-  const row = await db.prepare(`SELECT id,request_hash,task_id,status,lease_token,lease_expires_at
-    FROM task_create_requests
-    WHERE family_id=? AND member_id=? AND scope=? AND idempotency_key=?
+  const row = await db.prepare(`SELECT r.id,r.request_hash,r.task_id,r.status,r.lease_token,r.lease_expires_at,
+      CASE WHEN t.id IS NULL THEN 0 ELSE 1 END AS task_exists
+    FROM task_create_requests r
+    LEFT JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id
+    WHERE r.family_id=? AND r.member_id=? AND r.scope=? AND r.idempotency_key=?
     LIMIT 1`).bind(familyId, memberId, TASK_CREATE_SCOPE, key).first<ClaimRow>();
   return row || null;
 }
@@ -59,7 +63,10 @@ export async function acquireTaskCreateClaim(
   let row = await readClaim(db, familyId, memberId, key);
   if (!row) return { state: 'BUSY' };
   if (String(row.request_hash) !== requestHash) return { state: 'CONFLICT' };
-  if (String(row.status) === 'DONE' && Number(row.task_id || 0) > 0) return { state: 'REPLAY', taskId: Number(row.task_id) };
+  if (String(row.status) === 'DONE') {
+    const taskId = Number(row.task_id || 0);
+    return taskId > 0 && Number(row.task_exists || 0) === 1 ? { state: 'REPLAY', taskId } : { state: 'GONE' };
+  }
 
   const nowText = iso(now);
   const reclaimed = await db.prepare(`UPDATE task_create_requests
@@ -71,7 +78,10 @@ export async function acquireTaskCreateClaim(
 
   row = await readClaim(db, familyId, memberId, key);
   if (row && String(row.request_hash) !== requestHash) return { state: 'CONFLICT' };
-  if (row && String(row.status) === 'DONE' && Number(row.task_id || 0) > 0) return { state: 'REPLAY', taskId: Number(row.task_id) };
+  if (row && String(row.status) === 'DONE') {
+    const taskId = Number(row.task_id || 0);
+    return taskId > 0 && Number(row.task_exists || 0) === 1 ? { state: 'REPLAY', taskId } : { state: 'GONE' };
+  }
   return { state: 'BUSY' };
 }
 
@@ -97,8 +107,10 @@ export async function readCompletedTaskCreate(
   key: string,
   requestHash: string,
 ): Promise<number> {
-  const row = await db.prepare(`SELECT task_id FROM task_create_requests
-    WHERE family_id=? AND member_id=? AND scope=? AND idempotency_key=? AND request_hash=? AND status='DONE'
+  const row = await db.prepare(`SELECT r.task_id
+    FROM task_create_requests r
+    JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id
+    WHERE r.family_id=? AND r.member_id=? AND r.scope=? AND r.idempotency_key=? AND r.request_hash=? AND r.status='DONE'
     LIMIT 1`).bind(familyId, memberId, TASK_CREATE_SCOPE, key, requestHash).first<{task_id:number|null}>();
   return Number(row?.task_id || 0);
 }
