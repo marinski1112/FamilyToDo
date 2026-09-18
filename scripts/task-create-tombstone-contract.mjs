@@ -86,7 +86,7 @@ UPDATE task_create_requests SET status='DONE',task_id=102,lease_token=NULL,lease
   assert.doesNotMatch(cleanupMatch[0],/(?:created_at|updated_at)\s*</i,'cleanup must not invent an age-based TTL');
 
   sqlite(cleanupMatch[0].replace('LIMIT ?','LIMIT 2'));
-  assert.equal(sqlite("SELECT group_concat(id,',') FROM task_create_requests ORDER BY id"),'3,4,5','only bounded, tombstoned DONE rows may be pruned');
+  assert.equal(sqlite("SELECT group_concat(id,',') FROM (SELECT id FROM task_create_requests ORDER BY id)"),'3,4,5','only bounded, tombstoned DONE rows may be pruned');
   assert.equal(sqlite('SELECT COUNT(*) FROM task_create_tombstones'),'3','durable replay/GONE records must survive operational cleanup');
   assert.equal(sqlite('SELECT COUNT(*) FROM tasks WHERE id IN (101,102)'),'2','cleanup must not delete target tasks');
 
