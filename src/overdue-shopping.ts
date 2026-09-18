@@ -78,8 +78,8 @@ export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:
 
 export function overdueShoppingCursorFromRow(row:Row):OverdueShoppingCursor|null{
   const due=String(row.effective_due||row.due_date||row.task_end_at||row.task_due_at||row.task_start_at||'').trim();
-  const id=Number(row.id||0),name=String(row.name||'');
-  if(!due||!Number.isSafeInteger(id)||id<=0||!name)return null;
+  const id=Number(row.id||0),name=String(row.name??'');
+  if(!due||!Number.isSafeInteger(id)||id<=0)return null;
   return {
     due,
     categoryPresent:row.category==null?0:1,
