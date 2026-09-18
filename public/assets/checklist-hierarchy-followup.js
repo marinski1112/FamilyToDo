@@ -32,6 +32,19 @@ const decorateParents=()=>{
  });
 };
 
+const installStatusTabs=(section,kind)=>{
+ if(!(section instanceof HTMLElement)||section.querySelector(':scope>.checklist-status-tabs'))return;
+ const head=section.querySelector(':scope>.section-head');if(!(head instanceof HTMLElement))return;
+ const tabs=document.createElement('div');tabs.className='checklist-status-tabs';tabs.setAttribute('role','tablist');tabs.innerHTML='<button type="button" class="active" data-status="pending" role="tab" aria-selected="true">未完了</button><button type="button" data-status="completed" role="tab" aria-selected="false">完了済み</button>';
+ head.insertAdjacentElement('afterend',tabs);
+ const apply=status=>{section.dataset.statusTab=status;tabs.querySelectorAll('button[data-status]').forEach(b=>{const on=b.dataset.status===status;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
+  const rows=section.querySelectorAll(kind==='task'?'.task-row,.unorganized-task-row':kind==='shopping'?'.linked-shopping-row':'.belongings-category-row');
+  rows.forEach(row=>{if(!(row instanceof HTMLElement))return;const box=row.querySelector('input.toggle');const done=Boolean(box?.checked);row.classList.toggle('checklist-status-hidden',status==='completed'?!done:done);});
+  if(kind!=='task')section.querySelectorAll(kind==='shopping'?'.shopping-category-group':'.belongings-category-group').forEach(g=>{if(g instanceof HTMLElement){const visible=[...g.querySelectorAll(kind==='shopping'?'.linked-shopping-row':'.belongings-category-row')].some(r=>r instanceof HTMLElement&&!r.classList.contains('checklist-status-hidden')&&!r.classList.contains('checklist-search-hidden'));g.classList.toggle('checklist-status-group-empty',!visible);}});
+ };
+ tabs.addEventListener('click',e=>{const b=e.target.closest?.('button[data-status]');if(b)apply(b.dataset.status||'pending');});apply('pending');
+};
+
 const installSearch=section=>{
  const head=section.querySelector(':scope>.section-head');if(!(head instanceof HTMLElement)||head.querySelector('.checklist-search-toggle'))return;
  const tools=document.createElement('div');tools.className='checklist-section-tools';const btn=document.createElement('button');btn.type='button';btn.className='checklist-icon-button checklist-search-toggle';btn.textContent='⌕';btn.setAttribute('aria-label','検索');
@@ -79,11 +92,11 @@ const installCategoryUi=async(section,kind,categories,canManage)=>{
 const waitFor=async test=>{for(let i=0;i<120;i++){const v=test();if(v)return v;await new Promise(r=>requestAnimationFrame(r));}return test();};
 const setup=async()=>{
  if(location.pathname!=='/app/tasks.php')return;hideLegacy();decorateParents();
- const task=document.querySelector('.task-section');if(task instanceof HTMLElement)installSearch(task);
+ const task=document.querySelector('.task-section');if(task instanceof HTMLElement){installStatusTabs(task,'task');installSearch(task);}
  const shopping=document.querySelector('.shopping-checklist-section'),items=document.querySelector('.item-section');
  let sc={categories:[],canManageCategories:false},ic={categories:[]};try{sc=await (await fetch('/api/shopping-categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}try{ic=await (await fetch('/api/item?view=categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}
- if(shopping instanceof HTMLElement){await waitFor(()=>shopping.querySelector('.shopping-category-group,.shopping-category-add'));await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));}
- if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}
+ if(shopping instanceof HTMLElement){await waitFor(()=>shopping.querySelector('.shopping-category-group,.shopping-category-add'));installStatusTabs(shopping,'shopping');await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));}
+ if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>void setup(),0)},{once:true});else setTimeout(()=>void setup(),0);
 })();
