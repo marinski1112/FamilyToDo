@@ -8,6 +8,7 @@
 .task-child-count-toggle,.checklist-category-count-toggle{border:0;background:transparent;color:#64748b;font:inherit;font-weight:800;min-width:34px;min-height:36px;padding:0 6px;border-radius:8px}
 .task-child-count-toggle:focus-visible,.checklist-category-count-toggle:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
 .shopping-category-name,.belongings-category-name{font-weight:800!important}
+#taskEditForm .assignee-list,#taskForm .assignee-list,#taskEditForm label:has(+ .assignee-list),#taskForm label:has(+ .assignee-list),#taskEditForm .sub-card:has(#shopToggle),#taskEditForm .sub-card:has(#itemToggle){display:none!important}
 .zero-category-cluster{margin:8px 0 12px;border:1px solid #e3e8ef;border-radius:12px;background:#fafbfc;overflow:hidden}
 .zero-category-cluster>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:800;color:#475569;display:flex;justify-content:space-between;gap:10px;align-items:center}
 .zero-category-cluster>summary::-webkit-details-marker{display:none}
