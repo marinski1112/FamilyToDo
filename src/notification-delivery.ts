@@ -6,6 +6,49 @@ const nowJst = (date = new Date()) => new Intl.DateTimeFormat('sv-SE',{timeZone:
 const leaseIso = (date = new Date()) => date.toISOString();
 const leaseExpiryIso = (date = new Date()) => new Date(date.getTime()+NOTIFICATION_DELIVERY_LEASE_MS).toISOString();
 
+async function recordSubscriptionState(write: Promise<unknown>): Promise<void> {
+  await write.catch((e)=>{ logNotificationFailure(e); });
+}
+
+async function finalizeAcceptedNotification(env: Env, notificationId: number, leaseToken: string): Promise<boolean> {
+  let lastError: unknown = null;
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const sentNow=new Date();
+      const sentResult=await env.DB.prepare(`UPDATE notifications
+        SET status=?,sent_at=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?
+        WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
+        .bind('sent',nowJst(sentNow),nowJst(sentNow),notificationId,leaseToken).run();
+      if(Number(sentResult.meta.changes || 0)===1)return true;
+      const state=await env.DB.prepare('SELECT status,sent_at,delivery_lease_token FROM notifications WHERE id=?').bind(notificationId).first<Record<string,unknown>>();
+      if(String(state?.status||'')==='sent' && Boolean(state?.sent_at))return true;
+      if(String(state?.delivery_lease_token||'')!==leaseToken){
+        lastError=new Error('Web Push accepted but the delivery lease was lost before sent finalization.');
+        break;
+      }
+      lastError=new Error('Web Push accepted but sent finalization did not update the owned notification.');
+    }catch(e){
+      lastError=e;
+    }
+  }
+  try{
+    const quarantineNow=new Date();
+    const quarantine=await env.DB.prepare(`UPDATE notifications
+      SET status='error',last_error=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?
+      WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
+      .bind('Web Push accepted; sent finalization could not be confirmed.',nowJst(quarantineNow),notificationId,leaseToken).run();
+    if(Number(quarantine.meta.changes || 0)===1){
+      logNotificationFailure(lastError || new Error('Web Push accepted but sent finalization was quarantined.'));
+      return false;
+    }
+  }catch(e){
+    logNotificationFailure(e);
+    if(lastError==null)lastError=e;
+  }
+  logNotificationFailure(lastError || new Error('Web Push accepted but sent finalization could not be confirmed.'));
+  return false;
+}
+
 export async function processNotifications(env: Env): Promise<void> {
   // Keep the five-minute empty path to one bounded, indexed due-work query.
   // Cross-table lifecycle repair/auditing is scheduled separately; send-time
@@ -75,16 +118,12 @@ export async function processNotifications(env: Env): Promise<void> {
       for(const sub of subs.results){
         const messageTarget=String(n.target_type||'').startsWith('message');
         const result=await sendWebPush(env,{id:Number(sub.id),endpoint:String(sub.endpoint),p256dh:String(sub.p256dh),auth:String(sub.auth)},{title:'Family TODO LINE',body:String(n.message||'Family TODO LINEからのお知らせです。'),url:messageTarget?'/app/messages.php':'/app/tasks.php',tag:`familytodo-${String(n.target_type||'notice')}-${String(n.target_id||n.id)}`});
-        if(result.ok){sent++;await env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?,last_error=NULL,failure_count=0,updated_at=? WHERE id=?').bind(nowJst(),nowJst(),Number(sub.id)).run();}
-        else if(result.gone){await env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=?').bind(Number(sub.id)).run();}
-        else{await env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),nowJst(),Number(sub.id)).run();}
+        if(result.ok){sent++;await recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?,last_error=NULL,failure_count=0,updated_at=? WHERE id=?').bind(nowJst(),nowJst(),Number(sub.id)).run());}
+        else if(result.gone){await recordSubscriptionState(env.DB.prepare('DELETE FROM web_push_subscriptions WHERE id=?').bind(Number(sub.id)).run());}
+        else{await recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET failure_count=failure_count+1,last_error=?,updated_at=? WHERE id=?').bind(String(result.error||`HTTP ${result.status}`).slice(0,500),nowJst(),Number(sub.id)).run());}
       }
       if(sent===0)throw new Error('Web Push delivery failed for all subscriptions.');
-      const sentNow=new Date();
-      await env.DB.prepare(`UPDATE notifications
-        SET status=?,sent_at=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?
-        WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
-        .bind('sent',nowJst(sentNow),nowJst(sentNow),n.id,leaseToken).run();
+      await finalizeAcceptedNotification(env,Number(n.id),leaseToken);
     } catch(e) {
       // Only the current lease owner may consume an attempt or release ownership.
       // A stale worker that resumes after takeover must not clobber its successor.
@@ -93,7 +132,7 @@ export async function processNotifications(env: Env): Promise<void> {
         SET attempt_count=COALESCE(attempt_count,0)+1,
             status=CASE WHEN COALESCE(attempt_count,0)+1>=5 THEN 'error' ELSE 'retry' END,
             last_error=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?
-        WHERE id=? AND delivery_lease_token=?`)
+        WHERE id=? AND delivery_lease_token=? AND status IN ('pending','retry') AND sent_at IS NULL`)
         .bind(String(e instanceof Error?e.message:e).slice(0,1000),nowJst(failedNow),n.id,leaseToken).run().catch(()=>{});
       logNotificationFailure(e);
     }
