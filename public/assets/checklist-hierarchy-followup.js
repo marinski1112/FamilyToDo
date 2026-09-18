@@ -84,7 +84,7 @@ const ensureCategoryGroup=(section,kind,name)=>{
 const openCategoryComposer=async(section,kind,name)=>{
  const live=ensureCategoryGroup(section,kind,name);if(!(live instanceof HTMLElement))return false;live.hidden=false;live.classList.remove('category-collapsed','checklist-status-group-empty','checklist-search-hidden');
  if(kind==='shopping'){for(let i=0;i<4&&!live.querySelector('.shopping-category-add-item');i++)await new Promise(r=>requestAnimationFrame(r));const trigger=live.querySelector('.shopping-category-add-item');if(!(trigger instanceof HTMLButtonElement))return false;trigger.click();}
- else{const input=live.querySelector('.belongings-composer-name');if(!(input instanceof HTMLElement))return false;input.focus({preventScroll:false});}
+ else{const trigger=live.querySelector('.belongings-category-add-item');if(trigger instanceof HTMLButtonElement)trigger.click();const input=live.querySelector('.belongings-composer-name');if(!(input instanceof HTMLElement))return false;requestAnimationFrame(()=>input.focus({preventScroll:false}));}
  live.scrollIntoView({behavior:'smooth',block:'center'});return true;
 };
 
