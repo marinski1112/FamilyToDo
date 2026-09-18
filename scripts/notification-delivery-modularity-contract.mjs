@@ -40,6 +40,13 @@ for(const marker of [
   'attempt_count=COALESCE(attempt_count,0)+1',
   "THEN 'error' ELSE 'retry' END",
   'logNotificationFailure(e);',
+  'async function finalizeAcceptedNotification(env: Env, notificationId: number, leaseToken: string): Promise<boolean> {',
+  'if(Number(sentResult.meta.changes || 0)===1)return true;',
+  "SELECT status,sent_at,delivery_lease_token FROM notifications WHERE id=?",
+  "SET status='error',last_error=?,delivery_lease_token=NULL,delivery_lease_expires_at=NULL,updated_at=?",
+  'Web Push accepted; sent finalization could not be confirmed.',
+  'await finalizeAcceptedNotification(env,Number(n.id),leaseToken);',
+  'await recordSubscriptionState(',
 ]) if(!delivery.includes(marker)) throw new Error(`notification delivery behavior marker missing: ${marker}`);
 
 for(const marker of [
@@ -52,6 +59,9 @@ const claimPos=delivery.indexOf('const claim=await env.DB.prepare(`UPDATE notifi
 const sendPos=delivery.indexOf('sendWebPush(env');
 if(claimPos<0||sendPos<0||claimPos>sendPos) throw new Error('notification delivery must acquire its atomic lease before provider send');
 const fencedUpdates=delivery.match(/WHERE id=\? AND delivery_lease_token=\?/g)||[];
-if(fencedUpdates.length<2) throw new Error('notification success and failure updates must both be fenced by lease token');
+if(fencedUpdates.length<3) throw new Error('notification success, quarantine and failure updates must all be fenced by lease token');
+const finalizerCallPos=delivery.indexOf('await finalizeAcceptedNotification(env,Number(n.id),leaseToken);');
+if(finalizerCallPos<sendPos) throw new Error('accepted delivery finalization must happen after provider send');
+if(!delivery.includes("recordSubscriptionState(env.DB.prepare('UPDATE web_push_subscriptions SET last_success_at=?")) throw new Error('subscription success bookkeeping must be best-effort after provider acceptance');
 if(delivery.includes('SELECT COALESCE(attempt_count,0) attempt_count')) throw new Error('failed delivery must not add a read-before-write attempt counter query');
-console.log('notification delivery modularity contract: bounded due query, atomic lease claim, stale recovery and fenced retry updates ok');
+console.log('notification delivery modularity contract: bounded due query, atomic lease claim, best-effort subscription bookkeeping, verified sent finalization and fenced retry updates ok');
