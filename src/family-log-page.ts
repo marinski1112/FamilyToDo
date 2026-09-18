@@ -39,8 +39,9 @@ export async function familyLogPage(request:Request,ctx:AppContext):Promise<Resp
  const m=ctx.member;if(!m)throw new AuthRequired();
  const managementMode=new URL(request.url).pathname==='/app/settings_family_log.php';
  const role=String(m.role||'').toUpperCase();
- const delegated=await ctx.env.DB.prepare("SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'").bind(m.family_id,m.id).first<Row>();
- const familyLogIsAdmin=role==='OWNER'||role==='ADMIN',canManageQuickChores=familyLogIsAdmin||Boolean(delegated);
+ const familyLogIsAdmin=role==='OWNER'||role==='ADMIN';
+ const delegated=familyLogIsAdmin?null:await ctx.env.DB.prepare("SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'").bind(m.family_id,m.id).first<Row>();
+ const canManageQuickChores=familyLogIsAdmin||Boolean(delegated);
  const url=new URL(request.url);
  const selectedDate=/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('date')||'')?String(url.searchParams.get('date')):dateOnly();
  const setting=await ctx.env.DB.prepare('SELECT show_adult_logs FROM family_log_settings WHERE family_id=?').bind(m.family_id).first<Row>();
