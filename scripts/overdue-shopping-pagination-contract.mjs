@@ -5,12 +5,13 @@ import {DatabaseSync} from 'node:sqlite';
 
 const helper=fs.readFileSync('src/overdue-shopping.ts','utf8');
 const page=fs.readFileSync('src/task-events-page.ts','utf8');
-const browser=fs.readFileSync('public/assets/task-events.js','utf8');
+const browser=fs.readFileSync('public/assets/overdue-shopping.js','utf8');
 const migration=fs.readFileSync('migrations/0094_shopping_overdue_seek.sql','utf8');
-const browserSyntax=spawnSync(process.execPath,['--check','public/assets/task-events.js'],{encoding:'utf8'});
-assert.equal(browserSyntax.status,0,browserSyntax.stderr||browserSyntax.stdout||'Task events browser syntax invalid');
+const browserSyntax=spawnSync(process.execPath,['--check','public/assets/overdue-shopping.js'],{encoding:'utf8'});
+assert.equal(browserSyntax.status,0,browserSyntax.stderr||browserSyntax.stdout||'Overdue Shopping browser syntax invalid');
 
 for(const marker of [
+  "import { taskVisibilitySql } from './task-visibility';",
   'export const OVERDUE_SHOPPING_PAGE_SIZE=50;',
   "s.task_id IS NULL AND s.status<>'completed'",
   "s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'",
@@ -25,6 +26,7 @@ for(const marker of [
   'renderOverdueShoppingRows(visibleExpiredShopping)',
   'class="btn secondary expired-shopping-more"',
   'expired-shopping-count',
+  '/assets/overdue-shopping.js?v=${APP_VERSION}',
 ])assert.ok(page.includes(marker),`overdue Shopping page marker missing: ${marker}`);
 for(const marker of [
   "document.querySelector('.expired-shopping-more')",
@@ -172,4 +174,4 @@ assert.ok(combined.every(row=>{
   return !task||task.visibility_scope!=='PRIVATE'||Number(task.private_owner_id)===memberId;
 }),'Shopping pages must retain PRIVATE parent filtering');
 
-console.log('overdue Shopping pagination contract: 3-branch semantic split, exact first-page equivalence, bounded keyset continuation, PRIVATE filtering, own-due seek indexes, and browser syntax ok');
+console.log('overdue Shopping pagination contract: 3-branch semantic split, exact first-page equivalence, bounded keyset continuation, PRIVATE filtering, own-due seek indexes, and dedicated browser syntax ok');
