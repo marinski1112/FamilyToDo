@@ -130,6 +130,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     itemNames,itemDueAt:date?`${date} 00:00:00`:null,
   });
   if(result.state==='CONFLICT')return json({ok:false,error:'同じ登録キーが別の内容に使われています。ページを再読み込みしてください。',code:'IDEMPOTENCY_KEY_CONFLICT'},409);
+  if(result.state==='GONE')return json({ok:false,error:'この登録キーで作成したタスクは既に削除されています。ページを再読み込みして新しく登録してください。',code:'IDEMPOTENCY_TARGET_DELETED'},409);
   if(result.state==='BUSY')return json({ok:false,error:'同じ登録処理が進行中です。少し待ってから再度お試しください。',code:'IDEMPOTENCY_IN_PROGRESS'},409);
   if(result.state==='LEASE_LOST')return json({ok:false,error:'登録処理の所有権が切り替わりました。保存結果を確認してから再度お試しください。',code:'IDEMPOTENCY_LEASE_LOST'},409);
   const id=result.taskId;
