@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 
 const page=fs.readFileSync('src/task-events-page.ts','utf8');
+const overdueShopping=fs.readFileSync('src/overdue-shopping.ts','utf8');
 const handlers=fs.readFileSync('src/task-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-events.js','utf8');
@@ -110,9 +111,8 @@ for(const marker of [
   "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)",
   "EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
   "date(s.due_date)=date(?)",
-  "const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));",
-  "COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL",
-  "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at)) < date(?)",
+  "expiredShoppingPageFor(ctx,date)",
+  "const expiredShoppingIds=new Set(expiredShopping.map(row=>String(row.id)));",
   "if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);",
   "const shoppingById=new Map<string,Row>();",
   "const effectiveShoppingDue=(item:Row)=>String(item.due_date||item.task_end_at||item.task_due_at||item.task_start_at||'').slice(0,10);",
@@ -132,7 +132,11 @@ for(const marker of [
   ".checklist-page .task-children{margin:8px 0 0 30px",
   "id=\"shopping-checklist\"",
   "<h2>🛒 買い物</h2>",
-  "<details class=\"card expired-shopping\"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>",
+  "const visibleExpiredShopping=data.expiredShopping.slice(0,OVERDUE_SHOPPING_PAGE_SIZE);",
+  "const expiredShoppingHasMore=data.expiredShopping.length>OVERDUE_SHOPPING_PAGE_SIZE;",
+  "renderOverdueShoppingRows(visibleExpiredShopping)",
+  "expired-shopping-count",
+  "class=\"btn secondary expired-shopping-more\"",
   "<details class=\"checklist-more\"><summary>表示ルール</summary>",
   "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
   "/app/shopping_new.php?date=",
@@ -145,6 +149,20 @@ for(const marker of [
   "<h1>✅ チェックリスト <span class=\"checklist-date\">${esc(compactDate)}</span></h1>",
   "return layout('チェックリスト',body,'/app/tasks.php');",
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
+
+for(const marker of [
+  "import { taskVisibilitySql } from './task-visibility';",
+  "export const OVERDUE_SHOPPING_PAGE_SIZE=50;",
+  "export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{",
+  "const parentVisible=taskVisibilitySql('t');",
+  "s.task_id IS NULL AND s.status<>'completed'",
+  "s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'",
+  "AND s.due_date IS NULL",
+  "COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL",
+  "date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)",
+  "LIMIT ${pageLimit}",
+  ".slice(0,pageLimit);",
+])if(!overdueShopping.includes(marker))throw new Error(`overdue Shopping helper marker missing: ${marker}`);
 
 for(const marker of [
   'CREATE INDEX IF NOT EXISTS idx_shopping_undated_status_completed_at',
@@ -227,4 +245,4 @@ for(const marker of [
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup4'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
-console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, off-day linked Belonging fallback without parent-title leakage, parent/child Task hierarchy with undated-child reload support, child-tail idempotent inline creation, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');
+console.log('task-events-page-boundary: retained Task/Event + grouped Shopping checklist, bounded overdue Shopping helper/paging, off-day linked Belonging fallback without parent-title leakage, parent/child Task hierarchy with undated-child reload support, child-tail idempotent inline creation, separate completion and navigation tap targets, populated-first stable priority, compact inline date header without counts, ordinary-task daily shopping window, recurrence-safe deadline fallback, compact overdue/completed content, privacy, selected-date overdue classification, canonical completion transport, guarded Shopping category observer writes, continuous undated Shopping category entry with memo/url and session draft recovery, expiry-filtered undated completed Shopping with JST midnight/01:00 grace and partial-index contract, and Shopping category UX contracts ok');

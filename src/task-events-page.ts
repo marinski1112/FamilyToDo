@@ -1,5 +1,6 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
+import { expiredShoppingPageFor, overdueShoppingCursorFromRow, OVERDUE_SHOPPING_PAGE_SIZE, renderOverdueShoppingRows, type OverdueShoppingCursor } from './overdue-shopping';
 import { recurringForDate } from './recurrence-projection';
 import { html, json, redirect } from './response';
 import { taskVisibilitySql } from './task-visibility';
@@ -107,14 +108,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
     recurringForDate(ctx,date),
     expiredTasksFor(ctx,date),
-    ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
-      FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
-      WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')}) AND s.status<>'completed'
-        AND COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL
-        AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at)) < date(?)
-      ORDER BY COALESCE(s.due_date,t.end_at,t.due_at,t.start_at),s.category,s.name,s.id`)
-      .bind(member.family_id,member.id,date).all<Row>(),
+    expiredShoppingPageFor(ctx,date),
   ]);
   const rootIds=[...new Set<number>(tasks.results.filter(row=>Number(row.id||0)>0&&!Number(row.parent_task_id||0)).map(row=>Number(row.id)))];
   const undatedChildren=await undatedChildrenFor(ctx,rootIds);
@@ -159,11 +153,11 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
         )
       ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`)
     .bind(member.family_id,member.id,date,date,date,date).all<Row>();
-  const expiredShoppingIds=new Set(expiredShopping.results.map(row=>String(row.id)));
+  const expiredShoppingIds=new Set(expiredShopping.map(row=>String(row.id)));
   const shoppingById=new Map<string,Row>();
   for(const row of baseShopping.results)if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);
   const shopping=[...shoppingById.values()].sort(compareShoppingRows);
-  return {tasks:taskRows,items:items.results,shopping,expiredTasks,expiredShopping:expiredShopping.results};
+  return {tasks:taskRows,items:items.results,shopping,expiredTasks,expiredShopping};
 }
 
 const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('');
@@ -274,7 +268,11 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
   const expiredTaskHasMore=data.expiredTasks.length>OVERDUE_TASK_PAGE_SIZE;
   const lastExpiredTask=visibleExpiredTasks.at(-1);
   const expiredHtml=visibleExpiredTasks.length?`<details class="card expired-tasks" id="expired-tasks"><summary>⚠️ 期限切れタスク <span class="expired-task-count">${visibleExpiredTasks.length}件表示${expiredTaskHasMore?'（続きあり）':''}</span></summary><div class="expired-list">${renderExpiredTaskRows(visibleExpiredTasks)}</div>${expiredTaskHasMore&&lastExpiredTask?`<button type="button" class="btn secondary expired-task-more" data-cursor-due="${esc(lastExpiredTask.effective_due||lastExpiredTask.end_at||lastExpiredTask.due_at||lastExpiredTask.start_at)}" data-cursor-id="${esc(lastExpiredTask.id)}">続きを表示</button>`:''}</details>`:'';
-  const expiredShoppingHtml=data.expiredShopping.length?`<details class="card expired-shopping"><summary>⚠️ 期限切れ買い物 ${data.expiredShopping.length}件</summary>${shoppingRows(data.expiredShopping)}</details>`:'';
+  const visibleExpiredShopping=data.expiredShopping.slice(0,OVERDUE_SHOPPING_PAGE_SIZE);
+  const expiredShoppingHasMore=data.expiredShopping.length>OVERDUE_SHOPPING_PAGE_SIZE;
+  const lastExpiredShopping=visibleExpiredShopping.at(-1);
+  const lastExpiredShoppingCursor=lastExpiredShopping?overdueShoppingCursorFromRow(lastExpiredShopping):null;
+  const expiredShoppingHtml=visibleExpiredShopping.length?`<details class="card expired-shopping"><summary>⚠️ 期限切れ買い物 <span class="expired-shopping-count">${visibleExpiredShopping.length}件表示${expiredShoppingHasMore?'（続きあり）':''}</span></summary><div class="expired-shopping-list">${renderOverdueShoppingRows(visibleExpiredShopping)}</div>${expiredShoppingHasMore&&lastExpiredShoppingCursor?`<button type="button" class="btn secondary expired-shopping-more" data-cursor-due="${esc(lastExpiredShoppingCursor.due)}" data-cursor-category-present="${lastExpiredShoppingCursor.categoryPresent}" data-cursor-category="${esc(lastExpiredShoppingCursor.category)}" data-cursor-name="${esc(lastExpiredShoppingCursor.name)}" data-cursor-id="${lastExpiredShoppingCursor.id}">続きを表示</button>`:''}</details>`:'';
   const cursor=new Date(`${date}T12:00:00Z`);cursor.setUTCDate(cursor.getUTCDate()-1);const prev=cursor.toISOString().slice(0,10);cursor.setUTCDate(cursor.getUTCDate()+2);const next=cursor.toISOString().slice(0,10);
   const [year,month,day]=date.split('-');
   const compactDate=year&&month&&day?`${year}.${Number(month)}.${Number(day)}`:date;
@@ -317,7 +315,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 .checklist-page .checklist-more .meta{font-size:13px;line-height:1.5;margin:8px 0 0}
 @media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}.checklist-page .task-children{margin-left:20px;padding-left:8px}}
 </style>`;
-  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf,date}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const body=`${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><a class="fab calendar-fab" href="/task/new.php?date=${encodeURIComponent(date)}&return=tasks" aria-label="AIざっくり入力で追加" title="AIざっくり入力で追加">＋</a><script type="application/json" id="dailyPayload">${JSON.stringify({csrf,date}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/overdue-shopping.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
 
@@ -336,6 +334,20 @@ export async function taskEvents(_request:Request,ctx:AppContext,targetDate:stri
     const hasMore=pageRows.length>OVERDUE_TASK_PAGE_SIZE;
     const last=visible.at(-1);
     return json({ok:true,html:renderExpiredTaskRows(visible),hasMore,cursor:last?{due:String(last.effective_due||last.end_at||last.due_at||last.start_at||''),id:Number(last.id||0)}:null});
+  }
+  if(requestUrl.searchParams.get('overdue')==='shopping'){
+    const cursorDue=String(requestUrl.searchParams.get('cursor_due')||'').trim();
+    const cursorCategoryPresent=Number(requestUrl.searchParams.get('cursor_category_present'));
+    const cursorCategory=String(requestUrl.searchParams.get('cursor_category')||'');
+    const cursorName=String(requestUrl.searchParams.get('cursor_name')||'');
+    const cursorId=Number(requestUrl.searchParams.get('cursor_id')||0);
+    if(!cursorDue||cursorDue.length>64||(cursorCategoryPresent!==0&&cursorCategoryPresent!==1)||cursorCategory.length>255||!cursorName||cursorName.length>2048||!Number.isSafeInteger(cursorId)||cursorId<=0)return json({ok:false,error:'期限切れ買い物の続きを取得できませんでした。'},400);
+    const cursor:OverdueShoppingCursor={due:cursorDue,categoryPresent:cursorCategoryPresent as 0|1,category:cursorCategory,name:cursorName,id:cursorId};
+    const pageRows=await expiredShoppingPageFor(ctx,safeDate,cursor);
+    const visible=pageRows.slice(0,OVERDUE_SHOPPING_PAGE_SIZE);
+    const hasMore=pageRows.length>OVERDUE_SHOPPING_PAGE_SIZE;
+    const last=visible.at(-1);
+    return json({ok:true,html:renderOverdueShoppingRows(visible),hasMore,cursor:last?overdueShoppingCursorFromRow(last):null});
   }
   const [data,unorganized]=await Promise.all([makeTaskEventsData(ctx,safeDate),unorganizedTasksFor(ctx)]);
   return html(renderTaskEventsPage(ctx,safeDate,data,unorganized));
