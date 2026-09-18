@@ -105,3 +105,8 @@ console.log('checklist hierarchy follow-up contract ok');
 requireText(addFooter,"if(klass==='task-section')",'task-specific top-right add ownership');
 requireText(addFooter,"button.className='checklist-compact-action task-add-top'",'task add toolbar button');
 requireText(addFooter,"form.hidden=true",'deferred task quick-entry form');
+
+requireText(js,"if(!count)g.hidden=true",'empty unclassified hidden while direct add route remains');
+requireText(js,"if(count&&name!==U)active.add(key(name))",'unclassified excluded from empty-category semantics');
+requireText(addFooter,"button.textContent='＋ タスク'",'compact top-right task label');
+requireText(js,"section.append(add)",'direct unclassified add route preserved');
