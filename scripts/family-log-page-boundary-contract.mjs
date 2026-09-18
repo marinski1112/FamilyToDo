@@ -25,6 +25,12 @@ for(const marker of [
   "permission_key='MANAGE_QUICK_CHORES'",
   'ensureFamilyLogMemberSubjects',
   'family_log_milk_amount_presets',
+  "const babySubjects=subjects.results.filter(x=>familyLogSubjectKind(x.subject_kind)==='BABY'),babySubjectIds=babySubjects.map(subject=>Number(subject.id)).filter(id=>id>0);",
+  "const loadQuickActions=()=>ctx.env.DB.prepare(`SELECT * FROM family_log_quick_actions WHERE family_id=? AND (active=1 OR subject_id IN (${babySubjectIds.map(()=>'?').join(',')||'NULL'})) ORDER BY subject_id,sort_order,id`)",
+  'const subjectsWithQuickActions=new Set(quickActionRows.results.map(row=>Number(row.subject_id)).filter(id=>id>0))',
+  'if(!subjectsWithQuickActions.has(subjectId))',
+  'if(insertedQuickActionDefaults)quickActionRows=await loadQuickActions();',
+  'const quickActions={results:quickActionRows.results.filter(row=>Number(row.active)===1)};',
   'ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC,id DESC)',
   'dashboardDays>1096',
   'ORDER BY l.occurred_at DESC,l.id DESC LIMIT 51 OFFSET ?',
@@ -36,6 +42,8 @@ for(const marker of [
   'familyLogSettingsModal',
   'family-ai-query',
 ])if(!page.includes(marker))throw new Error(`Family Log retained page marker missing: ${marker}`);
+if(page.includes("SELECT COUNT(*) c FROM family_log_quick_actions WHERE family_id=? AND subject_id=?"))throw new Error('Family Log page must not issue one quick-action COUNT query per BABY subject');
+if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? AND \(active=1 OR subject_id IN/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable active-or-BABY read query site');
 for(const marker of [
   "taskVisibilitySql('t')",
   "INSERT OR IGNORE INTO recurrence_occurrences",
@@ -160,6 +168,6 @@ if(familyLogLayout.includes('grid-template-columns:26px 96px 26px'))throw new Er
 if(/previous\.href\s*=|next\.href\s*=|previous\.setAttribute\(['"]href|next\.setAttribute\(['"]href/.test(familyLogCompactUi))throw new Error('Family Log compact enhancer must retain server-rendered previous/next navigation URLs');
 if(/通常タスク/.test(familyLogManagementUi))throw new Error('Family Log management must not advertise the retired normal-task model');
 if(/fetch\(|XMLHttpRequest|DELETE FROM|UPDATE family_logs/.test(familyLogManagementUi))throw new Error('Family Log management navigation must reuse retained tenant-scoped page/API behavior instead of mutating data directly');
-console.log('family-log-page-boundary: retained page GET, guarded page POST, recurrence projection, compact one-row controls, visibly rendered tappable native date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
+console.log('family-log-page-boundary: retained page GET, guarded page POST, bounded family-scoped quick-action initialization read, recurrence projection, compact one-row controls, visibly rendered tappable native date navigation, compact quick cards, row-tap edit, subject-collision-safe overview quick actions and all-Quick-Tasks management ok');
 
 for(const marker of ['.family-log-page .family-log-quick','.family-log-page .family-log-bars','flex:0 0 38px','max-width:100%','flex-direction:column'])if(!familyLogLayout.includes(marker))throw new Error(`mobile daily geometry missing: ${marker}`);
