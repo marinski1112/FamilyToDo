@@ -24,19 +24,30 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
   const url=new URL(request.url),after=Number(url.searchParams.get('after')||0),releasedAfter=String(url.searchParams.get('released_after')||'');
   if(!Number.isSafeInteger(after)||after<0)return reply({ok:false,error:'INVALID_CURSOR'},400);
   if(releasedAfter&&!validJst(releasedAfter))return reply({ok:false,error:'INVALID_CURSOR'},400);
-  const now=nowJst(),releaseFloor=releasedAfter||now;
-  const rows=await ctx.env.DB.prepare(`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name
+  const now=nowJst();
+  const newStatement=ctx.env.DB.prepare(`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name
     FROM messages msg JOIN members s ON s.id=msg.sender_id AND s.family_id=msg.family_id
-    WHERE msg.family_id=? AND (
-      (msg.id>? AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?))
-      OR (msg.sender_id<>? AND msg.reminder_at IS NOT NULL AND msg.reminder_at>? AND msg.reminder_at<=?)
-    )
+    WHERE msg.family_id=? AND msg.id>? AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?)
     ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}`)
-    .bind(m.family_id,after,now,m.id,m.id,releaseFloor,now).all<SyncRow>();
+    .bind(m.family_id,after,now,m.id);
+  const releasedStatement=releasedAfter&&releasedAfter<now
+    ?ctx.env.DB.prepare(`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name
+      FROM messages msg JOIN members s ON s.id=msg.sender_id AND s.family_id=msg.family_id
+      WHERE msg.family_id=? AND msg.sender_id<>? AND msg.reminder_at IS NOT NULL
+        AND msg.reminder_at>? AND msg.reminder_at<=?
+      ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}`)
+      .bind(m.family_id,m.id,releasedAfter,now)
+    :null;
+  const statements=[newStatement];
+  if(releasedStatement)statements.push(releasedStatement);
+  const results=await ctx.env.DB.batch<SyncRow>(statements);
+  const byId=new Map<number,SyncRow>();
+  for(const row of results.flatMap(result=>result.results))byId.set(Number(row.id),row);
+  const rows=[...byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,PAGE_SIZE);
   return reply({
     ok:true,
     serverNow:now,
-    messages:rows.results.map(row=>({
+    messages:rows.map(row=>({
       id:Number(row.id),
       senderId:Number(row.sender_id),
       senderName:String(row.sender_name||''),
