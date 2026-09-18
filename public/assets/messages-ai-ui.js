@@ -39,6 +39,26 @@
   const taskForm=document.getElementById('messageTaskForm'),modal=document.getElementById('messageTaskModal');
   for(const form of document.querySelectorAll('#messageTaskForm,#messageShoppingForm'))labelControls(form);
   for(const button of document.querySelectorAll('#messageTaskClose,#messageShoppingClose,#messageEditClose'))button.setAttribute('aria-label','閉じる');
+  const enhanceSecondaryModal=(modalId,dialogSelector,openerSelector,closeId,label)=>{
+    const secondaryModal=document.getElementById(modalId),dialog=secondaryModal?.querySelector(dialogSelector),close=document.getElementById(closeId);
+    if(!secondaryModal||!dialog||!close)return;
+    dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label',label);
+    let returnFocus=null,wasOpen=secondaryModal.classList.contains('open');
+    document.addEventListener('click',event=>{const opener=event.target?.closest?.(openerSelector);if(opener)returnFocus=opener;},true);
+    new MutationObserver(()=>{
+      const open=secondaryModal.classList.contains('open');
+      if(wasOpen&&!open){const target=returnFocus;returnFocus=null;requestAnimationFrame(()=>{if(target?.isConnected)target.focus();});}
+      wasOpen=open;
+    }).observe(secondaryModal,{attributes:true,attributeFilter:['class']});
+    secondaryModal.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){event.preventDefault();close.click();return;}
+      if(event.key!=='Tab')return;
+      const controls=[...dialog.querySelectorAll('button,input,select,textarea,summary,a[href]')].filter(el=>!el.disabled&&el.getClientRects().length),first=controls[0],last=controls.at(-1);
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+    });
+  };
+  enhanceSecondaryModal('messageShoppingModal','.message-shopping-dialog','.convert-shopping','messageShoppingClose','伝言を買い物に追加');
+  enhanceSecondaryModal('messageEditModal','.message-edit-dialog','.edit-message','messageEditClose','伝言を編集');
   if(!taskForm||!modal)return;
   modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','伝言からタスクに追加');
   modal.querySelector('h2').textContent='伝言から追加';
