@@ -177,3 +177,9 @@
 .checklist-page .shopping-category-group[data-category="未分類"],.checklist-page .belongings-category-group[data-category="未分類"]{order:70!important}
 .checklist-page .belongings-category-body,.checklist-page .belongings-category-row,.checklist-page .belongings-composer-main{width:100%!important;text-align:left!important;justify-content:flex-start!important}
 .checklist-page .belongings-composer-name{text-align:left!important}
+
+/* Screenshot follow-up: one toolbar, rightmost Task add */
+.checklist-page .task-section>.section-head{flex-wrap:nowrap!important}
+.checklist-page .task-section>.section-head>h2{flex:1 1 auto!important;min-width:0!important}
+.checklist-page .task-section>.section-head .checklist-section-tools{flex:0 0 auto!important;margin-left:auto!important;gap:2px!important}
+.checklist-page .task-section .task-add-top{order:99!important;border:0!important;background:transparent!important;border-radius:0!important;padding:0 4px!important;min-width:auto!important;height:42px!important;font-size:15px!important}
