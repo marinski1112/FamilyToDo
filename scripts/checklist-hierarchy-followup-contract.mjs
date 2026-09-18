@@ -78,6 +78,7 @@ requireText(css,'.checklist-status-tabs','compact status tab styling');
 requireText(css,'/* Dense checklist alignment */','dense checklist alignment');
 requireText(css,'.task-child-composer-deferred','deferred child composer styling');
 requireText(css,'/* iPhone screenshot follow-up 2 */','second iPhone screenshot alignment');
+requireText(css,'/* Final compact polish */','final compact checklist polish');
 requireText(css,'/* Final reference alignment */','final reference alignment');
 requireText(css,'/* iPhone reference follow-up */','iPhone reference alignment');
 requireText(css,'body:has(.checklist-page) .calendar-fab','robust checklist FAB suppression');
