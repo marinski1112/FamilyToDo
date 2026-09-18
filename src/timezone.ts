@@ -21,7 +21,7 @@ export function addCalendarDays(value:string,days:number){
   const [y,mo,d]=value.split('-').map(Number),date=new Date(Date.UTC(y,mo-1,d)+Math.trunc(days)*86400000);
   return date.toISOString().slice(0,10);
 }
-export function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){return addCalendarDays(familyDate(timeZone),days);}
+export function asDateOffset(days:number,timeZone=DEFAULT_FAMILY_TIMEZONE){const base=familyDate(timeZone),d=new Date(`${base}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 /** Infrastructure timestamps are UTC-naive SQL values, not family wall-clock values. */
 export const utcNow=(date=new Date())=>date.toISOString().slice(0,19).replace('T',' ');
 
