@@ -35,7 +35,7 @@ const install=()=>{
       section.querySelector(':scope > .section-add-disclosure')?.remove();
       let button=section.querySelector(':scope > .section-head .task-add-top');
       if(!(button instanceof HTMLButtonElement)){
-        button=document.createElement('button');button.type='button';button.className='checklist-compact-action task-add-top';button.textContent='＋ タスクを追加';
+        button=document.createElement('button');button.type='button';button.className='checklist-compact-action task-add-top';button.textContent='＋ タスク';
         button.addEventListener('click',()=>{form.hidden=false;form.scrollIntoView({behavior:'smooth',block:'nearest'});const input=form.querySelector('input,textarea');if(input instanceof HTMLElement)input.focus({preventScroll:false});});
       }
       let tools=section.querySelector(':scope > .section-head .checklist-section-tools');
