@@ -94,7 +94,7 @@ for(const marker of [
   "class=\"task-child-composer\" data-parent-task-id=\"${esc(task.id)}\"",
   "data-parent-private=\"${String(task.visibility_scope)==='PRIVATE'?'1':'0'}\"",
   "const childSection=childRows||composer?",
-  "JSON.stringify({csrf,date})",
+  "JSON.stringify({csrf,date,appVersion:APP_VERSION})",
   "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
   "s.task_id IS NULL",
   "s.due_date IS NULL",

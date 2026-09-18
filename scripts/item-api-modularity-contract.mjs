@@ -104,12 +104,12 @@ for(const sentinel of [
 ])if(!itemEdit.includes(sentinel))throw new Error(`item edit category/url marker missing: ${sentinel}`);
 
 for(const sentinel of [
-  '/assets/checklist-belongings-categories.css?v=belongings-category1',
-  '/assets/checklist-belongings-categories.js?v=belongings-category1',
+  '`/assets/checklist-belongings-categories.css?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}`',
+  '`/assets/checklist-belongings-categories.js?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}`',
   "link.id='belongingsCategoryChecklistStyle'",
   "script.id='belongingsCategoryChecklistScript'",
-  '/assets/checklist-belongings-reusable-sets.css?v=belongings-set1',
-  '/assets/checklist-belongings-reusable-sets.js?v=belongings-set1',
+  '`/assets/checklist-belongings-reusable-sets.css?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}`',
+  '`/assets/checklist-belongings-reusable-sets.js?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}`',
   "link.id='belongingsReusableSetStyle'",
   "script.id='belongingsReusableSetScript'",
 ])if(!taskEvents.includes(sentinel))throw new Error(`belongings checklist asset wiring missing: ${sentinel}`);

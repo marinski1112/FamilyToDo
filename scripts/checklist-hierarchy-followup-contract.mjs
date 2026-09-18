@@ -8,6 +8,8 @@ const shell=readFileSync('src/app-shell.ts','utf8');
 const ui=readFileSync('public/assets/checklist-hierarchy-followup.js','utf8');
 const css=readFileSync('public/assets/checklist-hierarchy-followup.css','utf8');
 const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation.sql','utf8');
+const taskEvents=readFileSync('public/assets/task-events.js','utf8');
+const taskPage=readFileSync('src/task-events-page.ts','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -31,8 +33,9 @@ for(const [needle,label] of [
   ['UPDATE item_category_catalog SET enabled=0','item catalog disable'],
   ['await ctx.env.DB.batch(statements);','category mutation batch'],
 ])requireText(categoryMutation,needle,label);
-forbidText(categoryMutation,'DELETE FROM shopping_items','shopping item deletion');
-forbidText(categoryMutation,'DELETE FROM items','belongings item deletion');
+requireText(categoryMutation,"itemPolicy!=='unclassified'&&itemPolicy!=='delete'",'explicit category item policy');
+requireText(categoryMutation,'DELETE FROM shopping_items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed shopping item deletion');
+requireText(categoryMutation,'DELETE FROM items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed belongings item deletion');
 requireText(categoryApi,'canManageCategories','category management capability');
 requireText(categoryApi,'SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1','enabled category catalog read');
 
@@ -44,6 +47,15 @@ for(const [needle,label] of [
   ['未完了の子タスクを親タスクとして残す','promote children choice'],
   ["'/api/task-parent-completion'",'parent completion browser boundary'],
   ["action:'delete_many'",'category bulk delete browser action'],
+  ["item_policy:policy",'category delete item policy'],
+  ['中の${noun}を未分類に移動して削除','move-to-unclassified choice'],
+  ['カテゴリと中の${noun}をすべて削除','delete-category-and-items choice'],
+  ['checklist-inline-search','compact checklist search'],
+  ['zero-unclassified-add','unclassified add route'],
+  ['checklist-status-tabs','pending/completed tab control'],
+  ["data-status=\"pending\"",'pending tab'],
+  ["data-status=\"completed\"",'completed tab'],
+  ['checklist-status-hidden','status row filtering'],
   ['zero-category-cluster','zero category grouping'],
   ['task-child-count-toggle','parent child count toggle'],
   ['input[name="assignees"]','assignee UI suppression'],
@@ -52,7 +64,12 @@ for(const [needle,label] of [
 forbidText(ui,'new MutationObserver','additional UI mutation observer');
 requireText(css,'.shopping-category-name,.belongings-category-name{font-weight:800!important}','bold category headings');
 requireText(css,'border-radius:5px','square checklist control styling');
+requireText(css,'.checklist-status-tabs','compact status tab styling');
 requireText(shell,'checklist-hierarchy-followup.css','follow-up stylesheet load');
 requireText(shell,'checklist-hierarchy-followup.js','follow-up browser script load');
+requireText(taskPage,'appVersion:APP_VERSION','checklist release revision payload');
+requireText(taskEvents,"payload.appVersion||'checklist'",'belongings child release revision');
+forbidText(taskEvents,'belongings-category1','fixed belongings category revision');
+forbidText(taskEvents,'belongings-set1','fixed belongings set revision');
 
 console.log('checklist hierarchy follow-up contract ok');
