@@ -39,6 +39,11 @@ for(const marker of [
   '.bind(m.family_id,...activeSubjectIds).all<Row>():{results:[] as Row[]}',
   'ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC,id DESC)',
   'dashboardDays>1096',
+  "'l.occurred_at>=?','l.occurred_at<=?'",
+  "scopeParams:any[]=[m.family_id,`${dashboardStart} 00:00:00`,`${dashboardEnd} 23:59:59`]",
+  "params:any[]=[m.family_id,`${selectedDate} 00:00:00`,`${selectedDate} 23:59:59`]",
+  "WITH periods(period,start_at) AS (SELECT '7d',date('now','+9 hours','-6 days')||' 00:00:00' UNION ALL SELECT 'month',date('now','+9 hours','start of month')||' 00:00:00')",
+  "l.occurred_at>=p.start_at AND l.occurred_at<(date('now','+9 hours','+1 day')||' 00:00:00')",
   'ORDER BY l.occurred_at DESC,l.id DESC LIMIT 51 OFFSET ?',
   "visibility_scope='FAMILY'",
   'recurringForDate(ctx,selectedDate)',
@@ -50,6 +55,7 @@ for(const marker of [
 ])if(!page.includes(marker))throw new Error(`Family Log retained page marker missing: ${marker}`);
 if(page.includes("const delegated=await ctx.env.DB.prepare(\"SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES'\")"))throw new Error('Family Log admin path must not unconditionally read delegated quick-chore permission');
 if(page.includes("FROM family_logs WHERE family_id=? AND log_type='MILK' AND deleted_at IS NULL AND subject_id IS NOT NULL"))throw new Error('Family Log latest MILK read must not scan all family subjects when only active subjects are selectable');
+for(const stale of ["'date(l.occurred_at)>=date(?)'","'date(l.occurred_at)<=date(?)'","'date(l.occurred_at)=date(?)'","date(l.occurred_at)>=p.start_date"])if(page.includes(stale))throw new Error(`Family Log occurred_at predicate must remain seekable: ${stale}`);
 if(page.includes("SELECT COUNT(*) c FROM family_log_quick_actions WHERE family_id=? AND subject_id=?"))throw new Error('Family Log page must not issue one quick-action COUNT query per BABY subject');
 if((page.match(/SELECT \* FROM family_log_quick_actions WHERE family_id=\? AND \(active=1 OR subject_id IN/g)||[]).length!==1)throw new Error('Family Log quick actions must have one reusable active-or-BABY read query site');
 for(const marker of [
