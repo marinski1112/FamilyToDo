@@ -162,3 +162,18 @@
 .checklist-page .belongings-category-body,.checklist-page .belongings-category-row,.checklist-page .belongings-category-row .checklist-row-line,.checklist-page .item-check-row{justify-content:flex-start!important;text-align:left!important}
 .checklist-page .belongings-category-row .checklist-row-line>label,.checklist-page .item-check-row{margin-left:0!important;margin-right:auto!important}
 .checklist-page .zero-category-name{display:block!important;text-align:left!important}
+
+/* Unified checklist interaction contract */
+.checklist-page .section-head{position:relative!important}
+.checklist-page .task-section>.section-head .checklist-section-tools{margin-left:auto!important}
+.checklist-page .task-section>.section-head .task-add-top{display:inline-flex!important;position:static!important;order:10!important}
+.checklist-page .task-section>.section-quick-entry{display:none!important}
+.checklist-page .shopping-category-name,.checklist-page .belongings-category-name{flex:1!important;min-width:0!important;text-align:left!important;cursor:text!important}
+.checklist-page .shopping-category-title,.checklist-page .belongings-category-head{display:flex!important;align-items:center!important;justify-content:flex-start!important}
+.checklist-page .shopping-category-toggle,.checklist-page .belongings-category-toggle{flex:0 0 28px!important;width:28px!important;min-width:28px!important;height:40px!important;border:0!important;background:transparent!important;padding:0!important;margin-left:0!important;font-size:22px!important;color:#8e8e93!important}
+.checklist-page .checklist-category-count-toggle{flex:0 0 auto!important;margin-left:auto!important;margin-right:0!important}
+.checklist-page .zero-unclassified-add{order:90!important;border-top:1px solid #eef1f4!important}
+.checklist-page .zero-category-cluster{order:80!important}
+.checklist-page .shopping-category-group[data-category="未分類"],.checklist-page .belongings-category-group[data-category="未分類"]{order:70!important}
+.checklist-page .belongings-category-body,.checklist-page .belongings-category-row,.checklist-page .belongings-composer-main{width:100%!important;text-align:left!important;justify-content:flex-start!important}
+.checklist-page .belongings-composer-name{text-align:left!important}
