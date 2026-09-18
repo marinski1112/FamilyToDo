@@ -11,6 +11,7 @@ const hierarchyMigration=readFileSync('migrations/0056_task_hierarchy_foundation
 const taskEvents=readFileSync('public/assets/task-events.js','utf8');
 const taskPage=readFileSync('src/task-events-page.ts','utf8');
 const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup.js','utf8');
+const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -100,3 +101,7 @@ forbidText(taskEvents,'belongings-category1','fixed belongings category revision
 forbidText(taskEvents,'belongings-set1','fixed belongings set revision');
 
 console.log('checklist hierarchy follow-up contract ok');
+
+requireText(addFooter,"if(klass==='task-section')",'task-specific top-right add ownership');
+requireText(addFooter,"button.className='checklist-compact-action task-add-top'",'task add toolbar button');
+requireText(addFooter,"form.hidden=true",'deferred task quick-entry form');
