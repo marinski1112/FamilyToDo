@@ -23,7 +23,15 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
   const member=ctx.member;
   if(!member)return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
 
-  if(request.method==='GET')return json({ok:true,order:await readOrder(ctx,member.family_id)});
+  if(request.method==='GET'){
+    const [order,catalogResult]=await Promise.all([
+      readOrder(ctx,member.family_id),
+      ctx.env.DB.prepare('SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(member.family_id).all<{name?:string}>(),
+    ]);
+    const categories=(catalogResult.results||[]).map(row=>String(row.name||'').trim()).filter(Boolean);
+    const role=String(member.role||'').toUpperCase();
+    return json({ok:true,order,categories,canManageCategories:role==='OWNER'||role==='ADMIN'});
+  }
   if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);
 
   let body:Record<string,unknown>;
