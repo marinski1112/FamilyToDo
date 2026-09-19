@@ -54,7 +54,8 @@ export async function dispatchContextFallbackRoute(request:Request,context:any,e
   if(url.pathname==='/task/delete.php') return await taskDelete(request,context);
   if(url.pathname==='/task/convert_occurrence.php') return await convertOccurrence(request,context);
   if(url.pathname==='/task/new.php') {
-    const initialType=url.searchParams.get('event')==='1'?'event':'task';
+    const requestedType=String(url.searchParams.get('type')||'');
+    const initialType=requestedType==='event'||requestedType==='shopping'||requestedType==='item'?requestedType:(url.searchParams.get('event')==='1'?'event':'task');
     return await taskEntryPage(
       context,
       url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),

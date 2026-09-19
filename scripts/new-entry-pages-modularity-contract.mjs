@@ -38,7 +38,8 @@ if(fs.existsSync(obsoleteTaskNew)) throw new Error('obsolete task-new browser co
 if(fs.existsSync('src/client/'+'task-new.ts')) throw new Error('nonexistent legacy task-new source must not be recreated');
 for(const marker of [
   "if(url.pathname==='/task/new.php') {",
-  "const initialType=url.searchParams.get('event')==='1'?'event':'task';",
+  "const requestedType=String(url.searchParams.get('type')||'');",
+  "const initialType=requestedType==='event'||requestedType==='shopping'||requestedType==='item'?requestedType:(url.searchParams.get('event')==='1'?'event':'task');",
   'return await taskEntryPage(',
   "if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));",
 ]) if(!exceptionRoutes.includes(marker)) throw new Error(`new page route wiring changed: ${marker}`);
@@ -66,3 +67,5 @@ if(roughUi.includes("fetch('/api/task-rough-input'")) throw new Error('visible r
 console.log('new entry pages modularity contract ok');
 await import('./task-rough-input-shopping-manual-contract.mjs');
 await import('./task-rough-input-item-manual-contract.mjs');
+
+if(!taskEntryPage.includes("type EntryType='task'|'event'|'shopping'|'item';")) throw new Error('task entry must accept the selected checklist AI input type');
