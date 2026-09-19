@@ -153,7 +153,8 @@ const setup=async()=>{
  const shopping=document.querySelector('.shopping-checklist-section'),items=document.querySelector('.item-section');
  let sc={categories:[],canManageCategories:false},ic={categories:[]};try{sc=await (await fetch('/api/shopping-categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}try{ic=await (await fetch('/api/item?view=categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}
  if(shopping instanceof HTMLElement){await waitFor(()=>shopping.querySelector('.shopping-category-group,.shopping-category-add'));installStatusTabs(shopping,'shopping');await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));}
- if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}\n installUnifiedChecklist();
+ if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}
+ installUnifiedChecklist();
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>void setup(),0)},{once:true});else setTimeout(()=>void setup(),0);
 })();
