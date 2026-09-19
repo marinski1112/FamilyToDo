@@ -35,10 +35,11 @@ for(const retiredMarker of [
 ]) if(root.includes(retiredMarker)) throw new Error(`retired standalone Shopping renderer must not return: ${retiredMarker}`);
 
 for(const marker of [
-  "visibility_scope='PRIVATE' AND private_owner_id=?",
   'archiveShoppingCompletionStatements',
-  'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN',
+  "taskVisibilitySql('t')",
+  'const taskId=Number(item.task_id)||null;',
 ]) if(!editPage.includes(marker)) throw new Error(`shopping edit lost ${marker}`);
+for(const forbidden of ['name="assignees"','name="task_id"','shoppingTaskSearch','shopping-task-link.js'])if(editPage.includes(forbidden))throw new Error(`shopping edit must not expose goods linkage: ${forbidden}`);
 for(const marker of [
   "const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;",
   "if(showAllLabel)showAllLabel.textContent=query?`検索を解除すると候補表示を切り替えられます`:`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;",
