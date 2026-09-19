@@ -4,7 +4,7 @@ import { CALENDAR_COLOR_OPTIONS } from './calendar-colors';
 import { resolveShoppingCategoryOptions } from './shopping-categories';
 import { APP_VERSION } from './version';
 
-type EntryType='task'|'event';
+type EntryType='task'|'event'|'shopping'|'item';
 
 const esc=(value:unknown)=>String(value??'')
   .replaceAll('&','&amp;')
