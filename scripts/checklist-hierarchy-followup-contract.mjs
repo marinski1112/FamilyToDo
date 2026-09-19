@@ -161,3 +161,9 @@ requireText(js,"reveal.textContent='＋ 子タスクを追加'", 'child task dir
 requireText(js,"'＋ 未分類に買い物を追加'", 'unclassified shopping direct-add route preserved');
 requireText(js,"'＋ 未分類に持ち物を追加'", 'unclassified belongings direct-add route preserved');
 requireText(css,'.unified-items-source{display:none!important}','single shared goods surface');
+
+/* Active input type owns compact controls and AI destination. */
+requireText(js,"ai.textContent='＋AI入力'",'compact AI input label');
+requireText(js,"u.searchParams.set('type',kind)",'AI/add route follows selected kind');
+requireText(css,'.unified-goods-section [hidden]{display:none!important}','inactive Shopping/Belongings controls stay hidden');
+requireText(css,'grid-template-columns:auto minmax(0,1fr)!important','two-row compact header does not overflow');
