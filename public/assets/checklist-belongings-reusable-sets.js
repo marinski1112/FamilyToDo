@@ -108,7 +108,7 @@ const boot=()=>{
     open.addEventListener('click',()=>{overlay.hidden=false;hideEditor();refreshSourceOptions();void load()});overlay.querySelector('.belongings-set-close')?.addEventListener('click',close);overlay.querySelector('.belongings-set-backdrop')?.addEventListener('click',close);
     sourceSelect?.addEventListener('change',refreshSourceOptions);saveButton?.addEventListener('click',()=>void saveCurrent(saveButton));document.addEventListener('keydown',e=>{if(e.key==='Escape'&&overlay instanceof HTMLElement&&!overlay.hidden)close()});
   };
-  let tries=0;const attach=()=>{const toolbar=section.querySelector('.belongings-category-toolbar');if(toolbar instanceof HTMLElement){build(toolbar);return}if(++tries<100)setTimeout(attach,50)};attach();
+  let tries=0;const attach=()=>{const unifiedStatus=document.querySelector('.unified-goods-section>.checklist-status-tabs'),toolbar=section.querySelector('.belongings-category-toolbar');if(unifiedStatus instanceof HTMLElement){build(unifiedStatus);return}if(toolbar instanceof HTMLElement&&tries>=100){build(toolbar);return}if(++tries<200)setTimeout(attach,50)};attach();document.addEventListener('familytodo:checklist-unified-ready',attach,{once:true});
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
