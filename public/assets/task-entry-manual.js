@@ -20,7 +20,7 @@ const init=()=>{
     const isPrivate=document.getElementById('isPrivate');
     const assignees=[...form.querySelectorAll('[name=assignees]')];
     const requestedInitial=String(payload.initialType||'task');
-    const initialRadio=form.querySelector(`[name=rough_primary_type][value="${requestedInitial==='event'?'event':'task'}"]`);
+    const initialRadio=form.querySelector(`[name=rough_primary_type][value="${['task','event','shopping','item'].includes(requestedInitial)?requestedInitial:'task'}"]`);
     if(initialRadio&&!initialRadio.checked){initialRadio.checked=true;initialRadio.dispatchEvent(new Event('change',{bubbles:true}));}
     let taskCreateKey=crypto.randomUUID();
 
