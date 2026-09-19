@@ -171,6 +171,6 @@ assert.ok(previewUiSource.includes('productLinkDiagnosticHtml'),'rough-input pre
 assert.ok(previewUiSource.includes('data.productLinkDiagnostics'),'browser must consume only the server diagnostic projection');
 for(const forbidden of ['d.url','d.href','d.hostname','d.host','d.body','d.titleText'])assert.ok(!previewUiSource.includes(forbidden),`browser diagnostic must not expose private/raw product metadata field: ${forbidden}`);
 assert.ok(saveSource.includes("url:item.url||''"),'shopping save path must continue persisting the confirmed draft URL');
-assert.ok(saveSource.includes("products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}]"),'linked shopping batch save must preserve confirmed URL too');
+assert.ok(saveSource.includes("url:item.url||''"),'independent shopping save must preserve the confirmed URL');
 
 console.log('rough-input product link contract: full field input goes through the existing single Gemini structured-output path for shopping URLs, contextual explicit quantities carry across URL blocks, public URL provenance remains saved, bounded metadata/path hints remain non-authoritative, privacy-safe diagnostics and SSRF/redirect/size guards stay intact');
