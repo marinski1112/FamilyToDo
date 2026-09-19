@@ -3,6 +3,7 @@ import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 import { commitSession } from './session';
 import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
+import { handleShoppingReusableSetAction, readShoppingReusableSets } from './shopping-reusable-set-api';
 
 type Row=Record<string,unknown>;
 
@@ -43,6 +44,7 @@ async function forcePrivateShoppingAssignee(ctx:AppContext,shoppingId:number,own
 export async function shopping(request:Request,ctx:AppContext):Promise<Response>{
   const m=ctx.member;
   if(!m)return json({ok:false,error:'ログインが必要です。',code:'AUTH_REQUIRED'},401);
+  if(request.method==='GET'&&new URL(request.url).searchParams.get('view')==='reusable_sets')return await readShoppingReusableSets(ctx,m);
   if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);
 
   const parsed=await requireBody(request);
@@ -51,6 +53,8 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
   const csrfFailure=csrfResponse(ctx,b.csrf);
   if(csrfFailure)return csrfFailure;
   const action=String(b.action??'add');
+  const reusableSetResponse=await handleShoppingReusableSetAction(ctx,m,b);
+  if(reusableSetResponse)return reusableSetResponse;
 
   if(action==='to_task'){
     const id=Number(b.id||0);
