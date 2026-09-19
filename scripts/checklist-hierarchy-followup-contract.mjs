@@ -17,6 +17,7 @@ const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.j
 const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.css','utf8');
 const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
+const appShell=readFileSync('src/app-shell.ts','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -170,10 +171,13 @@ requireText(css,'.unified-goods-section [hidden]{display:none!important}','inact
 requireText(css,'grid-template-columns:auto minmax(0,1fr)!important','two-row compact header does not overflow');
 
 /* Shopping owns Belongings presentation; selected entry type must survive into AI/manual controllers. */
-requireText(taskEntryPage,"/assets/task-rough-input-ai.js?v=${APP_VERSION}",'AI controller loaded by canonical entry page');
-requireText(taskEntryPage,"/assets/task-rough-input-save.js?v=${APP_VERSION}",'AI save controller loaded by canonical entry page');
-requireText(taskEntryPage,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSION}",'Shopping selected-type manual controller loaded');
-requireText(taskEntryPage,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
+requireText(appShell,"/assets/task-rough-input-ai.js?v=${APP_VERSION}",'AI controller loaded by canonical entry page');
+requireText(appShell,"/assets/task-rough-input-save.js?v=${APP_VERSION}",'AI save controller loaded by canonical entry page');
+requireText(appShell,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSION}",'Shopping selected-type manual controller loaded');
+requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
+requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
+requireText(appShell,'hierarchy-followup2','checklist hierarchy cache revision');
+requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot2','Shopping sets load after hierarchy bootstrap');
 if(belongingsCss.includes('.belongings-category-row')||belongingsCss.includes('.belongings-composer'))throw new Error('Belongings must not own divergent row/composer presentation CSS');
 requireText(css,'Shopping is the single visual contract for both goods types.','Shopping is canonical for Belongings presentation');
