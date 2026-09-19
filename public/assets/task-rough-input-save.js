@@ -92,30 +92,22 @@ try{
 
   async function saveRows(rows){
     const roots=rows.filter(x=>x.destination==='task'||x.destination==='event'),children=rows.filter(x=>x.destination==='child_task'),shopping=rows.filter(x=>x.destination==='shopping'),items=rows.filter(x=>x.destination==='item'),createdTaskIds=[];
-    if(roots.length===1){
-      const parent=roots[0],parentResult=await saveTask(parent),parentId=Number(parentResult.id);createdTaskIds.push(parentId);
-      try{
-        for(const item of shopping)await saveShopping(item);
-        for(const item of items)await saveItem(item);
-        for(const child of children){const result=await saveTask(child,parentId,Boolean(parent.isPrivate));createdTaskIds.push(Number(result.id));}
-      }catch(error){
-        if(error?.uncertain)throw error;
-        const rolledBack=await rollbackTasks(createdTaskIds);
-        if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`,true);
-        resetTaskCreateKeys(rows);
-        throw error;
-      }
-      return {saved:1+children.length+shopping.length+items.length,date:parent.startDate||'',kind:parent.destination};
+    let savedGoods=0;
+    try{
+      for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}
+      for(const child of children){const result=await saveTask(child,createdTaskIds[0],Boolean(roots[0]?.isPrivate));createdTaskIds.push(Number(result.id));}
+      for(const item of shopping){await saveShopping(item);savedGoods++;}
+      for(const item of items){await saveItem(item);savedGoods++;}
+    }catch(error){
+      // Independent goods are not removed by task rollback: never unlock a retry
+      // after any goods succeeded or a response became uncertain.
+      if(savedGoods||error?.uncertain)throw new SaveRequestError('一部が保存済み、または保存結果が不明です。重複を避けるため、再試行する前に一覧を確認してください。',true);
+      const rolledBack=await rollbackTasks(createdTaskIds);
+      if(!rolledBack)throw new SaveRequestError('一部のタスクを元に戻せませんでした。一覧を確認してください。',true);
+      resetTaskCreateKeys(rows);
+      throw error;
     }
-    if(roots.length>1){
-      try{for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}}
-      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`,true);resetTaskCreateKeys(rows);throw error;}
-      return {saved:roots.length,date:roots[0]?.startDate||'',kind:roots[0]?.destination||'task'};
-    }
-    let saved=0;
-    try{for(const item of shopping){await saveShopping(item);saved++;}for(const item of items){await saveItem(item);saved++;}}
-    catch(error){if(saved||error?.uncertain)throw new SaveRequestError(saved?`${saved}件は保存済みです。残りの保存に失敗しました。重複を避けるため、再試行する前に一覧を確認してください。`:String(error?.message||'保存結果を確認できませんでした。'),true);throw error;}
-    return {saved,date:'',kind:primary()};
+    return {saved:createdTaskIds.length+savedGoods,date:roots[0]?.startDate||'',kind:roots[0]?.destination||primary()};
   }
 
   const redirectAfterSave=result=>{
