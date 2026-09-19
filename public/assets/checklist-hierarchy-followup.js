@@ -108,6 +108,44 @@ const installCategoryUi=async(section,kind,categories,canManage)=>{
  trash.addEventListener('click',()=>{const on=!section.classList.contains('category-delete-mode-active');setMode(on);trash.textContent=on?'キャンセル':'🗑️';trash.classList.toggle('text-button',on);});
 };
 
+
+const installUnifiedChecklist=()=>{
+ const task=document.querySelector('.task-section'),shopping=document.querySelector('.shopping-checklist-section'),items=document.querySelector('.item-section');
+ if(task instanceof HTMLElement){
+  const head=task.querySelector(':scope>.section-head'),tools=head?.querySelector('.checklist-section-tools'),status=task.querySelector(':scope>.checklist-status-tabs');
+  head?.querySelector('h2')?.classList.add('unified-original-title-hidden');
+  head?.querySelector('.checklist-search-toggle')?.remove();head?.querySelector('.checklist-inline-search')?.remove();
+  const events=[...task.querySelectorAll(':scope>.event-task-row')],eventCount=events.length;
+  const tabs=document.createElement('div');tabs.className='checklist-kind-tabs task-event-tabs';tabs.innerHTML=`<button type="button" class="active" data-kind="task">☑ タスク</button><button type="button" data-kind="event">📅 イベント${eventCount?` <span>${eventCount}</span>`:''}</button>`;head?.prepend(tabs);
+  const add=tools?.querySelector('.task-add-top');if(add instanceof HTMLAnchorElement)add.dataset.baseHref=add.href;
+  const ai=document.createElement('a');ai.className='checklist-compact-action unified-ai-input';ai.textContent='✨＋AI入力';ai.href='/task/new.php?date='+encodeURIComponent(String(dailyPayload.date||''));
+  if(tools instanceof HTMLElement){tools.prepend(ai);const trash=tools.querySelector('.task-delete-mode');if(trash instanceof HTMLElement&&status instanceof HTMLElement)status.append(trash);}
+  const apply=kind=>{task.dataset.kindTab=kind;tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.kind===kind));task.querySelectorAll(':scope>.task-row').forEach(row=>{if(!(row instanceof HTMLElement))return;const isEvent=row.classList.contains('event-task-row');row.classList.toggle('checklist-kind-hidden',kind==='event'?!isEvent:isEvent);});task.querySelectorAll(':scope>.unorganized-task-row').forEach(row=>row.classList.toggle('checklist-kind-hidden',kind==='event'));if(add instanceof HTMLAnchorElement){add.textContent=kind==='event'?'＋ イベント':'＋ タスク';const u=new URL(add.dataset.baseHref||add.href,location.href);u.searchParams.set('type',kind);add.href=u.pathname+u.search;}};
+  tabs.addEventListener('click',e=>{const b=e.target.closest?.('button[data-kind]');if(b)apply(b.dataset.kind||'task');});apply('task');
+ }
+ if(shopping instanceof HTMLElement&&items instanceof HTMLElement){
+  shopping.classList.add('unified-goods-section');items.classList.add('unified-items-source');
+  const head=shopping.querySelector(':scope>.section-head'),tools=head?.querySelector('.checklist-section-tools'),status=shopping.querySelector(':scope>.checklist-status-tabs');
+  head?.querySelector('h2')?.classList.add('unified-original-title-hidden');head?.querySelector('.checklist-search-toggle')?.remove();head?.querySelector('.checklist-inline-search')?.remove();
+  items.querySelector(':scope>.section-head')?.querySelector('.checklist-search-toggle')?.remove();
+  const tabs=document.createElement('div');tabs.className='checklist-kind-tabs goods-kind-tabs';tabs.innerHTML='<button type="button" class="active" data-kind="shopping">🛒 買い物</button><button type="button" data-kind="item">🎒 持ち物</button>';head?.prepend(tabs);
+  const ai=document.createElement('a');ai.className='checklist-compact-action unified-ai-input';ai.textContent='✨＋AI入力';ai.href='/task/new.php?date='+encodeURIComponent(String(dailyPayload.date||''));
+  if(tools instanceof HTMLElement)tools.prepend(ai);
+  const shoppingGroups=[...shopping.querySelectorAll(':scope>.shopping-category-group')],itemGroups=[...items.querySelectorAll(':scope>.belongings-category-group')];
+  shoppingGroups.forEach(g=>{g.classList.add('unified-category-group','unified-shopping-group');const h=g.querySelector(':scope>.shopping-category-title');if(h&&!h.querySelector('.unified-category-icon'))h.insertAdjacentHTML('afterbegin','<span class="unified-category-icon" aria-hidden="true">🛒</span>');});
+  itemGroups.forEach(g=>{g.classList.add('unified-category-group','unified-item-group');const h=g.querySelector(':scope>.belongings-category-head');if(h&&!h.querySelector('.unified-category-icon'))h.insertAdjacentHTML('afterbegin','<span class="unified-category-icon" aria-hidden="true">🎒</span>');shopping.append(g);});
+  const itemZero=items.querySelector(':scope>.zero-category-cluster');if(itemZero){itemZero.classList.add('unified-item-zero');shopping.append(itemZero);}
+  const shoppingUn=shopping.querySelector(':scope>.zero-unclassified-add'),itemUn=items.querySelector(':scope>.zero-unclassified-add');if(itemUn)shopping.append(itemUn);
+  const itemStatus=items.querySelector(':scope>.checklist-status-tabs');itemStatus?.remove();
+  const itemHead=items.querySelector(':scope>.section-head');if(itemHead)itemHead.hidden=true;items.hidden=true;
+  const catButtons=[...shopping.querySelectorAll('.shopping-category-add,.belongings-add-category,.checklist-compact-action')].filter(b=>/カテゴリ/.test(String(b.textContent||'')));
+  let active='shopping';const apply=kind=>{active=kind;shopping.dataset.inputKind=kind;tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.kind===kind));catButtons.forEach(b=>{if(!(b instanceof HTMLElement))return;const belongs=b.classList.contains('belongings-add-category')||b.closest('.unified-items-source');b.hidden=kind==='item'?!belongs:belongs;});if(shoppingUn instanceof HTMLElement)shoppingUn.hidden=kind!=='shopping';if(itemUn instanceof HTMLElement)itemUn.hidden=kind!=='item';};
+  tabs.addEventListener('click',e=>{const b=e.target.closest?.('button[data-kind]');if(b)apply(b.dataset.kind||'shopping');});
+  const trash=tools?.querySelector('.category-delete-mode');if(trash instanceof HTMLElement&&status instanceof HTMLElement)status.append(trash);
+  apply('shopping');
+ }
+};
+
 const waitFor=async test=>{for(let i=0;i<120;i++){const v=test();if(v)return v;await new Promise(r=>requestAnimationFrame(r));}return test();};
 const setup=async()=>{
  if(location.pathname!=='/app/tasks.php')return;hideLegacy();decorateParents();
@@ -115,7 +153,7 @@ const setup=async()=>{
  const shopping=document.querySelector('.shopping-checklist-section'),items=document.querySelector('.item-section');
  let sc={categories:[],canManageCategories:false},ic={categories:[]};try{sc=await (await fetch('/api/shopping-categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}try{ic=await (await fetch('/api/item?view=categories',{credentials:'same-origin',cache:'no-store'})).json();}catch{}
  if(shopping instanceof HTMLElement){await waitFor(()=>shopping.querySelector('.shopping-category-group,.shopping-category-add'));installStatusTabs(shopping,'shopping');await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));}
- if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}
+ if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}\n installUnifiedChecklist();
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>void setup(),0)},{once:true});else setTimeout(()=>void setup(),0);
 })();
