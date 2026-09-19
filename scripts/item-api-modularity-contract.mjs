@@ -134,12 +134,9 @@ for(const sentinel of [
   "post({action:'category_rename',name:old,new_name:next})",
   "section.addEventListener('belongings-items-added'",
 ])if(!belongingsUi.includes(sentinel))throw new Error(`belongings Reminders-style UX marker missing: ${sentinel}`);
-for(const sentinel of [
-  '.belongings-category-name{flex:1;min-width:0;font-size:19px',
-  '.belongings-category-toggle{display:inline-flex;align-items:center;justify-content:center;min-width:44px;width:44px;height:44px',
-  'input.toggle[data-type="item"]{-webkit-appearance:none!important;appearance:none!important',
-  'min-height:44px!important',
-])if(!belongingsCss.includes(sentinel))throw new Error(`belongings checklist CSS marker missing: ${sentinel}`);
+if(!belongingsCss.includes('Belongings no longer owns presentation. Shopping/checklist shared CSS is canonical.'))throw new Error('Belongings CSS must delegate presentation to the shared Shopping/checklist contract');
+for(const forbidden of ['.belongings-category-name{','.belongings-category-toggle{','input.toggle[data-type="item"]{','.belongings-category-row{'])
+  if(belongingsCss.includes(forbidden))throw new Error(`divergent Belongings presentation CSS returned: ${forbidden}`);
 if(belongingsUi.includes('category_reorder'))throw new Error('Belongings UI must mirror Shopping and not expose category reorder arrows');
 if(belongingsUi.includes('new MutationObserver'))throw new Error('belongings category UI must not add a MutationObserver self-loop risk');
 if(belongingsUi.includes('location.reload')||belongingsUi.includes('location.replace'))throw new Error('belongings inline add/toggle/category operations must not full-reload the checklist');
