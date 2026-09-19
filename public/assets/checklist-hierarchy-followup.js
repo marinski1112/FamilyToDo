@@ -155,6 +155,7 @@ const setup=async()=>{
  if(shopping instanceof HTMLElement){await waitFor(()=>shopping.querySelector('.shopping-category-group,.shopping-category-add'));installStatusTabs(shopping,'shopping');await installCategoryUi(shopping,'shopping',Array.isArray(sc.categories)?sc.categories:[],Boolean(sc.canManageCategories));}
  if(items instanceof HTMLElement){await waitFor(()=>items.querySelector('.belongings-category-group,.belongings-add-category'));installStatusTabs(items,'item');await installCategoryUi(items,'item',Array.isArray(ic.categories)?ic.categories:[],Boolean(sc.canManageCategories));}
  installUnifiedChecklist();
+ document.dispatchEvent(new CustomEvent('familytodo:checklist-unified-ready'));
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>void setup(),0)},{once:true});else setTimeout(()=>void setup(),0);
 })();
