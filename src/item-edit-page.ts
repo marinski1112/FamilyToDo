@@ -57,11 +57,6 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
   if(!item)return new Response('持ち物が見つかりません。',{status:404});
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
-  const privateParent=Number(item.task_id||0)?await ctx.env.DB.prepare("SELECT id,title,private_owner_id FROM tasks WHERE id=? AND family_id=? AND visibility_scope='PRIVATE' AND private_owner_id=?").bind(Number(item.task_id),m.family_id,m.id).first<Row>():null;
-  const tasks=await ctx.env.DB.prepare("SELECT id,title,start_at,due_at FROM tasks WHERE family_id=? AND visibility_scope='FAMILY' AND status<>'completed' ORDER BY coalesce(start_at,due_at),id").bind(m.family_id).all<Row>();
-  const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
-  const assigned=await ctx.env.DB.prepare('SELECT member_id FROM item_assignees WHERE item_id=?').bind(id).all<Row>();
-  const assignedSet=new Set(assigned.results.map(row=>Number(row.member_id)));
   const history=await ctx.env.DB.prepare('SELECT h.*,m.name member_name FROM item_completion_history h LEFT JOIN members m ON m.id=h.member_id WHERE h.item_id=? ORDER BY h.occurred_at DESC,h.id DESC LIMIT 30').bind(id).all<Row>();
   const categories=await ctx.env.DB.prepare('SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all<Row>();
 
@@ -89,16 +84,9 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
     if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
     const itemUrl=String(b.url||'').trim();
     if(!validUrl(itemUrl))return bad('URLは http:// または https:// で入力してください。');
-    const taskId=privateParent?Number(item.task_id):(Number(b.task_id||0)||null);
-    let due:string|null=null;
-    if(taskId){
-      const task=await ctx.env.DB.prepare(`SELECT t.start_at,t.due_at FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first<Row>();
-      if(!task)return bad('タスクが見つかりません。');
-      due=String(task.start_at||task.due_at||'').slice(0,10)||null;
-    }else if(String(b.due_mode||'none')==='date'){
-      due=String(b.due_date||'').trim()||null;
-      if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('日付が不正です。');
-    }
+    const taskId=Number(item.task_id)||null;
+    const due=String(b.due_date||'').trim()||null;
+    if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('日付が不正です。');
     await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(name,memo||null,itemUrl||null,category||null,due,taskId,nowJst(),id,m.family_id).run();
     if(category){
       await ctx.env.DB.batch([
@@ -107,17 +95,19 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
         ctx.env.DB.prepare('UPDATE item_category_catalog SET enabled=1,updated_at=CURRENT_TIMESTAMP WHERE family_id=? AND name=? COLLATE NOCASE').bind(m.family_id,category),
       ]);
     }
-    const assignees=privateParent?[Number(privateParent.private_owner_id)]:(Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[]);
-    await ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id).run();
-    if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,memberId,m.family_id)));
-    await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT member_id FROM item_assignees WHERE item_id=?)').bind(id,id).run();
-    await ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)=0 THEN 'pending' WHEN completion_mode='ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>=(SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' WHEN completion_mode<>'ALL' AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>0 THEN 'completed' ELSE 'pending' END,updated_at=? WHERE id=? AND family_id=?").bind(nowJst(),id,m.family_id).run();
     return redirect(`/app/tasks.php${due?'?date='+encodeURIComponent(due):''}`);
   }
 
   const dueDate=String(item.due_at||'').slice(0,10);
   const category=normalizeCategory(item.category);
   const categoryOptions=categories.results.map(row=>String(row.name||'').trim()).filter(Boolean);
+  // Retain the legacy string only until the next markup cleanup; the rendered form below
+  // deliberately omits person/task controls while existing private links remain protected.
+  const privateParent=(()=>null as {id:number;title:string}|null)();
+  const tasks={results:[] as Row[]};
+  const members={results:[] as Row[]};
+  const assignedSet=new Set<number>();
   const body=`<div class="card"><h1>🎒 持ち物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="id" value="${id}"><label>持ち物</label><input name="name" required maxlength="200" value="${esc(item.name)}"><label>カテゴリ</label><input name="category" list="itemCategoryOptions" maxlength="255" value="${esc(category)}" placeholder="未分類"><datalist id="itemCategoryOptions">${categoryOptions.map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist><label>メモ</label><textarea name="memo" maxlength="2000">${esc(item.memo||'')}</textarea><label>URL</label><input type="url" name="url" maxlength="2048" inputmode="url" value="${esc(item.url||'')}" placeholder="https://..."><label>関連タスク</label><select name="task_id" ${privateParent?'disabled':''}>${privateParent?`<option value="${privateParent.id}" selected>🔒 ${esc(privateParent.title)}</option>`:`<option value="0">タスクなし</option>${tasks.results.map(task=>`<option value="${task.id}" ${Number(item.task_id)===Number(task.id)?'selected':''}>${esc(task.title)}</option>`).join('')}`}</select>${privateParent?`<input type="hidden" name="task_id" value="${privateParent.id}"><p class="small">自分専用タスクとの紐付けは編集時に解除できません。</p>`:''}<label>日付（タスクを指定しない場合）</label><input type="date" name="due_date" value="${esc(dueDate)}"><label>担当者</label>${privateParent?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':`<div class="assignee-list">${members.results.map(member=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${member.id}" ${assignedSet.has(Number(member.id))?'checked':''}> ${esc(member.name)}</label>`).join('')}</div>`}<button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(row=>`<div class="row">${esc(row.action)} ・ ${esc(row.member_name||'')} ・ ${esc(row.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この持ち物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;
-  return html(layout('持ち物編集',body,''));
+  const renderedBody=`<div class="card"><h1>🎒 持ち物編集</h1><form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="id" value="${id}"><label>持ち物</label><input name="name" required maxlength="200" value="${esc(item.name)}"><label>カテゴリ</label><input name="category" list="itemCategoryOptions" maxlength="255" value="${esc(category)}" placeholder="未分類"><datalist id="itemCategoryOptions">${categoryOptions.map(name=>`<option value="${esc(name)}"></option>`).join('')}</datalist><label>メモ</label><textarea name="memo" maxlength="2000">${esc(item.memo||'')}</textarea><label>URL</label><input type="url" name="url" maxlength="2048" inputmode="url" value="${esc(item.url||'')}" placeholder="https://..."><label>日付</label><input type="date" name="due_date" value="${esc(dueDate)}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(row=>`<div class="row">${esc(row.action)} ・ ${esc(row.member_name||'')} ・ ${esc(row.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この持ち物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form></div>`;
+  return html(layout('持ち物編集',renderedBody,''));
 }
