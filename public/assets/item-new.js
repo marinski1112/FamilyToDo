@@ -17,8 +17,6 @@
       if(errorBox) errorBox.style.display='none';
       if(button){button.disabled=true;button.textContent='登録中…';}
       const body=Object.fromEntries(new FormData(form));
-      body.assignees=[...form.querySelectorAll('[name="assignees"]:checked')].map(x=>Number(x.value)).filter(Number.isFinite);
-      body.task_id=Number(form.elements.task_id?.value||0);
       const response=await fetch('/api/item',{
         method:'POST',
         headers:{'content-type':'application/json','accept':'application/json'},
