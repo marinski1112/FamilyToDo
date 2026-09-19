@@ -32,26 +32,19 @@ for(const marker of ["return html(layout('買い物'",'id="shoppingPayload"',ret
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
-  "import { taskVisibilitySql } from './task-visibility';",
-  'export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):Promise<Response>{',
-  "status<>'completed'",
-  "visibility_scope='FAMILY'",
-  'taskOverlapsDate(task,date)',
+  'export async function shoppingNew(ctx:AppContext,date?:string,_selectedTaskId=0):Promise<Response>{',
   'const shoppingChecklistUrl=',
   'const checklistUrl=shoppingChecklistUrl(d);',
   'href="${checklistUrl}"',
   "return html(layout('買い物を追加',body,'/app/tasks.php'));",
   'id="shoppingTaskDueDate"',
-  'id="shoppingTaskId"',
-  'id="shoppingTaskShowAll"',
-  'id="shoppingTaskLinkPayload"',
-  '/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-2',
   'name="product_name[]"',
   'name="product_quantity[]"',
   'name="product_url[]" maxlength="2048"',
   'id="shoppingNewPayload"',
   '/assets/shopping-new.js?v=${APP_VERSION}',
 ]) if(!newPage.includes(marker)) throw new Error(`Shopping new page lost behavior marker: ${marker}`);
+for(const retired of ['id="shoppingTaskId"','id="shoppingTaskShowAll"','id="shoppingTaskLinkPayload"','name="assignees"'])if(newPage.includes(retired))throw new Error(`Shopping new page restored retired linkage control: ${retired}`);
 
 for(const marker of [
   "categoryRegisterToggle.type='button';",
@@ -67,17 +60,14 @@ for(const marker of [
 
 for(const marker of [
   'export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{',
-  "visibility_scope='PRIVATE' AND private_owner_id=?",
   "role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id",
   'id="shoppingTaskDueDate"',
-  'id="shoppingTaskId"',
-  'id="shoppingTaskShowAll"',
   'archiveShoppingCompletionStatements',
-  'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN',
   'return redirect(shoppingChecklistUrl(item.due_date));',
   'return redirect(shoppingChecklistUrl(due||item.due_date));',
   "return html(layout('買い物編集',body,''));",
 ]) if(!editPage.includes(marker)) throw new Error(`Shopping edit page lost behavior marker: ${marker}`);
+for(const retired of ['id="shoppingTaskId"','id="shoppingTaskShowAll"','name="assignees"'])if(editPage.includes(retired))throw new Error(`Shopping edit page restored retired linkage control: ${retired}`);
 
 for(const marker of [
   "const payloadNode=document.getElementById('shoppingTaskLinkPayload');",
