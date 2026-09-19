@@ -6,7 +6,7 @@ import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
 import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 import { buildStoredTaskRange } from './task-range-safety';
-import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
+import { taskVisibilitySql } from './task-visibility';
 import { APP_VERSION } from './version';
 
 type Row=Record<string,unknown>;
@@ -66,23 +66,12 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
 
-  const [members,shops,items,categories]=await Promise.all([
-    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
-    ctx.env.DB.prepare('SELECT id,name,quantity,url,category,status FROM shopping_items WHERE task_id=? AND family_id=? ORDER BY id').bind(id,m.family_id).all<Row>(),
-    ctx.env.DB.prepare('SELECT id,name,status FROM items WHERE task_id=? AND family_id=? ORDER BY id').bind(id,m.family_id).all<Row>(),
-    ctx.env.DB.prepare(`SELECT DISTINCT s.category FROM shopping_items s WHERE s.family_id=? AND ${taskChildVisibilitySql('s')} AND s.category IS NOT NULL AND s.category<>'' ORDER BY s.category`).bind(m.family_id,m.id).all<Row>(),
-  ]);
+  const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
 
   if(request.method==='POST'){
     const parsed=await requireBody(request);
     if(parsed instanceof Response)return parsed;
     const b=parsed;
-    const rawShoppingCategories=Array.isArray(b.shopping)?(b.shopping as unknown[]).slice(0,50):[];
-    for(const rawShopping of rawShoppingCategories){
-      const raw=rawShopping as Record<string,unknown>|null;
-      if(raw&&typeof raw==='object'&&Object.prototype.hasOwnProperty.call(raw,'category')&&String(raw.category||'').trim().length>255)return bad('カテゴリーは255文字以内で入力してください。');
-    }
-    if(String(b.shopping_category||'').trim().length>255)return bad('カテゴリーは255文字以内で入力してください。');
     const csrfFailure=csrfResponse(ctx,b.csrf);
     if(csrfFailure)return csrfFailure;
 
