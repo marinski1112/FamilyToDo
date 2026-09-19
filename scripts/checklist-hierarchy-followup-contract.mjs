@@ -177,8 +177,8 @@ requireText(appShell,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSIO
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,'hierarchy-followup3','checklist hierarchy cache revision');
-requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot3','Shopping set cache revision');
+requireText(appShell,'hierarchy-followup4','checklist hierarchy cache revision');
+requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
 requireText(shoppingSets,"familytodo:checklist-unified-ready",'Shopping sets wait for async unified checklist completion');
@@ -186,3 +186,7 @@ if(belongingsCss.includes('.belongings-category-row')||belongingsCss.includes('.
 requireText(css,'Shopping is the single visual contract for both goods types.','Shopping is canonical for Belongings presentation');
 requireText(js,"'unified-item-group','shopping-category-group'",'Belongings unified groups delegate to Shopping structural class');
 requireText(css,'.unified-goods-section .unified-item-group.shopping-category-group','Belongings unified shell uses Shopping visual contract');
+requireText(js,"'unified-shopping-group'",'Belongings unified groups share Shopping runtime structure');
+const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
+requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
+requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
