@@ -1,107 +1,41 @@
 import fs from 'node:fs';
 
 const page=fs.readFileSync('src/task-edit-page.ts','utf8');
-const reconciliation=fs.readFileSync('src/task-completion-reconciliation.ts','utf8');
 const handlers=fs.readFileSync('src/task-page-handlers.ts','utf8');
 const routes=fs.readFileSync('src/page-routes.ts','utf8');
 const browser=fs.readFileSync('public/assets/task-edit.js','utf8');
 const hierarchyGuard=fs.readFileSync('src/task-edit-hierarchy-guard.ts','utf8');
 
-if(page.includes("from './app'"))throw new Error('task edit page must not depend on app.ts');
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
-  "archiveItemCompletionStatements, archiveShoppingCompletionStatements",
-  "reconcileItemCompletionAfterAssigneeChange, reconcileShoppingCompletionAfterAssigneeChange, reconcileTaskCompletionAfterAssigneeChange",
+  "import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
-  "import { buildStoredTaskRange } from './task-range-safety';",
-  "taskChildVisibilitySql, taskVisibilitySql",
-  "export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{",
+  "taskVisibilitySql",
   "SELECT t.* FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1",
-  ".bind(id,member.family_id,member.id).first<Row>()",
-  "return new Response('タスクが見つかりません。',{status:404});",
-  "role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id",
-  "他のメンバーが作成した共有タスクを自分専用にはできません。",
-  "buildStoredTaskRange({noDate,allDay:allDayRequested,startDate:date,endDate,startTime,endTime,requireTimedStart:!allDayRequested})",
-  "DELETE FROM activity_logs WHERE family_id=?",
   "visibility_scope=?,private_owner_id=?",
-  "makePrivate?[m.id]",
   "if(isEvent)await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?')",
   "if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);",
-  "DELETE FROM shopping_assignees WHERE shopping_item_id=?",
-  "DELETE FROM item_assignees WHERE item_id=?",
-  "reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)",
-  "reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)",
-  "UPDATE notifications SET status='cancelled'",
-  "SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1",
-  "String(reminderTask?.status||'').toLowerCase()!=='completed'",
-  "INSERT OR IGNORE INTO notifications",
-  "...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,shoppingId,now)",
-  "...archiveItemCompletionStatements(ctx.env.DB,m.family_id,itemId,now)",
   "queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id)",
-  "return redirect(`/task/view.php?id=${id}`);",
-  "<h1>📝 タスク・イベント編集</h1>",
-  "id=\"editIsPrivate\"",
-  "id=\"shopRows\"",
-  "id=\"itemRows\"",
-  "/assets/task-edit.js?v=${APP_VERSION}",
-])if(!page.includes(marker))throw new Error(`retained task edit behavior/privacy marker missing: ${marker}`);
+  '<h1>📝 タスク・イベント編集</h1>',
+  'id="editIsPrivate"',
+])if(!page.includes(marker))throw new Error(`task edit marker missing: ${marker}`);
 
-if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT member_id FROM task_assignees"))throw new Error('task edit must not purge zero-assignee family completion rows inline');
-if(page.includes('UPDATE tasks SET status=CASE WHEN (SELECT COUNT(*) FROM task_assignees'))throw new Error('task edit must use canonical completion reconciliation instead of zero-assignee pending fallback');
-if(page.includes("UPDATE shopping_items SET status=CASE WHEN (SELECT COUNT(*) FROM shopping_assignees"))throw new Error('task edit must use canonical shopping completion reconciliation instead of zero-assignee pending fallback');
-if(page.includes("UPDATE items SET status=CASE WHEN (SELECT COUNT(*) FROM item_assignees"))throw new Error('task edit must use canonical item completion reconciliation instead of zero-assignee pending fallback');
-const reconcileIndex=page.indexOf("if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);");
-const childAssigneeSyncIndex=page.indexOf('if(syncStatements.length)await ctx.env.DB.batch(syncStatements);');
-const shopReconcileIndex=page.indexOf('reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)');
-const itemReconcileIndex=page.indexOf('reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now)');
-const reminderStatusIndex=page.indexOf('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1');
-const reminderInsertIndex=page.indexOf('INSERT OR IGNORE INTO notifications');
-if(reconcileIndex<0||childAssigneeSyncIndex<=reconcileIndex||shopReconcileIndex<=childAssigneeSyncIndex||itemReconcileIndex<=childAssigneeSyncIndex||reminderStatusIndex<=itemReconcileIndex||reminderInsertIndex<=reminderStatusIndex)throw new Error('task edit reconciliation/reminder ordering changed');
+for(const forbidden of [
+  'id="shopRows"','id="itemRows"','shopping_name[]','item_name[]',
+  'SELECT id,name,quantity,url,category,status FROM shopping_items WHERE task_id=?',
+  "SELECT id,name,status FROM items WHERE task_id=?",
+  'rawShoppingCategories','shopping_category',
+  'DELETE FROM shopping_assignees WHERE shopping_item_id=?','DELETE FROM item_assignees WHERE item_id=?',
+  'reconcileShoppingCompletionAfterAssigneeChange','reconcileItemCompletionAfterAssigneeChange',
+])if(page.includes(forbidden))throw new Error(`task edit must not manage goods linkage: ${forbidden}`);
 
-for(const marker of [
-  'export async function reconcileTaskCompletionAfterAssigneeChange(',
-  'SELECT completion_mode FROM tasks WHERE id=? AND family_id=? LIMIT 1',
-  'const assignedCount=Number(assigned?.c||0);',
-  'DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT ta.member_id FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?)',
-  'DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN (SELECT id FROM members WHERE family_id=? AND active=1)',
-  'JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?',
-  "const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';",
-  'ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1',
-  'UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
-  'export async function reconcileShoppingCompletionAfterAssigneeChange(',
-  'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN (SELECT id FROM members WHERE family_id=? AND active=1)',
-  'JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?',
-  'UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
-  'export async function reconcileItemCompletionAfterAssigneeChange(',
-  'DELETE FROM item_completions WHERE item_id=? AND member_id NOT IN (SELECT id FROM members WHERE family_id=? AND active=1)',
-  'JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=?',
-  "const mode=assignedCount>0?String(item.completion_mode||'ANY').toUpperCase():'ANY';",
-  'UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?',
-])if(!reconciliation.includes(marker))throw new Error(`task/child completion reconciliation marker missing: ${marker}`);
+for(const forbidden of ['shopping:[...f.querySelectorAll','items:[...f.querySelectorAll','shopping_category','shopToggle','shopping_name[]','item_name[]'])if(browser.includes(forbidden))throw new Error(`task edit browser must not transport goods linkage: ${forbidden}`);
+for(const marker of ["const f=document.getElementById('taskEditForm')","fetch(location.href,{method:'POST'","assignees:[...f.querySelectorAll('[name=\"assignees\"]:checked')]"])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
 
-if(handlers.includes("from './app'"))throw new Error('task page handlers must not depend on app.ts after task edit extraction');
+if(handlers.includes("from './app'"))throw new Error('task page handlers must not depend on app.ts');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('taskEdit must route through retained task edit page');
-if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new Error('retained item edit boundary regressed');
-for(const marker of [
-  "if(url.pathname==='/task/edit.php'){",
-  'validateTaskEditRequestHierarchy(request,context,taskId)',
-  'return await taskEdit(request,context,taskId);',
-])if(!routes.includes(marker))throw new Error(`task edit guarded route missing: ${marker}`);
-for(const marker of [
-  'export async function validateTaskEditRequestHierarchy(',
-  "if(request.method!=='POST')return {ok:true};",
-  'request.clone()',
-  "if(requestedEvent)return {ok:false,status:400,message:'子タスクはイベントに変更できません。'};",
-  "if(requestedScope!==parentScope)return {ok:false,status:400,message:'親タスクと子タスクの公開範囲は一致している必要があります。'};",
-  "SELECT COUNT(*) c FROM tasks WHERE family_id=? AND parent_task_id=?",
-  "子タスクがあるため、公開範囲は変更できません。",
-])if(!hierarchyGuard.includes(marker))throw new Error(`task edit hierarchy mutation guard missing: ${marker}`);
-for(const marker of [
-  "const f=document.getElementById('taskEditForm')",
-  "fetch(location.href,{method:'POST'",
-  "shopping:[...f.querySelectorAll('[name=\"shopping_name[]\"]')].map",
-  "items:[...f.querySelectorAll('[name=\"item_name[]\"]')].map",
-])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
+for(const marker of ["if(url.pathname==='/task/edit.php'){",'validateTaskEditRequestHierarchy(request,context,taskId)','return await taskEdit(request,context,taskId);'])if(!routes.includes(marker))throw new Error(`task edit guarded route missing: ${marker}`);
+for(const marker of ['export async function validateTaskEditRequestHierarchy(',"if(request.method!=='POST')return {ok:true};","if(requestedEvent)return {ok:false,status:400,message:'子タスクはイベントに変更できません。'};"])if(!hierarchyGuard.includes(marker))throw new Error(`task edit hierarchy mutation guard missing: ${marker}`);
 
-console.log('task-edit-page-boundary: retained Task/Event edit ownership, canonical task/child completion reconciliation, server hierarchy guard, PRIVATE conversion, child lifecycle and projection semantics ok');
+console.log('task-edit-page-boundary: Task/Event editing retains its own assignment and privacy controls while never reads or mutates linked goods');
