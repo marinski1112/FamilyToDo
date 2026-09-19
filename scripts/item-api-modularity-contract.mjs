@@ -152,7 +152,7 @@ for(const sentinel of [
   'client_request_id:rid',
   'sessionStorage.setItem(key,created)',
   "new CustomEvent('belongings-items-added'",
-  "if(++tries<100)setTimeout(attach,50)",
+  "document.addEventListener('familytodo:checklist-unified-ready',attach,{once:true})",
 ])if(!reusableSetUi.includes(sentinel))throw new Error(`reusable belongings set UI marker missing: ${sentinel}`);
 for(const sentinel of [
   '.belongings-set-overlay[hidden]{display:none!important}',
