@@ -1,11 +1,10 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { CALENDAR_COLOR_OPTIONS, normalizeCalendarColor } from './calendar-colors';
-import { archiveItemCompletionStatements, archiveShoppingCompletionStatements } from './lifecycle';
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
-import { reconcileItemCompletionAfterAssigneeChange, reconcileShoppingCompletionAfterAssigneeChange, reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
+import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';
 import { buildStoredTaskRange } from './task-range-safety';
 import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
 import { APP_VERSION } from './version';
@@ -119,11 +118,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     const allDay=allDayRequested?1:0;
     const calendarColor=normalizeCalendarColor(b.calendar_color,normalizeCalendarColor(task.calendar_color));
 
-    const shopping=Array.isArray(b.shopping)?(b.shopping as unknown[]).slice(0,50):[];
-    const itemsIn=Array.isArray(b.items)?(b.items as unknown[]).slice(0,50):[];
-    const validUrl=(url:string)=>{if(!url)return true;try{const parsedUrl=new URL(url);return parsedUrl.protocol==='http:'||parsedUrl.protocol==='https:';}catch{return false;}};
-    for(const value of shopping){const url=String((value as Record<string,unknown>)?.url||'').trim();if(!validUrl(url))return bad('買い物URLが不正です。');}
-
     await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id).run();
     const becamePrivate=makePrivate&&String(task.visibility_scope||'FAMILY')!=='PRIVATE';
     if(becamePrivate){
@@ -138,21 +132,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,memberId,m.family_id)));
     if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);
 
-    const linkedShopsForAssignees=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
-    const linkedItemsForAssignees=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all<Row>();
-    const syncStatements:any[]=[];
-    for(const row of linkedShopsForAssignees.results){
-      syncStatements.push(ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(Number(row.id)));
-      if(assignees.length)for(const memberId of assignees)syncStatements.push(ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(Number(row.id),memberId,m.family_id));
-    }
-    for(const row of linkedItemsForAssignees.results){
-      syncStatements.push(ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(Number(row.id)));
-      if(assignees.length)for(const memberId of assignees)syncStatements.push(ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(Number(row.id),memberId,m.family_id));
-    }
-    if(syncStatements.length)await ctx.env.DB.batch(syncStatements);
-    for(const row of linkedShopsForAssignees.results)await reconcileShoppingCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now);
-    for(const row of linkedItemsForAssignees.results)await reconcileItemCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,Number(row.id),now);
-
     const reminderTask=reminderAt&&assignees.length
       ?await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>()
       :null;
@@ -160,67 +139,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       const recipients=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();
       if(recipients.results.length)await ctx.env.DB.batch(recipients.results.map(row=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .bind(m.family_id,Number(row.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description||'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location||'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
-    }
-
-    const existingShopIds=new Set(shops.results.map(row=>Number(row.id)));
-    const existingShopCategoryById=new Map(shops.results.map(row=>[Number(row.id),String(row.category||'').trim()||null]));
-    const postedShopIds=new Set<number>();
-    const fallbackCategory=String(b.shopping_category||'').trim()||null;
-    for(const value of shopping){
-      const row=value as Record<string,unknown>;
-      const name=String(row?.name||'').trim();
-      if(!name)continue;
-      const quantity=String(row?.quantity||'1').trim()||'1';
-      const url=String(row?.url||'').trim()||null;
-      const shoppingId=Number(row?.id||0);
-      const rawCategory=Object.prototype.hasOwnProperty.call(row,'category')?String(row.category||'').trim():(existingShopCategoryById.get(shoppingId)||fallbackCategory||'');
-      if(rawCategory.length>255)return bad('カテゴリーは255文字以内で入力してください。');
-      const category=rawCategory||null;
-      if(shoppingId&&existingShopIds.has(shoppingId)){
-        postedShopIds.add(shoppingId);
-        await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,url=?,category=?,updated_at=? WHERE id=? AND task_id=? AND family_id=?').bind(name,quantity,url,category,now,shoppingId,id,m.family_id).run();
-      }else{
-        const created=await ctx.env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)")
-          .bind(m.family_id,name,quantity,category,null,noDate?null:date,m.id,now,now,id,url).run();
-        const shoppingId2=Number(created.meta.last_row_id);
-        if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(shoppingId2,memberId,m.family_id)));
-      }
-    }
-    for(const row of shops.results){
-      const shoppingId=Number(row.id);
-      if(postedShopIds.has(shoppingId))continue;
-      await ctx.env.DB.batch([
-        ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(shoppingId),
-        ...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,shoppingId,now),
-        ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND task_id=? AND family_id=?').bind(shoppingId,id,m.family_id),
-      ]);
-    }
-
-    const existingItemIds=new Set(items.results.map(row=>Number(row.id)));
-    const postedItemIds=new Set<number>();
-    for(const value of itemsIn){
-      const row=value as Record<string,unknown>;
-      const name=String(row?.name||'').trim();
-      if(!name)continue;
-      const itemId=Number(row?.id||0);
-      if(itemId&&existingItemIds.has(itemId)){
-        postedItemIds.add(itemId);
-        await ctx.env.DB.prepare('UPDATE items SET name=?,due_at=?,updated_at=? WHERE id=? AND task_id=? AND family_id=?').bind(name,noDate?null:`${date} 00:00:00`,now,itemId,id,m.family_id).run();
-      }else{
-        const created=await ctx.env.DB.prepare("INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,group_key) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?)")
-          .bind(m.family_id,name,null,noDate?null:`${date} 00:00:00`,m.id,now,now,id,crypto.randomUUID().replaceAll('-','').slice(0,16)).run();
-        const itemId2=Number(created.meta.last_row_id);
-        if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(itemId2,memberId,m.family_id)));
-      }
-    }
-    for(const row of items.results){
-      const itemId=Number(row.id);
-      if(postedItemIds.has(itemId))continue;
-      await ctx.env.DB.batch([
-        ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(itemId),
-        ...archiveItemCompletionStatements(ctx.env.DB,m.family_id,itemId,now),
-        ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND task_id=? AND family_id=?').bind(itemId,id,m.family_id),
-      ]);
     }
 
     try{await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id);}catch{/* task save succeeds independently of Google */}
@@ -235,8 +153,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const safe=(value:unknown)=>esc(String(value??''));
   const currentCalendarColor=normalizeCalendarColor(task.calendar_color);
   const currentCalendarColorIsPreset=CALENDAR_COLOR_OPTIONS.some(option=>option.value===currentCalendarColor);
-  const shopRows=shops.results.map(row=>`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="${row.id}"><input name="shopping_name[]" value="${safe(row.name)}" placeholder="商品名"><input name="shopping_quantity[]" value="${safe(row.quantity||'1')}" placeholder="数量"><input name="shopping_category[]" value="${safe(row.category||'')}" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" value="${safe(row.url||'')}" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
-  const itemRows=items.results.map(row=>`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="${row.id}"><input name="item_name[]" value="${safe(row.name)}" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`).join('');
   const body=`<div class="card form-card"><h1>📝 タスク・イベント編集</h1><form id="taskEditForm" class="compact-form">
     <input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">
     <label>タイトル</label><input name="title" required value="${safe(task.title)}"><label class="checkrow"><input id="editIsEvent" type="checkbox" name="is_event" ${String(task.task_kind||'').toLowerCase()==='event'?'checked':''}><span>イベントとして登録（チェック・期限切れ対象なし）</span></label>
@@ -248,8 +164,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div>
     <label>担当者</label><div class="assignee-list">${members.results.map(member=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${member.id}" ${selected.has(Number(member.id))?'checked':''}> ${safe(member.name)}</label>`).join('')}</div>
     <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると担当者へ指定日時に詳細を設定した通知方法で通知します。</p>
-    <div class="sub-card"><button type="button" class="section-button" id="shopToggle">🛒 買い物を編集</button><div id="shopBox" ${shops.results.length?'':'style="display:none"'}><datalist id="taskShopCategories">${categories.results.map(category=>`<option value="${safe(category.category)}">`).join('')}</datalist><div id="shopRows">${shopRows||`<div class="product-row task-child-row"><input type="hidden" name="shopping_id[]" value="0"><input name="shopping_name[]" placeholder="商品名"><input name="shopping_quantity[]" value="1" placeholder="数量"><input name="shopping_category[]" list="taskShopCategories" maxlength="255" placeholder="カテゴリー"><input type="url" name="shopping_url[]" placeholder="URL（任意）"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addShopRow">＋ 商品を追加</button></div></div>
-    <div class="sub-card"><button type="button" class="section-button" id="itemToggle">🎒 持ち物を編集</button><div id="itemBox" ${items.results.length?'':'style="display:none"'}><div id="itemRows">${itemRows||`<div class="item-entry task-child-row"><input type="hidden" name="item_id[]" value="0"><input name="item_name[]" placeholder="持ち物名"><button type="button" class="btn gray small remove-child">×</button></div>`}</div><button type="button" class="btn gray small" id="addItemRow">＋ 持ち物を追加</button></div></div>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
     <script src="/assets/task-edit.js?v=${APP_VERSION}"></script>`;
   return html(layout('タスク・イベント編集',body,''));
