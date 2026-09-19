@@ -18,25 +18,6 @@ const shoppingChecklistUrl=(value:unknown)=>{
   return /^\d{4}-\d{2}-\d{2}$/.test(date)?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
 };
 
-function taskRange(task:Row):{start:string;end:string}{
-  const start=String(task.start_at||task.due_at||'').slice(0,10);
-  let end=String(task.end_at||task.start_at||task.due_at||'').slice(0,10);
-  if(start&&end&&end<start)end=start;
-  return {start,end};
-}
-
-function taskOverlapsDate(task:Row,date:string):boolean{
-  if(!date)return false;
-  const {start,end}=taskRange(task);
-  return Boolean(start&&start<=date&&(!end||end>=date));
-}
-
-function taskOption(task:Row,selectedTaskId:number):string{
-  const {start,end}=taskRange(task);
-  const dateLabel=start?(end&&end!==start?`${start}〜${end}`:start):'期限なし';
-  return `<option value="${task.id}" ${Number(task.id)===selectedTaskId?'selected':''}>${esc(task.title)}（${esc(dateLabel)}）</option>`;
-}
-
 function authRequiredResponse(ctx:AppContext):Response{
   const url=new URL(ctx.request.url);
   const next=validateLiffNext(url.pathname+url.search);
@@ -106,18 +87,6 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     return `<option value="${esc(option)}">${esc(option)}</option>`;
   }).join('');
   const customSelected=Boolean(currentCategory&&!currentIsCatalogued);
-  const tasks={results:[] as Row[]};
-  const selectedTaskId=Number(item.task_id||0);
-  const dueDate=String(item.due_date||'').slice(0,10);
-  const initialTasks=tasks.results.filter(task=>Number(task.id)===selectedTaskId||taskOverlapsDate(task,dueDate));
-  const otherTaskCount=Math.max(0,tasks.results.length-initialTasks.length);
-  const taskLinkPayload=JSON.stringify({
-    selectedTaskId,
-    tasks:tasks.results.map(task=>{
-      const {start,end}=taskRange(task);
-      return {id:Number(task.id),title:String(task.title||''),start,end,due:String(task.due_at||'').slice(0,10)};
-    }),
-  }).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
   const body=`<div class="card"><h1>🛒 買い物編集</h1><form method="post" id="shoppingEditForm"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><label>商品名</label><input name="name" required value="${esc(item.name)}"><label>数量</label><input type="text" name="quantity" value="${esc(item.quantity||'1')}"><label for="shoppingEditCategorySelect">カテゴリー</label><select id="shoppingEditCategorySelect"><option value="" ${currentCategory?'':'selected'}>カテゴリーなし</option>${categoryOptionHtml}<option value="__custom__" ${customSelected?'selected':''}>自由入力</option></select><div id="shoppingEditCategoryCustomWrap" ${customSelected?'':'hidden'}><label for="shoppingEditCategoryCustom">自由入力</label><input type="text" id="shoppingEditCategoryCustom" maxlength="${SHOPPING_CATEGORY_MAX_LENGTH}" autocomplete="off" value="${customSelected?esc(currentCategory):''}" placeholder="カテゴリー名"><label class="checkrow"><input type="checkbox" id="shoppingEditCategoryRegister"><span>このカテゴリを登録</span></label></div><input type="hidden" name="category" id="shoppingEditCategoryValue" value="${esc(currentCategory)}"><p class="small">登録済みカテゴリーから選択できます。候補にない場合は「自由入力」を選び、必要なら家族の候補として登録できます。</p><label>URL</label><input type="url" name="url" value="${esc(item.url||'')}"><label>メモ</label><textarea name="memo">${esc(item.memo||'')}</textarea><label>期限日</label><input type="date" name="due_date" id="shoppingTaskDueDate" value="${esc(item.due_date||'')}"><button name="action" value="save">保存する</button></form><div class="card"><h2>完了履歴</h2>${history.results.map(row=>`<div class="row">${esc(row.action)} ・ ${esc(row.member_name||'')} ・ ${esc(row.occurred_at||'')}</div>`).join('')||'<p>履歴はありません。</p>'}</div><form method="post" onsubmit="return confirm('この買い物を削除しますか？')"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><button class="btn danger" name="action" value="delete">削除</button></form><script src="/assets/shopping-edit.js?v=${APP_VERSION}-category-picker-1"></script></div>`;
   return html(layout('買い物編集',body,''));
 }
