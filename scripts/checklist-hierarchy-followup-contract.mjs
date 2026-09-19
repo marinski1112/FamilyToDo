@@ -14,6 +14,8 @@ const shoppingCategoryUi=readFileSync('public/assets/checklist-category-followup
 const shoppingUi=shoppingCategoryUi;
 const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
+const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.css','utf8');
+const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -128,3 +130,22 @@ requireText(js,'openCategoryComposer(section,kind,U)','unclassified add route us
 requireText(shoppingUi,"if(category===UNCLASSIFIED){location.reload()", 'authoritative unclassified Shopping reload');
 requireText(belongingsUi,"if(category===U){g.hidden=false", 'unclassified Belongings is visibly retained after save');
 requireText(css,'Empty named categories: name edits','empty category action styling');
+
+requireText(belongingsUi,"g.className='belongings-category-group shopping-category-group'",'Belongings mirrors Shopping group structure');
+requireText(belongingsUi,'belongings-category-footer shopping-category-footer','Belongings category-local add footer');
+requireText(belongingsUi,"f.hidden=true",'Belongings composer deferred like Shopping');
+forbidText(belongingsUi,'カテゴリを上へ','Belongings reorder arrows removed');
+forbidText(belongingsUi,'カテゴリを下へ','Belongings reorder arrows removed');
+requireText(js,"live.querySelector('.belongings-category-add-item')",'empty/unclassified Belongings routes use category-local add');
+requireText(belongingsCss,'Belongings intentionally mirrors Shopping presentation','Shopping-equivalent Belongings CSS');
+requireText(belongingsCss,'border-radius:5px!important','square Belongings checkbox');
+
+/* Cross-section visual/interaction consistency contract */
+for(const marker of ['checklist-section-tools','checklist-search-toggle','checklist-delete-toggle','checklist-status-tabs'])requireText(js,marker,`shared checklist control: ${marker}`);
+for(const marker of ['shopping-category-group','belongings-category-group','shopping-category-toggle','belongings-category-toggle'])requireText(js,marker,`shopping/belongings shared category contract: ${marker}`);
+for(const marker of ['width:22px!important','height:22px!important','border-radius:5px!important']){requireText(css,marker,`task/shopping square checkbox contract: ${marker}`);requireText(belongingsCss,marker,`belongings square checkbox contract: ${marker}`);}
+requireText(categoryDrag,"section=document.querySelector('.checklist-page .item-section')",'Belongings category drag mirrors Shopping');
+requireText(categoryDrag,"action:'category_reorder'",'Belongings drag persists category order');
+requireText(categoryDrag,"name.title='タップで編集／長押しで並び替え'",'Belongings long-press drag affordance');
+forbidText(belongingsUi,'カテゴリを上へ','no divergent Belongings up-arrow control');
+forbidText(belongingsUi,'カテゴリを下へ','no divergent Belongings down-arrow control');

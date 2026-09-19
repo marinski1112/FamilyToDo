@@ -58,3 +58,29 @@ const endTouch=e=>{cancelLong();if(!touch||e.pointerId!==touch.pointerId)return;
 section.addEventListener('pointerup',endTouch);section.addEventListener('pointercancel',endTouch);
 groups().forEach(decorateGroup);new MutationObserver(()=>groups().forEach(decorateGroup)).observe(section,{childList:true,subtree:true});
 })();
+
+
+// Belongings mirrors Shopping category drag ordering; persistence only differs.
+(()=>{
+'use strict';
+if(location.pathname!=='/app/tasks.php')return;
+const section=document.querySelector('.checklist-page .item-section');
+if(!(section instanceof HTMLElement))return;
+const payload=(()=>{try{return JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}')}catch{return{}}})();
+const U='未分類';
+const groups=()=>[...section.querySelectorAll(':scope > .belongings-category-group')].filter(g=>g instanceof HTMLElement&&!g.hidden&&String(g.dataset.category||'').trim()!==U);
+const cat=g=>String(g.dataset.category||'').trim();
+const saveOrder=async()=>{const order=groups().map(cat).filter(Boolean);if(!order.length)return;const r=await fetch('/api/item',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),action:'category_reorder',order})});const d=await r.json().catch(()=>({ok:false}));if(!r.ok||!d.ok)throw new Error(d.error||'並び順の保存に失敗しました。')};
+let drag=null,touch=null,longPress=null,start=null;
+const clearOver=()=>section.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));
+const finish=()=>{drag?.classList.remove('dragging');touch?.subject?.classList.remove('dragging');drag=null;touch=null;clearOver()};
+const place=(subject,target,y)=>{if(subject===target||cat(target)===U)return;const r=target.getBoundingClientRect();(y<r.top+r.height/2?target.before.bind(target):target.after.bind(target))(subject)};
+const decorate=g=>{if(!(g instanceof HTMLElement)||g.dataset.belongingsDrag==='1'||cat(g)===U)return;g.dataset.belongingsDrag='1';const name=g.querySelector(':scope > .belongings-category-head .belongings-category-name');if(!(name instanceof HTMLElement))return;name.draggable=true;name.title='タップで編集／長押しで並び替え';name.addEventListener('dragstart',e=>{if(name.querySelector('input.category-inline-rename')){e.preventDefault();return}drag=g;g.classList.add('dragging');e.dataTransfer?.setData('text/plain',cat(g))});name.addEventListener('dragend',()=>{finish();void saveOrder().catch(()=>{})})};
+section.addEventListener('dragover',e=>{if(!(drag instanceof HTMLElement))return;const target=e.target instanceof Element?e.target.closest('.belongings-category-group'):null;if(!(target instanceof HTMLElement)||cat(target)===U)return;e.preventDefault();clearOver();target.classList.add('drag-over');place(drag,target,e.clientY)});
+section.addEventListener('drop',e=>{if(!(drag instanceof HTMLElement))return;e.preventDefault();finish();void saveOrder().catch(()=>{})});
+section.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'||!(e.target instanceof HTMLElement))return;const name=e.target.closest('.belongings-category-name');if(!(name instanceof HTMLElement)||name.querySelector('input.category-inline-rename'))return;const g=name.closest('.belongings-category-group');if(!(g instanceof HTMLElement)||cat(g)===U)return;start={x:e.clientX,y:e.clientY,id:e.pointerId};longPress=setTimeout(()=>{if(!start||start.id!==e.pointerId)return;touch={subject:g,id:e.pointerId};g.classList.add('dragging');navigator.vibrate?.(20)},420)});
+section.addEventListener('pointermove',e=>{if(start&&!touch&&e.pointerId===start.id&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>8){clearTimeout(longPress);longPress=null;start=null}if(!touch||touch.id!==e.pointerId)return;e.preventDefault();const under=document.elementFromPoint(e.clientX,e.clientY);const target=under?.closest?.('.belongings-category-group');if(!(target instanceof HTMLElement)||cat(target)===U)return;clearOver();target.classList.add('drag-over');place(touch.subject,target,e.clientY)});
+const end=e=>{if(longPress)clearTimeout(longPress);longPress=null;start=null;if(!touch||touch.id!==e.pointerId)return;const subject=touch.subject;finish();subject.classList.remove('dragging');void saveOrder().catch(()=>{})};
+section.addEventListener('pointerup',end);section.addEventListener('pointercancel',end);
+groups().forEach(decorate);new MutationObserver(()=>groups().forEach(decorate)).observe(section,{childList:true,subtree:true});
+})();

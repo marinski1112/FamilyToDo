@@ -131,7 +131,6 @@ for(const sentinel of [
   "requestAnimationFrame(()=>n.focus({preventScroll:true}))",
   "ordered=[...all.filter(r=>!r.querySelector('input.toggle')?.checked),...all.filter(r=>r.querySelector('input.toggle')?.checked)]",
   "if(box.disabled&&++n<100)",
-  "post({action:'category_reorder',order:named().map(g=>cat(g.dataset.category))})",
   "post({action:'category_rename',name:old,new_name:next})",
   "section.addEventListener('belongings-items-added'",
 ])if(!belongingsUi.includes(sentinel))throw new Error(`belongings Reminders-style UX marker missing: ${sentinel}`);
@@ -141,6 +140,7 @@ for(const sentinel of [
   'input.toggle[data-type="item"]{-webkit-appearance:none!important;appearance:none!important',
   'min-height:44px!important',
 ])if(!belongingsCss.includes(sentinel))throw new Error(`belongings checklist CSS marker missing: ${sentinel}`);
+if(belongingsUi.includes('category_reorder'))throw new Error('Belongings UI must mirror Shopping and not expose category reorder arrows');
 if(belongingsUi.includes('new MutationObserver'))throw new Error('belongings category UI must not add a MutationObserver self-loop risk');
 if(belongingsUi.includes('location.reload')||belongingsUi.includes('location.replace'))throw new Error('belongings inline add/toggle/category operations must not full-reload the checklist');
 if(belongingsUi.includes('△'))throw new Error('deprecated triangle state UI must not return');
