@@ -177,7 +177,10 @@ requireText(appShell,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSIO
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,'hierarchy-followup2','checklist hierarchy cache revision');
-requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot2','Shopping sets load after hierarchy bootstrap');
+requireText(appShell,'hierarchy-followup3','checklist hierarchy cache revision');
+requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot3','Shopping set cache revision');
+requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
+const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
+requireText(shoppingSets,"familytodo:checklist-unified-ready",'Shopping sets wait for async unified checklist completion');
 if(belongingsCss.includes('.belongings-category-row')||belongingsCss.includes('.belongings-composer'))throw new Error('Belongings must not own divergent row/composer presentation CSS');
 requireText(css,'Shopping is the single visual contract for both goods types.','Shopping is canonical for Belongings presentation');
