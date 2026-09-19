@@ -27,7 +27,7 @@ const style=document.createElement('style');style.textContent=`
 .linked-shopping-row .shopping-check-row{touch-action:pan-y}
 @media(max-width:720px){.shopping-checklist-section .section-head{align-items:center}.shopping-category-title{position:sticky;top:0;background:#fff;z-index:2}}
 `;document.head.append(style);
-const groups=()=>[...section.querySelectorAll(':scope > .shopping-category-group')].filter(x=>x instanceof HTMLElement);
+const groups=()=>[...section.querySelectorAll(':scope > .shopping-category-group:not(.belongings-category-group)')].filter(x=>x instanceof HTMLElement);
 const cat=g=>String(g.dataset.category||UNCLASSIFIED).trim()||UNCLASSIFIED;
 const post=async(url,body)=>{const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),...body})});const d=await r.json().catch(()=>({ok:false,error:'応答エラー'}));if(!r.ok||!d.ok)throw new Error(d.error||'更新失敗');return d};
 const saveOrder=()=>post('/api/shopping-categories',{action:'reorder',order:groups().map(cat).filter(x=>x!==UNCLASSIFIED&&x!=='__draft__')}).catch(()=>{});

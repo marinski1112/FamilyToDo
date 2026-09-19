@@ -55,7 +55,7 @@ const fixChecklistFab=()=>{
 
 const loadChecklistFollowup=()=>{
   if(location.pathname!=='/app/tasks.php'||document.querySelector('script[data-checklist-followup="1"]'))return;
-  const script=document.createElement('script');script.src='/assets/checklist-reminders-followup.js?v=followup1';script.defer=true;script.dataset.checklistFollowup='1';document.head.append(script);
+  const script=document.createElement('script');script.src='/assets/checklist-reminders-followup.js?v=followup2';script.defer=true;script.dataset.checklistFollowup='1';document.head.append(script);
 };
 
 const observeCalendarPins=()=>{

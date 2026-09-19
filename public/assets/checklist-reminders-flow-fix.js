@@ -163,12 +163,16 @@ const makeQuickForm=(section,type)=>{
     const value=name.value.trim();if(!value||saving)return;saving=true;name.disabled=true;if(category instanceof HTMLInputElement)category.disabled=true;if(status)status.textContent='';
     try{
       let response;
-      if(type==='task')response=await fetch('/api/task',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),title:value,dateOnly:selectedDate,endDateOnly:selectedDate,is_event:false,noDate:false,allDay:true,calendar_visible:true})});
+      const isEvent=type==='task'&&section.dataset.kindTab==='event';
+      let calendarColor='';try{calendarColor=localStorage.getItem('familytodo:lastCalendarColor')||'';}catch{}
+      if(!/^#[0-9a-f]{6}$/i.test(calendarColor))calendarColor='';
+      if(type==='task')response=await fetch('/api/task',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),title:value,dateOnly:selectedDate,endDateOnly:selectedDate,is_event:isEvent,calendar_color:calendarColor||undefined,noDate:false,allDay:true,calendar_visible:true})});
       else if(type==='shopping')response=await fetch('/api/shopping',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),action:'add',name:value,quantity:'1',category:category instanceof HTMLInputElement?category.value.trim():'',due_date:selectedDate})});
       else response=await fetch('/api/item',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),name:value,date:selectedDate})});
       const data=await response.json().catch(()=>({ok:false,error:'サーバー応答を読み取れませんでした。'}));
       if(!response.ok||!data.ok)throw new Error(data.error||'保存に失敗しました。');
       const id=Number(data.id||0);if(!id)throw new Error('保存結果を確認できませんでした。');
+      if(type==='task'&&isEvent){location.reload();return;}
       if(type==='task')addTaskRow(id,value);else if(type==='shopping')addShoppingRow(id,value,category instanceof HTMLInputElement?category.value.trim():'');else addItemRow(id,value);
       name.value='';
     }catch(error){if(status)status.textContent=error?.message||String(error)||'保存に失敗しました。';}

@@ -33,7 +33,7 @@ page.addEventListener('click',event=>{
   try{title.click();}finally{forwardingTitleClick=false;}
 },true);
 
-const shoppingGroups=()=>[...page.querySelectorAll('.shopping-category-group')].filter(node=>node instanceof HTMLElement&&!node.classList.contains('shopping-category-draft'));
+const shoppingGroups=()=>[...page.querySelectorAll('.shopping-category-group')].filter(node=>node instanceof HTMLElement&&!node.classList.contains('shopping-category-draft')&&!node.classList.contains('belongings-category-group'));
 const refreshCategoryCount=group=>{
   const title=group.querySelector(':scope > .shopping-category-title');
   const toggle=title?.querySelector(':scope > .shopping-category-toggle');
