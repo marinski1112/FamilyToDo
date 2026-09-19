@@ -223,3 +223,12 @@
  .checklist-page .section-head .unified-ai-input,.checklist-page .section-head .checklist-compact-action{font-size:13px!important;padding:0 3px!important}
  .checklist-page .checklist-status-tabs>button[data-status]{min-width:92px!important}
 }
+
+/* Unified header overflow correction: exactly two compact control rows. */
+.checklist-page .task-section>.section-head,.checklist-page .unified-goods-section>.section-head{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;align-items:center!important;column-gap:6px!important;row-gap:4px!important}
+.checklist-page .task-section>.section-head>.checklist-kind-tabs,.checklist-page .unified-goods-section>.section-head>.checklist-kind-tabs{grid-column:1!important;grid-row:1!important;min-width:0!important}
+.checklist-page .task-section>.section-head>.checklist-section-tools,.checklist-page .unified-goods-section>.section-head>.checklist-section-tools{grid-column:2!important;grid-row:1!important;display:flex!important;justify-content:flex-end!important;gap:6px!important;min-width:0!important}
+.checklist-page .unified-goods-section [hidden]{display:none!important}
+.checklist-page .unified-goods-section>.zero-unclassified-add[hidden]{display:none!important}
+.checklist-page .unified-goods-section .checklist-compact-action,.checklist-page .task-section .checklist-compact-action{white-space:nowrap!important;font-size:14px!important;padding-inline:2px!important}
+.checklist-page .unified-goods-section .goods-kind-tabs>button,.checklist-page .task-section .task-event-tabs>button{padding-inline:8px!important;font-size:14px!important}
