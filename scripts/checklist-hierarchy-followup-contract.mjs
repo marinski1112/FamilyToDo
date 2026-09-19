@@ -149,3 +149,15 @@ requireText(categoryDrag,"action:'category_reorder'",'Belongings drag persists c
 requireText(categoryDrag,"name.title='タップで編集／長押しで並び替え'",'Belongings long-press drag affordance');
 forbidText(belongingsUi,'カテゴリを上へ','no divergent Belongings up-arrow control');
 forbidText(belongingsUi,'カテゴリを下へ','no divergent Belongings down-arrow control');
+
+/* Unified checklist tabs must preserve direct-add routes. */
+requireText(js,"className='checklist-kind-tabs task-event-tabs'",'task/event tabs');
+requireText(js,"data-kind=\"event\"", 'event tab with count');
+requireText(js,"className='checklist-kind-tabs goods-kind-tabs'",'shopping/belongings input tabs');
+requireText(js,"unified-category-icon", 'type icon on category header');
+requireText(js,"head?.querySelector('.checklist-search-toggle')?.remove()", 'search removed from compact header');
+requireText(js,"trash.textContent=on?'✕':'🗑️'", 'icon-only delete cancel');
+requireText(js,"reveal.textContent='＋ 子タスクを追加'", 'child task direct-add route preserved');
+requireText(js,"'＋ 未分類に買い物を追加'", 'unclassified shopping direct-add route preserved');
+requireText(js,"'＋ 未分類に持ち物を追加'", 'unclassified belongings direct-add route preserved');
+requireText(css,'.unified-items-source{display:none!important}','single shared goods surface');
