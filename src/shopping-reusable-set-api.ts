@@ -1,3 +1,4 @@
+import { taskVisibilitySql } from './task-visibility';
 import { json } from './response';
 type Row=Record<string,unknown>;
 const now=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
@@ -12,7 +13,22 @@ export async function readShoppingReusableSets(ctx:any,m:any):Promise<Response>{
 }
 export async function handleShoppingReusableSetAction(ctx:any,m:any,b:Record<string,unknown>):Promise<Response|null>{
  const action=String(b.action||'');if(!action.startsWith('reusable_set_'))return null;
- if(action==='reusable_set_create'){const name=String(b.name||'').trim(),source=ids(b.source_item_ids);if(!name||!source.length)return bad('セット名と買い物を指定してください。');if(source.length>100)return bad('1つのセットは100件までです。');const ph=source.map(()=>'?').join(','),q=await ctx.env.DB.prepare(`SELECT id,name,quantity,category,memo,url FROM shopping_items WHERE family_id=? AND id IN (${ph})`).bind(m.family_id,...source).all(),rows=(q.results||[]) as Row[];if(rows.length!==source.length)return bad('表示中の買い物が更新されています。',409);const map=new Map(rows.map(x=>[Number(x.id),x])),ordered=source.map(id=>map.get(id)!);const t=now();try{const r=await ctx.env.DB.prepare('INSERT INTO shopping_reusable_sets(family_id,name,created_by_member_id,created_at,updated_at) VALUES(?,?,?,?,?)').bind(m.family_id,name,m.id,t,t).run(),setId=Number(r.meta.last_row_id);await ctx.env.DB.batch(ordered.map((x,i)=>ctx.env.DB.prepare('INSERT INTO shopping_reusable_set_entries(set_id,position,name,quantity,category,memo,url) VALUES(?,?,?,?,?,?,?)').bind(setId,i,String(x.name||''),String(x.quantity||'1'),String(x.category||'')||null,String(x.memo||'')||null,String(x.url||'')||null)));return json({ok:true,id:setId,name,item_count:ordered.length},201)}catch{return bad('同じ名前のセットがあるか、保存に失敗しました。',409)}}
+ if(action==='reusable_set_create'){
+  const name=String(b.name||'').trim(),source=ids(b.source_item_ids);if(!name||!source.length)return bad('セット名と買い物を指定してください。');if(source.length>100)return bad('1つのセットは100件までです。');
+  const ph=source.map(()=>'?').join(','),q=await ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.memo,s.url,s.task_id,t.visibility_scope FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND s.id IN (${ph}) AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})`).bind(m.family_id,...source,m.id).all(),rows=(q.results||[]) as Row[];
+  if(rows.length!==source.length)return bad('表示中の買い物が更新されています。',409);
+  const map=new Map(rows.map(x=>[Number(x.id),x])),visible=source.map(id=>map.get(id)!),ordered=visible.filter(x=>String(x.visibility_scope||'FAMILY')!=='PRIVATE'),skippedPrivate=visible.length-ordered.length;
+  if(!ordered.length)return bad('非公開タスクに紐づく買い物だけでは共有セットを作成できません。');
+  const t=now();let setId=0;
+  try{
+   const r=await ctx.env.DB.prepare('INSERT INTO shopping_reusable_sets(family_id,name,created_by_member_id,created_at,updated_at) VALUES(?,?,?,?,?)').bind(m.family_id,name,m.id,t,t).run();setId=Number(r.meta.last_row_id||0);if(!setId)throw new Error('set id missing');
+   await ctx.env.DB.batch(ordered.map((x,i)=>ctx.env.DB.prepare('INSERT INTO shopping_reusable_set_entries(set_id,position,name,quantity,category,memo,url) VALUES(?,?,?,?,?,?,?)').bind(setId,i,String(x.name||''),String(x.quantity||'1'),String(x.category||'')||null,String(x.memo||'')||null,String(x.url||'')||null)));
+   return json({ok:true,id:setId,name,item_count:ordered.length,skipped_private:skippedPrivate},201)
+  }catch{
+   if(setId)await ctx.env.DB.prepare('DELETE FROM shopping_reusable_sets WHERE id=? AND family_id=?').bind(setId,m.family_id).run().catch(()=>{});
+   return bad('同じ名前のセットがあるか、保存に失敗しました。',409)
+  }
+ }
  const setId=Number(b.set_id||0),set=(await ctx.env.DB.prepare('SELECT id,created_by_member_id,name FROM shopping_reusable_sets WHERE id=? AND family_id=?').bind(setId,m.family_id).first()) as Row|null;if(!set)return bad('セットが見つかりません。',404);const manage=Number(set.created_by_member_id)===Number(m.id)||['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase());
  if(action==='reusable_set_delete'){if(!manage)return bad('このセットを削除する権限がありません。',403);await ctx.env.DB.prepare('DELETE FROM shopping_reusable_sets WHERE id=? AND family_id=?').bind(setId,m.family_id).run();return json({ok:true,id:setId})}
  if(action==='reusable_set_invoke'){
