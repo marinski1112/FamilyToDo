@@ -47,7 +47,7 @@ export async function taskEntryPage(
     <button type="submit">登録する</button>
   </form></div>
   <script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo,categoryOptions,initialType}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script>
-  <script src="/assets/task-rough-input-ui.js?v=${APP_VERSION}"></script>\n  <script src="/assets/task-rough-input-ai.js?v=${APP_VERSION}"></script>\n  <script src="/assets/task-rough-input-save.js?v=${APP_VERSION}"></script>\n  <script src="/assets/task-rough-input-shopping-manual.js?v=${APP_VERSION}"></script>\n  <script src="/assets/task-rough-input-item-manual.js?v=${APP_VERSION}"></script>
-  <script src="/assets/task-entry-manual.js?v=${APP_VERSION}-task-idem1"></script>`;
+  <script src="/assets/task-rough-input-ui.js?v=${APP_VERSION}-entry-type2"></script>
+  <script src="/assets/task-entry-manual.js?v=${APP_VERSION}-task-idem2"></script>`;
   return new Response(layout('追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}});
 }
