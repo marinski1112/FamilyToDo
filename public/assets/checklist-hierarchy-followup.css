@@ -232,3 +232,18 @@
 .checklist-page .unified-goods-section>.zero-unclassified-add[hidden]{display:none!important}
 .checklist-page .unified-goods-section .checklist-compact-action,.checklist-page .task-section .checklist-compact-action{white-space:nowrap!important;font-size:14px!important;padding-inline:2px!important}
 .checklist-page .unified-goods-section .goods-kind-tabs>button,.checklist-page .task-section .task-event-tabs>button{padding-inline:8px!important;font-size:14px!important}
+
+
+/* Shopping is the single visual contract for both goods types. */
+.checklist-page .unified-goods-section .belongings-category-group{margin:0!important;border-top:1px solid #edf0f3!important;border-bottom:0!important;background:#fff!important}
+.checklist-page .unified-goods-section .belongings-category-head{display:flex!important;align-items:center!important;gap:0!important;min-height:44px!important;padding:2px!important;border-bottom:1px solid #e5e7eb!important;background:#fff!important}
+.checklist-page .unified-goods-section .belongings-category-name{flex:1!important;min-width:0!important;font-size:16px!important;font-weight:800!important;line-height:1.2!important;color:#1f2937!important}
+.checklist-page .unified-goods-section .belongings-category-row{margin:0!important;padding:5px 14px!important;border-bottom:1px solid #f0f0f2!important;background:#fff!important}
+.checklist-page .unified-goods-section .belongings-category-row>div:first-child{display:flex!important;align-items:center!important;gap:8px!important;min-height:48px!important}
+.checklist-page .unified-goods-section .belongings-category-row .item-check-row{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;min-height:44px!important;flex:1!important;margin:0!important;padding:0!important}
+.checklist-page .unified-goods-section .belongings-category-row input.toggle[data-type="item"]{-webkit-appearance:none!important;appearance:none!important;position:relative!important;flex:0 0 22px!important;width:22px!important;height:22px!important;min-width:22px!important;margin:0 10px 0 0!important;border:1.7px solid #9aa1aa!important;border-radius:5px!important;background:#fff!important;box-sizing:border-box!important}
+.checklist-page .unified-goods-section .belongings-category-row input.toggle[data-type="item"]:checked{background:#087bff!important;border-color:#087bff!important}
+.checklist-page .unified-goods-section .belongings-category-row input.toggle[data-type="item"]:checked::after{content:""!important;position:absolute!important;left:6px!important;top:2px!important;width:6px!important;height:11px!important;border:solid #fff!important;border-width:0 2px 2px 0!important;transform:rotate(45deg)!important}
+.checklist-page .unified-goods-section .belongings-category-row .item-check-row>span{min-width:0!important;overflow-wrap:anywhere!important;font-size:17px!important;line-height:1.35!important}
+.checklist-page .unified-goods-section .belongings-category-footer{border-top:1px solid #eef0f3!important;padding:4px 10px 10px 28px!important;background:#fff!important}
+.checklist-page .unified-goods-section .belongings-category-add-item{display:flex!important;align-items:center!important;min-height:48px!important;width:100%!important;border:0!important;background:transparent!important;color:#007aff!important;font:inherit!important;font-size:16px!important;font-weight:800!important;text-align:left!important;padding:0!important}
