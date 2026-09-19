@@ -2,7 +2,6 @@ import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { html, redirect } from './response';
 import { resolveShoppingCategoryOptions, SHOPPING_CATEGORY_MAX_LENGTH } from './shopping-categories';
-import { taskVisibilitySql } from './task-visibility';
 import { validateLiffNext } from './liff-target';
 import { APP_VERSION } from './version';
 
@@ -16,38 +15,9 @@ const esc = (v: unknown) => String(v ?? '')
   .replaceAll("'",'&#39;');
 const shoppingChecklistUrl=(date='')=>date?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';
 
-function taskRange(task:Row):{start:string;end:string}{
-  const start=String(task.start_at||task.due_at||'').slice(0,10);
-  let end=String(task.end_at||task.start_at||task.due_at||'').slice(0,10);
-  if(start&&end&&end<start)end=start;
-  return {start,end};
-}
-
-function taskOverlapsDate(task:Row,date:string):boolean{
-  if(!date)return false;
-  const {start,end}=taskRange(task);
-  return Boolean(start&&start<=date&&(!end||end>=date));
-}
-
-function taskOption(task:Row,selectedTaskId:number):string{
-  const {start,end}=taskRange(task);
-  const dateLabel=start?(end&&end!==start?`${start}〜${end}`:start):'期限なし';
-  return `<option value="${task.id}" ${Number(task.id)===selectedTaskId?'selected':''}>${esc(task.title)}（${esc(dateLabel)}）</option>`;
-}
-
-function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],selectedTaskId=0,categoryOptions:string[]=[]):string{
+function shoppingBatchForm(ctx:AppContext,date='',categoryOptions:string[]=[]):string{
   const csrf=ctx.session.csrfToken??'';
   const defaultDate=esc(date);
-  const selectedTask=tasks.find(t=>Number(t.id)===selectedTaskId),privateContext=String(selectedTask?.visibility_scope||'')==='PRIVATE';
-  const initialTasks=tasks.filter(task=>Number(task.id)===selectedTaskId||taskOverlapsDate(task,date));
-  const otherTaskCount=Math.max(0,tasks.length-initialTasks.length);
-  const taskLinkPayload=JSON.stringify({
-    selectedTaskId,
-    tasks:tasks.map(task=>{
-      const {start,end}=taskRange(task);
-      return {id:Number(task.id),title:String(task.title||''),start,end,due:String(task.due_at||'').slice(0,10)};
-    }),
-  }).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
   const categoryOptionHtml=categoryOptions.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
   return `<div class="card form-card batch-shopping-card" id="addShopping">
     <div class="section-head"><h2>＋ 買い物を追加</h2><span class="meta">複数商品を一度に登録できます</span></div>
@@ -65,10 +35,6 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
         <p class="small" id="shoppingCategoryHint">登録済みカテゴリーから選択できます。候補にない場合は「自由入力」を選び、必要なら家族の候補として登録できます。</p>
         <label>期限（全商品共通）</label>
         <input type="date" name="due_date" id="shoppingTaskDueDate" value="${defaultDate}">
-        <label>担当者（全商品共通）</label>
-        ${privateContext?'<p class="notice">🔒 自分専用タスクのため、担当者はあなたのみです</p>':`<div class="assignee-list">${members.map(x=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${x.id}"> ${esc(x.name)}</label>`).join('')}</div>`}
-        <label>関連タスク（全商品共通）</label>
-        ${privateContext?`<p class="notice">🔒 自分専用タスク: ${esc(selectedTask?.title)}</p><input type="hidden" name="task_id" value="${selectedTaskId}">`:`<select name="task_id" id="shoppingTaskId"><option value="0">タスクなし</option>${initialTasks.map(task=>taskOption(task,selectedTaskId)).join('')}</select><label class="checkrow"><input type="checkbox" id="shoppingTaskShowAll"><span>その他の未完了タスクも表示${otherTaskCount?`（${otherTaskCount}件）`:''}</span></label><p class="small" id="shoppingTaskHint">${date?`期限日に重なる未完了タスク ${initialTasks.filter(task=>taskOverlapsDate(task,date)).length}件を優先表示しています。`:'期限を指定すると、その日に重なる未完了タスクだけを先に表示します。'}</p>`}
         <label>メモ（全商品共通・任意）</label>
         <textarea name="memo" placeholder="例：低脂肪、○○店で購入"></textarea>
       </div>
@@ -76,12 +42,11 @@ function shoppingBatchForm(ctx:AppContext,tasks:Row[],date='',members:Row[]=[],s
     </form>
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
-  ${privateContext?'':`<script type="application/json" id="shoppingTaskLinkPayload">${taskLinkPayload}</script><script src="/assets/shopping-task-link.js?v=${APP_VERSION}-task-date-2"></script>`}
   <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-register-1"></script>`;
 }
 
 /** Canonical server-rendered shopping-new page independent from the legacy app.ts monolith. */
-export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):Promise<Response>{
+export async function shoppingNew(ctx:AppContext,date?:string,_selectedTaskId=0):Promise<Response>{
   const m=ctx.member;
   if(!m){
     const url=new URL(ctx.request.url);
@@ -89,13 +54,9 @@ export async function shoppingNew(ctx:AppContext,date?:string,selectedTaskId=0):
     return redirect(next?`/login.php?next=${encodeURIComponent(next)}`:'/login.php');
   }
   const d=date&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
-  const [tasks,members,catalog]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT id,title,start_at,end_at,due_at,visibility_scope,created_at FROM tasks t WHERE family_id=? AND status<>'completed' AND (visibility_scope='FAMILY' OR (id=? AND ${taskVisibilitySql('t')})) ORDER BY CASE WHEN id=? THEN 0 ELSE 1 END, COALESCE(start_at,due_at,created_at) DESC,id DESC LIMIT 200`).bind(m.family_id,selectedTaskId,m.id,selectedTaskId).all<Row>(),
-    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>(),
-    ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE,id').bind(m.family_id).all<Row>(),
-  ]);
+  const catalog=await ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE,id').bind(m.family_id).all<Row>();
   const categoryOptions=resolveShoppingCategoryOptions(catalog.results);
   const checklistUrl=shoppingChecklistUrl(d);
-  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="${checklistUrl}">戻る</a></div>${shoppingBatchForm(ctx,tasks.results,d,members.results,selectedTaskId,categoryOptions)}`;
+  const body=`<div class="page-head"><div><div class="eyebrow">Family TODO LINE</div><h1>🛒 買い物を追加</h1></div><a class="btn gray" href="${checklistUrl}">戻る</a></div>${shoppingBatchForm(ctx,d,categoryOptions)}`;
   return html(layout('買い物を追加',body,'/app/tasks.php'));
 }

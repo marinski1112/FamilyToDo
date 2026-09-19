@@ -53,10 +53,9 @@ try{
       if((item.destination==='task'||item.destination==='event')&&(!validDate(item.startDate)||!validDate(item.endDate)))return `「${item.title}」の日付が不正です。`;
       if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;
     }
-    const roots=rows.filter(x=>x.destination==='task'||x.destination==='event'),children=rows.filter(x=>x.destination==='child_task'),related=rows.filter(x=>['child_task','shopping','item'].includes(x.destination));
+    const roots=rows.filter(x=>x.destination==='task'||x.destination==='event'),children=rows.filter(x=>x.destination==='child_task');
     if(children.length&&!roots.length)return '子タスクを保存するには親タスクまたはイベントが1件必要です。';
-    if(roots.length>1&&related.length)return '親候補が複数あるため、子タスク・買い物・持ち物の紐付け先を決められません。メインのタスク/イベントを1件にしてください。';
-    if(roots.length===1&&roots[0].startDate){for(const item of rows.filter(x=>x.destination==='item'))if(item.dueDate&&item.dueDate!==roots[0].startDate)return `持ち物「${item.title}」は親タスクに紐付けるため、日付を親タスクと同じ ${roots[0].startDate} にするか空欄にしてください。`;}
+    if(roots.length>1&&children.length)return '親候補が複数あるため、子タスクの親を決められません。メインのタスク/イベントを1件にしてください。';
     return '';
   };
 
@@ -86,38 +85,29 @@ try{
   });
 
   async function saveTask(item,parentTaskId=null,parentPrivate=false){return await postJson('/api/task',taskPayload(item,parentTaskId,parentPrivate));}
-  async function saveShopping(item,taskId=null,assignees=[]){
-    if(taskId)return await postJson('/api/shopping',{csrf:csrf(),action:'add_batch',products:[{name:item.title,quantity:item.quantity||'1',url:item.url||''}],category:item.category||'',due_date:item.dueDate||'',task_id:taskId,assignees});
-    return await postJson('/api/shopping',{csrf:csrf(),action:'add',name:item.title,quantity:item.quantity||'1',category:item.category||'',url:item.url||'',due_date:item.dueDate||'',task_id:0});
+  async function saveShopping(item){
+    return await postJson('/api/shopping',{csrf:csrf(),action:'add',name:item.title,quantity:item.quantity||'1',category:item.category||'',url:item.url||'',due_date:item.dueDate||''});
   }
-  async function saveItem(item,taskId=null){return await postJson('/api/item',{csrf:csrf(),name:item.title,date:item.dueDate||'',task_id:taskId||0,assignees:item.assignees||[]});}
+  async function saveItem(item){return await postJson('/api/item',{csrf:csrf(),name:item.title,date:item.dueDate||''});}
 
   async function saveRows(rows){
     const roots=rows.filter(x=>x.destination==='task'||x.destination==='event'),children=rows.filter(x=>x.destination==='child_task'),shopping=rows.filter(x=>x.destination==='shopping'),items=rows.filter(x=>x.destination==='item'),createdTaskIds=[];
-    if(roots.length===1){
-      const parent=roots[0],parentResult=await saveTask(parent),parentId=Number(parentResult.id);createdTaskIds.push(parentId);
-      try{
-        for(const item of shopping)await saveShopping(item,parentId,parent.assignees||[]);
-        for(const item of items)await saveItem(item,parentId);
-        for(const child of children){const result=await saveTask(child,parentId,Boolean(parent.isPrivate));createdTaskIds.push(Number(result.id));}
-      }catch(error){
-        if(error?.uncertain)throw error;
-        const rolledBack=await rollbackTasks(createdTaskIds);
-        if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'関連項目の保存に失敗しました。')} 一部の作成内容を自動で戻せなかった可能性があります。`,true);
-        resetTaskCreateKeys(rows);
-        throw error;
-      }
-      return {saved:1+children.length+shopping.length+items.length,date:parent.startDate||'',kind:parent.destination};
+    let savedGoods=0;
+    try{
+      for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}
+      for(const child of children){const result=await saveTask(child,createdTaskIds[0],Boolean(roots[0]?.isPrivate));createdTaskIds.push(Number(result.id));}
+      for(const item of shopping){await saveShopping(item);savedGoods++;}
+      for(const item of items){await saveItem(item);savedGoods++;}
+    }catch(error){
+      // Independent goods are not removed by task rollback: never unlock a retry
+      // after any goods succeeded or a response became uncertain.
+      if(savedGoods||error?.uncertain)throw new SaveRequestError('一部が保存済み、または保存結果が不明です。重複を避けるため、再試行する前に一覧を確認してください。',true);
+      const rolledBack=await rollbackTasks(createdTaskIds);
+      if(!rolledBack)throw new SaveRequestError('一部のタスクを元に戻せませんでした。一覧を確認してください。',true);
+      resetTaskCreateKeys(rows);
+      throw error;
     }
-    if(roots.length>1){
-      try{for(const root of roots){const result=await saveTask(root);createdTaskIds.push(Number(result.id));}}
-      catch(error){if(error?.uncertain)throw error;const rolledBack=await rollbackTasks(createdTaskIds);if(!rolledBack)throw new SaveRequestError(`${String(error?.message||'保存に失敗しました。')} 一部のタスクを自動で戻せなかった可能性があります。`,true);resetTaskCreateKeys(rows);throw error;}
-      return {saved:roots.length,date:roots[0]?.startDate||'',kind:roots[0]?.destination||'task'};
-    }
-    let saved=0;
-    try{for(const item of shopping){await saveShopping(item);saved++;}for(const item of items){await saveItem(item);saved++;}}
-    catch(error){if(saved||error?.uncertain)throw new SaveRequestError(saved?`${saved}件は保存済みです。残りの保存に失敗しました。重複を避けるため、再試行する前に一覧を確認してください。`:String(error?.message||'保存結果を確認できませんでした。'),true);throw error;}
-    return {saved,date:'',kind:primary()};
+    return {saved:createdTaskIds.length+savedGoods,date:roots[0]?.startDate||'',kind:roots[0]?.destination||primary()};
   }
 
   const redirectAfterSave=result=>{
