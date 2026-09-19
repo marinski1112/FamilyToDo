@@ -18,11 +18,10 @@ for(const marker of ['async function taskNew(','async function itemNew(','id="ta
 if(pages.includes('export async function taskNew(')) throw new Error('obsolete taskNew renderer must stay retired');
 for(const marker of [
   'export async function itemNew(',
-  "SELECT id,title,start_at,due_at,visibility_scope FROM tasks",
-  '/assets/item-new.js?v=12.93-wave74',
-  'taskVisibilitySql',
+  '/assets/item-new.js?v=${APP_VERSION}-goods-independent-1',
   "import { layout } from './app-shell';",
 ]) if(!pages.includes(marker)) throw new Error(`retained new-entry page behavior marker missing: ${marker}`);
+for(const forbidden of ['taskVisibilitySql','task_id','assignees','SELECT id,title,start_at,due_at,visibility_scope FROM tasks'])if(pages.includes(forbidden))throw new Error(`item create must not fetch or expose goods linkage: ${forbidden}`);
 for(const marker of [
   'export async function taskEntryPage(',
   'shopping_category_catalog',
