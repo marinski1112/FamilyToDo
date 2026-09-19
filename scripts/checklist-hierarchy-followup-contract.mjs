@@ -184,3 +184,5 @@ const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.
 requireText(shoppingSets,"familytodo:checklist-unified-ready",'Shopping sets wait for async unified checklist completion');
 if(belongingsCss.includes('.belongings-category-row')||belongingsCss.includes('.belongings-composer'))throw new Error('Belongings must not own divergent row/composer presentation CSS');
 requireText(css,'Shopping is the single visual contract for both goods types.','Shopping is canonical for Belongings presentation');
+requireText(js,"'unified-item-group','shopping-category-group'",'Belongings unified groups delegate to Shopping structural class');
+requireText(css,'.unified-goods-section .unified-item-group.shopping-category-group','Belongings unified shell uses Shopping visual contract');
