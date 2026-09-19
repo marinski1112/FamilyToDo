@@ -11,7 +11,7 @@ const boot=()=>{
   const setStatus=(message,error=false)=>{if(!(status instanceof HTMLElement))return;status.textContent=message||'';status.dataset.error=error?'1':'0'};
   const hideEditor=()=>{if(editor instanceof HTMLElement){editor.hidden=true;editor.replaceChildren()}};
   const close=()=>{if(overlay instanceof HTMLElement){overlay.hidden=true;hideEditor();setStatus('')}};
-  const groups=()=>[...section.querySelectorAll('.belongings-category-group')].filter(g=>g instanceof HTMLElement);
+  const groups=()=>[...document.querySelectorAll('.unified-goods-section .unified-item-group,.item-section .belongings-category-group')].filter((g,i,a)=>g instanceof HTMLElement&&a.indexOf(g)===i);
   const categoryName=g=>String(g?.dataset?.category||'').trim()||'未分類';
   const refreshSourceOptions=()=>{
     if(!(sourceSelect instanceof HTMLSelectElement))return;
