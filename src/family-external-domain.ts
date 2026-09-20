@@ -48,13 +48,13 @@ export async function recordQuickChoreDomain(env:Env,member:CurrentMember,id:num
   const logId=Number(r.meta.last_row_id);await logActivity(externalActionContext(env,member),'CREATED','family_log',logId,{log_type:'HOUSEWORK',occurred_at:now,value_text:String(chore.name),quick_chore_id:id});return {ok:true,id:logId};
 }
 
-export async function createExternalShoppingItemDomain(env:Env,member:CurrentMember,input:{name:string;quantity:number}):Promise<{ok:boolean;id?:number}>{
+export async function createExternalShoppingItemDomain(env:Env,member:CurrentMember,input:{name:string;quantity:number;visibility?:'FAMILY'|'PRIVATE'}):Promise<{ok:boolean;id?:number}>{
   const name=String(input.name||'').trim();
   if(!name||name.length>255||!Number.isSafeInteger(input.quantity)||input.quantity<1||input.quantity>999)return {ok:false};
   const n=nowJst();
-  const r=await env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,url) VALUES(?,?,?,NULL,NULL,'pending',?,?,?,NULL,NULL)").bind(member.family_id,name,String(input.quantity),member.id,n,n).run();
+  const visibility=input.visibility==='PRIVATE'?'PRIVATE':'FAMILY';
+  const r=await env.DB.prepare("INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,url,visibility_scope,private_owner_id) VALUES(?,?,?,NULL,NULL,'pending',?,?,?,NULL,?,?)").bind(member.family_id,name,String(input.quantity),member.id,n,n,visibility,visibility==='PRIVATE'?member.id:null).run();
   const id=Number(r.meta.last_row_id||0);if(!id)return {ok:false};
-  await env.DB.prepare('INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1 AND deleted_at IS NULL').bind(id,member.id,member.family_id).run();
   return {ok:true,id};
 }
 
