@@ -22,7 +22,7 @@ for(const marker of [
   "action==='add_batch'",
   "action==='add'",
   "taskChildVisibilitySql('s')",
-  "queueCalendarProjectionAfterMutation",
+  "code:'RETIRED_ACTION'",
   "INSERT INTO shopping_completion_history",
   "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`shopping root lost ${marker}`);
