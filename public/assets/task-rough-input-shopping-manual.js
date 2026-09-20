@@ -62,14 +62,10 @@ try{
       const doc=new DOMParser().parseFromString(source,'text/html');
       const card=doc.getElementById('addShopping');
       const shoppingPayload=doc.getElementById('shoppingNewPayload');
-      const taskPayload=doc.getElementById('shoppingTaskLinkPayload');
       if(!card||!shoppingPayload)throw new Error('shopping form missing');
-      const taskLinkSrc=allowedScriptSrc(doc,'/assets/shopping-task-link.js');
       const shoppingNewSrc=allowedScriptSrc(doc,'/assets/shopping-new.js');
-      if(!shoppingNewSrc||(taskPayload&&!taskLinkSrc))throw new Error('shopping controller missing');
+      if(!shoppingNewSrc)throw new Error('shopping controller missing');
       body.replaceChildren(card,shoppingPayload);
-      if(taskPayload)body.appendChild(taskPayload);
-      if(taskPayload)await loadScript(taskLinkSrc);
       await loadScript(shoppingNewSrc);
       if(document.documentElement.dataset.shoppingNewJs!=='ready')throw new Error('shopping controller failed');
       body.dataset.loaded='1';
