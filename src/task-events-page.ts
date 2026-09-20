@@ -194,49 +194,29 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 
   const taskMeta=(task:Row)=>{const parts:string[]=[];const start=String(task.start_at||'').slice(11,16),due=String(task.due_at||'').slice(11,16);if(start&&start!=='00:00')parts.push(esc(start));else if(!start&&due&&due!=='00:00')parts.push(esc(due));if(task.location)parts.push(esc(task.location));return parts.join(' ・ ');};
   const childComposer=(task:Row,hidden=false)=>`<form class="task-child-composer" data-parent-task-id="${esc(task.id)}" data-parent-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"${hidden?' hidden':''}><div class="task-child-composer-line"><span class="task-child-branch" aria-hidden="true">└</span><input class="task-child-title" type="text" maxlength="255" autocomplete="off" enterkeyhint="done" placeholder="子タスクを追加" aria-label="子タスクを追加"><button class="btn small secondary task-child-add" type="submit">追加</button></div><div class="task-child-status" role="status" aria-live="polite"></div></form>`;
-  const renderLinkedTaskAccessories=(task:Row)=>{
-    const templateId=Number(task.task_id||0)||Math.abs(Number(task.id));
-    const linkedShopping=shoppingByTask.get(templateId)||shoppingByTask.get(Math.abs(Number(task.id)))||[];
-    const linkedItems=itemsByTask.get(templateId)||itemsByTask.get(Math.abs(Number(task.id)))||[];
-    const itemRows=linkedItems.map(item=>`<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">🎒 ${esc(item.name)}</span></label></div>`).join('');
-    return {
-      childItems:linkedItems.length?`<details class="task-shopping"><summary>🎒 持ち物 ${linkedItems.length}件</summary>${itemRows}</details>`:'',
-      shoppingAdd:'',
-      shoppingCount:linkedShopping.length?`<a class="task-shopping-count" href="#shopping-checklist">🛒 ${linkedShopping.length}件</a>`:'',
-    };
-  };
-  const renderChildTask=(task:Row,withShopping=true)=>{
+  const renderChildTask=(task:Row)=>{
     const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
-    const accessories=withShopping?renderLinkedTaskAccessories(task):{childItems:'',shoppingAdd:'',shoppingCount:''};
-    return `<div class="row task-child-row" data-task-id="${esc(task.id)}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}" ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a>${accessories.shoppingCount}${accessories.shoppingAdd}</div></div><div class="meta">${taskMeta(task)}</div>${accessories.childItems}</div>`;
+    return `<div class="row task-child-row" data-task-id="${esc(task.id)}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}" ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="meta">${taskMeta(task)}</div></div>`;
   };
   const renderRootTask=(task:Row)=>{
     const taskId=Number(task.id||0),isEvent=String(task.task_kind||'').toLowerCase()==='event',storedChild=Number(task.parent_task_id||0)>0;
-    const {childItems,shoppingAdd,shoppingCount}=renderLinkedTaskAccessories(task);
     const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
     const titleHtml=taskId<0?`<span>${esc(task.title)} <small>(定期)</small></span>`:`${privateBadge}${isEvent?`<a href="/task/view.php?id=${task.id}">📌 ${esc(task.title)}</a>`:esc(task.title)}`;
     const detailAction=!isEvent&&taskId>=0?`<a class="checklist-row-action" href="/task/view.php?id=${task.id}" aria-label="${esc(task.title)}の詳細">詳細</a>`:'';
-    const mainHtml=isEvent?`<div class="task-main event-main"><span>${titleHtml} <small>(イベント)</small></span><div>${shoppingCount}${shoppingAdd}</div></div>`:`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="${taskId<0?'recurrence':'task'}" data-id="${esc(task.id)}" ${taskId<0?`data-occurrence-id="${esc(task.recurrence_occurrence_id)}"`:''} ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${titleHtml}</span></label><div class="checklist-row-actions">${detailAction}${shoppingCount}${shoppingAdd}</div></div>`;
+    const mainHtml=isEvent?`<div class="task-main event-main"><span>${titleHtml} <small>(イベント)</small></span></div>`:`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="${taskId<0?'recurrence':'task'}" data-id="${esc(task.id)}" ${taskId<0?`data-occurrence-id="${esc(task.recurrence_occurrence_id)}"`:''} ${task.status==='completed'?'checked':''}><span class="${task.status==='completed'?'done':''}">${titleHtml}</span></label><div class="checklist-row-actions">${detailAction}</div></div>`;
     const familyLogAction=taskId<0&&Number(task.family_log_template_id||0)?`<button type="button" class="btn small secondary occurrence-family-log" data-occurrence-id="${esc(task.recurrence_occurrence_id)}">🐣 記録して完了</button>`:'';
     const children=taskId>0?(childTasksByParent.get(taskId)||[]):[];
-    const childRows=children.map(child=>renderChildTask(child,true)).join('');
+    const childRows=children.map(child=>renderChildTask(child)).join('');
     const composer=taskId>0&&!isEvent&&!storedChild?childComposer(task,task.status==='completed'):'';
     const childSection=childRows||composer?`<div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div>`:'';
-    return `<div class="row task-row ${isEvent?'event-task-row':''}" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}">${mainHtml}<div class="meta">${taskMeta(task)}</div>${familyLogAction}${childItems}${childSection}</div>`;
+    return `<div class="row task-row ${isEvent?'event-task-row':''}" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}">${mainHtml}<div class="meta">${taskMeta(task)}</div>${familyLogAction}${childSection}</div>`;
   };
   const taskRows=rootTasks.map(renderRootTask).join('');
 
-  const renderedTaskLinkIds=new Set<number>();
-  for(const task of data.tasks){
-    const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));
-    if(linkId>0)renderedTaskLinkIds.add(linkId);
-  }
   const renderItemRow=(item:Row)=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div></div>`;
   const standaloneItems=data.items;
-  const orphanLinkedItems:Row[]=[];
   const itemRows=standaloneItems.map(renderItemRow).join('');
-  const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');
-  const itemContent=`${itemRows}${orphanItemRows?`<div class="orphan-linked-items"><div class="meta"><strong>関連タスクの持ち物</strong></div>${orphanItemRows}</div>`:''}`;
+  const itemContent=itemRows;
   const unorganizedHtml=unorganizedRoots.length?`<div class="card section-card unorganized-section"><div class="section-head"><h2>📋 未整理</h2><span class="meta">期限なし ${unorganized.length}件</span></div>${unorganizedRoots.map(task=>{
     const privateBadge=String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':'';
     const children=unorganizedChildrenByParent.get(Number(task.id||0))||[];
