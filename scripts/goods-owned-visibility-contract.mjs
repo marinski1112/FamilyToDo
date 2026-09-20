@@ -116,7 +116,44 @@ for(const [type,table,key] of [['item','item_completion_history','item_id'],['sh
   }
   assert.deepEqual(db.prepare(`SELECT action FROM ${table} WHERE ${key}=1 ORDER BY id`).all().map(r=>r.action),['COMPLETED','UNCOMPLETED'],'same-state retries do not duplicate history');
 }
-db.exec('PRAGMA foreign_keys=ON; DELETE FROM members WHERE id=901');
+for(const [file,handler,table] of [['item-api.ts','itemApi','items'],['shopping-root.ts','shopping','shopping_items']]){
+  const sandbox=vm.createContext({Response,URL,Intl,Date,goodsVisibilitySql:context.goodsVisibilitySql,taskChildVisibilitySql:context.taskChildVisibilitySql,bodyJson:request=>request.json(),json:(body,status=200)=>new Response(JSON.stringify(body),{status}),commitSession:response=>response,handleItemReusableSetAction:async()=>null,handleShoppingReusableSetAction:async()=>null});
+  vm.runInContext(stripTypeScriptTypes(readFileSync('src/'+file,'utf8')).replace(/^import .*;\s*$/gm,'').replace(/export /g,'')+`\nglobalThis.handle=${handler}`,sandbox);
+  const call=payload=>sandbox.handle(new Request('https://fixture.invalid/api/goods',{method:'POST',body:JSON.stringify({csrf:'fixture',name:'New independent',date:'2026-09-20',due_date:'2026-09-20',...payload})}),{member:{id:901,family_id:901},session:{csrfToken:'fixture'},env:{DB}});
+  const beforeCount=db.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n;
+  for(const payload of [{task_id:902},{assignees:[901]}])assert.equal((await call(payload)).status,400,'legacy linked payload is rejected, not silently shared');
+  assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n,beforeCount);
+  const response=await call({client_request_id:'new-independent'});assert.ok([200,201].includes(response.status));
+  const result=await response.json();
+  const row=db.prepare(`SELECT task_id,visibility_scope,private_owner_id FROM ${table} WHERE id=?`).get(result.id);
+  assert.deepEqual({...row},{task_id:null,visibility_scope:'FAMILY',private_owner_id:null});
+  if(table==='items'){
+    const repeat=await call({client_request_id:'new-independent'});assert.equal(repeat.status,200);assert.equal((await repeat.json()).id,result.id);
+    assert.equal((await call({client_request_id:'new-independent',name:'Changed'})).status,409);
+  }else{
+    assert.equal((await call({action:'to_task',id:result.id})).status,410);
+    assert.equal((await call({action:'add_batch',products:[{name:'Batch A'},{name:'Batch B'}]})).status,200);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM shopping_items WHERE name LIKE 'Batch %' AND task_id IS NULL AND visibility_scope='FAMILY'").get().n,2);
+  }
+}
+const externalContext=vm.createContext({Intl,Date,FAMILY_LOG_TYPE_META:{}});
+vm.runInContext(stripTypeScriptTypes(readFileSync('src/family-external-domain.ts','utf8')).replace(/^import .*;\s*$/gm,'').replace(/export /g,''),externalContext);
+const voiceContext=vm.createContext({Intl,Date,utcNow:()=> '2026-09-20 01:00:00',goodsVisibilitySql:context.goodsVisibilitySql,createExternalShoppingItemDomain:externalContext.createExternalShoppingItemDomain});
+vm.runInContext(stripTypeScriptTypes(readFileSync('src/google-tasks.ts','utf8').replace(/^import .*;\s*$/gm,'').replace(/export /g,''),{mode:'transform'}),voiceContext);
+let externalId=0;
+for(const actor of [901,902,903])db.prepare("INSERT INTO external_google_task_accounts(id,family_id,member_id,refresh_token_ciphertext,tasklist_id,status,sync_started_at,updated_min,created_at,updated_at) VALUES(?,?,?,'fixture-not-a-token','fixture','ACTIVE','now','now','now','now')").run(actor,actor===903?902:901,actor);
+const voice=(actor,command,visibility='PRIVATE')=>voiceContext.applyVoiceCommand({DB},{id:actor,member_id:actor,family_id:actor===903?902:901,tasklist_id:'fixture',import_visibility:visibility},{id:String(++externalId),etag:'fixture'},command);
+for(const visibility of ['PRIVATE','FAMILY']){
+  assert.equal(await voice(901,{marked:true,type:'SHOPPING_ADD',name:'Voice '+visibility,quantity:1},visibility),'command');
+  const row=db.prepare('SELECT task_id,visibility_scope,private_owner_id FROM shopping_items WHERE name=?').get('Voice '+visibility);
+  assert.deepEqual({...row},{task_id:null,visibility_scope:visibility,private_owner_id:visibility==='PRIVATE'?901:null});
+}
+assert.equal(await voice(902,{marked:true,type:'SHOPPING_COMPLETE',name:'Voice PRIVATE'}),'review');
+assert.equal(await voice(903,{marked:true,type:'SHOPPING_COMPLETE',name:'Voice FAMILY'}),'review');
+assert.equal(await voice(901,{marked:true,type:'SHOPPING_COMPLETE',name:'Voice PRIVATE'}),'command');
+assert.equal(await voice(902,{marked:true,type:'SHOPPING_COMPLETE',name:'Voice FAMILY'}),'command','shared goods do not require assignments');
+assert.equal(db.prepare("SELECT COUNT(*) n FROM shopping_items WHERE name LIKE 'Voice %' AND status='completed'").get().n,2);
+db.exec('DELETE FROM external_google_voice_commands; DELETE FROM external_google_task_accounts; PRAGMA foreign_keys=ON; DELETE FROM members WHERE id=901');
 for(const table of ['items','shopping_items'])assert.equal(db.prepare(`SELECT private_owner_id FROM ${table} WHERE id=3`).get().private_owner_id,null);
 db.close();
 console.log('goods-owned visibility: migration preserves data; private/orphan/foreign-parent rows fail closed; unlink does not widen visibility; shared exports exclude private rows');
