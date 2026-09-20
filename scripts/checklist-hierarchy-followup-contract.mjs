@@ -184,6 +184,8 @@ requireText(css,'grid-template-columns:auto minmax(0,1fr)!important','two-row co
 requireText(appShell,"/assets/task-rough-input-ai.js?v=${APP_VERSION}",'AI controller loaded by canonical entry page');
 requireText(appShell,"/assets/task-rough-input-save.js?v=${APP_VERSION}",'AI save controller loaded by canonical entry page');
 requireText(appShell,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSION}",'Shopping selected-type manual controller loaded');
+forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf8'),'shoppingTaskLinkPayload','retired Shopping Task-link payload in embedded manual entry');
+forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf8'),'shopping-task-link.js','retired Shopping Task-link controller in embedded manual entry');
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
