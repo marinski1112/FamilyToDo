@@ -21,6 +21,8 @@ const belongingsCategories=readFileSync('public/assets/checklist-belongings-cate
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
 const appShell=readFileSync('src/app-shell.ts','utf8');
 const flowFix=readFileSync('public/assets/checklist-reminders-flow-fix.js','utf8');
+const taskEventsPage=readFileSync('src/task-events-page.ts','utf8');
+const taskEventsJs=readFileSync('public/assets/task-events.js','utf8');
 const js=ui;
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
@@ -220,3 +222,11 @@ requireText(categoryDrag,"familytodo:category-created",'shopping live category c
 requireText(belongingsCategories,"g.dataset.createdAt=String(d.created_at||'')",'belongings live category creation timestamp');
 requireText(belongingsCategories,"familytodo:category-created",'belongings live category creation event');
 requireText(js,"document.addEventListener('familytodo:category-created',rememberCreated)",'hierarchy remembers same-session category age');
+
+/* Checklist server/runtime must not retain legacy task-owned goods presentation. */
+forbidText(taskEventsPage,'task-shopping-add','server-rendered task shopping affordance');
+forbidText(taskEventsPage,'shopping_assignees','shopping assignee presentation query');
+forbidText(taskEventsPage,'item_assignees','item assignee presentation query');
+forbidText(taskEventsPage,"LEFT JOIN tasks t ON t.id=s.task_id",'shopping parent-task read');
+forbidText(taskEventsJs,'task-shopping-add','event runtime task shopping affordance');
+forbidText(taskEventsJs,'task_id=${id}','event runtime task-linked shopping URL');
