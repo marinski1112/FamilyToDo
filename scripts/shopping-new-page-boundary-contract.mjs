@@ -21,8 +21,8 @@ for(const marker of [
   "action==='add'",
   'normalized.length>50',
   'INSERT INTO shopping_completion_history',
-  'queueCalendarProjectionAfterMutation',
-  "String(task.visibility_scope)==='PRIVATE'",
+  "code:'RETIRED_ACTION'",
+  "'FAMILY',NULL)",
   "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`Shopping API lost behavior marker: ${marker}`);
 const retiredAsset='/assets/'+'shopping.js';
