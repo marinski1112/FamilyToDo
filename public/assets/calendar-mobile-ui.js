@@ -113,9 +113,6 @@ try{
       const text=String(el.textContent||'').replace(/^\s*📌\s*/,'');
       if(el.textContent!==text)el.textContent=text;
       if(el.tagName==='A'&&matchMedia('(max-width:600px)').matches&&el.hasAttribute('href')){
-        el.dataset.calendarPreviewHref=el.getAttribute('href')||'';
-        el.removeAttribute('href');
-        el.setAttribute('role','button');
         el.setAttribute('aria-label',text);
       }
     });
@@ -220,12 +217,12 @@ try{
   document.addEventListener('touchmove',event=>{if(preview)event.stopPropagation();},{capture:true,passive:true});
   document.addEventListener('touchend',event=>{
     if(!preview&&!scheduleTarget(event.target))return;
-    event.preventDefault();event.stopPropagation();clearPreview();
-  },{capture:true,passive:false});
+    clearPreview();
+  },{capture:true,passive:true});
   document.addEventListener('touchcancel',()=>clearPreview(),{capture:true,passive:true});
   document.addEventListener('click',event=>{
     if(!scheduleTarget(event.target))return;
-    event.preventDefault();event.stopPropagation();
+    clearPreview();
   },{capture:true});
   document.addEventListener('pointerdown',event=>{
     if(event.pointerType==='touch')return;
