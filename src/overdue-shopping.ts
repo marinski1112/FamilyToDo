@@ -1,5 +1,5 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import type { AppContext } from './app-context';
-import { taskVisibilitySql } from './task-visibility';
 
 type Row=Record<string,unknown>;
 
@@ -46,16 +46,16 @@ export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:
   const parentDueCursor=cursorSql('COALESCE(t.end_at,t.due_at,t.start_at)',cursor);
   const ownCursorBindings=cursorBindings(cursor);
   const parentCursorBindings=cursorBindings(cursor);
-  const parentVisible=taskVisibilitySql('t');
+  const parentVisible=goodsVisibilitySql('s');
   const [unlinkedOwnDue,linkedOwnDue,parentFallback]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.*,NULL AS task_title,NULL AS task_start_at,NULL AS task_end_at,NULL AS task_due_at,
         s.due_date AS effective_due,
         (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s
-      WHERE s.family_id=? AND s.task_id IS NULL AND s.status<>'completed'
+      WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND s.task_id IS NULL AND s.status<>'completed'
         AND s.due_date IS NOT NULL AND date(s.due_date)<date(?)${ownDueCursor}
       ORDER BY s.due_date,(s.category IS NOT NULL),COALESCE(s.category,''),s.name,s.id
-      LIMIT ${pageLimit}`).bind(member.family_id,date,...ownCursorBindings).all<Row>(),
+      LIMIT ${pageLimit}`).bind(member.family_id,member.id,date,...ownCursorBindings).all<Row>(),
     ctx.env.DB.prepare(`SELECT ${selectColumns},s.due_date AS effective_due
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
       WHERE s.family_id=? AND s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'
