@@ -79,5 +79,6 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
       WHERE family_id=? AND name=? COLLATE NOCASE`).bind(member.family_id,name),
   ]);
 
-  return commitSession(json({ok:true,name}),ctx.session,ctx.env.APP_SECRET);
+  const created=await ctx.env.DB.prepare('SELECT created_at FROM shopping_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(member.family_id,name).first<{created_at?:string}>();
+  return commitSession(json({ok:true,name,created_at:String(created?.created_at||'')}),ctx.session,ctx.env.APP_SECRET);
 }
