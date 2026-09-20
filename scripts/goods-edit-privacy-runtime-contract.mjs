@@ -48,7 +48,7 @@ for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['sh
     if(method==='GET')assert.doesNotMatch(await result.text(),/name="(?:assignees|task_id)"/);
     else assert.equal(result.status,302);
     const row=db.prepare(`SELECT task_id,status,completed_by,completed_at FROM ${table} WHERE id=701`).get();
-    assert.deepEqual({...row},{task_id:null,status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00'});
+    assert.deepEqual({...row},{task_id:method==='POST'?null:relation,status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00'});
     assert(mutations.every(sql=>!/(?:DELETE|INSERT).*completions|SET status=/i.test(sql)));
   }
   }
