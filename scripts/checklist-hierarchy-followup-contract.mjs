@@ -126,6 +126,10 @@ requireText(js,"g.hidden=name===U?false:emptyEligible(name)",'new empty categori
 requireText(js,'nextJstOneAt','next JST 01:00 empty-category threshold');
 requireText(js,"if(count&&name!==U)active.add(key(name))",'unclassified excluded from empty-category semantics');
 requireText(addFooter,"button.textContent='＋ タスク'",'compact top-right task label');
+requireText(css,'.task-section>.section-quick-entry:not([hidden]){display:block!important}','Task/Event quick entry becomes visible when add control opens it');
+requireText(belongingsUi,"familytodo:belongings-category-add-request",'Belongings category add request reaches canonical category controller');
+requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
+requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
 
 requireText(addFooter,"if(klass==='item-section')",'global Belongings add suppressed at owner');
