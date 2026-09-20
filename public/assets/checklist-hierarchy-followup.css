@@ -167,7 +167,8 @@
 .checklist-page .section-head{position:relative!important}
 .checklist-page .task-section>.section-head .checklist-section-tools{margin-left:auto!important}
 .checklist-page .task-section>.section-head .task-add-top{display:inline-flex!important;position:static!important;order:10!important}
-.checklist-page .task-section>.section-quick-entry{display:none!important}
+.checklist-page .task-section>.section-quick-entry[hidden]{display:none!important}
+.checklist-page .task-section>.section-quick-entry:not([hidden]){display:block!important}
 .checklist-page .shopping-category-name,.checklist-page .belongings-category-name{flex:1!important;min-width:0!important;text-align:left!important;cursor:text!important}
 .checklist-page .shopping-category-title,.checklist-page .belongings-category-head{display:flex!important;align-items:center!important;justify-content:flex-start!important}
 .checklist-page .shopping-category-toggle,.checklist-page .belongings-category-toggle{flex:0 0 28px!important;width:28px!important;min-width:28px!important;height:40px!important;border:0!important;background:transparent!important;padding:0!important;margin-left:0!important;font-size:22px!important;color:#8e8e93!important}
