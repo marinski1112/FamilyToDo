@@ -190,7 +190,7 @@ requireText(css,'.unified-items-source{display:none!important}','single shared g
 /* Active input type owns compact controls and AI destination. */
 requireText(js,"ai.textContent='＋AI入力'",'compact AI input label');
 requireText(js,"u.searchParams.set('type',kind)",'AI/add route follows selected kind');
-requireText(css,'.unified-goods-section [hidden]{display:none!important}','inactive Shopping/Belongings controls stay hidden');
+requireText(css,'.unified-goods-section [hidden]{display:none!important}','explicitly hidden controls stay hidden');
 requireText(css,'grid-template-columns:auto minmax(0,1fr)!important','two-row compact header does not overflow');
 
 /* Shopping owns Belongings presentation; selected entry type must survive into AI/manual controllers. */
@@ -202,7 +202,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,'hierarchy-followup4','checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity6'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
@@ -216,7 +216,9 @@ const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-se
 requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
 requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Task/Event add works for button-owned quick entry');
-requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'only active goods type categories are shown');
+requireText(js,"if(sz instanceof HTMLElement)sz.hidden=false;if(iz instanceof HTMLElement)iz.hidden=false",'Shopping and Belongings empty-category clusters remain visible together');
+requireText(js,"if(shoppingUn instanceof HTMLElement)shoppingUn.hidden=false;if(itemUn instanceof HTMLElement)itemUn.hidden=false",'Shopping and Belongings unclassified add routes remain visible together');
+forbidText(js,"g.hidden=(kind==='item')?!g.classList.contains('unified-item-group'):g.classList.contains('unified-item-group')",'goods tabs must not hide the non-selected goods categories');
 requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
 requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
 requireText(js,"shopping.classList.remove('category-delete-mode-active')",'goods tab switch exits stale Shopping category delete mode');
