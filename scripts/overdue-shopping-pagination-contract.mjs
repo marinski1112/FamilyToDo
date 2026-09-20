@@ -11,7 +11,7 @@ const browserSyntax=spawnSync(process.execPath,['--check','public/assets/overdue
 assert.equal(browserSyntax.status,0,browserSyntax.stderr||browserSyntax.stdout||'Overdue Shopping browser syntax invalid');
 
 for(const marker of [
-  "import { taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   'export const OVERDUE_SHOPPING_PAGE_SIZE=50;',
   "s.task_id IS NULL AND s.status<>'completed'",
   "s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'",
@@ -70,7 +70,9 @@ CREATE TABLE shopping_items(
   created_at TEXT,
   updated_at TEXT,
   task_id INTEGER,
-  url TEXT
+  url TEXT,
+  visibility_scope TEXT NOT NULL DEFAULT 'FAMILY',
+  private_owner_id INTEGER
 );
 CREATE INDEX idx_shopping_family ON shopping_items(family_id);
 CREATE INDEX idx_shopping_due ON shopping_items(family_id,due_date);
@@ -82,7 +84,7 @@ const currentSql=`SELECT s.id,s.name,s.category,s.due_date,s.task_id,
   COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) AS effective_due
 FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
 WHERE s.family_id=?
-  AND (s.task_id IS NULL OR (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?)))
+  AND (s.visibility_scope='FAMILY' OR (s.visibility_scope='PRIVATE' AND s.private_owner_id IS NOT NULL AND s.private_owner_id=?))
   AND s.status<>'completed'
   AND COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL
   AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))<date(?)
@@ -97,26 +99,26 @@ const branchSql=(kind,cursor=false)=>{
   const cursorC=cursor?cursorClause('COALESCE(t.end_at,t.due_at,t.start_at)'):'';
   if(kind==='unlinked')return `SELECT s.id,s.name,s.category,s.due_date,s.task_id,s.due_date AS effective_due
     FROM shopping_items s
-    WHERE s.family_id=? AND s.task_id IS NULL AND s.status<>'completed'
+    WHERE s.family_id=? AND (s.visibility_scope='FAMILY' OR (s.visibility_scope='PRIVATE' AND s.private_owner_id IS NOT NULL AND s.private_owner_id=?)) AND s.task_id IS NULL AND s.status<>'completed'
       AND s.due_date IS NOT NULL AND date(s.due_date)<date(?)${cursorA}
     ORDER BY s.due_date,(s.category IS NOT NULL),COALESCE(s.category,''),s.name,s.id LIMIT ${limit}`;
   if(kind==='linked')return `SELECT s.id,s.name,s.category,s.due_date,s.task_id,s.due_date AS effective_due
     FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
     WHERE s.family_id=? AND s.task_id IS NOT NULL
-      AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
+      AND (s.visibility_scope='FAMILY' OR (s.visibility_scope='PRIVATE' AND s.private_owner_id IS NOT NULL AND s.private_owner_id=?))
       AND s.status<>'completed' AND s.due_date IS NOT NULL AND date(s.due_date)<date(?)${cursorA}
     ORDER BY s.due_date,(s.category IS NOT NULL),COALESCE(s.category,''),s.name,s.id LIMIT ${limit}`;
   return `SELECT s.id,s.name,s.category,s.due_date,s.task_id,COALESCE(t.end_at,t.due_at,t.start_at) AS effective_due
     FROM shopping_items s JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
     WHERE s.family_id=? AND s.task_id IS NOT NULL
-      AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
+      AND (s.visibility_scope='FAMILY' OR (s.visibility_scope='PRIVATE' AND s.private_owner_id IS NOT NULL AND s.private_owner_id=?))
       AND s.status<>'completed' AND s.due_date IS NULL
       AND COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL
       AND date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)${cursorC}
     ORDER BY COALESCE(t.end_at,t.due_at,t.start_at),(s.category IS NOT NULL),COALESCE(s.category,''),s.name,s.id LIMIT ${limit}`;
 };
 const plan=(sql,args)=>db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map(row=>String(row.detail||'')).join('\n');
-const unlinkedPlan=plan(branchSql('unlinked'),[familyId,cutoff]);
+const unlinkedPlan=plan(branchSql('unlinked'),[familyId,memberId,cutoff]);
 const linkedPlan=plan(branchSql('linked'),[familyId,memberId,cutoff]);
 assert.match(unlinkedPlan,/idx_shopping_overdue_unlinked_seek/,'unlinked own-due branch must use its partial seek index');
 assert.doesNotMatch(unlinkedPlan,/TEMP B-TREE/,'unlinked own-due branch must not sort into a temp tree');
@@ -145,12 +147,16 @@ for(let id=1;id<=12000;id++){
 }
 shoppingInsert.run(20001,'orphan-visible',null,'2025-12-01',999999);
 db.prepare("UPDATE shopping_items SET status='completed' WHERE id%13=0").run();
+// Snapshot legacy privacy and make an unlinked private row explicit.
+db.exec(`UPDATE shopping_items SET visibility_scope=CASE WHEN task_id IS NULL THEN 'FAMILY' ELSE COALESCE((SELECT visibility_scope FROM tasks WHERE tasks.id=shopping_items.task_id),'PRIVATE') END,
+ private_owner_id=(SELECT private_owner_id FROM tasks WHERE tasks.id=shopping_items.task_id);
+ UPDATE shopping_items SET visibility_scope='PRIVATE',private_owner_id=999 WHERE id=10;`);
 
 const sqliteBinary=(a,b)=>Buffer.compare(Buffer.from(String(a??''),'utf8'),Buffer.from(String(b??''),'utf8'));
 const rowCompare=(a,b)=>sqliteBinary(a.effective_due,b.effective_due)||(Number(a.category!=null)-Number(b.category!=null))||sqliteBinary(a.category,b.category)||sqliteBinary(a.name,b.name)||(Number(a.id)-Number(b.id));
 const argsFor=(kind,cursor)=>{
   const tail=cursor?[cursor.effective_due,cursor.category==null?0:1,String(cursor.category??''),String(cursor.name),Number(cursor.id)]:[];
-  return kind==='unlinked'?[familyId,cutoff,...tail]:[familyId,memberId,cutoff,...tail];
+  return [familyId,memberId,cutoff,...tail];
 };
 const splitPage=(cursor)=>{
   const rows=['unlinked','linked','fallback'].flatMap(kind=>db.prepare(branchSql(kind,Boolean(cursor))).all(...argsFor(kind,cursor)));
@@ -160,7 +166,7 @@ const currentFirst=db.prepare(`${currentSql} LIMIT ${limit}`).all(familyId,membe
 const first=splitPage(null);
 assert.deepEqual(first.map(row=>Number(row.id)),currentFirst.map(row=>Number(row.id)),'split first page must preserve the current combined-query order');
 assert.equal(first.length,limit,'split page must return page size + sentinel');
-assert.ok(first.some(row=>Number(row.id)===20001),'linked own-due orphan rows visible in the current LEFT JOIN contract must remain visible');
+assert.ok(!first.some(row=>Number(row.id)===20001),'orphan private goods must fail closed');
 const visible=first.slice(0,50),last=visible.at(-1);
 assert.ok(last,'first Shopping page must expose a continuation cursor');
 const second=splitPage(last);
@@ -169,9 +175,8 @@ assert.notEqual(Number(second[0].id),Number(last.id),'Shopping keyset continuati
 const combined=[...visible,...second.slice(0,50)];
 for(let index=1;index<combined.length;index++)assert.ok(rowCompare(combined[index-1],combined[index])<0,'Shopping pages must preserve canonical effective_due/category/name/id order');
 assert.ok(combined.every(row=>{
-  const taskId=Number(row.task_id||0);if(!taskId)return true;
-  const task=db.prepare('SELECT visibility_scope,private_owner_id FROM tasks WHERE id=?').get(taskId);
-  return !task||task.visibility_scope!=='PRIVATE'||Number(task.private_owner_id)===memberId;
-}),'Shopping pages must retain PRIVATE parent filtering');
+  const goods=db.prepare('SELECT visibility_scope,private_owner_id FROM shopping_items WHERE id=?').get(row.id);
+  return goods.visibility_scope==='FAMILY'||Number(goods.private_owner_id)===memberId;
+}),'Shopping pages must retain goods-owned PRIVATE filtering');
 
 console.log('overdue Shopping pagination contract: 3-branch semantic split, exact first-page equivalence, bounded keyset continuation, PRIVATE filtering, own-due seek indexes, and dedicated browser syntax ok');
