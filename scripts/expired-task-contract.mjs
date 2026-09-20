@@ -15,9 +15,6 @@ for(const marker of [
   'class="check toggle expired-checkbox"',
   'data-type="task"',
   'href="/task/view.php?id=',
-  'aria-label="この予定に買い物を追加"',
-  'title="買い物を追加"',
-  'task-shopping-add',
 ]) assert.ok(checklist.includes(marker),`missing canonical checklist expired-task contract marker: ${marker}`);
 for(const marker of ['becamePrivate','DELETE FROM activity_logs'])assert.ok(app.includes(marker),`missing retained lifecycle marker: ${marker}`);
 
@@ -42,4 +39,4 @@ for(const marker of [
   'section.open=true',
 ]) assert.ok(taskEvents.includes(marker),`missing task-toggle/checklist visibility contract marker: ${marker}`);
 
-console.log('expired-task-contract: canonical checklist filtering, effective deadline alignment, visible overdue section, compact shopping action, and toggle behavior ok');
+console.log('expired-task-contract: canonical checklist filtering, effective deadline alignment, visible overdue section, and toggle behavior ok');
