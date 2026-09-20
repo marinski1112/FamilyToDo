@@ -132,8 +132,11 @@ requireText(belongingsUi,"belongingsCategoryControllerReady='1'",'Belongings cat
 requireText(belongingsUi,"familytodo:belongings-category-controller-ready",'Belongings category controller signals readiness after listener installation');
 requireText(js,"belongingsCategoryControllerReady==='1'",'unified Belongings category add checks controller readiness');
 requireText(js,"familytodo:belongings-category-controller-ready",'unified Belongings category add waits for late controller boot');
-requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category2','checklist loads the canonical Belongings category controller');
-requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category2','checklist loads Belongings category styles');
+requireText(js,"goodsCategoryDiag='item:controller-timeout'",'Belongings category proxy records missing-controller diagnostic state');
+requireText(belongingsUi,"goodsCategoryDiag='item:request-received'",'Belongings controller records request receipt');
+requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings controller records draft mount');
+requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category3','checklist loads the canonical Belongings category controller');
+requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category3','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
 requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
@@ -202,7 +205,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity6'",'checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity7'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
@@ -217,7 +220,7 @@ requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets 
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
 requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Task/Event add works for button-owned quick entry');
 requireText(js,"if(sz instanceof HTMLElement)sz.hidden=false;if(iz instanceof HTMLElement)iz.hidden=false",'Shopping and Belongings empty-category clusters remain visible together');
-requireText(js,"if(shoppingUn instanceof HTMLElement)shoppingUn.hidden=false;if(itemUn instanceof HTMLElement)itemUn.hidden=false",'Shopping and Belongings unclassified add routes remain visible together');
+requireText(js,"if(shoppingUn instanceof HTMLElement)shoppingUn.hidden=kind!=='shopping';if(itemUn instanceof HTMLElement)itemUn.hidden=kind!=='item'",'only selected goods type exposes its unclassified add route');
 forbidText(js,"g.hidden=(kind==='item')?!g.classList.contains('unified-item-group'):g.classList.contains('unified-item-group')",'goods tabs must not hide the non-selected goods categories');
 requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
 requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
