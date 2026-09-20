@@ -1,3 +1,4 @@
+import { sharedGoodsSql } from './goods-visibility';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { digestHasNumericClaim, type DigestGeneration } from './line-digest-generation';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
@@ -118,8 +119,8 @@ async function loadPeriodFacts(db:D1Database,familyId:number,period:Period):Prom
       GROUP BY l.log_type,l.subject_id,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE NULL END,l.unit,s.name,CASE WHEN l.subject_id IS NULL THEN m.name ELSE NULL END
       ORDER BY l.subject_id,l.log_type LIMIT 24`).bind(familyId,period.startDate,period.endDate).all<Row>(),
     db.prepare(`SELECT SUM(CASE WHEN lower(COALESCE(i.status,''))='completed' THEN 1 ELSE 0 END) completed,SUM(CASE WHEN lower(COALESCE(i.status,''))<>'completed' THEN 1 ELSE 0 END) incomplete
-      FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
-      WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN ? AND ? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND COALESCE(pt.visibility_scope,'FAMILY')='FAMILY'))`).bind(familyId,period.startDate,period.endDate).first<Row>(),
+      FROM items i
+      WHERE i.family_id=? AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN ? AND ? AND ${sharedGoodsSql('i')}`).bind(familyId,period.startDate,period.endDate).first<Row>(),
   ]);
   const eventCount=Math.max(0,Number(ordinaryCounts?.event_count||0))+Math.max(0,Number(recurringCounts?.event_count||0));
   const taskCompleted=Math.max(0,Number(ordinaryCounts?.task_completed||0))+Math.max(0,Number(recurringCounts?.task_completed||0));
