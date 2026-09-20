@@ -44,6 +44,24 @@ for(const table of ['items','shopping_items']){
   assert.deepEqual(visible(901),[1,2,3]);
   assert.deepEqual(visible(902),[1,2]);
 }
+// Execute both shared-set writers with detached private goods. An owner's
+// ability to read a private source must never imply permission to share it.
+const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this;},
+  async first(){return db.prepare(sql).get(...args)??null;},
+  async all(){return {results:db.prepare(sql).all(...args)};},
+  async run(){const r=db.prepare(sql).run(...args);return {meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)}};}
+};},async batch(statements){db.exec('BEGIN');try{const out=[];for(const statement of statements)out.push(await statement.run());db.exec('COMMIT');return out;}catch(error){db.exec('ROLLBACK');throw error;}}};
+for(const [file,handler,entries] of [['item-reusable-set-api.ts','handleItemReusableSetAction','item_reusable_set_entries'],['shopping-reusable-set-api.ts','handleShoppingReusableSetAction','shopping_reusable_set_entries']]){
+  const sandbox=vm.createContext({Response,URL,Intl,Date,json:(body,status=200)=>new Response(JSON.stringify(body),{status}),goodsVisibilitySql:context.goodsVisibilitySql});
+  vm.runInContext(stripTypeScriptTypes(readFileSync('src/'+file,'utf8')).replace(/^import .*;\s*$/gm,'').replace(/export /g,'')+`\nglobalThis.handle=${handler}`,sandbox);
+  const owner={id:901,family_id:901,role:'OWNER'},admin={id:902,family_id:901,role:'ADMIN'};
+  for(const [actor,ids,status] of [[owner,[3],400],[admin,[3],409],[owner,[1,3],201]]){
+    const response=await sandbox.handle({env:{DB}},actor,{action:'reusable_set_create',name:'Mixed',source_item_ids:ids});
+    assert.equal(response.status,status);
+    if(status===201){const result=await response.json();assert.equal(result.item_count,1);assert.equal(result.skipped_private,1);}
+  }
+  assert.deepEqual(db.prepare(`SELECT name FROM ${entries}`).all().map(x=>x.name),['row-1']);
+}
 db.exec('PRAGMA foreign_keys=ON; DELETE FROM members WHERE id=901');
 for(const table of ['items','shopping_items'])assert.equal(db.prepare(`SELECT private_owner_id FROM ${table} WHERE id=3`).get().private_owner_id,null);
 db.close();
