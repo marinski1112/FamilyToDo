@@ -4,7 +4,7 @@ import { archiveItemCompletionStatements } from './lifecycle';
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
-import { taskVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
 
 type Row=Record<string,unknown>;
 
@@ -53,7 +53,7 @@ function csrfResponse(ctx:AppContext,token:unknown):Response|null{
 export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{
   const m=ctx.member;
   if(!m)return authRequiredResponse(ctx);
-  const item=await ctx.env.DB.prepare(`SELECT i.* FROM items i WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id AND ${taskVisibilitySql('t')}))`).bind(id,m.family_id,m.id).first<Row>();
+  const item=await ctx.env.DB.prepare(`SELECT i.* FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')}`).bind(id,m.family_id,m.id).first<Row>();
   if(!item)return new Response('持ち物が見つかりません。',{status:404});
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
