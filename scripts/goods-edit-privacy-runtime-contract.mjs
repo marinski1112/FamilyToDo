@@ -16,6 +16,8 @@ INSERT INTO items(id,family_id,name,status,created_by,created_at,updated_at,task
 VALUES(701,701,'Item','completed',701,'now','now',701,701,'2026-09-19 10:00:00');
 INSERT INTO shopping_items(id,family_id,name,status,created_by,created_at,updated_at,task_id,completed_by,completed_at)
 VALUES(701,701,'Shopping','completed',701,'now','now',701,701,'2026-09-19 10:00:00');
+UPDATE items SET visibility_scope='PRIVATE',private_owner_id=701 WHERE id=701;
+UPDATE shopping_items SET visibility_scope='PRIVATE',private_owner_id=701 WHERE id=701;
 `);
 const mutations=[];
 const DB={prepare(sql){let args=[];return {bind(...values){args=values;return this;},
@@ -23,7 +25,7 @@ const DB={prepare(sql){let args=[];return {bind(...values){args=values;return th
   async all(){return {results:db.prepare(sql).all(...args)};},
   async run(){mutations.push(sql);const result=db.prepare(sql).run(...args);return {meta:{changes:Number(result.changes),last_row_id:Number(result.lastInsertRowid)}};}
 };}};
-const visibility=stripTypeScriptTypes(readFileSync('src/task-visibility.ts','utf8')).replace(/export /g,'');
+const visibility=stripTypeScriptTypes(readFileSync('src/goods-visibility.ts','utf8')).replace(/export /g,'');
 for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['shopping-edit-page.ts','shoppingEdit','shopping_items']]){
   const source=stripTypeScriptTypes(readFileSync('src/'+file,'utf8')).replace(/^import .*;\s*$/gm,'').replace(/export /g,'');
   const context=vm.createContext({Response,URL,Intl,Date,crypto,APP_VERSION:'fixture',
@@ -36,6 +38,8 @@ for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['sh
     resolveShoppingCategoryOptions:()=>[],shoppingCategoryKey:value=>value.toLowerCase(),validateLiffNext:value=>value,
   });
   vm.runInContext(visibility+'\n'+source+`\nglobalThis.handler=${handler};`,context);
+  for(const relation of [701,null]){
+  db.prepare(`UPDATE ${table} SET task_id=? WHERE id=701`).run(relation);
   for(const memberId of [701,702])for(const method of ['GET','POST']){
     mutations.length=0;
     const request=new Request('https://fixture.invalid/edit',{method,...(method==='POST'?{headers:{'content-type':'application/json'},body:JSON.stringify({csrf:'fixture',name:'Updated',task_id:null,assignees:[],date:'2026-09-20',due_date:'2026-09-20'})}:{})});
@@ -44,8 +48,9 @@ for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['sh
     if(method==='GET')assert.doesNotMatch(await result.text(),/name="(?:assignees|task_id)"/);
     else assert.equal(result.status,302);
     const row=db.prepare(`SELECT task_id,status,completed_by,completed_at FROM ${table} WHERE id=701`).get();
-    assert.deepEqual({...row},{task_id:701,status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00'});
+    assert.deepEqual({...row},{task_id:relation,status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00'});
     assert(mutations.every(sql=>!/(?:DELETE|INSERT).*completions|SET status=/i.test(sql)));
+  }
   }
 }
 db.close();
