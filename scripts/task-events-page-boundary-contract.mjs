@@ -241,7 +241,7 @@ for(const marker of [
   "const memo=String(b.memo??'').trim()||null;",
   "const rawUrl=String(b.url??'').trim();",
   "if(!['http:','https:'].includes(u.protocol))throw new Error();",
-  "INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url)",
+  "INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,url,visibility_scope,private_owner_id)",
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup5'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 
