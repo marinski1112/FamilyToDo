@@ -1,4 +1,4 @@
-import { taskVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 type Row=Record<string,unknown>;
 const now=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
@@ -15,10 +15,10 @@ export async function handleShoppingReusableSetAction(ctx:any,m:any,b:Record<str
  const action=String(b.action||'');if(!action.startsWith('reusable_set_'))return null;
  if(action==='reusable_set_create'){
   const name=String(b.name||'').trim(),source=ids(b.source_item_ids);if(!name||!source.length)return bad('セット名と買い物を指定してください。');if(source.length>100)return bad('1つのセットは100件までです。');
-  const ph=source.map(()=>'?').join(','),q=await ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.memo,s.url,s.task_id,t.visibility_scope FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND s.id IN (${ph}) AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})`).bind(m.family_id,...source,m.id).all(),rows=(q.results||[]) as Row[];
+  const ph=source.map(()=>'?').join(','),q=await ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.memo,s.url,s.visibility_scope FROM shopping_items s WHERE s.family_id=? AND s.id IN (${ph}) AND ${goodsVisibilitySql('s')}`).bind(m.family_id,...source,m.id).all(),rows=(q.results||[]) as Row[];
   if(rows.length!==source.length)return bad('表示中の買い物が更新されています。',409);
-  const map=new Map(rows.map(x=>[Number(x.id),x])),visible=source.map(id=>map.get(id)!),ordered=visible.filter(x=>String(x.visibility_scope||'FAMILY')!=='PRIVATE'),skippedPrivate=visible.length-ordered.length;
-  if(!ordered.length)return bad('非公開タスクに紐づく買い物だけでは共有セットを作成できません。');
+  const map=new Map(rows.map(x=>[Number(x.id),x])),visible=source.map(id=>map.get(id)!),ordered=visible.filter(x=>x.visibility_scope==='FAMILY'),skippedPrivate=visible.length-ordered.length;
+  if(!ordered.length)return bad('非公開の買い物だけでは共有セットを作成できません。');
   const t=now();let setId=0;
   try{
    const r=await ctx.env.DB.prepare('INSERT INTO shopping_reusable_sets(family_id,name,created_by_member_id,created_at,updated_at) VALUES(?,?,?,?,?)').bind(m.family_id,name,m.id,t,t).run();setId=Number(r.meta.last_row_id||0);if(!setId)throw new Error('set id missing');
