@@ -112,7 +112,6 @@ for(const marker of [
   "expired-shopping-count",
   "class=\"btn secondary expired-shopping-more\"",
   "<details class=\"checklist-more\"><summary>表示ルール</summary>",
-  "/app/shopping_new.php?date=",
   "const primarySections=[",
   "{priority:0,hasContent:Boolean(taskRows),html:taskSection}",
   "{priority:1,hasContent:data.shopping.length>0,html:shoppingSection}",
