@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 const parentApi=readFileSync('src/task-parent-completion-api.ts','utf8');
 const categoryMutation=readFileSync('src/shopping-category-mutation-api.ts','utf8');
 const categoryApi=readFileSync('src/shopping-category-api.ts','utf8');
+const itemApi=readFileSync('src/item-api.ts','utf8');
 const routes=readFileSync('src/context-api-routes.ts','utf8');
 const shell=readFileSync('src/app-shell.ts','utf8');
 const ui=readFileSync('public/assets/checklist-hierarchy-followup.js','utf8');
@@ -207,3 +208,7 @@ requireText(categoryDrag,"g.dataset.categoryCommit==='1'",'single shopping categ
 requireText(categoryDrag,"icon.textContent='🛒'",'shopping category icon survives inline creation');
 requireText(js,'Array.isArray(sc.categoryMeta)?sc.categoryMeta:[]','shopping category age metadata reaches UI');
 requireText(js,'Array.isArray(ic.categoryMeta)?ic.categoryMeta:[]','belongings category age metadata reaches UI');
+
+/* Category create responses carry authoritative timestamps for immediate JST-01:00 placement. */
+requireText(categoryApi,"created_at:String(created?.created_at||'')",'shopping category create timestamp response');
+requireText(itemApi,"created_at:String(created?.created_at||'')",'belongings category create timestamp response');
