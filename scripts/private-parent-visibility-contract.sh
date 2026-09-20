@@ -42,7 +42,7 @@ node --input-type=module <<'JS'
 import fs from 'node:fs';
 for(const path of ['src/item-edit-page.ts','src/shopping-edit-page.ts']){
   const s=fs.readFileSync(path,'utf8');
-  if(!s.includes('const taskId=Number(item.task_id)||null;') || s.includes('Number(b.task_id') || !s.includes("taskVisibilitySql('t')")){
+  if(!s.includes('const taskId=Number(item.task_id)||null;') || s.includes('Number(b.task_id') || !s.includes('goodsVisibilitySql(')){
     throw new Error(path+' must preserve stored private visibility');
   }
 }
