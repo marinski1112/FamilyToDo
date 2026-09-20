@@ -254,3 +254,7 @@ requireText(shoppingEditPage,'due_date=?,task_id=NULL,url=?','Shopping edit clea
 forbidText(shoppingEditPage,'const taskId=Number(item.task_id)','Shopping edit must not preserve legacy Task linkage');
 requireText(itemEditPage,'due_at=?,task_id=NULL,updated_at=?','Belongings edit clears legacy Task linkage');
 forbidText(itemEditPage,'const taskId=Number(item.task_id)','Belongings edit must not preserve legacy Task linkage');
+
+/* Unified empty categories expose their Goods kind and shared deletion retires both catalogs. */
+requireText(js,"icon.textContent=kind==='shopping'?'🛒':'🎒'",'empty category rows identify Shopping vs Belongings');
+requireText(js,"kind:'shared',names:[name]",'unified category deletion targets the shared catalog');
