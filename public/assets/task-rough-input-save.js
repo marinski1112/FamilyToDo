@@ -33,7 +33,7 @@ try{
     const taskCreateKey=['task','event','child_task'].includes(destination)?(row.dataset.taskCreateKey||(row.dataset.taskCreateKey=crypto.randomUUID())):'';
     const base={row,destination,title,taskCreateKey};
     if(destination==='shopping')return {...base,quantity:value(row,'.rough-draft-quantity')||'1',category:categoryValue(row),url:value(row,'.rough-draft-url'),dueDate:value(row,'.rough-draft-due-date')};
-    if(destination==='item')return {...base,dueDate:value(row,'.rough-draft-due-date'),assignees:selectedIds(row,'.rough-item-assignees input[type=checkbox]')};
+    if(destination==='item')return {...base,dueDate:value(row,'.rough-draft-due-date')};
     if(destination==='child_task')return {...base,dueDate:value(row,'.rough-draft-due-date'),dueTime:value(row,'.rough-draft-due-time'),completion:value(row,'.rough-child-completion')||'ANY',assignees:selectedIds(row,'.rough-child-assignees input[type=checkbox]')};
     return {...base,startDate:value(row,'.rough-main-start-date'),endDate:value(row,'.rough-main-end-date'),allDay:checked(row,'.rough-main-all-day'),startTime:value(row,'.rough-main-start-time'),endTime:value(row,'.rough-main-end-time'),location:value(row,'.rough-main-location'),description:value(row,'.rough-main-description'),isPrivate:checked(row,'.rough-main-private'),calendarVisible:checked(row,'.rough-main-calendar-visible'),calendarColor:value(row,'.rough-main-calendar-color'),completion:value(row,'.rough-main-completion')||'ANY',assignees:selectedIds(row,'.rough-main-assignees input[type=checkbox]'),reminderAt:value(row,'.rough-main-reminder')};
   };
