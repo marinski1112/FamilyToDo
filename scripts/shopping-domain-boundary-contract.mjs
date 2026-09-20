@@ -37,8 +37,9 @@ for(const retiredMarker of [
 for(const marker of [
   'archiveShoppingCompletionStatements',
   "goodsVisibilitySql('s')",
-  'const taskId=Number(item.task_id)||null;',
+  'due_date=?,task_id=NULL,url=?',
 ]) if(!editPage.includes(marker)) throw new Error(`shopping edit lost ${marker}`);
+if(editPage.includes('const taskId=Number(item.task_id)||null;'))throw new Error('shopping edit must not preserve retired Task linkage');
 for(const forbidden of ['name="assignees"','name="task_id"','shoppingTaskSearch','shopping-task-link.js'])if(editPage.includes(forbidden))throw new Error(`shopping edit must not expose goods linkage: ${forbidden}`);
 for(const marker of [
   "const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;",
