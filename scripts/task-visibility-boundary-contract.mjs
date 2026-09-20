@@ -18,8 +18,6 @@ if(boundary.includes("from './app'")) throw new Error('task visibility boundary 
 
 const expectations=[
   ['src/task-api.ts',['taskVisibilitySql']],
-  ['src/item-api.ts',['taskVisibilitySql']],
-  ['src/new-entry-pages.ts',['taskVisibilitySql']],
   ['src/activity-log-page.ts',['activityLogVisibilitySql']],
 ];
 for(const [file,names] of expectations){
@@ -33,3 +31,5 @@ for(const [file,names] of expectations){
 }
 
 console.log('task visibility canonical boundary contract ok');
+const itemApi=fs.readFileSync('src/item-api.ts','utf8');
+if(!itemApi.includes("from './goods-visibility'")||itemApi.includes('taskVisibilitySql('))throw new Error('item API must use its own goods privacy boundary');

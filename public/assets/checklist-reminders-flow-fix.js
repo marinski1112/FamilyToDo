@@ -92,7 +92,7 @@ const clearEmpty=section=>section.querySelector(':scope > .empty')?.remove();
 const addTaskRow=(id,title)=>{
   const section=page.querySelector('.task-section');if(!(section instanceof HTMLElement))return;
   clearEmpty(section);const row=document.createElement('div');row.className='row task-row reminders-new-row';
-  row.innerHTML=`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${id}"><span></span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${id}" aria-label="詳細">詳細</a><a class="task-shopping-add" href="/app/shopping_new.php?date=${encodeURIComponent(selectedDate)}&task_id=${id}" aria-label="この予定に買い物を追加" title="買い物を追加"><span aria-hidden="true">🛒</span><span class="shopping-plus-badge" aria-hidden="true">＋</span></a></div></div><div class="meta"></div>`;
+  row.innerHTML=`<div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${id}"><span></span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${id}" aria-label="詳細">詳細</a></div></div><div class="meta"></div>`;
   const titleNode=row.querySelector('.task-main>span');if(titleNode)titleNode.textContent=title;
   const form=section.querySelector(':scope > .section-quick-entry'),completed=section.querySelector(':scope > details.completed-tasks');
   if(completed)section.insertBefore(row,completed);else if(form)form.insertAdjacentElement('afterend',row);else section.append(row);
@@ -124,10 +124,6 @@ const groupExistingShopping=()=>{
     const cat=categoryKey(extractCategory(row));
     let group=groups.get(cat);
     if(!group){group=document.createElement('div');group.className='shopping-category-group';group.dataset.category=cat;const head=document.createElement('div');head.className='shopping-category-title';head.textContent=cat;group.append(head);groups.set(cat,group);}
-    const oldGroup=row.closest('.shopping-group');const oldHead=oldGroup?.querySelector(':scope > .shopping-group-head strong');
-    if(oldHead&&oldHead.textContent?.trim()){
-      const meta=row.querySelector(':scope > .meta');if(meta instanceof HTMLElement&&!meta.dataset.taskLabelAdded){const task=document.createElement('span');task.textContent=`関連: ${oldHead.textContent.trim()}${meta.textContent?.trim()?' ・ ':''}`;meta.prepend(task);meta.dataset.taskLabelAdded='1';}
-    }
     group.append(row);
   }
   section.querySelectorAll(':scope > .shopping-group').forEach(node=>node.remove());

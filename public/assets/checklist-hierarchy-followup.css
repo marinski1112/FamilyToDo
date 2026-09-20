@@ -263,3 +263,28 @@
 .checklist-page .checklist-status-tabs>button[data-status]{min-width:85px!important;min-height:34px!important}
 .checklist-page .checklist-status-tabs{min-height:40px!important;padding:4px!important}
 .checklist-page .belongings-category-draft .category-inline-rename{flex:1;min-width:0;width:auto}
+
+
+/* Reference-image density pass: preserve FamilyToDo Set/combined-goods behavior. */
+.checklist-page.reminders-ui .unified-goods-section .shopping-category-group[data-category="未分類"]:not([hidden])>.shopping-category-title,
+.checklist-page.reminders-ui .unified-goods-section .belongings-category-group[data-category="未分類"]:not([hidden])>.belongings-category-head{
+ min-height:44px!important;padding:4px 10px!important
+}
+.checklist-page.reminders-ui .unified-goods-section .shopping-category-group[data-category="未分類"]:not([hidden]) .shopping-category-name,
+.checklist-page.reminders-ui .unified-goods-section .belongings-category-group[data-category="未分類"]:not([hidden]) .belongings-category-name{
+ font-size:17px!important;line-height:1.25!important
+}
+.checklist-page.reminders-ui :is(.task-row,.unorganized-task-row) input.check.toggle,
+.checklist-page.reminders-ui .unified-goods-section input.check.toggle{
+ appearance:none;-webkit-appearance:none;background:#fff!important;border:1.7px solid #aeb4bd!important;border-radius:5px!important;
+ box-shadow:none!important;display:grid!important;place-content:center!important
+}
+.checklist-page.reminders-ui :is(.task-row,.unorganized-task-row) input.check.toggle:checked,
+.checklist-page.reminders-ui .unified-goods-section input.check.toggle:checked{
+ border-color:#087bff!important;background:#087bff!important
+}
+.checklist-page.reminders-ui :is(.task-row,.unorganized-task-row) input.check.toggle:checked::after,
+.checklist-page.reminders-ui .unified-goods-section input.check.toggle:checked::after{
+ content:'✓';color:#fff;font-size:15px;font-weight:900;line-height:1
+}
+.checklist-page.reminders-ui .unified-goods-section .unified-category-icon{font-size:18px!important}

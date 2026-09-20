@@ -19,19 +19,23 @@ for(const marker of [
   "action==='member_toggle'||action==='member_delete'",
   "UPDATE notifications SET status='cancelled'",
   'DELETE FROM task_assignees',
-  'DELETE FROM item_assignees',
-  'DELETE FROM shopping_assignees',
   'DELETE FROM task_completions',
-  'DELETE FROM item_completions',
-  'DELETE FROM shopping_completions',
   "UPDATE tasks SET status=CASE WHEN completion_mode='ALL'",
-  "UPDATE items SET status=CASE WHEN completion_mode='ALL'",
   "logActivity(ctx,nextActive?'MEMBER_REACTIVATED':'MEMBER_DEACTIVATED'",
   "logActivity(ctx,'MEMBER_DELETED'",
   "action==='notification'",
   "return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);",
   "return html(layout('管理',body,'/app/settings.php'));",
 ]) if(!handler.includes(marker)) throw new Error(`Top-level settings handler lost behavior marker: ${marker}`);
+
+for(const retired of [
+  'DELETE FROM item_assignees',
+  'DELETE FROM shopping_assignees',
+  'DELETE FROM item_completions',
+  'DELETE FROM shopping_completions',
+  "UPDATE items SET status=CASE WHEN completion_mode='ALL'",
+  "UPDATE shopping_items SET status=CASE WHEN completion_mode='ALL'",
+]) if(handler.includes(retired)) throw new Error(`member lifecycle must not mutate retired goods assignment/completion state: ${retired}`);
 
 if(handler.includes("from './app'")) throw new Error('Top-level settings handler must not depend on app.ts');
 if(!routes.includes("import { settings } from './settings-root';")) throw new Error('context API dispatcher must import retained settings handler');
@@ -42,4 +46,4 @@ if(/\bsettings\b/.test(appImport)) throw new Error('context API dispatcher must 
 if(pages.includes("from './app'")) throw new Error('settings page handlers must not depend on app.ts after recurring extraction');
 if(!pages.includes("export { recurring } from './recurring-page';")) throw new Error('recurring retained boundary missing');
 
-console.log('Top-level settings retained page/API boundary contract ok');
+console.log('Top-level settings retained page/API boundary contract ok; member lifecycle stays task-only and leaves independent goods state untouched');

@@ -67,20 +67,24 @@ try{
   assert.equal(parse('遠足の持ち物に水筒を持ち物に追加').reason,'AMBIGUOUS_INSTRUCTION');
   for(const text of ['会議資料','FT 買い物 牛乳 2','FT タスク ゴミ出し','FT ミルク160','昨日の移動を教えて'])assert.equal(parse(text),null,text);
   assert.equal(parse('持ち物：'+Array(21).fill('物').join('、')).reason,'INVALID_ITEMS');
-  rpc({script:schema+fs.readFileSync('migrations/0070_google_tasks_routing.sql','utf8')});
+  rpc({script:schema+fs.readFileSync('migrations/0070_google_tasks_routing.sql','utf8')+fs.readFileSync('migrations/0099_goods_owned_visibility.sql','utf8')});
   const first=item('牛乳と卵を明日の買い物に追加');statements=0;
   assert.equal(await sandbox.apply({DB},account,first),'command');assert.ok(statements<=10,statements);
   assert.deepEqual(query('SELECT name,quantity,due_date FROM shopping_items ORDER BY id'),[{name:'牛乳',quantity:'1',due_date:'2026-09-10'},{name:'卵',quantity:'1',due_date:'2026-09-10'}]);
-  assert.deepEqual(query('SELECT visibility_scope,private_owner_id,calendar_visible FROM tasks'),[{visibility_scope:'PRIVATE',private_owner_id:10,calendar_visible:0}]);
+  assert.deepEqual(query('SELECT visibility_scope,private_owner_id,task_id FROM shopping_items'),Array(2).fill({visibility_scope:'PRIVATE',private_owner_id:10,task_id:null}));
+  assert.equal(query('SELECT COUNT(*) n FROM tasks')[0].n,0,'goods must not create synthetic parents');
+  assert.equal(query('SELECT COUNT(*) n FROM shopping_assignees')[0].n,0);
   assert.equal(await sandbox.apply({DB},account,first),'noop');
   assert.equal(await sandbox.apply({DB},account,{...first,title:'普通のタスクに変更',etag:'v2'}),'noop');
   assert.equal(query('SELECT COUNT(*) n FROM shopping_items')[0].n,2);
-  const retry=item('持ち物：水筒、タオル');failAt=3;
+  const retry=item('持ち物：水筒、タオル');failAt=2;
   await assert.rejects(()=>sandbox.apply({DB},account,retry));failAt=-1;
   assert.equal(query('SELECT COUNT(*) n FROM google_tasks_routes WHERE external_id=?',[retry.id])[0].n,0);
-  assert.equal(query('SELECT COUNT(*) n FROM tasks')[0].n,1);
+  assert.equal(query('SELECT COUNT(*) n FROM tasks')[0].n,0);
+  assert.equal(query('SELECT COUNT(*) n FROM items')[0].n,0);
   assert.equal(await sandbox.apply({DB},account,retry),'command');
-  assert.equal(query('SELECT COUNT(*) n FROM item_assignees')[0].n,2);
+  assert.equal(query('SELECT COUNT(*) n FROM item_assignees')[0].n,0);
+  assert.deepEqual(query('SELECT visibility_scope,private_owner_id,task_id FROM items'),Array(2).fill({visibility_scope:'PRIVATE',private_owner_id:10,task_id:null}));
   const bad=item('買い物：牛乳 2');assert.equal(await sandbox.apply({DB},account,bad),'review');
   const correction=item('買い物：豆乳 2');assert.equal(await sandbox.apply({DB},account,correction),'review');
   assert.equal(await sandbox.apply({DB},account,{...correction,title:'FT 買い物 豆乳 2',etag:'v2'}),'not-handled');
@@ -95,6 +99,12 @@ try{
   assert.equal(await sandbox.apply({DB},{...account,family_id:2,member_id:20},revoked),'noop');
   const family=item('掃除と洗濯をタスクに追加');await sandbox.apply({DB},account,family);
   assert.equal(query("SELECT COUNT(*) n FROM tasks WHERE visibility_scope='FAMILY' AND private_owner_id IS NULL")[0].n,2);
+  assert.equal(query('SELECT COUNT(*) n FROM task_assignees')[0].n,2,'actual task assignees remain supported');
+  for(const [title,table] of [['買い物：パン','shopping_items'],['持ち物：上履き','items']]){
+    const shared=item(title);assert.equal(await sandbox.apply({DB},account,shared),'command');
+    assert.equal(await sandbox.apply({DB},account,shared),'noop');
+    assert.equal(query(`SELECT COUNT(*) n FROM ${table} WHERE visibility_scope='FAMILY' AND private_owner_id IS NULL AND task_id IS NULL`)[0].n,1);
+  }
   const legacy=item('持ち物：ノート');query('INSERT INTO external_google_task_links VALUES(1,?,?)',['list',legacy.id]);
   assert.equal(await sandbox.apply({DB},account,legacy),'not-handled');
   assert.equal(await sandbox.apply({DB},account,item('持ち物：ペン',{deleted:true})),'not-handled');

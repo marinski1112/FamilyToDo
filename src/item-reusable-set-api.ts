@@ -1,4 +1,4 @@
-import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 
 type Row=Record<string,unknown>;
@@ -58,7 +58,7 @@ async function ensureCategories(ctx:any,familyId:number,memberId:number,categori
 async function rowsByIds(ctx:any,familyId:number,memberId:number,ids:number[]):Promise<Row[]>{
   if(!ids.length)return [];
   const placeholders=ids.map(()=>'?').join(',');
-  const result=await ctx.env.DB.prepare(`SELECT i.id,i.name,i.category FROM items i WHERE i.family_id=? AND i.id IN (${placeholders}) AND ${taskChildVisibilitySql('i')}`).bind(familyId,...ids,memberId).all();
+  const result=await ctx.env.DB.prepare(`SELECT i.id,i.name,i.category FROM items i WHERE i.family_id=? AND i.id IN (${placeholders}) AND ${goodsVisibilitySql('i')}`).bind(familyId,...ids,memberId).all();
   const byId=new Map(((result?.results||[]) as Row[]).map(row=>[Number(row.id),row]));
   return ids.map(id=>byId.get(id)).filter(Boolean) as Row[];
 }
@@ -93,15 +93,15 @@ async function createSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   if(!sourceIds.length)return bad('セットに保存する持ち物がありません。');
   if(sourceIds.length>MAX_SET_ITEMS)return bad(`1つのセットは${MAX_SET_ITEMS}件までです。`);
   const placeholders=sourceIds.map(()=>'?').join(',');
-  const result=await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.task_id,t.visibility_scope
-    FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
-    WHERE i.family_id=? AND i.id IN (${placeholders}) AND (i.task_id IS NULL OR ${taskVisibilitySql('t')})`)
+  const result=await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.visibility_scope
+    FROM items i
+    WHERE i.family_id=? AND i.id IN (${placeholders}) AND ${goodsVisibilitySql('i')}`)
     .bind(m.family_id,...sourceIds,m.id).all();
   const found=(result?.results||[]) as Row[],byId=new Map(found.map(row=>[Number(row.id),row]));
   if(sourceIds.some(id=>!byId.has(id)))return bad('表示中の持ち物が更新されています。画面を開き直してから再度保存してください。',409,'SOURCE_CHANGED');
-  const ordered=sourceIds.map(id=>byId.get(id)!).filter(row=>String(row.visibility_scope||'FAMILY')!=='PRIVATE');
+  const ordered=sourceIds.map(id=>byId.get(id)!).filter(row=>row.visibility_scope==='FAMILY');
   const skippedPrivate=sourceIds.length-ordered.length;
-  if(!ordered.length)return bad('非公開タスクに紐づく持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY');
+  if(!ordered.length)return bad('非公開の持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY');
   for(const row of ordered){
     if(!String(row.name||'').trim()||String(row.name||'').trim().length>200)return bad('セットに保存できない持ち物名が含まれています。');
     if(String(row.memo||'').length>2000)return bad('セットに保存できない長さのメモが含まれています。');

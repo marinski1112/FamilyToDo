@@ -1,3 +1,4 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import type { AppContext } from './app-context';
 import { logActivity } from './activity-log';
 import { bodyJson, RequestBodyParseError } from './request-body';
@@ -100,36 +101,16 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
   }
 
   if(type==='item'){
-    const item=await ctx.env.DB.prepare(`SELECT i.id,i.task_id FROM items i WHERE i.id=? AND i.family_id=? AND (i.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=i.task_id AND t.family_id=i.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+    const item=await ctx.env.DB.prepare(`SELECT i.id FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
     if(!item)return json({ok:false,error:'持ち物が見つかりません。'},404);
-    const itemLinkedTaskId=Number(item.task_id||0);
-    const itemAssigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=?').bind(id).first<Row>();
-    const itemDirectAssigned=Number(itemAssigned?.c||0);
-    const itemActorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=? AND ia.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
-    const itemTaskAssigned=itemDirectAssigned===0&&itemLinkedTaskId?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(itemLinkedTaskId).first<Row>():null;
-    const itemInheritedAssigned=Number(itemTaskAssigned?.c||0);
-    const itemTaskActorAssigned=itemDirectAssigned===0&&itemInheritedAssigned>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(itemLinkedTaskId,m.id).first<Row>():null;
-    if(itemDirectAssigned>0&&!itemActorAssigned)return json({ok:false,error:'この持ち物の担当者ではありません。'},403);
-    if(itemDirectAssigned===0&&itemInheritedAssigned>0&&!itemTaskActorAssigned)return json({ok:false,error:'この持ち物に紐づくタスクの担当者ではありません。'},403);
     const itemCompletionMutation=completed
       ?await ctx.env.DB.prepare('INSERT INTO item_completions(item_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(item_id,member_id) DO NOTHING').bind(id,m.id,now).run()
       :await ctx.env.DB.prepare('DELETE FROM item_completions WHERE item_id=? AND member_id=?').bind(id,m.id).run();
     const itemStateChanged=Number(itemCompletionMutation.meta?.changes||0)>0;
-    const itemMode=await ctx.env.DB.prepare('SELECT completion_mode FROM items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
-    const itemEffectiveAssigned=itemDirectAssigned>0?itemDirectAssigned:itemInheritedAssigned;
-    const done=itemDirectAssigned>0
-      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=?').bind(id).first<Row>()
-      :itemInheritedAssigned>0
-        ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_completions ic JOIN task_assignees ta ON ta.member_id=ic.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ic.item_id=?').bind(itemLinkedTaskId,id).first<Row>()
-        :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_completions ic JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=?').bind(m.family_id,id).first<Row>();
-    const mode=itemEffectiveAssigned>0?String(itemMode?.completion_mode||'ANY').toUpperCase():'ANY';
-    const itemComplete=mode==='ALL'?Number(done?.c||0)>=itemEffectiveAssigned:Number(done?.c||0)>0;
+    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM item_completions ic JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=?').bind(m.family_id,id).first<Row>();
+    const itemComplete=Number(done?.c||0)>0;
     const latest=itemComplete
-      ?itemDirectAssigned>0
-        ?await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(id).first<Row>()
-        :itemInheritedAssigned>0
-          ?await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN task_assignees ta ON ta.member_id=ic.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(itemLinkedTaskId,id).first<Row>()
-          :await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
+      ?await ctx.env.DB.prepare('SELECT ic.member_id,ic.completed_at FROM item_completions ic JOIN members am ON am.id=ic.member_id AND am.family_id=? AND am.active=1 WHERE ic.item_id=? ORDER BY ic.completed_at DESC,ic.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
       :null;
     if(itemStateChanged){
       await ctx.env.DB.prepare('UPDATE items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(itemComplete?'completed':'pending',itemComplete?Number(latest?.member_id||0)||null:null,itemComplete?String(latest?.completed_at||now):null,now,id,m.family_id).run();
@@ -139,34 +120,16 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     return commitSession(json({ok:true,status:itemComplete?'completed':'pending'}),ctx.session,ctx.env.APP_SECRET);
   }
 
-  const current=await ctx.env.DB.prepare(`SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')})) LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+  const current=await ctx.env.DB.prepare(`SELECT s.id FROM shopping_items s WHERE s.id=? AND s.family_id=? AND ${goodsVisibilitySql('s')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
   if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
-  const shopTask=await ctx.env.DB.prepare('SELECT task_id FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id).first<Row>();
-  const linkedTaskId=Number(shopTask?.task_id||0);
-  const shopAssigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=?').bind(id).first<Row>();
-  const directAssigned=Number(shopAssigned?.c||0);
-  const shopActorAssigned=await ctx.env.DB.prepare('SELECT 1 x FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=? AND sa.member_id=? LIMIT 1').bind(id,m.id).first<Row>();
-  const taskAssigned=directAssigned===0&&linkedTaskId?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(linkedTaskId).first<Row>():null;
-  const inheritedAssigned=Number(taskAssigned?.c||0);
-  const taskActorAssigned=directAssigned===0&&inheritedAssigned>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(linkedTaskId,m.id).first<Row>():null;
-  if(directAssigned>0&&!shopActorAssigned)return json({ok:false,error:'この買い物の担当者ではありません。'},403);
-  if(directAssigned===0&&inheritedAssigned>0&&!taskActorAssigned)return json({ok:false,error:'この買い物に紐づくタスクの担当者ではありません。'},403);
   const shoppingCompletionMutation=completed
     ?await ctx.env.DB.prepare('INSERT INTO shopping_completions(shopping_item_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(shopping_item_id,member_id) DO NOTHING').bind(id,m.id,now).run()
     :await ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id=?').bind(id,m.id).run();
   const shoppingStateChanged=Number(shoppingCompletionMutation.meta?.changes||0)>0;
-  const shopDone=directAssigned>0
-    ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(id).first<Row>()
-    :inheritedAssigned>0
-      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=?').bind(linkedTaskId,id).first<Row>()
-      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?').bind(m.family_id,id).first<Row>();
+  const shopDone=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=?').bind(m.family_id,id).first<Row>();
   const shopComplete=Number(shopDone?.c||0)>0;
   const shopLatest=shopComplete
-    ?directAssigned>0
-      ?await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN shopping_assignees sa ON sa.shopping_item_id=sc.shopping_item_id AND sa.member_id=sc.member_id JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(id).first<Row>()
-      :inheritedAssigned>0
-        ?await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN task_assignees ta ON ta.member_id=sc.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(linkedTaskId,id).first<Row>()
-        :await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
+    ?await ctx.env.DB.prepare('SELECT sc.member_id,sc.completed_at FROM shopping_completions sc JOIN members am ON am.id=sc.member_id AND am.family_id=? AND am.active=1 WHERE sc.shopping_item_id=? ORDER BY sc.completed_at DESC,sc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
     :null;
   if(shoppingStateChanged){
     await ctx.env.DB.prepare('UPDATE shopping_items SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(shopComplete?'completed':'pending',shopComplete?Number(shopLatest?.member_id||0)||null:null,shopComplete?String(shopLatest?.completed_at||now):null,now,id,m.family_id).run();

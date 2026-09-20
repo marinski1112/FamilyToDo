@@ -22,7 +22,6 @@ if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task cla
 if(page.includes('<details class="card expired-shopping" open>'))throw new Error('overdue Shopping must stay collapsed by default to preserve Checklist information density');
 if(page.includes('task-event-summary meta')||page.includes('const summary=`<div class="task-event-summary'))throw new Error('Checklist header must not restore Task/Shopping count summary');
 if(page.includes('<div class="date-title">'))throw new Error('Checklist selected date must stay inline with the compact title');
-if(page.includes('OR (s.task_id IS NULL AND s.due_date IS NULL)'))throw new Error('undated Shopping must not fetch all historical completed rows');
 
 for(const marker of [
   "const isRealDateOnly=(value:string)=>{",
@@ -45,32 +44,18 @@ for(const [value,expected] of [
   ['2026-12-31',true],
   ['2027-01-01',true],
 ])if(realDateFixture(value)!==expected)throw new Error(`unified checklist real-date fixture failed: ${value}`);
-const orphanLinkedItemFixture=(tasks,items)=>{
-  const renderedTaskLinkIds=new Set();
-  for(const task of tasks){
-    const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));
-    if(linkId>0)renderedTaskLinkIds.add(linkId);
-  }
-  return items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);}).map(item=>item.id);
-};
-const orphanFixture=orphanLinkedItemFixture(
-  [{id:10},{id:-50,task_id:20}],
-  [{id:1,task_id:null},{id:2,task_id:10},{id:3,task_id:20},{id:4,task_id:30}],
-);
-if(JSON.stringify(orphanFixture)!==JSON.stringify([4]))throw new Error('off-day linked Belonging fixture must surface only links whose task/template is not rendered');
-
-for(const marker of [
-  "const renderedTaskLinkIds=new Set<number>();",
-  "const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));",
-  "const orphanLinkedItems=data.items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);});",
-  "const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');",
-  "<strong>関連タスクの持ち物</strong>",
-  "const itemContent=`${itemRows}${orphanItemRows?",
-  "FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id",
-  "WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')})",
-])if(!page.includes(marker))throw new Error(`off-day linked Belonging visibility marker missing: ${marker}`);
-
-if(page.includes('pt.title AS item_task_title'))throw new Error('off-day linked Belonging fallback must not expose parent task titles');
+for(const forbidden of [
+  'shoppingByTask',
+  'itemsByTask',
+  'renderLinkedTaskAccessories',
+  'task-shopping-add',
+  'task-shopping-count',
+  '関連タスクの持ち物',
+  "LEFT JOIN tasks t ON t.id=s.task_id",
+  "LEFT JOIN tasks pt ON pt.id=i.task_id",
+  'shopping_assignees',
+  'item_assignees',
+])if(page.includes(forbidden))throw new Error(`detached goods checklist must not restore legacy task ownership: ${forbidden}`);
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
@@ -95,8 +80,7 @@ for(const marker of [
   "data-parent-private=\"${String(task.visibility_scope)==='PRIVATE'?'1':'0'}\"",
   "const childSection=childRows||composer?",
   "JSON.stringify({csrf,date,appVersion:APP_VERSION})",
-  "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
-  "s.task_id IS NULL",
+  "${goodsVisibilitySql('s')}",
   "s.due_date IS NULL",
   "s.status<>'completed'",
   "s.status='completed'",
@@ -105,21 +89,12 @@ for(const marker of [
   "WHEN strftime('%H','now','+9 hours')='00'",
   "THEN datetime('now','+9 hours','start of day','-1 hour')",
   "ELSE datetime('now','+9 hours','start of day')",
-  "s.task_id IS NOT NULL",
-  "NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
-  "date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)",
-  "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)",
-  "EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)",
-  "date(s.due_date)=date(?)",
   "expiredShoppingPageFor(ctx,date)",
   "const expiredShoppingIds=new Set(expiredShopping.map(row=>String(row.id)));",
   "if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);",
   "const shoppingById=new Map<string,Row>();",
-  "const effectiveShoppingDue=(item:Row)=>String(item.due_date||item.task_end_at||item.task_due_at||item.task_start_at||'').slice(0,10);",
+  "const effectiveShoppingDue=(item:Row)=>String(item.due_date||'').slice(0,10);",
   "const groups=new Map<string,{title:string;due:string;items:Row[]}>();",
-  "const key=taskId&&item.task_title?`${taskId}|${due}`:`item:${String(item.id)}`;",
-  "<div class=\"shopping-group-head\"><strong>${esc(group.title)}</strong>",
-  "const itemMeta=[item.category||'',item.assignees?'担当 '+item.assignees:'']",
   "<div class=\"shopping-group\">${groupHead}${rows}</div>",
   "data-type=\"shopping\"",
   "data-type=\"item\"",
@@ -127,7 +102,6 @@ for(const marker of [
   "const mainHtml=isEvent?",
   "class=\"checklist-row-action\" href=\"/app/shopping_edit.php?id=${esc(item.id)}\"",
   "const detailAction=!isEvent&&taskId>=0?",
-  "<div class=\"checklist-row-actions\">${detailAction}${shoppingCount}${shoppingAdd}</div>",
   ".checklist-page .checklist-row-action{display:inline-flex",
   ".checklist-page .task-children{margin:8px 0 0 30px",
   "id=\"shopping-checklist\"",
@@ -138,8 +112,6 @@ for(const marker of [
   "expired-shopping-count",
   "class=\"btn secondary expired-shopping-more\"",
   "<details class=\"checklist-more\"><summary>表示ルール</summary>",
-  "通常タスクは関連日から期限まで、定期タスクは期限日に表示",
-  "/app/shopping_new.php?date=",
   "const primarySections=[",
   "{priority:0,hasContent:Boolean(taskRows),html:taskSection}",
   "{priority:1,hasContent:data.shopping.length>0,html:shoppingSection}",
@@ -151,17 +123,11 @@ for(const marker of [
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
 
 for(const marker of [
-  "import { taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   "export const OVERDUE_SHOPPING_PAGE_SIZE=50;",
   "export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{",
-  "const parentVisible=taskVisibilitySql('t');",
-  "s.task_id IS NULL AND s.status<>'completed'",
-  "s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'",
-  "AND s.due_date IS NULL",
-  "COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL",
-  "date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)",
+  "s.due_date IS NOT NULL AND date(s.due_date)<date(?)",
   "LIMIT ${pageLimit}",
-  ".slice(0,pageLimit);",
 ])if(!overdueShopping.includes(marker))throw new Error(`overdue Shopping helper marker missing: ${marker}`);
 
 for(const marker of [
@@ -241,7 +207,7 @@ for(const marker of [
   "const memo=String(b.memo??'').trim()||null;",
   "const rawUrl=String(b.url??'').trim();",
   "if(!['http:','https:'].includes(u.protocol))throw new Error();",
-  "INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url)",
+  "INSERT INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,url,visibility_scope,private_owner_id)",
 ])if(!shoppingRoot.includes(marker))throw new Error(`canonical Shopping persistence marker missing: ${marker}`);
 if(!shell.includes('checklist-category-followup.js?v=${APP_VERSION}-category-followup5'))throw new Error('Shopping continuous-entry UX must use a fresh asset revision');
 

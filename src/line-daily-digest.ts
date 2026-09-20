@@ -1,3 +1,4 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import { recurringForFamilyRange } from './recurrence-projection';
 import { digestHasNumericClaim, safeDigestAttempts, type DigestAttempt, type DigestGeneration } from './line-digest-generation';
 import { dailyFortune, type DailyFortune } from './daily-fortune';
@@ -261,8 +262,8 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
       .bind(localDate,localDate,localDate,localDate,localDate,familyId,memberId,memberId).first<Row>(),
     recurringForFamilyRange(env.DB,familyId,memberId,localDate,localDate),
     env.DB.prepare(`SELECT i.name,i.status
-      FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
-      WHERE i.family_id=? AND (i.task_id IS NULL OR (pt.id IS NOT NULL AND (COALESCE(pt.visibility_scope,'FAMILY')='FAMILY' OR (pt.visibility_scope='PRIVATE' AND pt.private_owner_id=?))))
+      FROM items i
+      WHERE i.family_id=? AND ${goodsVisibilitySql('i')}
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY CASE WHEN lower(COALESCE(i.status,''))='completed' THEN 1 ELSE 0 END,i.due_at,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
   ]);

@@ -42,12 +42,11 @@ for(const marker of [
   'export async function itemNew(',
   'id="itemFormError"',
   'id="itemForm"',
-  'name="task_id"',
   'name="date"',
   'name="memo"',
-  'name="assignees"',
-  '/assets/item-new.js?v=12.93-wave74',
+  '/assets/item-new.js?v=${APP_VERSION}-goods-independent-1',
 ]) assert.ok(pages.includes(marker),`canonical Belongings page behavior missing: ${marker}`);
+for(const forbidden of ['task_id','assignees','taskVisibilitySql'])assert.equal(pages.includes(forbidden),false,`canonical Belongings page must not expose linkage: ${forbidden}`);
 for(const marker of [
   "const form=document.getElementById('itemForm');",
   "fetch('/api/item'",

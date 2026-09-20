@@ -30,26 +30,27 @@ for(const sentinel of [
   'if(reusableSetResponse)return reusableSetResponse;',
   "if(request.method!=='POST') return json({ok:false,error:'POST only'},405);",
   "String(b.csrf||'')!==String(ctx.session.csrfToken||'')",
-  "taskVisibilitySql('t')",
+  "goodsVisibilitySql('i')",
   "visibility_scope,private_owner_id",
   "const CATEGORY_ORDER_KEY='item_category_order';",
   "SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1",
   "item_category_catalog",
+  "action==='update_category'",
   "action==='category_reorder'",
   "action==='category_add'",
   "action==='category_disable'",
   "action==='category_rename'",
   "const clientRequestId=String(b.client_request_id??'').trim();",
   "visibleRequestRow(ctx,m.family_id,m.id,clientRequestId)",
-  "INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id)",
-  "privateOwner?[privateOwner]",
-  "INSERT OR IGNORE INTO item_assignees(item_id,member_id)",
+  "INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,category,url,client_request_id,visibility_scope,private_owner_id)",
+  "タスクとの紐づけは廃止されました。",
+  "持ち物の担当者指定は廃止されました。",
   "'CREATED','item'",
   "return json({ok:true,id,date:dueDate,category,deduplicated:!inserted},inserted?201:200)",
 ]){
   if(!itemApi.includes(sentinel)) throw new Error(`item API behavior sentinel missing: ${sentinel}`);
 }
-if(itemApi.includes("action==='update_category'"))throw new Error('category-only mutation must stay on the permission-checked item edit path');
+if(!itemApi.includes("UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?"))throw new Error('standalone belongings category move must persist without task linkage');
 
 for(const sentinel of [
   'ALTER TABLE items ADD COLUMN category TEXT;',
@@ -75,16 +76,16 @@ const entriesSchema=reusableSetMigration.match(/CREATE TABLE IF NOT EXISTS item_
 if(/\b(status|completed|completion)\b/iu.test(entriesSchema))throw new Error('reusable set definition must not persist actual checklist completion state');
 
 for(const sentinel of [
-  "import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   'const MAX_SET_ITEMS=100;',
   'WHERE s.family_id=?',
-  "filter(row=>String(row.visibility_scope||'FAMILY')!=='PRIVATE')",
-  "return bad('非公開タスクに紐づく持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY')",
+  "filter(row=>row.visibility_scope==='FAMILY')",
+  "return bad('非公開の持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY')",
   "role==='OWNER'||role==='ADMIN'",
   "action==='reusable_set_create'",
   "action==='reusable_set_delete'",
   "action==='reusable_set_invoke'",
-  "taskChildVisibilitySql('i')",
+  "goodsVisibilitySql('i')",
   'Number(existing.created_by_member_id)!==Number(m.id)',
   "const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);",
   "VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)",

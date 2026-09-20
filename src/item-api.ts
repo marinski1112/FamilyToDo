@@ -1,4 +1,4 @@
-import { taskVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';
 
@@ -41,38 +41,38 @@ async function upsertCatalogCategory(ctx:any,familyId:number,memberId:number,nam
 }
 async function visibleRequestRow(ctx:any,familyId:number,memberId:number,requestId:string):Promise<Row|null>{
   if(!requestId)return null;
-  return (await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.due_at,i.task_id
-    FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
-    WHERE i.family_id=? AND i.client_request_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')}) LIMIT 1`)
+  return (await ctx.env.DB.prepare(`SELECT i.id,i.name,i.memo,i.url,i.category,i.due_at
+    FROM items i
+    WHERE i.family_id=? AND i.client_request_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`)
     .bind(familyId,requestId,memberId).first()) as Row|null;
 }
-function sameRequest(row:Row,name:string,memo:string,url:string,category:string,dueDate:string|null,taskId:number|null):boolean{
+function sameRequest(row:Row,name:string,memo:string,url:string,category:string,dueDate:string|null):boolean{
   return String(row.name??'')===name
     && String(row.memo??'')===memo
     && String(row.url??'')===url
     && normalizeCategory(row.category)===category
-    && String(row.due_at??'').slice(0,10)===(dueDate||'')
-    && (Number(row.task_id??0)||null)===taskId;
+    && String(row.due_at??'').slice(0,10)===(dueDate||'');
 }
 
 async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
   const url=new URL(request.url);
   const date=String(url.searchParams.get('date')||'');
   const [catalogResult,order]=await Promise.all([
-    ctx.env.DB.prepare('SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
+    ctx.env.DB.prepare('SELECT name,created_at FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
     readCategoryOrder(ctx,m.family_id),
   ]);
   const catalog=(catalogResult?.results||[]) as Row[];
   let items:Row[]=[];
   if(/^\d{4}-\d{2}-\d{2}$/.test(date)){
     const result=await ctx.env.DB.prepare(`SELECT i.id,i.category,i.memo,i.url,i.status
-      FROM items i LEFT JOIN tasks t ON t.id=i.task_id AND t.family_id=i.family_id
-      WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('t')})
+      FROM items i
+      WHERE i.family_id=? AND ${goodsVisibilitySql('i')}
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
     items=(result?.results||[]) as Row[];
   }
-  return json({ok:true,categories:catalog.map((row:Row)=>String(row.name||'')).filter(Boolean),order,items});
+  const categoryMeta=catalog.map((row:Row)=>({name:String(row.name||'').trim(),created_at:String(row.created_at||'')})).filter(row=>row.name);
+  return json({ok:true,categories:categoryMeta.map(row=>row.name),categoryMeta,order,items});
 }
 
 export async function itemApi(request:Request,ctx:any):Promise<Response>{
@@ -89,6 +89,15 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
   const reusableSetResponse=await handleItemReusableSetAction(ctx,m,b);
   if(reusableSetResponse)return reusableSetResponse;
 
+  if(action==='update_category'){
+    const id=Number(b.id||0);if(!Number.isInteger(id)||id<=0)return bad('持ち物が不正です。');
+    const category=normalizeCategory(b.category);if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
+    const current=await ctx.env.DB.prepare(`SELECT i.id FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first();
+    if(!current)return json({ok:false,error:'持ち物が見つかりません。'},404);
+    const now=nowJst();await ctx.env.DB.prepare('UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?').bind(category||null,now,id,m.family_id).run();
+    if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
+    return json({ok:true,id,category});
+  }
   if(action==='category_reorder'){
     const order=uniqueNames(Array.isArray(b.order)?b.order:[]);
     await writeCategoryOrder(ctx,m.family_id,order);
@@ -101,7 +110,8 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     await upsertCatalogCategory(ctx,m.family_id,m.id,name);
     const order=await readCategoryOrder(ctx,m.family_id);
     if(!order.some(value=>value.toLocaleLowerCase('ja-JP')===name.toLocaleLowerCase('ja-JP')))await writeCategoryOrder(ctx,m.family_id,[...order,name]);
-    return json({ok:true,name});
+    const created=await ctx.env.DB.prepare('SELECT created_at FROM item_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(m.family_id,name).first() as Row|null;
+    return json({ok:true,name,created_at:String(created?.created_at||'')});
   }
   if(action==='category_disable'){
     const role=String(m.role||'').toUpperCase();
@@ -147,35 +157,34 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
   const category=normalizeCategory(b.category);if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
   const itemUrl=String(b.url??'').trim();if(!validUrl(itemUrl))return bad('URLは http:// または https:// で入力してください。');
   const clientRequestId=String(b.client_request_id??'').trim();if(clientRequestId.length>120)return bad('リクエストIDが長すぎます。');
-  const taskId=Number(b.task_id??0)||null; let dueDate=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:null;
-  let privateOwner=0;if(taskId){const t=await ctx.env.DB.prepare(`SELECT id,start_at,end_at,due_at,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')}`).bind(taskId,m.family_id,m.id).first();if(!t)return json({ok:false,error:'関連タスクが見つかりません。'},400);dueDate=String(t.start_at||t.due_at||'').slice(0,10)||dueDate;privateOwner=String(t.visibility_scope)==='PRIVATE'?Number(t.private_owner_id):0;}
+  if(b.task_id!=null&&b.task_id!==''&&b.task_id!==0)return bad('タスクとの紐づけは廃止されました。画面を再読み込みしてください。');
+  if(Array.isArray(b.assignees)&&b.assignees.length)return bad('持ち物の担当者指定は廃止されました。画面を再読み込みしてください。');
+  const dueDate=/^\d{4}-\d{2}-\d{2}$/.test(date)?date:null;
 
   if(clientRequestId){
     const existing=await visibleRequestRow(ctx,m.family_id,m.id,clientRequestId);
     if(existing){
-      if(!sameRequest(existing,name,memo,itemUrl,category,dueDate,taskId))return bad('同じリクエストIDが別の持ち物に使用されています。',409,'IDEMPOTENCY_CONFLICT');
+      if(!sameRequest(existing,name,memo,itemUrl,category,dueDate))return bad('同じリクエストIDが別の持ち物に使用されています。',409,'IDEMPOTENCY_CONFLICT');
       return json({ok:true,id:Number(existing.id),date:dueDate,category,deduplicated:true},200);
     }
   }
 
   const now=nowJst();
   const insertSql=clientRequestId
-    ?`INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)`
-    :`INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)`;
-  const r=await ctx.env.DB.prepare(insertSql).bind(m.family_id,name,memo||null,dueDate?`${dueDate} 00:00:00`:null,m.id,now,now,taskId,category||null,itemUrl||null,clientRequestId||null).run();
+    ?`INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,category,url,client_request_id,visibility_scope,private_owner_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,'FAMILY',NULL)`
+    :`INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,category,url,client_request_id,visibility_scope,private_owner_id) VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,'FAMILY',NULL)`;
+  const r=await ctx.env.DB.prepare(insertSql).bind(m.family_id,name,memo||null,dueDate?`${dueDate} 00:00:00`:null,m.id,now,now,category||null,itemUrl||null,clientRequestId||null).run();
   let id=Number(r.meta.last_row_id||0);let inserted=Number(r.meta.changes||0)>0;
   if(clientRequestId){
     const resolved=await visibleRequestRow(ctx,m.family_id,m.id,clientRequestId);
     if(!resolved)return bad('保存結果を確認できませんでした。',409,'IDEMPOTENCY_CONFLICT');
-    if(!sameRequest(resolved,name,memo,itemUrl,category,dueDate,taskId))return bad('同じリクエストIDが別の持ち物に使用されています。',409,'IDEMPOTENCY_CONFLICT');
+    if(!sameRequest(resolved,name,memo,itemUrl,category,dueDate))return bad('同じリクエストIDが別の持ち物に使用されています。',409,'IDEMPOTENCY_CONFLICT');
     id=Number(resolved.id);inserted=inserted&&id>0;
   }
   if(!id)return bad('持ち物を保存できませんでした。',500,'SAVE_FAILED');
   if(inserted){
-    const ids=privateOwner?[privateOwner]:Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(n=>n>0):[];
-    if(ids.length) await ctx.env.DB.batch(ids.map(mid=>ctx.env.DB.prepare('INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,mid,m.family_id)));
     if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
-    if(!privateOwner)await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','item',id,JSON.stringify({name}),nowJst()).run().catch(()=>{});
+    await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(m.family_id,m.id,'CREATED','item',id,JSON.stringify({name}),nowJst()).run().catch(()=>{});
   }
   return json({ok:true,id,date:dueDate,category,deduplicated:!inserted},inserted?201:200);
 }

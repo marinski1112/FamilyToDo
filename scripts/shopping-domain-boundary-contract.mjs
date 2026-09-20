@@ -22,7 +22,7 @@ for(const marker of [
   "action==='add_batch'",
   "action==='add'",
   "taskChildVisibilitySql('s')",
-  "queueCalendarProjectionAfterMutation",
+  "code:'RETIRED_ACTION'",
   "INSERT INTO shopping_completion_history",
   "return bad('未対応の操作です。');",
 ]) if(!root.includes(marker)) throw new Error(`shopping root lost ${marker}`);
@@ -35,10 +35,11 @@ for(const retiredMarker of [
 ]) if(root.includes(retiredMarker)) throw new Error(`retired standalone Shopping renderer must not return: ${retiredMarker}`);
 
 for(const marker of [
-  "visibility_scope='PRIVATE' AND private_owner_id=?",
   'archiveShoppingCompletionStatements',
-  'DELETE FROM shopping_completions WHERE shopping_item_id=? AND member_id NOT IN',
+  "goodsVisibilitySql('s')",
+  'const taskId=Number(item.task_id)||null;',
 ]) if(!editPage.includes(marker)) throw new Error(`shopping edit lost ${marker}`);
+for(const forbidden of ['name="assignees"','name="task_id"','shoppingTaskSearch','shopping-task-link.js'])if(editPage.includes(forbidden))throw new Error(`shopping edit must not expose goods linkage: ${forbidden}`);
 for(const marker of [
   "const showAllLabel=showAllInput?.closest('label')?.querySelector('span')||null;",
   "if(showAllLabel)showAllLabel.textContent=query?`検索を解除すると候補表示を切り替えられます`:`その他の未完了タスクも表示${hidden?`（${hidden}件）`:''}`;",
@@ -67,13 +68,12 @@ for(const marker of [
   "UPDATE shopping_reusable_set_invocations SET created_item_ids=?,updated_at=?",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set idempotency marker missing: ${marker}`);
 for(const marker of [
-  "import { taskVisibilitySql } from './task-visibility';",
-  "LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id",
-  "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
-  "visible.filter(x=>String(x.visibility_scope||'FAMILY')!=='PRIVATE')",
+  "import { goodsVisibilitySql } from './goods-visibility';",
+  "${goodsVisibilitySql('s')}",
+  "visible.filter(x=>x.visibility_scope==='FAMILY')",
   "skipped_private:skippedPrivate",
   "DELETE FROM shopping_reusable_sets WHERE id=? AND family_id=?",
-  "非公開タスクに紐づく買い物だけでは共有セットを作成できません。",
+  "非公開の買い物だけでは共有セットを作成できません。",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set privacy/atomicity marker missing: ${marker}`);
 for(const marker of [
   'familytodo.shopping-set-invoke:',

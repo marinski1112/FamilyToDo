@@ -18,11 +18,8 @@ for(const marker of [
   "new DOMParser().parseFromString(source,'text/html')",
   "const card=doc.getElementById('addShopping');",
   "const shoppingPayload=doc.getElementById('shoppingNewPayload');",
-  "const taskPayload=doc.getElementById('shoppingTaskLinkPayload');",
-  "allowedScriptSrc(doc,'/assets/shopping-task-link.js')",
   "allowedScriptSrc(doc,'/assets/shopping-new.js')",
   'body.replaceChildren(card,shoppingPayload);',
-  'if(taskPayload)await loadScript(taskLinkSrc);',
   'await loadScript(shoppingNewSrc);',
   "genericManual.hidden=shoppingMode;",
   "shoppingManual.hidden=!shoppingMode;",
@@ -47,19 +44,15 @@ for(const marker of [
   'id="shoppingProducts"',
   'id="shoppingCategorySelect"',
   'id="shoppingTaskDueDate"',
-  'id="shoppingTaskId"',
   'id="shoppingNewPayload"',
-  'id="shoppingTaskLinkPayload"',
-  '/assets/shopping-task-link.js?v=${APP_VERSION}',
   '/assets/shopping-new.js?v=${APP_VERSION}',
 ]) assert.ok(shoppingPage.includes(marker),`canonical Shopping page behavior missing: ${marker}`);
+for(const forbidden of ['id="shoppingTaskId"','id="shoppingTaskLinkPayload"','name="assignees"'])assert.equal(shoppingPage.includes(forbidden),false,`canonical Shopping page must not restore retired linkage control: ${forbidden}`);
 for(const marker of [
   "fetch('/api/shopping'",
   "fetch('/api/shopping-categories'",
   "const body={action:'add_batch'",
 ]) assert.ok(shoppingJs.includes(marker),`canonical Shopping controller write boundary missing: ${marker}`);
-assert.ok(taskLinkJs.includes("const DEFAULT_VISIBLE_LIMIT=12;"),'canonical Shopping related-task picker must remain bounded by default');
-assert.ok(taskLinkJs.includes("searchInput.type='search';"),'canonical Shopping related-task picker must retain search');
 assert.ok(pageRoutes.includes("if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));"),'Shopping manual reuse must target the canonical authenticated Shopping-new route');
 
 console.log('rough-input Shopping manual fallback reuses canonical lazy Shopping UI/controller boundary');

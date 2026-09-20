@@ -13,13 +13,14 @@ for(const marker of [
   "import { layout } from './app-shell';",
   "import { logActivity } from './activity-log';",
   "archiveRecurrenceRuleOccurrenceStatements",
-  "archiveTaskChildCompletionStatements",
   "archiveTaskCompletionStatements",
   "import { matchesRecurrence, parseJsonArray } from './recurrence-projection';",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
   "import { reconcileTaskCompletionAfterAssigneeChange } from './task-completion-reconciliation';",
   "saveTaskFamilyLogTemplate",
   "validateTaskFamilyLogTemplateInput",
+  "hasRetiredGoodsPayload",
+  "GOODS_LINKAGE_RETIRED".replace('GOODS_LINKAGE_RETIRED','定期タスクと買い物・持ち物の紐づけは廃止されました。'),
   "export async function recurring(request:Request,ctx:AppContext):Promise<Response>{",
   "action==='restore_excluded'",
   "matchesRecurrence(excluded,occurrenceDate)",
@@ -31,7 +32,6 @@ for(const marker of [
   "await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,taskId,now);",
   "DELETE FROM recurrence_occurrence_completions WHERE member_id NOT IN",
   "UPDATE recurrence_occurrences SET status=CASE WHEN",
-  "archiveTaskChildCompletionStatements(ctx.env.DB,m.family_id,taskId,nowJst())",
   "saveTaskFamilyLogTemplate(ctx,newTaskId,b,validatedFamilyLogTemplate)",
   "saveTaskFamilyLogTemplate(ctx,taskId,b,validatedFamilyLogTemplate)",
   "await ensureFamilyLogMemberSubjects(ctx,m.family_id,m.id);",
@@ -41,6 +41,15 @@ for(const marker of [
   "action=\"/app/recurring.php\"",
 ])if(!page.includes(marker))throw new Error(`retained recurring behavior marker missing: ${marker}`);
 
+for(const retired of [
+  'archiveTaskChildCompletionStatements',
+  'shopping_items WHERE task_id',
+  'items WHERE task_id',
+  'INSERT INTO shopping_items',
+  'INSERT INTO items',
+  'shopping_assignees',
+  'item_assignees',
+])if(page.includes(retired))throw new Error(`recurring task lifecycle must not read/write linked goods: ${retired}`);
 if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN"))throw new Error('recurring series-wide assignee edits must use canonical task completion reconciliation');
 
 for(const marker of [
@@ -58,4 +67,4 @@ if(!exceptions.includes("import { recurring } from './recurring-page';"))throw n
 if(!exceptions.includes("if(url.pathname!=='/app/recurring.php') return null;"))throw new Error('canonical recurring early route changed');
 if(!routes.includes("if(url.pathname==='/app/settings_recurring.php') return await recurring(request,context);"))throw new Error('settings recurring alias route changed');
 
-console.log('recurring-page-boundary: retained recurring ownership, split/archive/template/restore/completion reconciliation semantics ok');
+console.log('recurring-page-boundary: retained recurring ownership, split/archive/template/restore/completion reconciliation and independent-goods boundary ok');

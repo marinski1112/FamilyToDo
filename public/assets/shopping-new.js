@@ -104,13 +104,7 @@ try {
     const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
-    const rawTaskId=String(fd.get('task_id')??'').trim();
-    const taskId=rawTaskId===''||rawTaskId==='0'?0:safeEntityId(rawTaskId);
-    if(rawTaskId!==''&&rawTaskId!=='0'&&!taskId){alert('タスクの指定が不正です。');return;}
-    const assigneeValues=[...form.querySelectorAll('[name="assignees"]:checked')].map(x=>String(x.value??'').trim());
-    const assignees=assigneeValues.map(safeEntityId);
-    if(assignees.some(id=>!id)){alert('担当者の指定が不正です。');return;}
-    const body={action:'add_batch',csrf,products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,task_id:taskId,assignees,memo:memo};
+    const body={action:'add_batch',csrf,products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,memo:memo};
     const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
     try{
       if(registerCategory){

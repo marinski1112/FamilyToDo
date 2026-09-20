@@ -1,3 +1,4 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { DEFAULT_CALENDAR_COLOR, isAllowedCalendarColor } from './calendar-colors';
@@ -62,8 +63,8 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
     return scope==='FAMILY'||(scope==='PRIVATE'&&Number(t.private_owner_id)===member.id);
   });
   const [shopping,items,journals]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')}) AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.id,i.name,i.status,i.due_at,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>(),
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
+    ctx.env.DB.prepare(`SELECT i.id,i.name,i.status,i.due_at,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>(),
     ctx.env.DB.prepare("SELECT journal_date FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date BETWEEN ? AND ? ORDER BY journal_date").bind(fid,from,to).all<Row>()
   ]);
   const journalDates=journals.results.map(row=>String(row.journal_date||'')).filter(value=>/^\d{4}-\d{2}-\d{2}$/.test(value));

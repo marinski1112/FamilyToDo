@@ -86,7 +86,7 @@
     span.append(document.createTextNode(title));label.append(checkbox,span);
     const actions=document.createElement('div');actions.className='checklist-row-actions';
     const detail=document.createElement('a');detail.className='checklist-row-action';detail.href=`/task/view.php?id=${id}`;detail.setAttribute('aria-label',`${title}の詳細`);detail.textContent='詳細';
-    const shopping=document.createElement('a');shopping.className='task-shopping-add';shopping.href=`/app/shopping_new.php?date=${encodeURIComponent(String(payload.date||''))}&task_id=${id}`;shopping.setAttribute('aria-label','この予定に買い物を追加');shopping.title='買い物を追加';shopping.innerHTML='<span aria-hidden="true">🛒</span><span class="shopping-plus-badge" aria-hidden="true">＋</span>';
+    const shopping=document.createDocumentFragment();
     actions.append(detail,shopping);main.append(label,actions);row.append(main);
     const meta=document.createElement('div');meta.className='meta';row.append(meta);
     container.insertBefore(row,form);

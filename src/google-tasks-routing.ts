@@ -47,8 +47,8 @@ export function parseChecklistRoute(value:unknown,due:unknown,updated:unknown,ti
   return result;
 }
 
-/** One D1 transaction owns the claim, parent/tasks, children and assignees together.
- * Parent task visibility is the canonical privacy boundary used by item-api/shopping-root.
+/** One D1 transaction owns the claim and independent checklist records together.
+ * Goods retain their own import visibility, without synthetic parent tasks.
  * At most ten statements per routed input; the caller retains its three-item page cap.
  */
 export async function applyChecklistRoute(env:Env,a:Row,item:any):Promise<'not-handled'|'noop'|'review'|'command'>{
@@ -81,16 +81,13 @@ export async function applyChecklistRoute(env:Env,a:Row,item:any):Promise<'not-h
   const statements=[env.DB.prepare("INSERT INTO google_tasks_routes(account_id,family_id,member_id,list_id,external_id,etag,kind,status,reason,claim,item_count,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM external_google_task_accounts a JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id WHERE a.id=? AND a.family_id=? AND a.member_id=? AND a.tasklist_id=? AND a.status IN ('ACTIVE','SYNCING','ERROR') AND m.active=1 AND m.deleted_at IS NULL AND (CASE WHEN a.import_visibility='FAMILY' THEN 'FAMILY' ELSE 'PRIVATE' END)=?) ON CONFLICT(account_id,list_id,external_id) DO UPDATE SET etag=excluded.etag,kind=excluded.kind,status=excluded.status,reason=excluded.reason,claim=excluded.claim,item_count=excluded.item_count,updated_at=excluded.updated_at WHERE google_tasks_routes.status='NEEDS_REVIEW'").bind(a.id,a.family_id,a.member_id,a.tasklist_id,String(item.id),String(item.etag||''),route.kind,route.reason?'NEEDS_REVIEW':'PENDING',route.reason,claim,route.names.length,n,n,a.id,a.family_id,a.member_id,a.tasklist_id,visibility)];
   if(!route.reason){
     const dueAt=route.date?route.date+' 00:00:00':null;
-    const parentTitle=(route.date?route.date+' ':'')+(route.kind==='SHOPPING'?'買い物':'持ち物');
-    const taskNames=route.kind==='TASK'?route.names:[parentTitle];
-    statements.push(env.DB.prepare(`INSERT INTO tasks(family_id,title,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,calendar_visible,task_kind,all_day,visibility_scope,private_owner_id,google_tasks_route_id) SELECT ?,j.value,?,'pending','ANY',?,?,?, ?,NULL,0,'TASK',1,?,?,r.id FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,dueAt,a.member_id,local,local,dueAt,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(taskNames),...gateArgs));
-    statements.push(env.DB.prepare(`INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT id,? FROM tasks WHERE google_tasks_route_id IN (${gate})`).bind(a.member_id,...gateArgs));
-    if(route.kind==='SHOPPING'){
-      statements.push(env.DB.prepare(`INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,task_id,url) SELECT ?,j.value,'1',NULL,?,'pending',?,?,?,t.id,NULL FROM tasks t,json_each(?) j WHERE t.google_tasks_route_id IN (${gate})`).bind(a.family_id,route.date,a.member_id,local,local,JSON.stringify(route.names),...gateArgs));
-      statements.push(env.DB.prepare(`INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id) SELECT s.id,? FROM shopping_items s JOIN tasks t ON t.id=s.task_id WHERE t.google_tasks_route_id IN (${gate})`).bind(a.member_id,...gateArgs));
+    if(route.kind==='TASK'){
+      statements.push(env.DB.prepare(`INSERT INTO tasks(family_id,title,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,calendar_visible,task_kind,all_day,visibility_scope,private_owner_id,google_tasks_route_id) SELECT ?,j.value,?,'pending','ANY',?,?,?, ?,NULL,0,'TASK',1,?,?,r.id FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,dueAt,a.member_id,local,local,dueAt,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(route.names),...gateArgs));
+      statements.push(env.DB.prepare(`INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT id,? FROM tasks WHERE google_tasks_route_id IN (${gate})`).bind(a.member_id,...gateArgs));
+    }else if(route.kind==='SHOPPING'){
+      statements.push(env.DB.prepare(`INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,visibility_scope,private_owner_id) SELECT ?,j.value,'1',NULL,?,'pending',?,?,?,?,? FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,route.date,a.member_id,local,local,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(route.names),...gateArgs));
     }else if(route.kind==='ITEM'){
-      statements.push(env.DB.prepare(`INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id) SELECT ?,j.value,NULL,?,'pending','ANY',?,?,?,t.id FROM tasks t,json_each(?) j WHERE t.google_tasks_route_id IN (${gate})`).bind(a.family_id,dueAt,a.member_id,local,local,JSON.stringify(route.names),...gateArgs));
-      statements.push(env.DB.prepare(`INSERT OR IGNORE INTO item_assignees(item_id,member_id) SELECT i.id,? FROM items i JOIN tasks t ON t.id=i.task_id WHERE t.google_tasks_route_id IN (${gate})`).bind(a.member_id,...gateArgs));
+      statements.push(env.DB.prepare(`INSERT INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,visibility_scope,private_owner_id) SELECT ?,j.value,NULL,?,'pending','ANY',?,?,?,?,? FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,dueAt,a.member_id,local,local,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(route.names),...gateArgs));
     }
     statements.push(env.DB.prepare(`UPDATE google_tasks_routes SET status='EXECUTED' WHERE id IN (${gate})`).bind(...gateArgs));
   }

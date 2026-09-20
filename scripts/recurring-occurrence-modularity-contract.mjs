@@ -22,12 +22,16 @@ for(const sentinel of [
   'INSERT OR IGNORE INTO task_assignees(task_id,member_id)',
   'INSERT OR IGNORE INTO task_completions(task_id,member_id,action,completed_at)',
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
-  'SELECT * FROM shopping_items WHERE task_id=? AND family_id=? ORDER BY id',
-  'INSERT OR IGNORE INTO shopping_assignees(shopping_item_id,member_id)',
-  'SELECT * FROM items WHERE task_id=? AND family_id=? ORDER BY id',
-  'INSERT OR IGNORE INTO item_assignees(item_id,member_id)',
   'UPDATE recurrence_occurrences SET exception_task_id=?,updated_at=?',
   'redirectTo=`/task/view.php?id=${taskId}`',
 ]) if(!occurrence.includes(sentinel)) throw new Error(`recurring occurrence behavior sentinel missing: ${sentinel}`);
+for(const retired of [
+  'SELECT * FROM shopping_items WHERE task_id=',
+  'INSERT INTO shopping_items',
+  'shopping_assignees',
+  'SELECT * FROM items WHERE task_id=',
+  'INSERT INTO items',
+  'item_assignees',
+]) if(occurrence.includes(retired)) throw new Error(`recurrence exception must not clone linked goods: ${retired}`);
 if(occurrence.includes('et?`${date} ${et}`:null')) throw new Error('multi-day recurring exception conversion must not collapse end_at onto the occurrence start date');
-console.log('recurring occurrence modularity contract: ok');
+console.log('recurring occurrence modularity contract: task state is preserved while independent goods are never cloned');

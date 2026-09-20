@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 const parentApi=readFileSync('src/task-parent-completion-api.ts','utf8');
 const categoryMutation=readFileSync('src/shopping-category-mutation-api.ts','utf8');
 const categoryApi=readFileSync('src/shopping-category-api.ts','utf8');
+const itemApi=readFileSync('src/item-api.ts','utf8');
 const routes=readFileSync('src/context-api-routes.ts','utf8');
 const shell=readFileSync('src/app-shell.ts','utf8');
 const ui=readFileSync('public/assets/checklist-hierarchy-followup.js','utf8');
@@ -16,8 +17,13 @@ const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.css','utf8');
 const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
+const belongingsCategories=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
 const appShell=readFileSync('src/app-shell.ts','utf8');
+const flowFix=readFileSync('public/assets/checklist-reminders-flow-fix.js','utf8');
+const taskEventsPage=readFileSync('src/task-events-page.ts','utf8');
+const taskEventsJs=readFileSync('public/assets/task-events.js','utf8');
+const js=ui;
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
 const forbidText=(source,needle,label)=>{if(source.includes(needle))throw new Error(`checklist hierarchy follow-up forbids ${label}: ${needle}`);};
@@ -45,7 +51,8 @@ requireText(categoryMutation,"itemPolicy!=='unclassified'&&itemPolicy!=='delete'
 requireText(categoryMutation,'DELETE FROM shopping_items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed shopping item deletion');
 requireText(categoryMutation,'DELETE FROM items WHERE family_id=? AND category=? COLLATE NOCASE','confirmed belongings item deletion');
 requireText(categoryApi,'canManageCategories','category management capability');
-requireText(categoryApi,'SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1','enabled category catalog read');
+requireText(categoryApi,'SELECT name,created_at FROM shopping_category_catalog WHERE family_id=? AND enabled=1','enabled category catalog metadata read');
+requireText(categoryApi,'categoryMeta','shopping category creation metadata');
 
 requireText(hierarchyMigration,'REFERENCES tasks(id) ON DELETE SET NULL','parent deletion preserves children');
 forbidText(hierarchyMigration,'REFERENCES tasks(id) ON DELETE CASCADE','parent deletion cascade');
@@ -112,7 +119,8 @@ requireText(addFooter,"if(klass==='task-section')",'task-specific top-right add 
 requireText(addFooter,"button.className='checklist-compact-action task-add-top'",'task add toolbar button');
 requireText(addFooter,"form.hidden=true",'deferred task quick-entry form');
 
-requireText(js,"if(!count)g.hidden=true",'empty unclassified hidden while direct add route remains');
+requireText(js,"g.hidden=name===U?false:emptyEligible(name)",'new empty categories remain in normal section until eligible');
+requireText(js,'nextJstOneAt','next JST 01:00 empty-category threshold');
 requireText(js,"if(count&&name!==U)active.add(key(name))",'unclassified excluded from empty-category semantics');
 requireText(addFooter,"button.textContent='＋ タスク'",'compact top-right task label');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
@@ -146,7 +154,9 @@ requireText(belongingsCss,'border-radius:5px!important','square Belongings check
 for(const marker of ['checklist-section-tools','checklist-search-toggle','checklist-delete-toggle','checklist-status-tabs'])requireText(js,marker,`shared checklist control: ${marker}`);
 for(const marker of ['shopping-category-group','belongings-category-group','shopping-category-toggle','belongings-category-toggle'])requireText(js,marker,`shopping/belongings shared category contract: ${marker}`);
 for(const marker of ['width:22px!important','height:22px!important','border-radius:5px!important']){requireText(css,marker,`task/shopping square checkbox contract: ${marker}`);requireText(belongingsCss,marker,`belongings square checkbox contract: ${marker}`);}
-requireText(categoryDrag,"section=document.querySelector('.checklist-page .item-section')",'Belongings category drag mirrors Shopping');
+requireText(categoryDrag,"const page=document.querySelector('.checklist-page')",'Belongings drag survives unified goods reparenting');
+requireText(categoryDrag,"action:'update_category'",'Belongings item drag persists target category');
+requireText(categoryDrag,"belongingsItemDrag",'Belongings rows receive drag affordance');
 requireText(categoryDrag,"action:'category_reorder'",'Belongings drag persists category order');
 requireText(categoryDrag,"name.title='タップで編集／長押しで並び替え'",'Belongings long-press drag affordance');
 forbidText(belongingsUi,'カテゴリを上へ','no divergent Belongings up-arrow control');
@@ -190,3 +200,33 @@ requireText(js,"'unified-shopping-group'",'Belongings unified groups share Shopp
 const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
 requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
+
+/* Retired goods linkage must not be reintroduced by runtime-generated checklist rows. */
+forbidText(flowFix,'task-shopping-add','runtime task-to-shopping affordance');
+forbidText(flowFix,'task_id=','runtime task-linked shopping URL');
+forbidText(flowFix,'関連: ','legacy related-task metadata injection');
+requireText(flowFix,"const isEvent=type==='task'&&section.dataset.kindTab==='event'",'task/event quick-entry follows selected tab');
+requireText(flowFix,'is_event:isEvent','event quick-entry payload flag');
+requireText(categoryDrag,"g.dataset.categoryCommit==='1'",'single shopping category commit guard');
+requireText(categoryDrag,"icon.textContent='🛒'",'shopping category icon survives inline creation');
+requireText(js,'Array.isArray(sc.categoryMeta)?sc.categoryMeta:[]','shopping category age metadata reaches UI');
+requireText(js,'Array.isArray(ic.categoryMeta)?ic.categoryMeta:[]','belongings category age metadata reaches UI');
+
+/* Category create responses carry authoritative timestamps for immediate JST-01:00 placement. */
+requireText(categoryApi,"created_at:String(created?.created_at||'')",'shopping category create timestamp response');
+requireText(itemApi,"created_at:String(created?.created_at||'')",'belongings category create timestamp response');
+
+/* Same-session category creation must retain authoritative age metadata in the live DOM. */
+requireText(categoryDrag,"g.dataset.createdAt=String(created.created_at||'')",'shopping live category creation timestamp');
+requireText(categoryDrag,"familytodo:category-created",'shopping live category creation event');
+requireText(belongingsCategories,"g.dataset.createdAt=String(d.created_at||'')",'belongings live category creation timestamp');
+requireText(belongingsCategories,"familytodo:category-created",'belongings live category creation event');
+requireText(js,"document.addEventListener('familytodo:category-created',rememberCreated)",'hierarchy remembers same-session category age');
+
+/* Checklist server/runtime must not retain legacy task-owned goods presentation. */
+forbidText(taskEventsPage,'task-shopping-add','server-rendered task shopping affordance');
+forbidText(taskEventsPage,'shopping_assignees','shopping assignee presentation query');
+forbidText(taskEventsPage,'item_assignees','item assignee presentation query');
+forbidText(taskEventsPage,"LEFT JOIN tasks t ON t.id=s.task_id",'shopping parent-task read');
+forbidText(taskEventsJs,'task-shopping-add','event runtime task shopping affordance');
+forbidText(taskEventsJs,'task_id=${id}','event runtime task-linked shopping URL');
