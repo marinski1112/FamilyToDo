@@ -67,7 +67,7 @@ for(const marker of [
   "<strong>関連タスクの持ち物</strong>",
   "const itemContent=`${itemRows}${orphanItemRows?",
   "FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id",
-  "WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')})",
+  "WHERE i.family_id=? AND ${goodsVisibilitySql('i')}",
 ])if(!page.includes(marker))throw new Error(`off-day linked Belonging visibility marker missing: ${marker}`);
 
 if(page.includes('pt.title AS item_task_title'))throw new Error('off-day linked Belonging fallback must not expose parent task titles');
@@ -95,7 +95,7 @@ for(const marker of [
   "data-parent-private=\"${String(task.visibility_scope)==='PRIVATE'?'1':'0'}\"",
   "const childSection=childRows||composer?",
   "JSON.stringify({csrf,date,appVersion:APP_VERSION})",
-  "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
+  "${goodsVisibilitySql('s')}",
   "s.task_id IS NULL",
   "s.due_date IS NULL",
   "s.status<>'completed'",
@@ -151,10 +151,10 @@ for(const marker of [
 ])if(!page.includes(marker))throw new Error(`unified checklist marker missing: ${marker}`);
 
 for(const marker of [
-  "import { taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   "export const OVERDUE_SHOPPING_PAGE_SIZE=50;",
   "export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{",
-  "const parentVisible=taskVisibilitySql('t');",
+  "const parentVisible=goodsVisibilitySql('s');",
   "s.task_id IS NULL AND s.status<>'completed'",
   "s.task_id IS NOT NULL AND ${parentVisible} AND s.status<>'completed'",
   "AND s.due_date IS NULL",
