@@ -1,3 +1,4 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';
 import type { AppContext } from './app-context';
 import { recurringForDate } from './recurrence-projection';
@@ -140,7 +141,7 @@ export async function loadHomeDashboard(ctx:AppContext,today:string):Promise<Hom
     ctx.env.DB.prepare(`SELECT count(*) c
       FROM shopping_items s
       LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
-      WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
+      WHERE s.family_id=? AND ${goodsVisibilitySql('s')}
         AND s.status<>'completed'
         AND COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL
         AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))<date(?)`)
