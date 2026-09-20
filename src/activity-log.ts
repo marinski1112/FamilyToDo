@@ -32,9 +32,9 @@ export async function logActivity(
     }
     if(targetId&&(targetType==='item'||targetType==='shopping')){
       const table=targetType==='item'?'items':'shopping_items';
-      const child=await ctx.env.DB.prepare(`SELECT t.visibility_scope FROM ${table} c JOIN tasks t ON t.id=c.task_id AND t.family_id=c.family_id WHERE c.id=? AND c.family_id=?`)
+      const child=await ctx.env.DB.prepare(`SELECT c.visibility_scope FROM ${table} c WHERE c.id=? AND c.family_id=?`)
         .bind(targetId,ctx.member.family_id).first<Row>();
-      if(String(child?.visibility_scope)==='PRIVATE')return;
+      if(String(child?.visibility_scope)!=='FAMILY')return;
     }
     await ctx.env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)')
       .bind(ctx.member.family_id,ctx.member.id,action,targetType,targetId,JSON.stringify(metadata),nowJst()).run();
