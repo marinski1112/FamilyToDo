@@ -18,6 +18,7 @@ const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.
 const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
 const appShell=readFileSync('src/app-shell.ts','utf8');
+const flowFix=readFileSync('public/assets/checklist-reminders-flow-fix.js','utf8');
 const js=ui;
 
 const requireText=(source,needle,label)=>{if(!source.includes(needle))throw new Error(`checklist hierarchy follow-up missing ${label}: ${needle}`);};
@@ -195,3 +196,14 @@ requireText(js,"'unified-shopping-group'",'Belongings unified groups share Shopp
 const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
 requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
+
+/* Retired goods linkage must not be reintroduced by runtime-generated checklist rows. */
+forbidText(flowFix,'task-shopping-add','runtime task-to-shopping affordance');
+forbidText(flowFix,'task_id=','runtime task-linked shopping URL');
+forbidText(flowFix,'関連: ','legacy related-task metadata injection');
+requireText(flowFix,"const isEvent=type==='task'&&section.dataset.kindTab==='event'",'task/event quick-entry follows selected tab');
+requireText(flowFix,'is_event:isEvent','event quick-entry payload flag');
+requireText(categoryDrag,"g.dataset.categoryCommit==='1'",'single shopping category commit guard');
+requireText(categoryDrag,"icon.textContent='🛒'",'shopping category icon survives inline creation');
+requireText(js,'Array.isArray(sc.categoryMeta)?sc.categoryMeta:[]','shopping category age metadata reaches UI');
+requireText(js,'Array.isArray(ic.categoryMeta)?ic.categoryMeta:[]','belongings category age metadata reaches UI');
