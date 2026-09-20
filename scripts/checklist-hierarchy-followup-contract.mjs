@@ -135,8 +135,8 @@ requireText(js,"familytodo:belongings-category-controller-ready",'unified Belong
 requireText(js,"goodsCategoryDiag='item:controller-timeout'",'Belongings category proxy records missing-controller diagnostic state');
 requireText(belongingsUi,"goodsCategoryDiag='item:request-received'",'Belongings controller records request receipt');
 requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings controller records draft mount');
-requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category2','checklist loads the canonical Belongings category controller');
-requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category2','checklist loads Belongings category styles');
+requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category3','checklist loads the canonical Belongings category controller');
+requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category3','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
 requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
@@ -205,7 +205,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity6'",'checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity7'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
