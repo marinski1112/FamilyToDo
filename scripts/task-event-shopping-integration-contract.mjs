@@ -8,6 +8,7 @@ const roughAi=fs.readFileSync('public/assets/task-rough-input-ai.js','utf8');
 const taskEdit=fs.readFileSync('public/assets/task-edit.js','utf8');
 const taskView=fs.readFileSync('public/assets/task-view.js','utf8');
 const taskEditServer=fs.readFileSync('src/task-edit-page.ts','utf8');
+assert.doesNotMatch(roughSave,/rough-item-assignees/,'Belongings draft reader must not retain retired assignee inputs');
 
 for(const marker of ['shopping_category_catalog','resolveShoppingCategoryOptions','id="taskNewPayload"'])assert.ok(taskEntryPage.includes(marker),`unified task entry canonical category bootstrap missing: ${marker}`);
 for(const marker of ['rough-draft-category','rough-draft-quantity','rough-draft-url','rough-draft-due-date'])assert.ok(roughAi.includes(marker),`rough preview shopping field missing: ${marker}`);
