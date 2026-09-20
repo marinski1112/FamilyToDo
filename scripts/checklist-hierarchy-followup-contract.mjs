@@ -204,6 +204,7 @@ requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Ta
 requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'only active goods type categories are shown');
 requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
 requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
+requireText(js,"const mergedCategories=[],mergedMeta=[],seenCategories=new Set(),seenMeta=new Set()",'Shopping and Belongings expose one merged category catalog in the unified checklist');
 
 
 /* Retired goods linkage must not be reintroduced by runtime-generated checklist rows. */
