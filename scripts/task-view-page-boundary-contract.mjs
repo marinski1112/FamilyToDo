@@ -21,15 +21,21 @@ for(const marker of [
   ".bind(id,m.family_id,m.id)",
   "return new Response('定期タスクの発生日が見つかりません。',{status:404});",
   "return new Response('タスクが見つかりません。',{status:404});",
-  'const returnContext=resolveTaskDetailReturn(ctx.request,dateForChildren);',
+  'const returnContext=resolveTaskDetailReturn(ctx.request,dateForTask);',
   'href="${esc(returnContext.url)}">${esc(returnContext.label)}</a>',
   'returnUrl:returnContext.url',
   'taskViewPayload',
   '/assets/task-view.js?v=12.147.0-wave128',
-  'data-type=\"shopping\"',
-  'data-type=\"item\"',
   '/task/convert_occurrence.php',
 ])if(!view.includes(marker))throw new Error(`retained task detail behavior/privacy marker missing: ${marker}`);
+for(const retired of [
+  "FROM shopping_items s WHERE s.task_id=?",
+  "FROM items i WHERE i.task_id=?",
+  'data-type=\"shopping\"',
+  'data-type=\"item\"',
+  '/shopping/new.php?task_id=',
+  '/item/new.php?task_id=',
+])if(view.includes(retired))throw new Error(`task detail must not expose retired goods linkage: ${retired}`);
 if(view.includes('r.name recurrence_name,r.completion_mode'))throw new Error('recurrence detail must read completion_mode from parent tasks, not recurrence_rules');
 if(view.includes("returnUrl:'/app/tasks.php?date='"))throw new Error('task detail must not hard-code checklist as the post-action return destination');
 
@@ -50,4 +56,4 @@ if(!handlers.includes("export { itemEdit } from './item-edit-page';"))throw new 
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('retained task edit boundary missing');
 if(!routes.includes("if(url.pathname==='/task/view.php') return await taskView(context,Number(url.searchParams.get('id')||0));"))throw new Error('task detail page route changed');
 
-console.log('task-view-page-boundary: retained detail ownership, PRIVATE visibility, recurrence D1 source, unassigned completion fallback and safe return context ok');
+console.log('task-view-page-boundary: retained detail ownership, PRIVATE visibility, recurrence fallback, safe return context and no linked-goods UI ok');
