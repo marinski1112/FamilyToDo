@@ -204,6 +204,8 @@ requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Ta
 requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'only active goods type categories are shown');
 requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
 requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
+requireText(js,"shopping.classList.remove('category-delete-mode-active')",'goods tab switch exits stale Shopping category delete mode');
+requireText(js,"g.className='belongings-category-group shopping-category-group unified-category-group unified-item-group unified-shopping-group category-collapsed'",'shared catalog category can materialize a Belongings group before adding an item');
 requireText(js,"const mergedCategories=[],mergedMeta=[],seenCategories=new Set(),seenMeta=new Set()",'Shopping and Belongings expose one merged category catalog in the unified checklist');
 
 
