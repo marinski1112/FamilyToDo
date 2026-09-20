@@ -96,7 +96,7 @@ for(const sentinel of [
 if(/recurrence_rules|recurring_occurrence|auto.?generate/iu.test(reusableSetApi))throw new Error('reusable belongings sets must not add recurrence or automatic generation');
 
 for(const sentinel of [
-  "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=?,updated_at=?",
+  "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=NULL,updated_at=?",
   "SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1",
   '<label>カテゴリ</label>',
   'name="category" list="itemCategoryOptions"',
