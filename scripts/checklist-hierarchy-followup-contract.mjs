@@ -223,6 +223,9 @@ requireText(js,"if(sz instanceof HTMLElement)sz.hidden=false;if(iz instanceof HT
 requireText(js,"if(shoppingUn instanceof HTMLElement)shoppingUn.hidden=kind!=='shopping';if(itemUn instanceof HTMLElement)itemUn.hidden=kind!=='item'",'only selected goods type exposes its unclassified add route');
 forbidText(js,"g.hidden=(kind==='item')?!g.classList.contains('unified-item-group'):g.classList.contains('unified-item-group')",'goods tabs must not hide the non-selected goods categories');
 requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
+requireText(js,"status.append(itemTrash)",'Belongings trash shares unified goods status-row placement');
+requireText(js,"shopping.classList.toggle('category-delete-mode-active',items.classList.contains('category-delete-mode-active'))",'Belongings delete mode is mirrored onto the visible unified goods surface');
+requireText(js,"goodsDeleteDiag=items.classList.contains('category-delete-mode-active')?'item:delete-mode-on':'item:delete-mode-off'",'Belongings delete activation records bounded diagnostic state');
 requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
 requireText(js,"shopping.classList.remove('category-delete-mode-active')",'goods tab switch exits stale Shopping category delete mode');
 requireText(js,"document.querySelectorAll('.category-delete-minus').forEach(n=>n.remove())",'moved delete controls are cleared when category delete mode exits');
