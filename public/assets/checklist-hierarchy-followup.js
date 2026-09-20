@@ -64,7 +64,7 @@ const deleteChoice=(names,kind)=>new Promise(resolve=>{
 
 const categoryName=group=>String(group?.dataset?.category||U).trim()||U;
 const addDeleteMinus=(head,name,kind,count)=>{
- if(name===U||head.querySelector('.category-delete-minus'))return;const button=document.createElement('button');button.type='button';button.className='category-delete-minus';button.textContent='−';button.setAttribute('aria-label',name+'カテゴリを削除');button.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();let policy='unclassified';if(Number(count)>0){policy=await deleteChoice([name],kind);if(!policy)return;}try{await requestJson('/api/shopping-category-mutation',{csrf,action:'delete_many',kind,names:[name],item_policy:policy});location.reload();}catch(err){alert(err?.message||String(err));}});head.prepend(button);
+ if(name===U||head.querySelector('.category-delete-minus'))return;const button=document.createElement('button');button.type='button';button.className='category-delete-minus';button.textContent='−';button.setAttribute('aria-label',name+'カテゴリを削除');button.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();let policy='unclassified';if(Number(count)>0){policy=await deleteChoice([name],kind);if(!policy)return;}try{await requestJson('/api/shopping-category-mutation',{csrf,action:'delete_many',kind:'shared',names:[name],item_policy:policy});location.reload();}catch(err){alert(err?.message||String(err));}});head.prepend(button);
 };
 const renameCategory=async(kind,oldName,node)=>{
  if(!(node instanceof HTMLElement)||node.querySelector(':scope>input.category-inline-rename'))return;
