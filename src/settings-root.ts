@@ -87,13 +87,8 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
           await ctx.env.DB.batch([
             ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,target,m.family_id),
             ctx.env.DB.prepare('DELETE FROM task_assignees WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
-            ctx.env.DB.prepare('DELETE FROM item_assignees WHERE member_id=? AND item_id IN (SELECT id FROM items WHERE family_id=?)').bind(target,m.family_id),
-            ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE member_id=? AND shopping_item_id IN (SELECT id FROM shopping_items WHERE family_id=?)').bind(target,m.family_id),
             ctx.env.DB.prepare('DELETE FROM task_completions WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
-            ctx.env.DB.prepare('DELETE FROM item_completions WHERE member_id=? AND item_id IN (SELECT id FROM items WHERE family_id=?)').bind(target,m.family_id),
-            ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE member_id=? AND shopping_item_id IN (SELECT id FROM shopping_items WHERE family_id=?)').bind(target,m.family_id),
             ctx.env.DB.prepare("UPDATE tasks SET status=CASE WHEN completion_mode='ALL' THEN CASE WHEN (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id)>0 AND (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id)>= (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id) THEN 'completed' ELSE 'pending' END ELSE CASE WHEN (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id)>0 THEN 'completed' ELSE 'pending' END END, completed_by=NULL, completed_at=NULL, updated_at=? WHERE family_id=?").bind(now,m.family_id),
-            ctx.env.DB.prepare("UPDATE items SET status=CASE WHEN completion_mode='ALL' THEN CASE WHEN (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id)>0 AND (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>= (SELECT COUNT(*) FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=items.id) THEN 'completed' ELSE 'pending' END ELSE CASE WHEN (SELECT COUNT(*) FROM item_completions ic JOIN item_assignees ia ON ia.item_id=ic.item_id AND ia.member_id=ic.member_id JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ic.item_id=items.id)>0 THEN 'completed' ELSE 'pending' END END, completed_by=NULL, completed_at=NULL, updated_at=? WHERE family_id=?").bind(now,m.family_id),
           ]);
         }
         await logActivity(ctx,nextActive?'MEMBER_REACTIVATED':'MEMBER_DEACTIVATED','member',target);
@@ -104,11 +99,7 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
       await ctx.env.DB.batch([
         ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,target,m.family_id),
         ctx.env.DB.prepare('DELETE FROM task_assignees WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
-        ctx.env.DB.prepare('DELETE FROM item_assignees WHERE member_id=? AND item_id IN (SELECT id FROM items WHERE family_id=?)').bind(target,m.family_id),
-        ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE member_id=? AND shopping_item_id IN (SELECT id FROM shopping_items WHERE family_id=?)').bind(target,m.family_id),
         ctx.env.DB.prepare('DELETE FROM task_completions WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
-        ctx.env.DB.prepare('DELETE FROM item_completions WHERE member_id=? AND item_id IN (SELECT id FROM items WHERE family_id=?)').bind(target,m.family_id),
-        ctx.env.DB.prepare('DELETE FROM shopping_completions WHERE member_id=? AND shopping_item_id IN (SELECT id FROM shopping_items WHERE family_id=?)').bind(target,m.family_id),
         ctx.env.DB.prepare('UPDATE members SET active=0,notification_enabled=0,deleted_at=?,updated_at=? WHERE id=? AND family_id=?').bind(now,now,target,m.family_id),
       ]);
       await logActivity(ctx,'MEMBER_DELETED','member',target);
