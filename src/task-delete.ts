@@ -1,5 +1,5 @@
 import { json, redirect } from './response';
-import { archiveTaskCompletionStatements, archiveShoppingCompletionStatements, archiveItemCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
+import { archiveTaskCompletionStatements, archiveRecurrenceRuleOccurrenceStatements, archiveRecurrenceOccurrenceCompletionStatements } from './lifecycle';
 import { queueCalendarProjectionAfterMutation } from './google-calendar';
 import { taskVisibilitySql } from './task-visibility';
 
@@ -29,8 +29,6 @@ export async function taskDelete(request:Request,ctx:any):Promise<Response>{
     const complete=assigned>0&&(mode==='ALL'?completed>=assigned:completed>0);
     if(complete){restoredStatus='completed';restoredBy=Number(last?.member_id||0)||null;restoredAt=String(last?.completed_at||'')||null;}
   }
-  const childShopping=await ctx.env.DB.prepare('SELECT id FROM shopping_items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
-  const childItems=await ctx.env.DB.prepare('SELECT id FROM items WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const recurrenceRules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
   const statements:any[]=[];
   const deleteNow=nowJst();
@@ -49,16 +47,6 @@ export async function taskDelete(request:Request,ctx:any):Promise<Response>{
       ctx.env.DB.prepare('DELETE FROM recurrence_rules WHERE id=? AND family_id=?').bind(Number(r.id),m.family_id)
     );
   }
-  for(const r of childShopping.results){const sid=Number(r.id);statements.push(
-    ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(sid),
-    ...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,sid,deleteNow),
-    ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(sid,m.family_id)
-  );}
-  for(const r of childItems.results){const iid=Number(r.id);statements.push(
-    ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(iid),
-    ...archiveItemCompletionStatements(ctx.env.DB,m.family_id,iid,deleteNow),
-    ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(iid,m.family_id)
-  );}
   statements.push(
     ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
     ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,deleteNow),
