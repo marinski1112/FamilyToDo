@@ -21,15 +21,14 @@ for(const sentinel of [
   "String(ctx.session.csrfToken||'')",
   "taskVisibilitySql('t')",
   'archiveRecurrenceRuleOccurrenceStatements',
-  'archiveShoppingCompletionStatements',
-  'archiveItemCompletionStatements',
   'archiveTaskCompletionStatements',
   'queueCalendarProjectionAfterMutation',
   'wakeCalendarOutbox',
   'buildStoredTaskRange',
   "reminderRaw && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/",
-  "['http:','https:'].includes(parsed.protocol)",
   "visibility_scope,private_owner_id",
+  'hasNonEmptyLegacyGoodsPayload',
+  "code:'GOODS_LINKAGE_RETIRED'",
   'createTaskIdempotently(ctx.env.DB',
   "result.state==='CONFLICT'",
   "result.state==='GONE'",
@@ -40,6 +39,14 @@ for(const sentinel of [
 ]){
   if(!taskApi.includes(sentinel)) throw new Error(`task API behavior sentinel missing: ${sentinel}`);
 }
+for(const retired of [
+  'archiveShoppingCompletionStatements',
+  'archiveItemCompletionStatements',
+  'INSERT INTO shopping_items',
+  'INSERT INTO items',
+  'DELETE FROM shopping_items',
+  'DELETE FROM items',
+]) if(taskApi.includes(retired)) throw new Error(`task API must not mutate linked goods: ${retired}`);
 
 for(const sentinel of [
   "export const TASK_CREATE_SCOPE = 'TASK_CREATE_V1'",
@@ -58,13 +65,15 @@ for(const sentinel of [
 for(const sentinel of [
   "const guard = `r.family_id=? AND r.member_id=? AND r.scope=? AND r.idempotency_key=? AND r.request_hash=? AND r.status='PROCESSING' AND r.lease_token=? AND COALESCE(r.lease_expires_at,'')>?`",
   'JOIN json_each(?) a',
-  'JOIN json_each(?) j',
   'db.batch(statements)',
   "SET status='DONE',task_id=(SELECT id FROM tasks WHERE create_request_id=task_create_requests.id)",
   'readCompletedTaskCreate',
   'markTaskCreateClaimError',
 ]){
   if(!taskCreate.includes(sentinel)) throw new Error(`atomic task create sentinel missing: ${sentinel}`);
+}
+for(const retired of ['TaskCreateShoppingInput','shoppingItems','itemNames','shoppingCategory','shopping_assignees','item_assignees']){
+  if(taskCreate.includes(retired)) throw new Error(`atomic task create must remain goods-independent: ${retired}`);
 }
 if(taskCreate.includes('logTaskCreationCleanupFailure')) throw new Error('idempotent create must not depend on best-effort partial cleanup');
 if(!manual.includes("'Idempotency-Key':taskCreateKey")) throw new Error('manual task create must send a stable idempotency key');
@@ -122,4 +131,4 @@ assert con.execute("""SELECT r.task_id FROM task_create_requests r JOIN tasks t 
 const sqlite=spawnSync('python3',['-c',python],{encoding:'utf8'});
 if(sqlite.status!==0) throw new Error(`task idempotency SQLite regression failed: ${sqlite.stderr||sqlite.stdout}`);
 
-console.log('task API modularity/idempotency contract: claim uniqueness, live replay, deleted-target tombstone conflict, hash conflict, stale lease fencing, atomic writer markers, and client key reuse ok');
+console.log('task API modularity/idempotency contract: claim uniqueness, live replay, stale lease fencing and goods-independent create/delete boundaries ok');
