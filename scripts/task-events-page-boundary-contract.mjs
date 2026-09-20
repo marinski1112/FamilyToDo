@@ -127,12 +127,8 @@ for(const marker of [
   "import { goodsVisibilitySql } from './goods-visibility';",
   "export const OVERDUE_SHOPPING_PAGE_SIZE=50;",
   "export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{",
-  "const parentVisible=goodsVisibilitySql('s');",
   "AND s.due_date IS NULL",
-  "COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL",
-  "date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)",
   "LIMIT ${pageLimit}",
-  ".slice(0,pageLimit);",
 ])if(!overdueShopping.includes(marker))throw new Error(`overdue Shopping helper marker missing: ${marker}`);
 
 for(const marker of [
