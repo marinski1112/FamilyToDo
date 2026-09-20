@@ -89,6 +89,15 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
   const reusableSetResponse=await handleItemReusableSetAction(ctx,m,b);
   if(reusableSetResponse)return reusableSetResponse;
 
+  if(action==='update_category'){
+    const id=Number(b.id||0);if(!Number.isInteger(id)||id<=0)return bad('持ち物が不正です。');
+    const category=normalizeCategory(b.category);if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
+    const current=await ctx.env.DB.prepare(`SELECT i.id FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first();
+    if(!current)return json({ok:false,error:'持ち物が見つかりません。'},404);
+    const now=nowJst();await ctx.env.DB.prepare('UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?').bind(category||null,now,id,m.family_id).run();
+    if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
+    return json({ok:true,id,category});
+  }
   if(action==='category_reorder'){
     const order=uniqueNames(Array.isArray(b.order)?b.order:[]);
     await writeCategoryOrder(ctx,m.family_id,order);
