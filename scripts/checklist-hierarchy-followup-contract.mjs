@@ -128,6 +128,10 @@ requireText(js,"if(count&&name!==U)active.add(key(name))",'unclassified excluded
 requireText(addFooter,"button.textContent='＋ タスク'",'compact top-right task label');
 requireText(css,'.task-section>.section-quick-entry:not([hidden]){display:block!important}','Task/Event quick entry becomes visible when add control opens it');
 requireText(belongingsUi,"familytodo:belongings-category-add-request",'Belongings category add request reaches canonical category controller');
+requireText(belongingsUi,"belongingsCategoryControllerReady='1'",'Belongings category controller exposes runtime readiness');
+requireText(belongingsUi,"familytodo:belongings-category-controller-ready",'Belongings category controller signals readiness after listener installation');
+requireText(js,"belongingsCategoryControllerReady==='1'",'unified Belongings category add checks controller readiness');
+requireText(js,"familytodo:belongings-category-controller-ready",'unified Belongings category add waits for late controller boot');
 requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category2','checklist loads the canonical Belongings category controller');
 requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category2','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
