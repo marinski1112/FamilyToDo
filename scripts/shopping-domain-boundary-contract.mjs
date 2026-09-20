@@ -68,13 +68,12 @@ for(const marker of [
   "UPDATE shopping_reusable_set_invocations SET created_item_ids=?,updated_at=?",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set idempotency marker missing: ${marker}`);
 for(const marker of [
-  "import { taskVisibilitySql } from './task-visibility';",
-  "LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id",
-  "(s.task_id IS NULL OR ${taskVisibilitySql('t')})",
-  "visible.filter(x=>String(x.visibility_scope||'FAMILY')!=='PRIVATE')",
+  "import { goodsVisibilitySql } from './goods-visibility';",
+  "${goodsVisibilitySql('s')}",
+  "visible.filter(x=>x.visibility_scope==='FAMILY')",
   "skipped_private:skippedPrivate",
   "DELETE FROM shopping_reusable_sets WHERE id=? AND family_id=?",
-  "非公開タスクに紐づく買い物だけでは共有セットを作成できません。",
+  "非公開の買い物だけでは共有セットを作成できません。",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set privacy/atomicity marker missing: ${marker}`);
 for(const marker of [
   'familytodo.shopping-set-invoke:',
