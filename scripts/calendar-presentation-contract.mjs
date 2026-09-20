@@ -38,9 +38,9 @@ assert.ok(ui.includes("replace(/^\\s*📌\\s*/,''"),'event pin prefix must be re
 assert.ok(ui.includes('calendar-overflow-hidden'),'normal month view must support an explicit hidden-row marker');
 assert.match(ui,/calendar-press-popover/,'press preview must remain available as a temporary floating view');
 assert.ok(ui.includes('schedulesForCell(cell)'),'press preview must include spanning bands and hidden rows for the pressed date');
-assert.ok(ui.includes("removeAttribute('href')"),'mobile schedule labels must not navigate when used as press-preview targets');
+assert.ok(!ui.includes("removeAttribute('href')"),'mobile schedule labels must retain native detail navigation while also supporting press preview');
 assert.ok(ui.includes("document.addEventListener('touchend'"),'touch release must restore the compact view');
-assert.ok(ui.includes("document.addEventListener('click'"),'schedule click must be intercepted so date/blank click remains the day-detail path');
+assert.ok(ui.includes("document.addEventListener('click'"),'schedule click must clear the press preview without suppressing native detail navigation');
 assert.ok(app.includes('--calendar-day-band-rows:'),'Calendar cells must publish their band-row count');
 assert.ok(app.includes('--calendar-day-content-top:calc(var(--calendar-date-zone) +'),'Calendar content must be positioned below date and band zones');
 assert.ok(calendarCss.includes('--calendar-no-band-content-top:29px'),'Calendar no-band cells must retain the compact content offset');
