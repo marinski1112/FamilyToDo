@@ -102,9 +102,8 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
           ))
         )
       ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(member.family_id,member.id,date,date,date,date,date,date).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.*,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=i.id) AS assignees
-      FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
+    ctx.env.DB.prepare(`SELECT i.*
+      FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
     recurringForDate(ctx,date),
@@ -116,15 +115,13 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   const taskById=new Map<number,Row>();
   for(const row of [...tasks.results,...undatedChildren]){const id=Number(row.id||0);if(id>0)taskById.set(id,row);}
   const taskRows=[...taskById.values(),...recurring].sort((a,b)=>String(a.start_at||a.due_at).localeCompare(String(b.start_at||b.due_at))||Number(a.sort_order||0)-Number(b.sort_order||0)||Number(a.id||0)-Number(b.id||0));
-  const baseShopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
-      FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
+  const baseShopping=await ctx.env.DB.prepare(`SELECT s.*
+      FROM shopping_items s
       WHERE s.family_id=? AND ${goodsVisibilitySql('s')}
         AND (
-          (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
+          (s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
           OR (
-            s.task_id IS NULL
-            AND s.due_date IS NULL
+            s.due_date IS NULL
             AND (
               s.status<>'completed'
               OR (
@@ -138,22 +135,9 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
               )
             )
           )
-          OR (
-            s.task_id IS NOT NULL
-            AND NOT EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)
-            AND COALESCE(t.start_at,t.due_at,t.end_at) IS NOT NULL
-            AND date(COALESCE(t.start_at,t.due_at,t.end_at))<=date(?)
-            AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))>=date(?)
-          )
-          OR (
-            s.task_id IS NOT NULL
-            AND EXISTS(SELECT 1 FROM recurrence_rules rr WHERE rr.task_id=s.task_id AND rr.family_id=s.family_id AND rr.active=1)
-            AND s.due_date IS NOT NULL
-            AND date(s.due_date)=date(?)
-          )
         )
       ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`)
-    .bind(member.family_id,member.id,date,date,date,date).all<Row>();
+    .bind(member.family_id,member.id,date).all<Row>();
   const expiredShoppingIds=new Set(expiredShopping.map(row=>String(row.id)));
   const shoppingById=new Map<string,Row>();
   for(const row of baseShopping.results)if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);
@@ -165,26 +149,21 @@ const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-
 
 function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,unorganized:Row[]):string{
   const csrf=ctx.session.csrfToken??'';
-  const shoppingByTask=new Map<number,Row[]>();
-  const itemsByTask=new Map<number,Row[]>();
-  for(const item of data.shopping){const tid=Number(item.task_id||0);if(tid){const list=shoppingByTask.get(tid)||[];list.push(item);shoppingByTask.set(tid,list);}}
-  for(const item of data.items){const tid=Number(item.task_id||0);if(tid){const list=itemsByTask.get(tid)||[];list.push(item);itemsByTask.set(tid,list);}}
   const safeProductUrl=(value:unknown)=>{const raw=String(value||'').trim();if(!raw||raw.length>2048)return '';try{const parsed=new URL(raw);if(parsed.username||parsed.password)return '';return parsed.protocol==='http:'||parsed.protocol==='https:'?parsed.href:'';}catch{return '';}};
-  const effectiveShoppingDue=(item:Row)=>String(item.due_date||item.task_end_at||item.task_due_at||item.task_start_at||'').slice(0,10);
+  const effectiveShoppingDue=(item:Row)=>String(item.due_date||'').slice(0,10);
   const shoppingRows=(items:Row[])=>{
     const groups=new Map<string,{title:string;due:string;items:Row[]}>();
     for(const item of items){
-      const taskId=Number(item.task_id||0);
       const due=effectiveShoppingDue(item);
-      const key=taskId&&item.task_title?`${taskId}|${due}`:`item:${String(item.id)}`;
-      const group=groups.get(key)||{title:taskId?String(item.task_title||''):'',due,items:[]};
+      const key=`item:${String(item.id)}`;
+      const group=groups.get(key)||{title:'',due,items:[]};
       group.items.push(item);groups.set(key,group);
     }
     return [...groups.values()].map(group=>{
       const groupHead=group.title?`<div class="shopping-group-head"><strong>${esc(group.title)}</strong>${group.due?`<span class="meta">${esc(group.due)}</span>`:''}</div>`:'';
       const rows=group.items.map(item=>{
         const productUrl=safeProductUrl(item.url);
-        const itemMeta=[item.category||'',item.assignees?'担当 '+item.assignees:''].filter(Boolean).map(esc).join(' ・ ');
+        const itemMeta=[item.category||''].filter(Boolean).map(esc).join(' ・ ');
         return `<div class="row linked-shopping-row"><div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}${item.quantity&&item.quantity!=='1'?` × ${esc(item.quantity)}`:''}</span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集">編集</a></div>${itemMeta||productUrl?`<div class="meta">${itemMeta}${itemMeta&&productUrl?' ・ ':''}${productUrl?`<a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div>`:''}</div>`;
       }).join('');
       return `<div class="shopping-group">${groupHead}${rows}</div>`;
@@ -222,7 +201,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
     const itemRows=linkedItems.map(item=>`<div class="linked-shopping-row"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">🎒 ${esc(item.name)}</span></label></div>`).join('');
     return {
       childItems:linkedItems.length?`<details class="task-shopping"><summary>🎒 持ち物 ${linkedItems.length}件</summary>${itemRows}</details>`:'',
-      shoppingAdd:`<a class="task-shopping-add" href="/app/shopping_new.php?date=${encodeURIComponent(date)}&task_id=${templateId}" aria-label="この予定に買い物を追加" title="買い物を追加"><span aria-hidden="true">🛒</span><span class="shopping-plus-badge" aria-hidden="true">＋</span></a>`,
+      shoppingAdd:'',
       shoppingCount:linkedShopping.length?`<a class="task-shopping-count" href="#shopping-checklist">🛒 ${linkedShopping.length}件</a>`:'',
     };
   };
@@ -252,9 +231,9 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
     const linkId=Number(task.task_id||0)||Math.abs(Number(task.id||0));
     if(linkId>0)renderedTaskLinkIds.add(linkId);
   }
-  const renderItemRow=(item:Row)=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div><div class="meta">${item.assignees?'担当 '+esc(item.assignees):''}</div></div>`;
-  const standaloneItems=data.items.filter(item=>!Number(item.task_id||0));
-  const orphanLinkedItems=data.items.filter(item=>{const taskId=Number(item.task_id||0);return taskId>0&&!renderedTaskLinkIds.has(taskId);});
+  const renderItemRow=(item:Row)=>`<div class="row"><div style="display:flex;gap:10px;align-items:center"><label style="display:flex;gap:10px;align-items:center;min-width:0"><input class="check toggle" type="checkbox" data-type="item" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}</span></label><a href="/item/edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集" style="margin-left:auto;white-space:nowrap">編集</a></div></div>`;
+  const standaloneItems=data.items;
+  const orphanLinkedItems:Row[]=[];
   const itemRows=standaloneItems.map(renderItemRow).join('');
   const orphanItemRows=orphanLinkedItems.map(renderItemRow).join('');
   const itemContent=`${itemRows}${orphanItemRows?`<div class="orphan-linked-items"><div class="meta"><strong>関連タスクの持ち物</strong></div>${orphanItemRows}</div>`:''}`;
