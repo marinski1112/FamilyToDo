@@ -10,10 +10,10 @@ for(const marker of [
   "import { layout } from './app-shell';",
   "import { archiveItemCompletionStatements } from './lifecycle';",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
-  "import { taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   "export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{",
   "SELECT i.* FROM items i WHERE i.id=? AND i.family_id=?",
-  "${taskVisibilitySql('t')}",
+  "${goodsVisibilitySql('i')}",
   ".bind(id,m.family_id,m.id).first<Row>()",
   "return new Response('持ち物が見つかりません。',{status:404});",
   "role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id",
@@ -33,3 +33,4 @@ if(!routes.includes("if(url.pathname==='/item/edit.php') return await itemEdit(r
 
 console.log('item-edit-page-boundary: retained item edit ownership, PRIVATE parent lock and lifecycle semantics ok');
 await import('./goods-edit-privacy-runtime-contract.mjs');
+await import('./goods-owned-visibility-contract.mjs');
