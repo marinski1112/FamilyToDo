@@ -62,6 +62,12 @@ for(const [file,handler,entries] of [['item-reusable-set-api.ts','handleItemReus
   }
   assert.deepEqual(db.prepare(`SELECT name FROM ${entries}`).all().map(x=>x.name),['row-1']);
 }
+const logContext=vm.createContext({Intl,Date});
+vm.runInContext(stripTypeScriptTypes(readFileSync('src/activity-log.ts','utf8')).replace(/^import .*;\s*$/gm,'').replace(/export /g,''),logContext);
+for(const kind of ['item','shopping'])for(const id of [1,3,4,999]){
+  await logContext.logActivity({member:{id:901,family_id:901},env:{DB}},'TEST',kind,id,{fixture:true},error=>{throw error;});
+}
+assert.deepEqual(db.prepare("SELECT target_type,target_id FROM activity_logs WHERE action='TEST' ORDER BY target_type").all().map(row=>({...row})),[{target_type:'item',target_id:1},{target_type:'shopping',target_id:1}],'shared log excludes detached private, ownerless and missing goods');
 db.exec('PRAGMA foreign_keys=ON; DELETE FROM members WHERE id=901');
 for(const table of ['items','shopping_items'])assert.equal(db.prepare(`SELECT private_owner_id FROM ${table} WHERE id=3`).get().private_owner_id,null);
 db.close();
