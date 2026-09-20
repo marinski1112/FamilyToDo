@@ -184,6 +184,8 @@ requireText(css,'grid-template-columns:auto minmax(0,1fr)!important','two-row co
 requireText(appShell,"/assets/task-rough-input-ai.js?v=${APP_VERSION}",'AI controller loaded by canonical entry page');
 requireText(appShell,"/assets/task-rough-input-save.js?v=${APP_VERSION}",'AI save controller loaded by canonical entry page');
 requireText(appShell,"/assets/task-rough-input-shopping-manual.js?v=${APP_VERSION}",'Shopping selected-type manual controller loaded');
+forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf8'),'shoppingTaskLinkPayload','retired Shopping Task-link payload in embedded manual entry');
+forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf8'),'shopping-task-link.js','retired Shopping Task-link controller in embedded manual entry');
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
@@ -200,6 +202,15 @@ requireText(js,"'unified-shopping-group'",'Belongings unified groups share Shopp
 const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
 requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
+requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Task/Event add works for button-owned quick entry');
+requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'only active goods type categories are shown');
+requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
+requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
+requireText(js,"shopping.classList.remove('category-delete-mode-active')",'goods tab switch exits stale Shopping category delete mode');
+requireText(js,"document.querySelectorAll('.category-delete-minus').forEach(n=>n.remove())",'moved delete controls are cleared when category delete mode exits');
+requireText(js,"g.className='belongings-category-group shopping-category-group unified-category-group unified-item-group unified-shopping-group category-collapsed'",'shared catalog category can materialize a Belongings group before adding an item');
+requireText(js,"const mergedCategories=[],mergedMeta=[],seenCategories=new Set(),seenMeta=new Set()",'Shopping and Belongings expose one merged category catalog in the unified checklist');
+
 
 /* Retired goods linkage must not be reintroduced by runtime-generated checklist rows. */
 forbidText(flowFix,'task-shopping-add','runtime task-to-shopping affordance');
