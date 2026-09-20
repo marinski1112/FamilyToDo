@@ -13,22 +13,6 @@ export type OverdueShoppingCursor={
 
 export const OVERDUE_SHOPPING_PAGE_SIZE=50;
 
-const encoder=new TextEncoder();
-const binaryTextCompare=(left:unknown,right:unknown)=>{
-  const a=encoder.encode(String(left??'')),b=encoder.encode(String(right??''));
-  const length=Math.min(a.length,b.length);
-  for(let index=0;index<length;index++){if(a[index]!==b[index])return a[index]-b[index];}
-  return a.length-b.length;
-};
-
-const overdueShoppingCompare=(a:Row,b:Row)=>{
-  const due=binaryTextCompare(a.effective_due,b.effective_due);if(due)return due;
-  const categoryPresence=Number(a.category!=null)-Number(b.category!=null);if(categoryPresence)return categoryPresence;
-  const category=binaryTextCompare(a.category,b.category);if(category)return category;
-  const name=binaryTextCompare(a.name,b.name);if(name)return name;
-  return Number(a.id||0)-Number(b.id||0);
-};
-
 const cursorSql=(effectiveDueSql:string,cursor?:OverdueShoppingCursor)=>cursor
   ?` AND (${effectiveDueSql},(s.category IS NOT NULL),COALESCE(s.category,''),s.name,s.id) > (?,?,?,?,?)`
   :'';
