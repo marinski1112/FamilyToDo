@@ -35,27 +35,6 @@
     });
   }
 
-  document.querySelectorAll('.task-child-toggle').forEach(el=>{
-    el.addEventListener('change',async()=>{
-      const checked=Boolean(el.checked);
-      el.disabled=true;
-      try{
-        const r=await fetch('/api/toggle',{
-          method:'POST',
-          headers:{'content-type':'application/json','accept':'application/json'},
-          credentials:'same-origin',
-          body:JSON.stringify({type:String(el.dataset.type||''),id:Number(el.dataset.id||0),completed:checked,csrf})
-        });
-        const d=await r.json().catch(()=>null);
-        if(!r.ok||!d?.ok)throw new Error(d?.error||'更新に失敗しました');
-        el.nextElementSibling?.classList.toggle('done',checked);
-      }catch(e){
-        el.checked=!checked;
-        alert(e?.message||String(e));
-      }finally{el.disabled=false;}
-    });
-  });
-
   const loadDirectChildren=async()=>{
     if(toggleType!=='task'||id<=0)return;
     try{
@@ -63,8 +42,7 @@
       if(!r.ok||!d?.ok||!Array.isArray(d.children)||!d.children.length)return;
       const card=document.createElement('div');card.className='card';card.id='taskDirectChildren';
       card.innerHTML=`<div class="section-head"><h2>✅ 子タスク <span class="small">(${d.children.length})</span></h2></div>${d.children.map(child=>`<div class="row"><div><strong class="${child.status==='completed'?'done':''}">${esc(child.title)}</strong><div class="meta">${[child.dueDate?`期限 ${child.dueDate}${child.dueTime?' '+child.dueTime:''}`:'期限なし',child.assignees?`担当 ${child.assignees}`:'担当なし',child.completionMode==='ALL'?'全員完了':'誰か1人で完了'].map(esc).join(' ・ ')}</div></div><div><a class="btn gray small" href="/task/view.php?id=${Number(child.id)}">詳細</a>${child.canEdit?` <a class="btn gray small" href="/task/edit.php?id=${Number(child.id)}">編集</a>`:''}</div></div>`).join('')}`;
-      const firstChildCard=document.querySelector('.task-child-toggle')?.closest('.card');
-      if(firstChildCard)firstChildCard.before(card);else payloadEl.before(card);
+      payloadEl.before(card);
     }catch{/* child list is supplementary; main detail remains usable */}
   };
   loadDirectChildren();
