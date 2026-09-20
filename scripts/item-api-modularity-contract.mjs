@@ -75,16 +75,16 @@ const entriesSchema=reusableSetMigration.match(/CREATE TABLE IF NOT EXISTS item_
 if(/\b(status|completed|completion)\b/iu.test(entriesSchema))throw new Error('reusable set definition must not persist actual checklist completion state');
 
 for(const sentinel of [
-  "import { taskChildVisibilitySql, taskVisibilitySql } from './task-visibility';",
+  "import { goodsVisibilitySql } from './goods-visibility';",
   'const MAX_SET_ITEMS=100;',
   'WHERE s.family_id=?',
-  "filter(row=>String(row.visibility_scope||'FAMILY')!=='PRIVATE')",
-  "return bad('非公開タスクに紐づく持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY')",
+  "filter(row=>row.visibility_scope==='FAMILY')",
+  "return bad('非公開の持ち物だけでは共有セットを作成できません。',400,'PRIVATE_SOURCE_ONLY')",
   "role==='OWNER'||role==='ADMIN'",
   "action==='reusable_set_create'",
   "action==='reusable_set_delete'",
   "action==='reusable_set_invoke'",
-  "taskChildVisibilitySql('i')",
+  "goodsVisibilitySql('i')",
   'Number(existing.created_by_member_id)!==Number(m.id)',
   "const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);",
   "VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)",
