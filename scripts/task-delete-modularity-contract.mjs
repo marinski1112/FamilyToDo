@@ -17,11 +17,17 @@ for(const marker of [
   "['restore','exclude'].includes(exceptionMode)",
   'archiveRecurrenceOccurrenceCompletionStatements',
   'archiveRecurrenceRuleOccurrenceStatements',
-  'archiveShoppingCompletionStatements',
-  'archiveItemCompletionStatements',
   'archiveTaskCompletionStatements',
   "DELETE FROM tasks WHERE id=? AND family_id=?",
   'await ctx.env.DB.batch(statements)',
 ]) if(!taskDelete.includes(marker)) throw new Error(`task delete behavior sentinel missing: ${marker}`);
+for(const retired of [
+  'archiveShoppingCompletionStatements',
+  'archiveItemCompletionStatements',
+  'DELETE FROM shopping_items',
+  'DELETE FROM items',
+  'DELETE FROM shopping_assignees',
+  'DELETE FROM item_assignees',
+]) if(taskDelete.includes(retired)) throw new Error(`task delete must not remove independent goods: ${retired}`);
 if(taskDelete.split('queueCalendarProjectionAfterMutation(').length-1<2) throw new Error('calendar delete projection hooks must remain before and after batch');
-console.log('task delete modularity contract: private visibility and lifecycle ok');
+console.log('task delete modularity contract: private visibility, recurrence lifecycle and independent goods retention ok');
