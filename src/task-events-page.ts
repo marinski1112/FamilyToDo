@@ -1,3 +1,4 @@
+import { goodsVisibilitySql } from './goods-visibility';
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { expiredShoppingPageFor, overdueShoppingCursorFromRow, OVERDUE_SHOPPING_PAGE_SIZE, renderOverdueShoppingRows, type OverdueShoppingCursor } from './overdue-shopping';
@@ -104,7 +105,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
     ctx.env.DB.prepare(`SELECT i.*,
       (SELECT GROUP_CONCAT(am.name,'、') FROM item_assignees ia JOIN members am ON am.id=ia.member_id AND am.active=1 WHERE ia.item_id=i.id) AS assignees
       FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id
-      WHERE i.family_id=? AND (i.task_id IS NULL OR ${taskVisibilitySql('pt')}) AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
+      WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
     recurringForDate(ctx,date),
     expiredTasksFor(ctx,date),
@@ -118,7 +119,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   const baseShopping=await ctx.env.DB.prepare(`SELECT s.*,t.title AS task_title,t.start_at AS task_start_at,t.end_at AS task_end_at,t.due_at AS task_due_at,
       (SELECT GROUP_CONCAT(am.name,'、') FROM shopping_assignees sa JOIN members am ON am.id=sa.member_id AND am.active=1 WHERE sa.shopping_item_id=s.id) AS assignees
       FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
-      WHERE s.family_id=? AND (s.task_id IS NULL OR ${taskVisibilitySql('t')})
+      WHERE s.family_id=? AND ${goodsVisibilitySql('s')}
         AND (
           (s.task_id IS NULL AND s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
           OR (
