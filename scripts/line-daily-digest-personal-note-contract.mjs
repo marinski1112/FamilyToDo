@@ -18,7 +18,7 @@ const context=vm.createContext({
   geminiFetch:async(_env,_model,body)=>{calls++;prompt=body.contents[0].parts[0].text;return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(output)}]}}]})};},
   FAMILY_LOG_TYPE_META:{},console,
 });
-vm.runInContext(moduleCode('src/daily-fortune.ts')+'\n'+moduleCode('src/line-digest-generation.ts')+'\n'+moduleCode('src/line-daily-digest.ts'),context);
+vm.runInContext(moduleCode('src/goods-visibility.ts')+'\n'+moduleCode('src/daily-fortune.ts')+'\n'+moduleCode('src/line-digest-generation.ts')+'\n'+moduleCode('src/line-daily-digest.ts'),context);
 for(const text of ['一緒に一息つきましょう。','千夏さんも、自分のペースで。','一人ひとりの頑張りに拍手。'])assert.equal(context.generatedRecapPassesSafety(text,[]),true,text);
 for(const text of ['三件完了です。','５回記録しました。','二つ済ませました。','三つ完了しました。','二本飲みました。','四枚片付けました。','https://evil.example','緯度を確認しました。'])assert.equal(context.generatedRecapPassesSafety(text,[]),false,text);
 assert.equal(context.generatedRecapPassesSafety('隠された趣味の秘密です。',[{personality_note:'隠された趣味の秘密'}]),false);
