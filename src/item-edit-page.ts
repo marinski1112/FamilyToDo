@@ -84,10 +84,9 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
     if(category.length>255)return bad('カテゴリ名は255文字以内で入力してください。');
     const itemUrl=String(b.url||'').trim();
     if(!validUrl(itemUrl))return bad('URLは http:// または https:// で入力してください。');
-    const taskId=Number(item.task_id)||null;
     const due=String(b.due_date||'').trim()||null;
     if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('日付が不正です。');
-    await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=?,updated_at=? WHERE id=? AND family_id=?').bind(name,memo||null,itemUrl||null,category||null,due,taskId,nowJst(),id,m.family_id).run();
+    await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=NULL,updated_at=? WHERE id=? AND family_id=?').bind(name,memo||null,itemUrl||null,category||null,due,nowJst(),id,m.family_id).run();
     if(category){
       await ctx.env.DB.batch([
         ctx.env.DB.prepare(`INSERT OR IGNORE INTO item_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
