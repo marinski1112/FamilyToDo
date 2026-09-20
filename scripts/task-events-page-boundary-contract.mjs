@@ -126,7 +126,7 @@ for(const marker of [
   "import { goodsVisibilitySql } from './goods-visibility';",
   "export const OVERDUE_SHOPPING_PAGE_SIZE=50;",
   "export async function expiredShoppingPageFor(ctx:AppContext,date:string,cursor?:OverdueShoppingCursor):Promise<Row[]>{",
-  "AND s.due_date IS NULL",
+  "s.due_date IS NOT NULL AND date(s.due_date)<date(?)",
   "LIMIT ${pageLimit}",
 ])if(!overdueShopping.includes(marker))throw new Error(`overdue Shopping helper marker missing: ${marker}`);
 
