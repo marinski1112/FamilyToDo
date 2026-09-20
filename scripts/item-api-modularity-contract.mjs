@@ -35,6 +35,7 @@ for(const sentinel of [
   "const CATEGORY_ORDER_KEY='item_category_order';",
   "SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=? LIMIT 1",
   "item_category_catalog",
+  "action==='update_category'",
   "action==='category_reorder'",
   "action==='category_add'",
   "action==='category_disable'",
@@ -49,7 +50,7 @@ for(const sentinel of [
 ]){
   if(!itemApi.includes(sentinel)) throw new Error(`item API behavior sentinel missing: ${sentinel}`);
 }
-if(itemApi.includes("action==='update_category'"))throw new Error('category-only mutation must stay on the permission-checked item edit path');
+if(!itemApi.includes("UPDATE items SET category=?,updated_at=? WHERE id=? AND family_id=?"))throw new Error('standalone belongings category move must persist without task linkage');
 
 for(const sentinel of [
   'ALTER TABLE items ADD COLUMN category TEXT;',
