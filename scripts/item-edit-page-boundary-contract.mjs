@@ -32,3 +32,4 @@ if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new 
 if(!routes.includes("if(url.pathname==='/item/edit.php') return await itemEdit(request,context,Number(url.searchParams.get('id')||0));"))throw new Error('item edit route changed');
 
 console.log('item-edit-page-boundary: retained item edit ownership, PRIVATE parent lock and lifecycle semantics ok');
+await import('./goods-edit-privacy-runtime-contract.mjs');
