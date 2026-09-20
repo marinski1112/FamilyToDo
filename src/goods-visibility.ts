@@ -4,7 +4,7 @@
  */
 export function goodsVisibilitySql(alias:string):string{
   if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias))throw new Error('invalid goods SQL alias');
-  return `(${alias}.visibility_scope='FAMILY' OR (${alias}.visibility_scope='PRIVATE' AND ${alias}.private_owner_id=?))`;
+  return `(${alias}.visibility_scope='FAMILY' OR (${alias}.visibility_scope='PRIVATE' AND ${alias}.private_owner_id IS NOT NULL AND ${alias}.private_owner_id=?))`;
 }
 
 /** Shared outputs (sets, family messages and summaries) exclude all private goods,
