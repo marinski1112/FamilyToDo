@@ -49,13 +49,13 @@ const init=()=>{
     const syncType=()=>{
       const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';
       if(noDateWrap)noDateWrap.hidden=eventMode;
-      if(completionWrap)completionWrap.hidden=eventMode;
-      if(assigneeWrap)assigneeWrap.hidden=eventMode;
+      if(completionWrap)completionWrap.hidden=!taskMode;
+      if(assigneeWrap)assigneeWrap.hidden=!taskMode;
       if(dateInput){dateInput.required=eventMode;dateInput.setAttribute('aria-required',eventMode?'true':'false');}
-      if(eventMode){
-        if(noDate){noDate.checked=false;noDate.disabled=true;}
+      if(!taskMode){
+        if(eventMode&&noDate){noDate.checked=false;noDate.disabled=true;}
         assignees.forEach(input=>{input.checked=false;input.disabled=true;});
-      }else if(taskMode){
+      }else{
         if(noDate)noDate.disabled=false;
         assignees.forEach(input=>{input.disabled=Boolean(isPrivate?.checked);if(isPrivate?.checked)input.checked=false;});
       }

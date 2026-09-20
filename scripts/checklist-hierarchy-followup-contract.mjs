@@ -19,6 +19,9 @@ const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.
 const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
 const belongingsCategories=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
+const taskEntryManual=readFileSync('public/assets/task-entry-manual.js','utf8');
+const shoppingEditPage=readFileSync('src/shopping-edit-page.ts','utf8');
+const itemEditPage=readFileSync('src/item-edit-page.ts','utf8');
 const appShell=readFileSync('src/app-shell.ts','utf8');
 const flowFix=readFileSync('public/assets/checklist-reminders-flow-fix.js','utf8');
 const taskEventsPage=readFileSync('src/task-events-page.ts','utf8');
@@ -241,3 +244,13 @@ forbidText(taskEventsPage,'item_assignees','item assignee presentation query');
 forbidText(taskEventsPage,"LEFT JOIN tasks t ON t.id=s.task_id",'shopping parent-task read');
 forbidText(taskEventsJs,'task-shopping-add','event runtime task shopping affordance');
 forbidText(taskEventsJs,'task_id=${id}','event runtime task-linked shopping URL');
+
+
+/* Goods edit/create surfaces must not preserve retired Task ownership. */
+requireText(taskEntryManual,"if(completionWrap)completionWrap.hidden=!taskMode",'Goods modes hide Task completion controls');
+requireText(taskEntryManual,"if(assigneeWrap)assigneeWrap.hidden=!taskMode",'Goods modes hide Task assignee controls');
+requireText(taskEntryManual,"if(!taskMode){",'non-Task entry disables stale assignee inputs');
+requireText(shoppingEditPage,'due_date=?,task_id=NULL,url=?','Shopping edit clears legacy Task linkage');
+forbidText(shoppingEditPage,'const taskId=Number(item.task_id)','Shopping edit must not preserve legacy Task linkage');
+requireText(itemEditPage,'due_at=?,task_id=NULL,updated_at=?','Belongings edit clears legacy Task linkage');
+forbidText(itemEditPage,'const taskId=Number(item.task_id)','Belongings edit must not preserve legacy Task linkage');

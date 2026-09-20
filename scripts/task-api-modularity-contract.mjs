@@ -80,7 +80,7 @@ if(!manual.includes("'Idempotency-Key':taskCreateKey")) throw new Error('manual 
 if(!roughSave.includes('row.dataset.taskCreateKey=crypto.randomUUID()')) throw new Error('rough task rows must own stable idempotency keys');
 if(!roughSave.includes("idempotency_key:item.taskCreateKey||''")) throw new Error('rough task create payload must send the row idempotency key');
 if(!roughSave.includes('resetTaskCreateKeys(rows);')) throw new Error('successful rough rollback must rotate task create keys before a new logical create');
-if(!entryPage.includes('task-entry-manual.js?v=${APP_VERSION}-task-idem1')) throw new Error('manual idempotency asset must be cache-busted');
+if(!entryPage.includes('task-entry-manual.js?v=${APP_VERSION}-task-idem2')) throw new Error('manual idempotency asset must be cache-busted');
 if(!shell.includes('task-rough-input-save.js?v=${APP_VERSION}-explicit-save1-${TASK_ENTRY_UI_REVISION}-task-idem1')) throw new Error('rough idempotency asset must be cache-busted');
 
 const python=String.raw`

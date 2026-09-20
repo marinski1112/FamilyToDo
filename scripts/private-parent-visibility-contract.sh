@@ -42,8 +42,8 @@ node --input-type=module <<'JS'
 import fs from 'node:fs';
 for(const path of ['src/item-edit-page.ts','src/shopping-edit-page.ts']){
   const s=fs.readFileSync(path,'utf8');
-  if(!s.includes('const taskId=Number(item.task_id)||null;') || s.includes('Number(b.task_id') || !s.includes('goodsVisibilitySql(')){
-    throw new Error(path+' must preserve stored private visibility');
+  if(s.includes('const taskId=Number(item.task_id)||null;') || s.includes('Number(b.task_id') || !s.includes('task_id=NULL') || !s.includes('goodsVisibilitySql(')){
+    throw new Error(path+' must preserve Goods-owned visibility while clearing retired Task linkage');
   }
 }
 JS

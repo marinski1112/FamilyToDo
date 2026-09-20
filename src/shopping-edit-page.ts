@@ -71,9 +71,8 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     const rawUrl=String(b.url||'').trim();
     if(rawUrl){try{const url=new URL(rawUrl);if(!['http:','https:'].includes(url.protocol))throw new Error();}catch{return bad('URLが不正です。');}}
     const quantity=String(b.quantity||'1').trim()||'1';
-    const taskId=Number(item.task_id)||null;
     const due=String(b.due_date||'').trim()||null;
-    await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,quantity,category||null,String(b.memo||'')||null,due,taskId,rawUrl||null,nowJst(),id,m.family_id).run();
+    await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=NULL,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,quantity,category||null,String(b.memo||'')||null,due,rawUrl||null,nowJst(),id,m.family_id).run();
     return redirect(shoppingChecklistUrl(due||item.due_date));
   }
 
