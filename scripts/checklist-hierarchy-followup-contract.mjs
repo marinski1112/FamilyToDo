@@ -200,6 +200,11 @@ requireText(js,"'unified-shopping-group'",'Belongings unified groups share Shopp
 const belongingSets=readFileSync('public/assets/checklist-belongings-reusable-sets.js','utf8');
 requireText(belongingSets,"familytodo:checklist-unified-ready",'Belongings sets wait for unified checklist readiness');
 requireText(js,"const liveAdd=task.querySelector('.task-add-top')",'Event tab updates the live add control');
+requireText(js,"if(add instanceof HTMLElement){add.dataset.inputKind='task'",'Task/Event add works for button-owned quick entry');
+requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'only active goods type categories are shown');
+requireText(js,"const shoppingTrash=tools?.querySelector('.category-delete-mode'),itemTrash=items.querySelector('.category-delete-mode')",'Shopping and Belongings delete controls remain independently functional');
+requireText(js,"b.hidden=b.dataset.inputKind!==kind",'single visible category-add control follows selected goods type');
+
 
 /* Retired goods linkage must not be reintroduced by runtime-generated checklist rows. */
 forbidText(flowFix,'task-shopping-add','runtime task-to-shopping affordance');
