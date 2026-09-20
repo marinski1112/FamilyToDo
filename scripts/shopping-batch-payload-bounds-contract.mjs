@@ -41,13 +41,12 @@ assert.match(source,/dueDate===null/,'malformed or impossible due dates must fai
 assert.match(source,/due_date:dueDate/,'validated due date must be used in the existing add_batch payload');
 assert.match(source,/const body=\{action:'add_batch',csrf,products:/,'Shopping batch payload must use only the prevalidated bounded CSRF variable');
 assert.doesNotMatch(source,/csrf:String\(payload\.csrf/,'Shopping batch request assembly must not re-read an unbounded raw CSRF value');
-assert.match(source,/category,due_date:dueDate,task_id:taskId,assignees,memo:memo/,'validated category and memo variables must be used in the existing add_batch payload while retaining the entity-ID contract shape');
+assert.match(source,/category,due_date:dueDate,memo:memo/,'validated category and memo must be used in the independent add_batch payload');
 assert.match(source,/names\.length!==rows\.length\|\|quantities\.length!==rows\.length\|\|urls\.length!==rows\.length/,'parallel product arrays must stay aligned with bounded visible rows');
 assert.match(source,/names\.some\(name=>name\.length>MAX_PRODUCT_NAME_UNITS\)/,'programmatic bypass of product-name maxlength must fail closed');
 assert.match(source,/quantities\.some\(quantity=>quantity\.length>MAX_PRODUCT_QUANTITY_UNITS\)/,'programmatic bypass of quantity maxlength must fail closed');
 assert.match(source,/const safeUrls=urls\.map\(safeProductUrl\)/,'bounded batch submission must retain product URL validation');
-assert.match(source,/const taskId=.*safeEntityId/,'bounded batch submission must retain task reference validation');
-assert.match(source,/const assignees=assigneeValues\.map\(safeEntityId\)/,'bounded batch submission must retain assignee reference validation');
+assert.doesNotMatch(source,/task_id:|assignees:/,'batch submission must not restore retired task or assignee fields');
 assert.match(source,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('追加に失敗しました。'\)/,'Shopping batch API failures must fall back to a fixed client-safe message even when the response body is malformed');
 assert.doesNotMatch(source,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?\.error|alert\(d\.error/,'Shopping batch create must not surface arbitrary server error detail in the browser');
 
