@@ -4,7 +4,7 @@ import { archiveShoppingCompletionStatements } from './lifecycle';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { html, json, redirect } from './response';
 import { isValidShoppingCategoryName, normalizeShoppingCategoryName, resolveShoppingCategoryOptions, SHOPPING_CATEGORY_MAX_LENGTH, shoppingCategoryKey } from './shopping-categories';
-import { taskVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
 import { validateLiffNext } from './liff-target';
 import { APP_VERSION } from './version';
 
@@ -42,7 +42,7 @@ function csrfResponse(ctx:AppContext,token:unknown):Response|null{
 export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Promise<Response>{
   const m=ctx.member;
   if(!m)return authRequiredResponse(ctx);
-  const item=await ctx.env.DB.prepare(`SELECT s.* FROM shopping_items s WHERE s.id=? AND s.family_id=? AND (s.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=s.task_id AND t.family_id=s.family_id AND ${taskVisibilitySql('t')}))`).bind(id,m.family_id,m.id).first<Row>();
+  const item=await ctx.env.DB.prepare(`SELECT s.* FROM shopping_items s WHERE s.id=? AND s.family_id=? AND ${goodsVisibilitySql('s')}`).bind(id,m.family_id,m.id).first<Row>();
   if(!item)return new Response('買い物が見つかりません。',{status:404});
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
