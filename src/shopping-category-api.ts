@@ -26,11 +26,13 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
   if(request.method==='GET'){
     const [order,catalogResult]=await Promise.all([
       readOrder(ctx,member.family_id),
-      ctx.env.DB.prepare('SELECT name FROM shopping_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(member.family_id).all<{name?:string}>(),
+      ctx.env.DB.prepare('SELECT name,created_at FROM shopping_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(member.family_id).all<{name?:string}>(),
     ]);
-    const categories=(catalogResult.results||[]).map(row=>String(row.name||'').trim()).filter(Boolean);
+    const catalog=(catalogResult.results||[]) as Array<{name?:string;created_at?:string}>;
+    const categories=catalog.map(row=>String(row.name||'').trim()).filter(Boolean);
+    const categoryMeta=catalog.map(row=>({name:String(row.name||'').trim(),created_at:String(row.created_at||'')})).filter(row=>row.name);
     const role=String(member.role||'').toUpperCase();
-    return json({ok:true,order,categories,canManageCategories:role==='OWNER'||role==='ADMIN'});
+    return json({ok:true,order,categories,categoryMeta,canManageCategories:role==='OWNER'||role==='ADMIN'});
   }
   if(request.method!=='POST')return json({ok:false,error:'Method Not Allowed',code:'METHOD_NOT_ALLOWED'},405);
 
