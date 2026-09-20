@@ -58,7 +58,7 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
   const url=new URL(request.url);
   const date=String(url.searchParams.get('date')||'');
   const [catalogResult,order]=await Promise.all([
-    ctx.env.DB.prepare('SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
+    ctx.env.DB.prepare('SELECT name,created_at FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
     readCategoryOrder(ctx,m.family_id),
   ]);
   const catalog=(catalogResult?.results||[]) as Row[];
@@ -71,7 +71,8 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
       ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
     items=(result?.results||[]) as Row[];
   }
-  return json({ok:true,categories:catalog.map((row:Row)=>String(row.name||'')).filter(Boolean),order,items});
+  const categoryMeta=catalog.map((row:Row)=>({name:String(row.name||'').trim(),created_at:String(row.created_at||'')})).filter(row=>row.name);
+  return json({ok:true,categories:categoryMeta.map(row=>row.name),categoryMeta,order,items});
 }
 
 export async function itemApi(request:Request,ctx:any):Promise<Response>{
