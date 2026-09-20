@@ -258,3 +258,7 @@ forbidText(itemEditPage,'const taskId=Number(item.task_id)','Belongings edit mus
 /* Unified empty categories expose their Goods kind and shared deletion retires both catalogs. */
 requireText(js,"icon.textContent=kind==='shopping'?'🛒':'🎒'",'empty category rows identify Shopping vs Belongings');
 requireText(js,"kind:'shared',names:[name]",'unified category deletion targets the shared catalog');
+requireText(categoryMutation,"kind!=='shopping'&&kind!=='item'&&kind!=='shared'",'category mutation accepts shared Goods catalog deletion');
+requireText(categoryMutation,"kind==='shopping'||kind==='shared'",'shared deletion retires Shopping catalog entry');
+requireText(categoryMutation,"kind==='item'||kind==='shared'",'shared deletion retires Belongings catalog entry');
+requireText(categoryMutation,"kind==='shared'?[ORDER_KEY,ITEM_ORDER_KEY]",'shared deletion removes both category order entries');
