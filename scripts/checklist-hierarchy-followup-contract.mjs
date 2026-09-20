@@ -17,6 +17,7 @@ const addFooter=readFileSync('public/assets/checklist-add-footer.js','utf8');
 const belongingsUi=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const belongingsCss=readFileSync('public/assets/checklist-belongings-categories.css','utf8');
 const categoryDrag=readFileSync('public/assets/checklist-category-drag.js','utf8');
+const belongingsCategories=readFileSync('public/assets/checklist-belongings-categories.js','utf8');
 const taskEntryPage=readFileSync('src/task-entry-page.ts','utf8');
 const appShell=readFileSync('src/app-shell.ts','utf8');
 const flowFix=readFileSync('public/assets/checklist-reminders-flow-fix.js','utf8');
@@ -212,3 +213,10 @@ requireText(js,'Array.isArray(ic.categoryMeta)?ic.categoryMeta:[]','belongings c
 /* Category create responses carry authoritative timestamps for immediate JST-01:00 placement. */
 requireText(categoryApi,"created_at:String(created?.created_at||'')",'shopping category create timestamp response');
 requireText(itemApi,"created_at:String(created?.created_at||'')",'belongings category create timestamp response');
+
+/* Same-session category creation must retain authoritative age metadata in the live DOM. */
+requireText(categoryDrag,"g.dataset.createdAt=String(created.created_at||'')",'shopping live category creation timestamp');
+requireText(categoryDrag,"familytodo:category-created",'shopping live category creation event');
+requireText(belongingsCategories,"g.dataset.createdAt=String(d.created_at||'')",'belongings live category creation timestamp');
+requireText(belongingsCategories,"familytodo:category-created",'belongings live category creation event');
+requireText(js,"document.addEventListener('familytodo:category-created',rememberCreated)",'hierarchy remembers same-session category age');
