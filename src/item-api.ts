@@ -110,7 +110,8 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     await upsertCatalogCategory(ctx,m.family_id,m.id,name);
     const order=await readCategoryOrder(ctx,m.family_id);
     if(!order.some(value=>value.toLocaleLowerCase('ja-JP')===name.toLocaleLowerCase('ja-JP')))await writeCategoryOrder(ctx,m.family_id,[...order,name]);
-    return json({ok:true,name});
+    const created=await ctx.env.DB.prepare('SELECT created_at FROM item_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(m.family_id,name).first() as Row|null;
+    return json({ok:true,name,created_at:String(created?.created_at||'')});
   }
   if(action==='category_disable'){
     const role=String(m.role||'').toUpperCase();
