@@ -22,18 +22,16 @@ const shoppingBlock=source.slice(source.indexOf("if(command.type==='SHOPPING_COM
 assert.ok(shoppingBlock.length>0,'SHOPPING_COMPLETE handler must exist');
 for(const value of [
   's.family_id=?',
-  'sa.member_id=? LIMIT 2',
+  'am.id=? AND am.family_id=s.family_id',
   'am.active=1',
-  's.task_id IS NULL OR EXISTS',
-  't.family_id=s.family_id',
-  "COALESCE(t.visibility_scope,'FAMILY')='FAMILY'",
-  't.private_owner_id=?',
-  'SHOPPING_NOT_FOUND_OR_NOT_ASSIGNED',
+  "goodsVisibilitySql('s')",
+  'am.deleted_at IS NULL',
+  'SHOPPING_NOT_FOUND_OR_NOT_VISIBLE',
   'AMBIGUOUS_SHOPPING',
   "WHERE id=? AND family_id=?",
 ])assert.ok(shoppingBlock.includes(value),`SHOPPING_COMPLETE privacy/integrity guard missing: ${value}`);
 
 assert.ok(!taskBlock.includes('OR ta.member_id IS NULL'),'voice completion must not broaden task completion to unassigned members');
-assert.ok(!shoppingBlock.includes('OR sa.member_id IS NULL'),'voice completion must not broaden shopping completion to unassigned members');
+assert.ok(!shoppingBlock.includes('shopping_assignees')&&!shoppingBlock.includes('s.task_id'),'goods voice completion must not depend on assignment or tasks');
 
 console.log('google-voice-completion-privacy-contract: exact-match ambiguity handling, active assignment, family scope, PRIVATE ownership, and parent-task shopping visibility remain enforced');
