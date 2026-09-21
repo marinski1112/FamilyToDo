@@ -209,7 +209,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity8'",'checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity9'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
