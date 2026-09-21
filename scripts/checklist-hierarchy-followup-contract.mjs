@@ -135,8 +135,8 @@ requireText(belongingsUi,"familytodo:belongings-category-controller-ready",'Belo
 
 requireText(belongingsUi,"goodsCategoryDiag='item:request-received'",'Belongings controller records request receipt');
 requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings controller records draft mount');
-requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category4','checklist loads the canonical Belongings category controller');
-requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category4','checklist loads Belongings category styles');
+requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category5','checklist loads the canonical Belongings category controller');
+requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category5','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
 requireText(belongingsUi,'window.familytodoBelongingsAddCategory=addCategory','Belongings controller exposes its canonical add action');
 requireText(js,"active==='item'",'unified Goods controls route by the active kind');
