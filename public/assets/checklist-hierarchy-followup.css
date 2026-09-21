@@ -413,3 +413,6 @@
 .checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{min-width:0!important;flex:0 1 86px!important;padding-left:8px!important;padding-right:8px!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{flex:0 0 62px!important;min-width:62px!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{flex:0 0 42px!important;min-width:42px!important}
+
+/* Active Goods kind owns the only visible reusable Set control. */
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button[hidden]{display:none!important}
