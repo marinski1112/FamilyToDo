@@ -5,27 +5,6 @@ const page=document.querySelector('.checklist-page');
 if(!(page instanceof HTMLElement))return;
 page.classList.add('reminders-ui');
 
-if(!document.getElementById('remindersQuickEntryStyle')){
-  const style=document.createElement('style');
-  style.id='remindersQuickEntryStyle';
-  style.textContent=`
-  .reminders-quick-entry{margin:0 0 12px;background:#fff;border-radius:14px;box-shadow:0 0 0 .5px rgba(60,60,67,.15);overflow:hidden}
-  .reminders-quick-entry-row{display:flex;align-items:center;gap:10px;min-height:54px;padding:6px 8px 6px 14px}
-  .reminders-empty-check{flex:0 0 23px;width:23px;height:23px;border:1.7px solid #c7c7cc;border-radius:50%;box-sizing:border-box}
-  .reminders-quick-input{flex:1;min-width:0;height:42px;border:0!important;outline:0!important;background:transparent!important;padding:0!important;box-shadow:none!important;font:inherit;font-size:16px!important;color:#1c1c1e}
-  .reminders-quick-input::placeholder{color:#8e8e93}
-  .reminders-save-button{flex:0 0 auto;min-width:54px;height:36px;border:0;border-radius:10px;background:#007aff;color:#fff;font-size:14px;font-weight:700;padding:0 12px}
-  .reminders-save-button:disabled{background:#d1d1d6;color:#8e8e93}
-  .reminders-quick-status{min-height:0;padding:0 14px;color:#8e8e93;font-size:12px;line-height:1.3}
-  .reminders-quick-status:not(:empty){padding-bottom:8px}
-  .reminders-inline-title{cursor:text;border-radius:6px;min-width:30px}
-  .reminders-inline-title[data-inline-editing="1"]{outline:2px solid rgba(0,122,255,.28);background:#fff;padding:2px 4px;margin:-2px -4px;cursor:text;-webkit-user-select:text;user-select:text}
-  .reminders-inline-title[data-inline-saving="1"]{opacity:.55}
-  @media(min-width:821px){.reminders-quick-entry{max-width:100%;border:1px solid #e5e7eb;box-shadow:none}}
-  `;
-  document.head.appendChild(style);
-}
-
 const q=(selector,root=page)=>root.querySelector(selector);
 const qa=(selector,root=page)=>[...root.querySelectorAll(selector)];
 const count=(selector,root=page)=>qa(selector,root).length;
