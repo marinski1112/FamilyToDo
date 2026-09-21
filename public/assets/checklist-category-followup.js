@@ -183,11 +183,10 @@ const activateComposer=(group,button)=>{
 const installFooter=group=>{
   if(group.classList.contains('shopping-category-draft'))return;
   let footer=group.querySelector(':scope > .shopping-category-footer');
-  if(!(footer instanceof HTMLElement)){
-    footer=document.createElement('div');footer.className='shopping-category-footer';
-    const button=document.createElement('button');button.type='button';button.className='shopping-category-add-item';button.textContent='＋ 買い物を追加';button.addEventListener('click',()=>activateComposer(group,button));
-    footer.append(button);group.append(footer);
-  }
+  if(!(footer instanceof HTMLElement)){footer=document.createElement('div');footer.className='shopping-category-footer';group.append(footer);}
+  let button=footer.querySelector(':scope > .shopping-category-add-item');
+  if(!(button instanceof HTMLButtonElement)){button=document.createElement('button');button.type='button';button.className='shopping-category-add-item';button.textContent='＋ 買い物を追加';footer.prepend(button);}
+  if(button.dataset.categoryAddBound!=='1'){button.dataset.categoryAddBound='1';button.addEventListener('click',()=>activateComposer(group,button));}
   keepFooterLast(group);
 };
 
