@@ -23,7 +23,24 @@ assert(ui.includes('if(liveAdd instanceof HTMLElement)'));
 const goodsApply=ui.slice(ui.indexOf("let active='shopping'"),ui.indexOf("apply('shopping');"));
 assert(!goodsApply.includes('checklist-kind-hidden'));
 for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])assert(read(p).includes('.shopping-category-group:not(.belongings-category-group)'));
+const categoryDrag=read('checklist-category-drag.js');
+// Shopping and Belongings category creation must both route to their canonical controller,
+// and the final unified Goods surface owns category reflection after either controller succeeds.
+assert(ui.includes('const direct=window.familytodoShoppingCategoryAdd'));
+assert(ui.includes("document.addEventListener('familytodo:category-created',syncCreated)"));
+assert(ui.includes("goodsCategoryDiag=kind+':category-reflected'"));
+assert(categoryDrag.includes('window.familytodoShoppingCategoryAdd=addCategoryDraft'));
+assert(categoryDrag.includes('shopping-category-draft-input'));
+assert(categoryDrag.includes('shopping-category-draft-save'));
+assert(categoryDrag.includes('shopping-category-draft-cancel'));
+assert(!categoryDrag.includes("n.addEventListener('blur',()=>{if(String(n.textContent||'').trim())void commitDraft(g,n)})"));
+// Shopping-empty OR Belongings-empty is represented by one shared block on both tabs.
+assert(ui.includes('const zeroClusters=[shoppingZero,itemZero].filter'));
+assert(ui.includes("unifiedZero.classList.add('unified-goods-zero')"));
+assert(ui.includes("shopping.append(unifiedZero)"));
+assert(ui.includes("zero-category-cluster.unified-goods-zero"));
+assert(!ui.includes('unified-item-zero'));
 const sets=read('checklist-shopping-reusable-sets.js');
 for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"action:'reusable_set_invoke'","action:'reusable_set_delete'",'client_request_id:rid','この日に配置'])assert(sets.includes(contract),contract);
 assert(!read('checklist-belongings-categories.js').includes("prompt('新しいカテゴリ名')"));
-console.log('checklist parity: task/event payload, date/color, failure recovery, co-visible goods, separate controllers, selected set lifecycle passed');
+console.log('checklist parity: task/event payload, date/color, failure recovery, co-visible goods, canonical category add/reflection, unified empty-category OR surface, separate controllers, selected set lifecycle passed');
