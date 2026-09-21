@@ -292,3 +292,4 @@ requireText(categoryMutation,"kind!=='shopping'&&kind!=='item'&&kind!=='shared'"
 requireText(categoryMutation,"kind==='shopping'||kind==='shared'",'shared deletion retires Shopping catalog entry');
 requireText(categoryMutation,"kind==='item'||kind==='shared'",'shared deletion retires Belongings catalog entry');
 requireText(categoryMutation,"kind==='shared'?[ORDER_KEY,ITEM_ORDER_KEY]",'shared deletion removes both category order entries');
+// CI trigger: Goods acceptance parity12
