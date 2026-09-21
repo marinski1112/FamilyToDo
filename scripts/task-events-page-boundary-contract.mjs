@@ -9,6 +9,7 @@ const browser=fs.readFileSync('public/assets/task-events.js','utf8');
 const categoryUx=fs.readFileSync('public/assets/checklist-category-followup.js','utf8');
 const shoppingRoot=fs.readFileSync('src/shopping-root.ts','utf8');
 const shell=fs.readFileSync('src/app-shell.ts','utf8');
+const remindersUi=fs.readFileSync('public/assets/checklist-reminders-ui.js','utf8');
 const undatedRetentionMigration=fs.readFileSync('migrations/0089_shopping_undated_completed_retention.sql','utf8');
 
 const categorySyntax=spawnSync(process.execPath,['--check','public/assets/checklist-category-followup.js'],{encoding:'utf8'});
@@ -22,6 +23,8 @@ if(page.includes('const todayJst=dateOnly();'))throw new Error('overdue Task cla
 if(page.includes('<details class="card expired-shopping" open>'))throw new Error('overdue Shopping must stay collapsed by default to preserve Checklist information density');
 if(page.includes('task-event-summary meta')||page.includes('const summary=`<div class="task-event-summary'))throw new Error('Checklist header must not restore Task/Shopping count summary');
 if(page.includes('<div class="date-title">'))throw new Error('Checklist selected date must stay inline with the compact title');
+for(const forbidden of ['reminders-quick-entry','reminders-smart-grid','reminders-smart-card','reminders-list-heading','reminders-add-button'])if(remindersUi.includes(forbidden))throw new Error(`Checklist boot must not create transient Reminders presentation: ${forbidden}`);
+if(!remindersUi.includes('const inlineTitleSelector='))throw new Error('retained checklist inline-title controller missing');
 
 for(const marker of [
   "const isRealDateOnly=(value:string)=>{",
