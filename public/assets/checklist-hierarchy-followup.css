@@ -400,3 +400,9 @@
  background:#fff!important;
  justify-self:end!important;
 }
+
+/* Force the approved Goods status row to remain one line on iPhone. */
+.checklist-page .unified-goods-section>.checklist-status-tabs{display:flex!important;flex-wrap:nowrap!important;width:100%!important;max-width:none!important;gap:4px!important;overflow:visible!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{flex:0 0 auto!important;min-width:86px!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 66px!important;margin-left:auto!important;order:90!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 42px!important;margin-left:0!important;order:100!important}
