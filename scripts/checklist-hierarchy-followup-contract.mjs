@@ -139,7 +139,11 @@ requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-b
 requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category4','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
 requireText(belongingsUi,'window.familytodoBelongingsAddCategory=addCategory','Belongings controller exposes its canonical add action');
-requireText(js,"typeof direct==='function'",'unified Belongings category add calls the canonical controller directly');
+requireText(js,"active==='item'",'unified Goods controls route by the active kind');
+requireText(js,"unified-goods-category-add",'Goods exposes one category-add control');
+requireText(js,"unified-goods-delete-mode",'Goods exposes one category-delete control');
+requireText(js,"shoppingCategoryAdd.click()",'Shopping route delegates to the canonical Shopping controller');
+requireText(js,"typeof direct==='function'",'Belongings route delegates to the canonical Belongings controller');
 requireText(js,"item:draft-missing-after-direct-call",'direct Belongings category activation exposes a bounded post-call diagnostic');
 requireText(js,"zero-category-cluster .zero-category-cluster-row",'Belongings delete mode includes visible empty named categories');
 requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'Belongings delete mode projects minus controls onto all visible shared goods categories');
@@ -211,7 +215,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity10'",'checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity11'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
