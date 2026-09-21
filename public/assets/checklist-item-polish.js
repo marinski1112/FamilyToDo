@@ -11,7 +11,9 @@ const storageKey=`familytodo:shopping-row-order:${familyId||'local'}`;
 
 const style=document.createElement('style');
 style.textContent=`
-.shopping-checklist-section .item-grip{display:none!important}
+.shopping-checklist-section .item-grip{display:inline-flex!important}
+.belongings-item-info{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border-radius:50%;background:#f0f7ff;color:#007aff!important;text-decoration:none;font-size:21px;font-weight:700;font-family:ui-sans-serif,system-ui,sans-serif;line-height:1}
+.belongings-item-info:active{background:#dcecff}
 .shopping-product-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border-radius:50%;background:#f0f7ff;color:#007aff;text-decoration:none;font-size:21px;font-weight:700;line-height:1}
 .shopping-product-link:active{background:#dcecff}
 .linked-shopping-row.same-category-sort-target{box-shadow:inset 0 2px 0 rgba(0,122,255,.45)}
@@ -75,7 +77,6 @@ const applyOrder=()=>{
 
 const moveProductLink=row=>{
   if(!(row instanceof HTMLElement))return;
-  row.querySelectorAll(':scope > .item-grip').forEach(node=>node.remove());
   const line=row.querySelector(':scope > .checklist-row-line');
   const meta=row.querySelector(':scope > .meta');
   if(!(line instanceof HTMLElement)||!(meta instanceof HTMLElement))return;
