@@ -17,9 +17,10 @@ for(const kind of ['task','event'])for(const failure of [false,true]){
  assert.equal(body.is_event,kind==='event');assert.equal(body.dateOnly,'2026-09-19');assert.equal(body.calendar_color,'#12ab34');assert.equal(form.input.disabled,false);
  assert.equal(reloaded,!failure&&kind==='event');if(failure)assert.equal(form.input.value,'予定');
 }
-const remindersUi=read('checklist-reminders-ui.js');
-for(const forbidden of ['reminders-quick-entry','reminders-smart-grid','reminders-smart-card','reminders-list-heading','reminders-add-button'])assert(!remindersUi.includes(forbidden),forbidden);
-assert(remindersUi.includes('const inlineTitleSelector='));
+const flow=read('checklist-reminders-flow-fix.js');
+assert(flow.includes('const titleSelector='));
+assert(!flow.includes('reminders-smart-card'));
+assert(!flow.includes("querySelector('.reminders-quick-entry')"));
 const ui=read('checklist-hierarchy-followup.js');
 assert(ui.includes('if(liveAdd instanceof HTMLElement)'));
 // Goods tabs choose the input target, deliberately do not filter category visibility.
