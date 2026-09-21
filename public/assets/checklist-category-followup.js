@@ -47,7 +47,7 @@ section.querySelector(':scope > .section-quick-entry')?.remove();
 const categoryOf=group=>String(group?.dataset?.category||UNCLASSIFIED).trim()||UNCLASSIFIED;
 const rowsOf=group=>[...group.querySelectorAll(':scope > .linked-shopping-row')].filter(row=>row instanceof HTMLElement);
 const rowCompleted=row=>row.querySelector('input.toggle[data-type="shopping"]')?.checked===true;
-const groups=()=>[...section.querySelectorAll(':scope > .shopping-category-group:not(.belongings-category-group)')].filter(group=>group instanceof HTMLElement);
+const groups=()=>[...section.querySelectorAll(':scope > .shopping-category-group:not(.belongings-category-group):not(.belongings-category-draft)')].filter(group=>group instanceof HTMLElement);
 
 const parking=document.createElement('div');
 parking.className='shopping-category-form-parking';
