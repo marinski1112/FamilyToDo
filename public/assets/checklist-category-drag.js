@@ -87,4 +87,3 @@ const end=e=>{if(longPress)clearTimeout(longPress);longPress=null;start=null;if(
 page.addEventListener('pointerup',end);page.addEventListener('pointercancel',end);
 groups().forEach(decorate);new MutationObserver(()=>groups().forEach(decorate)).observe(page,{childList:true,subtree:true});
 })();
-
