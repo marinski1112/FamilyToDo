@@ -130,14 +130,18 @@ requireText(css,'.task-section>.section-quick-entry:not([hidden]){display:block!
 requireText(belongingsUi,"familytodo:belongings-category-add-request",'Belongings category add request reaches canonical category controller');
 requireText(belongingsUi,"belongingsCategoryControllerReady='1'",'Belongings category controller exposes runtime readiness');
 requireText(belongingsUi,"familytodo:belongings-category-controller-ready",'Belongings category controller signals readiness after listener installation');
-requireText(js,"belongingsCategoryControllerReady==='1'",'unified Belongings category add checks controller readiness');
-requireText(js,"familytodo:belongings-category-controller-ready",'unified Belongings category add waits for late controller boot');
-requireText(js,"goodsCategoryDiag='item:controller-timeout'",'Belongings category proxy records missing-controller diagnostic state');
+
+
+
 requireText(belongingsUi,"goodsCategoryDiag='item:request-received'",'Belongings controller records request receipt');
 requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings controller records draft mount');
 requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category3','checklist loads the canonical Belongings category controller');
 requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category3','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
+requireText(js,"sourceItemCategoryAdd.click()",'unified Belongings category add directly activates the canonical source controller');
+requireText(js,"item:draft-missing-after-direct-click",'direct Belongings category activation exposes a bounded post-click diagnostic');
+requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'Belongings delete mode projects minus controls onto all visible shared goods categories');
+requireText(js,"item:delete-mode-on-visible",'Belongings delete diagnostic confirms visible-surface projection');
 requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
 
