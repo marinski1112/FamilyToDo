@@ -24,16 +24,17 @@ const goodsApply=ui.slice(ui.indexOf("let active='shopping'"),ui.indexOf("apply(
 assert(!goodsApply.includes('checklist-kind-hidden'));
 for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])assert(read(p).includes('.shopping-category-group:not(.belongings-category-group)'));
 const categoryDrag=read('checklist-category-drag.js');
-// Shopping and Belongings category creation must both route to their canonical controller,
-// and the final unified Goods surface owns category reflection after either controller succeeds.
-assert(ui.includes('const direct=window.familytodoShoppingCategoryAdd'));
+const belongingsCategories=read('checklist-belongings-categories.js');
+// Shopping category creation stays on the pre-#1072 contenteditable flow that passed iPhone acceptance.
+assert(!categoryDrag.includes('window.familytodoShoppingCategoryAdd=addCategoryDraft'));
+assert(categoryDrag.includes('shopping-category-name" contenteditable="true"'));
+assert(categoryDrag.includes("n.addEventListener('blur',()=>{if(String(n.textContent||'').trim())void commitDraft(g,n)})"));
+// Belongings deliberately mirrors that interaction while retaining its own /api/item category_add ownership.
+assert(belongingsCategories.includes('belongings-category-draft'));
+assert(belongingsCategories.includes('shopping-category-name" contenteditable="true"'));
+assert(belongingsCategories.includes("action:'category_add'"));
+assert(belongingsCategories.includes("kind:'item'"));
 assert(ui.includes("document.addEventListener('familytodo:category-created',syncCreated)"));
-assert(ui.includes("goodsCategoryDiag=kind+':category-reflected'"));
-assert(categoryDrag.includes('window.familytodoShoppingCategoryAdd=addCategoryDraft'));
-assert(categoryDrag.includes('shopping-category-draft-input'));
-assert(categoryDrag.includes('shopping-category-draft-save'));
-assert(categoryDrag.includes('shopping-category-draft-cancel'));
-assert(!categoryDrag.includes("n.addEventListener('blur',()=>{if(String(n.textContent||'').trim())void commitDraft(g,n)})"));
 // Shopping-empty OR Belongings-empty is represented by one shared block on both tabs.
 assert(ui.includes('const zeroClusters=[shoppingZero,itemZero].filter'));
 assert(ui.includes("unifiedZero.classList.add('unified-goods-zero')"));
