@@ -89,6 +89,6 @@ for(const marker of [
   'ON shopping_items(family_id, client_request_id)',
   'WHERE client_request_id IS NOT NULL',
 ]) if(!reusableSetMigration.includes(marker)) throw new Error(`Shopping reusable-set migration marker missing: ${marker}`);
-if(!appShell.includes('checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-select3'))throw new Error('Shopping reusable-set asset revision must rotate after privacy fix');
+if(!appShell.includes('checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-select4'))throw new Error('Shopping reusable-set asset revision must rotate after privacy fix');
 
 console.log('Shopping API/new/edit domain contract ok; reusable-set invocation is retry-safe and shared snapshots exclude PRIVATE task-linked Shopping rows with failed-create cleanup');
