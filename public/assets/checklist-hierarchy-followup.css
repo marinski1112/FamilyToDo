@@ -406,3 +406,10 @@
 .checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{flex:0 0 auto!important;min-width:86px!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 66px!important;margin-left:auto!important;order:90!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 42px!important;margin-left:0!important;order:100!important}
+
+/* iPhone acceptance: one Set control, no Goods status overflow. */
+.checklist-page .unified-goods-section{overflow-x:hidden!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs{box-sizing:border-box!important;min-width:0!important;max-width:100%!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{min-width:0!important;flex:0 1 86px!important;padding-left:8px!important;padding-right:8px!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{flex:0 0 62px!important;min-width:62px!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{flex:0 0 42px!important;min-width:42px!important}
