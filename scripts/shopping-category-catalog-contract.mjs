@@ -7,6 +7,7 @@ const newJs=readFileSync(new URL('../public/assets/shopping-new.js',import.meta.
 const editPage=readFileSync(new URL('../src/shopping-edit-page.ts',import.meta.url),'utf8');
 const editJs=readFileSync(new URL('../public/assets/shopping-edit.js',import.meta.url),'utf8');
 const categoryApi=readFileSync(new URL('../src/shopping-category-api.ts',import.meta.url),'utf8');
+const categoryMutationApi=readFileSync(new URL('../src/shopping-category-mutation-api.ts',import.meta.url),'utf8');
 const contextRoutes=readFileSync(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
 const settingsContent=readFileSync(new URL('../src/settings-content-page.ts',import.meta.url),'utf8');
 const settingsCategoryJs=readFileSync(new URL('../public/assets/settings-shopping-categories.js',import.meta.url),'utf8');
@@ -101,6 +102,12 @@ if(/UPDATE\s+shopping_items|DELETE\s+FROM\s+shopping_items/i.test(categoryApi)){
   throw new Error('category API must not rewrite/delete historical shopping item category strings');
 }
 requireMatch(contextRoutes,/url\.pathname==='\/api\/shopping-categories'[\s\S]*shoppingCategoryApi\(request,context\)/,'Shopping category API must be reachable through the retained context router');
+for(const pattern of [
+  /action!=='rename'/,
+  /INSERT OR IGNORE INTO shopping_category_catalog[\s\S]*newName/,
+  /UPDATE shopping_category_catalog SET enabled=1,updated_at=\?[\s\S]*name=\? COLLATE NOCASE[\s\S]*newName/,
+  /UPDATE shopping_category_catalog SET enabled=0,updated_at=\?[\s\S]*name=\? COLLATE NOCASE[\s\S]*oldName/,
+]) requireMatch(categoryMutationApi,pattern,'Shopping category rename must keep the destination catalog row enabled, including reuse of a previously disabled name');
 
 for(const pattern of [
   /resolveShoppingCategoryOptions\(categoryCatalog\.results\)/,
