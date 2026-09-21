@@ -12,7 +12,7 @@ style.textContent=`
 `;
 document.head.append(style);
 
-const editableTitle=label=>label?.querySelector(':scope > span.reminders-inline-title,:scope > span');
+const editableTitle=label=>label?.querySelector(':scope > span.checklist-inline-title,:scope > span');
 const checklistLabelSelector='label.task-main,label.shopping-check-row,.item-section .row label,.expired-task-main';
 let forwardingTitleClick=false;
 
@@ -69,7 +69,7 @@ page.addEventListener('familytodo:toggle-success',event=>{
   const input=event.target;
   if(!(input instanceof HTMLInputElement)||input.dataset.type!=='shopping'||!event.detail?.completed)return;
   const row=input.closest('.linked-shopping-row');
-  if(row instanceof HTMLElement&&row.classList.contains('reminders-new-row')){row.remove();refreshCounts();}
+  if(row instanceof HTMLElement&&row.classList.contains('checklist-new-row')){row.remove();refreshCounts();}
 });
 
 // Refresh only when checklist rows/groups are structurally added or removed. Do not observe
