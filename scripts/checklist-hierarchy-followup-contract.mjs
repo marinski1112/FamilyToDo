@@ -135,11 +135,13 @@ requireText(belongingsUi,"familytodo:belongings-category-controller-ready",'Belo
 
 requireText(belongingsUi,"goodsCategoryDiag='item:request-received'",'Belongings controller records request receipt');
 requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings controller records draft mount');
-requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category3','checklist loads the canonical Belongings category controller');
-requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category3','checklist loads Belongings category styles');
+requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category4','checklist loads the canonical Belongings category controller');
+requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category4','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
-requireText(js,"sourceItemCategoryAdd.click()",'unified Belongings category add directly activates the canonical source controller');
-requireText(js,"item:draft-missing-after-direct-click",'direct Belongings category activation exposes a bounded post-click diagnostic');
+requireText(belongingsUi,'window.familytodoBelongingsAddCategory=addCategory','Belongings controller exposes its canonical add action');
+requireText(js,"typeof direct==='function'",'unified Belongings category add calls the canonical controller directly');
+requireText(js,"item:draft-missing-after-direct-call",'direct Belongings category activation exposes a bounded post-call diagnostic');
+requireText(js,"zero-category-cluster .zero-category-cluster-row",'Belongings delete mode includes visible empty named categories');
 requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'Belongings delete mode projects minus controls onto all visible shared goods categories');
 requireText(js,"item:delete-mode-on-visible",'Belongings delete diagnostic confirms visible-surface projection');
 requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
@@ -209,7 +211,7 @@ forbidText(readFileSync('public/assets/task-rough-input-shopping-manual.js','utf
 requireText(appShell,"/assets/task-rough-input-item-manual.js?v=${APP_VERSION}",'Item selected-type manual controller loaded');
 requireText(js,"if(kind==='event')u.searchParams.set('event','1')",'Event tab preserves canonical Event add route');
 requireText(taskEntryPage,'task-idem2','selected-type manual entry cache revision');
-requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity9'",'checklist hierarchy cache revision');
+requireText(appShell,"const CHECKLIST_HIERARCHY_UI_REVISION = 'hierarchy-parity10'",'checklist hierarchy cache revision');
 requireText(appShell,'checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-boot4','Shopping set cache revision');
 requireText(js,"familytodo:checklist-unified-ready",'async unified checklist completion signal');
 const shoppingSets=readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8');
