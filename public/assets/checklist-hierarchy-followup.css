@@ -364,3 +364,39 @@
  margin-left:12px!important;
  justify-self:end!important;
 }
+
+/* User-approved Goods control row: status | set | delete */
+.checklist-page .unified-goods-section>.checklist-status-tabs{
+ display:grid!important;
+ grid-template-columns:auto auto 1fr auto auto!important;
+ align-items:center!important;
+ width:100%!important;
+ min-height:46px!important;
+ gap:6px!important;
+ padding:4px!important;
+}
+.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]:first-of-type{grid-column:1!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]:nth-of-type(2){grid-column:2!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{
+ grid-column:4!important;
+ margin:0!important;
+ min-width:72px!important;
+ height:36px!important;
+ border:1px solid #b8d8ff!important;
+ border-radius:9px!important;
+ background:#fff!important;
+ color:#087bff!important;
+ font-size:14px!important;
+ font-weight:800!important;
+}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{
+ grid-column:5!important;
+ margin:0!important;
+ min-width:42px!important;
+ width:42px!important;
+ height:36px!important;
+ border:1px solid #b8d8ff!important;
+ border-radius:9px!important;
+ background:#fff!important;
+ justify-self:end!important;
+}
