@@ -330,3 +330,37 @@
  box-shadow:none!important;
  font-size:14px!important;
 }
+
+/* Status segmented control: match the compact reference treatment */
+.checklist-page .checklist-status-tabs{
+ display:inline-grid!important;
+ grid-template-columns:1fr 1fr auto!important;
+ width:auto!important;
+ min-height:36px!important;
+ padding:3px!important;
+ gap:0!important;
+ border-radius:9px!important;
+ background:#eef1f5!important;
+}
+.checklist-page .checklist-status-tabs>button[data-status]{
+ min-width:86px!important;
+ height:30px!important;
+ min-height:30px!important;
+ padding:0 13px!important;
+ border-radius:7px!important;
+ color:#667085!important;
+ font-size:13px!important;
+ font-weight:700!important;
+}
+.checklist-page .checklist-status-tabs>button[data-status].active{
+ background:#fff!important;
+ color:#172033!important;
+ box-shadow:0 1px 3px rgba(15,23,42,.14)!important;
+}
+.checklist-page .checklist-status-tabs>.task-delete-mode,
+.checklist-page .checklist-status-tabs>.category-delete-mode,
+.checklist-page .checklist-status-tabs>.unified-goods-delete-mode{
+ grid-column:3!important;
+ margin-left:12px!important;
+ justify-self:end!important;
+}
