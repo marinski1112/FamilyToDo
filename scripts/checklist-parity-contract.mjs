@@ -26,6 +26,7 @@ for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])a
 const categoryFollowup=read('checklist-category-followup.js');
 assert(categoryFollowup.includes("button.dataset.categoryAddBound!=='1'"));
 assert(categoryFollowup.includes("button.addEventListener('click',()=>activateComposer(group,button))"));
+const categoryDrag=read('checklist-category-drag.js');
 const itemPolish=read('checklist-item-polish.js');
 const belongingsCategoryUi=read('checklist-belongings-categories.js');
 assert(categoryDrag.includes("const bottomAnchor=section.querySelector(':scope > .zero-category-cluster,:scope > .zero-unclassified-add')"));
