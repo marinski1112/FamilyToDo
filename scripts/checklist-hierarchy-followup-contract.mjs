@@ -138,9 +138,9 @@ requireText(belongingsUi,"goodsCategoryDiag='item:draft-mounted'",'Belongings co
 requireText(shell,'/assets/checklist-belongings-categories.js?v=${APP_VERSION}-belongings-category3','checklist loads the canonical Belongings category controller');
 requireText(shell,'/assets/checklist-belongings-categories.css?v=${APP_VERSION}-belongings-category3','checklist loads Belongings category styles');
 requireText(js,"unified-belongings-category-add",'unified Belongings category add uses a live proxy outside the hidden source section');
-requireText(js,"sourceItemCategoryAdd.click()",'unified Belongings category add directly activates the canonical source controller');
-requireText(js,"item:draft-missing-after-direct-click",'direct Belongings category activation exposes a bounded post-click diagnostic');
-requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group')",'Belongings delete mode projects minus controls onto all visible shared goods categories');
+requireText(js,"item:visible-composer-mounted",'unified Belongings category add mounts a visible-surface composer without hidden-source click dependency');
+requireText(js,"requestJson('/api/item',{csrf,action:'category_add',name})",'visible Belongings category composer saves through canonical item API');
+requireText(js,"shopping.querySelectorAll(':scope>.unified-category-group.unified-item-group')",'Belongings delete mode projects minus controls only onto visible item-origin categories');
 requireText(js,"item:delete-mode-on-visible",'Belongings delete diagnostic confirms visible-surface projection');
 requireText(js,"familytodo:belongings-category-add-request",'unified Belongings category add dispatches canonical request');
 requireText(js,"section.append(add)",'direct unclassified add route preserved');
