@@ -95,6 +95,7 @@ export async function shoppingCategoryMutationApi(request:Request,ctx:AppContext
     ctx.env.DB.prepare('UPDATE shopping_items SET category=?,updated_at=? WHERE family_id=? AND category=? COLLATE NOCASE').bind(newName,now,member.family_id,oldName),
     ctx.env.DB.prepare(`INSERT OR IGNORE INTO shopping_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
       VALUES(?,?,1,1,?,?,?)`).bind(member.family_id,newName,member.id,now,now),
+    ctx.env.DB.prepare('UPDATE shopping_category_catalog SET enabled=1,updated_at=? WHERE family_id=? AND name=? COLLATE NOCASE').bind(now,member.family_id,newName),
     ctx.env.DB.prepare('UPDATE shopping_category_catalog SET enabled=0,updated_at=? WHERE family_id=? AND name=? COLLATE NOCASE').bind(now,member.family_id,oldName),
   ];
   if(order.length)statements.push(ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?)
