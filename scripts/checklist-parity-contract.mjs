@@ -23,6 +23,9 @@ assert(ui.includes('if(liveAdd instanceof HTMLElement)'));
 const goodsApply=ui.slice(ui.indexOf("let active='shopping'"),ui.indexOf("apply('shopping');"));
 assert(!goodsApply.includes('checklist-kind-hidden'));
 for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])assert(read(p).includes('.shopping-category-group:not(.belongings-category-group)'));
+const categoryFollowup=read('checklist-category-followup.js');
+assert(categoryFollowup.includes("button.dataset.categoryAddBound!=='1'"));
+assert(categoryFollowup.includes("button.addEventListener('click',()=>activateComposer(group,button))"));
 const categoryDrag=read('checklist-category-drag.js');
 const belongingsCategories=read('checklist-belongings-categories.js');
 // Shopping category creation stays on the pre-#1072 contenteditable flow that passed iPhone acceptance.
