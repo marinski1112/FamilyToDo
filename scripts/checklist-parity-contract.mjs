@@ -36,7 +36,6 @@ assert(categoryDrag.includes("closest('.belongings-category-group')"));
 assert(categoryDrag.includes("action:'update_category',id,category:name===U?'':name"));
 assert(itemPolish.includes('.shopping-checklist-section .item-grip{display:inline-flex!important}'));
 assert(itemPolish.includes('same-category-sort-target'));
-const categoryDrag=read('checklist-category-drag.js');
 const belongingsCategories=read('checklist-belongings-categories.js');
 // Shopping category creation stays on the pre-#1072 contenteditable flow that passed iPhone acceptance.
 assert(!categoryDrag.includes('window.familytodoShoppingCategoryAdd=addCategoryDraft'));
