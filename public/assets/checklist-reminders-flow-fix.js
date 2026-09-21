@@ -14,10 +14,6 @@ const selectedDate=(()=>{
   return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 })();
 
-// The old single top input could only create tasks. Remove it and put a native-looking
-// "new item" row inside each actual list instead.
-page.querySelector('.reminders-quick-entry')?.remove();
-
 if(!document.getElementById('sectionQuickEntryStyle')){
   const style=document.createElement('style');style.id='sectionQuickEntryStyle';style.textContent=`
   .section-quick-entry{margin:2px 0 8px;border-top:1px solid #eef0f3;border-bottom:1px solid #eef0f3}
@@ -86,7 +82,6 @@ const bindInlineEditor=title=>{
 };
 page.querySelectorAll(titleSelector).forEach(bindInlineEditor);
 
-const updateSmartCount=(tone,value)=>{const n=page.querySelector(`.reminders-smart-card[data-tone="${tone}"] .reminders-smart-count`);if(n)n.textContent=String(value);};
 const clearEmpty=section=>section.querySelector(':scope > .empty')?.remove();
 
 const addTaskRow=(id,title)=>{
@@ -96,7 +91,7 @@ const addTaskRow=(id,title)=>{
   const titleNode=row.querySelector('.task-main>span');if(titleNode)titleNode.textContent=title;
   const form=section.querySelector(':scope > .section-quick-entry'),completed=section.querySelector(':scope > details.completed-tasks');
   if(completed)section.insertBefore(row,completed);else if(form)form.insertAdjacentElement('afterend',row);else section.append(row);
-  if(titleNode)bindInlineEditor(titleNode);updateSmartCount('blue',section.querySelectorAll(':scope > .task-row').length);
+  if(titleNode)bindInlineEditor(titleNode);
 };
 const addItemRow=(id,name)=>{
   const section=page.querySelector('.item-section');if(!(section instanceof HTMLElement))return;
@@ -143,7 +138,6 @@ const addShoppingRow=(id,name,category)=>{
   row.innerHTML=`<div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${id}"><span></span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${id}" aria-label="編集">編集</a></div><div class="meta"></div>`;
   const titleNode=row.querySelector('.shopping-check-row>span');if(titleNode)titleNode.textContent=name;const meta=row.querySelector('.meta');if(meta)meta.textContent=categoryKey(category)==='未分類'?'':categoryKey(category);
   group.append(row);if(titleNode)bindInlineEditor(titleNode);
-  updateSmartCount('orange',section.querySelectorAll('input.toggle[data-type="shopping"]').length);
 };
 
 const makeQuickForm=(section,type)=>{
