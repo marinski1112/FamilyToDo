@@ -331,88 +331,50 @@
  font-size:14px!important;
 }
 
-/* Status segmented control: match the compact reference treatment */
-.checklist-page .checklist-status-tabs{
- display:inline-grid!important;
- grid-template-columns:1fr 1fr auto!important;
- width:auto!important;
- min-height:36px!important;
- padding:3px!important;
- gap:0!important;
- border-radius:9px!important;
- background:#eef1f5!important;
+/* Status tabs are a separate segmented control; actions stay outside it. */
+.checklist-page .checklist-status-tabs,
+.checklist-page .unified-goods-section>.checklist-status-tabs{
+ display:flex!important;align-items:center!important;flex-wrap:nowrap!important;
+ box-sizing:border-box!important;width:100%!important;min-width:0!important;max-width:none!important;
+ min-height:44px!important;margin:4px 0 10px!important;padding:0!important;gap:6px!important;
+ background:transparent!important;border:0!important;border-radius:0!important;
 }
-.checklist-page .checklist-status-tabs>button[data-status]{
- min-width:86px!important;
- height:30px!important;
- min-height:30px!important;
- padding:0 13px!important;
- border-radius:7px!important;
- color:#667085!important;
- font-size:13px!important;
- font-weight:700!important;
+.checklist-page .checklist-status-segments{
+ display:flex;align-items:center;gap:2px;padding:3px;min-width:0;
+ background:#eef1f5;border-radius:11px;flex:0 1 210px;
 }
-.checklist-page .checklist-status-tabs>button[data-status].active{
- background:#fff!important;
- color:#172033!important;
- box-shadow:0 1px 3px rgba(15,23,42,.14)!important;
+.checklist-page .checklist-status-segments>button[data-status]{
+ flex:1 1 0!important;min-width:0!important;min-height:38px!important;height:38px!important;
+ padding:0 7px!important;border:0!important;border-radius:9px!important;white-space:nowrap!important;
+ background:#fff!important;color:#667085!important;font-size:13px!important;font-weight:700!important;
+ box-shadow:0 1px 3px rgba(15,23,42,.12)!important;
+}
+.checklist-page .checklist-status-segments>button[data-status].active{
+ background:#087bff!important;color:#fff!important;box-shadow:none!important;
 }
 .checklist-page .checklist-status-tabs>.task-delete-mode,
-.checklist-page .checklist-status-tabs>.category-delete-mode,
-.checklist-page .checklist-status-tabs>.unified-goods-delete-mode{
- grid-column:3!important;
- margin-left:12px!important;
- justify-self:end!important;
-}
-
-/* User-approved Goods control row: status | set | delete */
-.checklist-page .unified-goods-section>.checklist-status-tabs{
- display:grid!important;
- grid-template-columns:auto auto 1fr auto auto!important;
- align-items:center!important;
- width:100%!important;
- min-height:46px!important;
- gap:6px!important;
- padding:4px!important;
-}
-.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]:first-of-type{grid-column:1!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]:nth-of-type(2){grid-column:2!important}
+.checklist-page .checklist-status-tabs>.unified-goods-delete-mode,
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{
- grid-column:4!important;
- margin:0!important;
- min-width:72px!important;
- height:36px!important;
- border:1px solid #b8d8ff!important;
- border-radius:9px!important;
- background:#fff!important;
- color:#087bff!important;
- font-size:14px!important;
- font-weight:800!important;
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;
+ flex:0 0 44px!important;min-width:44px!important;width:44px!important;height:44px!important;min-height:44px!important;
+ padding:0!important;margin:0!important;border:1px solid #b8d8ff!important;border-radius:9px!important;
+ background:#fff!important;box-shadow:none!important;color:#e32320!important;font-size:0!important;
 }
-.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{
- grid-column:5!important;
- margin:0!important;
- min-width:42px!important;
- width:42px!important;
- height:36px!important;
- border:1px solid #b8d8ff!important;
- border-radius:9px!important;
- background:#fff!important;
- justify-self:end!important;
+.checklist-page .checklist-status-tabs>.task-delete-mode{margin-left:auto!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{
+ flex-basis:72px!important;min-width:72px!important;width:72px!important;margin-left:auto!important;
+ gap:4px!important;color:#087bff!important;font-size:14px!important;font-weight:700!important;
 }
-
-/* Force the approved Goods status row to remain one line on iPhone. */
-.checklist-page .unified-goods-section>.checklist-status-tabs{display:flex!important;flex-wrap:nowrap!important;width:100%!important;max-width:none!important;gap:4px!important;overflow:visible!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{flex:0 0 auto!important;min-width:86px!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 66px!important;margin-left:auto!important;order:90!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 42px!important;margin-left:0!important;order:100!important}
-
-/* iPhone acceptance: one Set control, no Goods status overflow. */
-.checklist-page .unified-goods-section{overflow-x:hidden!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs{box-sizing:border-box!important;min-width:0!important;max-width:100%!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>button[data-status]{min-width:0!important;flex:0 1 86px!important;padding-left:8px!important;padding-right:8px!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button{flex:0 0 62px!important;min-width:62px!important}
-.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{flex:0 0 42px!important;min-width:42px!important}
-
-/* Active Goods kind owns the only visible reusable Set control. */
+.checklist-page .unified-goods-set-button::before{content:'☷';font-size:21px;line-height:1}
+.checklist-page .checklist-status-tabs>.task-delete-mode::before,
+.checklist-page .checklist-status-tabs>.unified-goods-delete-mode::before{
+ content:'';width:20px;height:22px;background:currentColor;
+ mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.checklist-page .checklist-status-tabs>.text-button{font-size:22px!important}
+.checklist-page .checklist-status-tabs>.text-button::before{display:none!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-set-button[hidden]{display:none!important}
+/* The category form must retain an editable field next to its actions. */
+.checklist-page .belongings-category-draft>.shopping-category-title{display:flex!important;gap:8px!important;min-width:0!important}
+.checklist-page .belongings-category-draft .category-inline-rename{flex:1 1 0!important;width:0!important;min-width:0!important;font-size:16px!important}
+.checklist-page .belongings-category-draft button{flex:0 0 auto;min-height:44px;color:#087bff;background:#fff;border:1px solid #b8d8ff;border-radius:9px}
