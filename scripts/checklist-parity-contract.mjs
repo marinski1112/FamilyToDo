@@ -26,6 +26,15 @@ for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])a
 const categoryFollowup=read('checklist-category-followup.js');
 assert(categoryFollowup.includes("button.dataset.categoryAddBound!=='1'"));
 assert(categoryFollowup.includes("button.addEventListener('click',()=>activateComposer(group,button))"));
+const itemPolish=read('checklist-item-polish.js');
+const belongingsCategoryUi=read('checklist-belongings-categories.js');
+assert(categoryDrag.includes("const bottomAnchor=section.querySelector(':scope > .zero-category-cluster,:scope > .zero-unclassified-add')"));
+assert(belongingsCategoryUi.includes("const anchor=host.querySelector(':scope>.zero-category-cluster,:scope>.zero-unclassified-add')"));
+assert(belongingsCategoryUi.includes("edit.textContent='i'"));
+assert(categoryDrag.includes("closest('.belongings-category-group')"));
+assert(categoryDrag.includes("action:'update_category',id,category:name===U?'':name"));
+assert(itemPolish.includes('.shopping-checklist-section .item-grip{display:inline-flex!important}'));
+assert(itemPolish.includes('same-category-sort-target'));
 const categoryDrag=read('checklist-category-drag.js');
 const belongingsCategories=read('checklist-belongings-categories.js');
 // Shopping category creation stays on the pre-#1072 contenteditable flow that passed iPhone acceptance.
