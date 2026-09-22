@@ -62,6 +62,7 @@ for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_i
 assert(!read('checklist-belongings-categories.js').includes("prompt('新しいカテゴリ名')"));
 // Newly-created empty categories stay in their normal position until the next JST midnight, then move to the empty cluster.
 assert(ui.includes('const nextJstMidnightAt='));
+assert(ui.includes('const cutoffHour=local.getUTCHours()>=23?1:0'));
 assert(!ui.includes('const nextJstOneAt='));
 assert(ui.includes("g.classList.toggle('category-new-empty',!eligible)"));
 // The unified hierarchy controller is the single category-name click owner; legacy per-section handlers must not race it.
