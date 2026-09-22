@@ -142,6 +142,7 @@ const boot=async()=>{
  let queued=false;
  const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;refresh();})};
  new MutationObserver(schedule).observe(host,{childList:true,subtree:true});
+ itemSource.addEventListener('belongings-items-added',()=>void run(async()=>{const fresh=await adapter('item').load();catalogs.set('item',new Map((fresh.categoryMeta||[]).map(meta=>[key(meta.name),meta])));for(const category of fresh.categories||[])ensureGroup('item',category);refresh();}));
  page.addEventListener('familytodo:toggle-success',schedule);page.addEventListener('change',schedule);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});setInterval(refresh,30000);
  applyKind(active);document.dispatchEvent(new CustomEvent('familytodo:checklist-unified-ready'));

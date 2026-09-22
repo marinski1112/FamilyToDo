@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {Window} from 'happy-dom';
 import {database,context,operations,api} from './goods-category-test-support.mjs';
 const db=database(),ctx=context(db),requests=[];
+await operations(ctx,'item').create('再有効化セット');await operations(ctx,'item').remove('再有効化セット');
 for(const kind of ['shopping','item']){
  const op=operations(ctx,kind);for(const name of [kind==='shopping'?'食品':'保育園','同名','古い空'])await op.create(name);
  db.exec(`UPDATE ${kind}_category_catalog SET activated_at='2000-01-01T00:00:00Z' WHERE name='古い空'`);
@@ -41,6 +42,9 @@ for(const kind of ['shopping','item']){
 for(const kind of ['shopping','item']){
  view.host.querySelector(`[data-kind="${kind}"]`).click();view.host.querySelector('.zero-unclassified-add').click();await settle();const g=find(view,kind,'未分類'),field=g.querySelector(kind==='shopping'?'.shopping-continuous-name':'.belongings-composer-name');assert(field,'working composer, including empty catalog');field.value='未分類テスト'+kind;field.dispatchEvent(new view.w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await settle();const table=kind==='shopping'?'shopping_items':'items';assert(db.prepare(`SELECT 1 FROM ${table} WHERE name=? AND category IS NULL`).get('未分類テスト'+kind));
 }
+// Reusable-set content events reload authoritative metadata, including re-enable.
+const addedResponse=await api(ctx,'/api/item',{action:'add',name:'セット追加',category:'再有効化セット',date:'2026-09-22'}),added=await addedResponse.json();
+view.w.document.querySelector('.item-section').dispatchEvent(new view.w.CustomEvent('belongings-items-added',{detail:{items:[{id:added.id,name:'セット追加',category:'再有効化セット'}]}}));await settle();assert.equal(find(view,'item','再有効化セット').dataset.categoryState,'ACTIVE');assert.equal(find(view,'item','再有効化セット').hidden,false);
 // Same-name deletion never sends shared and never disables the other catalog.
 view.host.querySelector('[data-kind="item"]').click();view.host.querySelector('.unified-goods-delete-mode').click();find(view,'item','同名').querySelector('.category-delete-minus').click();view.w.document.querySelector('[data-policy="unclassified"]').click();await settle();assert.equal(requests.at(-1).body.kind,'item');assert.equal(db.prepare("SELECT enabled FROM shopping_category_catalog WHERE name='同名'").get().enabled,1);assert.equal(db.prepare("SELECT category FROM items WHERE name='内容'").get().category,null);
 assert(!requests.some(r=>r.body?.kind==='shared'));
