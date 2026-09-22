@@ -88,7 +88,7 @@ const openCategoryComposer=async(section,kind,name)=>{
  live.scrollIntoView({behavior:'smooth',block:'center'});return true;
 };
 
-const nextJstOneAt=raw=>{const text=String(raw||'').trim();if(!text)return 0;const created=Date.parse(/Z$|[+-]\d\d:\d\d$/.test(text)?text:text.replace(' ','T')+'Z');if(!Number.isFinite(created))return 0;const local=new Date(created+9*3600000);let target=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate(),1)-9*3600000;if(target<=created)target+=86400000;return target;};
+const nextJstEmptyAt=raw=>{const text=String(raw||'').trim();if(!text)return 0;const created=Date.parse(/Z$|[+-]\\d\\d:\\d\\d$/.test(text)?text:text.replace(' ','T')+'Z');if(!Number.isFinite(created))return 0;const local=new Date(created+9*3600000),cutoffHour=local.getUTCHours()>=23?1:0;return Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate()+1,cutoffHour)-9*3600000;};
 const installCategoryUi=async(section,kind,categories,canManage,categoryMeta=[])=>{
  const metaByKey=new Map((Array.isArray(categoryMeta)?categoryMeta:[]).map(row=>[key(row?.name),row]));
  const emptyEligible=name=>{const meta=metaByKey.get(key(name));if(!meta)return true;const at=nextJstMidnightAt(meta.created_at);return !at||Date.now()>=at;};
