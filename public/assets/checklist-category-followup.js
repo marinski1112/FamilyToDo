@@ -89,17 +89,6 @@ const restoreDraft=category=>{
 const resizeName=()=>{nameInput.style.height='auto';nameInput.style.height=`${Math.min(96,Math.max(48,nameInput.scrollHeight))}px`;};
 for(const field of [nameInput,memoInput,urlInput])field.addEventListener('input',()=>{writeDraft();if(field===nameInput)resizeName();});
 
-const updateToggle=group=>{
-  const toggle=group.querySelector(':scope > .shopping-category-title > .shopping-category-toggle');
-  if(!(toggle instanceof HTMLButtonElement))return;
-  const collapsed=group.classList.contains('category-collapsed');
-  const label=collapsed?'展開':'閉じる';
-  const symbol=collapsed?'›':'⌄';
-  if(toggle.textContent!==symbol)toggle.textContent=symbol;
-  toggle.setAttribute('aria-expanded',collapsed?'false':'true');
-  toggle.setAttribute('aria-label',`${categoryOf(group)}を${collapsed?'展開':'閉じる'}（${rowsOf(group).length}件）`);
-};
-
 const keepFooterLast=group=>{
   const footer=group.querySelector(':scope > .shopping-category-footer');
   if(footer instanceof HTMLElement&&group.lastElementChild!==footer)group.append(footer);
@@ -114,7 +103,6 @@ const keepCompletedLast=group=>{
     if(!rows.every((row,index)=>row===desired[index]))for(const row of desired)group.insertBefore(row,footer instanceof HTMLElement?footer:null);
   }
   keepFooterLast(group);
-  updateToggle(group);
 };
 
 const resetAddButtons=except=>{
@@ -177,7 +165,7 @@ const activateComposer=(group,button)=>{
   const category=categoryOf(group);const restored=restoreDraft(category);resizeName();
   button.textContent='入力を閉じる';nameInput.placeholder=`${category}に追加`;
   status.dataset.error='0';status.textContent=restored?'入力途中の内容を復元しました。':'';
-  updateToggle(group);requestAnimationFrame(()=>nameInput.focus({preventScroll:true}));
+  window.familytodoGoodsCategories?.setExpanded(group,true);requestAnimationFrame(()=>nameInput.focus({preventScroll:true}));
 };
 
 const installFooter=group=>{
@@ -193,25 +181,16 @@ const installFooter=group=>{
 const decorateGroup=group=>{
   if(group.classList.contains('shopping-category-draft'))return;
   installFooter(group);
-  if(group.dataset.categoryUxInit!=='1'){group.classList.add('category-collapsed');group.dataset.categoryUxInit='1';}
+  if(group.dataset.categoryUxInit!=='1'){if(!group.dataset.goodsKind)group.classList.add('category-collapsed');group.dataset.categoryUxInit='1';}
   keepCompletedLast(group);
 };
 
-const ensureUnclassifiedGroup=()=>{
-  const existing=groups().filter(group=>categoryOf(group)===UNCLASSIFIED);if(existing.length){const keep=existing[0];for(const duplicate of existing.slice(1)){for(const row of rowsOf(duplicate))keep.append(row);duplicate.remove();}return;}
-  const group=document.createElement('div');group.className='shopping-category-group';group.dataset.category=UNCLASSIFIED;
-  const head=document.createElement('div');head.className='shopping-category-title';
-  const name=document.createElement('strong');name.className='shopping-category-name';name.textContent=UNCLASSIFIED;
-  const toggle=document.createElement('button');toggle.type='button';toggle.className='shopping-category-toggle';toggle.addEventListener('click',()=>{group.classList.toggle('category-collapsed');updateToggle(group);});head.append(name,toggle);group.append(head);
-  const anchor=groups().at(-1)||section.querySelector(':scope > .section-head');anchor?.insertAdjacentElement('afterend',group);
-};
-
-ensureUnclassifiedGroup();groups().forEach(decorateGroup);
+groups().forEach(decorateGroup);
 
 let queued=false;
 const syncGroups=()=>{
   if(queued)return;queued=true;
-  queueMicrotask(()=>{queued=false;ensureUnclassifiedGroup();for(const group of groups())decorateGroup(group);});
+  queueMicrotask(()=>{queued=false;for(const group of groups())decorateGroup(group);});
 };
 new MutationObserver(syncGroups).observe(section,{childList:true,subtree:true,attributes:true,attributeFilter:['class','data-category']});
 

@@ -23,55 +23,6 @@ assert(!flow.includes('reminders-smart-card'));
 assert(!flow.includes("querySelector('.reminders-quick-entry')"));
 const ui=read('checklist-hierarchy-followup.js');
 assert(ui.includes('if(liveAdd instanceof HTMLElement)'));
-// Goods tabs choose the input target, deliberately do not filter category visibility.
-const goodsApply=ui.slice(ui.indexOf("let active='shopping'"),ui.indexOf("apply('shopping');"));
-assert(!goodsApply.includes('checklist-kind-hidden'));
-for(const p of ['checklist-category-drag.js','checklist-category-followup.js'])assert(read(p).includes('.shopping-category-group:not(.belongings-category-group)'));
-const categoryFollowup=read('checklist-category-followup.js');
-assert(categoryFollowup.includes("button.dataset.categoryAddBound!=='1'"));
-assert(categoryFollowup.includes("button.addEventListener('click',()=>activateComposer(group,button))"));
-const categoryDrag=read('checklist-category-drag.js');
-const itemPolish=read('checklist-item-polish.js');
-const belongingsCategoryUi=read('checklist-belongings-categories.js');
-assert(categoryDrag.includes("const bottomAnchor=section.querySelector(':scope > .zero-category-cluster,:scope > .zero-unclassified-add')"));
-assert(belongingsCategoryUi.includes("const anchor=host.querySelector(':scope>.zero-category-cluster,:scope>.zero-unclassified-add')"));
-assert(belongingsCategoryUi.includes("edit.textContent='i'"));
-assert(categoryDrag.includes("closest('.belongings-category-group')"));
-assert(categoryDrag.includes("action:'update_category',id,category:name===U?'':name"));
-assert(itemPolish.includes('.shopping-checklist-section .item-grip{display:inline-flex!important}'));
-assert(itemPolish.includes('same-category-sort-target'));
-const belongingsCategories=read('checklist-belongings-categories.js');
-// Shopping category creation stays on the pre-#1072 contenteditable flow that passed iPhone acceptance.
-assert(!categoryDrag.includes('window.familytodoShoppingCategoryAdd=addCategoryDraft'));
-assert(categoryDrag.includes('shopping-category-name" contenteditable="true"'));
-assert(categoryDrag.includes("n.addEventListener('blur',()=>{if(String(n.textContent||'').trim())void commitDraft(g,n)})"));
-// Belongings deliberately mirrors that interaction while retaining its own /api/item category_add ownership.
-assert(belongingsCategories.includes('belongings-category-draft'));
-assert(belongingsCategories.includes('shopping-category-name" contenteditable="true"'));
-assert(belongingsCategories.includes("action:'category_add'"));
-assert(belongingsCategories.includes("kind:'item'"));
-assert(ui.includes("document.addEventListener('familytodo:category-created',syncCreated)"));
-// Shopping-empty OR Belongings-empty is represented by one shared block on both tabs.
-assert(ui.includes('const zeroClusters=[shoppingZero,itemZero].filter'));
-assert(ui.includes("unifiedZero.classList.add('unified-goods-zero')"));
-assert(ui.includes("shopping.append(unifiedZero)"));
-assert(ui.includes("zero-category-cluster.unified-goods-zero"));
-assert(!ui.includes('unified-item-zero'));
 const sets=read('checklist-shopping-reusable-sets.js');
 for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"action:'reusable_set_invoke'","action:'reusable_set_delete'",'client_request_id:rid','この日に配置'])assert(sets.includes(contract),contract);
-assert(!read('checklist-belongings-categories.js').includes("prompt('新しいカテゴリ名')"));
-// Newly-created empty categories stay in their normal position until the required JST boundary, then move to the empty cluster.
-assert(ui.includes('const nextJstEmptyAt='));
-assert(ui.includes('cutoffHour=local.getUTCHours()>=23?1:0'));
-assert(!ui.includes('const nextJstOneAt='));
-assert(ui.includes("const at=nextJstEmptyAt(meta.created_at)"));
-assert(!ui.includes('nextJstMidnightAt'));
-assert(ui.includes("g.classList.toggle('category-new-empty',!eligible)"));
-const rolloverSource=ui.slice(ui.indexOf('const nextJstEmptyAt='),ui.indexOf('const installCategoryUi='));
-const rolloverCtx={};
-vm.runInNewContext(rolloverSource+';this.nextJstEmptyAt=nextJstEmptyAt;',rolloverCtx);
-assert.equal(new Date(rolloverCtx.nextJstEmptyAt('2026-09-22T22:59:00+09:00')).toISOString(),'2026-09-22T15:00:00.000Z');
-assert.equal(new Date(rolloverCtx.nextJstEmptyAt('2026-09-22T23:00:00+09:00')).toISOString(),'2026-09-22T16:00:00.000Z');
-// The unified hierarchy controller is the single category-name click owner; legacy per-section handlers must not race it.
-assert(ui.includes('e.stopImmediatePropagation();void renameCategory(kind,name,node)'));
-console.log('checklist parity: task/event payload, date/color, failure recovery, co-visible goods, category visibility/rename ownership, unified empty-category OR surface, separate controllers, selected set lifecycle passed');
+console.log('Checklist Task/Event payload/date/color/failure and reusable-set contracts passed');

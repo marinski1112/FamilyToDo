@@ -3,6 +3,9 @@ export const activeRegressionGroups=[
     name:'core-domain',
     checks:[
       ['checklist-parity','node scripts/checklist-parity-contract.mjs'],
+      ['goods-category-lifecycle','node scripts/goods-category-lifecycle-contract.mjs'],
+      ['goods-category-dom','node scripts/goods-category-dom-contract.mjs'],
+      ['checklist-hierarchy','node scripts/checklist-hierarchy-followup-contract.mjs'],
       ['family-log-photo-form','node scripts/family-log-photo-form-contract.mjs'],
       ['family-log-one-shot-diagnostics','node scripts/family-log-diagnostics-contract.mjs'],
       ['family-log-success-recovery','node scripts/family-log-success-recovery-contract.mjs'],

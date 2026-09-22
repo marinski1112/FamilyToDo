@@ -104,22 +104,11 @@ for(const sentinel of [
   'type="url" name="url"',
 ])if(!itemEdit.includes(sentinel))throw new Error(`item edit category/url marker missing: ${sentinel}`);
 
-for(const sentinel of [
-  '`/assets/checklist-belongings-categories.css?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}-parity2`',
-  '`/assets/checklist-belongings-categories.js?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}-parity2`',
-  "link.id='belongingsCategoryChecklistStyle'",
-  "script.id='belongingsCategoryChecklistScript'",
-  '`/assets/checklist-belongings-reusable-sets.css?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}-parity2`',
-  '`/assets/checklist-belongings-reusable-sets.js?v=${encodeURIComponent(String(payload.appVersion||\'checklist\'))}-parity2`',
-  "link.id='belongingsReusableSetStyle'",
-  "script.id='belongingsReusableSetScript'",
-])if(!taskEvents.includes(sentinel))throw new Error(`belongings checklist asset wiring missing: ${sentinel}`);
+if(taskEvents.includes("script.id='belongingsCategoryChecklistScript'"))throw new Error('duplicate Goods asset loader returned');
 
 for(const sentinel of [
   "const U='未分類'",
   "g.classList.toggle('category-collapsed',v)",
-  "label=closed?'展開':'閉じる'",
-  "if(b.textContent!==symbol)b.textContent=symbol",
   'belongings-composer-name',
   'belongings-composer-memo',
   'belongings-composer-url',
@@ -132,7 +121,6 @@ for(const sentinel of [
   "requestAnimationFrame(()=>n.focus({preventScroll:true}))",
   "ordered=[...all.filter(r=>!r.querySelector('input.toggle')?.checked),...all.filter(r=>r.querySelector('input.toggle')?.checked)]",
   "if(box.disabled&&++n<100)",
-  "post({action:'category_rename',name:old,new_name:next})",
   "section.addEventListener('belongings-items-added'",
 ])if(!belongingsUi.includes(sentinel))throw new Error(`belongings Reminders-style UX marker missing: ${sentinel}`);
 if(!belongingsCss.includes('Belongings no longer owns presentation. Shopping/checklist shared CSS is canonical.'))throw new Error('Belongings CSS must delegate presentation to the shared Shopping/checklist contract');
