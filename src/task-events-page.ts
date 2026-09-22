@@ -1,3 +1,4 @@
+import { checklistCompletionSql, completionVisible, nextCompletionBoundary } from './checklist-completion';
 import { goodsVisibilitySql } from './goods-visibility';
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
@@ -32,7 +33,7 @@ const compareShoppingRows=(a:Row,b:Row)=>{
   for(const key of ['due_date','category','name'] as const){const diff=String(a[key]??'').localeCompare(String(b[key]??''));if(diff)return diff;}
   return Number(a.id||0)-Number(b.id||0);
 };
-const taskListColumns='t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,t.parent_task_id,t.sort_order,t.task_kind';
+const taskListColumns='t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,t.parent_task_id,t.sort_order,t.task_kind,t.completed_at,t.updated_at,t.created_at';
 const OVERDUE_TASK_PAGE_SIZE=50;
 
 async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=false):Promise<Row[]>{
@@ -41,7 +42,7 @@ async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=
   return (await ctx.env.DB.prepare(`SELECT ${taskListColumns},
       (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
     FROM tasks t
-    WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND ${statusSql}
+    WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND ${statusSql} AND ${checklistCompletionSql('t')}
       AND t.parent_task_id IN (${parentIds.map(()=>'?').join(',')})
       AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')
       AND t.start_at IS NULL AND t.end_at IS NULL AND t.due_at IS NULL
@@ -92,6 +93,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status IN ('pending','completed')
         AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
         AND (
+          (t.status='completed' AND lower(COALESCE(t.task_kind,''))<>'event' AND ${checklistCompletionSql('t')}) OR
           (lower(COALESCE(t.task_kind,''))='event' AND (
             (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND date(COALESCE(t.end_at,t.start_at))>=date(?))
             OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at)=date(?))
@@ -104,9 +106,17 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
       ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id`).bind(member.family_id,member.id,date,date,date,date,date,date).all<Row>(),
     ctx.env.DB.prepare(`SELECT i.*
       FROM items i
-      WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
+      WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND ${checklistCompletionSql('i')}
+        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.status='completed')
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
-    recurringForDate(ctx,date),
+    (async()=>{
+      const selected=await recurringForDate(ctx,date);
+      if(new Date(Date.now()+9*3600000).getUTCHours()!==0)return selected;
+      const previous=new Date(`${date}T00:00:00Z`);previous.setUTCDate(previous.getUTCDate()-1);
+      const prior=await recurringForDate(ctx,previous.toISOString().slice(0,10));
+      const ids=new Set(selected.map(row=>Number(row.id)));
+      return [...selected,...prior.filter(row=>!ids.has(Number(row.id))&&row.status==='completed'&&completionVisible(row))];
+    })(),
     expiredTasksFor(ctx,date),
     expiredShoppingPageFor(ctx,date),
   ]);
@@ -118,31 +128,15 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   const baseShopping=await ctx.env.DB.prepare(`SELECT s.*
       FROM shopping_items s
       WHERE s.family_id=? AND ${goodsVisibilitySql('s')}
-        AND (
-          (s.due_date IS NOT NULL AND date(s.due_date)>=date(?))
-          OR (
-            s.due_date IS NULL
-            AND (
-              s.status<>'completed'
-              OR (
-                s.status='completed'
-                AND s.completed_at IS NOT NULL
-                AND s.completed_at >= CASE
-                  WHEN strftime('%H','now','+9 hours')='00'
-                    THEN datetime('now','+9 hours','start of day','-1 hour')
-                  ELSE datetime('now','+9 hours','start of day')
-                END
-              )
-            )
-          )
-        )
+        AND ${checklistCompletionSql('s')}
+        AND ((s.due_date IS NOT NULL AND date(s.due_date)>=date(?)) OR s.due_date IS NULL OR s.status='completed')
       ORDER BY s.status,(s.due_date IS NULL),s.due_date,s.category,s.name,s.id`)
     .bind(member.family_id,member.id,date).all<Row>();
   const expiredShoppingIds=new Set(expiredShopping.map(row=>String(row.id)));
   const shoppingById=new Map<string,Row>();
   for(const row of baseShopping.results)if(!expiredShoppingIds.has(String(row.id)))shoppingById.set(String(row.id),row);
   const shopping=[...shoppingById.values()].sort(compareShoppingRows);
-  return {tasks:taskRows,items:items.results,shopping,expiredTasks,expiredShopping};
+  return {tasks:taskRows.filter(row=>String(row.task_kind||'').toLowerCase()==='event'||completionVisible(row)),items:items.results,shopping,expiredTasks,expiredShopping};
 }
 
 const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('');
@@ -163,8 +157,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
       const groupHead=group.title?`<div class="shopping-group-head"><strong>${esc(group.title)}</strong>${group.due?`<span class="meta">${esc(group.due)}</span>`:''}</div>`:'';
       const rows=group.items.map(item=>{
         const productUrl=safeProductUrl(item.url);
-        const itemMeta=[item.category||''].filter(Boolean).map(esc).join(' ・ ');
-        return `<div class="row linked-shopping-row"><div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}${item.quantity&&item.quantity!=='1'?` × ${esc(item.quantity)}`:''}</span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集">編集</a></div>${itemMeta||productUrl?`<div class="meta">${itemMeta}${itemMeta&&productUrl?' ・ ':''}${productUrl?`<a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a>`:''}</div>`:''}</div>`;
+        return `<div class="row linked-shopping-row" data-category="${esc(item.category||'')}"><div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${esc(item.id)}" ${item.status==='completed'?'checked':''}><span class="${item.status==='completed'?'done':''}">${esc(item.name)}${item.quantity&&item.quantity!=='1'?` × ${esc(item.quantity)}`:''}</span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${esc(item.id)}" aria-label="${esc(item.name)}を編集">編集</a></div>${productUrl?`<div class="meta"><a href="${esc(productUrl)}" target="_blank" rel="noopener noreferrer">商品ページ</a></div>`:''}</div>`;
       }).join('');
       return `<div class="shopping-group">${groupHead}${rows}</div>`;
     }).join('');
@@ -275,7 +268,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
 .checklist-page .checklist-more .meta{font-size:13px;line-height:1.5;margin:8px 0 0}
 @media(max-width:360px){.checklist-page .daily-head h1{font-size:18px!important}.checklist-page .checklist-date{font-size:13px;margin-left:3px}.checklist-page .date-nav{gap:4px}.checklist-page .date-nav .btn{min-width:40px;width:40px;padding-left:0;padding-right:0}.checklist-page .task-children{margin-left:20px;padding-left:8px}}
 </style>`;
-  const body=`<link rel="stylesheet" href="/assets/checklist-belongings-reusable-sets.css?v=${APP_VERSION}">${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><script type="application/json" id="dailyPayload">${JSON.stringify({csrf,date,appVersion:APP_VERSION}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/overdue-shopping.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const body=`<link rel="stylesheet" href="/assets/checklist-belongings-reusable-sets.css?v=${APP_VERSION}">${checklistStyle}<div class="checklist-page"><div class="daily-head"><h1>✅ チェックリスト <span class="checklist-date">${esc(compactDate)}</span></h1><div class="date-nav"><a class="btn gray" aria-label="前日を表示" href="/app/tasks.php?date=${prev}">‹</a><a class="btn gray" aria-label="翌日を表示" href="/app/tasks.php?date=${next}">›</a></div></div>${primarySections}${unorganizedHtml}</div><script type="application/json" id="dailyPayload">${JSON.stringify({csrf,date,appVersion:APP_VERSION,completionRefreshAt:nextCompletionBoundary()}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script><script src="/assets/task-events.js?v=${APP_VERSION}"></script><script src="/assets/overdue-shopping.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
   return layout('チェックリスト',body,'/app/tasks.php');
 }
 

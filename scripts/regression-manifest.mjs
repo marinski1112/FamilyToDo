@@ -76,6 +76,7 @@ export const activeRegressionGroups=[
       ['api-me-boundary','node scripts/api-me-boundary-contract.mjs'],
       ['task-visibility-boundary','node scripts/task-visibility-boundary-contract.mjs'],
       ['goods-owned-visibility','node scripts/goods-owned-visibility-contract.mjs'],
+      ['checklist-completion','node scripts/checklist-completion-contract.mjs'],
       ['goods-task-detachment','node scripts/goods-task-detachment-contract.mjs'],
       ['task-hierarchy-foundation','node scripts/task-hierarchy-foundation-contract.mjs'],
       ['task-view-page-boundary','node scripts/task-view-page-boundary-contract.mjs'],

@@ -24,6 +24,7 @@ import { dispatchPageRoute } from './page-routes';
 import { dispatchContextApiRoute } from './context-api-routes';
 import { dispatchPublicRoute } from './public-routes';
 import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
+import { cleanupCompletedGoods } from './checklist-completion';
 import { scheduledDispatchPlanAt } from './scheduled-dispatch';
 
 export default {
@@ -65,6 +66,7 @@ export default {
     if(plan.googleTasksInbound) ctx.waitUntil(processGoogleTasksInbound(env));
 
     if(plan.fiveMinuteCore){
+      ctx.waitUntil(cleanupCompletedGoods(env.DB,controller.scheduledTime));
       ctx.waitUntil(processNotifications(env));
       ctx.waitUntil(processLineDailyDigests(env));
       ctx.waitUntil(processLinePeriodicDigests(env));

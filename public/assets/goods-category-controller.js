@@ -84,19 +84,34 @@ const boot=async()=>{
   for(const category of data[i].order||[]){const g=byName.get(key(category));if(g){zero.before(g);byName.delete(key(category));}}
   for(const g of byName.values())zero.before(g);
  }
+ const recoverOrphans=()=>{
+  // Deleted or missing catalog rows cannot make surviving content inaccessible.
+  for(const kind of KINDS)for(const g of groups(kind)){
+   const meta=catalogs.get(kind).get(key(name(g)));
+   if(name(g)===U||(meta&&meta.enabled!==0))continue;
+   const target=ensureGroup(kind,U);
+   for(const row of rows(g)){
+    row.dataset.category=U;
+    if(kind==='item')target.querySelector('.belongings-composer').before(row);
+    else target.insertBefore(row,target.querySelector(':scope>.shopping-category-footer'));
+   }
+
+  }
+ };
  const refresh=()=>{
+  const completedView=host.dataset.statusTab==='completed';
   let completed=0;const archived=[];
   for(const kind of KINDS)for(const g of groups(kind)){
-   register(g);const content=rows(g),meta=catalogs.get(kind).get(key(name(g))),state=categoryState(meta,content.length);
+   register(g);const content=rows(g);if(kind==='shopping')for(const row of content){const meta=row.querySelector(':scope>.meta');if(meta)for(const node of [...meta.childNodes])if(node.nodeType===3)node.remove();}const meta=catalogs.get(kind).get(key(name(g))),state=name(g)!==U&&!meta?'DISABLED':categoryState(meta,content.length);
    g.dataset.categoryState=state;g.dataset.activatedAt=meta?.activated_at||'';
    g.classList.toggle('category-new-empty',state==='FRESH_EMPTY');g.classList.remove('checklist-status-group-empty');
-   g.hidden=kind!==active||state==='DISABLED'||(name(g)!==U&&state==='ARCHIVED_EMPTY'&&!openedEmpty.has(g));
+   g.hidden=kind!==active||state==='DISABLED'||(!completedView&&name(g)!==U&&state==='ARCHIVED_EMPTY'&&!openedEmpty.has(g));
    const collapsed=g.classList.contains('category-collapsed'),h=g.querySelector(':scope>.shopping-category-title');
-   const count=h?.querySelector('.checklist-category-count-toggle'),toggle=h?.querySelector('.shopping-category-toggle');setText(count,String(content.length));setText(toggle,collapsed?'›':'⌄');
-   toggle?.setAttribute('aria-expanded',String(!collapsed));toggle?.setAttribute('aria-label',`${name(g)}を${collapsed?'展開':'閉じる'}`);count?.setAttribute('aria-label',`${name(g)} ${content.length}件を開閉`);
+   const count=h?.querySelector('.checklist-category-count-toggle'),toggle=h?.querySelector('.shopping-category-toggle');const visibleCount=content.filter(row=>Boolean(row.querySelector('input.toggle')?.checked)===completedView).length;setText(count,String(visibleCount));setText(toggle,collapsed?'›':'⌄');
+   toggle?.setAttribute('aria-expanded',String(!collapsed));toggle?.setAttribute('aria-label',`${name(g)}を${collapsed?'展開':'閉じる'}`);count?.setAttribute('aria-label',`${name(g)} ${visibleCount}件を開閉`);
    for(const row of content){const done=Boolean(row.querySelector('input.toggle')?.checked);if(kind===active&&done)completed++;row.classList.toggle('checklist-status-hidden',host.dataset.statusTab==='completed'?!done:done);}
    const minus=h?.querySelector('.category-delete-minus');if(deleteMode&&kind===active&&name(g)!==U){if(!minus){const b=document.createElement('button');b.type='button';b.className='category-delete-minus';b.dataset.goodsAction='delete';b.textContent='−';b.setAttribute('aria-label',name(g)+'を削除');h.prepend(b);}}else minus?.remove();
-   if(kind===active&&name(g)!==U&&state==='ARCHIVED_EMPTY')archived.push(g);
+   if(!completedView&&kind===active&&name(g)!==U&&state==='ARCHIVED_EMPTY')archived.push(g);
   }
   status.querySelectorAll('[data-status]').forEach(b=>{const on=b.dataset.status===host.dataset.statusTab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));});
   setText(status.querySelector('[data-status="completed"]'),completed?`完了済み ${completed}`:'完了済み');
@@ -142,10 +157,10 @@ const boot=async()=>{
  let queued=false;
  const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;refresh();})};
  new MutationObserver(schedule).observe(host,{childList:true,subtree:true});
- itemSource.addEventListener('belongings-items-added',()=>void run(async()=>{const fresh=await adapter('item').load();catalogs.set('item',new Map((fresh.categoryMeta||[]).map(meta=>[key(meta.name),meta])));for(const category of fresh.categories||[])ensureGroup('item',category);refresh();}));
+ itemSource.addEventListener('belongings-items-added',()=>void run(async()=>{const fresh=await adapter('item').load();catalogs.set('item',new Map((fresh.categoryMeta||[]).map(meta=>[key(meta.name),meta])));for(const category of fresh.categories||[])ensureGroup('item',category);recoverOrphans();refresh();}));
  page.addEventListener('familytodo:toggle-success',schedule);page.addEventListener('change',schedule);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});setInterval(refresh,30000);
- applyKind(active);document.dispatchEvent(new CustomEvent('familytodo:checklist-unified-ready'));
+ recoverOrphans();applyKind(active);document.dispatchEvent(new CustomEvent('familytodo:checklist-unified-ready'));
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>void boot(),{once:true});else void boot();
 })();
