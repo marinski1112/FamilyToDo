@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const read=p=>readFileSync('public/assets/'+p,'utf8');
-const source=read('checklist-reminders-flow-fix.js');
+const source=read('checklist-controller.js');
 const make=source.slice(source.indexOf('const makeQuickForm='),source.indexOf("makeQuickForm(page.querySelector"));
 class Element{constructor(){this.dataset={};this.listeners={};}addEventListener(k,f){this.listeners[k]=f;}focus(){}querySelector(){return null;}}
 class Input extends Element{constructor(){super();this.value='予定';}}
@@ -17,7 +17,7 @@ for(const kind of ['task','event'])for(const failure of [false,true]){
  assert.equal(body.is_event,kind==='event');assert.equal(body.dateOnly,'2026-09-19');assert.equal(body.calendar_color,'#12ab34');assert.equal(form.input.disabled,false);
  assert.equal(reloaded,!failure&&kind==='event');if(failure)assert.equal(form.input.value,'予定');
 }
-const flow=read('checklist-reminders-flow-fix.js');
+const flow=read('checklist-controller.js');
 assert(flow.includes('const titleSelector='));
 assert(!flow.includes('reminders-smart-card'));
 assert(!flow.includes("querySelector('.reminders-quick-entry')"));
