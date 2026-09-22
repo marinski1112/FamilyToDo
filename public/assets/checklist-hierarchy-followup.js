@@ -88,10 +88,10 @@ const openCategoryComposer=async(section,kind,name)=>{
  live.scrollIntoView({behavior:'smooth',block:'center'});return true;
 };
 
-const nextJstEmptyAt=raw=>{const text=String(raw||'').trim();if(!text)return 0;const created=Date.parse(/Z$|[+-]\\d\\d:\\d\\d$/.test(text)?text:text.replace(' ','T')+'Z');if(!Number.isFinite(created))return 0;const local=new Date(created+9*3600000),cutoffHour=local.getUTCHours()>=23?1:0;return Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate()+1,cutoffHour)-9*3600000;};
+const nextJstEmptyAt=raw=>{const text=String(raw||'').trim();if(!text)return 0;const created=Date.parse(/Z$|[+-]\d\d:\d\d$/.test(text)?text:text.replace(' ','T')+'Z');if(!Number.isFinite(created))return 0;const local=new Date(created+9*3600000),cutoffHour=local.getUTCHours()>=23?1:0;return Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate()+1,cutoffHour)-9*3600000;};
 const installCategoryUi=async(section,kind,categories,canManage,categoryMeta=[])=>{
  const metaByKey=new Map((Array.isArray(categoryMeta)?categoryMeta:[]).map(row=>[key(row?.name),row]));
- const emptyEligible=name=>{const meta=metaByKey.get(key(name));if(!meta)return true;const at=nextJstMidnightAt(meta.created_at);return !at||Date.now()>=at;};
+ const emptyEligible=name=>{const meta=metaByKey.get(key(name));if(!meta)return true;const at=nextJstEmptyAt(meta.created_at);return !at||Date.now()>=at;};
  const rememberCreated=e=>{const d=e?.detail;if(!d||d.kind!==kind||!d.name)return;metaByKey.set(key(d.name),{name:String(d.name),created_at:String(d.created_at||'')});const g=[...section.querySelectorAll(kind==='shopping'?'.shopping-category-group':'.belongings-category-group')].find(x=>key(x.dataset.category)===key(d.name));if(g instanceof HTMLElement){g.dataset.createdAt=String(d.created_at||'');g.hidden=false;g.classList.remove('checklist-status-group-empty','checklist-search-hidden');}};
  document.addEventListener('familytodo:category-created',rememberCreated);
  if(section.dataset.categoryContractDelegated!=='1'){section.dataset.categoryContractDelegated='1';section.addEventListener('click',e=>{const node=e.target.closest?.(kind==='shopping'?'.shopping-category-name':'.belongings-category-name');if(!(node instanceof HTMLElement)||node.closest('.category-delete-mode-active'))return;const group=node.closest(kind==='shopping'?'.shopping-category-group':'.belongings-category-group'),name=categoryName(group);if(name===U)return;e.preventDefault();e.stopImmediatePropagation();void renameCategory(kind,name,node);},true);}
