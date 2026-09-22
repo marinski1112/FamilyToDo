@@ -61,3 +61,10 @@ const sets=read('checklist-shopping-reusable-sets.js');
 for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"action:'reusable_set_invoke'","action:'reusable_set_delete'",'client_request_id:rid','この日に配置'])assert(sets.includes(contract),contract);
 assert(!read('checklist-belongings-categories.js').includes("prompt('新しいカテゴリ名')"));
 console.log('checklist parity: task/event payload, date/color, failure recovery, co-visible goods, canonical category add/reflection, unified empty-category OR surface, separate controllers, selected set lifecycle passed');
+
+// Newly-created empty categories stay in their normal position until the next JST midnight, then move to the empty cluster.
+assert(ui.includes('const nextJstMidnightAt='));
+assert(!ui.includes('const nextJstOneAt='));
+assert(ui.includes("g.classList.toggle('category-new-empty',!eligible)"));
+// The unified hierarchy controller is the single category-name click owner; legacy per-section handlers must not race it.
+assert(ui.includes('e.stopImmediatePropagation();void renameCategory(kind,name,node)'));
