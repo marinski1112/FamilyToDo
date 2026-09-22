@@ -378,3 +378,14 @@
 .checklist-page .belongings-category-draft>.shopping-category-title{display:flex!important;gap:8px!important;min-width:0!important}
 .checklist-page .belongings-category-draft .category-inline-rename{flex:1 1 0!important;width:0!important;min-width:0!important;font-size:16px!important}
 .checklist-page .belongings-category-draft button{flex:0 0 auto;min-height:44px;color:#087bff;background:#fff;border:1px solid #b8d8ff;border-radius:9px}
+/* Goods Category Controller owns kind filtering and lifecycle visibility. */
+.checklist-page .unified-goods-section [data-goods-kind][hidden],
+.checklist-page .unified-goods-section .zero-category-cluster[hidden],
+.checklist-page .unified-goods-section .unified-goods-delete-mode[hidden]{display:none!important}
+.checklist-page .unified-goods-section .shopping-category-name{background:transparent;border:0;padding:0;text-align:left;color:#1f2937;flex:1;min-width:0;overflow-wrap:anywhere}
+.checklist-page .unified-goods-section .shopping-category-name:disabled{opacity:1}
+.checklist-page .unified-goods-section .goods-category-grip{display:inline-flex!important;flex:0 0 24px;width:24px;border:0;background:transparent;padding:0;touch-action:none}
+.checklist-page .unified-goods-section .shopping-category-draft .category-inline-rename{width:100%;min-width:0;font-size:16px}
+.checklist-page .unified-goods-section .category-inline-rename{box-sizing:border-box;max-width:100%;font-size:16px}
+.checklist-page .unified-goods-section .category-collapsed>.belongings-category-body{display:none!important}
+.checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{margin-left:auto!important}

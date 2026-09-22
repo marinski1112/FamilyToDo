@@ -26,11 +26,11 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
   if(request.method==='GET'){
     const [order,catalogResult]=await Promise.all([
       readOrder(ctx,member.family_id),
-      ctx.env.DB.prepare('SELECT name,created_at FROM shopping_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(member.family_id).all<{name?:string}>(),
+      ctx.env.DB.prepare('SELECT name,created_at,activated_at,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE').bind(member.family_id).all<{name?:string}>(),
     ]);
-    const catalog=(catalogResult.results||[]) as Array<{name?:string;created_at?:string}>;
-    const categories=catalog.map(row=>String(row.name||'').trim()).filter(Boolean);
-    const categoryMeta=catalog.map(row=>({name:String(row.name||'').trim(),created_at:String(row.created_at||'')})).filter(row=>row.name);
+    const catalog=(catalogResult.results||[]) as Array<{name?:string;created_at?:string;activated_at?:string;enabled?:number}>;
+    const categories=catalog.filter(row=>Number(row.enabled)===1).map(row=>String(row.name||'').trim()).filter(Boolean);
+    const categoryMeta=catalog.map(row=>({name:String(row.name||'').trim(),created_at:String(row.created_at||''),activated_at:String(row.activated_at||''),enabled:Number(row.enabled)})).filter(row=>row.name);
     const role=String(member.role||'').toUpperCase();
     return json({ok:true,order,categories,categoryMeta,canManageCategories:role==='OWNER'||role==='ADMIN'});
   }
@@ -79,6 +79,6 @@ export async function shoppingCategoryApi(request:Request,ctx:AppContext):Promis
       WHERE family_id=? AND name=? COLLATE NOCASE`).bind(member.family_id,name),
   ]);
 
-  const created=await ctx.env.DB.prepare('SELECT created_at FROM shopping_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(member.family_id,name).first<{created_at?:string}>();
-  return commitSession(json({ok:true,name,created_at:String(created?.created_at||'')}),ctx.session,ctx.env.APP_SECRET);
+  const created=await ctx.env.DB.prepare('SELECT created_at,activated_at FROM shopping_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(member.family_id,name).first<{created_at?:string;activated_at?:string;enabled?:number}>();
+  return commitSession(json({ok:true,name,created_at:String(created?.created_at||''),activated_at:String(created?.activated_at||'')}),ctx.session,ctx.env.APP_SECRET);
 }

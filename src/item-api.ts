@@ -58,7 +58,7 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
   const url=new URL(request.url);
   const date=String(url.searchParams.get('date')||'');
   const [catalogResult,order]=await Promise.all([
-    ctx.env.DB.prepare('SELECT name,created_at FROM item_category_catalog WHERE family_id=? AND enabled=1 ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
+    ctx.env.DB.prepare('SELECT name,created_at,activated_at,enabled FROM item_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE').bind(m.family_id).all(),
     readCategoryOrder(ctx,m.family_id),
   ]);
   const catalog=(catalogResult?.results||[]) as Row[];
@@ -71,8 +71,8 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
       ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
     items=(result?.results||[]) as Row[];
   }
-  const categoryMeta=catalog.map((row:Row)=>({name:String(row.name||'').trim(),created_at:String(row.created_at||'')})).filter(row=>row.name);
-  return json({ok:true,categories:categoryMeta.map(row=>row.name),categoryMeta,order,items});
+  const categoryMeta=catalog.map((row:Row)=>({name:String(row.name||'').trim(),created_at:String(row.created_at||''),activated_at:String(row.activated_at||''),enabled:Number(row.enabled)})).filter(row=>row.name);
+  return json({ok:true,categories:categoryMeta.filter(row=>row.enabled===1).map(row=>row.name),categoryMeta,order,items,canManageCategories:['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())});
 }
 
 export async function itemApi(request:Request,ctx:any):Promise<Response>{
@@ -110,8 +110,8 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     await upsertCatalogCategory(ctx,m.family_id,m.id,name);
     const order=await readCategoryOrder(ctx,m.family_id);
     if(!order.some(value=>value.toLocaleLowerCase('ja-JP')===name.toLocaleLowerCase('ja-JP')))await writeCategoryOrder(ctx,m.family_id,[...order,name]);
-    const created=await ctx.env.DB.prepare('SELECT created_at FROM item_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(m.family_id,name).first() as Row|null;
-    return json({ok:true,name,created_at:String(created?.created_at||'')});
+    const created=await ctx.env.DB.prepare('SELECT created_at,activated_at FROM item_category_catalog WHERE family_id=? AND name=? COLLATE NOCASE LIMIT 1').bind(m.family_id,name).first() as Row|null;
+    return json({ok:true,name,created_at:String(created?.created_at||''),activated_at:String(created?.activated_at||'')});
   }
   if(action==='category_disable'){
     const role=String(m.role||'').toUpperCase();
@@ -137,15 +137,16 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     const updateItems=oldName===UNCLASSIFIED
       ?ctx.env.DB.prepare("UPDATE items SET category=?,updated_at=? WHERE family_id=? AND (category IS NULL OR trim(category)='')").bind(newName,now,m.family_id)
       :ctx.env.DB.prepare('UPDATE items SET category=?,updated_at=? WHERE family_id=? AND category=? COLLATE NOCASE').bind(newName,now,m.family_id,oldName);
-    await updateItems.run();
-    await upsertCatalogCategory(ctx,m.family_id,m.id,newName);
-    if(oldName!==UNCLASSIFIED&&oldName.toLocaleLowerCase('ja-JP')!==newName.toLocaleLowerCase('ja-JP')){
-      await ctx.env.DB.prepare('UPDATE item_category_catalog SET enabled=0,updated_at=? WHERE family_id=? AND name=? COLLATE NOCASE').bind(now,m.family_id,oldName).run();
-    }
+    const statements=[updateItems,
+      ctx.env.DB.prepare("INSERT OR IGNORE INTO item_category_catalog(family_id,name,enabled,is_custom,created_by_member_id) VALUES(?,?,1,1,?)").bind(m.family_id,newName,m.id),
+      ctx.env.DB.prepare("UPDATE item_category_catalog SET enabled=1,updated_at=CURRENT_TIMESTAMP,activated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE family_id=? AND name=? COLLATE NOCASE").bind(m.family_id,newName),
+    ];
+    if(oldName!==UNCLASSIFIED&&oldName.toLocaleLowerCase('ja-JP')!==newName.toLocaleLowerCase('ja-JP'))statements.push(ctx.env.DB.prepare('UPDATE item_category_catalog SET enabled=0,updated_at=? WHERE family_id=? AND name=? COLLATE NOCASE').bind(now,m.family_id,oldName));
     const current=await readCategoryOrder(ctx,m.family_id);
     const replaced=current.map(value=>value.toLocaleLowerCase('ja-JP')===oldName.toLocaleLowerCase('ja-JP')?newName:value);
     if(oldName===UNCLASSIFIED&&!replaced.some(value=>value.toLocaleLowerCase('ja-JP')===newName.toLocaleLowerCase('ja-JP')))replaced.push(newName);
-    await writeCategoryOrder(ctx,m.family_id,replaced);
+    statements.push(ctx.env.DB.prepare("INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?) ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(m.family_id,CATEGORY_ORDER_KEY,JSON.stringify(uniqueNames(replaced)),now));
+    await ctx.env.DB.batch(statements);
     return json({ok:true,name:newName});
   }
   if(action!=='add')return bad('未対応の操作です。');

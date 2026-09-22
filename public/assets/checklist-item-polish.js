@@ -53,7 +53,7 @@ style.textContent=`
 `;
 document.head.append(style);
 
-const getGroups=()=>[...section.querySelectorAll(':scope > .shopping-category-group')].filter(g=>g instanceof HTMLElement);
+const getGroups=()=>[...section.querySelectorAll(':scope > .shopping-category-group:not(.belongings-category-group)')].filter(g=>g instanceof HTMLElement);
 const categoryOf=g=>String(g?.dataset?.category||'未分類').trim()||'未分類';
 const rowId=row=>Number(row?.querySelector?.('input.toggle[data-type="shopping"]')?.dataset.id||0);
 const rowsOf=g=>[...g.querySelectorAll(':scope > .linked-shopping-row')].filter(r=>r instanceof HTMLElement);

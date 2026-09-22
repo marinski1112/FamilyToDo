@@ -38,20 +38,20 @@ export async function shoppingCategoryMutationApi(request:Request,ctx:AppContext
     const role=String(member.role||'').toUpperCase();
     if(role!=='OWNER'&&role!=='ADMIN')return json({ok:false,error:'管理者権限が必要です。',code:'FORBIDDEN'},403);
     const kind=String(body.kind||'shopping');
-    if(kind!=='shopping'&&kind!=='item'&&kind!=='shared')return json({ok:false,error:'カテゴリ種別が不正です。'},400);
+    if(kind!=='shopping'&&kind!=='item')return json({ok:false,error:'カテゴリ種別が不正です。'},400);
     const itemPolicy=String(body.item_policy||'unclassified');
     if(itemPolicy!=='unclassified'&&itemPolicy!=='delete')return json({ok:false,error:'カテゴリ内項目の扱いが不正です。'},400);
     const names=uniqueDeleteNames(Array.isArray(body.names)?body.names:[]);
     if(!names.length)return commitSession(json({ok:true,deleted:[]}),ctx.session,ctx.env.APP_SECRET);
 
-    const orderKeys=kind==='shared'?[ORDER_KEY,ITEM_ORDER_KEY]:[kind==='shopping'?ORDER_KEY:ITEM_ORDER_KEY];
+    const orderKeys=[kind==='shopping'?ORDER_KEY:ITEM_ORDER_KEY];
     const removedKeys=new Set(names.map(categoryKey));
     const now=nowJst();
     const statements=[];
     const defaultShoppingKeys=new Set(DEFAULT_SHOPPING_CATEGORY_NAMES.map(shoppingCategoryKey));
 
     for(const name of names){
-      if(kind==='shopping'||kind==='shared'){
+      if(kind==='shopping'){
         const isCustom=defaultShoppingKeys.has(shoppingCategoryKey(name))?0:1;
         if(itemPolicy==='delete')statements.push(ctx.env.DB.prepare('DELETE FROM shopping_items WHERE family_id=? AND category=? COLLATE NOCASE').bind(member.family_id,name));
         else statements.push(ctx.env.DB.prepare('UPDATE shopping_items SET category=NULL,updated_at=? WHERE family_id=? AND category=? COLLATE NOCASE').bind(now,member.family_id,name));
@@ -59,7 +59,7 @@ export async function shoppingCategoryMutationApi(request:Request,ctx:AppContext
           VALUES(?,?,0,?,?,?,?)`).bind(member.family_id,name,isCustom,member.id,now,now));
         statements.push(ctx.env.DB.prepare('UPDATE shopping_category_catalog SET enabled=0,updated_at=? WHERE family_id=? AND name=? COLLATE NOCASE').bind(now,member.family_id,name));
       }
-      if(kind==='item'||kind==='shared'){
+      if(kind==='item'){
         if(itemPolicy==='delete')statements.push(ctx.env.DB.prepare('DELETE FROM items WHERE family_id=? AND category=? COLLATE NOCASE').bind(member.family_id,name));
         else statements.push(ctx.env.DB.prepare('UPDATE items SET category=NULL,updated_at=? WHERE family_id=? AND category=? COLLATE NOCASE').bind(now,member.family_id,name));
         statements.push(ctx.env.DB.prepare(`INSERT OR IGNORE INTO item_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)
@@ -75,6 +75,7 @@ export async function shoppingCategoryMutationApi(request:Request,ctx:AppContext
 
   if(action!=='rename')return json({ok:false,error:'未対応の操作です。'},400);
 
+  if(body.kind!=null&&body.kind!=='shopping')return json({ok:false,error:'カテゴリ種別が不正です。画面を再読み込みしてください。'},400);
   const oldName=normalizeShoppingCategoryName(body.name);
   const newName=normalizeShoppingCategoryName(body.new_name);
   const renamingUnclassified=shoppingCategoryKey(oldName)===shoppingCategoryKey(UNCLASSIFIED);
@@ -100,6 +101,7 @@ export async function shoppingCategoryMutationApi(request:Request,ctx:AppContext
   ];
   if(order.length)statements.push(ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?)
     ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at`).bind(member.family_id,ORDER_KEY,JSON.stringify(order),now));
+  statements.push(ctx.env.DB.prepare("UPDATE shopping_category_catalog SET enabled=1,activated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE family_id=? AND name=? COLLATE NOCASE").bind(member.family_id,newName));
   await ctx.env.DB.batch(statements);
   return commitSession(json({ok:true,name:newName,old_name:oldName,renamed_unclassified:renamingUnclassified}),ctx.session,ctx.env.APP_SECRET);
 }

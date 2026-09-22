@@ -76,7 +76,7 @@ assert.ok(index.includes('if(plan.calendarWatchRenewal)'));
 assert.ok(schedule.includes('calendarWatchRenewal: minute === 7 || minute === 37'));
 assert.ok(schedule.includes('googleTasksInbound: minute % 5 === 3'));
 assert.deepEqual(JSON.parse(wrangler).triggers?.crons,['* * * * *']);
-assert.ok(/12\.(?:146|147|148)\.0-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
+assert.ok(/12\.(?:146|147|148)\.\d+-wave(?:127|128)/.test(version)&&/Wave(?:127|128)/.test(version));
 
 for(const ui of ['FamilyToDo → Google Calendar','Google Calendarからの予定取り込みは、明示的な読み取り許可を分離して行います。','使用モデル:'])assert.ok(calendar.includes(ui),ui);
 assert.match(calendar,/pending_count/);

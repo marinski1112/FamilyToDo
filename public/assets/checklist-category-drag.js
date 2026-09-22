@@ -1,11 +1,6 @@
 (()=>{
 'use strict';
 if(location.pathname!=='/app/tasks.php')return;
-const page=document.querySelector('.checklist-page');const section=page?.querySelector('.shopping-checklist-section');
-if(!(page instanceof HTMLElement)||!(section instanceof HTMLElement))return;
-const payload=(()=>{try{return JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}')}catch{return{}}})();
-const UNCLASSIFIED='未分類';
-page.querySelector('.reminders-smart-grid')?.remove();page.querySelector('.reminders-list-heading')?.remove();
 const style=document.createElement('style');style.textContent=`
 .reminders-smart-grid,.reminders-list-heading{display:none!important}
 .reminders-quick-entry-row{padding-left:26px!important}
@@ -27,63 +22,55 @@ const style=document.createElement('style');style.textContent=`
 .linked-shopping-row .shopping-check-row{touch-action:pan-y}
 @media(max-width:720px){.shopping-checklist-section .section-head{align-items:center}.shopping-category-title{position:sticky;top:0;background:#fff;z-index:2}}
 `;document.head.append(style);
-const groups=()=>[...section.querySelectorAll(':scope > .shopping-category-group:not(.belongings-category-group):not(.belongings-category-draft)')].filter(x=>x instanceof HTMLElement);
-const cat=g=>String(g.dataset.category||UNCLASSIFIED).trim()||UNCLASSIFIED;
-const post=async(url,body)=>{const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),...body})});const d=await r.json().catch(()=>({ok:false,error:'応答エラー'}));if(!r.ok||!d.ok)throw new Error(d.error||'更新失敗');return d};
-const saveOrder=()=>post('/api/shopping-categories',{action:'reorder',order:groups().map(cat).filter(x=>x!==UNCLASSIFIED&&x!=='__draft__')}).catch(()=>{});
-const applyOrder=order=>{if(!Array.isArray(order))return;const map=new Map(groups().map(g=>[cat(g).toLowerCase(),g]));let anchor=section.querySelector(':scope > .section-quick-entry')||section.querySelector(':scope > .section-head');for(const name of order){const g=map.get(String(name).toLowerCase());if(g){anchor?.insertAdjacentElement('afterend',g);anchor=g;map.delete(String(name).toLowerCase())}}for(const g of map.values()){anchor?.insertAdjacentElement('afterend',g);anchor=g}};
-fetch('/api/shopping-categories',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).then(d=>{if(d?.ok)applyOrder(d.order)}).catch(()=>{});
-const stripCategoryMeta=(row,category)=>{const meta=row.querySelector(':scope > .meta');if(!(meta instanceof HTMLElement))return;for(const node of [...meta.childNodes]){if(node.nodeType!==Node.TEXT_NODE)continue;let text=String(node.textContent||'');const escaped=category.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');text=text.replace(new RegExp(`^\\s*${escaped}\\s*(?:・|·|\\|)?\\s*`),'');node.textContent=text;}if(!meta.textContent?.trim()&&!meta.querySelector('a,button'))meta.remove()};
-const cleanGroupMeta=g=>g.querySelectorAll(':scope > .linked-shopping-row').forEach(row=>stripCategoryMeta(row,cat(g)));
-const moveItem=async(row,id,target)=>{const old=row.closest('.shopping-category-group');if(old===target)return;target.append(row);const targetName=cat(target);try{await post('/api/shopping',{action:'update_category',id,category:targetName==='__draft__'||targetName===UNCLASSIFIED?'':targetName});stripCategoryMeta(row,targetName);if(old instanceof HTMLElement&&!old.classList.contains('shopping-category-draft')&&!old.querySelector(':scope > .linked-shopping-row'))old.remove()}catch(e){alert(e.message||String(e));location.reload()}};
-const addCategoryDraft=()=>{let draft=section.querySelector(':scope > .shopping-category-draft:not(.belongings-category-draft)');if(draft instanceof HTMLElement){draft.scrollIntoView({behavior:'smooth',block:'center'});draft.querySelector('.shopping-category-name')?.focus();return;}draft=document.createElement('div');draft.className='shopping-category-group shopping-category-draft';draft.dataset.category='__draft__';draft.innerHTML='<div class="shopping-category-title"><span class="cat-grip" aria-hidden="true">☰</span><span class="shopping-category-name" contenteditable="true" role="textbox" aria-label="新しいカテゴリ名" data-placeholder="カテゴリ名"></span><button type="button" class="shopping-category-toggle" aria-label="カテゴリを畳む">⌄</button></div>';const bottomAnchor=section.querySelector(':scope > .zero-category-cluster,:scope > .zero-unclassified-add');if(bottomAnchor instanceof HTMLElement)bottomAnchor.before(draft);else section.append(draft);decorateGroup(draft);const n=draft.querySelector('.shopping-category-name');if(n instanceof HTMLElement){n.focus();const range=document.createRange();range.selectNodeContents(n);range.collapse(false);const sel=getSelection();sel?.removeAllRanges();sel?.addRange(range)}};
-const commitDraft=async(g,n)=>{if(g.dataset.categoryCommit==='1')return;const next=String(n.textContent||'').trim();if(!next){n.textContent='';n.dataset.placeholder='カテゴリ名';return;}g.dataset.categoryCommit='1';const rows=[...g.querySelectorAll(':scope > .linked-shopping-row')];try{const created=await post('/api/shopping-categories',{action:'add',name:next});g.dataset.createdAt=String(created.created_at||'');for(const row of rows){const id=Number(row.querySelector('input.toggle[data-type="shopping"]')?.dataset.id||0);if(id)await post('/api/shopping',{action:'update_category',id,category:next});stripCategoryMeta(row,next)}g.dataset.category=next;g.classList.remove('shopping-category-draft');n.removeAttribute('contenteditable');n.textContent=next;const head=g.querySelector(':scope > .shopping-category-title');if(head&&!head.querySelector('.unified-category-icon')){const icon=document.createElement('span');icon.className='unified-category-icon';icon.setAttribute('aria-hidden','true');icon.textContent='🛒';head.insertBefore(icon,n)}document.dispatchEvent(new CustomEvent('familytodo:category-created',{detail:{kind:'shopping',name:next,created_at:String(created.created_at||'')}}));await saveOrder()}catch(e){delete g.dataset.categoryCommit;alert(e.message||String(e));n.focus()}};
-let drag=null;
-const beginItemDrag=(row,id)=>{drag={kind:'item',row,id};row.classList.add('dragging')};
-const beginCategoryDrag=group=>{drag={kind:'category',group};group.classList.add('dragging')};
-const finishDrag=()=>{drag?.row?.classList?.remove('dragging');drag?.group?.classList?.remove('dragging');drag=null;section.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'))};
-const autoScroll=y=>{const edge=90;if(y<edge)window.scrollBy({top:-18,behavior:'auto'});else if(y>innerHeight-edge-90)window.scrollBy({top:18,behavior:'auto'})};
-const decorateRow=row=>{if(!(row instanceof HTMLElement)||row.dataset.drag3)return;row.dataset.drag3='1';const line=row.querySelector(':scope > .checklist-row-line');if(!(line instanceof HTMLElement))return;const id=Number(row.querySelector('input.toggle[data-type="shopping"]')?.dataset.id||0);const h=document.createElement('span');h.className='item-grip';h.textContent='⠿';h.draggable=true;h.title='ドラッグしてカテゴリ移動';line.prepend(h);h.addEventListener('dragstart',e=>{if(!id){e.preventDefault();return}beginItemDrag(row,id);e.dataTransfer?.setData('text/plain',String(id))});h.addEventListener('dragend',finishDrag);const title=row.querySelector('.shopping-check-row>span');if(title instanceof HTMLElement){title.draggable=true;title.title='タップで編集／長押しでカテゴリ移動';title.addEventListener('dragstart',e=>{if(!id){e.preventDefault();return}beginItemDrag(row,id);e.dataTransfer?.setData('text/plain',String(id))})}};
-const decorateGroup=g=>{if(!(g instanceof HTMLElement)||g.dataset.drag3)return;g.dataset.drag3='1';const head=g.querySelector(':scope > .shopping-category-title');if(!(head instanceof HTMLElement))return;let h=head.querySelector(':scope > .cat-grip');let n=head.querySelector(':scope > .shopping-category-name');if(!(h instanceof HTMLElement)||!(n instanceof HTMLElement)){const text=head.textContent?.trim()||cat(g);head.textContent='';h=document.createElement('span');h.className='cat-grip';h.textContent='☰';n=document.createElement('span');n.className='shopping-category-name';n.textContent=text;head.append(h,n)}h.draggable=true;h.title='ドラッグして並び替え';let toggle=head.querySelector(':scope > .shopping-category-toggle');if(!(toggle instanceof HTMLButtonElement)){toggle=document.createElement('button');toggle.type='button';toggle.className='shopping-category-toggle';toggle.textContent='⌄';toggle.setAttribute('aria-label','カテゴリを畳む');head.append(toggle)}toggle.addEventListener('click',()=>g.classList.toggle('category-collapsed'));
-if(g.classList.contains('shopping-category-draft')){n.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229)return;if(e.key==='Enter'){e.preventDefault();void commitDraft(g,n)}});n.addEventListener('blur',()=>{if(String(n.textContent||'').trim())void commitDraft(g,n)})}else{n.title='タップで編集／長押しで並び替え';n.addEventListener('click',()=>{if(n.dataset.longDrag==='1'){delete n.dataset.longDrag;return}n.contentEditable='true';n.focus()});n.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229)return;if(e.key==='Enter'){e.preventDefault();n.blur()}if(e.key==='Escape'){e.preventDefault();n.textContent=cat(g);n.contentEditable='false';n.blur()}});n.addEventListener('blur',async()=>{if(n.contentEditable!=='true')return;const old=cat(g),next=String(n.textContent||'').trim();n.contentEditable='false';if(!next||next===old){n.textContent=old;return}try{const d=await post('/api/shopping-category-mutation',{action:'rename',name:old,new_name:next});g.dataset.category=d.name||next;n.textContent=d.name||next;cleanGroupMeta(g);await saveOrder()}catch(e){n.textContent=old;alert(e.message||String(e))}})}
-h.addEventListener('dragstart',e=>{beginCategoryDrag(g);e.dataTransfer?.setData('text/plain',cat(g))});h.addEventListener('dragend',()=>{finishDrag();void saveOrder()});n.draggable=true;n.addEventListener('dragstart',e=>{if(n.contentEditable==='true'){e.preventDefault();return}beginCategoryDrag(g);e.dataTransfer?.setData('text/plain',cat(g))});g.querySelectorAll(':scope > .linked-shopping-row').forEach(decorateRow);cleanGroupMeta(g)};
-const head=section.querySelector(':scope > .section-head');if(head instanceof HTMLElement&&!head.querySelector('.shopping-category-add')){const add=document.createElement('button');add.type='button';add.className='shopping-category-add';add.textContent='＋ カテゴリを追加';add.addEventListener('click',addCategoryDraft);head.append(add)}
-section.addEventListener('dragover',e=>{if(!drag)return;const t=e.target instanceof Element?e.target.closest('.shopping-category-group'):null;if(!(t instanceof HTMLElement))return;e.preventDefault();autoScroll(e.clientY);section.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));t.classList.add('drag-over');if(drag.kind==='category'&&drag.group!==t){const r=t.getBoundingClientRect();(e.clientY<r.top+r.height/2?t.before.bind(t):t.after.bind(t))(drag.group)}});
-section.addEventListener('drop',e=>{if(!drag)return;const t=e.target instanceof Element?e.target.closest('.shopping-category-group'):null;if(!(t instanceof HTMLElement))return;e.preventDefault();if(drag.kind==='item')void moveItem(drag.row,drag.id,t);else void saveOrder();finishDrag()});
-let touch=null,longPress=null,startPoint=null;
-const cancelLong=()=>{if(longPress)clearTimeout(longPress);longPress=null;startPoint=null};
-section.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'||!(e.target instanceof HTMLElement))return;const direct=e.target.closest('.cat-grip,.item-grip');const title=e.target.closest('.shopping-category-name,.shopping-check-row>span');const target=direct||title;if(!(target instanceof HTMLElement))return;const g=target.closest('.shopping-category-group');if(!(g instanceof HTMLElement))return;const row=target.closest('.linked-shopping-row');const itemId=Number(row?.querySelector('input.toggle[data-type="shopping"]')?.dataset.id||0);startPoint={x:e.clientX,y:e.clientY,pointerId:e.pointerId,target};const activate=()=>{if(!startPoint||startPoint.pointerId!==e.pointerId)return;if(target.classList.contains('item-grip')||row instanceof HTMLElement&&target.matches('.shopping-check-row>span')){if(!(row instanceof HTMLElement)||!itemId)return;touch={kind:'item',subject:row,id:itemId,pointerId:e.pointerId}}else{touch={kind:'category',subject:g,pointerId:e.pointerId};if(target.classList.contains('shopping-category-name'))target.dataset.longDrag='1'}touch.subject.classList.add('dragging');navigator.vibrate?.(20)};if(direct){e.preventDefault();activate()}else longPress=setTimeout(activate,420)});
-section.addEventListener('pointermove',e=>{if(startPoint&&!touch&&e.pointerId===startPoint.pointerId&&Math.hypot(e.clientX-startPoint.x,e.clientY-startPoint.y)>8)cancelLong();if(!touch||e.pointerId!==touch.pointerId)return;e.preventDefault();autoScroll(e.clientY);const under=document.elementFromPoint(e.clientX,e.clientY);const t=under?.closest?.('.shopping-category-group');if(!(t instanceof HTMLElement))return;section.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));t.classList.add('drag-over');if(touch.kind==='category'&&touch.subject!==t){const r=t.getBoundingClientRect();(e.clientY<r.top+r.height/2?t.before.bind(t):t.after.bind(t))(touch.subject)}});
-const endTouch=e=>{cancelLong();if(!touch||e.pointerId!==touch.pointerId)return;const d=touch;touch=null;d.subject.classList.remove('dragging');const under=document.elementFromPoint(e.clientX,e.clientY);const t=under?.closest?.('.shopping-category-group');section.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));if(d.kind==='item'&&t instanceof HTMLElement)void moveItem(d.subject,d.id,t);else if(d.kind==='category')void saveOrder()};
-section.addEventListener('pointerup',endTouch);section.addEventListener('pointercancel',endTouch);
-groups().forEach(decorateGroup);new MutationObserver(()=>groups().forEach(decorateGroup)).observe(section,{childList:true,subtree:true});
-})();
 
-
-// Belongings mirrors Shopping category drag ordering; persistence only differs.
-(()=>{
-'use strict';
-if(location.pathname!=='/app/tasks.php')return;
-const page=document.querySelector('.checklist-page');if(!(page instanceof HTMLElement))return;
-const payload=(()=>{try{return JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}')}catch{return{}}})();
-const U='未分類';
-const groups=()=>[...page.querySelectorAll('.belongings-category-group')].filter(g=>g instanceof HTMLElement);
-const cat=g=>String(g?.dataset?.category||U).trim()||U;
-const rows=g=>[...g.querySelectorAll(':scope > .belongings-category-body > .belongings-category-row')];
-const post=async body=>{const r=await fetch('/api/item',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({csrf:String(payload.csrf||''),...body})}),d=await r.json().catch(()=>({ok:false,error:'応答エラー'}));if(!r.ok||!d.ok)throw new Error(d.error||'更新失敗');return d};
-const saveOrder=async()=>{const order=groups().map(cat).filter(x=>x&&x!==U);if(order.length)await post({action:'category_reorder',order})};
-const moveItem=async(row,id,target)=>{const old=row.closest('.belongings-category-group');if(old===target)return;const body=target.querySelector(':scope > .belongings-category-body');if(!(body instanceof HTMLElement))return;const composer=body.querySelector(':scope > .belongings-composer');if(composer)composer.before(row);else body.append(row);const name=cat(target);row.dataset.category=name;target.hidden=false;target.classList.remove('category-collapsed','checklist-status-group-empty','checklist-search-hidden');try{await post({action:'update_category',id,category:name===U?'':name})}catch(e){alert(e.message||String(e));location.reload()}};
-let drag=null,touch=null,longPress=null,start=null;
-const clearOver=()=>page.querySelectorAll('.belongings-category-group.drag-over').forEach(x=>x.classList.remove('drag-over'));
-const finish=()=>{drag?.subject?.classList?.remove('dragging');touch?.subject?.classList?.remove('dragging');drag=null;touch=null;clearOver()};
-const placeCategory=(subject,target,y)=>{if(subject===target||cat(subject)===U||cat(target)===U)return;const r=target.getBoundingClientRect();(y<r.top+r.height/2?target.before.bind(target):target.after.bind(target))(subject)};
-const decorateRow=row=>{if(!(row instanceof HTMLElement)||row.dataset.belongingsItemDrag==='1')return;row.dataset.belongingsItemDrag='1';const id=Number(row.querySelector('input.toggle[data-type="item"]')?.dataset.id||0),line=row.firstElementChild;if(!id||!(line instanceof HTMLElement))return;const h=document.createElement('span');h.className='item-grip';h.textContent='⠿';h.draggable=true;h.title='ドラッグしてカテゴリ移動';line.prepend(h);h.addEventListener('dragstart',e=>{drag={kind:'item',subject:row,id};row.classList.add('dragging');e.dataTransfer?.setData('text/plain',String(id))});h.addEventListener('dragend',finish)};
-const decorate=g=>{if(!(g instanceof HTMLElement))return;rows(g).forEach(decorateRow);if(g.dataset.belongingsDrag==='1'||cat(g)===U)return;g.dataset.belongingsDrag='1';const name=g.querySelector(':scope > .belongings-category-head .belongings-category-name');if(!(name instanceof HTMLElement))return;name.draggable=true;name.title='タップで編集／長押しで並び替え';name.addEventListener('dragstart',e=>{if(name.querySelector('input.category-inline-rename')){e.preventDefault();return}drag={kind:'category',subject:g};g.classList.add('dragging');e.dataTransfer?.setData('text/plain',cat(g))});name.addEventListener('dragend',()=>{const was=drag?.kind==='category';finish();if(was)void saveOrder().catch(()=>{})})};
-page.addEventListener('dragover',e=>{if(!drag)return;const target=e.target instanceof Element?e.target.closest('.belongings-category-group'):null;if(!(target instanceof HTMLElement))return;e.preventDefault();clearOver();target.classList.add('drag-over');if(drag.kind==='category')placeCategory(drag.subject,target,e.clientY)});
-page.addEventListener('drop',e=>{if(!drag)return;const d=drag,target=e.target instanceof Element?e.target.closest('.belongings-category-group'):null;if(!(target instanceof HTMLElement))return;e.preventDefault();if(d.kind==='item')void moveItem(d.subject,d.id,target);else{placeCategory(d.subject,target,e.clientY);void saveOrder().catch(()=>{})}finish()});
-page.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'||!(e.target instanceof HTMLElement))return;const grip=e.target.closest('.belongings-category-group .item-grip'),name=e.target.closest('.belongings-category-name'),target=grip||name;if(!(target instanceof HTMLElement))return;const g=target.closest('.belongings-category-group');if(!(g instanceof HTMLElement))return;const row=target.closest('.belongings-category-row'),id=Number(row?.querySelector('input.toggle[data-type="item"]')?.dataset.id||0);start={x:e.clientX,y:e.clientY,id:e.pointerId};const activate=()=>{if(!start||start.id!==e.pointerId)return;if(grip&&row instanceof HTMLElement&&id)touch={kind:'item',subject:row,itemId:id,id:e.pointerId};else if(name&&cat(g)!==U)touch={kind:'category',subject:g,id:e.pointerId};else return;touch.subject.classList.add('dragging');navigator.vibrate?.(20)};if(grip){e.preventDefault();activate()}else longPress=setTimeout(activate,420)});
-page.addEventListener('pointermove',e=>{if(start&&!touch&&e.pointerId===start.id&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>8){if(longPress)clearTimeout(longPress);longPress=null;start=null}if(!touch||touch.id!==e.pointerId)return;e.preventDefault();const target=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.belongings-category-group');if(!(target instanceof HTMLElement))return;clearOver();target.classList.add('drag-over');if(touch.kind==='category')placeCategory(touch.subject,target,e.clientY)});
-const end=e=>{if(longPress)clearTimeout(longPress);longPress=null;start=null;if(!touch||touch.id!==e.pointerId)return;const d=touch,target=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.belongings-category-group');touch=null;d.subject.classList.remove('dragging');clearOver();if(d.kind==='item'&&target instanceof HTMLElement)void moveItem(d.subject,d.itemId,target);else if(d.kind==='category'){if(target instanceof HTMLElement)placeCategory(d.subject,target,e.clientY);void saveOrder().catch(()=>{})}};
-page.addEventListener('pointerup',end);page.addEventListener('pointercancel',end);
-groups().forEach(decorate);new MutationObserver(()=>groups().forEach(decorate)).observe(page,{childList:true,subtree:true});
+// Gesture layer only: the controller validates kind and owns persistence.
+let drag=null,start=null,timer=null;
+const host=()=>document.querySelector('.unified-goods-section');
+const group=node=>node?.closest?.('.unified-category-group[data-goods-kind]');
+const clear=()=>{clearTimeout(timer);timer=null;start=null;document.querySelectorAll('.dragging,.drag-over').forEach(n=>n.classList.remove('dragging','drag-over'));drag=null;};
+const begin=target=>{
+ const g=group(target);if(!g)return null;
+ const row=target.closest('.linked-shopping-row,.belongings-category-row');
+ if(row)return {subject:row,group:g,type:'content'};
+ if(g.dataset.category==='未分類')return null;
+ return {subject:g,group:g,type:'category'};
+};
+const place=(target,y)=>{
+ if(!drag||!target||target.dataset.goodsKind!==drag.group.dataset.goodsKind||target===drag.group)return;
+ if(drag.type==='category'&&target.dataset.category!=='未分類'){
+  const rect=target.getBoundingClientRect();if(y<rect.top+rect.height/2)target.before(drag.subject);else target.after(drag.subject);
+ }else target.classList.add('drag-over');
+};
+const save=async(target)=>{
+ const d=drag,controller=window.familytodoGoodsCategories;clear();if(!d||!controller)return;
+ try{
+  if(d.type==='content'){if(target)await controller.moveContent(d.subject,target);}
+  else {const kind=d.group.dataset.goodsKind;const order=[...host().querySelectorAll(':scope>.unified-category-group')].filter(g=>g.dataset.goodsKind===kind&&g.dataset.category!=='未分類').map(g=>g.dataset.category);await controller.reorderCategories(kind,order);}
+ }catch(error){alert(error.message||String(error));location.reload();}
+};
+document.addEventListener('dragstart',e=>{
+ if(!e.target.closest('.goods-category-grip,.item-grip'))return;
+ drag=begin(e.target);if(!drag)return;drag.subject.classList.add('dragging');e.dataTransfer?.setData('text/plain',drag.group.dataset.category);
+});
+document.addEventListener('dragover',e=>{if(!drag)return;const target=group(e.target);if(target&&target.dataset.goodsKind===drag.group.dataset.goodsKind){e.preventDefault();place(target,e.clientY);}});
+document.addEventListener('drop',e=>{if(!drag)return;e.preventDefault();void save(group(e.target));});
+document.addEventListener('dragend',()=>{if(drag)clear();});
+document.addEventListener('pointerdown',e=>{
+ if(e.pointerType==='mouse'||!e.target.closest('.goods-category-grip,.item-grip'))return;
+ start={x:e.clientX,y:e.clientY,id:e.pointerId,target:e.target};
+ timer=setTimeout(()=>{if(!start)return;drag=begin(start.target);if(drag)drag.subject.classList.add('dragging');},250);
+});
+document.addEventListener('pointermove',e=>{
+ if(!start||start.id!==e.pointerId)return;
+ if(!drag){if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>12){clearTimeout(timer);start=null;}return;}
+ e.preventDefault();place(group(document.elementFromPoint(e.clientX,e.clientY)),e.clientY);
+},{passive:false});
+document.addEventListener('pointerup',e=>{if(!start||start.id!==e.pointerId)return;clearTimeout(timer);if(drag)void save(group(document.elementFromPoint(e.clientX,e.clientY)));else clear();});
+document.addEventListener('pointercancel',clear);
+document.addEventListener('keydown',e=>{
+ if(!e.target.matches?.('.goods-category-grip')||!['ArrowUp','ArrowDown'].includes(e.key))return;
+ const g=group(e.target),list=[...host().querySelectorAll(':scope>.unified-category-group')].filter(x=>!x.hidden&&x.dataset.goodsKind===g.dataset.goodsKind&&x.dataset.category!=='未分類'),i=list.indexOf(g),target=list[i+(e.key==='ArrowUp'?-1:1)];if(!target)return;e.preventDefault();drag=begin(e.target);if(e.key==='ArrowUp')target.before(g);else target.after(g);void save(target);e.target.focus();
+});
+const decorate=()=>{for(const row of host()?.querySelectorAll('.linked-shopping-row,.belongings-category-row')||[]){if(row.querySelector('.item-grip'))continue;const grip=document.createElement('span');grip.className='item-grip';grip.draggable=true;grip.textContent='☰';grip.setAttribute('aria-label','項目を別カテゴリへ移動');row.querySelector('label')?.before(grip);}};
+document.addEventListener('familytodo:checklist-unified-ready',()=>{decorate();if(host())new MutationObserver(decorate).observe(host(),{childList:true,subtree:true});},{once:true});
 })();
