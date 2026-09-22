@@ -60,11 +60,18 @@ assert(!ui.includes('unified-item-zero'));
 const sets=read('checklist-shopping-reusable-sets.js');
 for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"action:'reusable_set_invoke'","action:'reusable_set_delete'",'client_request_id:rid','この日に配置'])assert(sets.includes(contract),contract);
 assert(!read('checklist-belongings-categories.js').includes("prompt('新しいカテゴリ名')"));
-// Newly-created empty categories stay in their normal position until the next JST midnight, then move to the empty cluster.
+// Newly-created empty categories stay in their normal position until the required JST boundary, then move to the empty cluster.
 assert(ui.includes('const nextJstEmptyAt='));
 assert(ui.includes('cutoffHour=local.getUTCHours()>=23?1:0'));
 assert(!ui.includes('const nextJstOneAt='));
+assert(ui.includes("const at=nextJstEmptyAt(meta.created_at)"));
+assert(!ui.includes('nextJstMidnightAt'));
 assert(ui.includes("g.classList.toggle('category-new-empty',!eligible)"));
+const rolloverSource=ui.slice(ui.indexOf('const nextJstEmptyAt='),ui.indexOf('const installCategoryUi='));
+const rolloverCtx={};
+vm.runInNewContext(rolloverSource+';this.nextJstEmptyAt=nextJstEmptyAt;',rolloverCtx);
+assert.equal(new Date(rolloverCtx.nextJstEmptyAt('2026-09-22T22:59:00+09:00')).toISOString(),'2026-09-22T15:00:00.000Z');
+assert.equal(new Date(rolloverCtx.nextJstEmptyAt('2026-09-22T23:00:00+09:00')).toISOString(),'2026-09-22T16:00:00.000Z');
 // The unified hierarchy controller is the single category-name click owner; legacy per-section handlers must not race it.
 assert(ui.includes('e.stopImmediatePropagation();void renameCategory(kind,name,node)'));
 console.log('checklist parity: task/event payload, date/color, failure recovery, co-visible goods, category visibility/rename ownership, unified empty-category OR surface, separate controllers, selected set lifecycle passed');
