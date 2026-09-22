@@ -107,7 +107,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
     ctx.env.DB.prepare(`SELECT i.*
       FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND ${checklistCompletionSql('i')}
-        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.status='completed')
+        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.due_at IS NULL OR i.status='completed')
       ORDER BY i.due_at,i.status,i.id`).bind(member.family_id,member.id,date).all<Row>(),
     (async()=>{
       const selected=await recurringForDate(ctx,date);

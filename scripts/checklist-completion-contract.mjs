@@ -53,6 +53,7 @@ try{
  for(const table of ['shopping_items','items'])for(const [name,when] of [['expired-goods','2026-09-22 22:59:59'],['late-goods','2026-09-22 23:00:00']]){
   const due=table==='items'?'due_at':'due_date';db.prepare(`INSERT INTO ${table}(family_id,name,status,${due},completed_at,created_at,updated_at,category,url) VALUES(1,?,'completed','2026-09-22',?,'2026-01-01',?,'スーパー','https://example.com/product')`).run(name,when,when);
  }
+ db.exec("INSERT INTO items(family_id,name,category,status,created_at,updated_at) VALUES(1,'undated-orphan','missing-category','pending','2026-01-01','2026-01-01')");
  const {recurringForDate}=loadTs('src/recurrence-projection.ts');
  for(const [title,when] of [['expired-recurring','2026-09-22 22:59:59'],['late-recurring','2026-09-22 23:00:00']]){
   const task=db.prepare("INSERT INTO tasks(family_id,title,task_kind,start_at,end_at,created_at,updated_at,calendar_visible) VALUES(1,?,'recurring','2026-09-22 08:00:00','2026-09-22 09:00:00','2026-01-01','2026-01-01',1)").run(title);
@@ -65,11 +66,11 @@ try{
  let html=await page('2026-09-23');
  assert(!html.includes('expired-task'));assert(!html.includes('expired-goods'));assert(html.includes('late-task'));assert(html.includes('late-recurring'),'late recurring survives midnight');assert(!html.includes('expired-recurring'));assert(html.includes('late-goods'),'late yesterday survives midnight on today page');
  assert(html.includes('data-category="スーパー"'));assert(!html.includes('<div class="meta">スーパー'),'no repeated visible category label');assert(html.includes('商品ページ'),'product URL retained');assert(html.includes('completionRefreshAt'));
- let meta=await(await itemApi(new Request('https://familytodo.test/api/item?view=categories&date=2026-09-23'),ctx)).json();assert.equal(meta.items.length,1,'metadata agrees across midnight');
+ let meta=await(await itemApi(new Request('https://familytodo.test/api/item?view=categories&date=2026-09-23'),ctx)).json();assert.equal(meta.items.length,2,'metadata agrees across midnight, including undated pending');assert(html.includes('undated-orphan'));assert(meta.items.some(row=>row.category==='missing-category'));
  clock=at('2026-09-23T01:00:00');html=await page('2026-09-22');assert(!html.includes('late-task'));assert(!html.includes('late-recurring'));assert(html.includes('pending-child'),'unfinished child survives expired parent projection');assert(!html.includes('late-goods'),'past checklist cannot resurrect expired completion');
  await cleanupCompletedGoods(ctx.env.DB,clock);assert.equal(db.prepare('SELECT count(*) n FROM tasks WHERE status=\'completed\' AND calendar_visible=1').get().n,2);assert.equal(db.prepare('SELECT count(*) n FROM task_completions').get().n,2);assert.equal(db.prepare('SELECT count(*) n FROM task_completion_history').get().n,2);
  const calendarHtml=await(await calendar(new Request('https://familytodo.test/app/calendar.php'),ctx,'2026-09')).text();assert(calendarHtml.includes('expired-task'));assert(calendarHtml.includes('late-recurring'));assert(calendarHtml.includes('expired-recurring'));assert.equal(db.prepare('SELECT count(*) n FROM recurrence_occurrence_completions').get().n,2);assert(calendarHtml.includes('late-task'),'actual Calendar still renders completed task history');
- assert.equal(db.prepare('SELECT count(*) n FROM items').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM shopping_items').get().n,0);
+ assert.equal(db.prepare('SELECT count(*) n FROM items').get().n,1,'undated pending is never purged');assert.equal(db.prepare('SELECT count(*) n FROM shopping_items').get().n,0);
 }finally{globalThis.Date=realDate;db.close();}
 assert(readFileSync('src/index.ts','utf8').includes('cleanupCompletedGoods(env.DB,controller.scheduledTime)'));
 console.log('Checklist completion: real SQL/API/page; JST boundaries, date-crossing grace, offsets, undo, indexes, purge, dangling rows, and preserved Task/calendar history passed');

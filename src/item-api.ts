@@ -69,7 +69,7 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
       FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')}
         AND ${checklistCompletionSql('i')}
-        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.status='completed')
+        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.due_at IS NULL OR i.status='completed')
       ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
     items=(result?.results||[]) as Row[];
   }
