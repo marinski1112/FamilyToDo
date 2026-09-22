@@ -1,6 +1,12 @@
 (()=>{
   'use strict';
   const payload=JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}');
+  const refreshAt=Number(payload.completionRefreshAt||0);
+  if(refreshAt){
+    const refreshExpired=()=>{if(Date.now()>=refreshAt)location.reload();};
+    setTimeout(refreshExpired,Math.max(0,refreshAt-Date.now())+100);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshExpired();});
+  }
   document.querySelectorAll('details.expired-tasks').forEach(section=>{section.open=true;});
 
   const taskSection=document.querySelector('.task-section');

@@ -51,3 +51,17 @@ Triggers run in the content mutation's transaction, including direct edit/delete
 - Existing Task/Event and content contracts are retained; obsolete assertions requiring union/shared-delete/duplicate owners are replaced by these behavioral checks.
 - Preview does not apply production migrations. Production migration and deploy use the existing main `npm run deploy` path. Keep build/migration evidence in #381/#657.
 - Synthetic tests do not constitute the user's real iPhone acceptance. Copy-category and cross-domain deletion need post-release real-device confirmation.
+
+## Completion / legacy content follow-up (2026-09-23)
+
+Version 12.148.2-wave128, migration 0102. Category identity and storage remain kind-specific.
+
+- Shopping rows carry `data-category`; the category name is no longer repeated beneath the item. Product links remain visible.
+- At initial reconstruction, content with a missing or disabled catalog entry is displayed in its own kind's unclassified group. Undated pending Items also remain accessible on the checklist (dated pending Items retain their selected-date scope). This is a read-only display fallback, repeated on reload; it neither re-enables a deleted catalog nor changes the other kind. Item set events first refresh catalog metadata before recovery, avoiding a race with category re-enable.
+- Category header counts reflect the selected pending/completed tab. Completed view shows zero-count categories in the normal list and suppresses the empty cluster without changing persisted lifecycle state. Pending view retains its existing lifecycle.
+- `checklist-completion.ts` defines a common JST completion cutoff for Shopping, Item and Task. Completion before 23:00 expires next 00:00; completion at/after 23:00 expires next 01:00. At exactly 00:00 a new completion belongs to the new day. Explicit timestamp offsets are converted; existing offset-less completion timestamps are JST. Legacy null completion time falls back to persisted update/create time.
+- The page and Item metadata API exclude expired completions consistently, even before Cron finishes. Recent completions remain visible across due-date midnight. An open checklist reloads at the next 00:00/01:00 boundary and when returning from background after it.
+- Existing five-minute Cron dispatch now drains expired `shopping_items` and `items` only. Expression indexes bound expiry lookup; each invocation deletes at most 10 batches of 100 per kind and retries backlog on the next run. Scheduled triggers can run late; visibility uses the exact cutoff independently. Migration 0102 also deletes matching legacy completion rows (those tables have no foreign keys); existing FK cascades clean history/assignees.
+- Tasks and recurrence completion records are never deleted by this cleanup. Only checklist projections filter them; Calendar remains unchanged and retains history. Recurrence projection exposes the effective completion timestamp for this filter.
+
+Verification executes actual migrations, SQLite, API handlers, checklist rendering, Calendar rendering and browser DOM scripts. It covers 22:59:59/23:00/23:59:59/00:00/01:00, explicit offsets, undo safety, both due/undated kinds, family scope, dangling completion cleanup, indexed queries, orphan recovery, unequal pending/completed counts, zero completed categories, and retained Calendar history. Production migration remains delegated to the existing main CI/CD deploy command; no preview production migration or manual remote D1 command.

@@ -1,3 +1,4 @@
+import { checklistCompletionSql } from './checklist-completion';
 import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';
@@ -67,7 +68,8 @@ async function readCategories(request:Request,ctx:any,m:any):Promise<Response>{
     const result=await ctx.env.DB.prepare(`SELECT i.id,i.category,i.memo,i.url,i.status
       FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')}
-        AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
+        AND ${checklistCompletionSql('i')}
+        AND ((i.due_at IS NOT NULL AND date(i.due_at)=date(?)) OR i.due_at IS NULL OR i.status='completed')
       ORDER BY i.status,i.id`).bind(m.family_id,m.id,date).all();
     items=(result?.results||[]) as Row[];
   }

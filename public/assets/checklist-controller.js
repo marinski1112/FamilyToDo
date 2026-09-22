@@ -103,6 +103,7 @@ const addItemRow=(id,name)=>{
 };
 
 const extractCategory=row=>{
+  if(row.hasAttribute('data-category'))return row.dataset.category||'未分類';
   const meta=row.querySelector(':scope > .meta');if(!(meta instanceof HTMLElement))return '未分類';
   const text=String(meta.textContent||'').trim();
   if(!text||text.startsWith('担当 ')||text==='商品ページ')return '未分類';
@@ -136,7 +137,7 @@ const addShoppingRow=(id,name,category)=>{
   clearEmpty(section);const group=ensureShoppingGroup(category);if(!group)return;
   const row=document.createElement('div');row.className='row linked-shopping-row checklist-new-row';
   row.innerHTML=`<div class="checklist-row-line"><label class="shopping-check-row"><input class="check toggle" type="checkbox" data-type="shopping" data-id="${id}"><span></span></label><a class="checklist-row-action" href="/app/shopping_edit.php?id=${id}" aria-label="編集">編集</a></div><div class="meta"></div>`;
-  const titleNode=row.querySelector('.shopping-check-row>span');if(titleNode)titleNode.textContent=name;const meta=row.querySelector('.meta');if(meta)meta.textContent=categoryKey(category)==='未分類'?'':categoryKey(category);
+  const titleNode=row.querySelector('.shopping-check-row>span');if(titleNode)titleNode.textContent=name;row.dataset.category=categoryKey(category);
   group.append(row);if(titleNode)bindInlineEditor(titleNode);
 };
 
