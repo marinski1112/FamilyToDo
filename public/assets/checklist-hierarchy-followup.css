@@ -393,3 +393,7 @@
 .checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line{display:flex!important;align-items:center!important;width:100%!important;min-width:0!important}
 .checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line>.item-check-row{flex:1 1 auto!important;min-width:0!important}
 .checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line>.belongings-item-info{flex:0 0 42px!important;margin-left:auto!important}
+/* Keep Item text at Shopping's compact scale in the shared Goods list. */
+.checklist-page.reminders-ui .unified-goods-section .unified-item-group .belongings-category-name{font-size:16px!important;line-height:1.25!important}
+.checklist-page.reminders-ui .unified-goods-section .unified-item-group .item-check-row>span{font-size:16px!important;line-height:1.35!important}
+.checklist-page.reminders-ui .unified-goods-section .unified-item-group[data-category="未分類"] .belongings-category-name{font-size:15px!important}

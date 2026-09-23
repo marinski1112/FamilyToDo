@@ -33,11 +33,19 @@ export function nextCompletionBoundary(at=Date.now()):number {
 export async function cleanupCompletedGoods(db:D1Database,at=Date.now()):Promise<void> {
   // Bounded batches retry every five minutes using the existing Cron. Each
   // DELETE rechecks completion state in the same statement, safe after undo.
-  const time=completionTimeSql(),threshold=completionThreshold(at);
+  const time=completionTimeSql(),threshold=completionThreshold(at),today=new Date(at+9*3600000).toISOString().slice(0,10);
   for(let batch=0;batch<10;batch++){
-   const results=await db.batch(['shopping_items','items'].map(table=>db.prepare(
+   const completed=['shopping_items','items'].map(table=>db.prepare(
     `DELETE FROM ${table} WHERE id IN (SELECT id FROM ${table} WHERE status='completed' AND (${time}) < ? ORDER BY (${time}),id LIMIT 100)`
-  ).bind(threshold)));
+   ).bind(threshold));
+   // A missed Item date ends its lifecycle; a recent completion keeps its
+   // existing 00:00/01:00 undo window even if the due date has passed.
+   const overdue=db.prepare(`DELETE FROM items WHERE id IN (
+     SELECT id FROM items WHERE due_at IS NOT NULL AND date(due_at)<date(?)
+       AND (status<>'completed' OR (${time}) < ?)
+     ORDER BY due_at,id LIMIT 100
+   )`).bind(today,threshold);
+   const results=await db.batch([...completed,overdue]);
    if(results.every(result=>Number(result.meta?.changes||0)<100))break;
   }
 }

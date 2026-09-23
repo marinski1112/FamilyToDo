@@ -73,4 +73,27 @@ try{
  assert.equal(db.prepare('SELECT count(*) n FROM items').get().n,1,'undated pending is never purged');assert.equal(db.prepare('SELECT count(*) n FROM shopping_items').get().n,0);
 }finally{globalThis.Date=realDate;db.close();}
 assert(readFileSync('src/index.ts','utf8').includes('cleanupCompletedGoods(env.DB,controller.scheduledTime)'));
+// Only Item expires with its due date. Shopping remains in the overdue list;
+// freshly completed Item retains the 23:00/00:00 completion grace window.
+{
+ const db=database(),ctx=context(db);
+ try{
+  db.exec(`INSERT INTO items(family_id,name,status,due_at,created_at,updated_at) VALUES
+    (1,'expired-pending','pending','2026-09-22','2026-01-01','2026-01-01'),
+    (1,'today-pending','pending','2026-09-23','2026-01-01','2026-01-01'),
+    (1,'undated-pending','pending',NULL,'2026-01-01','2026-01-01');
+    INSERT INTO items(family_id,name,status,due_at,completed_at,created_at,updated_at) VALUES
+    (1,'fresh-completed','completed','2026-09-22','2026-09-22 23:30:00','2026-01-01','2026-09-22 23:30:00');
+    INSERT INTO shopping_items(family_id,name,status,due_date,created_at,updated_at) VALUES
+    (1,'overdue-shopping','pending','2026-09-22','2026-01-01','2026-01-01');`);
+  await cleanupCompletedGoods(ctx.env.DB,at('2026-09-23T00:30:00'));
+  assert.deepEqual(db.prepare('SELECT name FROM items ORDER BY name').all().map(x=>x.name),['fresh-completed','today-pending','undated-pending']);
+  assert.equal(db.prepare("SELECT count(*) n FROM shopping_items WHERE name='overdue-shopping'").get().n,1);
+  assert((await(await taskEvents(new Request('https://familytodo.test/app/tasks.php'),ctx,'2026-09-23')).text()).includes('期限切れ買い物'));
+  const calendarHtml=await(await calendar(new Request('https://familytodo.test/app/calendar.php'),ctx,'2026-09')).text();
+  assert(calendarHtml.includes('🎒 1件'),'calendar uses an Item count badge');
+  await cleanupCompletedGoods(ctx.env.DB,at('2026-09-23T01:00:00'));
+  assert.equal(db.prepare("SELECT count(*) n FROM items WHERE name='fresh-completed'").get().n,0);
+ }finally{db.close()}
+}
 console.log('Checklist completion: real SQL/API/page; JST boundaries, date-crossing grace, offsets, undo, indexes, purge, dangling rows, and preserved Task/calendar history passed');
