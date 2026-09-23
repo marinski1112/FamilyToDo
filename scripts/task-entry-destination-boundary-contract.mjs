@@ -23,6 +23,8 @@ for(const mode of ['event','shopping','item']){
 const api=read('src/task-rough-input-api.ts');
 assert.match(api,/primaryType==='task'\?\['child_task'\]:\[\]/,'API rejects linked Goods and Event children');
 assert.match(read('src/task-api.ts'),/String\(parent\.task_kind\)==='EVENT'\)return json\(\{ok:false,error:'イベントには子タスクを追加できません。'/,'direct API rejects children of Event');
+assert.match(read('src/task-children-api.ts'),/canAddChildren:canManageParent&&parent\.parent_task_id===null&&String\(parent\.task_kind\|\|'TASK'\)\.toUpperCase\(\)!=='EVENT'/,'Event detail API does not advertise child creation');
+assert.match(read('public/assets/task-edit.js'),/childState\.canAddChildren&&!editIsEvent\?\.checked/,'editing an Event never shows a child creation form');
 assert.ok(!read('src/task-entry-page.ts').includes('id="taskAssigneeWrap"'),'manual entry has no old assignee input');
 assert.ok(!read('public/assets/task-rough-input-ai.js').includes('${assigneeFieldset('),'AI draft has no old assignee input');
 assert.match(read('public/assets/task-rough-input-save.js'),/if\(children\.length&&!roots\.some\(x=>x\.destination==='task'\)\)/,'save requires Task parent');

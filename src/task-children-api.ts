@@ -34,7 +34,7 @@ export async function taskChildrenApi(request:Request,ctx:any):Promise<Response>
       isChild:parent.parent_task_id!==null,
       kind:String(parent.task_kind||'TASK').toUpperCase()==='EVENT'?'EVENT':'TASK',
     },
-    canAddChildren:canManageParent&&parent.parent_task_id===null,
+    canAddChildren:canManageParent&&parent.parent_task_id===null&&String(parent.task_kind||'TASK').toUpperCase()!=='EVENT',
     children:children.results.map((row:Row)=>{
       const start=String(row.start_at||row.due_at||'');
       const assigneeIds=String(row.assignee_ids||'').split(',').map(Number).filter(id=>Number.isInteger(id)&&id>0);
