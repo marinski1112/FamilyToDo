@@ -378,7 +378,7 @@
 .checklist-page .belongings-category-draft>.shopping-category-title{display:flex!important;gap:8px!important;min-width:0!important}
 .checklist-page .belongings-category-draft .category-inline-rename{flex:1 1 0!important;width:0!important;min-width:0!important;font-size:16px!important}
 .checklist-page .belongings-category-draft button{flex:0 0 auto;min-height:44px;color:#087bff;background:#fff;border:1px solid #b8d8ff;border-radius:9px}
-/* Goods Category Controller owns kind filtering and lifecycle visibility. */
+/* Goods Category Controller owns lifecycle visibility; input kind does not filter categories. */
 .checklist-page .unified-goods-section [data-goods-kind][hidden],
 .checklist-page .unified-goods-section .zero-category-cluster[hidden],
 .checklist-page .unified-goods-section .unified-goods-delete-mode[hidden]{display:none!important}
@@ -389,3 +389,7 @@
 .checklist-page .unified-goods-section .category-inline-rename{box-sizing:border-box;max-width:100%;font-size:16px}
 .checklist-page .unified-goods-section .category-collapsed>.belongings-category-body{display:none!important}
 .checklist-page .unified-goods-section>.checklist-status-tabs>.unified-goods-delete-mode{margin-left:auto!important}
+.checklist-page.reminders-ui .unified-goods-section [data-category="未分類"]:not([hidden]) .shopping-category-name{font-size:15px!important;line-height:1.25!important}
+.checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line{display:flex!important;align-items:center!important;width:100%!important;min-width:0!important}
+.checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line>.item-check-row{flex:1 1 auto!important;min-width:0!important}
+.checklist-page.reminders-ui .unified-goods-section .belongings-category-row>.checklist-row-line>.belongings-item-info{flex:0 0 42px!important;margin-left:auto!important}
