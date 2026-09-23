@@ -48,6 +48,12 @@ for(const kind of ['shopping','item']){
 
 await settle();assert.equal([...view.host.querySelectorAll('.unified-goods-set-button')].filter(b=>!b.hidden).length,1,'one active set button');
 for(const kind of ['shopping','item']){
+ view.host.querySelector(`[data-kind="${kind}"]`).click();await settle();
+ const active=view.host.querySelector(`:scope>.checklist-status-tabs>.${kind==='shopping'?'shopping-reusable-set-button':'belongings-reusable-set-button:not(.shopping-reusable-set-button)'}`);
+ assert(active&&!active.hidden,`${kind} set button stays visible with its input tab`);
+ assert.equal([...view.host.querySelectorAll(':scope>.checklist-status-tabs>.unified-goods-set-button')].filter(b=>!b.hidden).length,1,'only the active kind set button is visible');
+}
+for(const kind of ['shopping','item']){
  view.host.querySelector(`[data-kind="${kind}"]`).click();
  const unc=find(view,kind,'未分類');
  assert.equal(unc.querySelectorAll('input.toggle').length,4,'both pending/completed legacy orphan rows recovered in own kind');
@@ -97,4 +103,16 @@ for(const kind of ['shopping','item']){
  assert.equal(unc.hidden,false,'unclassified add still opens an empty category composer');
  assert(unc.querySelector(kind==='shopping'?'.shopping-continuous-name:not([disabled])':'.belongings-composer-name:not([disabled])'));
 }
-await view.close();db.close();console.log('Goods DOM: Shopping/Item categories and archived cluster co-visible under both add tabs, isolated mutations, hidden zero unclassified, row actions and lifecycle passed');
+await view.close();
+// Shopping set loader must survive a late unified Goods controller, even if its ready event was missed.
+const late=new Window({url:'https://familytodo.test/app/tasks.php',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
+late.document.body.innerHTML='<script type="application/json" id="dailyPayload">{"csrf":"test"}</script>';
+late.eval(readFileSync('public/assets/checklist-shopping-reusable-sets.js','utf8'));
+late.document.dispatchEvent(new late.Event('DOMContentLoaded'));
+await settle();
+late.document.body.insertAdjacentHTML('beforeend','<section class="unified-goods-section" data-input-kind="shopping"><div class="checklist-status-tabs"><button class="unified-goods-delete-mode">削除</button></div></section>');
+await settle();
+assert(late.document.querySelector('.shopping-reusable-set-button:not([hidden])'),'late unified Goods host gets Shopping set button');
+late.document.dispatchEvent(new late.CustomEvent('familytodo:checklist-unified-ready'));
+assert.equal(late.document.querySelectorAll('.shopping-reusable-set-button').length,1,'ready event never duplicates Shopping set');
+await late.happyDOM.close();db.close();console.log('Goods DOM: Shopping/Item categories and set buttons co-visible under both add tabs, late Shopping set boot, isolated mutations, hidden zero unclassified, row actions and lifecycle passed');

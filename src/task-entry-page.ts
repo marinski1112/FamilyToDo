@@ -26,10 +26,7 @@ export async function taskEntryPage(
 ):Promise<Response>{
   if(!ctx.member)return redirect('/liff?next='+encodeURIComponent('/task/new.php?date='+date));
 
-  const [members,categoryRows]=await Promise.all([
-    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(ctx.member.family_id).all(),
-    ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE').bind(ctx.member.family_id).all(),
-  ]);
+  const categoryRows=await ctx.env.DB.prepare('SELECT name,enabled FROM shopping_category_catalog WHERE family_id=? ORDER BY name COLLATE NOCASE').bind(ctx.member.family_id).all();
   const categoryOptions=resolveShoppingCategoryOptions(categoryRows.results as any[]);
   const body=`<div class="card form-card"><h1>📝 追加</h1><form id="taskForm" class="compact-form" autocomplete="off">
     <input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">
@@ -42,7 +39,6 @@ export async function taskEntryPage(
     <label>カレンダー表示</label><label class="checkrow"><input id="taskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label>
     <div id="taskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}">${esc(option.label)}</option>`).join('')}</select><label class="small" for="taskCalendarCustomColor">カスタム色</label><input id="taskCalendarCustomColor" type="color" value="${CALENDAR_COLOR_OPTIONS[0].value}" aria-label="カレンダーのカスタム色"></div>
     <div id="taskCompletionWrap" data-task-only="1"><label>完了条件</label><select name="completion_mode"><option value="ANY">誰か1人で完了</option><option value="ALL">担当者全員が完了</option></select></div>
-    <div id="taskAssigneeWrap" data-task-only="1"><label>担当者</label><div class="assignee-list">${members.results.map((member:any)=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${Number(member.id)}"> ${esc(member.name)}</label>`).join('')}</div></div>
     <label>通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定するとタスク・イベントの詳細を設定した通知方法で通知します。</p>
     <button type="submit">登録する</button>
   </form></div>

@@ -14,11 +14,9 @@ const init=()=>{
     const allDay=document.getElementById('allDay');
     const times=document.getElementById('dateTimes');
     const completionWrap=document.getElementById('taskCompletionWrap');
-    const assigneeWrap=document.getElementById('taskAssigneeWrap');
     const calendarVisible=document.getElementById('taskCalendarVisible');
     const calendarColorWrap=document.getElementById('taskCalendarColorWrap');
     const isPrivate=document.getElementById('isPrivate');
-    const assignees=[...form.querySelectorAll('[name=assignees]')];
     const requestedInitial=String(payload.initialType||'task');
     const initialRadio=form.querySelector(`[name=rough_primary_type][value="${['task','event','shopping','item'].includes(requestedInitial)?requestedInitial:'task'}"]`);
     if(initialRadio&&!initialRadio.checked){initialRadio.checked=true;initialRadio.dispatchEvent(new Event('change',{bubbles:true}));}
@@ -50,14 +48,11 @@ const init=()=>{
       const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';
       if(noDateWrap)noDateWrap.hidden=eventMode;
       if(completionWrap)completionWrap.hidden=!taskMode;
-      if(assigneeWrap)assigneeWrap.hidden=!taskMode;
       if(dateInput){dateInput.required=eventMode;dateInput.setAttribute('aria-required',eventMode?'true':'false');}
       if(!taskMode){
         if(eventMode&&noDate){noDate.checked=false;noDate.disabled=true;}
-        assignees.forEach(input=>{input.checked=false;input.disabled=true;});
       }else{
         if(noDate)noDate.disabled=false;
-        assignees.forEach(input=>{input.disabled=Boolean(isPrivate?.checked);if(isPrivate?.checked)input.checked=false;});
       }
       syncDate();
     };
@@ -107,7 +102,7 @@ const init=()=>{
         calendar_visible:Boolean(calendarVisible?.checked),
         calendar_color:String(form.elements.calendar_color?.value||''),
         completion_mode:eventMode?'ANY':String(form.elements.completion_mode?.value||'ANY'),
-        assignees:eventMode?[]:[...form.querySelectorAll('[name=assignees]:checked')].map(input=>Number(input.value)).filter(id=>Number.isInteger(id)&&id>0),
+        assignees:[],
         reminderAt:String(form.elements.reminderAt?.value||''),
         shopping:[],
         items:[],

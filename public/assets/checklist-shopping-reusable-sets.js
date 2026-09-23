@@ -2,6 +2,7 @@
 const boot=()=>{
  if(location.pathname!=='/app/tasks.php')return;
  const goods=document.querySelector('.unified-goods-section');if(!(goods instanceof HTMLElement))return;
+ if(goods.querySelector('.shopping-reusable-set-button'))return;
  const payload=(()=>{try{return JSON.parse(document.getElementById('dailyPayload')?.textContent||'{}')}catch{return {}}})();
  const date=new URLSearchParams(location.search).get('date')||String(payload.date||'');
  const uuid=()=>crypto.randomUUID?.()||`shopping-set-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -29,6 +30,6 @@ const boot=()=>{
  };
 
 };
-const start=()=>{boot();if(!document.querySelector('.shopping-reusable-set-button'))document.addEventListener('familytodo:checklist-unified-ready',boot,{once:true});};
+const start=()=>{boot();document.addEventListener('familytodo:checklist-unified-ready',boot,{once:true});let tries=0;const retry=()=>{if(document.querySelector('.shopping-reusable-set-button')||tries++>=200)return;boot();if(!document.querySelector('.shopping-reusable-set-button'))setTimeout(retry,50);};retry();};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();

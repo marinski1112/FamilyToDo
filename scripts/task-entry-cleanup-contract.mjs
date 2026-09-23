@@ -44,13 +44,12 @@ assert.ok(taskDelete.includes("exception_task_id=NULL,status=?,completed_by=?,co
 for(const marker of [
   "const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';",
   'if(noDateWrap)noDateWrap.hidden=eventMode;',
-  'if(completionWrap)completionWrap.hidden=eventMode;',
-  'if(assigneeWrap)assigneeWrap.hidden=eventMode;',
+  'if(completionWrap)completionWrap.hidden=!taskMode;',
   'dateInput.required=eventMode',
   "is_event:eventMode,",
   "noDate:eventMode?false:Boolean(noDate?.checked),",
   "completion_mode:eventMode?'ANY':",
-  'assignees:eventMode?[]:',
+  'assignees:[],',
 ])assert.ok(manual.includes(marker),`manual task/event contract missing: ${marker}`);
 assert.ok(taskApi.includes("if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);"),'server must reject EVENT creation without a date');
 assert.ok(roughSave.includes("if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;"),'rough EVENT save must require a start date');
@@ -59,6 +58,7 @@ assert.ok(roughSave.includes("noDate:item.destination!=='event'&&!(item.startDat
 assert.ok(roughUi.includes('name="rough_primary_type" value="event"'),'rough input must expose explicit EVENT primary type');
 assert.ok(typeUi.includes("row.dataset.destination!=='event'"),'EVENT rough draft cleanup must key from explicit destination');
 assert.ok(typeUi.includes("row.querySelector('.rough-main-assignees')?.remove()"),'EVENT rough draft must omit assignee controls');
+assert.ok(!page.includes('id="taskAssigneeWrap"'),'new entry form must not offer assignee selection');
 assert.ok(typeUi.includes("row.querySelector('.rough-main-completion')?.closest('label')?.remove()"),'EVENT rough draft must omit completion controls');
 assert.ok(typeUi.includes('start.required=true'),'EVENT rough draft must mark start date required');
 assert.ok(typeUi.includes("setLabelText(start,'開始日（必須）')"),'EVENT rough draft must visibly identify the required start date');

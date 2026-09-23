@@ -55,12 +55,11 @@ for(const marker of [
   'name="rough_primary_type" value="item"',
   'roughMainInput',
   'roughChildTaskInput',
-  'roughShoppingInput',
-  'roughItemInput',
   '入力欄そのものが登録先を決めます。',
   '全入力欄を合計して最大4,000文字・20行',
   'このプレビューからはまだ登録されません。',
 ]) if(!roughUi.includes(marker)) throw new Error(`rough-input split-field safety marker missing: ${marker}`);
+for(const removed of ['roughShoppingInput','roughItemInput'])if(roughUi.includes(removed))throw new Error(`Task/Event must not offer linked Goods: ${removed}`);
 for(const oldPrefix of ['子タスク：猫ホテルに連絡','買い物：旅行用シャンプー','持ち物：パスポート','prefixRules']) if(roughUi.includes(oldPrefix)) throw new Error(`rough-input must not require type prefixes: ${oldPrefix}`);
 if(roughUi.includes("fetch('/api/task-rough-input'")) throw new Error('visible rough-input UI shell must remain proposal-only; analysis transport belongs to its dedicated controller');
 console.log('new entry pages modularity contract ok');
