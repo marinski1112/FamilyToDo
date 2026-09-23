@@ -6,6 +6,7 @@ export const activeRegressionGroups=[
       ['goods-category-lifecycle','node scripts/goods-category-lifecycle-contract.mjs'],
       ['goods-category-dom','node scripts/goods-category-dom-contract.mjs'],
       ['task-entry-destination-boundary','node scripts/task-entry-destination-boundary-contract.mjs'],
+      ['calendar-day-checklist','node scripts/calendar-day-checklist-contract.mjs'],
       ['checklist-hierarchy','node scripts/checklist-hierarchy-followup-contract.mjs'],
       ['family-log-photo-form','node scripts/family-log-photo-form-contract.mjs'],
       ['family-log-one-shot-diagnostics','node scripts/family-log-diagnostics-contract.mjs'],
