@@ -76,8 +76,9 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   if(parentTaskId!==null&&(!Number.isInteger(parentTaskId)||parentTaskId<=0))return json({ok:false,error:'親タスクが不正です。'},400);
   if(parentTaskId!==null&&isEvent)return json({ok:false,error:'子タスクはタスクとして作成してください。'},400);
   if(parentTaskId!==null){
-    const parent=await ctx.env.DB.prepare(`SELECT id,family_id,parent_task_id,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(parentTaskId,m.family_id,m.id).first();
+    const parent=await ctx.env.DB.prepare(`SELECT id,family_id,parent_task_id,task_kind,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(parentTaskId,m.family_id,m.id).first();
     if(!parent)return json({ok:false,error:'親タスクが見つかりません。'},404);
+    if(String(parent.task_kind)==='EVENT')return json({ok:false,error:'イベントには子タスクを追加できません。'},400);
     const link=validateTaskParentLink(
       {id:0,familyId:Number(m.family_id),parentTaskId:null,hasChildren:false,visibilityScope:isPrivate?'PRIVATE':'FAMILY',privateOwnerId:isPrivate?Number(m.id):null},
       {id:Number(parent.id),familyId:Number(parent.family_id),parentTaskId:parent.parent_task_id===null?null:Number(parent.parent_task_id),hasChildren:false,visibilityScope:String(parent.visibility_scope)==='PRIVATE'?'PRIVATE':'FAMILY',privateOwnerId:parent.private_owner_id===null?null:Number(parent.private_owner_id)},

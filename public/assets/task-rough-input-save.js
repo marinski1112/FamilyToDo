@@ -34,8 +34,8 @@ try{
     const base={row,destination,title,taskCreateKey};
     if(destination==='shopping')return {...base,quantity:value(row,'.rough-draft-quantity')||'1',category:categoryValue(row),url:value(row,'.rough-draft-url'),dueDate:value(row,'.rough-draft-due-date')};
     if(destination==='item')return {...base,dueDate:value(row,'.rough-draft-due-date')};
-    if(destination==='child_task')return {...base,dueDate:value(row,'.rough-draft-due-date'),dueTime:value(row,'.rough-draft-due-time'),completion:value(row,'.rough-child-completion')||'ANY',assignees:selectedIds(row,'.rough-child-assignees input[type=checkbox]')};
-    return {...base,startDate:value(row,'.rough-main-start-date'),endDate:value(row,'.rough-main-end-date'),allDay:checked(row,'.rough-main-all-day'),startTime:value(row,'.rough-main-start-time'),endTime:value(row,'.rough-main-end-time'),location:value(row,'.rough-main-location'),description:value(row,'.rough-main-description'),isPrivate:checked(row,'.rough-main-private'),calendarVisible:checked(row,'.rough-main-calendar-visible'),calendarColor:value(row,'.rough-main-calendar-color'),completion:value(row,'.rough-main-completion')||'ANY',assignees:selectedIds(row,'.rough-main-assignees input[type=checkbox]'),reminderAt:value(row,'.rough-main-reminder')};
+    if(destination==='child_task')return {...base,dueDate:value(row,'.rough-draft-due-date'),dueTime:value(row,'.rough-draft-due-time'),completion:value(row,'.rough-child-completion')||'ANY',assignees:[]};
+    return {...base,startDate:value(row,'.rough-main-start-date'),endDate:value(row,'.rough-main-end-date'),allDay:checked(row,'.rough-main-all-day'),startTime:value(row,'.rough-main-start-time'),endTime:value(row,'.rough-main-end-time'),location:value(row,'.rough-main-location'),description:value(row,'.rough-main-description'),isPrivate:checked(row,'.rough-main-private'),calendarVisible:checked(row,'.rough-main-calendar-visible'),calendarColor:value(row,'.rough-main-calendar-color'),completion:value(row,'.rough-main-completion')||'ANY',assignees:[],reminderAt:value(row,'.rough-main-reminder')};
   };
 
   const validateRows=rows=>{
@@ -54,8 +54,8 @@ try{
       if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;
     }
     const roots=rows.filter(x=>x.destination==='task'||x.destination==='event'),children=rows.filter(x=>x.destination==='child_task');
-    if(children.length&&!roots.length)return '子タスクを保存するには親タスクまたはイベントが1件必要です。';
-    if(roots.length>1&&children.length)return '親候補が複数あるため、子タスクの親を決められません。メインのタスク/イベントを1件にしてください。';
+    if(children.length&&!roots.some(x=>x.destination==='task'))return '子タスクを保存するには親タスクが1件必要です。';
+    if(roots.length>1&&children.length)return '親候補が複数あるため、子タスクの親を決められません。メインのタスクを1件にしてください。';
     return '';
   };
 

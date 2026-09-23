@@ -190,7 +190,7 @@ function parseRequestBody(value:unknown):{primaryType:Destination;fields:RoughFi
     fields.push({destination,text,blocks,sharedDueDirective});
   }
   if(fields[0]?.destination!==primaryType||totalChars>MAX_CHARS||(!summarize&&totalLines>MAX_ITEMS)||totalItems>MAX_ITEMS||totalItems<1)return null;
-  const allowedChildren=new Set<Destination>(primaryType==='task'||primaryType==='event'?['child_task','shopping','item']:[]);
+  const allowedChildren=new Set<Destination>(primaryType==='task'?['child_task']:[]);
   for(const field of fields.slice(1))if(!allowedChildren.has(field.destination))return null;
   return {primaryType,fields,summarize};
 }
