@@ -6,7 +6,7 @@ for(const marker of [
   'ORDER BY msg.id DESC LIMIT ${PAGE_SIZE+1}',
   "url.searchParams.get('before')",
   "AND msg.id<?",
-  "rows.results.slice(0,PAGE_SIZE).reverse()",
+  "visible=rows.results.slice(0,PAGE_SIZE)",
   'さらに以前のメッセージ',
   '最新のメッセージに戻る',
   'id="chatImage"',
@@ -18,7 +18,7 @@ for(const marker of [
   'data-photo-share="1"',
   '/assets/messages-chat-diagnostics.js',
   '/assets/messages-chat.js?v=${APP_VERSION}-chat9',
-  "box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>box.classList.remove('chat-messages-initializing'))",
+  "${back}${messages||",
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
 if(/performance\.getEntriesByType\('resource'\)[\s\S]{0,300}message-stamps/.test(page))throw new Error('message opening must not wait for stamp hydration before reveal');
@@ -52,3 +52,5 @@ await import('./message-chat-sync-contract.mjs');
 await import('./message-photos-contract.mjs');
 await import('./photo-transfer-contract.mjs');
 await import('./photo-share-ui-contract.mjs');
+const css=fs.readFileSync('public/assets/messages-chat.css','utf8');
+if(!css.includes('flex-direction:column-reverse')||page.includes('box.scrollTop=box.scrollHeight')||client.includes('scrollToLatest(true);syncMessages(false)'))throw new Error('chat must start at newest without a delayed initial scroll');
