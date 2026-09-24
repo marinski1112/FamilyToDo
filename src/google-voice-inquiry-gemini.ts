@@ -1,4 +1,5 @@
 import { familyAiProvider, geminiFetch, resolveFamilyGeminiModel } from './family-ai';
+import { resolveFeatureModels } from './ai-model-routing';
 import type { GoogleVoiceInquiryKind, MarkedGoogleVoiceInquiryCommand } from './google-voice-inquiry';
 
 const ALLOWED_KINDS=new Set<GoogleVoiceInquiryKind>(['TODAY_SCHEDULE','TOMORROW_SCHEDULE','OPEN_SHOPPING']);
@@ -22,8 +23,9 @@ export async function classifyMarkedGoogleVoiceInquiryWithGemini(
 ):Promise<MarkedGoogleVoiceInquiryCommand|null>{
   if(!body||body.length>256||familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY)return null;
   try{
-    const model=(await resolveFamilyGeminiModel(env.DB,familyId,env)).model;
-    const response=await geminiFetch(env,model,{
+    const route=await resolveFeatureModels(env.DB,familyId,'GOOGLE_VOICE_INQUIRY','OWNER');
+    const models=route.source==='FAMILY_SETTING'?route.models:[(await resolveFamilyGeminiModel(env.DB,familyId,env)).model];
+    const requestBody={
       systemInstruction:{parts:[{text:'Classify this FamilyToDo read-only inquiry. Call the classifier exactly once. TODAY_SCHEDULE means asking about today schedule/tasks; TOMORROW_SCHEDULE means tomorrow schedule/tasks; OPEN_SHOPPING means incomplete shopping/list. If it is not clearly one of these, use NONE. Do not answer the user and do not infer any other action.'}]},
       contents:[{role:'user',parts:[{text:body}]}],
       tools:[{functionDeclarations:[{
@@ -33,7 +35,10 @@ export async function classifyMarkedGoogleVoiceInquiryWithGemini(
       }]}],
       toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:[CLASSIFIER_FUNCTION]}},
       generationConfig:{maxOutputTokens:32},
-    });
+    };
+    let response:Response|undefined;
+    for(const model of models){response=await geminiFetch(env,model,requestBody);if(response.ok||response.status!==429&&response.status<500)break;}
+    if(!response)return null;
     if(!response.ok)return null;
     const data=await response.json() as any;
     const call=data?.candidates?.[0]?.content?.parts?.find((part:any)=>part?.functionCall)?.functionCall;

@@ -11,7 +11,8 @@ for(const marker of ['ai_summary_text','ai_model','ai_status','ai_generated_at',
 assert.ok(ai.includes('MAX_AI_GENERATIONS_PER_RUN=3'),'scheduled AI work must be globally bounded');
 assert.ok(ai.includes('AI_RETRY_HOURS=6'),'failed AI generations need a cooldown');
 assert.ok(ai.includes('FAMILY_JOURNAL_GEMINI_MODEL'),'journal must use its feature-specific model policy');
-assert.ok(ai.includes('geminiFetch(env,FAMILY_JOURNAL_GEMINI_MODEL'),'journal Gemini call must use the 3.7 model policy');
+assert.ok(ai.includes("resolveFeatureModels(env.DB,Number(row.family_id),'FAMILY_DAILY_JOURNAL','OWNER')"),'journal Gemini call must use the family model route');
+assert.ok(ai.includes('geminiFetch(env,model,bodyForJournal'),'journal uses the selected model');
 assert.ok(ai.includes("ai_source_content_version<>content_version"),'journal AI must refresh only after deterministic evidence changes');
 assert.ok(ai.includes('parseLocationMemberIds(row.location_json)'),'AI narrative must retain the Location member provenance needed for revocation');
 assert.ok(ai.includes("ai_status='AI_OK'"),'successful AI generation must be classified');

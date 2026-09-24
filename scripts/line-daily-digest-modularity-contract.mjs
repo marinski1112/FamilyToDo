@@ -31,8 +31,7 @@ for(const sentinel of [
   'receipts.filter(receipt=>Number(receipt.attempt_count)<3)',
   "message=renderDeterministicFacts",
   'buildLocationDigestDayFacts',
-  '【昨日の移動】',
-  '【今日の移動】',
+  '【残っている買い物】',
 ]){
   if(!digest.includes(sentinel)) throw new Error(`LINE daily digest behavior sentinel missing: ${sentinel}`);
 }
@@ -124,10 +123,10 @@ if(receiptGate<0||frameInvocation<0||frameInvocation<receiptGate||persistedGuard
   throw new Error('morning frame must retain persisted daily guard, consent-filtered profile projection, and explicit Gemini eligibility');
 }
 if(reservation<0||liveGemini<0||reservation>liveGemini||reservation<persistedGuardRead||reservation<profileLoader||reservation<aiEligibilityGuard)throw new Error('every morning Gemini live call must follow persisted/profile/eligibility checks and reserve bounded daily budget first');
-const authoritativeMarkers=['【今日の記録】','【今日の予定】','【今日のタスク】','【今日のヒント】'];
-const firstLocation=Math.min(...['【昨日の移動】','【今日の移動】'].map(marker=>digest.indexOf(marker)).filter(index=>index>=0));
-if(firstLocation<0||authoritativeMarkers.some(marker=>digest.indexOf(marker)<0||digest.indexOf(marker)>firstLocation)){
-  throw new Error('authoritative Family Log/schedule/task/advice sections must render before optional Location enrichment');
+const renderBody=digest.slice(digest.indexOf('function renderDeterministicFacts('),digest.indexOf('\nexport async function processLineDailyDigests('));
+const priorities=['【今日の予定】','【今日のタスク】','【残っている買い物】','【今日の持ち物】'];
+if(priorities.some(marker=>!renderBody.includes(marker))||renderBody.includes('【昨日の移動】')||renderBody.includes('【今日の移動】')){
+  throw new Error('morning report must prioritize actionable facts without location filler');
 }
 const adviceStart=digest.indexOf('function buildDeterministicAdvice('),adviceEnd=digest.indexOf('\nfunction buildEvidencePraise(',adviceStart);
 const adviceBody=adviceStart>=0&&adviceEnd>adviceStart?digest.slice(adviceStart,adviceEnd):'';

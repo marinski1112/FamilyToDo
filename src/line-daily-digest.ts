@@ -1,4 +1,5 @@
 import { goodsVisibilitySql } from './goods-visibility';
+import { resolveFeatureModels } from './ai-model-routing';
 import { recurringForFamilyRange } from './recurrence-projection';
 import { digestHasNumericClaim, safeDigestAttempts, type DigestAttempt, type DigestGeneration } from './line-digest-generation';
 import { dailyFortune, type DailyFortune } from './daily-fortune';
@@ -15,13 +16,13 @@ type ToneLevel='PLAIN'|'FRIENDLY'|'FRIENDLY_LIGHT';
 type DigestFactPayload={
   localDate:string;
   previousDate:string;
-  today:{events:string[];tasks:string[];bringItems:string[];completed:number;incomplete:number;overdue:number};
+  today:{events:string[];tasks:string[];bringItems:string[];shopping:string[];completed:number;incomplete:number;overdue:number};
   familyLog:{previous:string[];today:string[]};
   location:LocationDigestDayFacts;
   fortune:DailyFortune;
 };
 
-type MemberMorning={memberId:number;note:string;fortune:string};
+type MemberMorning={memberId:number;note:string};
 type Frame={opener:string;closing:string;personalNote?:string;narrativeVersion?:3;memberMorning?:MemberMorning[];generation?:DigestGeneration};
 type StoredMorningRecap={recap:string|null;narrativeVersion:3;memberMorning?:MemberMorning[];generation?:DigestGeneration};
 const TONE_LEVELS=new Set<ToneLevel>(['PLAIN','FRIENDLY','FRIENDLY_LIGHT']);
@@ -137,7 +138,7 @@ function persistedMorningFrame(raw:string|null,fallbackFrame:Frame,profiles:Fami
     if(value.recap===null)return fallbackFrame;
     const recap=clean(value.recap,MAX_MORNING_NARRATIVE_CHARS);
     if(!recap||!generatedRecapPassesSafety(recap,profiles))return null;
-    const memberMorning=Array.isArray(value.memberMorning)?value.memberMorning.filter((entry:any)=>Number.isSafeInteger(entry?.memberId)&&entry.memberId>0&&typeof entry.note==='string'&&entry.note.length<=80&&typeof entry.fortune==='string'&&entry.fortune.length<=120&&generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles)) as MemberMorning[]:[];
+    const memberMorning=Array.isArray(value.memberMorning)?value.memberMorning.filter((entry:any)=>Number.isSafeInteger(entry?.memberId)&&entry.memberId>0&&typeof entry.note==='string'&&entry.note.length<=80&&generatedRecapPassesSafety(entry.note,profiles)).map((entry:any)=>({memberId:entry.memberId,note:entry.note})) as MemberMorning[]:[];
     return {...fallbackFrame,personalNote:recap,narrativeVersion:3,memberMorning};
   }catch{return null;}
 }
@@ -156,6 +157,7 @@ function morningNarrativeEvidence(payload:DigestFactPayload,weather:MorningWeath
     today_events:payload.today.events.slice(0,5),
     today_tasks:payload.today.tasks.slice(0,6),
     today_bring_items:payload.today.bringItems.slice(0,8),
+    remaining_shopping:payload.today.shopping?.slice(0,8)||[],
     today_counts:{completed:payload.today.completed,incomplete:payload.today.incomplete,overdue:payload.today.overdue},
     ...(weather?{today_weather:formatMorningWeather(weather)}:{}),
   });
@@ -180,8 +182,9 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
   }catch{/* Missing/unavailable guard storage must not block deterministic personalized fallback. */}
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY)return fallback('NOT_CONFIGURED');
   if(!morningDigestAiEnabled(env))return fallback('DISABLED');
-  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。昨日の家族の様子と今日の予定を読み、朝いちに少し元気が出る自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"...","members":[{"memberId":123,"note":"...","fortune":"..."}]}。membersにはrecipientsの全員をIDで一度ずつ含めてください。noteは本人へ話しかける自然な応援を80文字以内、fortuneは本人向けのお楽しみ占いを120文字以内。占いは娯楽の創作として明るい予感と気軽なラッキーアクションを毎回新しく考え、名前だけ差し替えた同文を避けてください。不吉な予言、健康・お金・安全の断定、属性からの決めつけは禁止です。個人の実際の行動はevidenceに本人との対応が明記されている場合以外は推測せず、共通の予定からの提案にしてください。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、昨日できたことを具体的に認め、今日の予定・天気・タスク等から役立つ一言へ自然につないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; recipients=${JSON.stringify(recipients.map(member=>({memberId:Number(member.id),name:clean(member.name,24)})))}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:Math.min(8192,600+recipients.length*350)}};
-  const models=morningDigestModels(env);
+  const body={contents:[{role:'user',parts:[{text:`あなたは家族向けLINEの朝便を書く編集者です。今日のイベント・タスク・未購入の買い物・持ち物を優先して読み、今朝の行動に役立つ自然な短い統括を作ってください。文章全体をひとつの自由な統括として書き、定型文の穴埋めではなく、毎日言い回し・着眼点・リズムが変わって構いません。返答はJSONだけで {"recap":"...","members":[{"memberId":123,"note":"..."}]}。membersにはrecipientsの全員をIDで一度ずつ含めてください。noteは本人へ話しかける自然な応援を80文字以内、不吉な予言、健康・お金・安全の断定、属性からの決めつけは禁止です。個人の実際の行動はevidenceに本人との対応が明記されている場合以外は推測せず、共通の予定からの提案にしてください。recapは${MAX_MORNING_NARRATIVE_CHARS}文字以内、2〜5文程度で、今日の予定・タスク・買い物・持ち物を具体的な名前でまとめ、必要な準備が伝わる文章にしてください。位置情報の有無や占いを統括の主題にしないでください。冒頭あいさつと締めの定型文はサーバー側で付けるため、recapには不要です。箇条書きの単なる再掲や「メモには〜」という説明は避けてください。プロフィール文脈は、管理者がAI利用を明示許可した項目だけを最小化した補助情報です。personality_noteは好み・関心・生活背景を理解して話題や言葉選びを自然にする判断材料として使えますが、原文を引用・羅列せず、プロフィールを読んだことも明かさないでください。血液型・性別/ジェンダー・出身地・年齢・星座を本文へ直接書かず、性格・健康・能力の因果根拠にも使わないでください。健康状態、妊娠、能力、性格などを根拠なく推測しないでください。事実はevidenceにある内容だけを使い、無い出来事・感情・成果を作らないでください。PRIVATEタスク、raw GPS、座標はevidenceに入っていないため推測しないでください。後段に正確な一覧が付くので、全項目を繰り返さず重要な話題を自然につないでください。正確な数字・件数・時刻・日付は後段の一覧が担当するため、recapには算用数字・漢数字を含む数値表現を書かないでください。tone=${tone}; local_date=${localDate}; variation_seed=${morningVariant(localDate,97,1009)}; recipients=${JSON.stringify(recipients.map(member=>({memberId:Number(member.id),name:clean(member.name,24)})))}; profile_context=${profileContext}; evidence=${evidence}`}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:Math.min(8192,600+recipients.length*350)}};
+  const configured=await resolveFeatureModels(env.DB,familyId,'MORNING_DIGEST','OWNER');
+  const models=configured.source==='FAMILY_SETTING'?configured.models:morningDigestModels(env);
   let failureReason='UPSTREAM',lastModel:string|undefined;
   for(let attempt=0;attempt<models.length;attempt++){
     const model=models[attempt];lastModel=model;
@@ -205,12 +208,12 @@ async function chooseFrame(env:Env,tone:ToneLevel,familyId:number,localDate:stri
       const memberMorning:MemberMorning[]=recipients.map(member=>{
         const matches=entries.filter((entry:any)=>entry?.memberId===Number(member.id));
         const entry=matches.length===1?matches[0]:{};
-        return {memberId:Number(member.id),note:typeof entry.note==='string'?clean(entry.note,80):'',fortune:typeof entry.fortune==='string'?clean(entry.fortune,120):''};
+        return {memberId:Number(member.id),note:typeof entry.note==='string'?clean(entry.note,80):''};
       });
       evidenceAttempt.stage='RECAP_VALIDATION';evidenceAttempt.reason=digestHasNumericClaim(recap)?'NUMERIC_CLAIM':'RECAP_REJECTED';
       const recapValid=!!recap&&generatedRecapPassesSafety(recap,profiles);
-      if(recapValid){evidenceAttempt.stage='MEMBER_VALIDATION';evidenceAttempt.reason=memberMorning.some(entry=>digestHasNumericClaim(entry.note)||digestHasNumericClaim(entry.fortune))?'NUMERIC_CLAIM':'MEMBER_REJECTED';}
-      if(recapValid&&memberMorning.every(entry=>generatedRecapPassesSafety(entry.note,profiles)&&generatedRecapPassesSafety(entry.fortune,profiles))){
+      if(recapValid){evidenceAttempt.stage='MEMBER_VALIDATION';evidenceAttempt.reason=memberMorning.some(entry=>digestHasNumericClaim(entry.note))?'NUMERIC_CLAIM':'MEMBER_REJECTED';}
+      if(recapValid&&memberMorning.every(entry=>generatedRecapPassesSafety(entry.note,profiles))){
         const frame:Frame={...fallbackBase,personalNote:recap,narrativeVersion:3,memberMorning};
         evidenceAttempt.stage='COMPLETE';evidenceAttempt.reason='OK';evidenceAttempt.durationMs=Date.now()-startedAt;
         await finalizeRecapSafely(env,familyId,localDate,recap,memberMorning,{status:'AI',reason:'OK',model,attempts:safeDigestAttempts(attempts)});
@@ -244,7 +247,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
       WHERE ro.exception_task_id=t.id AND ro.family_id=t.family_id
         AND (COALESCE(rt.visibility_scope,'FAMILY')='FAMILY' OR (rt.visibility_scope='PRIVATE' AND rt.private_owner_id=?)) LIMIT 1)
     ELSE upper(COALESCE(t.task_kind,'TASK')) END`;
-  const [taskRows,taskCounts,recurringRows,bringItemRows]=await Promise.all([
+  const [taskRows,taskCounts,recurringRows,bringItemRows,shoppingRows]=await Promise.all([
     env.DB.prepare(`SELECT t.title,${effectiveKind} task_kind,t.status,t.all_day,COALESCE(t.start_at,t.due_at) at FROM tasks t
       WHERE t.family_id=? AND (COALESCE(t.visibility_scope,'FAMILY')='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?))
       AND ${effectiveKind} IN ('TASK','EVENT')
@@ -266,6 +269,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')}
         AND i.due_at IS NOT NULL AND date(i.due_at)=date(?)
       ORDER BY CASE WHEN lower(COALESCE(i.status,''))='completed' THEN 1 ELSE 0 END,i.due_at,i.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
+    env.DB.prepare(`SELECT s.name,s.quantity FROM shopping_items s WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND lower(COALESCE(s.status,'pending'))<>'completed' ORDER BY CASE WHEN s.due_date IS NOT NULL AND date(s.due_date)<=date(?) THEN 0 ELSE 1 END,s.due_date,s.id LIMIT 8`).bind(familyId,memberId,localDate).all<Row>(),
   ]);
   const recurringToday:Row[]=recurringRows.map(x=>({...x,task_kind:String(x.task_kind).toUpperCase()==='EVENT'?'EVENT':'TASK',at:x.start_at||x.due_at}));
   const todayRows=[...taskRows.results,...recurringToday].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
@@ -274,6 +278,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
   const events=eventRows.slice(0,5).map(x=>`${String(x.at).slice(0,10)<localDate?'継続中 ':Number(x.all_day)!==1&&localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
   const tasks=taskOnly.slice(0,6).map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.title)}`);
   const bringItems=bringItemRows.results.map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.name)}`).filter(x=>x.length>2);
+  const shopping=shoppingRows.results.map(x=>`${clean(x.name)}${Number(x.quantity)>1?` ×${Number(x.quantity)}`:''}`).filter(Boolean);
   const completed=Math.max(0,Number(taskCounts?.completed||0))+recurringToday.filter(x=>x.task_kind==='TASK'&&String(x.status).toLowerCase()==='completed').length,incomplete=Math.max(0,Number(taskCounts?.incomplete||0))+recurringToday.filter(x=>x.task_kind==='TASK'&&String(x.status).toLowerCase()!=='completed').length,overdue=Math.max(0,Number(taskCounts?.overdue||0));
 
   const logRows=await env.DB.prepare(`SELECT substr(l.occurred_at,1,10) local_date,l.log_type,s.name subject_name,
@@ -290,7 +295,7 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
     ORDER BY local_date,l.subject_id,l.log_type,CASE WHEN l.subject_id IS NULL THEN l.created_by ELSE 0 END LIMIT 40`).bind(familyId,previousDate,localDate).all<Row>();
   const previous=logRows.results.filter(x=>x.local_date===previousDate).slice(0,12).map(logFact);
   const today=logRows.results.filter(x=>x.local_date===localDate).slice(0,8).map(logFact);
-  return {localDate,previousDate,today:{events,tasks,bringItems,completed,incomplete,overdue},familyLog:{previous,today},location,fortune:dailyFortune(familyId,memberId,localDate)};
+  return {localDate,previousDate,today:{events,tasks,bringItems,shopping,completed,incomplete,overdue},familyLog:{previous,today},location,fortune:dailyFortune(familyId,memberId,localDate)};
 }
 
 function buildDeterministicAdvice(payload:DigestFactPayload):string[]{
@@ -356,28 +361,25 @@ function fitMorningDigest(prefix:string[],requiredSuffix:string[],maxChars=MAX_M
 
 function renderDeterministicFacts(payload:DigestFactPayload,frame:Frame,weather:MorningWeatherFact|null,members:Row[]=[]):string{
   const authoritative=[`☀️ ${payload.localDate} 朝まとめ`,frame.opener];
+  if(payload.today.events.length){authoritative.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
+  if(payload.today.tasks.length){authoritative.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
+  if(payload.today.shopping?.length){authoritative.push('【残っている買い物】',...payload.today.shopping.map(x=>`🛒 ${x}`));}
+  if(payload.today.bringItems.length){authoritative.push('【今日の持ち物】',...payload.today.bringItems.map(x=>`🎒 ${x}`));}
   if(weather)authoritative.push('【今日の天気】',formatMorningWeather(weather));
   const praise=buildEvidencePraise(payload);
   if(praise.length)authoritative.push('【昨日からのいいところ】',...praise.map(x=>`👏 ${x}`));
   if(payload.familyLog.previous.length){authoritative.push(`【昨日 ${payload.previousDate}】`,...payload.familyLog.previous);}
   if(payload.familyLog.today.length){authoritative.push('【今日の記録】',...payload.familyLog.today);}
-  if(payload.today.events.length){authoritative.push('【今日の予定】',...payload.today.events.map(x=>`📌 ${x}`));}
-  if(payload.today.tasks.length){authoritative.push(`【今日のタスク】 完了${payload.today.completed}・未完了${payload.today.incomplete}`,...payload.today.tasks);}
-  if(payload.today.bringItems.length){authoritative.push('【今日の持ち物】',...payload.today.bringItems.map(x=>`🎒 ${x}`));}
   if(payload.today.overdue)authoritative.push(`⚠️ 期限切れタスク ${payload.today.overdue}件`);
   const advice=buildDeterministicAdvice(payload);
   if(advice.length)authoritative.push('【今日のヒント】',...advice.map(x=>`💡 ${x}`));
-  if(payload.location.previous.length){authoritative.push('【昨日の移動】',...payload.location.previous);}
-  if(payload.location.today.length){authoritative.push('【今日の移動】',...payload.location.today);}
   if(authoritative.length===2)authoritative.push('昨日の記録・今日の予定はありません。');
-  const stars='★'.repeat(payload.fortune.stars)+'☆'.repeat(Math.max(0,5-payload.fortune.stars));
   const personalBudget=Math.floor(3500/Math.max(1,members.length));
   const personalLines=members.map(member=>{
     const entry=frame.memberMorning?.find(value=>value.memberId===Number(member.id));
-    const backup=dailyFortune(0,Number(member.id),payload.localDate);
-    return [`【${clean(member.name,24)||'メンバー'}さんへ】`,entry?.note||'今日も無理のないペースで。',`🔮 お楽しみ占い：${entry?.fortune||`${backup.headline} ${backup.luckyAction}`}`].join('\n').slice(0,Math.max(0,personalBudget-1));
+    return [`【${clean(member.name,24)||'メンバー'}さんへ】`,entry?.note||'今日の予定を確認して、無理のないペースで。'].join('\n').slice(0,Math.max(0,personalBudget-1));
   });
-  const requiredSuffix=personalLines.length?[...personalLines,frame.closing]:['【お楽しみ占い】',`🔮 ${stars} ${payload.fortune.headline}`,`ラッキーアクション: ${payload.fortune.luckyAction}／カラー: ${payload.fortune.luckyColor}`,frame.closing];
+  const requiredSuffix=personalLines.length?[...personalLines,frame.closing]:[frame.closing];
   const maxChars=members.length?Math.min(5000,1000+requiredSuffix.join('\n').length):MAX_MORNING_DIGEST_CHARS;
   const authoritativeText=fitMorningDigest(authoritative,requiredSuffix,maxChars);
   if(!frame.personalNote)return authoritativeText;
