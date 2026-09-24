@@ -16,7 +16,7 @@ const stripLeadingPinFromElement=element=>{
 };
 
 const stripEventPins=()=>{
-  document.querySelectorAll('.calendar-item,.calendar-band,.event-task-row a[href*="/task/view.php"],#dayModal .modal-task-copy>strong>a').forEach(stripLeadingPinFromElement);
+  document.querySelectorAll('.calendar-item,.calendar-band,.event-task-row a[href*="/task/view.php"]').forEach(stripLeadingPinFromElement);
   document.querySelectorAll('h1').forEach(heading=>{
     const text=String(heading.textContent||'');
     if(/^\s*📌\s*イベント詳細/u.test(text))heading.textContent=text.replace(/^\s*📌\s*/u,'');
@@ -64,10 +64,7 @@ const observeCalendarPins=()=>{
   if(grid instanceof HTMLElement){
     new MutationObserver(stripEventPins).observe(grid,{childList:true,subtree:true,characterData:true});
   }
-  const modal=document.getElementById('dayModal');
-  if(modal instanceof HTMLElement){
-    new MutationObserver(()=>{stripEventPins();stripEventTypeLabels();}).observe(modal,{childList:true,subtree:true,characterData:true});
-  }
+
 };
 
 const run=()=>{

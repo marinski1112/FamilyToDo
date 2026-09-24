@@ -699,3 +699,5 @@ html[data-calendar-js="ready"] .calendar-grid .calendar-cell{cursor:pointer}
 .calendar-jump-go{box-sizing:border-box;font-size:13px;line-height:1;font-weight:800;height:40px;min-height:40px;width:56px;min-width:56px;padding:0;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff!important;position:static;transform:none;margin:0;border:0;border-radius:8px}
 /* Wave128 compact server-side visibility scope control. */
 .calendar-view-filter{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 0 8px}.calendar-view-filter a{min-width:0;padding:7px 3px;border:1px solid #dbe2ea;border-radius:999px;background:#fff;color:#475569;text-align:center;text-decoration:none;font-size:12px;font-weight:700}.calendar-view-filter a.active{border-color:#6366f1;background:#eef2ff;color:#4338ca}
+
+.calendar-stamp-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0 0 8px;font-size:12px;color:#475569}.calendar-stamp-controls input{width:135px;min-width:0;padding:6px;font-size:14px}.calendar-stamp-controls button{min-height:38px}

@@ -28,12 +28,11 @@ for(const marker of [
   'recurrence_occurrence_id:t.recurrence_occurrence_id??0',
   'id="calendarPayload"',
   '/assets/calendar.js?v=${APP_VERSION}',
-  '/assets/calendar-day-inline.js?v=${APP_VERSION}',
-  '/assets/occurrence-family-log.js?v=${APP_VERSION}',
-  'id="dayModal"',
+  'id="calendarStampDate"',
   'id="calendarFab"',
   "layout('カレンダー',body,'/app/calendar.php')",
 ]) if(!page.includes(marker)) throw new Error(`calendar retained page lost behavior marker: ${marker}`);
+if(page.includes('id="dayModal"')||page.includes('/assets/calendar-day-inline.js'))throw new Error('retired date modal must not be loaded');
 
 
 if(/SELECT\s+s\.\*/i.test(page)) throw new Error('calendar shopping projection must stay explicit');
