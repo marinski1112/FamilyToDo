@@ -6,7 +6,7 @@ const routes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
-  "import { verifyLineIdToken } from './line';",
+  "import { verifyLineIdToken,safeLinePictureUrl } from './line';",
   "import { validateLiffNext } from './liff-target';",
   "import { bodyJson, RequestBodyParseError } from './request-body';",
   "import { commitSession } from './session';",

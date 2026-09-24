@@ -1,5 +1,5 @@
 import type { AppContext } from './app-context';
-import { verifyLineIdToken } from './line';
+import { verifyLineIdToken,safeLinePictureUrl } from './line';
 import { validateLiffNext } from './liff-target';
 import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
@@ -23,9 +23,13 @@ export async function liffLogin(request: Request, ctx: AppContext): Promise<Resp
 
   ctx.session.lineUserId = verified.sub;
   ctx.session.lineDisplayName = verified.name ?? '';
+  ctx.session.linePictureUrl = safeLinePictureUrl(verified.picture)||undefined;
   ctx.session.csrfToken ??= crypto.randomUUID();
   const member = await ctx.env.DB.prepare('SELECT id,family_id FROM members WHERE line_user_id=? AND active=1 LIMIT 1').bind(verified.sub).first<{id:number;family_id:number}>();
-  if (member) { ctx.session.memberId=Number(member.id); ctx.session.familyId=Number(member.family_id); }
+  if (member) {
+    ctx.session.memberId=Number(member.id); ctx.session.familyId=Number(member.family_id);
+    if(ctx.session.linePictureUrl)await ctx.env.DB.prepare('UPDATE members SET line_picture_url=? WHERE id=? AND family_id=? AND line_user_id=?').bind(ctx.session.linePictureUrl,member.id,member.family_id,verified.sub).run();
+  }
   else { delete ctx.session.memberId; delete ctx.session.familyId; }
   const requestedNext = validateLiffNext(body.next);
   console.log(JSON.stringify({stage:'LIFF_LOGIN_POST',provider:'LINE',has_next:Boolean(requestedNext),flow:Boolean(body.google_home),member_present:Boolean(member)}));

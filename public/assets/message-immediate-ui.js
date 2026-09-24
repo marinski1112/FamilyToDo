@@ -34,12 +34,13 @@ window.fetch=async(input,init)=>{
       const action=String(body?.action||'create');
       immediateRequested=action==='create'&&truthy(body?.notify_now);
       if(immediateRequested){
+        const saved=await response.clone().json();
+        if(!Number.isSafeInteger(Number(saved?.id))||Number(saved.id)<=0)throw new Error('伝言IDを取得できませんでした。');
         const notifyResponse=await nativeFetch('/api/message-immediate-notify',{
           method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',
           body:JSON.stringify({
             csrf:String(body?.csrf||''),
-            target_member_id:Number(body?.target_member_id||0),
-            text:String(body?.text||'').trim()||(url.pathname==='/api/message-stamps'?'スタンプ':'伝言'),
+            message_id:Number(saved.id),
           }),
         });
         if(!notifyResponse.ok)throw new Error('即時通知に失敗しました。');
