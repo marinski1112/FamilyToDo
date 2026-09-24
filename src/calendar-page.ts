@@ -1,4 +1,5 @@
 import { goodsVisibilitySql } from './goods-visibility';
+import { countCalendarChecklistTasks } from './calendar-checklist-summary';
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
 import { DEFAULT_CALENDAR_COLOR, isAllowedCalendarColor } from './calendar-colors';
@@ -27,7 +28,8 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
   const openRaw=String(url.searchParams.get('open')||'');
   const openCandidate=new Date(`${openRaw}T12:00:00Z`);
   const openDate=/^(?:20\d{2}|2100)-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(openRaw)&&!Number.isNaN(openCandidate.getTime())&&openCandidate.toISOString().slice(0,10)===openRaw?openRaw:'';
-  const requestedMonth=openDate?openDate.slice(0,7):month;
+  if(openDate)return redirect(`/app/tasks.php?date=${encodeURIComponent(openDate)}`);
+  const requestedMonth=month;
   const m=/^(?:20\d{2}|2100)-(?:0[1-9]|1[0-2])$/.test(requestedMonth)?requestedMonth:dateOnly().slice(0,7);
   const [y,mo]=m.split('-').map(Number);
   const first=new Date(Date.UTC(y,mo-1,1));
@@ -42,7 +44,7 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
     FROM tasks t
     LEFT JOIN task_assignees ta ON ta.task_id=t.id
     LEFT JOIN members m ON m.id=ta.member_id AND m.active=1
-    WHERE t.family_id=? AND ${taskVisibilitySql('t')} ${viewSql} AND t.calendar_visible=1
+    WHERE t.family_id=? AND ${taskVisibilitySql('t')} ${viewSql} AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
       AND (
         (t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
@@ -55,20 +57,22 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
 
   const recurRows=await recurringForRange(ctx,from,to);
   const visibleRecur=recurRows.filter(t=>{
-    if(Number(t.calendar_visible??1)!==1)return false;
+    if(String(t.task_kind||'').toUpperCase()==='EVENT'&&Number(t.calendar_visible??1)!==1)return false;
     const scope=String(t.visibility_scope||'FAMILY').toUpperCase();
     if(view==='family')return scope==='FAMILY';
     if(view==='assigned')return scope==='FAMILY'&&String(t.assignee_ids||'').split(',').map(Number).includes(member.id);
     if(view==='private')return scope==='PRIVATE'&&Number(t.private_owner_id)===member.id;
     return scope==='FAMILY'||(scope==='PRIVATE'&&Number(t.private_owner_id)===member.id);
   });
+  const parentIds=tasks.results.filter(t=>!Number(t.parent_task_id||0)&&String(t.task_kind||'').toUpperCase()!=='EVENT').map(t=>Number(t.id));
+  const undatedChildren=parentIds.length?(await ctx.env.DB.prepare(`SELECT t.id,t.parent_task_id FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.parent_task_id IN (${parentIds.map(()=>'?').join(',')}) AND t.start_at IS NULL AND t.due_at IS NULL AND upper(coalesce(t.task_kind,'TASK'))<>'EVENT'`).bind(fid,member.id,...parentIds).all<Row>()).results:[];
   const [shopping,items,journals]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
     ctx.env.DB.prepare(`SELECT i.id,i.name,i.status,i.due_at,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>(),
     ctx.env.DB.prepare("SELECT journal_date FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date BETWEEN ? AND ? ORDER BY journal_date").bind(fid,from,to).all<Row>()
   ]);
   const journalDates=journals.results.map(row=>String(row.journal_date||'')).filter(value=>/^\d{4}-\d{2}-\d{2}$/.test(value));
-  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...visibleRecur],openDate,view,journalDates));
+  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...visibleRecur],openDate,view,journalDates,undatedChildren));
 }
 
 export function calendarDisplayLabel(task:Row,options:{includeTime?:boolean}={}){
@@ -81,7 +85,7 @@ export function calendarDisplayLabel(task:Row,options:{includeTime?:boolean}={})
 
 function calendarLabelHtml(task:Row,includeTime=true){const display=calendarDisplayLabel(task,{includeTime}),icon=String(task.task_kind||'').toLowerCase()==='event'?'📌 ':'';return {accessible:`${display.time?display.time+' ':''}${icon}${display.title}`,html:`${display.time?`<span class="calendar-item-time">${display.time}</span> `:''}${icon}${esc(display.title)}`};}
 
-function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks,openDate='',view='all',journalDates:string[]=[]):string{
+function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks,openDate='',view='all',journalDates:string[]=[],undatedChildren:Row[]=[]):string{
   const map:Record<string,Row[]>=Object.create(null);
   const detailMap:Record<string,Row[]>=Object.create(null);
   const shoppingMap:Record<string,Row[]>=Object.create(null);
@@ -94,13 +98,16 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
       (target[k]??=[]).push({...t,_segment:cursorMs===range.startMs?'start':cursorMs===range.endMs?'end':'mid',_spanDays:range.spanDays});
     }
   };
-  tasks.forEach(t=>addToMap(map,t));
+  tasks.filter(t=>String(t.task_kind||'').toUpperCase()==='EVENT').forEach(t=>addToMap(map,t));
+  const taskMap:Record<string,Row[]>=Object.create(null);
+  tasks.filter(t=>String(t.task_kind||'').toUpperCase()!=='EVENT').forEach(t=>addToMap(taskMap,t));
+  const taskCount=(day:string)=>countCalendarChecklistTasks(taskMap[day]||[],undatedChildren.filter(t=>(taskMap[day]||[]).some(row=>Number(row.id)===Number(t.parent_task_id))));
   detailTasks.forEach(t=>addToMap(detailMap,t));
   for(const item of shopping){const d=String(item.due_date||'').slice(0,10);if(d)(shoppingMap[d]??=[]).push(item);}
   for(const item of items){const d=String(item.due_at||'').slice(0,10);if(d)(itemMap[d]??=[]).push(item);}
 
   const rangeByKey=new Map<string,{start:string;end:string;task:Row}>();
-  for(const t of tasks){
+  for(const t of tasks.filter(t=>String(t.task_kind||'').toUpperCase()==='EVENT')){
     const rs=String(t.start_at||t.due_at||'').slice(0,10);if(!rs)continue;
     let re=String(t.end_at||rs).slice(0,10);if(re<rs)re=rs;
     const key=String(t.id);rangeByKey.set(key,{start:rs,end:re,task:t});
@@ -121,7 +128,7 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
       const cursor=new Date(weekStart);cursor.setUTCDate(cursor.getUTCDate()+i);
       const d=cursor.toISOString().slice(0,10),inMonth=d.startsWith(month),dayItems=(map[d]||[]).filter(t=>Number(t._spanDays||1)<=1).sort((a,b)=>(Number(a.sort_order||0)-Number(b.sort_order||0))||(Number(a.id)-Number(b.id))),holiday=jpHolidayName(d),wd=cursor.getUTCDay();
       const num=d===dateOnly()?`<span class="today-num">${Number(d.slice(8))}</span>`:String(Number(d.slice(8)));
-      const accessoryRows=(itemMap[d]?.length?1:0)+(shoppingMap[d]?.length?1:0);
+      const accessoryRows=taskCount(d)||itemMap[d]?.length||shoppingMap[d]?.length?1:0;
       maxSingleRows=Math.max(maxSingleRows,Math.min(singleTaskCap,dayItems.length)+(dayItems.length>singleTaskCap?1:0));
       maxAccessoryRows=Math.max(maxAccessoryRows,accessoryRows);
       weekDays.push({d,inMonth,dayItems,holiday,wd,num,accessoryRows});
@@ -144,7 +151,9 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     for(const info of weekDays){
       const cls=['calendar-cell',info.inMonth?'':'other',info.wd===0?'sun':'',info.wd===6?'sat':'',info.holiday?'holiday':''].filter(Boolean).join(' ');
       const shown=info.dayItems.slice(0,singleTaskCap);
-      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" data-band-rows="${dayBandRows[info.d]||0}" style="--calendar-day-band-rows:${dayBandRows[info.d]||0};--calendar-day-content-top:calc(var(--calendar-date-zone) + ${dayBandRows[info.d]||0} * var(--calendar-band-step))" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim(),style=isAllowedCalendarColor(cc)?` style="background:${cc}"`:'',display=calendarLabelHtml(t);return `<div class="calendar-item seg-single ${Number(t.id)<0?'recurring-single':''} ${String(t.task_kind||'').toLowerCase()==='event'?'event-single':''}" title="${esc(display.accessible)}" aria-label="${esc(display.accessible)}"${style}>${display.html}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${itemMap[info.d]?.length?`<div class="calendar-item item">🎒 ${itemMap[info.d].length}件</div>`:''}${shoppingMap[info.d]?.length?`<div class="calendar-shopping">🛒 ${shoppingMap[info.d].length}件</div>`:''}</div></button>`;
+      const tasksToday=taskCount(info.d),shoppingToday=shoppingMap[info.d]?.length||0,itemsToday=itemMap[info.d]?.length||0,total=tasksToday+shoppingToday+itemsToday;
+      const summary=total?`<div class="calendar-shopping calendar-goods-summary" aria-label="${esc(`${tasksToday?'タスク'+tasksToday+'件 ':''}${shoppingToday?'買い物'+shoppingToday+'件 ':''}${itemsToday?'持ち物'+itemsToday+'件 ':''}`)}">${tasksToday?'✅':''}${shoppingToday?'🛒':''}${itemsToday?'🎒':''} ${total}件</div>`:'';
+      dayCells+=`<button type="button" class="${cls}" data-date="${info.d}" data-band-rows="${dayBandRows[info.d]||0}" style="--calendar-day-band-rows:${dayBandRows[info.d]||0};--calendar-day-content-top:calc(var(--calendar-date-zone) + ${dayBandRows[info.d]||0} * var(--calendar-band-step))" aria-label="${esc(info.d+(info.holiday?' '+info.holiday:'')+(total?` タスク${tasksToday}件 買い物${shoppingToday}件 持ち物${itemsToday}件`: ''))}"><div class="num">${info.num}</div><div class="calendar-items">${shown.map(t=>{const cc=String(t.calendar_color||'').trim(),style=isAllowedCalendarColor(cc)?` style="background:${cc}"`:'',display=calendarLabelHtml(t);return `<div class="calendar-item seg-single event-single" title="${esc(display.accessible)}" aria-label="${esc(display.accessible)}"${style}>${display.html}</div>`}).join('')}${info.dayItems.length>singleTaskCap?`<div class="calendar-task-overflow">+${info.dayItems.length-singleTaskCap}件</div>`:''}${summary}</div></button>`;
     }
     for(let i=0;i<7;i++){const d=new Date(weekStart);d.setUTCDate(d.getUTCDate()+i);const k=d.toISOString().slice(0,10);more+=`<span>${overflow[k]?`+${overflow[k]}件`:''}</span>`;}
     const weekStyle=`--calendar-band-rows:${bandRows};--calendar-single-rows:${Math.max(1,maxSingleRows)};--calendar-accessory-rows:${maxAccessoryRows}`;

@@ -103,7 +103,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     if(reminderRaw&&!reminderAt)return bad('通知日時が不正です。');
     const now=nowJst();
     if(reminderAt&&reminderAt<=now)return bad('通知日時は現在より後の日時を指定してください。');
-    const calendarVisible=b.calendar_visible===false||String(b.calendar_visible)==='0'?0:1;
+    const calendarVisible=isEvent&&(b.calendar_visible===false||String(b.calendar_visible)==='0')?0:1;
     const allDay=allDayRequested?1:0;
     const calendarColor=normalizeCalendarColor(b.calendar_color,normalizeCalendarColor(task.calendar_color));
 
@@ -112,8 +112,8 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     if(becamePrivate){
       await ctx.env.DB.prepare(`DELETE FROM activity_logs WHERE family_id=? AND ((target_type='task' AND target_id=?) OR (target_type='item' AND target_id IN (SELECT id FROM items WHERE family_id=? AND task_id=?)) OR (target_type='shopping' AND target_id IN (SELECT id FROM shopping_items WHERE family_id=? AND task_id=?)))`).bind(m.family_id,id,m.family_id,id,m.family_id,id).run();
     }
-    await ctx.env.DB.prepare("UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,task_kind=?,visibility_scope=?,private_owner_id=?,completion_mode=CASE WHEN ?='PRIVATE' THEN 'ANY' ELSE completion_mode END,status=CASE WHEN ?=1 THEN 'pending' ELSE status END,completed_by=CASE WHEN ?=1 THEN NULL ELSE completed_by END,completed_at=CASE WHEN ?=1 THEN NULL ELSE completed_at END,updated_at=? WHERE id=? AND family_id=?")
-      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null,makePrivate?'PRIVATE':'FAMILY',isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
+    await ctx.env.DB.prepare("UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,task_kind=?,visibility_scope=?,private_owner_id=?,completion_mode='ANY',status=CASE WHEN ?=1 THEN 'pending' ELSE status END,completed_by=CASE WHEN ?=1 THEN NULL ELSE completed_by END,completed_at=CASE WHEN ?=1 THEN NULL ELSE completed_at END,updated_at=? WHERE id=? AND family_id=?")
+      .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null,isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
     if(isEvent)await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id).run();
 
     const assignees=makePrivate?[m.id]:(Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(memberId=>memberId>0):[]);
@@ -150,7 +150,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label>場所</label><input name="location" value="${safe(task.location||'')}">
     <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea><label class="checkrow"><input id="editIsPrivate" type="checkbox" name="is_private" ${String(task.visibility_scope||'FAMILY')==='PRIVATE'?'checked':''}><span>🔒 自分専用</span></label><p class="small">他の家族にはタスク・カレンダー・詳細を表示しません</p>
     <label class="checkrow"><input id="editAllDay" type="checkbox" name="all_day" ${Number(task.all_day??0)?'checked':''}> 終日</label>
-    <label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div>
+    <div id="editCalendarControls"><label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div></div>
     <label>担当者</label><div class="assignee-list">${members.results.map(member=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${member.id}" ${selected.has(Number(member.id))?'checked':''}> ${safe(member.name)}</label>`).join('')}</div>
     <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると担当者へ指定日時に詳細を設定した通知方法で通知します。</p>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>

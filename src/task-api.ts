@@ -70,15 +70,14 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   const reminderRaw=String(b.reminderAt??'').trim();
   const reminderAt=reminderRaw && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
   if(reminderRaw && !reminderAt)return json({ok:false,error:'通知日時が不正です。'},400);
-  const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
+  const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode='ANY';
   const parentRaw=b.parent_task_id;
   const parentTaskId=parentRaw===undefined||parentRaw===null||String(parentRaw).trim()===''?null:Number(parentRaw);
   if(parentTaskId!==null&&(!Number.isInteger(parentTaskId)||parentTaskId<=0))return json({ok:false,error:'親タスクが不正です。'},400);
   if(parentTaskId!==null&&isEvent)return json({ok:false,error:'子タスクはタスクとして作成してください。'},400);
   if(parentTaskId!==null){
-    const parent=await ctx.env.DB.prepare(`SELECT id,family_id,parent_task_id,task_kind,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(parentTaskId,m.family_id,m.id).first();
+    const parent=await ctx.env.DB.prepare(`SELECT id,family_id,parent_task_id,visibility_scope,private_owner_id FROM tasks t WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(parentTaskId,m.family_id,m.id).first();
     if(!parent)return json({ok:false,error:'親タスクが見つかりません。'},404);
-    if(String(parent.task_kind)==='EVENT')return json({ok:false,error:'イベントには子タスクを追加できません。'},400);
     const link=validateTaskParentLink(
       {id:0,familyId:Number(m.family_id),parentTaskId:null,hasChildren:false,visibilityScope:isPrivate?'PRIVATE':'FAMILY',privateOwnerId:isPrivate?Number(m.id):null},
       {id:Number(parent.id),familyId:Number(parent.family_id),parentTaskId:parent.parent_task_id===null?null:Number(parent.parent_task_id),hasChildren:false,visibilityScope:String(parent.visibility_scope)==='PRIVATE'?'PRIVATE':'FAMILY',privateOwnerId:parent.private_owner_id===null?null:Number(parent.private_owner_id)},

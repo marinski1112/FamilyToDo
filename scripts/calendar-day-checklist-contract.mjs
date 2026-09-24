@@ -1,22 +1,34 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {Window} from 'happy-dom';
+import {transform} from 'esbuild';
 
-const day='2026-09-23',w=new Window({url:'https://familytodo.test/app/calendar.php?month=2026-09',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
-w.document.body.innerHTML=`<script id="calendarPayload" type="application/json">${JSON.stringify({csrf:'test',month:'2026-09',today:day,detail:{},shoppingDetail:{[day]:[{id:1,name:'牛乳',status:'pending'}]},itemDetail:{[day]:[{id:2,name:'水筒',status:'pending'}]}})}</script><div class="calendar-card"><div class="calendar-grid"><button class="calendar-cell" data-date="${day}">23</button></div></div><div id="dayModal"><div class="day-modal"><div id="modalTitle"></div><button id="modalClose"></button><div class="modal-scroll"><div id="modalBody"></div></div><a id="modalAdd"></a></div></div>`;
-const requests=[];w.fetch=async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({ok:true,status:options.body.includes('"completed":true')?'completed':'pending'})}};
-w.alert=message=>{throw new Error(message)};
+const compiled=await transform(readFileSync('src/calendar-checklist-summary.ts','utf8'),{loader:'ts',format:'esm'});
+const {countCalendarChecklistTasks:count}=await import(`data:text/javascript,${encodeURIComponent(compiled.code)}`);
+assert.equal(count([{id:1},{id:2,parent_task_id:1},{id:3,parent_task_id:1},{id:4,parent_task_id:1}],[]),3,'Three dated children replace their parent');
+assert.equal(count([{id:1},{id:2},{id:3}],[]),3,'Two parents and one recurring Task count as three');
+assert.equal(count([{id:1}], [{id:2,parent_task_id:1},{id:3,parent_task_id:1},{id:4,parent_task_id:1}]),3,'Undated children attached to a dated parent count');
+assert.equal(count([],[]),0);
+
+const day='2026-09-23';
+const w=new Window({url:'https://familytodo.test/app/calendar.php?month=2026-09',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
+w.document.body.innerHTML=`<script id="calendarPayload" type="application/json">${JSON.stringify({csrf:'test',month:'2026-09',today:day,detail:{},shoppingDetail:{},itemDetail:{}})}</script><div class="calendar-card"><div class="calendar-grid"><button class="calendar-cell" data-date="${day}">23</button></div></div><div id="dayModal"><div class="day-modal"><div id="modalTitle"></div><button id="modalClose"></button><div class="modal-scroll"><div id="modalBody"></div></div><a id="modalAdd"></a></div></div>`;
 w.eval(readFileSync('public/assets/calendar.js','utf8'));
 assert.equal(w.document.documentElement.dataset.calendarJs,'ready');
-const cell=w.document.querySelector('.calendar-cell');cell.click();
-assert.equal(w.document.querySelector('.calendar-day-checklist-link')?.getAttribute('href'),`/app/tasks.php?date=${day}`);
-for(const type of ['shop','item']){
- const check=w.document.querySelector(`.calendar-${type}-toggle`);assert(check);check.checked=true;check.dispatchEvent(new w.Event('change',{bubbles:true}));
-}
-await new Promise(resolve=>setTimeout(resolve,0));
-assert.deepEqual(requests.map(x=>x.body.completed),[true,true]);
-w.document.querySelector('#modalClose').click();cell.click();
-assert(w.document.querySelector('.calendar-shop-toggle').checked,'Shopping completion survives reopening the day');
-assert(w.document.querySelector('.calendar-item-toggle').checked,'Item completion survives reopening the day');
+w.document.querySelector('.calendar-cell').click();
+assert.equal(w.location.pathname,'/app/tasks.php');
+assert.equal(w.location.search,`?date=${day}`);
+assert.equal(w.document.getElementById('dayModal').classList.contains('open'),false);
+const page=readFileSync('src/calendar-page.ts','utf8');
+assert(page.includes('if(openDate)return redirect(`/app/tasks.php?date=${encodeURIComponent(openDate)}`);'));
+assert(page.includes("tasks.filter(t=>String(t.task_kind||'').toUpperCase()==='EVENT').forEach(t=>addToMap(map,t))"));
+assert(page.includes('const tasksToday=taskCount(info.d),shoppingToday='));
+assert(page.includes('${tasksToday?\'✅\':\'\'}${shoppingToday?\'🛒\':\'\'}${itemsToday?\'🎒\':\'\'} ${total}件'));
+const entry=readFileSync('src/task-entry-page.ts','utf8');
+const rough=readFileSync('public/assets/task-rough-input-ai.js','utf8');
+const recurring=readFileSync('src/recurring-page.ts','utf8');
+assert(!entry.includes('taskCompletionWrap')&&!rough.includes('class="rough-main-completion"')&&!rough.includes('class="rough-child-completion"'),'Task and child Task completion conditions are removed');
+assert(!recurring.includes('name="calendar_visible"')&&!recurring.includes('name="completion_mode"'),'Recurring Tasks expose neither Calendar visibility nor completion conditions');
+assert(page.includes("taskVisibilitySql('t')"),'The date summary respects private Task ownership');
 await w.happyDOM.close();
-console.log('Calendar day: Shopping/Item checks persist in the open date and link to its working Checklist');
+console.log('Calendar date goes directly to Checklist; events remain individual and goods/tasks share one summary');

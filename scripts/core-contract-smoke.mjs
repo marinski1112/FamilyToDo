@@ -113,18 +113,19 @@ for(const marker of [
   '<details class="rough-advanced"><summary>詳細設定</summary>',
   'class="rough-main-calendar-visible"',
   'class="rough-main-calendar-color"',
-  'class="rough-main-completion"',
+  'rough-main-assignees',
   'class="rough-main-private"',
   'class="rough-main-start-date"',
   'class="rough-main-end-date"',
   'class="rough-main-description"',
-  'class="rough-child-completion"',
+  'rough-child-assignees',
   'rough-item-assignees',
   'class="rough-draft-url"',
   "item.dueTime?false:",
   "syncItemFromRow(item,row)",
   '日付・数量を確認してください。',
 ])assert.ok(roughInputUi.includes(marker),`rough-input progressive confirmation marker missing: ${marker}`);
+assert.ok(!roughInputUi.includes('class="rough-main-completion"')&&!roughInputUi.includes('class="rough-child-completion"'),'task completion mode must stay out of the new task preview');
 assert.ok(!/<details[^>]*\sopen(?:\s|>)/i.test(roughInputUi),'advanced confirmation sections must start collapsed');
 
 for(const marker of [

@@ -13,7 +13,7 @@ const init=()=>{
     const noDateWrap=document.getElementById('taskNoDateWrap');
     const allDay=document.getElementById('allDay');
     const times=document.getElementById('dateTimes');
-    const completionWrap=document.getElementById('taskCompletionWrap');
+    const calendarControls=document.getElementById('taskCalendarControls');
     const calendarVisible=document.getElementById('taskCalendarVisible');
     const calendarColorWrap=document.getElementById('taskCalendarColorWrap');
     const isPrivate=document.getElementById('isPrivate');
@@ -47,7 +47,7 @@ const init=()=>{
     const syncType=()=>{
       const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';
       if(noDateWrap)noDateWrap.hidden=eventMode;
-      if(completionWrap)completionWrap.hidden=!taskMode;
+      if(calendarControls)calendarControls.hidden=!eventMode;
       if(dateInput){dateInput.required=eventMode;dateInput.setAttribute('aria-required',eventMode?'true':'false');}
       if(!taskMode){
         if(eventMode&&noDate){noDate.checked=false;noDate.disabled=true;}
@@ -99,9 +99,9 @@ const init=()=>{
         startTime:String(form.elements.startTime?.value||''),
         endTime:String(form.elements.endTime?.value||''),
         location:String(form.elements.location?.value||''),
-        calendar_visible:Boolean(calendarVisible?.checked),
+        calendar_visible:!eventMode||Boolean(calendarVisible?.checked),
         calendar_color:String(form.elements.calendar_color?.value||''),
-        completion_mode:eventMode?'ANY':String(form.elements.completion_mode?.value||'ANY'),
+        completion_mode:'ANY',
         assignees:[],
         reminderAt:String(form.elements.reminderAt?.value||''),
         shopping:[],
