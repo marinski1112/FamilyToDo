@@ -5,7 +5,7 @@ import { listGeminiModels, familyAiModelCatalog } from './family-ai';
 import { ROUTED_AI_FEATURES, routeSettingKey, resolveFeatureModels, parseRouteModels, type RoutedAiFeature, type AiAudience } from './ai-model-routing';
 
 const esc=(v:unknown)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-const labels:Record<RoutedAiFeature,string>={ROUGH_INPUT:'タスク・買い物・持ち物のざっくり入力',MESSAGE_DRAFT:'伝言からのタスク下書き'};
+const labels:Record<RoutedAiFeature,string>={ROUGH_INPUT:'タスク・買い物・持ち物のざっくり入力',MESSAGE_DRAFT:'伝言からのタスク下書き',FAMILY_DAILY_JOURNAL:'家族日誌のAI文章',MORNING_DIGEST:'朝のLINE報告',PERIODIC_DIGEST:'週次・月次のLINE報告',GOOGLE_VOICE_INQUIRY:'Google音声問い合わせの分類',CALENDAR_ICS_IMPORT:'カレンダー取込時の時刻整理'};
 const pageUrl='/app/settings_ai_models.php';
 const noStore=(response:Response)=>{response.headers.set('Cache-Control','private, no-store');return response;};
 
@@ -59,7 +59,7 @@ export async function settingsAiModelRouting(request:Request,ctx:AppContext):Pro
     }
     rows.push(`<tr><th>${labels[feature]}</th>${cells.join('')}</tr>`);
   }
-  const body=`<div class="page-head"><h1>AIモデル設定</h1><a href="/app/settings_diagnostics.php">診断へ</a></div><p>機能と操作するメンバー別の設定です。ADMINは「その他」に含まれます。同じモデルを重ねて選んでも呼び出しは増えません。</p><p>朝まとめ・家族日誌などの共有生成は、この設定への移行前です。3.6／3.7という呼称からIDを自動設定せず、プロジェクトの一覧から選びます。</p>${notice?`<p role="status">${esc(notice)}</p>`:''}<form method="post"><input type="hidden" name="csrf" value="${csrf}"><button class="btn" name="action" value="catalog">利用可能なモデルを取得</button></form><p class="small">一覧取得・設定保存・この画面の表示では文章を生成しません。一覧にあっても利用枠や機能別の生成成功は保証されません。</p><div style="overflow-x:auto"><table><thead><tr><th>機能</th><th>OWNER用モデル</th><th>その他メンバー用モデル</th></tr></thead><tbody>${rows.join('')}</tbody></table></div><style>td,th{vertical-align:top;padding:12px;border-bottom:1px solid #ddd}select{max-width:320px;width:100%}label{display:block;margin-bottom:10px}</style>`;
+  const body=`<div class="page-head"><h1>AIモデル設定</h1><a href="/app/settings_diagnostics.php">診断へ</a></div><p>機能と操作するメンバー別の設定です。ADMINは「その他」に含まれます。家族日誌とLINE報告は共有生成のため「OWNER用モデル」を使います。Family AIの会話モデルは<a href="/app/settings_integrations.php">Family AI設定</a>で選択します。</p>${notice?`<p role="status">${esc(notice)}</p>`:''}<form method="post"><input type="hidden" name="csrf" value="${csrf}"><button class="btn" name="action" value="catalog">利用可能なモデルを取得</button></form><p class="small">一覧取得・設定保存・この画面の表示では文章を生成しません。一覧にあっても利用枠や機能別の生成成功は保証されません。</p><div style="overflow-x:auto"><table><thead><tr><th>機能</th><th>OWNER用モデル</th><th>その他メンバー用モデル</th></tr></thead><tbody>${rows.join('')}</tbody></table></div><style>td,th{vertical-align:top;padding:12px;border-bottom:1px solid #ddd}select{max-width:320px;width:100%}label{display:block;margin-bottom:10px}</style>`;
   const response=html(layout('AIモデル設定',body,'/app/settings.php'));
   return noStore(new Response(response.body,{status,headers:response.headers}));
 }

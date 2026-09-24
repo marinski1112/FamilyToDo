@@ -19,6 +19,8 @@ settings.set('1|ai_model_route_v1_MESSAGE_DRAFT_OWNER','["gemini-message"]');
 assert.deepEqual(Array.from((await context.resolve(db,1,'ROUGH_INPUT','OWNER')).models),['gemini-test-owner']);
 assert.deepEqual(Array.from((await context.resolve(db,1,'ROUGH_INPUT','ADMIN')).models),['gemini-test-member']);
 assert.deepEqual(Array.from((await context.resolve(db,1,'MESSAGE_DRAFT','OWNER')).models),['gemini-message']);
+assert.deepEqual(Array.from((await context.resolve(db,1,'FAMILY_DAILY_JOURNAL','OWNER')).models),['gemini-3.6-flash','gemini-3.5-flash']);
+assert.deepEqual(Array.from((await context.resolve(db,1,'MORNING_DIGEST','OWNER')).models),['gemini-3.8-flash','gemini-3.5-flash']);
 assert.equal((await context.resolve(db,2,'ROUGH_INPUT','OWNER')).source,'FEATURE_DEFAULT');
 settings.set('2|ai_model_route_v1_ROUGH_INPUT_OWNER','["https://private.invalid/secret"]');
 assert.equal((await context.resolve(db,2,'ROUGH_INPUT','OWNER')).source,'FEATURE_DEFAULT');

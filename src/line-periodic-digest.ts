@@ -1,4 +1,5 @@
 import { sharedGoodsSql } from './goods-visibility';
+import { resolveFeatureModels } from './ai-model-routing';
 import { familyAiProvider, geminiFetch } from './family-ai';
 import { digestHasNumericClaim, type DigestGeneration } from './line-digest-generation';
 import { loadSafeFamilyAiProfileContext, type FamilyAiSafeProfileContext } from './family-ai-profile-context';
@@ -148,12 +149,14 @@ async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promis
   const prompt=`あなたは家族向けLINEの${facts.period.reportType==='WEEKLY'?'週末':'月末'}便を書く編集者です。期間中の事実を読み、家族みんなが少しうれしくなる自然な統括を作ってください。毎回、構成・着眼点・言い回しは変わって構いません。記録から確認できる積み重ねを具体的に認め、次の期間へやさしくつないでください。返答はJSONだけで {"narrative":"..."}。narrativeは${MAX_NARRATIVE_CHARS}文字以内、三〜五文程度。事実はevidenceだけを根拠にし、出来事・感情・成果を捏造しないでください。プロフィール文脈はAI利用が許可された最小情報で、personality_noteは話題や言葉選びの背景としてのみ使えます。原文を引用・要約・列挙せず、プロフィールやメモを読んだことも明かさないでください。健康・性格・能力などを推測しないでください。PRIVATEタスク、raw GPS、座標、位置履歴は渡していないため推測しないでください。正確な数字・件数・日付は後段の決定論的一覧が担当するので、本文には算用数字・漢数字を含む数値表現を書かないでください。profile_context=${safeProfileContext(profiles)}; evidence=${evidence(facts)}`;
   const editorial='占いは不要です。記録から選んだ具体的な話題、家族へのねぎらい、次の期間に試せる気軽な提案を自然につないでください。前期間の比較データは渡していないため、増減や成長を断定しないでください。記録が少ないときはその事実を穏やかに伝え、埋め合わせの出来事を創作しないでください。';
   const body={contents:[{role:'user',parts:[{text:prompt+' '+editorial}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:620}};
-  for(let attempt=0;attempt<models(env).length;attempt++){
-    lastModel=models(env)[attempt];
+  const configured=await resolveFeatureModels(env.DB,familyId,'PERIODIC_DIGEST','OWNER');
+  const choices=configured.source==='FAMILY_SETTING'?configured.models:models(env);
+  for(let attempt=0;attempt<choices.length;attempt++){
+    lastModel=choices[attempt];
     let reserved=false;try{reserved=await reservePeriodicDigestAiRequest(env.DB,familyId,facts.period.reportType,facts.period.periodKey,attempt>0);}catch{return finishFallback('STORAGE',lastModel);}
     if(!reserved)return finishFallback('BUDGET_OR_CIRCUIT',lastModel);
     try{
-      const response=await geminiFetch(env,models(env)[attempt],body);
+      const response=await geminiFetch(env,choices[attempt],body);
       if(response.status===429){try{await blockPeriodicDigestAiAfter429(env.DB);}catch{}}
       if(!response.ok){failureReason=response.status===429?'RATE_LIMIT':'UPSTREAM';continue;}
       const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||''),parsed=JSON.parse(text),narrative=clean(parsed?.narrative,MAX_NARRATIVE_CHARS);

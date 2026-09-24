@@ -97,6 +97,6 @@ const dailyRender=daily.slice(daily.indexOf('function fitMorningDigest('),daily.
 vm.runInContext(transpile('const MAX_MORNING_DIGEST_CHARS=1000,MAX_MORNING_NARRATIVE_CHARS=320; const buildEvidencePraise=()=>[],buildDeterministicAdvice=()=>[];\n'+dailyRender),context);
 const payload={localDate:'2026-09-07',previousDate:'2026-09-06',familyLog:{previous:Array(12).fill('記録'.repeat(100)),today:[]},today:{events:[],tasks:[],bringItems:[],completed:3,incomplete:4,overdue:2},location:{previous:[],today:[]},fortune:context.dailyFortune(42,0,'2026-09-07')};
 const dailyMessage=context.renderDeterministicFacts(payload,{opener:'おはよう',closing:'またね',personalNote:'家族の自由な文章。'.repeat(30)},null);
-if(dailyMessage.length>1000||!dailyMessage.includes('家族の自由な文章。'.repeat(30))||!dailyMessage.includes('完了3・未完了4／期限切れ2件')||!dailyMessage.includes('お楽しみ占い')||!dailyMessage.endsWith('またね'))throw new Error('busy morning must retain recap, totals and fortune');
+if(dailyMessage.length>1000||!dailyMessage.includes('家族の自由な文章。'.repeat(30))||!dailyMessage.includes('完了3・未完了4／期限切れ2件')||dailyMessage.includes('お楽しみ占い')||!dailyMessage.endsWith('またね'))throw new Error('busy morning must retain recap and totals without obsolete fortune');
 if(!daily.includes("if(!String(env.LINE_ACCESS_TOKEN||'').trim())return"))throw new Error('daily missing token must not consume receipts');
 console.log('line-periodic-digest-contract: scheduling, privacy, dedupe, lazy shared generation, missing-token guards and daily/periodic overflow behavior ok');
