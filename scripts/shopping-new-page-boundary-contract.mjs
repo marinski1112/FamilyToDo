@@ -32,7 +32,7 @@ for(const marker of ["return html(layout('買い物'",'id="shoppingPayload"',ret
 
 for(const marker of [
   "import type { AppContext } from './app-context';",
-  'export async function shoppingNew(ctx:AppContext,date?:string,_selectedTaskId=0):Promise<Response>{',
+  'export async function shoppingNew(ctx:AppContext,date?:string):Promise<Response>{',
   'const shoppingChecklistUrl=',
   'const checklistUrl=shoppingChecklistUrl(d);',
   'href="${checklistUrl}"',
@@ -96,7 +96,7 @@ if(!apiRoutes.includes("import { shopping } from './shopping-root';")) throw new
 if(!apiRoutes.includes("if(url.pathname==='/api/shopping') return await shopping(request,context);")) throw new Error('/api/shopping route wiring changed');
 if(!pageRoutes.includes("import { shoppingNew, shoppingEdit } from './shopping-page-handlers';")) throw new Error('page dispatcher shopping new/edit boundary changed');
 for(const marker of [
-  "if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));",
+  "if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'');",
   "if(url.pathname==='/app/shopping_edit.php') return await shoppingEdit(request,context,Number(url.searchParams.get('id')||0));",
 ]) if(!pageRoutes.includes(marker)) throw new Error(`Shopping page route changed: ${marker}`);
 

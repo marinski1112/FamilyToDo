@@ -64,7 +64,7 @@ for(const marker of [
   "SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM shopping_reusable_set_invocations",
   "Number(old.created_by_member_id)!==Number(m.id)",
   "const requestKeys=rows.map(x=>`set:${rid}:${Number(x.id)}`);",
-  "INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url,client_request_id)",
+  "INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,url,client_request_id)",
   "SELECT id,client_request_id FROM shopping_items WHERE family_id=? AND client_request_id IN",
   "UPDATE shopping_reusable_set_invocations SET created_item_ids=?,updated_at=?",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set idempotency marker missing: ${marker}`);

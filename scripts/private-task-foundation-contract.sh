@@ -13,7 +13,7 @@ for(const [file,text] of checks){const source=file==='@retained'?app:fs.readFile
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 const taskCreate=fs.readFileSync('src/task-create.ts','utf8');
 if(!taskApi.includes('privateOwnerId:isPrivate?Number(m.id):null'))throw new Error('src/task-api.ts: PRIVATE create must persist owner separately from assignees');
-if(!taskApi.includes('assigneeIds:ids')||!taskApi.includes('const ids:number[]=[]'))throw new Error('src/task-api.ts: retired assignee persistence must receive no IDs');
+if(taskApi.includes('assigneeIds')||taskCreate.includes('assigneeIds'))throw new Error('Task creation must have no assignee payload or fingerprint');
 if(!taskCreate.includes("input.visibilityScope, input.privateOwnerId??input.memberId"))throw new Error('src/task-create.ts: reminder recipients must be scoped to the PRIVATE owner');
 if(!taskCreate.includes('m.family_id=? AND m.active=1'))throw new Error('src/task-create.ts: reminder recipients must remain active family members');
 if(taskCreate.includes('task_assignees'))throw new Error('src/task-create.ts: retired assignee table must not be written');

@@ -40,7 +40,7 @@ for(const marker of [
   "const requestedType=String(url.searchParams.get('type')||'');",
   "const initialType=requestedType==='event'||requestedType==='shopping'||requestedType==='item'?requestedType:(url.searchParams.get('event')==='1'?'event':'task');",
   'return await taskEntryPage(',
-  "if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));",
+  "if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));",
 ]) if(!exceptionRoutes.includes(marker)) throw new Error(`new page route wiring changed: ${marker}`);
 for(const marker of [
   "if(payload.returnTo==='calendar')location.href=!body.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='",

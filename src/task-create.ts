@@ -25,7 +25,6 @@ export type TaskCreateInput = {
   visibilityScope: 'FAMILY' | 'PRIVATE';
   privateOwnerId: number | null;
   parentTaskId: number | null;
-  assigneeIds: number[];
 };
 
 export type TaskCreateResult =
@@ -58,7 +57,6 @@ function requestFingerprint(input: TaskCreateInput) {
     visibilityScope: input.visibilityScope,
     privateOwnerId: input.privateOwnerId,
     parentTaskId: input.parentTaskId,
-    assigneeIds: input.assigneeIds,
   };
 }
 

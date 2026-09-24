@@ -86,7 +86,6 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   }
   const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
-  const ids:number[]=[];
 
   const rawIdempotencyKey=String(request.headers.get('Idempotency-Key')||b.idempotency_key||'').trim();
   const suppliedIdempotencyKey=normalizeTaskCreateKey(rawIdempotencyKey);
@@ -97,7 +96,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
     description:String(b.description??'')||null,dueValue,completionMode,start,end,
     location:String(b.location??'')||null,allDay,calendarVisible:calendarVisibleFlag(b),calendarColor,
     taskKind:isEvent?'EVENT':'TASK',reminderAt,visibilityScope:isPrivate?'PRIVATE':'FAMILY',
-    privateOwnerId:isPrivate?Number(m.id):null,parentTaskId,assigneeIds:ids,
+    privateOwnerId:isPrivate?Number(m.id):null,parentTaskId,
   });
   if(result.state==='CONFLICT')return json({ok:false,error:'同じ登録キーが別の内容に使われています。ページを再読み込みしてください。',code:'IDEMPOTENCY_KEY_CONFLICT'},409);
   if(result.state==='GONE')return json({ok:false,error:'この登録キーで作成したタスクは既に削除されています。ページを再読み込みして新しく登録してください。',code:'IDEMPOTENCY_TARGET_DELETED'},409);

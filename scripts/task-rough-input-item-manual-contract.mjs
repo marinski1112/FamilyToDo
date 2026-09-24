@@ -53,6 +53,6 @@ for(const marker of [
   "credentials:'same-origin'",
   "root.dataset.itemNewJs='ready';",
 ]) assert.ok(itemJs.includes(marker),`canonical Belongings controller write boundary missing: ${marker}`);
-assert.ok(routes.includes("if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),Number(url.searchParams.get('task_id')||0));"),'Belongings manual reuse must target the canonical authenticated item-new route');
+assert.ok(routes.includes("if(url.pathname==='/item/new.php') return await itemNew(context,url.searchParams.get('date')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)));"),'Belongings manual reuse must target the canonical authenticated item-new route without retired Task linkage');
 
 console.log('rough-input Belongings manual fallback reuses canonical lazy item UI/controller boundary');
