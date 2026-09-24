@@ -71,11 +71,11 @@ export async function joinFamily(request: Request, ctx: AppContext): Promise<Res
 
   const promotedMemberType=promotionSubject&&['BABY','CHILD'].includes(familyLogSubjectKind(promotionSubject.subject_kind))?'CHILD':'ADULT';
   if(memberId){
-    await ctx.env.DB.prepare('UPDATE members SET name=?,active=1,member_type=CASE WHEN ?<>\'\' THEN ? ELSE member_type END,updated_at=? WHERE id=? AND family_id=?')
-      .bind(name,promotionSubject?promotedMemberType:'',promotionSubject?promotedMemberType:'',now,memberId,family.id).run();
+    await ctx.env.DB.prepare('UPDATE members SET name=?,active=1,member_type=CASE WHEN ?<>\'\' THEN ? ELSE member_type END,updated_at=?,line_picture_url=COALESCE(?,line_picture_url) WHERE id=? AND family_id=?')
+      .bind(name,promotionSubject?promotedMemberType:'',promotionSubject?promotedMemberType:'',now,ctx.session.linePictureUrl||null,memberId,family.id).run();
   } else {
-    const r=await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
-      .bind(family.id,ctx.session.lineUserId,name,promotionSubject?promotedMemberType:'ADULT','MEMBER',1,1,now,now).run();
+    const r=await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at,line_picture_url) VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .bind(family.id,ctx.session.lineUserId,name,promotionSubject?promotedMemberType:'ADULT','MEMBER',1,1,now,now,ctx.session.linePictureUrl||null).run();
     memberId=Number(r.meta.last_row_id||0);
     if(!memberId)throw new Error('家族メンバーIDを取得できませんでした。');
   }

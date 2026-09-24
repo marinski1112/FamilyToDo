@@ -5,6 +5,11 @@ export interface LineIdTokenResult {
   email?: string;
 }
 
+export function safeLinePictureUrl(picture:unknown):string|null {
+  try{const u=new URL(String(picture||''));return u.protocol==='https:'&&(u.hostname==='line-scdn.net'||u.hostname.endsWith('.line-scdn.net'))?u.href.slice(0,2048):null;}
+  catch{return null;}
+}
+
 export async function verifyLineIdToken(token: string, channelId: string, nonce?: string): Promise<LineIdTokenResult> {
   const response = await fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'POST',

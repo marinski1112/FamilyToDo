@@ -17,8 +17,8 @@ for(const marker of [
   'class="chat-photo"',
   'data-photo-share="1"',
   '/assets/messages-chat-diagnostics.js',
-  '/assets/messages-chat.js?v=${APP_VERSION}-chat8',
-  "window.scrollTo(0,document.documentElement.scrollHeight);requestAnimationFrame(()=>box.classList.remove('chat-messages-initializing'))",
+  '/assets/messages-chat.js?v=${APP_VERSION}-chat9',
+  "box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>box.classList.remove('chat-messages-initializing'))",
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
 if(/performance\.getEntriesByType\('resource'\)[\s\S]{0,300}message-stamps/.test(page))throw new Error('message opening must not wait for stamp hydration before reveal');
@@ -32,7 +32,7 @@ if(client.includes("action:'convert_shopping',id:Number(row.dataset.messageId),n
 if(/const convertTask=async[\s\S]*?await post\('\/api\/messages',\{action:'convert_task'[\s\S]*?requireConfirmation\(draft\)/.test(client)) throw new Error('task conversion must confirm the draft before mutation');
 if(/for\s*\([^)]*frames[^)]*\)[\s\S]{0,200}new Image/.test(client))throw new Error('message stamp optimization must not preload every animation frame');
 const syncApi=fs.readFileSync('src/message-chat-sync-api.ts','utf8'),routes=fs.readFileSync('src/context-api-routes.ts','utf8');
-for(const marker of ["WHERE msg.family_id=? AND msg.id>? AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?)","WHERE msg.family_id=? AND msg.sender_id<>? AND msg.reminder_at IS NOT NULL","AND msg.reminder_at>? AND msg.reminder_at<=?","const byId=new Map<number,SyncRow>();","ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}","cache-control':'private, no-store"]){if(!syncApi.includes(marker))throw new Error(`message sync API contract lost: ${marker}`);}
+for(const marker of ["WHERE msg.family_id=? AND msg.id>? AND (msg.target_member_id IS NULL OR msg.target_member_id IN (?,msg.sender_id)) AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?)","WHERE msg.family_id=? AND msg.sender_id<>? AND msg.reminder_at IS NOT NULL","AND msg.reminder_at>? AND msg.reminder_at<=?","const byId=new Map<number,SyncRow>();","ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}","cache-control':'private, no-store"]){if(!syncApi.includes(marker))throw new Error(`message sync API contract lost: ${marker}`);}
 if(!routes.includes("if(url.pathname==='/api/message-chat-sync') return await messageChatSyncApi(request,context);"))throw new Error('message sync API route wiring lost');
 const diagnostic=fs.readFileSync('public/assets/messages-chat-diagnostics.js','utf8');
 for(const marker of ["KEY='message-chat-one-shot-v1'","MODES=new Set(['stamp','dismiss'])","STAMP_FETCH_START","FIRST_FRAME_LOADED","CYCLE_2_DONE","OUTSIDE_TAP","FOCUS_RELEASED","TEXT_WAS_PRESENT","TOOLS_WAS_OPEN","SCHEDULE_VALUE_WAS_PRESENT",'伝言本文、スタンプID/URL、画像、token、位置情報は保存しません']) if(!diagnostic.includes(marker)) throw new Error(`message chat diagnostic marker lost: ${marker}`);

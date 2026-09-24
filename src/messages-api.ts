@@ -103,7 +103,7 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
         const rs=target
           ? await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(target,m.family_id).all<Row>()
           : await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND id<>?').bind(m.family_id,m.id).all<Row>();
-        if(rs.results.length)await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',id,reminderAt,'pending',`【伝言】\n${text}`,now)));
+        if(rs.results.length)await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',id,reminderAt,'pending',`【伝言】\n${text.replace(/\s+/gu,' ').slice(0,120)}`,now)));
       }
       await logActivity(ctx,'UPDATED','message',id);
       return json({ok:true});
@@ -279,9 +279,9 @@ export async function messages(request:Request,ctx:AppContext):Promise<Response>
       const rs=target
         ? await ctx.env.DB.prepare('SELECT id FROM members WHERE id=? AND family_id=? AND active=1').bind(target,m.family_id).all<Row>()
         : await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND id<>?').bind(m.family_id,m.id).all<Row>();
-      if(rs.results.length)await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',msgId,reminderAt,'pending',`【伝言】\n${text}`,now)));
+      if(rs.results.length)await ctx.env.DB.batch(rs.results.map(r=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(m.family_id,Number(r.id),'message_reminder','message',msgId,reminderAt,'pending',`【伝言】\n${text.replace(/\s+/gu,' ').slice(0,120)}`,now)));
     }
-    return commitSession(json({ok:true}),ctx.session,ctx.env.APP_SECRET);
+    return commitSession(json({ok:true,id:msgId}),ctx.session,ctx.env.APP_SECRET);
   }
 
   const [rows,members,tasks]=await Promise.all([
