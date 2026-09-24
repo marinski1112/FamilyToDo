@@ -40,13 +40,10 @@ if(view.includes('r.name recurrence_name,r.completion_mode'))throw new Error('re
 if(view.includes("returnUrl:'/app/tasks.php?date='"))throw new Error('task detail must not hard-code checklist as the post-action return destination');
 
 for(const marker of [
-  'const assignedCount=Number(assigned?.c||0);',
   "JOIN members cm ON cm.id=c.member_id AND cm.family_id=? AND cm.active=1 WHERE c.occurrence_id=?",
-  "NOT EXISTS(SELECT 1 FROM task_assignees ta0 JOIN members am0 ON am0.id=ta0.member_id AND am0.active=1 WHERE ta0.task_id=?)",
-  "EXISTS(SELECT 1 FROM task_assignees ta1 JOIN members am1 ON am1.id=ta1.member_id AND am1.active=1 WHERE ta1.task_id=? AND ta1.member_id=c.member_id)",
-  "const mode=assignedCount>0?String(occurrence.completion_mode||'ANY').toUpperCase():'ANY';",
-])if(!view.includes(marker))throw new Error(`recurrence detail must preserve unassigned family-member completion fallback: ${marker}`);
-if(view.includes('const mode=String(occurrence.completion_mode||\'ANY\').toUpperCase();'))throw new Error('unassigned recurrence detail must use effective ANY completion semantics, matching toggle API');
+  "const complete=Number(done?.c||0)>0;",
+])if(!view.includes(marker))throw new Error(`recurrence detail must count any active family member: ${marker}`);
+if(view.includes('task_assignees'))throw new Error('retired assignee table must not determine Task detail completion');
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must no longer depend on app.ts');
 if(!handlers.includes("export { taskView } from './task-view-page';"))throw new Error('task page boundary must route taskView through retained module');

@@ -87,7 +87,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   }
   const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
-  const ids=(isPrivate?[m.id]:[...new Set((Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number):[]).filter(n=>Number.isInteger(n)&&n>0))]).sort((a,b)=>a-b);
+  const ids:number[]=[];
   if(ids.length){
     const valid=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
     const validIds=new Set(valid.results.map((x:any)=>Number(x.id)));

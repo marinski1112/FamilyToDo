@@ -31,11 +31,12 @@ for(const forbidden of [
 ])if(page.includes(forbidden))throw new Error(`task edit must not manage goods linkage: ${forbidden}`);
 
 for(const forbidden of ['shopping:[...f.querySelectorAll','items:[...f.querySelectorAll','shopping_category','shopToggle','shopping_name[]','item_name[]'])if(browser.includes(forbidden))throw new Error(`task edit browser must not transport goods linkage: ${forbidden}`);
-for(const marker of ["const f=document.getElementById('taskEditForm')","fetch(location.href,{method:'POST'","assignees:[...f.querySelectorAll('[name=\"assignees\"]:checked')]"])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
+for(const marker of ["const f=document.getElementById('taskEditForm')","fetch(location.href,{method:'POST'"])if(!browser.includes(marker))throw new Error(`task edit browser transport missing: ${marker}`);
 
 if(handlers.includes("from './app'"))throw new Error('task page handlers must not depend on app.ts');
 if(!handlers.includes("export { taskEdit } from './task-edit-page';"))throw new Error('taskEdit must route through retained task edit page');
 for(const marker of ["if(url.pathname==='/task/edit.php'){",'validateTaskEditRequestHierarchy(request,context,taskId)','return await taskEdit(request,context,taskId);'])if(!routes.includes(marker))throw new Error(`task edit guarded route missing: ${marker}`);
 for(const marker of ['export async function validateTaskEditRequestHierarchy(',"if(request.method!=='POST')return {ok:true};","if(requestedEvent)return {ok:false,status:400,message:'子タスクはイベントに変更できません。'};"])if(!hierarchyGuard.includes(marker))throw new Error(`task edit hierarchy mutation guard missing: ${marker}`);
 
-console.log('task-edit-page-boundary: Task/Event editing retains its own assignment and privacy controls while never reads or mutates linked goods');
+if(page.includes('name="assignees"')||browser.includes('child-task-assignees'))throw new Error('retired assignee UI must stay absent');
+console.log('task-edit-page-boundary: Task/Event editing retains privacy controls and no assignee UI or linked goods');

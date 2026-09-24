@@ -100,9 +100,10 @@ export async function createTaskIdempotently(db: D1Database, input: TaskCreateIn
       SELECT ?,m.id,'task_reminder','task',t.id,?,'pending',?,?
       FROM tasks t
       JOIN task_create_requests r ON r.id=t.create_request_id
-      JOIN members m ON m.id=? AND m.family_id=? AND m.active=1
+      JOIN members m ON m.family_id=? AND m.active=1
+        AND (?='FAMILY' OR m.id=?)
       WHERE ${guard}`)
-      .bind(input.familyId, input.reminderAt, notificationMessage, createdAt, input.memberId, input.familyId, ...guardArgs()));
+      .bind(input.familyId, input.reminderAt, notificationMessage, createdAt, input.familyId, input.visibilityScope, input.privateOwnerId??input.memberId, ...guardArgs()));
   }
 
   if (input.visibilityScope === 'FAMILY') {

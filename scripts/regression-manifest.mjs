@@ -83,6 +83,7 @@ export const activeRegressionGroups=[
       ['goods-task-detachment','node scripts/goods-task-detachment-contract.mjs'],
       ['task-hierarchy-foundation','node scripts/task-hierarchy-foundation-contract.mjs'],
       ['task-view-page-boundary','node scripts/task-view-page-boundary-contract.mjs'],
+      ['task-any-member-completion','node scripts/task-any-member-completion-contract.mjs'],
       ['task-events-page-boundary','node scripts/task-events-page-boundary-contract.mjs'],
       ['daily-task-page-boundary','node scripts/daily-task-page-boundary-contract.mjs'],
       ['item-edit-page-boundary','node scripts/item-edit-page-boundary-contract.mjs'],

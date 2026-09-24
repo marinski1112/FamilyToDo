@@ -121,7 +121,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       ?await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>()
       :null;
     if(reminderAt&&String(reminderTask?.status||'').toLowerCase()!=='completed'){
-      const recipients=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND id=?').bind(m.family_id,Number(task.created_by)||m.id).all<Row>();
+      const recipients=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND (?=0 OR id=?)').bind(m.family_id,makePrivate?1:0,m.id).all<Row>();
       if(recipients.results.length)await ctx.env.DB.batch(recipients.results.map(row=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .bind(m.family_id,Number(row.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description||'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location||'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
     }
@@ -146,7 +146,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea><label class="checkrow"><input id="editIsPrivate" type="checkbox" name="is_private" ${String(task.visibility_scope||'FAMILY')==='PRIVATE'?'checked':''}><span>🔒 自分専用</span></label><p class="small">他の家族にはタスク・カレンダー・詳細を表示しません</p>
     <label class="checkrow"><input id="editAllDay" type="checkbox" name="all_day" ${Number(task.all_day??0)?'checked':''}> 終日</label>
     <div id="editCalendarControls"><label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div></div>
-    <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると作成者へ指定日時に詳細を設定した通知方法で通知します。</p>
+    <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">共有タスクは家族全員、自分専用タスクは本人へ通知します。</p>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
     <script src="/assets/task-edit.js?v=${APP_VERSION}"></script>`;
   return html(layout('タスク・イベント編集',body,''));
