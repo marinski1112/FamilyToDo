@@ -17,7 +17,7 @@ export type TaskParentLinkResult =
  * Validates the one-level parent/child relationship before persistence.
  *
  * This helper deliberately does not mutate tasks or infer inheritance. A child keeps its own
- * completion, assignees, schedule and recurrence. PRIVATE/FAMILY scope must match the parent so
+ * completion, schedule and recurrence. PRIVATE/FAMILY scope must match the parent so
  * linking cannot widen or ambiguously narrow visibility; PRIVATE owner identity must also match.
  */
 export function validateTaskParentLink(

@@ -44,7 +44,6 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
       );
     }
     q.push(
-      ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
       ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,now),
       ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
     );
@@ -88,11 +87,6 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   const calendarColor=normalizeCalendarColor(b.calendar_color);
   const dueValue=noDate?null:(end||start||`${date} 00:00:00`);
   const ids:number[]=[];
-  if(ids.length){
-    const valid=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(m.family_id,...ids).all();
-    const validIds=new Set(valid.results.map((x:any)=>Number(x.id)));
-    if(ids.some(id=>!validIds.has(id))) return json({ok:false,error:'担当者に無効なメンバーが含まれています。'},400);
-  }
 
   const rawIdempotencyKey=String(request.headers.get('Idempotency-Key')||b.idempotency_key||'').trim();
   const suppliedIdempotencyKey=normalizeTaskCreateKey(rawIdempotencyKey);

@@ -13,6 +13,7 @@ async function run(responses,{reserve=true,persisted=null,enabled=true}={}){
   let calls=0,stored=null;
   const context=vm.createContext({Date,JSON,Number,String,Set,Map,Math,Error,SyntaxError,Response,
     familyAiProvider:()=> 'GEMINI',loadSafeFamilyAiProfileContext:async()=>[],
+    resolveFeatureModels:async()=>({models:['gemini-3.8-flash','gemini-3.5-flash'],source:'FEATURE_DEFAULT'}),
     readFinalizedMorningDigestFrame:async()=>persisted,reserveMorningDigestAiRequest:async()=>reserve,
     finalizeMorningDigestFrame:async(_db,_f,_d,value)=>{stored=JSON.parse(value);},
     blockMorningDigestAiAfter429:async()=>{},

@@ -115,7 +115,7 @@
         response=await fetch('/api/task',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','accept':'application/json','Idempotency-Key':createKey},body:JSON.stringify({
           csrf:String(payload.csrf||''),title,description:'',is_event:false,is_private:parentPrivate,
           dateOnly:'',endDateOnly:'',noDate:true,allDay:true,startTime:'',endTime:'',location:'',
-          calendar_visible:false,calendar_color:'',completion_mode:'ANY',assignees:[],reminderAt:'',shopping:[],items:[],parent_task_id:parentId,
+          calendar_visible:false,calendar_color:'',reminderAt:'',shopping:[],items:[],parent_task_id:parentId,
         })});
       }catch{throw new Error('通信が途切れました。保存済みの可能性があるため、再試行する前に一覧を確認してください。');}
       const data=await response.json().catch(()=>null);

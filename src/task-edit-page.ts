@@ -114,7 +114,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
       .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null,isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
     if(isEvent)await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id).run();
 
-    await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id).run();
     if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);
 
     const reminderTask=reminderAt

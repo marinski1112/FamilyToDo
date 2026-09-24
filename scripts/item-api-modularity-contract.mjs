@@ -88,15 +88,15 @@ for(const sentinel of [
   "goodsVisibilitySql('i')",
   'Number(existing.created_by_member_id)!==Number(m.id)',
   "const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);",
-  "VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)",
-  'task_id,category,url,client_request_id',
+  "VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?)",
+  'category,url,client_request_id',
   "INSERT OR IGNORE INTO item_reusable_set_invocations",
   "UPDATE item_reusable_set_invocations SET created_item_ids=?,updated_at=?",
 ])if(!reusableSetApi.includes(sentinel))throw new Error(`reusable belongings set API marker missing: ${sentinel}`);
 if(/recurrence_rules|recurring_occurrence|auto.?generate/iu.test(reusableSetApi))throw new Error('reusable belongings sets must not add recurrence or automatic generation');
 
 for(const sentinel of [
-  "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=NULL,updated_at=?",
+  "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,updated_at=?",
   "SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1",
   '<label>カテゴリ</label>',
   'name="category" list="itemCategoryOptions"',

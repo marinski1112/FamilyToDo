@@ -53,8 +53,8 @@ if(/\bmessages\b/.test(appImport)) throw new Error('context API dispatcher must 
 
 const explicitlyLabelledControls=[
   'messageCreateTarget','messageCreateText','messageCreateReminder',
-  'messageShoppingName','messageShoppingQuantity','messageShoppingCategory','messageShoppingDueDate','messageShoppingTask','messageShoppingMemo','messageShoppingUrl',
-  'messageTaskMode','messageTaskExistingTarget','messageTaskTitle','messageTaskDescription','messageTaskStartTime','messageTaskEndTime','messageTaskLocation','messageTaskCompletion','messageTaskReminder','messageTaskCalendarColor',
+  'messageShoppingName','messageShoppingQuantity','messageShoppingCategory','messageShoppingDueDate','messageShoppingMemo','messageShoppingUrl',
+  'messageTaskMode','messageTaskExistingTarget','messageTaskTitle','messageTaskDescription','messageTaskStartTime','messageTaskEndTime','messageTaskLocation','messageTaskReminder','messageTaskCalendarColor',
   'messageEditTarget','messageEditText','messageEditReminder',
 ];
 for(const id of explicitlyLabelledControls){

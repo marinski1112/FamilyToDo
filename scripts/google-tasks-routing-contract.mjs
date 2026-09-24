@@ -99,7 +99,7 @@ try{
   assert.equal(await sandbox.apply({DB},{...account,family_id:2,member_id:20},revoked),'noop');
   const family=item('掃除と洗濯をタスクに追加');await sandbox.apply({DB},account,family);
   assert.equal(query("SELECT COUNT(*) n FROM tasks WHERE visibility_scope='FAMILY' AND private_owner_id IS NULL")[0].n,2);
-  assert.equal(query('SELECT COUNT(*) n FROM task_assignees')[0].n,2,'actual task assignees remain supported');
+  assert.equal(query('SELECT COUNT(*) n FROM task_assignees')[0].n,0,'routed shared tasks must not persist assignees');
   for(const [title,table] of [['買い物：パン','shopping_items'],['持ち物：上履き','items']]){
     const shared=item(title);assert.equal(await sandbox.apply({DB},account,shared),'command');
     assert.equal(await sandbox.apply({DB},account,shared),'noop');

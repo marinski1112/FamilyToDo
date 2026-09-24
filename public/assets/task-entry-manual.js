@@ -22,7 +22,7 @@ const init=()=>{
     if(initialRadio&&!initialRadio.checked){initialRadio.checked=true;initialRadio.dispatchEvent(new Event('change',{bubbles:true}));}
     let taskCreateKey=crypto.randomUUID();
 
-    const calendarReturnView=(()=>{try{const u=new URL(document.referrer);if(u.origin===location.origin&&u.pathname==='/app/calendar.php'){const v=String(u.searchParams.get('view')||'');if(['all','family','assigned','private'].includes(v))return v;}}catch{}return 'all';})();
+    const calendarReturnView=(()=>{try{const u=new URL(document.referrer);if(u.origin===location.origin&&u.pathname==='/app/calendar.php'){const v=String(u.searchParams.get('view')||'');if(['all','family','private'].includes(v))return v;}}catch{}return 'all';})();
     const syncDate=()=>{
       const mode=primary(),eventMode=mode==='event';
       if(eventMode&&noDate)noDate.checked=false;
@@ -102,7 +102,6 @@ const init=()=>{
         calendar_visible:!eventMode||Boolean(calendarVisible?.checked),
         calendar_color:String(form.elements.calendar_color?.value||''),
         completion_mode:'ANY',
-        assignees:[],
         reminderAt:String(form.elements.reminderAt?.value||''),
         shopping:[],
         items:[],

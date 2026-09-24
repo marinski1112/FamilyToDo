@@ -39,8 +39,7 @@ const OVERDUE_TASK_PAGE_SIZE=50;
 async function undatedChildrenFor(ctx:AppContext,parentIds:number[],pendingOnly=false):Promise<Row[]>{
   const member=ctx.member;if(!member||!parentIds.length)return [];
   const statusSql=pendingOnly?"t.status='pending'":"t.status IN ('pending','completed')";
-  return (await ctx.env.DB.prepare(`SELECT ${taskListColumns},
-      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
+  return (await ctx.env.DB.prepare(`SELECT ${taskListColumns}
     FROM tasks t
     WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND ${statusSql} AND ${checklistCompletionSql('t')}
       AND t.parent_task_id IN (${parentIds.map(()=>'?').join(',')})
@@ -55,8 +54,7 @@ async function expiredTaskPageFor(ctx:AppContext,date:string,cursor?:OverdueTask
   const bindings:unknown[]=[member.family_id,member.id,date];
   if(cursor)bindings.push(cursor.due,cursor.id);
   return (await ctx.env.DB.prepare(`SELECT t.id,t.title,t.status,t.due_at,t.start_at,t.end_at,t.location,t.visibility_scope,
-      COALESCE(t.end_at,t.due_at,t.start_at) AS effective_due,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
+      COALESCE(t.end_at,t.due_at,t.start_at) AS effective_due
     FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
       AND (t.task_kind IS NULL OR lower(t.task_kind)='task')
       AND COALESCE(t.end_at,t.due_at,t.start_at) IS NOT NULL
@@ -71,8 +69,7 @@ async function expiredTasksFor(ctx:AppContext,date:string):Promise<Row[]>{
 
 async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]>{
   const member=ctx.member;if(!member)return [];
-  const roots=(await ctx.env.DB.prepare(`SELECT ${taskListColumns},t.description,t.created_at,t.created_by,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
+  const roots=(await ctx.env.DB.prepare(`SELECT ${taskListColumns},t.description,t.created_at,t.created_by
     FROM tasks t
     WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status='pending'
       AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')
@@ -87,8 +84,7 @@ async function unorganizedTasksFor(ctx:AppContext):Promise<Row[]>{
 async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEventsData>{
   const member=ctx.member;if(!member)return {tasks:[],items:[],shopping:[],expiredTasks:[],expiredShopping:[]};
   const [tasks,items,recurring,expiredTasks,expiredShopping]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT t.*,
-      (SELECT GROUP_CONCAT(am.name,'、') FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=t.id) AS assignees
+    ctx.env.DB.prepare(`SELECT t.*
       FROM tasks t
       WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.status IN ('pending','completed')
         AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
@@ -139,7 +135,7 @@ async function makeTaskEventsData(ctx:AppContext,date:string):Promise<TaskEvents
   return {tasks:taskRows.filter(row=>String(row.task_kind||'').toLowerCase()==='event'||completionVisible(row)),items:items.results,shopping,expiredTasks,expiredShopping};
 }
 
-const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))} ・ 担当 ${esc(task.assignees||'未設定')}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('');
+const renderExpiredTaskRows=(tasks:Row[])=>tasks.map(task=>`<div class="expired-row" data-expired-task-id="${esc(task.id)}"><div class="checklist-row-line"><label class="expired-task-main"><input class="check toggle expired-checkbox" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${String(task.visibility_scope)==='PRIVATE'?'<span class="private-task-badge" title="自分専用">🔒</span> ':''}${esc(task.title)}</span></label><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div><div class="expired-meta">期限 ${esc(String(task.end_at||task.due_at||task.start_at).slice(0,10))}${task.location?' ・ '+esc(task.location):''}</div></div>`).join('');
 
 function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,unorganized:Row[]):string{
   const csrf=ctx.session.csrfToken??'';
@@ -215,7 +211,7 @@ function renderTaskEventsPage(ctx:AppContext,date:string,data:TaskEventsData,uno
     const children=unorganizedChildrenByParent.get(Number(task.id||0))||[];
     const childRows=children.map(child=>renderChildTask(child)).join('');
     const composer=childComposer(task,false);
-    return `<div class="row unorganized-task-row" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="meta">${esc(task.assignees||'')}</div><div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div></div>`;
+    return `<div class="row unorganized-task-row" data-task-id="${esc(task.id)}" data-task-private="${String(task.visibility_scope)==='PRIVATE'?'1':'0'}"><div class="task-main-row"><label class="task-main"><input class="check toggle" type="checkbox" data-type="task" data-id="${esc(task.id)}"><span>${privateBadge}${esc(task.title)}</span></label><div class="checklist-row-actions"><a class="checklist-row-action" href="/task/view.php?id=${esc(task.id)}" aria-label="${esc(task.title)}の詳細">詳細</a></div></div><div class="task-children" data-parent-task-id="${esc(task.id)}">${childRows}${composer}</div></div>`;
   }).join('')}</div>`:'';
   const visibleExpiredTasks=data.expiredTasks.slice(0,OVERDUE_TASK_PAGE_SIZE);
   const expiredTaskHasMore=data.expiredTasks.length>OVERDUE_TASK_PAGE_SIZE;

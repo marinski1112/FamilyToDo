@@ -3,6 +3,7 @@ export interface SessionData {
   familyId?: number;
   lineUserId?: string;
   lineDisplayName?: string;
+  linePictureUrl?: string;
   csrfToken?: string;
   authRedirectAttempts?: number;
   iat: number;

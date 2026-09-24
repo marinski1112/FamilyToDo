@@ -18,24 +18,14 @@ for(const marker of [
   "定期タスクの発生日が見つかりません。",
   "定期タスクのルールが見つかりません。",
   'const recurrenceTaskId=Number(rule.task_id);',
-  'const assignedCount=Number(assigned?.c||0);',
-  "if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'この定期タスクの担当者ではありません。'},403);",
   'INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at)',
-  'DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=? AND member_id=?',
-  'const done=assignedCount>0',
   'JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?',
-  "const mode=assignedCount>0?String(rule.completion_mode||'ANY').toUpperCase():'ANY';",
   'const completedBy=isComplete?(Number(latest?.member_id||0)||null):null;',
+  'const isComplete=Number(done?.c||0)>0;',
   'updateRecurrenceOccurrenceAggregateCompat(ctx.env.DB',
   "if(type==='task')",
   "イベントは完了チェックの対象外です。",
-  "const assignedCount=Number(assigned?.c||0);",
-  "const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees",
-  "if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'このタスクの担当者ではありません。'},403);",
-  'const done=assignedCount>0',
   'JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?',
-  "const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';",
-  "const taskComplete=mode==='ALL'?assignedCount>0&&Number(done?.c||0)>=assignedCount:Number(done?.c||0)>0;",
   'SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?',
   "await logActivity(ctx,completed?'COMPLETED':'UNCOMPLETED','task',id,{status:taskComplete?'completed':'pending'});",
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
@@ -54,7 +44,8 @@ for(const marker of [
   "taskVisibilitySql('t')",
 ]) if(!api.includes(marker)) throw new Error(`retained toggle behavior marker missing: ${marker}`);
 
-for(const retired of ['item_assignees','shopping_assignees','itemLinkedTaskId','linkedTaskId'])if(api.includes(retired))throw new Error('goods completion must not depend on assignment or parent: '+retired);
+for(const retired of ['task_assignees','item_assignees','shopping_assignees','itemLinkedTaskId','linkedTaskId'])if(api.includes(retired))throw new Error('goods completion must not depend on assignment or parent: '+retired);
+if(!api.includes('DELETE FROM task_completions WHERE task_id=?')||!api.includes('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=?'))throw new Error('undo must clear shared completion state');
 
 for(const forbiddenSql of [
   'SELECT task_id,completion_mode FROM recurrence_rules',
@@ -71,6 +62,7 @@ const recurrenceBlock=api.match(/if\(type==='recurrence'\)\{([\s\S]*?)\n  if\(ty
 if(!recurrenceBlock) throw new Error('recurrence completion block missing');
 for(const marker of [
   'const recurrenceCompletionMutation=completed',
+  'DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=?',
   'ON CONFLICT(occurrence_id,member_id) DO NOTHING',
   'const recurrenceStateChanged=Number(recurrenceCompletionMutation.meta?.changes||0)>0;',
   'if(recurrenceStateChanged){',
@@ -82,6 +74,7 @@ const taskBlock=api.match(/if\(type==='task'\)\{([\s\S]*?)\n  if\(type==='item'\
 if(!taskBlock) throw new Error('task completion block missing');
 for(const marker of [
   'const taskCompletionMutation=completed',
+  'DELETE FROM task_completions WHERE task_id=?',
   'ON CONFLICT(task_id,member_id) DO NOTHING',
   'const taskStateChanged=Number(taskCompletionMutation.meta?.changes||0)>0;',
   'if(taskStateChanged){',
@@ -128,4 +121,4 @@ if(!exceptionRoutes.includes("if(url.pathname==='/app/api/check.php'||url.pathna
 const appImport=exceptionRoutes.split('\n').find(line=>line.includes("from './app'"))||'';
 if(/\btoggle\b/.test(appImport)) throw new Error('exception routes must not import toggle from app.ts');
 
-console.log('toggle-api-boundary: retained routing, authorization, assignment fallback, task/item/shopping/recurrence retry idempotency and D1 schema compatibility ok');
+console.log('toggle-api-boundary: retained routing, ownership, shared undo, retry idempotency and D1 schema compatibility ok');

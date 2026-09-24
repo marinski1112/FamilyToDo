@@ -11,7 +11,6 @@ requireMatch(calendar,/params=new URLSearchParams\(\{edit:String\(row\.recurrenc
 requireMatch(calendar,/link\.href='\/app\/recurring\.php\?'\+params\.toString\(\)/,'negative recurring band href must be rewritten to recurring.php');
 requireMatch(calendar,/repairRecurringBandLinks\(document\.querySelector\('\.calendar-grid'\)\)/,'initial month render must repair recurring band links');
 requireMatch(calendar,/repairRecurringBandLinks\(gridNow\)/,'AJAX month replacement must repair recurring band links');
-requireMatch(calendar,/t\.recurring\?'\/app\/recurring\.php\?'/,'day-detail recurring rows must navigate directly to recurring.php');
-if(/\/task\/view\.php\?id='\+encodeURIComponent\(t\.id\)/.test(calendar) && !/t\.recurring\?'\/app\/recurring\.php\?'/.test(calendar))failures.push('task view fallback is reachable for recurring rows');
+if(/calendar-day-inline|day-detail/.test(calendar))failures.push('retired calendar day detail must stay removed');
 if(failures.length){console.error('Recurring calendar navigation contract failed:');for(const failure of failures)console.error(`- ${failure}`);process.exit(1);}
 console.log('Recurring calendar navigation contract: ok');

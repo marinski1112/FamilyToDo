@@ -187,9 +187,9 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   if(already.length){const rows=await rowsByIds(ctx,m.family_id,m.id,already);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
   const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);
   try{
-    await ctx.env.DB.batch(entries.map((row,index)=>ctx.env.DB.prepare(`INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,task_id,category,url,client_request_id)
-      VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?,?)`)
-      .bind(m.family_id,String(row.name||'').trim(),String(row.memo||'').trim()||null,`${date} 00:00:00`,m.id,now,now,null,normalizeCategory(row.category)||null,String(row.url||'').trim()||null,requestKeys[index])));
+    await ctx.env.DB.batch(entries.map((row,index)=>ctx.env.DB.prepare(`INSERT OR IGNORE INTO items(family_id,name,memo,due_at,status,completion_mode,created_by,created_at,updated_at,category,url,client_request_id)
+      VALUES(?,?,?,?,'pending','ANY',?,?,?,?,?,?)`)
+      .bind(m.family_id,String(row.name||'').trim(),String(row.memo||'').trim()||null,`${date} 00:00:00`,m.id,now,now,normalizeCategory(row.category)||null,String(row.url||'').trim()||null,requestKeys[index])));
   }catch{return bad('セットから持ち物を作成できませんでした。',500,'INVOKE_SAVE_FAILED');}
   const placeholders=requestKeys.map(()=>'?').join(',');
   const itemResult=await ctx.env.DB.prepare(`SELECT id,name,category,client_request_id FROM items WHERE family_id=? AND client_request_id IN (${placeholders})`).bind(m.family_id,...requestKeys).all();

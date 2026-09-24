@@ -58,7 +58,6 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     const action=String(b.action||'save');
     if(action==='delete'){
       await ctx.env.DB.batch([
-        ctx.env.DB.prepare('DELETE FROM shopping_assignees WHERE shopping_item_id=?').bind(id),
         ...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
         ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id),
       ]);
@@ -72,7 +71,7 @@ export async function shoppingEdit(request:Request,ctx:AppContext,id:number):Pro
     if(rawUrl){try{const url=new URL(rawUrl);if(!['http:','https:'].includes(url.protocol))throw new Error();}catch{return bad('URLが不正です。');}}
     const quantity=String(b.quantity||'1').trim()||'1';
     const due=String(b.due_date||'').trim()||null;
-    await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,task_id=NULL,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,quantity,category||null,String(b.memo||'')||null,due,rawUrl||null,nowJst(),id,m.family_id).run();
+    await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,due_date=?,url=?,updated_at=? WHERE id=? AND family_id=?').bind(name,quantity,category||null,String(b.memo||'')||null,due,rawUrl||null,nowJst(),id,m.family_id).run();
     return redirect(shoppingChecklistUrl(due||item.due_date));
   }
 

@@ -1,7 +1,7 @@
 import { resolveFamilyGeminiModel } from './family-ai';
 import { resolveFeatureModels, ROUTED_AI_FEATURES } from './ai-model-routing';
 
-export const FAMILY_JOURNAL_GEMINI_MODEL='gemini-3.7-flash';
+export const FAMILY_JOURNAL_GEMINI_MODEL='gemini-3.6-flash';
 
 export type AiModelInventoryItem={
   feature:string;
@@ -18,12 +18,6 @@ export async function resolveAiModelInventory(db:D1Database,familyId:number,env:
     routed.push({feature:`${feature}_${audience}`,models:route.models,source:route.source,note:'機能別の管理設定。左から使用し、同じモデルへの重複試行はしません。'});
   }
   return [
-    {
-      feature:'FAMILY_DAILY_JOURNAL',
-      models:[FAMILY_JOURNAL_GEMINI_MODEL],
-      source:'FEATURE_DEFAULT',
-      note:'家族日誌専用。決定論的要約をフォールバックとして保持します。',
-    },
     ...routed,
     {
       feature:'FAMILY_AI',

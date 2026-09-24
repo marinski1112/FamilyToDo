@@ -14,11 +14,12 @@ for(const marker of [
   "finalizeMessageConversionClaimStatement(ctx.env.DB,m.family_id,id,'task'",
 ]) if(!handler.includes(marker))throw new Error(`message conversion idempotency handler marker missing: ${marker}`);
 
-const shoppingSql="INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,task_id,url,source_message_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?)";
+const shoppingSql="INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,url,source_message_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)";
 const taskSql='INSERT OR IGNORE INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,reminder_at,source_message_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
 if(!handler.includes(shoppingSql))throw new Error('shopping source-message insert SQL/placeholder contract changed');
 if(!handler.includes(taskSql))throw new Error('task source-message insert SQL/placeholder contract changed');
-if(handler.includes("VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?,?)"))throw new Error('shopping source-message insert has an extra placeholder');
+if(handler.includes('updated_at,task_id,url,source_message_id'))throw new Error('shopping source-message insert must not restore task linkage');
+if(handler.includes('INSERT OR IGNORE INTO shopping_assignees')||handler.includes('INSERT OR IGNORE INTO task_assignees'))throw new Error('message conversion must not persist assignees');
 
 for(const marker of [
   "INSERT OR IGNORE INTO message_conversion_claims",

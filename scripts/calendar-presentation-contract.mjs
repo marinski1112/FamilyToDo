@@ -54,7 +54,7 @@ assert.match(calendar,/\/app\/recurring\.php\?/,'recurring Calendar bands must p
 assert.match(calendar,/gridNow\.innerHTML=nextGrid\.innerHTML;[\s\S]*?detail=payload\.detail\|\|\{\};[\s\S]*?repairRecurringBandLinks\(gridNow\)/,'AJAX month replacement must repair recurring band links using the replacement payload');
 assert.match(calendar,/repairRecurringBandLinks\(document\.querySelector\('\.calendar-grid'\)\)/,'initial Calendar grid must repair recurring band links');
 assert.ok(!app.includes('id="dayModal"'),'retired date detail must not be rendered');
-assert.ok(!app.includes('/assets/calendar-day-inline.js'),'retired inline editor must not be loaded');
+assert.ok(!app.includes('calendar-day-inline.js'),'retired inline editor must not be loaded');
 assert.ok(ui.includes("Number(row?.spanDays||1)<=1"),'one-day rows must be detected by spanDays, not legacy segment labels');
 assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule cap must include recurring/task/event rows while excluding carry-item rows');
 assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'third and later schedule rows must stay hidden despite important display rules');

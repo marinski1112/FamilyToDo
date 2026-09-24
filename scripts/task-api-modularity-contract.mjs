@@ -64,7 +64,7 @@ for(const sentinel of [
 
 for(const sentinel of [
   "const guard = `r.family_id=? AND r.member_id=? AND r.scope=? AND r.idempotency_key=? AND r.request_hash=? AND r.status='PROCESSING' AND r.lease_token=? AND COALESCE(r.lease_expires_at,'')>?`",
-  'JOIN json_each(?) a',
+  'FROM task_create_requests r',
   'db.batch(statements)',
   "SET status='DONE',task_id=(SELECT id FROM tasks WHERE create_request_id=task_create_requests.id)",
   'readCompletedTaskCreate',
@@ -75,6 +75,7 @@ for(const sentinel of [
 for(const retired of ['TaskCreateShoppingInput','shoppingItems','itemNames','shoppingCategory','shopping_assignees','item_assignees']){
   if(taskCreate.includes(retired)) throw new Error(`atomic task create must remain goods-independent: ${retired}`);
 }
+if(taskCreate.includes('INSERT INTO task_assignees')||taskCreate.includes('JOIN json_each(?) a'))throw new Error('task creation must not persist assignee rows');
 if(taskCreate.includes('logTaskCreationCleanupFailure')) throw new Error('idempotent create must not depend on best-effort partial cleanup');
 if(!manual.includes("'Idempotency-Key':taskCreateKey")) throw new Error('manual task create must send a stable idempotency key');
 if(!roughSave.includes('row.dataset.taskCreateKey=crypto.randomUUID()')) throw new Error('rough task rows must own stable idempotency keys');

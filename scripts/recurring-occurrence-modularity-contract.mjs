@@ -19,7 +19,7 @@ for(const sentinel of [
   'et?`${endDate} ${et}`:null',
   'INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode',
   "'OCCURRENCE'",
-  'INSERT OR IGNORE INTO task_assignees(task_id,member_id)',
+  "String(occ.visibility_scope||'FAMILY'),occ.private_owner_id||null",
   'INSERT OR IGNORE INTO task_completions(task_id,member_id,action,completed_at)',
   'INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)',
   'UPDATE recurrence_occurrences SET exception_task_id=?,updated_at=?',

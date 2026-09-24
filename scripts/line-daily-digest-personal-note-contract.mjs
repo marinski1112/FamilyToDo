@@ -14,7 +14,7 @@ const context=vm.createContext({
   loadSafeFamilyAiProfileContext:async()=>[],readFinalizedMorningDigestFrame:async()=>stored,
   finalizeMorningDigestFrame:async(_db,_family,_date,raw)=>{stored=raw;},
   reserveMorningDigestAiRequest:async()=>true,blockMorningDigestAiAfter429:async()=>{},
-  familyAiProvider:()=> 'GEMINI',formatMorningWeather:()=> '晴れ',
+  familyAiProvider:()=> 'GEMINI',formatMorningWeather:()=> '晴れ',resolveFeatureModels:async()=>({models:['gemini-3.8-flash','gemini-3.5-flash'],source:'FEATURE_DEFAULT'}),
   geminiFetch:async(_env,_model,body)=>{calls++;prompt=body.contents[0].parts[0].text;return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(output)}]}}]})};},
   FAMILY_LOG_TYPE_META:{},console,
 });
@@ -30,9 +30,12 @@ assert.equal(frame.memberMorning.length,2);
 assert.equal(JSON.parse(stored).generation.status,'AI');
 assert.ok(prompt.includes('"memberId":1')&&prompt.includes('"memberId":2'));
 const individual=context.renderDeterministicFacts(facts,frame,null,[recipients[0]]);
-assert.ok(individual.includes(output.members[0].fortune)&&!individual.includes(output.members[1].fortune));
+assert.ok(individual.includes(output.members[0].note)&&!individual.includes(output.members[1].note));
 const shared=context.renderDeterministicFacts(facts,frame,null,recipients);
-assert.ok(shared.includes(output.members[0].fortune)&&shared.includes(output.members[1].fortune));
+const practical=context.renderDeterministicFacts({...facts,today:{...facts.today,events:['学校行事'],tasks:['□ 書類提出'],shopping:['牛乳'],bringItems:['□ 水筒']},familyLog:{previous:[],today:[]}},frame,null,recipients);
+for(const item of ['学校行事','書類提出','牛乳','水筒'])assert.ok(practical.includes(item),`morning output must keep ${item}`);
+assert.ok(shared.includes(output.members[0].note)&&shared.includes(output.members[1].note));
+assert.ok(!shared.includes("お楽しみ占い"));
 assert.equal(shared.split(output.recap).length-1,1);
 assert.ok(shared.includes('完了3・未完了4／期限切れ2件')&&shared.length<=5000);
 await context.chooseFrame(env,'FRIENDLY',42,facts.localDate,facts,null,recipients);
@@ -42,7 +45,7 @@ assert.equal(context.persistedMorningFrame(badStored,{},[]).memberMorning.length
 stored=null;
 await context.chooseFrame({...env,GEMINI_API_KEY:''},'FRIENDLY',42,facts.localDate,facts,null,recipients);
 assert.equal(JSON.parse(stored).generation.reason,'NOT_CONFIGURED');
-stored=null;output.members[1].fortune='';
+stored=null;output.members[1].note='';
 await context.chooseFrame(env,'FRIENDLY',42,facts.localDate,facts,null,recipients);
 assert.equal(JSON.parse(stored).generation.reason,'INVALID_OUTPUT');
 assert.equal(calls,3,'invalid bundle allows only the existing primary/fallback attempts');

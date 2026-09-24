@@ -29,7 +29,7 @@ export async function createFamily(request: Request, ctx: AppContext): Promise<R
   const familyInsert = await ctx.env.DB.prepare('INSERT INTO families(family_code,name,created_at,updated_at) VALUES(?,?,?,?)').bind(familyCode,familyName,now,now).run();
   const familyId = Number(familyInsert.meta.last_row_id ?? 0);
   if(!familyId) throw new Error('家族IDを取得できませんでした。');
-  const memberResult = await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(familyId,ctx.session.lineUserId,memberName,'ADULT','OWNER',1,1,now,now).run();
+  const memberResult = await ctx.env.DB.prepare('INSERT INTO members(family_id,line_user_id,name,member_type,role,notification_enabled,active,created_at,updated_at,line_picture_url) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(familyId,ctx.session.lineUserId,memberName,'ADULT','OWNER',1,1,now,now,ctx.session.linePictureUrl||null).run();
   const memberId = Number(memberResult.meta.last_row_id);
   await ctx.env.DB.batch([
     ctx.env.DB.prepare('INSERT OR IGNORE INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?)').bind(familyId,'timezone',JSON.stringify('Asia/Tokyo'),now),

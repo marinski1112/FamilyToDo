@@ -12,10 +12,10 @@ INSERT INTO members(id,family_id,line_user_id,name,role,active,created_at,update
 (701,701,'goods-owner','Owner','OWNER',1,'now','now'),(702,701,'goods-admin','Admin','ADMIN',1,'now','now');
 INSERT INTO tasks(id,family_id,title,status,created_by,created_at,updated_at,visibility_scope,private_owner_id)
 VALUES(701,701,'Private','pending',701,'now','now','PRIVATE',701);
-INSERT INTO items(id,family_id,name,status,created_by,created_at,updated_at,task_id,completed_by,completed_at)
-VALUES(701,701,'Item','completed',701,'now','now',701,701,'2026-09-19 10:00:00');
-INSERT INTO shopping_items(id,family_id,name,status,created_by,created_at,updated_at,task_id,completed_by,completed_at)
-VALUES(701,701,'Shopping','completed',701,'now','now',701,701,'2026-09-19 10:00:00');
+INSERT INTO items(id,family_id,name,status,created_by,created_at,updated_at,completed_by,completed_at)
+VALUES(701,701,'Item','completed',701,'now','now',701,'2026-09-19 10:00:00');
+INSERT INTO shopping_items(id,family_id,name,status,created_by,created_at,updated_at,completed_by,completed_at)
+VALUES(701,701,'Shopping','completed',701,'now','now',701,'2026-09-19 10:00:00');
 UPDATE items SET visibility_scope='PRIVATE',private_owner_id=701 WHERE id=701;
 UPDATE shopping_items SET visibility_scope='PRIVATE',private_owner_id=701 WHERE id=701;
 `);
@@ -38,8 +38,6 @@ for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['sh
     resolveShoppingCategoryOptions:()=>[],shoppingCategoryKey:value=>value.toLowerCase(),validateLiffNext:value=>value,
   });
   vm.runInContext(visibility+'\n'+source+`\nglobalThis.handler=${handler};`,context);
-  for(const relation of [701,null]){
-  db.prepare(`UPDATE ${table} SET task_id=? WHERE id=701`).run(relation);
   for(const memberId of [701,702])for(const method of ['GET','POST']){
     mutations.length=0;
     const request=new Request('https://fixture.invalid/edit',{method,...(method==='POST'?{headers:{'content-type':'application/json'},body:JSON.stringify({csrf:'fixture',name:'Updated',task_id:null,assignees:[],date:'2026-09-20',due_date:'2026-09-20'})}:{})});
@@ -47,11 +45,10 @@ for(const [file,handler,table] of [['item-edit-page.ts','itemEdit','items'],['sh
     if(memberId===702){assert.equal(result.status,404);assert.equal(mutations.length,0);continue;}
     if(method==='GET')assert.doesNotMatch(await result.text(),/name="(?:assignees|task_id)"/);
     else assert.equal(result.status,302);
-    const row=db.prepare(`SELECT task_id,status,completed_by,completed_at FROM ${table} WHERE id=701`).get();
-    assert.deepEqual({...row},{task_id:method==='POST'?null:relation,status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00'});
+    const row=db.prepare(`SELECT status,completed_by,completed_at,visibility_scope,private_owner_id FROM ${table} WHERE id=701`).get();
+    assert.deepEqual({...row},{status:'completed',completed_by:701,completed_at:'2026-09-19 10:00:00',visibility_scope:'PRIVATE',private_owner_id:701});
     assert(mutations.every(sql=>!/(?:DELETE|INSERT).*completions|SET status=/i.test(sql)));
-  }
   }
 }
 db.close();
-console.log('goods edit runtime: owner edits detach legacy Task linkage; admin denied; forged linkage/assignees cannot change Goods ownership, privacy or completion');
+console.log('goods edit runtime: owner edits preserve private Goods and completion; admin denied; forged linkage/assignees cannot change Goods ownership, privacy or completion');

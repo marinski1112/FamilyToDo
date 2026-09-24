@@ -49,8 +49,8 @@ assert.match(taskEdit,/is_private:editIsPrivate\?\.checked\|\|false/,'edit submi
 assert.match(taskEditServer,/const makePrivate=truthy\(b\.visibility_scope==='PRIVATE'\|\|b\.is_private,false\);/,'server edit flow must honor PRIVATE for both TASK and EVENT');
 assert.doesNotMatch(taskEditServer,/const makePrivate=!isEvent&&/,'server edit flow must not force EVENT visibility back to FAMILY');
 assert.ok(taskEditServer.includes("makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null"),'server edit flow must persist PRIVATE scope and owner');
-assert.ok(taskEditServer.includes('const assignees=makePrivate?[m.id]'),'PRIVATE task/event reminders and child assignments must remain owner-scoped');
-assert.ok(taskEditServer.includes("if(reminderAt&&assignees.length&&String(reminderTask?.status||'').toLowerCase()!=='completed'){"),'scheduled reminders must be generated only from the resolved assignee recipient scope and a non-completed final task state');
+assert.ok(taskEditServer.includes("(?=0 OR id=?)")&&taskEditServer.includes('makePrivate?1:0,m.id'),'PRIVATE reminder recipients must remain owner-scoped');
+assert.ok(taskEditServer.includes("if(reminderAt&&String(reminderTask?.status||'').toLowerCase()!=='completed'){"),'scheduled reminders must be generated only for a non-completed final task state');
 
 // Task creation transport failure handling
 assert.match(taskEntryManual,/await response\.json\(\)\.catch\(\(\)=>null\)/,'task creation must tolerate non-JSON error responses');
@@ -59,7 +59,7 @@ assert.match(taskEntryManual,/catch\(_error\)\{alert\('登録に失敗しまし�
 assert.doesNotMatch(taskEntryManual,/data\?\.error|_error\.message|error\.message|console\.(?:log|warn|error)\(/,'task creation failures must not surface or log arbitrary server/exception detail');
 assert.match(taskEntryManual,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
 assert.match(taskEntryManual,/document\.referrer/,'Calendar task creation must recover the originating Calendar navigation state');
-assert.match(taskEntryManual,/\['all','family','assigned','private'\]\.includes\(v\)/,'Calendar return view must be constrained to the supported filter allowlist');
+assert.match(taskEntryManual,/\['all','family','private'\]\.includes\(v\)/,'Calendar return view must be constrained to the supported filter allowlist');
 assert.match(taskEntryManual,/\/app\/calendar\.php\?view='\+encodeURIComponent\(calendarReturnView\)\+'&month='/,'successful Calendar task creation must retain the active filter when returning');
 assert.doesNotMatch(sw,/const STATIC_CACHE='familytodo-static-message-delete-error-handling'/,'task creation asset changes must remain past the pre-fix static cache namespace so first-visit delivery is preserved');
 

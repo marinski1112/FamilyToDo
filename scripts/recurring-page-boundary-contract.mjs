@@ -30,8 +30,8 @@ for(const marker of [
   "'recurrence_split_future'",
   "'SPLIT_FUTURE'",
   "await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,taskId,now);",
-  "DELETE FROM recurrence_occurrence_completions WHERE member_id NOT IN",
-  "UPDATE recurrence_occurrences SET status=CASE WHEN",
+  "JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1",
+  "UPDATE recurrence_occurrences SET\n          status=CASE WHEN",
   "saveTaskFamilyLogTemplate(ctx,newTaskId,b,validatedFamilyLogTemplate)",
   "saveTaskFamilyLogTemplate(ctx,taskId,b,validatedFamilyLogTemplate)",
   "await ensureFamilyLogMemberSubjects(ctx,m.family_id,m.id);",
@@ -50,7 +50,7 @@ for(const retired of [
   'shopping_assignees',
   'item_assignees',
 ])if(page.includes(retired))throw new Error(`recurring task lifecycle must not read/write linked goods: ${retired}`);
-if(page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN"))throw new Error('recurring series-wide assignee edits must use canonical task completion reconciliation');
+if(page.includes('task_assignees')||page.includes("DELETE FROM task_completions WHERE task_id=? AND member_id NOT IN"))throw new Error('recurring series-wide assignee edits must use canonical task completion reconciliation');
 
 for(const marker of [
   "export const FAMILY_LOG_TYPES=Object.keys(FAMILY_LOG_TYPE_META);",

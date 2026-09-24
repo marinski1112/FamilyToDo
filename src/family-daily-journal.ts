@@ -30,7 +30,7 @@ async function readSharedLocationMemberIds(db:D1Database,familyId:number):Promis
 async function readLocation(db:D1Database,familyId:number,date:string):Promise<LocationSummary[]>{
   const [days,stays]=await Promise.all([
     db.prepare(`SELECT a.member_id,m.name,a.route_point_count FROM location_history_archive_days a JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id AND m.active=1 WHERE a.family_id=? AND a.local_date=? AND EXISTS (SELECT 1 FROM location_devices d WHERE d.family_id=a.family_id AND d.member_id=a.member_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL) ORDER BY m.id`).bind(familyId,date).all<Row>(),
-    db.prepare(`SELECT s.member_id,s.started_at,s.ended_at,s.duration_minutes,COALESCE(NULLIF(s.address_label,''),s.place_label) place_label FROM location_history_stays s WHERE s.family_id=? AND s.local_date=? AND EXISTS (SELECT 1 FROM members m JOIN location_devices d ON d.member_id=m.id AND d.family_id=m.family_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL WHERE m.id=s.member_id AND m.family_id=s.family_id AND m.active=1) ORDER BY s.member_id,s.started_at,s.id LIMIT 300`).bind(familyId,date).all<Row>(),
+    db.prepare(`SELECT s.member_id,s.started_at,s.ended_at,s.duration_minutes,CASE WHEN (s.place_label IN ('自宅','家','我が家','職場','会社','勤務先') OR s.place_label LIKE '自宅付近%' OR s.place_label LIKE '職場付近%') THEN s.place_label ELSE COALESCE(NULLIF(s.address_label,''),s.place_label) END place_label FROM location_history_stays s WHERE s.family_id=? AND s.local_date=? AND EXISTS (SELECT 1 FROM members m JOIN location_devices d ON d.member_id=m.id AND d.family_id=m.family_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL WHERE m.id=s.member_id AND m.family_id=s.family_id AND m.active=1) ORDER BY s.member_id,s.started_at,s.id LIMIT 300`).bind(familyId,date).all<Row>(),
   ]);
   const grouped=new Map<number,LocationSummary['stays']>();
   for(const row of stays.results){const id=Number(row.member_id),list=grouped.get(id)||[];list.push({from:String(row.started_at||''),to:String(row.ended_at||''),minutes:Number(row.duration_minutes||0),place:String(row.place_label||'未登録地点付近')});grouped.set(id,list);}
@@ -55,7 +55,13 @@ function summaryDetails(values:string[]):string{
 
 function summary(location:LocationSummary[],tasks:TaskSummary[],housework:HouseworkSummary[]):string{
   const out:string[]=[];
-  if(location.length){const stays=location.flatMap(member=>member.stays),details=summaryDetails(stays.map(stay=>stay.place));out.push(`位置記録${location.length}人分・滞在${stays.length}件${details?`（${details}）`:''}。`);}
+  for(const member of location){
+    const places=member.stays.map(stay=>stay.place).filter(place=>place&&place!=='未登録地点付近');
+    if(!places.length)continue;
+    const home=places.filter(place=>/^(自宅|家|我が家)(付近)?$/.test(place)),work=places.filter(place=>/^(職場|会社|勤務先)(付近)?$/.test(place)),visited=summaryDetails(places.filter(place=>!/^(自宅|家|我が家|職場|会社|勤務先)(付近)?$/.test(place)));
+    const actions=[...(home.length?['自宅で過ごし']:[]),...(work.length?['職場で過ごし']:[]),...(visited?[`${visited}に立ち寄り`]:[])];
+    if(actions.length)out.push(`${member.name}さんは${actions.join('、')}ました。`);
+  }
   if(tasks.length){const details=summaryDetails(tasks.map(task=>task.title));out.push(`完了タスク${tasks.length}件${details?`（${details}）`:''}。`);}
   if(housework.length){const details=summaryDetails(housework.map(item=>item.name));out.push(`家事${housework.length}件${details?`（${details}）`:''}。`);}
   return out.join('')||'この日は、日次総括に残す記録がありませんでした。';

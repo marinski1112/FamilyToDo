@@ -86,9 +86,12 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
         if(!nextActive){
           await ctx.env.DB.batch([
             ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,target,m.family_id),
-            ctx.env.DB.prepare('DELETE FROM task_assignees WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
             ctx.env.DB.prepare('DELETE FROM task_completions WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
-            ctx.env.DB.prepare("UPDATE tasks SET status=CASE WHEN completion_mode='ALL' THEN CASE WHEN (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id)>0 AND (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id)>= (SELECT COUNT(*) FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=tasks.id) THEN 'completed' ELSE 'pending' END ELSE CASE WHEN (SELECT COUNT(*) FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=tasks.id)>0 THEN 'completed' ELSE 'pending' END END, completed_by=NULL, completed_at=NULL, updated_at=? WHERE family_id=?").bind(now,m.family_id),
+            ctx.env.DB.prepare(`UPDATE tasks SET
+              status=CASE WHEN EXISTS(SELECT 1 FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id) THEN 'completed' ELSE 'pending' END,
+              completed_by=(SELECT tc.member_id FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id ORDER BY tc.completed_at DESC LIMIT 1),
+              completed_at=(SELECT tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id ORDER BY tc.completed_at DESC LIMIT 1),
+              updated_at=? WHERE family_id=? AND COALESCE(task_kind,'TASK')<>'EVENT'`).bind(now,m.family_id),
           ]);
         }
         await logActivity(ctx,nextActive?'MEMBER_REACTIVATED':'MEMBER_DEACTIVATED','member',target);
@@ -98,9 +101,13 @@ export async function settings(request:Request,ctx:AppContext):Promise<Response>
       const now=nowJst();
       await ctx.env.DB.batch([
         ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE member_id=? AND family_id=? AND status IN ('pending','retry')").bind(now,target,m.family_id),
-        ctx.env.DB.prepare('DELETE FROM task_assignees WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
         ctx.env.DB.prepare('DELETE FROM task_completions WHERE member_id=? AND task_id IN (SELECT id FROM tasks WHERE family_id=?)').bind(target,m.family_id),
         ctx.env.DB.prepare('UPDATE members SET active=0,notification_enabled=0,deleted_at=?,updated_at=? WHERE id=? AND family_id=?').bind(now,now,target,m.family_id),
+        ctx.env.DB.prepare(`UPDATE tasks SET
+              status=CASE WHEN EXISTS(SELECT 1 FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id) THEN 'completed' ELSE 'pending' END,
+              completed_by=(SELECT tc.member_id FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id ORDER BY tc.completed_at DESC LIMIT 1),
+              completed_at=(SELECT tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=tasks.family_id AND am.active=1 WHERE tc.task_id=tasks.id ORDER BY tc.completed_at DESC LIMIT 1),
+              updated_at=? WHERE family_id=? AND COALESCE(task_kind,'TASK')<>'EVENT'`).bind(now,m.family_id),
       ]);
       await logActivity(ctx,'MEMBER_DELETED','member',target);
       return json({ok:true});
