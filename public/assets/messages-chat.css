@@ -7,3 +7,8 @@
 /* Reverse flow starts at the newest message without an initial scroll animation. */
 .messages-chat-page #chatMessages{display:flex;flex-direction:column-reverse;scrollbar-gutter:auto;overflow-anchor:none}
 .messages-chat-page #chatMessages>*{flex-shrink:0}
+
+/* Reserve media space before asynchronous stamp and photo loads. */
+.chat-message.has-stamp .chat-bubble{box-sizing:border-box;width:132px;height:132px;padding:2px;background:transparent;box-shadow:none;display:grid;place-items:center;color:#64748b;font-size:11px}
+.chat-message.has-stamp .chat-stamp{width:128px;height:128px;object-fit:contain}
+.chat-photo{box-sizing:border-box;width:min(56vw,240px);height:min(56vw,240px);max-height:none;object-fit:contain}

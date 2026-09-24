@@ -54,3 +54,7 @@ await import('./photo-transfer-contract.mjs');
 await import('./photo-share-ui-contract.mjs');
 const css=fs.readFileSync('public/assets/messages-chat.css','utf8');
 if(!css.includes('flex-direction:column-reverse')||page.includes('box.scrollTop=box.scrollHeight')||client.includes('scrollToLatest(true);syncMessages(false)'))throw new Error('chat must start at newest without a delayed initial scroll');
+
+const syncSource=fs.readFileSync('src/message-chat-sync-api.ts','utf8'),style=fs.readFileSync('public/assets/messages-chat.css','utf8');
+for(const marker of ['message_stamp_attachments a JOIN calendar_stamp_assets asset','has_stamp'])if(!page.includes(marker)||!syncSource.includes(marker))throw Error('initial and incremental stamp classification diverged');
+if(!style.includes('.chat-message.has-stamp .chat-bubble')||!style.includes('.chat-photo{box-sizing:border-box;width:min(56vw,240px)')||!client.includes('item.hasStamp'))throw Error('media hydration changes chat geometry');
