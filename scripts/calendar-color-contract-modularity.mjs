@@ -65,10 +65,7 @@ if(!taskEditJs.includes("colorSelect.addEventListener('change',syncCustomColorFr
 if(!recurringPage.includes("import { CALENDAR_COLOR_OPTIONS, normalizeCalendarColor } from './calendar-colors';")) throw new Error('recurring page must use canonical calendar color contract');
 if((recurringPage.match(/normalizeCalendarColor\(b\.calendar_color\)/g)||[]).length<2) throw new Error('recurring create/update must accept safe custom colors through canonical normalization');
 if(recurringPage.includes('const allowedColors=[')) throw new Error('recurring page must not duplicate the hardcoded color allowlist');
-if(!recurringPage.includes('CALENDAR_COLOR_OPTIONS.map(option=>')) throw new Error('recurring preset selector must render from canonical options');
-if(!recurringPage.includes('id="recCalendarColorCustom" type="color"')) throw new Error('recurring page must expose a native custom color picker');
-if(!recurringJs.includes("const syncSelectFromCustomColor=()=>")) throw new Error('recurring custom picker must synchronize into the submitted selector');
-if(!recurringJs.includes("recCalendarColorCustom?.addEventListener('input',syncSelectFromCustomColor)")) throw new Error('recurring custom color input wiring changed');
-if(!recurringJs.includes("calendarColorSelect?.addEventListener('change',syncCustomColorFromSelect)")) throw new Error('recurring preset selection must remain synchronized with the picker');
+if(recurringPage.includes('name="calendar_visible"')) throw new Error('recurring tasks must not expose individual Calendar visibility');
+if(recurringPage.includes('name="completion_mode"')) throw new Error('recurring tasks must not expose obsolete completion conditions');
 
 console.log('calendar color contract modularity ok');

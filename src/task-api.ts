@@ -70,7 +70,7 @@ export async function taskApi(request:Request,ctx:any):Promise<Response>{
   const reminderRaw=String(b.reminderAt??'').trim();
   const reminderAt=reminderRaw && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderRaw)?reminderRaw.replace('T',' ')+':00':null;
   if(reminderRaw && !reminderAt)return json({ok:false,error:'通知日時が不正です。'},400);
-  const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode=isPrivate?'ANY':(String(b.completion_mode||'ANY').toUpperCase()==='ALL'?'ALL':'ANY');
+  const isPrivate=(b.is_private===true||String(b.is_private)==='1'||String(b.visibility_scope)==='PRIVATE');const completionMode='ANY';
   const parentRaw=b.parent_task_id;
   const parentTaskId=parentRaw===undefined||parentRaw===null||String(parentRaw).trim()===''?null:Number(parentRaw);
   if(parentTaskId!==null&&(!Number.isInteger(parentTaskId)||parentTaskId<=0))return json({ok:false,error:'親タスクが不正です。'},400);

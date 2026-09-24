@@ -27,7 +27,8 @@ assert.deepEqual(actualColors,expectedColors,'calendar color values/order change
 assert.ok(!colors.includes('TimeTree'),'visible calendar color labels must not include TimeTree');
 
 assert.ok(page.includes('export async function taskEntryPage('),'unified entry page must be canonical renderer');
-assert.ok(page.includes('data-task-only="1"'),'task-only manual controls must be explicit');
+assert.ok(page.includes('id="taskCalendarControls"'),'Event calendar controls must be explicit');
+assert.ok(!page.includes('id="taskCompletionWrap"'),'Task completion mode is no longer configurable');
 assert.ok(page.includes('id="taskNoDateWrap"'),'no-deadline control must be addressable by type');
 assert.ok(!page.includes('id="isEvent"'),'manual create page must not contain redundant event checkbox');
 assert.ok(!page.includes('name="is_event"'),'manual create page must not submit a checkbox-derived event type');
@@ -44,11 +45,12 @@ assert.ok(taskDelete.includes("exception_task_id=NULL,status=?,completed_by=?,co
 for(const marker of [
   "const mode=primary(),eventMode=mode==='event',taskMode=mode==='task';",
   'if(noDateWrap)noDateWrap.hidden=eventMode;',
-  'if(completionWrap)completionWrap.hidden=!taskMode;',
+  'if(calendarControls)calendarControls.hidden=!eventMode;',
+
   'dateInput.required=eventMode',
   "is_event:eventMode,",
   "noDate:eventMode?false:Boolean(noDate?.checked),",
-  "completion_mode:eventMode?'ANY':",
+  "completion_mode:'ANY',",
   'assignees:[],',
 ])assert.ok(manual.includes(marker),`manual task/event contract missing: ${marker}`);
 assert.ok(taskApi.includes("if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);"),'server must reject EVENT creation without a date');

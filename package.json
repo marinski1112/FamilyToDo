@@ -1,6 +1,6 @@
 {
   "name": "familytodo-cloudflare",
-  "version": "12.148.5-wave128",
+  "version": "12.148.6-wave128",
   "private": true,
   "description": "FamilyToDo LINE family application on Cloudflare Workers and D1",
   "type": "module",
