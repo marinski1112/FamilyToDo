@@ -59,7 +59,7 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/settings_integrations.php') return await integrationsSettings(request,context);
   if(url.pathname==='/app/settings_ai_models.php') return await settingsAiModelRouting(request,context);
   if(url.pathname==='/app/message_new.php') return await messageNew(context);
-  if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));
+  if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'');
   if(url.pathname==='/app/settings_content.php') return await settingsContent(context);
   if(url.pathname==='/app/settings_diagnostics.php') return await settingsDiagnostics(context);
   if(url.pathname==='/app/settings_members.php') return await settingsMembers(request,context);

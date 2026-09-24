@@ -35,7 +35,7 @@ try{
     if(destination==='shopping')return {...base,quantity:value(row,'.rough-draft-quantity')||'1',category:categoryValue(row),url:value(row,'.rough-draft-url'),dueDate:value(row,'.rough-draft-due-date')};
     if(destination==='item')return {...base,dueDate:value(row,'.rough-draft-due-date')};
     if(destination==='child_task')return {...base,dueDate:value(row,'.rough-draft-due-date'),dueTime:value(row,'.rough-draft-due-time'),completion:'ANY',assignees:[]};
-    return {...base,startDate:value(row,'.rough-main-start-date'),endDate:value(row,'.rough-main-end-date'),allDay:checked(row,'.rough-main-all-day'),startTime:value(row,'.rough-main-start-time'),endTime:value(row,'.rough-main-end-time'),location:value(row,'.rough-main-location'),description:value(row,'.rough-main-description'),isPrivate:checked(row,'.rough-main-private'),calendarVisible:destination!=='event'||checked(row,'.rough-main-calendar-visible'),calendarColor:value(row,'.rough-main-calendar-color'),completion:'ANY',assignees:[],reminderAt:value(row,'.rough-main-reminder')};
+    return {...base,startDate:value(row,'.rough-main-start-date'),endDate:value(row,'.rough-main-end-date'),allDay:checked(row,'.rough-main-all-day'),startTime:value(row,'.rough-main-start-time'),endTime:value(row,'.rough-main-end-time'),location:value(row,'.rough-main-location'),description:value(row,'.rough-main-description'),isPrivate:checked(row,'.rough-main-private'),calendarVisible:destination!=='event'||checked(row,'.rough-main-calendar-visible'),calendarColor:value(row,'.rough-main-calendar-color'),completion:'ANY',reminderAt:value(row,'.rough-main-reminder')};
   };
 
   const validateRows=rows=>{
@@ -81,7 +81,7 @@ try{
 
   const taskPayload=(item,parentTaskId=null,parentPrivate=false)=>({
     csrf:csrf(),idempotency_key:item.taskCreateKey||'',title:item.title,description:item.description||'',is_event:item.destination==='event',is_private:parentTaskId?parentPrivate:Boolean(item.isPrivate),
-    dateOnly:item.startDate||item.dueDate||'',endDateOnly:item.endDate||item.dueDate||item.startDate||'',noDate:item.destination!=='event'&&!(item.startDate||item.dueDate),allDay:item.destination==='child_task'?!item.dueTime:Boolean(item.allDay),startTime:item.destination==='child_task'?(item.dueTime||''):(item.startTime||''),endTime:item.destination==='child_task'?'':(item.endTime||''),location:item.location||'',calendar_visible:item.destination==='event'?Boolean(item.calendarVisible):true,calendar_color:item.calendarColor||'',completion_mode:'ANY',assignees:parentTaskId&&parentPrivate?[]:(item.assignees||[]),reminderAt:item.reminderAt||'',parent_task_id:parentTaskId,
+    dateOnly:item.startDate||item.dueDate||'',endDateOnly:item.endDate||item.dueDate||item.startDate||'',noDate:item.destination!=='event'&&!(item.startDate||item.dueDate),allDay:item.destination==='child_task'?!item.dueTime:Boolean(item.allDay),startTime:item.destination==='child_task'?(item.dueTime||''):(item.startTime||''),endTime:item.destination==='child_task'?'':(item.endTime||''),location:item.location||'',calendar_visible:item.destination==='event'?Boolean(item.calendarVisible):true,calendar_color:item.calendarColor||'',completion_mode:'ANY',reminderAt:item.reminderAt||'',parent_task_id:parentTaskId,
   });
 
   async function saveTask(item,parentTaskId=null,parentPrivate=false){return await postJson('/api/task',taskPayload(item,parentTaskId,parentPrivate));}

@@ -63,12 +63,15 @@ test('cleanup and full integrity audit run at low frequency',()=>{
   assert.match(index,/if\(plan\.dailyNotificationAudit\)[\s\S]*auditNotificationLifecycle\(env\)/);
 });
 
-test('recurrence assignee reads reuse the projected task set',()=>{
-  assert.ok(recurrence.includes("projectedTaskIds=[...new Set(projected.map(({rule})=>Number(rule.task_id)).filter(Number.isInteger))]"));
-  assert.ok(recurrence.includes('WHERE ta.task_id IN (${projectedTaskPlaceholders}) GROUP BY ta.task_id`).bind(...projectedTaskIds).all<Row>()'));
-  assert.equal(recurrence.includes("const assigneeOverlapSql=recurrenceOverlapSql('rr','rt');"),false);
-  assert.equal(recurrence.includes('WHERE EXISTS(SELECT 1 FROM recurrence_rules rr JOIN tasks rt'),false);
-  assert.ok(recurrence.includes("r.family_id=? AND ${taskVisibilitySql('t')} AND r.active=1"));
+test('recurrence completion read is bounded to projected rules and dates',()=>{
+  const segment=recurrence.slice(recurrence.indexOf('export async function recurringForFamilyRange'),recurrence.indexOf('export async function recurringForDate'));
+  assert.ok(segment.includes("r.family_id=? AND ${taskVisibilitySql('t')} AND r.active=1"));
+  assert.ok(segment.includes('o.recurrence_rule_id IN (${projectedRulePlaceholders})'));
+  assert.ok(segment.includes('o.occurrence_date BETWEEN ? AND ? GROUP BY c.occurrence_id'));
+  assert.equal((segment.match(/FROM recurrence_occurrence_completions c/g)||[]).length,1);
+  assert.equal((segment.match(/db\.prepare\(/g)||[]).length,4,'three bounded reads plus batched missing inserts');
+  assert.equal(segment.includes('task_assignees'),false);
+  assert.ok(segment.includes('Scheduled family summaries use memberId=0 for FAMILY-only visibility.')===false);
   assert.ok(recurrence.includes('Scheduled family summaries use memberId=0 for FAMILY-only visibility.'));
 });
 

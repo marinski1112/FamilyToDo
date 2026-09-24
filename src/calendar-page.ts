@@ -24,7 +24,7 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
   if(!member){const url=new URL(request.url);return redirect(`/login.php?next=${encodeURIComponent(url.pathname+url.search)}`);}
   const url=new URL(request.url);
   const requestedView=String(url.searchParams.get('view')||'all');
-  const view=['all','family','assigned','private'].includes(requestedView)?requestedView:'all';
+  const view=['all','family','private'].includes(requestedView)?requestedView:'all';
   const openRaw=String(url.searchParams.get('open')||'');
   const openCandidate=new Date(`${openRaw}T12:00:00Z`);
   const openDate=/^(?:20\d{2}|2100)-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(openRaw)&&!Number.isNaN(openCandidate.getTime())&&openCandidate.toISOString().slice(0,10)===openRaw?openRaw:'';
@@ -37,13 +37,11 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
   const end=new Date(Date.UTC(y,mo,0));end.setUTCDate(end.getUTCDate()+(6-end.getUTCDay()));
   const from=start.toISOString().slice(0,10),to=end.toISOString().slice(0,10),fid=member.family_id;
 
-  const viewSql=view==='family'?" AND t.visibility_scope='FAMILY'":view==='assigned'?" AND t.visibility_scope='FAMILY' AND EXISTS (SELECT 1 FROM task_assignees viewer_ta WHERE viewer_ta.task_id=t.id AND viewer_ta.member_id=?)":view==='private'?" AND t.visibility_scope='PRIVATE' AND t.private_owner_id=?":'';
-  const viewBinds=(view==='assigned'||view==='private')?[member.id]:[];
+  const viewSql=view==='family'?" AND t.visibility_scope='FAMILY'":view==='private'?" AND t.visibility_scope='PRIVATE' AND t.private_owner_id=?":'';
+  const viewBinds=view==='private'?[member.id]:[];
   const tasks=await ctx.env.DB.prepare(`
-    SELECT t.*,GROUP_CONCAT(m.name,'、') assignees
+    SELECT t.*
     FROM tasks t
-    LEFT JOIN task_assignees ta ON ta.task_id=t.id
-    LEFT JOIN members m ON m.id=ta.member_id AND m.active=1
     WHERE t.family_id=? AND ${taskVisibilitySql('t')} ${viewSql} AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
       AND (
@@ -51,7 +49,6 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
         OR
         (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at) BETWEEN date(?) AND date(?))
       )
-    GROUP BY t.id
     ORDER BY coalesce(t.start_at,t.due_at),t.sort_order,t.id
   `).bind(fid,member.id,...viewBinds,to,from,from,to).all<Row>();
 
@@ -60,19 +57,16 @@ export async function calendar(request:Request,ctx:AppContext,month:string):Prom
     if(String(t.task_kind||'').toUpperCase()==='EVENT'&&Number(t.calendar_visible??1)!==1)return false;
     const scope=String(t.visibility_scope||'FAMILY').toUpperCase();
     if(view==='family')return scope==='FAMILY';
-    if(view==='assigned')return scope==='FAMILY'&&String(t.assignee_ids||'').split(',').map(Number).includes(member.id);
     if(view==='private')return scope==='PRIVATE'&&Number(t.private_owner_id)===member.id;
     return scope==='FAMILY'||(scope==='PRIVATE'&&Number(t.private_owner_id)===member.id);
   });
   const parentIds=tasks.results.filter(t=>!Number(t.parent_task_id||0)&&String(t.task_kind||'').toUpperCase()!=='EVENT').map(t=>Number(t.id));
   const undatedChildren=parentIds.length?(await ctx.env.DB.prepare(`SELECT t.id,t.parent_task_id FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')} AND t.parent_task_id IN (${parentIds.map(()=>'?').join(',')}) AND t.start_at IS NULL AND t.due_at IS NULL AND upper(coalesce(t.task_kind,'TASK'))<>'EVENT'`).bind(fid,member.id,...parentIds).all<Row>()).results:[];
-  const [shopping,items,journals]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title,(SELECT GROUP_CONCAT(m.name,'、') FROM shopping_assignees sa JOIN members m ON m.id=sa.member_id AND m.active=1 WHERE sa.shopping_item_id=s.id) assignees FROM shopping_items s LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.id,i.name,i.status,i.due_at,(SELECT GROUP_CONCAT(m.name,'、') FROM item_assignees ia JOIN members m ON m.id=ia.member_id AND m.active=1 WHERE ia.item_id=i.id) assignees FROM items i LEFT JOIN tasks pt ON pt.id=i.task_id AND pt.family_id=i.family_id WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>(),
-    ctx.env.DB.prepare("SELECT journal_date FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date BETWEEN ? AND ? ORDER BY journal_date").bind(fid,from,to).all<Row>()
+  const [shopping,items]=await Promise.all([
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date FROM shopping_items s WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND s.due_date BETWEEN ? AND ? ORDER BY s.due_date,s.category,s.name,s.id`).bind(fid,member.id,from,to).all<Row>(),
+    ctx.env.DB.prepare(`SELECT i.id,i.name,i.status,i.due_at FROM items i WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND i.due_at IS NOT NULL AND date(i.due_at) BETWEEN date(?) AND date(?) ORDER BY i.due_at,i.id`).bind(fid,member.id,from,to).all<Row>()
   ]);
-  const journalDates=journals.results.map(row=>String(row.journal_date||'')).filter(value=>/^\d{4}-\d{2}-\d{2}$/.test(value));
-  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...visibleRecur],openDate,view,journalDates,undatedChildren));
+  return html(renderCalendarPage(ctx,m,start,end,[...tasks.results,...visibleRecur],shopping.results,items.results,[...tasks.results,...visibleRecur],openDate,view,undatedChildren));
 }
 
 export function calendarDisplayLabel(task:Row,options:{includeTime?:boolean}={}){
@@ -85,7 +79,7 @@ export function calendarDisplayLabel(task:Row,options:{includeTime?:boolean}={})
 
 function calendarLabelHtml(task:Row,includeTime=true){const display=calendarDisplayLabel(task,{includeTime}),icon=String(task.task_kind||'').toLowerCase()==='event'?'📌 ':'';return {accessible:`${display.time?display.time+' ':''}${icon}${display.title}`,html:`${display.time?`<span class="calendar-item-time">${display.time}</span> `:''}${icon}${esc(display.title)}`};}
 
-function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks,openDate='',view='all',journalDates:string[]=[],undatedChildren:Row[]=[]):string{
+function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,tasks:Row[],shopping:Row[],items:Row[]=[],detailTasks:Row[]=tasks,openDate='',view='all',undatedChildren:Row[]=[]):string{
   const map:Record<string,Row[]>=Object.create(null);
   const detailMap:Record<string,Row[]>=Object.create(null);
   const shoppingMap:Record<string,Row[]>=Object.create(null);
@@ -160,12 +154,12 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
     cells+=`<div class="calendar-week" style="${weekStyle}"><div class="calendar-week-days">${dayCells}</div><div class="calendar-week-bands">${bars}</div><div class="calendar-week-more">${more}</div></div>`;
   }
 
-  const shoppingDetail=Object.fromEntries(Object.entries(shoppingMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,quantity:t.quantity,category:t.category,status:t.status,due_date:t.due_date,task_title:t.task_title,assignees:t.assignees}))]));
-  const itemDetail=Object.fromEntries(Object.entries(itemMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,status:t.status,due_at:t.due_at,assignees:t.assignees}))]));
+  const shoppingDetail=Object.fromEntries(Object.entries(shoppingMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,quantity:t.quantity,category:t.category,status:t.status,due_date:t.due_date}))]));
+  const itemDetail=Object.fromEntries(Object.entries(itemMap).map(([k,v])=>[k,v.map(t=>({id:t.id,name:t.name,status:t.status,due_at:t.due_at}))]));
   const detail=Object.fromEntries(Object.entries(detailMap).map(([k,v])=>[k,v.sort((a,b)=>(Number(a.sort_order||0)-Number(b.sort_order||0))||(Number(a.id)-Number(b.id))).map(t=>({
     id:t.id,title:t.title,start_at:t.start_at,end_at:t.end_at,due_at:t.due_at,
     location:t.location,description:t.description??t.memo??'',
-    recurring:Number(t.id)<0,family_log_template_id:Number(t.family_log_template_id||0),recurrence_rule_id:t.recurrence_rule_id??0,recurrence_occurrence_id:t.recurrence_occurrence_id??0,occurrence_date:t.occurrence_date??'',status:t.status??'pending',assignees:t.assignees??'',segment:t._segment??'single',spanDays:Number(t._spanDays||1),calendar_color:t.calendar_color??'',calendar_visible:Number(t.calendar_visible??1),task_kind:String(t.task_kind||''),sort_order:Number(t.sort_order||0)
+    recurring:Number(t.id)<0,family_log_template_id:Number(t.family_log_template_id||0),recurrence_rule_id:t.recurrence_rule_id??0,recurrence_occurrence_id:t.recurrence_occurrence_id??0,occurrence_date:t.occurrence_date??'',status:t.status??'pending',segment:t._segment??'single',spanDays:Number(t._spanDays||1),calendar_color:t.calendar_color??'',calendar_visible:Number(t.calendar_visible??1),task_kind:String(t.task_kind||''),sort_order:Number(t.sort_order||0)
   }))]));
   const holidays=Object.fromEntries(
     Array.from({length:Math.round((end.getTime()-start.getTime())/86400000)+1},(_,i)=>{
@@ -175,10 +169,10 @@ function renderCalendarPage(ctx:AppContext,month:string,start:Date,end:Date,task
   );
   const prev=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5))-2,1)).toISOString().slice(0,7);
   const next=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),1)).toISOString().slice(0,7);
-  const calendarPayload=JSON.stringify({detail,shoppingDetail,itemDetail,holidays,journalDates,month,prev,next,view,openDate,from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),today:dateOnly(),csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  const script=`<script src="/assets/calendar.js?v=${APP_VERSION}"></script><script src="/assets/calendar-day-inline.js?v=${APP_VERSION}"></script><script src="/assets/occurrence-family-log.js?v=${APP_VERSION}"></script>`;
+  const calendarPayload=JSON.stringify({detail,shoppingDetail,itemDetail,holidays,month,prev,next,view,openDate,from:start.toISOString().slice(0,10),to:end.toISOString().slice(0,10),today:dateOnly(),csrf:ctx.session.csrfToken??''}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  const script=`<script src="/assets/calendar.js?v=${APP_VERSION}"></script>`;
   const body='<div class="page-head calendar-page-head"><div><h1>📅 カレンダー</h1><button type="button" class="calendar-month-label" id="monthLabel" aria-expanded="false" aria-controls="calendarJumpPanel">'+month.slice(0,4)+'年'+Number(month.slice(5))+'月 ▼</button><div class="calendar-jump-panel" id="calendarJumpPanel" hidden><form id="calendarMonthJump" class="calendar-jump-row calendar-month-jump"><select aria-label="年" name="year">'+Array.from({length:101},(_,i)=>2000+i).map(y=>`<option value="${y}" ${y===Number(month.slice(0,4))?'selected':''}>${y}</option>`).join('')+'</select><select aria-label="月" name="month">'+Array.from({length:12},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===Number(month.slice(5))?'selected':''}>${n}</option>`).join('')+'</select><button type="submit" class="calendar-jump-go">移動</button></form><form id="calendarDateJump" class="calendar-jump-row calendar-date-jump"><input aria-label="日付指定" name="date" type="date" min="2000-01-01" max="2100-12-31" value="${openDate||dateOnly()}"><button type="submit" class="calendar-jump-go">移動</button></form><div class="calendar-jump-shortcuts"><a class="btn gray small" href="/app/calendar.php?month=${dateOnly().slice(0,7)}">今月</a><a class="btn gray small" href="/app/calendar.php?month=${dateOnly().slice(0,7)}&open=${dateOnly()}">今日</a></div></div></div><div class="calendar-month-actions"><a id="prevMonth" data-month="'+prev+'" class="btn gray" href="/app/calendar.php?view='+view+'&month='+prev+'" aria-label="前の月">‹</a> <a id="nextMonth" data-month="'+next+'" class="btn gray" href="/app/calendar.php?view='+view+'&month='+next+'" aria-label="次の月">›</a></div></div>'+
-    '<nav class="calendar-view-filter" aria-label="表示範囲">'+[['all','すべて'],['family','共通'],['assigned','自分担当'],['private','自分専用']].map(([key,label])=>`<a class="${view===key?'active':''}" href="/app/calendar.php?view=${key}&month=${month}${openDate?'&open='+openDate:''}">${label}</a>`).join('')+'</nav>'+'<div class="card calendar-card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
-    '<a class="fab calendar-fab" id="calendarFab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a><div class="modal-backdrop" id="dayModal"><div class="day-modal"><div class="modal-top"><button id="modalPrev" class="modal-day-nav" type="button" aria-label="前の日">‹</button><h2 id="modalTitle"></h2><button id="modalNext" class="modal-day-nav" type="button" aria-label="次の日">›</button><button id="modalReorder" class="btn gray small modal-reorder" type="button">並べ替え</button><button id="modalClose" class="btn gray modal-close" type="button" aria-label="閉じる">×</button></div><div class="modal-swipe-hint">左右にスワイプして日付移動</div><div class="modal-scroll"><div id="modalBody" class="modal-body"></div></div><a id="modalAdd" class="modal-add-fab" href="#" aria-label="この日にタスクを追加">＋</a></div></div><script type="application/json" id="calendarPayload">'+calendarPayload+'</script>'+script;
+    '<nav class="calendar-view-filter" aria-label="表示範囲">'+[['all','すべて'],['family','共通'],['private','自分専用']].map(([key,label])=>`<a class="${view===key?'active':''}" href="/app/calendar.php?view=${key}&month=${month}${openDate?'&open='+openDate:''}">${label}</a>`).join('')+'</nav>'+'<div class="calendar-stamp-controls"><label for="calendarStampDate">スタンプの日付</label><input id="calendarStampDate" type="date" min="2000-01-01" max="2100-12-31" value="'+dateOnly()+'"></div>'+'<div class="card calendar-card"><div class="calendar-grid"><div class="weekday"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>'+cells+'</div></div>'+
+    '<a class="fab calendar-fab" id="calendarFab" href="/task/new.php?date='+dateOnly()+'&return=calendar" aria-label="タスクを追加">＋</a><script type="application/json" id="calendarPayload">'+calendarPayload+'</script>'+script;
   return layout('カレンダー',body,'/app/calendar.php');
 }

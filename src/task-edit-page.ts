@@ -66,8 +66,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const role=String(m.role||'').toUpperCase();
   if(!(role==='OWNER'||role==='ADMIN'||Number(task.created_by)===m.id))return new Response('編集権限がありません。',{status:403});
 
-  const members=await ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 ORDER BY id').bind(m.family_id).all<Row>();
-
   if(request.method==='POST'){
     const parsed=await requireBody(request);
     if(parsed instanceof Response)return parsed;
@@ -110,22 +108,19 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     await ctx.env.DB.prepare("UPDATE notifications SET status='cancelled',updated_at=? WHERE target_type='task' AND target_id=? AND family_id=? AND status IN ('pending','retry')").bind(nowJst(),id,m.family_id).run();
     const becamePrivate=makePrivate&&String(task.visibility_scope||'FAMILY')!=='PRIVATE';
     if(becamePrivate){
-      await ctx.env.DB.prepare(`DELETE FROM activity_logs WHERE family_id=? AND ((target_type='task' AND target_id=?) OR (target_type='item' AND target_id IN (SELECT id FROM items WHERE family_id=? AND task_id=?)) OR (target_type='shopping' AND target_id IN (SELECT id FROM shopping_items WHERE family_id=? AND task_id=?)))`).bind(m.family_id,id,m.family_id,id,m.family_id,id).run();
+      await ctx.env.DB.prepare("DELETE FROM activity_logs WHERE family_id=? AND target_type='task' AND target_id=?").bind(m.family_id,id).run();
     }
     await ctx.env.DB.prepare("UPDATE tasks SET title=?,description=?,due_at=?,start_at=?,end_at=?,location=?,reminder_at=?,calendar_visible=?,all_day=?,calendar_color=?,task_kind=?,visibility_scope=?,private_owner_id=?,completion_mode='ANY',status=CASE WHEN ?=1 THEN 'pending' ELSE status END,completed_by=CASE WHEN ?=1 THEN NULL ELSE completed_by END,completed_at=CASE WHEN ?=1 THEN NULL ELSE completed_at END,updated_at=? WHERE id=? AND family_id=?")
       .bind(title,String(b.description||'')||null,noDate?null:(end||start||`${date} 00:00:00`),start,end,String(b.location||'')||null,reminderAt,calendarVisible,allDay,calendarColor,isEvent?'EVENT':'TASK',makePrivate?'PRIVATE':'FAMILY',makePrivate?m.id:null,isEvent?1:0,isEvent?1:0,isEvent?1:0,now,id,m.family_id).run();
     if(isEvent)await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id).run();
 
-    const assignees=makePrivate?[m.id]:(Array.isArray(b.assignees)?(b.assignees as unknown[]).map(Number).filter(memberId=>memberId>0):[]);
-    await ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id).run();
-    if(assignees.length)await ctx.env.DB.batch(assignees.map(memberId=>ctx.env.DB.prepare('INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT ?,id FROM members WHERE id=? AND family_id=? AND active=1').bind(id,memberId,m.family_id)));
     if(!isEvent)await reconcileTaskCompletionAfterAssigneeChange(ctx.env.DB,m.family_id,id,now);
 
-    const reminderTask=reminderAt&&assignees.length
+    const reminderTask=reminderAt
       ?await ctx.env.DB.prepare('SELECT status FROM tasks WHERE id=? AND family_id=? LIMIT 1').bind(id,m.family_id).first<Row>()
       :null;
-    if(reminderAt&&assignees.length&&String(reminderTask?.status||'').toLowerCase()!=='completed'){
-      const recipients=await ctx.env.DB.prepare(`SELECT id FROM members WHERE family_id=? AND active=1 AND id IN (${assignees.map(()=>'?').join(',')})`).bind(m.family_id,...assignees).all<Row>();
+    if(reminderAt&&String(reminderTask?.status||'').toLowerCase()!=='completed'){
+      const recipients=await ctx.env.DB.prepare('SELECT id FROM members WHERE family_id=? AND active=1 AND (?=0 OR id=?)').bind(m.family_id,makePrivate?1:0,m.id).all<Row>();
       if(recipients.results.length)await ctx.env.DB.batch(recipients.results.map(row=>ctx.env.DB.prepare('INSERT OR IGNORE INTO notifications(family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .bind(m.family_id,Number(row.id),'task_reminder','task',id,reminderAt,'pending',`【タスク】${title}\n${String(b.description||'').trim()||'詳細なし'}${start?'\n予定: '+start.slice(0,16):''}${end?' ～ '+end.slice(11,16):''}${String(b.location||'').trim()?'\n場所: '+String(b.location).trim():''}`,now)));
     }
@@ -138,7 +133,6 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
   const noDate=!task.start_at&&!task.due_at;
   const startTime=task.start_at?String(task.start_at).slice(11,16):'';
   const endTime=task.end_at?String(task.end_at).slice(11,16):'';
-  const selected=new Set((await ctx.env.DB.prepare('SELECT member_id FROM task_assignees WHERE task_id=?').bind(id).all<Row>()).results.map(row=>Number(row.member_id)));
   const safe=(value:unknown)=>esc(String(value??''));
   const currentCalendarColor=normalizeCalendarColor(task.calendar_color);
   const currentCalendarColorIsPreset=CALENDAR_COLOR_OPTIONS.some(option=>option.value===currentCalendarColor);
@@ -151,8 +145,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     <label>説明</label><textarea name="description">${safe(task.description||'')}</textarea><label class="checkrow"><input id="editIsPrivate" type="checkbox" name="is_private" ${String(task.visibility_scope||'FAMILY')==='PRIVATE'?'checked':''}><span>🔒 自分専用</span></label><p class="small">他の家族にはタスク・カレンダー・詳細を表示しません</p>
     <label class="checkrow"><input id="editAllDay" type="checkbox" name="all_day" ${Number(task.all_day??0)?'checked':''}> 終日</label>
     <div id="editCalendarControls"><label class="checkrow"><input id="editCalendarVisible" type="checkbox" name="calendar_visible" ${Number(task.calendar_visible??1)?'checked':''}> カレンダーに表示</label><div id="editCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${currentCalendarColorIsPreset?'':`<option value="${safe(currentCalendarColor)}" selected>カスタム ${safe(currentCalendarColor)}</option>`}${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}" ${option.value===currentCalendarColor?'selected':''}>${option.label}</option>`).join('')}</select><label class="small" for="editCalendarColorCustom">カスタム色</label><input id="editCalendarColorCustom" type="color" value="${safe(currentCalendarColor)}" aria-label="カレンダーのカスタム色"></div></div>
-    <label>担当者</label><div class="assignee-list">${members.results.map(member=>`<label class="checkrow inline-check"><input type="checkbox" name="assignees" value="${member.id}" ${selected.has(Number(member.id))?'checked':''}> ${safe(member.name)}</label>`).join('')}</div>
-    <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">設定すると担当者へ指定日時に詳細を設定した通知方法で通知します。</p>
+    <label>通知日時（任意）</label><input type="datetime-local" name="reminder_at" value="${safe(task.reminder_at?String(task.reminder_at).slice(0,16).replace(' ','T'):'')}"><p class="small">共有タスクは家族全員、自分専用タスクは本人へ通知します。</p>
     <button type="submit">保存する</button></form><p><a class="btn gray" href="/task/view.php?id=${id}">戻る</a></p></div>
     <script src="/assets/task-edit.js?v=${APP_VERSION}"></script>`;
   return html(layout('タスク・イベント編集',body,''));

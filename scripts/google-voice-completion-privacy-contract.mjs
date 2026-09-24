@@ -10,9 +10,7 @@ for(const value of [
   "COALESCE(t.task_kind,'TASK')<>'EVENT'",
   "COALESCE(t.visibility_scope,'FAMILY')='FAMILY'",
   't.private_owner_id=?',
-  'ta.member_id=? LIMIT 2',
-  'am.active=1',
-  'TASK_NOT_FOUND_OR_NOT_ASSIGNED',
+  'TASK_NOT_FOUND_OR_PRIVATE',
   'AMBIGUOUS_TASK',
   "WHERE id=? AND family_id=?",
   "target_type='task' AND target_id=? AND family_id=?",
@@ -31,7 +29,8 @@ for(const value of [
   "WHERE id=? AND family_id=?",
 ])assert.ok(shoppingBlock.includes(value),`SHOPPING_COMPLETE privacy/integrity guard missing: ${value}`);
 
-assert.ok(!taskBlock.includes('OR ta.member_id IS NULL'),'voice completion must not broaden task completion to unassigned members');
+assert.ok(!taskBlock.includes('task_assignees'),'voice completion must not depend on assignment rows');
+assert.ok(taskBlock.includes('INSERT INTO task_completion_history'),'voice completion history must remain');
 assert.ok(!shoppingBlock.includes('shopping_assignees')&&!shoppingBlock.includes('s.task_id'),'goods voice completion must not depend on assignment or tasks');
 
-console.log('google-voice-completion-privacy-contract: exact-match ambiguity handling, active assignment, family scope, PRIVATE ownership, and parent-task shopping visibility remain enforced');
+console.log('google-voice-completion-privacy-contract: exact-match ambiguity handling, family scope, PRIVATE ownership, completion history, and independent shopping visibility remain enforced');

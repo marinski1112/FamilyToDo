@@ -53,6 +53,6 @@ for(const marker of [
   "fetch('/api/shopping-categories'",
   "const body={action:'add_batch'",
 ]) assert.ok(shoppingJs.includes(marker),`canonical Shopping controller write boundary missing: ${marker}`);
-assert.ok(pageRoutes.includes("if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'',Number(url.searchParams.get('task_id')||0));"),'Shopping manual reuse must target the canonical authenticated Shopping-new route');
+assert.ok(pageRoutes.includes("if(url.pathname==='/app/shopping_new.php') return await shoppingNew(context,url.searchParams.get('date')||'');"),'Shopping manual reuse must target the canonical authenticated Shopping-new route without retired Task linkage');
 
 console.log('rough-input Shopping manual fallback reuses canonical lazy Shopping UI/controller boundary');

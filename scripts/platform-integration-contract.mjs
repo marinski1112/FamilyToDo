@@ -20,7 +20,8 @@ const migration=read('migrations/0042_wave128_calendar_digest_private_event.sql'
 
 for(const token of ['recurrence_rule_id','recurrence_occurrence_id','occurrence_date'])assert.ok(app.includes(token)&&calendarJs.includes(token),token);
 assert.ok(calendarJs.includes("new URLSearchParams({edit:")&&!calendarJs.includes("href=\"/task/view.php?id='+encodeURIComponent(t.id)+'\""),'recurring Calendar rows must resolve through recurrence editing');
-for(const token of ["view==='family'","view==='assigned'","view==='private'","taskVisibilitySql('t')"])assert.ok(app.includes(token),token);
+for(const token of ["view==='family'","view==='private'","taskVisibilitySql('t')"])assert.ok(app.includes(token),token);
+assert.ok(!app.includes("view==='assigned'"),'retired assignee Calendar filter must stay removed');
 assert.ok(taskEntryPage.includes('id="isPrivate"')&&taskEntryManual.includes('is_private:Boolean(isPrivate?.checked)'),'PRIVATE task control must remain available and submitted by unified create entry');
 assert.ok(calendar.includes("visibility_scope='FAMILY'")&&calendar.includes("task_kind='EVENT'")&&calendar.includes('event_history')&&calendar.includes("upper(COALESCE(task_kind,'TASK'))='EVENT'"),'Google outbound projection must remain EVENT/FAMILY aware');
 assert.ok(calendar.includes("ON CONFLICT(provider,task_id)")&&calendar.includes("link?'UPDATE':'CREATE'"),'projection links must remain upsert-aware');

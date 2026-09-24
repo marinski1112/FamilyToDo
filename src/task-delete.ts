@@ -21,12 +21,8 @@ export async function taskDelete(request:Request,ctx:any):Promise<Response>{
   if(exceptionOrigin&&!['restore','exclude'].includes(exceptionMode))return json({ok:false,error:'このタスクは定期タスクの例外です。削除後の扱いを選択してください。'},400);
   let restoredStatus='pending',restoredBy:null|number=null,restoredAt:null|string=null;
   if(exceptionOrigin&&exceptionMode==='restore'){
-    const rr=await ctx.env.DB.prepare('SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.id=? AND r.family_id=? LIMIT 1').bind(Number(exceptionOrigin.recurrence_rule_id),m.family_id).first();
-    const assigned=Number((await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(Number(rr?.task_id||0)).first())?.c||0);
-    const completed=Number((await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=? AND ta.task_id=?').bind(Number(exceptionOrigin.id),Number(rr?.task_id||0)).first())?.c||0);
-    const last=await ctx.env.DB.prepare('SELECT member_id,completed_at FROM recurrence_occurrence_completions WHERE occurrence_id=? ORDER BY completed_at DESC LIMIT 1').bind(Number(exceptionOrigin.id)).first();
-    const mode=String(rr?.completion_mode||'ANY').toUpperCase();
-    const complete=assigned>0&&(mode==='ALL'?completed>=assigned:completed>0);
+    const last=await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC LIMIT 1').bind(m.family_id,Number(exceptionOrigin.id)).first();
+    const complete=Boolean(last);
     if(complete){restoredStatus='completed';restoredBy=Number(last?.member_id||0)||null;restoredAt=String(last?.completed_at||'')||null;}
   }
   const recurrenceRules=await ctx.env.DB.prepare('SELECT id FROM recurrence_rules WHERE task_id=? AND family_id=?').bind(id,m.family_id).all();
@@ -48,7 +44,6 @@ export async function taskDelete(request:Request,ctx:any):Promise<Response>{
     );
   }
   statements.push(
-    ctx.env.DB.prepare('DELETE FROM task_assignees WHERE task_id=?').bind(id),
     ...archiveTaskCompletionStatements(ctx.env.DB,m.family_id,id,deleteNow),
     ctx.env.DB.prepare('DELETE FROM tasks WHERE id=? AND family_id=?').bind(id,m.family_id)
   );

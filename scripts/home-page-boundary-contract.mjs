@@ -39,7 +39,7 @@ for(const marker of [
   "taskChildVisibilitySql('s')",
   "t.status='pending'",
   "date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)",
-  "date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))<date(?)",
+  "date(s.due_date)<date(?)",
   "storage_tier='HOT'",
   'journal_date=?',
   'LIMIT 1',

@@ -71,18 +71,14 @@ export async function recordOccurrenceFamilyLog(request:Request,ctx:AppContext):
   if(!occurrenceId)return badRequest('発生日が不正です。');
 
   const row=await ctx.env.DB.prepare(`SELECT o.id,o.occurrence_date,o.status,r.task_id,t.task_kind,ft.id template_id,ft.subject_id,ft.log_type,ft.detail_code,ft.amount,ft.unit,ft.duration_minutes,ft.value_text,ft.note
-    FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id JOIN tasks t ON t.id=r.task_id AND t.family_id=o.family_id JOIN task_family_log_templates ft ON ft.task_id=t.id AND ft.family_id=o.family_id AND ft.active=1
-    WHERE o.id=? AND o.family_id=? AND o.status<>'excluded' LIMIT 1`).bind(occurrenceId,m.family_id).first<Row>();
+    FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id JOIN tasks t ON t.id=r.task_id AND t.family_id=o.family_id AND (t.visibility_scope='FAMILY' OR (t.visibility_scope='PRIVATE' AND t.private_owner_id=?)) JOIN task_family_log_templates ft ON ft.task_id=t.id AND ft.family_id=o.family_id AND ft.active=1
+    WHERE o.id=? AND o.family_id=? AND o.status<>'excluded' LIMIT 1`).bind(m.id,occurrenceId,m.family_id).first<Row>();
   if(!row||String(row.task_kind||'').toUpperCase()==='EVENT')return json({ok:false,error:'家族ログ連携された定期タスク発生日が見つかりません。'},404);
 
   if(row.subject_id){
     const subject=await ctx.env.DB.prepare('SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 LIMIT 1').bind(Number(row.subject_id),m.family_id).first<Row>();
     if(!subject||!familyLogEnabledTypes(subject).includes(String(row.log_type)))return badRequest('設定された家族ログ対象は現在利用できません。');
   }
-
-  const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members mm ON mm.id=ta.member_id AND mm.active=1 WHERE ta.task_id=?').bind(Number(row.task_id)).first<Row>();
-  const actorAssigned=Number(assigned?.c||0)===0||Boolean(await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees WHERE task_id=? AND member_id=? LIMIT 1').bind(Number(row.task_id),m.id).first<Row>());
-  if(!actorAssigned)return json({ok:false,error:'記録者がこの定期タスクの担当者ではありません。'},409);
 
   const existing=await ctx.env.DB.prepare('SELECT id FROM family_logs WHERE task_family_log_template_id=? AND linked_occurrence_id=? AND created_by=? AND deleted_at IS NULL LIMIT 1').bind(Number(row.template_id),occurrenceId,m.id).first<Row>();
   let logId=Number(existing?.id||0),created=false;

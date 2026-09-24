@@ -46,7 +46,7 @@ function shoppingBatchForm(ctx:AppContext,date='',categoryOptions:string[]=[]):s
 }
 
 /** Canonical server-rendered shopping-new page independent from the legacy app.ts monolith. */
-export async function shoppingNew(ctx:AppContext,date?:string,_selectedTaskId=0):Promise<Response>{
+export async function shoppingNew(ctx:AppContext,date?:string):Promise<Response>{
   const m=ctx.member;
   if(!m){
     const url=new URL(ctx.request.url);

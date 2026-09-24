@@ -38,28 +38,17 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     const occId=Number(b.occurrence_id||id);
     const occ=await ctx.env.DB.prepare('SELECT o.id,o.family_id,o.recurrence_rule_id FROM recurrence_occurrences o WHERE o.id=? AND o.family_id=?').bind(occId,m.family_id).first<Row>();
     if(!occ)return json({ok:false,error:'定期タスクの発生日が見つかりません。'},404);
-    const rule=await ctx.env.DB.prepare('SELECT r.task_id,t.completion_mode FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.id=? AND r.family_id=?').bind(Number(occ.recurrence_rule_id),m.family_id).first<Row>();
+    const rule=await ctx.env.DB.prepare(`SELECT r.task_id FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.id=? AND r.family_id=? AND ${taskVisibilitySql('t')}`).bind(Number(occ.recurrence_rule_id),m.family_id,m.id).first<Row>();
     if(!rule)return json({ok:false,error:'定期タスクのルールが見つかりません。'},404);
     const recurrenceTaskId=Number(rule.task_id);
-    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(recurrenceTaskId).first<Row>();
-    const assignedCount=Number(assigned?.c||0);
-    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(recurrenceTaskId,m.id).first<Row>():null;
-    if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'この定期タスクの担当者ではありません。'},403);
     const recurrenceCompletionMutation=completed
       ?await ctx.env.DB.prepare('INSERT INTO recurrence_occurrence_completions(occurrence_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(occurrence_id,member_id) DO NOTHING').bind(occId,m.id,now).run()
-      :await ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=? AND member_id=?').bind(occId,m.id).run();
+      :await ctx.env.DB.prepare('DELETE FROM recurrence_occurrence_completions WHERE occurrence_id=?').bind(occId).run();
     const recurrenceStateChanged=Number(recurrenceCompletionMutation.meta?.changes||0)>0;
-    const done=assignedCount>0
-      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=?').bind(recurrenceTaskId,occId).first<Row>()
-      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?').bind(m.family_id,occId).first<Row>();
-    const mode=assignedCount>0?String(rule.completion_mode||'ANY').toUpperCase():'ANY';
-    const isComplete=mode==='ALL'
-      ? assignedCount>0&&Number(done?.c||0)>=assignedCount
-      : Number(done?.c||0)>0;
+    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=?').bind(m.family_id,occId).first<Row>();
+    const isComplete=Number(done?.c||0)>0;
     const latest=isComplete
-      ?assignedCount>0
-        ?await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN task_assignees ta ON ta.member_id=c.member_id AND ta.task_id=? JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC,c.member_id DESC LIMIT 1').bind(recurrenceTaskId,occId).first<Row>()
-        :await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC,c.member_id DESC LIMIT 1').bind(m.family_id,occId).first<Row>()
+      ?await ctx.env.DB.prepare('SELECT c.member_id,c.completed_at FROM recurrence_occurrence_completions c JOIN members am ON am.id=c.member_id AND am.family_id=? AND am.active=1 WHERE c.occurrence_id=? ORDER BY c.completed_at DESC,c.member_id DESC LIMIT 1').bind(m.family_id,occId).first<Row>()
       :null;
     const completedBy=isComplete?(Number(latest?.member_id||0)||null):null;
     if(recurrenceStateChanged){
@@ -73,23 +62,14 @@ export async function toggle(request:Request,ctx:AppContext):Promise<Response>{
     const task=await ctx.env.DB.prepare(`SELECT t.id,t.status,t.completion_mode,t.task_kind,t.visibility_scope,t.private_owner_id FROM tasks t WHERE t.id=? AND t.family_id=? AND ${taskVisibilitySql('t')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
     if(!task)return json({ok:false,error:'タスクが見つかりません。'},404);
     if(String(task.task_kind||'').toLowerCase()==='event')return json({ok:false,error:'イベントは完了チェックの対象外です。'},409);
-    const assigned=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?').bind(id).first<Row>();
-    const assignedCount=Number(assigned?.c||0);
-    const actorAssigned=assignedCount>0?await ctx.env.DB.prepare('SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=? AND ta.member_id=? LIMIT 1').bind(id,m.id).first<Row>():null;
-    if(assignedCount>0&&!actorAssigned)return json({ok:false,error:'このタスクの担当者ではありません。'},403);
     const taskCompletionMutation=completed
       ?await ctx.env.DB.prepare('INSERT INTO task_completions(task_id,member_id,completed_at) VALUES(?,?,?) ON CONFLICT(task_id,member_id) DO NOTHING').bind(id,m.id,now).run()
-      :await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=? AND member_id=?').bind(id,m.id).run();
+      :await ctx.env.DB.prepare('DELETE FROM task_completions WHERE task_id=?').bind(id).run();
     const taskStateChanged=Number(taskCompletionMutation.meta?.changes||0)>0;
-    const done=assignedCount>0
-      ?await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?').bind(id).first<Row>()
-      :await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?').bind(m.family_id,id).first<Row>();
-    const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';
-    const taskComplete=mode==='ALL'?assignedCount>0&&Number(done?.c||0)>=assignedCount:Number(done?.c||0)>0;
+    const done=await ctx.env.DB.prepare('SELECT COUNT(*) c FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?').bind(m.family_id,id).first<Row>();
+    const taskComplete=Number(done?.c||0)>0;
     const taskLatest=taskComplete
-      ?assignedCount>0
-        ?await ctx.env.DB.prepare('SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=? ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1').bind(id).first<Row>()
-        :await ctx.env.DB.prepare('SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=? ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
+      ?await ctx.env.DB.prepare('SELECT tc.member_id,tc.completed_at FROM task_completions tc JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=? ORDER BY tc.completed_at DESC,tc.member_id DESC LIMIT 1').bind(m.family_id,id).first<Row>()
       :null;
     if(taskStateChanged){
       await ctx.env.DB.prepare('UPDATE tasks SET status=?,completed_by=?,completed_at=?,updated_at=? WHERE id=? AND family_id=?').bind(taskComplete?'completed':'pending',taskComplete?Number(taskLatest?.member_id||0)||null:null,taskComplete?String(taskLatest?.completed_at||now):null,now,id,m.family_id).run();

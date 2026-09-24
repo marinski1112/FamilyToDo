@@ -52,25 +52,11 @@ export async function taskParentCompletionApi(request:Request,ctx:AppContext):Pr
     return json({ok:false,error:'未完了の子タスクの扱いを選択してください。',code:'PARENT_CHILD_POLICY_REQUIRED',incomplete_children:incompleteChildren.length},409);
   }
 
-  const assigned=await ctx.env.DB.prepare(`SELECT COUNT(*) c FROM task_assignees ta
-    JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE ta.task_id=?`).bind(id).first<Row>();
-  const assignedCount=Number(assigned?.c||0);
-  const actorAssigned=assignedCount>0
-    ?await ctx.env.DB.prepare(`SELECT 1 x FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.active=1
-      WHERE ta.task_id=? AND ta.member_id=? LIMIT 1`).bind(id,member.id).first<Row>()
-    :null;
-  if(assignedCount>0&&!actorAssigned)return fail('このタスクの担当者ではありません。',403,'FORBIDDEN');
-
   const actorDone=await ctx.env.DB.prepare('SELECT 1 x FROM task_completions WHERE task_id=? AND member_id=? LIMIT 1').bind(id,member.id).first<Row>();
-  const done=assignedCount>0
-    ?await ctx.env.DB.prepare(`SELECT COUNT(*) c FROM task_completions tc
-      JOIN task_assignees ta ON ta.task_id=tc.task_id AND ta.member_id=tc.member_id
-      JOIN members am ON am.id=ta.member_id AND am.active=1 WHERE tc.task_id=?`).bind(id).first<Row>()
-    :await ctx.env.DB.prepare(`SELECT COUNT(*) c FROM task_completions tc
+  const done=await ctx.env.DB.prepare(`SELECT COUNT(*) c FROM task_completions tc
       JOIN members am ON am.id=tc.member_id AND am.family_id=? AND am.active=1 WHERE tc.task_id=?`).bind(member.family_id,id).first<Row>();
-  const mode=assignedCount>0?String(task.completion_mode||'ANY').toUpperCase():'ANY';
   const nextDone=Number(done?.c||0)+(actorDone?0:1);
-  const taskComplete=mode==='ALL'?assignedCount>0&&nextDone>=assignedCount:nextDone>0;
+  const taskComplete=nextDone>0;
   const now=nowJst();
   const statements=[];
 
@@ -93,12 +79,7 @@ export async function taskParentCompletionApi(request:Request,ctx:AppContext):Pr
   if(taskComplete&&incompleteChildren.length>0&&policy==='complete'){
     for(const childId of incompleteChildren){
       statements.push(ctx.env.DB.prepare(`INSERT OR IGNORE INTO task_completions(task_id,member_id,completed_at)
-        SELECT ?,ta.member_id,? FROM task_assignees ta
-        JOIN members am ON am.id=ta.member_id AND am.family_id=? AND am.active=1 WHERE ta.task_id=?`).bind(childId,now,member.family_id,childId));
-      statements.push(ctx.env.DB.prepare(`INSERT OR IGNORE INTO task_completions(task_id,member_id,completed_at)
-        SELECT ?,?,? WHERE NOT EXISTS(
-          SELECT 1 FROM task_assignees ta JOIN members am ON am.id=ta.member_id AND am.family_id=? AND am.active=1 WHERE ta.task_id=?
-        )`).bind(childId,member.id,now,member.family_id,childId));
+        VALUES(?,?,?)`).bind(childId,member.id,now));
       statements.push(ctx.env.DB.prepare(`UPDATE tasks SET status='completed',completed_by=?,completed_at=?,updated_at=?
         WHERE id=? AND family_id=? AND status<>'completed'`).bind(member.id,now,now,childId,member.family_id));
       statements.push(ctx.env.DB.prepare(`UPDATE notifications SET status='cancelled',updated_at=?

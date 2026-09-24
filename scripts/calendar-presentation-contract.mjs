@@ -7,12 +7,10 @@ const app=retainedAppContractSource();
 const family=fs.readFileSync('public/assets/family.css','utf8');
 const calendarCss=fs.readFileSync('public/assets/calendar.css','utf8');
 const calendar=fs.readFileSync('public/assets/calendar.js','utf8');
-const dayInline=fs.readFileSync('public/assets/calendar-day-inline.js','utf8');
 const ui=fs.readFileSync('public/assets/calendar-mobile-ui.js','utf8');
 const sw=fs.readFileSync('public/sw.js','utf8');
 
 execFileSync(process.execPath,['--check','public/assets/calendar-mobile-ui.js'],{stdio:'inherit'});
-execFileSync(process.execPath,['--check','public/assets/calendar-day-inline.js'],{stdio:'inherit'});
 for(const token of ['calendar-month-jump','calendar-jump-go','class="compact-form"'])assert.ok(app.includes(token),`missing Calendar jump markup: ${token}`);
 for(const token of ['calendarJumpPanel','calendarMonthJump','calendarDateJump','2000','2100','openDate'])assert.ok(app.includes(token)||calendar.includes(token),`missing Calendar jump behavior: ${token}`);
 assert.ok(calendar.includes("get('open')"),'Calendar must preserve direct-date open handling');
@@ -55,20 +53,8 @@ assert.match(calendar,/a\.calendar-band\[data-task-id\]/,'Calendar band repair m
 assert.match(calendar,/\/app\/recurring\.php\?/,'recurring Calendar bands must preserve their editing destination');
 assert.match(calendar,/gridNow\.innerHTML=nextGrid\.innerHTML;[\s\S]*?detail=payload\.detail\|\|\{\};[\s\S]*?repairRecurringBandLinks\(gridNow\)/,'AJAX month replacement must repair recurring band links using the replacement payload');
 assert.match(calendar,/repairRecurringBandLinks\(document\.querySelector\('\.calendar-grid'\)\)/,'initial Calendar grid must repair recurring band links');
-for(const marker of [
-  "const editableTitleButton=(type,id,title)=>{",
-  "const node=document.createElement('button');",
-  "node.type='button';",
-  "node.setAttribute('aria-label',title+'を編集');",
-  "anchor.replaceWith(shell);",
-  "const separateChecklistTitle=(check,strong,title)=>{",
-  "label.replaceWith(shell);",
-  "shell.append(check,document.createTextNode(' '),strong);",
-  "check.setAttribute('aria-label',title+'を完了にする');",
-  "queueMicrotask(()=>fresh.focus())",
-])assert.ok(dayInline.includes(marker),`Calendar day inline keyboard semantics missing: ${marker}`);
-assert.ok(!dayInline.includes("const titleNode=document.createElement('span')"),'editable Calendar titles must not regress to pointer-only spans');
-assert.ok(!dayInline.includes("anchor.append(titleNode)"),'editable title button must not be nested inside the task detail link');
+assert.ok(!app.includes('id="dayModal"'),'retired date detail must not be rendered');
+assert.ok(!app.includes('calendar-day-inline.js'),'retired inline editor must not be loaded');
 assert.ok(ui.includes("Number(row?.spanDays||1)<=1"),'one-day rows must be detected by spanDays, not legacy segment labels');
 assert.ok(ui.includes(".calendar-items > .calendar-item:not(.item)"),'schedule cap must include recurring/task/event rows while excluding carry-item rows');
 assert.ok(ui.includes("row.style.setProperty('display','none','important')"),'third and later schedule rows must stay hidden despite important display rules');
@@ -82,4 +68,4 @@ assert.ok(ui.includes('requestAnimationFrame'),'Calendar row-budget recalculatio
 assert.match(sw,/const STATIC_CACHE='familytodo-static-[^']+'/,'static cache must use the Family TODO namespace');
 assert.match(sw,/name\.startsWith\('familytodo-static-'\)&&name!==STATIC_CACHE/,'older Family TODO static caches must be retired');
 assert.doesNotMatch(sw,/familytodo-static-v92/,'obsolete pre-Wave128 static cache namespace must remain retired');
-console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links, keyboard-reachable inline editing, two-row schedule and overflow contracts ok');
+console.log('calendar-presentation-contract: compact chrome, filtering, press preview, positioning, recurring band links, two-row schedule and overflow contracts ok');

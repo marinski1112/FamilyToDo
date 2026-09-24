@@ -79,11 +79,10 @@ try{
   const closePicker=()=>{if(placing)return;picker.classList.remove('open');pickerTargetDate='';};
   picker.querySelector('.calendar-stamp-picker-close')?.addEventListener('click',closePicker);
   picker.addEventListener('click',event=>{if(event.target===picker)closePicker();});
-  const dayModal=document.getElementById('dayModal'),modalAdd=document.getElementById('modalAdd'),modalReorder=document.getElementById('modalReorder');
-  const pickerButton=document.createElement('button');pickerButton.type='button';pickerButton.className='btn gray small calendar-stamp-picker-button';pickerButton.textContent='スタンプ';pickerButton.setAttribute('aria-label','この日にスタンプを追加');
-  if(modalReorder?.parentNode)modalReorder.parentNode.insertBefore(pickerButton,modalReorder);
-
-  const selectedModalDate=()=>{try{const href=String(modalAdd?.getAttribute('href')||'');const u=new URL(href,location.origin),date=String(u.searchParams.get('date')||'');return safeDate(date)?date:'';}catch{return '';}};
+  const stampDate=document.getElementById('calendarStampDate');
+  const pickerButton=document.createElement('button');pickerButton.type='button';pickerButton.className='btn gray small calendar-stamp-picker-button';pickerButton.textContent='＋ スタンプ';pickerButton.setAttribute('aria-label','指定した日にスタンプを追加');
+  stampDate?.parentElement?.appendChild(pickerButton);
+  const selectedModalDate=()=>{const date=String(stampDate?.value||'');return safeDate(date)?date:'';};
   const localOptions=async()=>{
     const response=await fetch('/api/calendar-stamp-options',{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});
     const data=await response.json().catch(()=>null);
@@ -200,7 +199,7 @@ try{
   document.addEventListener('touchend',event=>{const stamp=stampFromTarget(event.target);if(!stamp)return;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openViewer(stamp);},true);
   document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(picker.classList.contains('open'))closePicker();else if(viewer.classList.contains('open'))closeViewer();});
   const grid=document.querySelector('.calendar-grid');if(grid){let timer=0;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(renderStamps,40);}).observe(grid,{childList:true,subtree:true});}
-  if(dayModal&&!csrf)pickerButton.hidden=true;
+  if(!csrf)pickerButton.hidden=true;
   renderStamps();
   document.documentElement.dataset.calendarStampUi='ready';
 }catch(_error){document.documentElement.dataset.calendarStampUi='error';}

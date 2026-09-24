@@ -83,7 +83,6 @@ export async function applyChecklistRoute(env:Env,a:Row,item:any):Promise<'not-h
     const dueAt=route.date?route.date+' 00:00:00':null;
     if(route.kind==='TASK'){
       statements.push(env.DB.prepare(`INSERT INTO tasks(family_id,title,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,calendar_visible,task_kind,all_day,visibility_scope,private_owner_id,google_tasks_route_id) SELECT ?,j.value,?,'pending','ANY',?,?,?, ?,NULL,0,'TASK',1,?,?,r.id FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,dueAt,a.member_id,local,local,dueAt,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(route.names),...gateArgs));
-      statements.push(env.DB.prepare(`INSERT OR IGNORE INTO task_assignees(task_id,member_id) SELECT id,? FROM tasks WHERE google_tasks_route_id IN (${gate})`).bind(a.member_id,...gateArgs));
     }else if(route.kind==='SHOPPING'){
       statements.push(env.DB.prepare(`INSERT INTO shopping_items(family_id,name,quantity,category,due_date,status,created_by,created_at,updated_at,visibility_scope,private_owner_id) SELECT ?,j.value,'1',NULL,?,'pending',?,?,?,?,? FROM google_tasks_routes r,json_each(?) j WHERE r.id IN (${gate})`).bind(a.family_id,route.date,a.member_id,local,local,visibility,visibility==='PRIVATE'?a.member_id:null,JSON.stringify(route.names),...gateArgs));
     }else if(route.kind==='ITEM'){

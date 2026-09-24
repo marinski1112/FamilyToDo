@@ -24,8 +24,8 @@ INSERT INTO families(id,family_code,name,created_at,updated_at) VALUES(86,'W86',
 INSERT INTO members(id,family_id,line_user_id,name,role,active,created_at,updated_at) VALUES(861,86,'a','A','OWNER',1,'2026','2026'),(862,86,'b','B','ADMIN',1,'2026','2026');
 INSERT INTO tasks(id,family_id,title,status,task_kind,due_at,created_by,created_at,updated_at,visibility_scope,private_owner_id) VALUES
 (861,86,'expired','pending','TASK','2026-08-26',861,'2026','2026','FAMILY',NULL),(862,86,'done','completed','TASK','2026-08-25',861,'2026','2026','FAMILY',NULL),(863,86,'no date','pending','TASK',NULL,861,'2026','2026','FAMILY',NULL),(864,86,'event','pending','EVENT','2026-08-25',861,'2026','2026','FAMILY',NULL),(865,86,'B private','pending','TASK','2026-08-25',862,'2026','2026','PRIVATE',862);
-INSERT INTO items(id,family_id,name,status,task_id,created_by,created_at,updated_at,visibility_scope,private_owner_id,completed_by,completed_at) VALUES(861,86,'legacy child','completed',861,861,'2026','2026','FAMILY',NULL,861,'2026-08-20 08:00:00');
-INSERT INTO shopping_items(id,family_id,name,status,task_id,created_by,created_at,updated_at,visibility_scope,private_owner_id,completed_by,completed_at) VALUES(861,86,'legacy shop','completed',861,861,'2026','2026','FAMILY',NULL,861,'2026-08-20 08:00:00');
+INSERT INTO items(id,family_id,name,status,created_by,created_at,updated_at,visibility_scope,private_owner_id,completed_by,completed_at) VALUES(861,86,'legacy child','completed',861,'2026','2026','FAMILY',NULL,861,'2026-08-20 08:00:00');
+INSERT INTO shopping_items(id,family_id,name,status,created_by,created_at,updated_at,visibility_scope,private_owner_id,completed_by,completed_at) VALUES(861,86,'legacy shop','completed',861,'2026','2026','FAMILY',NULL,861,'2026-08-20 08:00:00');
 INSERT INTO item_completions(item_id,member_id,action,completed_at) VALUES(861,861,'completed','2026-08-20 08:00:00');
 INSERT INTO shopping_completions(shopping_item_id,member_id,action,completed_at) VALUES(861,861,'completed','2026-08-20 08:00:00');
 INSERT INTO item_completion_history(item_id,member_id,action,occurred_at) VALUES(861,861,'COMPLETED','2026-08-20 08:00:00');
@@ -38,8 +38,8 @@ expired="$(sqlite3 "$db" "SELECT group_concat(id) FROM tasks WHERE family_id=86 
 test "$expired" = 861
 
 # Emulate the authoritative task-row removal after task-specific history is archived.
-# Legacy task_id values may still exist transiently before 0100 on a deployment upgrade;
-# even then deleting the task must leave goods and their history/activity untouched.
+# The cleanup migration removes task_id from Goods; deleting the Task still leaves
+# independent Goods and their history/activity untouched.
 sqlite3 "$db" "DELETE FROM tasks WHERE id=861;"
 
 test "$(sqlite3 "$db" 'SELECT count(*) FROM items WHERE id=861')" = 1

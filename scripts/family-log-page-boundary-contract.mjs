@@ -63,7 +63,7 @@ for(const marker of [
   "INSERT OR IGNORE INTO recurrence_occurrences",
   "String(occ.status||'').toLowerCase()==='excluded'",
   'occ.exception_task_id',
-  "mode==='ALL'?assigned>0&&completed>=assigned:completed>0",
+  "(completedByOccurrence.get(Number(occ.id))||0)>0",
   'recurrence_occurrence_id:Number(occ.id)',
 ])if(!recurrence.includes(marker))throw new Error(`retained recurrence projection marker missing: ${marker}`);
 if(!api.includes('export async function familyLogApi'))throw new Error('retained Family Log mutation API missing');

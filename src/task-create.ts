@@ -25,7 +25,6 @@ export type TaskCreateInput = {
   visibilityScope: 'FAMILY' | 'PRIVATE';
   privateOwnerId: number | null;
   parentTaskId: number | null;
-  assigneeIds: number[];
 };
 
 export type TaskCreateResult =
@@ -58,7 +57,6 @@ function requestFingerprint(input: TaskCreateInput) {
     visibilityScope: input.visibilityScope,
     privateOwnerId: input.privateOwnerId,
     parentTaskId: input.parentTaskId,
-    assigneeIds: input.assigneeIds,
   };
 }
 
@@ -73,7 +71,6 @@ export async function createTaskIdempotently(db: D1Database, input: TaskCreateIn
   const token = claim.token;
   const createdAt = nowJst();
   const guardNow = new Date().toISOString();
-  const assigneesJson = JSON.stringify(input.assigneeIds);
   const notificationMessage = `【タスク】${input.title}\n${input.description?.trim() || '詳細なし'}${input.start ? '\n予定: ' + input.start.slice(0, 16) : ''}${input.end ? ' ～ ' + input.end.slice(11, 16) : ''}${input.location?.trim() ? '\n場所: ' + input.location.trim() : ''}`;
   const guard = `r.family_id=? AND r.member_id=? AND r.scope=? AND r.idempotency_key=? AND r.request_hash=? AND r.status='PROCESSING' AND r.lease_token=? AND COALESCE(r.lease_expires_at,'')>?`;
   const guardArgs = () => [input.familyId, input.memberId, TASK_CREATE_SCOPE, input.idempotencyKey, requestHash, token, guardNow] as const;
@@ -94,26 +91,17 @@ export async function createTaskIdempotently(db: D1Database, input: TaskCreateIn
       input.parentTaskId, ...guardArgs(),
     ));
 
-  statements.push(db.prepare(`INSERT OR IGNORE INTO task_assignees(task_id,member_id)
-    SELECT t.id,m.id
-    FROM tasks t
-    JOIN task_create_requests r ON r.id=t.create_request_id
-    JOIN json_each(?) a
-    JOIN members m ON m.id=CAST(a.value AS INTEGER) AND m.family_id=? AND m.active=1
-    WHERE ${guard}`)
-    .bind(assigneesJson, input.familyId, ...guardArgs()));
-
-  if (input.reminderAt && input.assigneeIds.length) {
+  if (input.reminderAt) {
     statements.push(db.prepare(`INSERT INTO notifications(
         family_id,member_id,type,target_type,target_id,notify_at,status,message,created_at
       )
       SELECT ?,m.id,'task_reminder','task',t.id,?,'pending',?,?
       FROM tasks t
       JOIN task_create_requests r ON r.id=t.create_request_id
-      JOIN json_each(?) a
-      JOIN members m ON m.id=CAST(a.value AS INTEGER) AND m.family_id=? AND m.active=1
+      JOIN members m ON m.family_id=? AND m.active=1
+        AND (?='FAMILY' OR m.id=?)
       WHERE ${guard}`)
-      .bind(input.familyId, input.reminderAt, notificationMessage, createdAt, assigneesJson, input.familyId, ...guardArgs()));
+      .bind(input.familyId, input.reminderAt, notificationMessage, createdAt, input.familyId, input.visibilityScope, input.privateOwnerId??input.memberId, ...guardArgs()));
   }
 
   if (input.visibilityScope === 'FAMILY') {

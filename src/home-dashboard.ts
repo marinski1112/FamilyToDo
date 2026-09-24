@@ -140,11 +140,10 @@ export async function loadHomeDashboard(ctx:AppContext,today:string):Promise<Hom
       .bind(familyId,memberId).first<Row>(),
     ctx.env.DB.prepare(`SELECT count(*) c
       FROM shopping_items s
-      LEFT JOIN tasks t ON t.id=s.task_id AND t.family_id=s.family_id
       WHERE s.family_id=? AND ${goodsVisibilitySql('s')}
         AND s.status<>'completed'
-        AND COALESCE(s.due_date,t.end_at,t.due_at,t.start_at) IS NOT NULL
-        AND date(COALESCE(s.due_date,t.end_at,t.due_at,t.start_at))<date(?)`)
+        AND s.due_date IS NOT NULL
+        AND date(s.due_date)<date(?)`)
       .bind(familyId,memberId,today).first<Row>(),
     ctx.env.DB.prepare(`SELECT count(*) c FROM family_logs l WHERE l.family_id=? AND l.deleted_at IS NULL AND date(l.occurred_at)=date(?) AND NOT ${IMPORTED_FAMILY_DIARY_SQL}`)
       .bind(familyId,today).first<Row>(),

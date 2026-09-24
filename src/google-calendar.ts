@@ -19,11 +19,7 @@ async function eventResetStats(db: D1Database, familyId: number) {
   const [events, rules, dependencies] = await Promise.all([
     db.prepare("SELECT COUNT(*) c FROM tasks WHERE family_id=? AND upper(COALESCE(task_kind,'TASK'))='EVENT'").bind(familyId).first<Row>(),
     db.prepare("SELECT COUNT(*) c FROM recurrence_rules r JOIN tasks t ON t.id=r.task_id AND t.family_id=r.family_id WHERE r.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT'").bind(familyId).first<Row>(),
-    db.prepare(`SELECT
-      (SELECT COUNT(*) FROM task_assignees x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
-      (SELECT COUNT(*) FROM task_completions x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
-      (SELECT COUNT(*) FROM items x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT')+
-      (SELECT COUNT(*) FROM shopping_items x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT') c`).bind(familyId,familyId,familyId,familyId).first<Row>(),
+    db.prepare("SELECT COUNT(*) c FROM task_completions x JOIN tasks t ON t.id=x.task_id WHERE t.family_id=? AND upper(COALESCE(t.task_kind,'TASK'))='EVENT'").bind(familyId).first<Row>(),
   ]);
   return { event_count:Number(events?.c||0), recurring_rule_count:Number(rules?.c||0), dependency_count:Number(dependencies?.c||0) };
 }

@@ -17,7 +17,7 @@ for(const marker of [
   ".bind(id,m.family_id,m.id).first<Row>()",
   "return new Response('持ち物が見つかりません。',{status:404});",
   "role==='OWNER'||role==='ADMIN'||Number(item.created_by)===m.id",
-  "due_at=?,task_id=NULL,updated_at=?",
+  "due_at=?,updated_at=?",
   "...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst())",
   "return redirect(`/app/tasks.php${due?'?date='+encodeURIComponent(due):''}`);",
   "<h1>🎒 持ち物編集</h1>",

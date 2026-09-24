@@ -49,7 +49,7 @@ requireText(taskApi,"WHERE id=? AND family_id=? AND ${taskVisibilitySql('t')} LI
 requireText(taskApi,'validateTaskParentLink(','create-time hierarchy validation');
 requireText(taskApi,'privateOwnerId:isPrivate?Number(m.id):null','PRIVATE child owner identity');
 requireText(taskApi,'privateOwnerId:parent.private_owner_id===null?null:Number(parent.private_owner_id)','PRIVATE parent owner identity');
-requireText(taskApi,'parentTaskId,assigneeIds:ids','validated parent handed to atomic writer');
+requireText(taskApi,'privateOwnerId:isPrivate?Number(m.id):null,parentTaskId','validated parent and PRIVATE owner handed to atomic writer');
 requireText(taskCreate,'visibility_scope,private_owner_id,parent_task_id,create_request_id','parent persisted on atomic task row');
 requireText(taskCreate,'input.parentTaskId, ...guardArgs()','explicit nullable parent binding');
 forbidText(taskApi,'UPDATE recurrence_rules SET task_id','recurrence inheritance on create');

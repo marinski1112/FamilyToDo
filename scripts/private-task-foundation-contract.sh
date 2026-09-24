@@ -12,10 +12,10 @@ const checks=[
 for(const [file,text] of checks){const source=file==='@retained'?app:fs.readFileSync(file,'utf8');if(!source.includes(text))throw new Error(`${file}: missing ${text}`);}
 const taskApi=fs.readFileSync('src/task-api.ts','utf8');
 const taskCreate=fs.readFileSync('src/task-create.ts','utf8');
-if(taskApi.includes('const ids=(isPrivate?[]:')||taskApi.includes('const ids=isPrivate?[]:'))throw new Error('src/task-api.ts: PRIVATE create must not drop its owner recipient');
-if(!taskApi.includes('const ids=(isPrivate?[m.id]:'))throw new Error('src/task-api.ts: PRIVATE create must assign its owner as the sole recipient scope before canonical sorting');
-if(!taskApi.includes('assigneeIds:ids'))throw new Error('src/task-api.ts: resolved PRIVATE recipient scope must be handed to the atomic writer');
-if(!taskCreate.includes("if (input.reminderAt && input.assigneeIds.length)"))throw new Error('src/task-create.ts: scheduled task reminders must use the resolved recipient scope');
-if(!taskCreate.includes("JOIN json_each(?) a")||!taskCreate.includes("m.id=CAST(a.value AS INTEGER) AND m.family_id=? AND m.active=1"))throw new Error('src/task-create.ts: reminder recipients must remain active family members from the resolved scope');
+if(!taskApi.includes('privateOwnerId:isPrivate?Number(m.id):null'))throw new Error('src/task-api.ts: PRIVATE create must persist owner separately from assignees');
+if(taskApi.includes('assigneeIds')||taskCreate.includes('assigneeIds'))throw new Error('Task creation must have no assignee payload or fingerprint');
+if(!taskCreate.includes("input.visibilityScope, input.privateOwnerId??input.memberId"))throw new Error('src/task-create.ts: reminder recipients must be scoped to the PRIVATE owner');
+if(!taskCreate.includes('m.family_id=? AND m.active=1'))throw new Error('src/task-create.ts: reminder recipients must remain active family members');
+if(taskCreate.includes('task_assignees'))throw new Error('src/task-create.ts: retired assignee table must not be written');
 NODE
 echo 'private-task-foundation-contract: visibility, ownership, unified create UI, and family-log validation markers ok'

@@ -69,7 +69,6 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
     const action=String(b.action||'save');
     if(action==='delete'){
       await ctx.env.DB.batch([
-        ctx.env.DB.prepare('DELETE FROM item_assignees WHERE item_id=?').bind(id),
         ...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
         ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(id,m.family_id),
       ]);
@@ -86,7 +85,7 @@ export async function itemEdit(request:Request,ctx:AppContext,id:number):Promise
     if(!validUrl(itemUrl))return bad('URLは http:// または https:// で入力してください。');
     const due=String(b.due_date||'').trim()||null;
     if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('日付が不正です。');
-    await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,task_id=NULL,updated_at=? WHERE id=? AND family_id=?').bind(name,memo||null,itemUrl||null,category||null,due,nowJst(),id,m.family_id).run();
+    await ctx.env.DB.prepare('UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,updated_at=? WHERE id=? AND family_id=?').bind(name,memo||null,itemUrl||null,category||null,due,nowJst(),id,m.family_id).run();
     if(category){
       await ctx.env.DB.batch([
         ctx.env.DB.prepare(`INSERT OR IGNORE INTO item_category_catalog(family_id,name,enabled,is_custom,created_by_member_id,created_at,updated_at)

@@ -21,6 +21,9 @@ for(const feature of [
 
 const executeSection=ai.slice(ai.indexOf('export async function familyAiExecute'),ai.indexOf('function safeDetails'));
 assert.ok(!executeSection.includes('plannerFor'),'familyAiExecute must not invoke plannerFor');
+assert.ok(!ai.includes('task_assignees'),'AI task actions must not write retired assignments');
+for(const marker of ["private_owner_id=?", "completed_by=?", "INSERT OR IGNORE INTO task_completions(task_id,member_id,completed_at)", "INSERT INTO task_completion_history(task_id,member_id,action,occurred_at)"])
+  assert.ok(ai.includes(marker),`AI completion must respect ownership and history: ${marker}`);
 assert.match(migration,/nonce TEXT PRIMARY KEY/);
 assert.ok(ui.includes('confirmation_token'),'UI confirmation token');
 assert.ok(ui.includes('csrf:config.csrf'),'UI CSRF token');

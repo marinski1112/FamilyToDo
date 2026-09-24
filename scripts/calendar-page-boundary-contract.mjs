@@ -14,12 +14,12 @@ for(const marker of [
   "import { safeCalendarDateRange } from './task-range-safety';",
   "import { taskVisibilitySql } from './task-visibility';",
   'export async function calendar(request:Request,ctx:AppContext,month:string):Promise<Response>{',
-  "const view=['all','family','assigned','private'].includes(requestedView)?requestedView:'all';",
+  "const view=['all','family','private'].includes(requestedView)?requestedView:'all';",
   "const recurRows=await recurringForRange(ctx,from,to);",
   "taskVisibilitySql('t')",
   "goodsVisibilitySql('i')",
   "goodsVisibilitySql('s')",
-  "SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,t.title task_title",
+  "SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date",
   "SELECT i.id,i.name,i.status,i.due_at",
   'safeCalendarDateRange(t.start_at||t.due_at,t.end_at||t.start_at||t.due_at)',
   'jpHolidayName(d)',
@@ -28,12 +28,11 @@ for(const marker of [
   'recurrence_occurrence_id:t.recurrence_occurrence_id??0',
   'id="calendarPayload"',
   '/assets/calendar.js?v=${APP_VERSION}',
-  '/assets/calendar-day-inline.js?v=${APP_VERSION}',
-  '/assets/occurrence-family-log.js?v=${APP_VERSION}',
-  'id="dayModal"',
+  'id="calendarStampDate"',
   'id="calendarFab"',
   "layout('カレンダー',body,'/app/calendar.php')",
 ]) if(!page.includes(marker)) throw new Error(`calendar retained page lost behavior marker: ${marker}`);
+if(page.includes('id="dayModal"')||page.includes('calendar-day-inline.js'))throw new Error('retired date modal must not be loaded');
 
 
 if(/SELECT\s+s\.\*/i.test(page)) throw new Error('calendar shopping projection must stay explicit');

@@ -12,13 +12,13 @@ assert.equal(count([],[]),0);
 
 const day='2026-09-23';
 const w=new Window({url:'https://familytodo.test/app/calendar.php?month=2026-09',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
-w.document.body.innerHTML=`<script id="calendarPayload" type="application/json">${JSON.stringify({csrf:'test',month:'2026-09',today:day,detail:{},shoppingDetail:{},itemDetail:{}})}</script><div class="calendar-card"><div class="calendar-grid"><button class="calendar-cell" data-date="${day}">23</button></div></div><div id="dayModal"><div class="day-modal"><div id="modalTitle"></div><button id="modalClose"></button><div class="modal-scroll"><div id="modalBody"></div></div><a id="modalAdd"></a></div></div>`;
+w.document.body.innerHTML=`<script id="calendarPayload" type="application/json">${JSON.stringify({csrf:'test',month:'2026-09',today:day,detail:{},shoppingDetail:{},itemDetail:{}})}</script><div class="calendar-card"><div class="calendar-grid"><button class="calendar-cell" data-date="${day}">23</button></div></div>`;
 w.eval(readFileSync('public/assets/calendar.js','utf8'));
 assert.equal(w.document.documentElement.dataset.calendarJs,'ready');
 w.document.querySelector('.calendar-cell').click();
 assert.equal(w.location.pathname,'/app/tasks.php');
 assert.equal(w.location.search,`?date=${day}`);
-assert.equal(w.document.getElementById('dayModal').classList.contains('open'),false);
+assert.equal(w.document.getElementById('dayModal'),null);
 const page=readFileSync('src/calendar-page.ts','utf8');
 assert(page.includes('if(openDate)return redirect(`/app/tasks.php?date=${encodeURIComponent(openDate)}`);'));
 assert(page.includes("tasks.filter(t=>String(t.task_kind||'').toUpperCase()==='EVENT').forEach(t=>addToMap(map,t))"));
