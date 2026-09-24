@@ -12,6 +12,7 @@ type SyncRow={
   sender_name:string;
   line_picture_url:string|null;
   read_count:number;
+  has_stamp:number;
 };
 
 const PAGE_SIZE=40;
@@ -46,6 +47,7 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
   if(releasedAfter&&!validJst(releasedAfter))return reply({ok:false,error:'INVALID_CURSOR'},400);
   const now=nowJst();
   const projection=`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name,s.line_picture_url,
+    EXISTS(SELECT 1 FROM message_stamp_attachments a JOIN calendar_stamp_assets asset ON asset.id=a.asset_id AND asset.family_id=a.family_id AND asset.active=1 WHERE a.family_id=msg.family_id AND a.message_id=msg.id) has_stamp,
     (SELECT COUNT(*) FROM message_reads r JOIN members reader ON reader.id=r.member_id AND reader.family_id=r.family_id AND reader.active=1 AND reader.deleted_at IS NULL WHERE r.family_id=msg.family_id AND r.message_id=msg.id) read_count`;
   if(before){
     const older=await ctx.env.DB.prepare(`${projection} FROM messages msg JOIN members s ON s.id=msg.sender_id AND s.family_id=msg.family_id
@@ -98,4 +100,5 @@ function mapRow(row:SyncRow){return {
       createdAt:String(row.created_at||''),
       updatedAt:String(row.updated_at||''),
       hasImage:Boolean(row.image_upload_id),
+      hasStamp:Boolean(row.has_stamp),
     };}
