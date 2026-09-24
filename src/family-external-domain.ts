@@ -58,6 +58,24 @@ export async function createExternalShoppingItemDomain(env:Env,member:CurrentMem
   return {ok:true,id};
 }
 
+/** Google Home activates a fixed baby quick action; the subject and amount come from the Scene ID. */
+export async function recordExternalBabyQuickDomain(env:Env,member:CurrentMember,subjectId:number,kind:'MILK'|'BATH',milkAmount?:number):Promise<{ok:boolean;id?:number}>{
+  if(!Number.isSafeInteger(subjectId)||subjectId<=0)return {ok:false};
+  const subject=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind='BABY' LIMIT 1").bind(subjectId,member.family_id).first<Row>();
+  if(!subject||!familyLogEnabledTypes(subject).includes(kind))return {ok:false};
+  if(kind==='MILK'){
+    if(!Number.isInteger(milkAmount)||Number(milkAmount)<1||Number(milkAmount)>2000)return {ok:false};
+    const setting=await env.DB.prepare("SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key='family_log_milk_amount_presets'").bind(member.family_id).first<Row>();
+    let presets=[160,240];if(setting?.setting_value){try{presets=normalizeMilkAmountPresets(JSON.parse(String(setting.setting_value)));}catch{}}
+    if(!presets.includes(milkAmount!))return {ok:false};
+  }
+  const now=nowJst(),amount=kind==='MILK'?milkAmount:null,detail=kind==='BATH'?'BATH':null,unit=kind==='MILK'?'ml':null;
+  const inserted=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,?,?,?,NULL)').bind(member.family_id,subjectId,kind,now,detail,amount,unit,member.id,now,now).run();
+  const id=Number(inserted.meta.last_row_id||0);if(!id)return {ok:false};
+  await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{quick_record:true,log_type:kind,detail_code:detail,amount,unit,subject_id:subjectId,source:'google_home_scene'});
+  return {ok:true,id};
+}
+
 export async function recordConfiguredQuickActionDomain(env:Env,member:CurrentMember,quickActionId:number):Promise<{ok:boolean;id?:number}>{
   const qa=await env.DB.prepare(`SELECT q.*,s.enabled_types_json,s.subject_kind FROM family_log_quick_actions q JOIN family_log_subjects s ON s.id=q.subject_id AND s.family_id=q.family_id AND s.active=1 WHERE q.id=? AND q.family_id=? AND q.active=1 AND q.mode='QUICK' LIMIT 1`).bind(quickActionId,member.family_id).first<Row>();if(!qa)return {ok:false};
   const type=String(qa.log_type||'');if(!FAMILY_LOG_TYPES.includes(type))return {ok:false};const allowed:Record<string,string[]>={DIAPER:['WET','DIRTY','BOTH'],MEAL:['BREAKFAST','LUNCH','DINNER','SNACK','BABY_FOOD','OTHER'],BATH:['BATH','SHOWER'],CONDITION:['GOOD','NORMAL','TIRED','SICK','VOMIT']},detail=String(qa.detail_code||'')||null;if(detail&&allowed[type]&&!allowed[type].includes(detail))return {ok:false};const amount=qa.amount===null?null:Number(qa.amount);if(amount!==null&&(!Number.isFinite(amount)||amount<-100000||amount>100000))return {ok:false};

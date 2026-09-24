@@ -78,6 +78,8 @@ Google Home credentials are separate from Google Calendar credentials. Do not su
 
 Active BABY/CHILD subjects can project child sleep, toilet/diaper and fixed Child Journal milestone Scenes; PET uses its dedicated quick operations, and family quick chores are separate shared Scenes. Eligibility is revalidated at EXECUTE time. Disabled or no-longer-eligible catalog entries fail closed instead of writing a record.
 
+Each active BABY subject also projects an お風呂 Scene and one ミルク Scene per configured amount (for example 160 ml and 240 ml). Their Scene IDs contain the subject ID and, for milk, the fixed amount. EXECUTE checks the linked member's family, current subject eligibility, and current amount presets before writing; changing the presets requests a HomeGraph catalog sync. With multiple children, activate the Scene named for the intended child. A Google Assistant response without an inbound EXECUTE request must be addressed in the Google Home voice starter/automation configuration.
+
 The fixed Child Journal 成長日記 Scene set is `立った`, `歩いた`, `最初の歯`, and `歯`. Google Home Scene activation does not accept 身長・体重 numeric values, arbitrary times/amounts, or free-form memo text; those require another input path.
 
 The FamilyToDo member linked during Account Linking is the trusted recorder identity. Do not infer a speaker or Voice Match identity from a shared Google Home device. `external_command_receipts` remains the idempotency boundary for duplicate Google request IDs.

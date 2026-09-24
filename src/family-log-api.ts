@@ -64,6 +64,7 @@ export async function familyLogApi(request:Request,ctx:AppContext):Promise<Respo
       ctx.env.DB.prepare(`INSERT INTO family_settings(family_id,setting_key,setting_value,updated_at) VALUES(?,?,?,?) ON CONFLICT(family_id,setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at`).bind(m.family_id,'family_log_milk_amount_presets',JSON.stringify(milkPresets),now)
     ]);
     await logActivity(ctx,'UPDATED','family_log_settings',m.family_id,{show_adult_logs:showAdultLogs,milk_amount_presets:milkPresets});
+    await requestGoogleHomeSyncForFamily(ctx.env,m.family_id);
     return json({ok:true,show_adult_logs:Boolean(showAdultLogs),milk_amount_presets:milkPresets});
   }
 
