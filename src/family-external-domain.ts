@@ -64,6 +64,24 @@ export async function recordConfiguredQuickActionDomain(env:Env,member:CurrentMe
   const now=nowJst(),r=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL,?,NULL,NULL,NULL,?,?,?,NULL)').bind(member.family_id,Number(qa.subject_id),type,now,detail,amount,qa.unit||null,qa.value_text||null,member.id,now,now).run(),id=Number(r.meta.last_row_id||0);if(!id)return {ok:false};await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{quick_action_id:quickActionId,source:'shared_quick_action'});return {ok:true,id};
 }
 
+/** Google Home activates a fixed baby quick action; the subject and amount come from the Scene ID. */
+export async function recordExternalBabyQuickDomain(env:Env,member:CurrentMember,subjectId:number,kind:'MILK'|'BATH',milkAmount?:number):Promise<{ok:boolean;id?:number}>{
+  if(!Number.isSafeInteger(subjectId)||subjectId<=0)return {ok:false};
+  const subject=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind='BABY' LIMIT 1").bind(subjectId,member.family_id).first<Row>();
+  if(!subject||!familyLogEnabledTypes(subject).includes(kind))return {ok:false};
+  if(kind==='MILK'){
+    if(!Number.isInteger(milkAmount)||Number(milkAmount)<1||Number(milkAmount)>2000)return {ok:false};
+    const setting=await env.DB.prepare("SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key='family_log_milk_amount_presets'").bind(member.family_id).first<Row>();
+    let presets=[160,240];if(setting?.setting_value){try{presets=normalizeMilkAmountPresets(JSON.parse(String(setting.setting_value)));}catch{}}
+    if(!presets.includes(milkAmount!))return {ok:false};
+  }
+  const now=nowJst(),amount=kind==='MILK'?milkAmount:null,detail=kind==='BATH'?'BATH':null,unit=kind==='MILK'?'ml':null;
+  const inserted=await env.DB.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,occurred_at,detail_code,amount,unit,duration_minutes,value_text,note,linked_task_id,linked_occurrence_id,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,?,?,?,NULL)').bind(member.family_id,subjectId,kind,now,detail,amount,unit,member.id,now,now).run();
+  const id=Number(inserted.meta.last_row_id||0);if(!id)return {ok:false};
+  await logActivity(externalActionContext(env,member),'CREATED','family_log',id,{quick_record:true,log_type:kind,detail_code:detail,amount,unit,subject_id:subjectId,source:'google_home_scene'});
+  return {ok:true,id};
+}
+
 export async function recordGoogleVoiceFamilyLogDomain(env:Env,member:CurrentMember,input:{subjectId:number;logType:string;detailCode:string|null;amount:number|null;unit:string|null;occurredOffsetMinutes:number}):Promise<{ok:boolean;id?:number}>{
   if(!Number.isInteger(input.occurredOffsetMinutes)||input.occurredOffsetMinutes<0||input.occurredOffsetMinutes>1440)return {ok:false};
   const subject=await env.DB.prepare("SELECT id,subject_kind,enabled_types_json FROM family_log_subjects WHERE id=? AND family_id=? AND active=1 AND subject_kind IN ('BABY','CHILD','PET')").bind(input.subjectId,member.family_id).first<Row>();
