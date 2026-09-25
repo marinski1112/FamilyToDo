@@ -96,6 +96,7 @@ export const activeRegressionGroups=[
       ['d1-rows-read-hotpath','node --test scripts/d1-rows-read-hotpath.test.mjs'],
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
       ['journal-location-narrative','node scripts/journal-location-narrative-contract.mjs'],
+      ['journal-location-diagnostics','node scripts/journal-location-diagnostics-contract.mjs'],
       ['line-daily-digest-ai-guard-atomicity','node scripts/line-daily-digest-ai-guard-atomicity-contract.mjs'],
       ['line-daily-digest-personal-note','node scripts/line-daily-digest-personal-note-contract.mjs'],
       ['morning-attempt-evidence','node scripts/morning-attempt-evidence-contract.mjs'],
