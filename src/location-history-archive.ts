@@ -4,6 +4,7 @@ import type {LocationPoint} from './location-providers';
 
 const MAX_ARCHIVE_GROUPS_PER_RUN=8;
 const ARCHIVE_REBUILD_FROM_LOCAL_DATE='2026-09-14';
+const ARCHIVE_REBUILD_BEFORE='2026-09-25T14:00:00Z';
 const MAX_MINUTE_POINTS_PER_DAY=1440;
 const MAX_ROUTE_POINTS=72;
 const ROUTE_DISTANCE_STEP_METERS=200;
@@ -136,6 +137,7 @@ async function rebuildIncompleteArchivedDays(db:D1Database):Promise<ArchiveGroup
     SELECT a.family_id,a.member_id,a.local_date
     FROM location_history_archive_days a
     WHERE a.local_date>=? AND a.local_date<?
+      AND a.archived_at<?
       AND a.raw_point_count>0
       AND NOT EXISTS(
         SELECT 1 FROM location_history_stays s
@@ -148,7 +150,7 @@ async function rebuildIncompleteArchivedDays(db:D1Database):Promise<ArchiveGroup
       )
     ORDER BY a.local_date DESC
     LIMIT ?
-  `).bind(ARCHIVE_REBUILD_FROM_LOCAL_DATE,todayJst(),MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
+  `).bind(ARCHIVE_REBUILD_FROM_LOCAL_DATE,todayJst(),ARCHIVE_REBUILD_BEFORE,MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
   const rebuilt:ArchiveGroup[]=[];
   for(const group of groups.results){
     try{if(await archiveOneDay(db,group,{replaceExisting:true}))rebuilt.push(group);}
