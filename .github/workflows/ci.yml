@@ -53,6 +53,8 @@ jobs:
         if: always()
       - run: npm run check:migrations
         if: always()
+      - run: npm run check:calendar-stickers
+        if: always()
       - run: node scripts/regression-suite.mjs
         if: always()
       - run: git diff --check HEAD^

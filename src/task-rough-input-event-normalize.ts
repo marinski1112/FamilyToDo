@@ -2,6 +2,7 @@ const DATE_ONLY_EVENT_LINE=/^(?:\d{4}[\/.\-])?\d{1,2}[\/.\-]\d{1,2}$|^\d{1,2}\s*
 const EVENT_METADATA_LINE=/^(?:説明|メモ|備考|note|url|リンク|数量|個数|カテゴリー|カテゴリ|期限|締切)\s*[:：]/iu;
 const URL_ONLY_LINE=/^https?:\/\/\S+$/iu;
 const DUE_DATE_LINE=/^((?:期限|締切)\s*[:：]\s*)(.+)$/u;
+const INLINE_EVENT_DATE=/^((?:(?:\d{4})[\/.\-])?\d{1,2}[\/.\-]\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日)(?:\s+|[、,]\s*)(.+)$/u;
 
 function currentReferenceDate():string{return new Date().toISOString().slice(0,10);}
 
@@ -39,6 +40,11 @@ export function normalizeEventDateTitleText(value:unknown,referenceDate=currentR
   for(let index=0;index<lines.length;index++){
     const current=lines[index].trim();
     const next=index+1<lines.length?lines[index+1].trim():'';
+    const inline=current.match(INLINE_EVENT_DATE);
+    if(inline&&isEventTitleLine(inline[2])){
+      const date=toIsoDate(inline[1],referenceDate);
+      if(date){out.push(inline[2].trim(),`期限: ${date}`);changed=true;continue;}
+    }
     if(current&&DATE_ONLY_EVENT_LINE.test(current)&&isEventTitleLine(next)){
       const normalizedDate=toIsoDate(current,referenceDate)||current;
       out.push(next,`期限: ${normalizedDate}`);

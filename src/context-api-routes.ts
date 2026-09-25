@@ -9,6 +9,7 @@ import { taskParentCompletionApi } from './task-parent-completion-api';
 import { taskRoughInputApi } from './task-rough-input-api';
 import { checklistInlineTitleApi } from './checklist-inline-title-api';
 import { normalizeEventRoughInputRequest } from './task-rough-input-event-normalize';
+import { familyDate,DEFAULT_FAMILY_TIMEZONE } from './timezone';
 import { itemApi } from './item-api';
 import { childJournalApi } from './child-journal';
 import { calendarStampReadApi } from './calendar-stamp-api';
@@ -16,6 +17,7 @@ import { calendarStampGlobalDeleteAdmin } from './calendar-stamp-global-delete-a
 import { calendarStampOptionsApi,calendarStampPlacementApi } from './calendar-stamp-placement-api';
 import { calendarStampAdminAssetsApi,calendarStampPngSequenceAdminApi } from './calendar-stamp-admin-api';
 import { calendarStampMediaReadApi,calendarStampMediaUploadApi } from './calendar-stamp-media-api';
+import { calendarStickerAdminApi,calendarStickerDaysApi,calendarStickerMediaApi } from './calendar-sticker-api';
 import { calendarSharedStampCatalogAdminApi } from './calendar-shared-stamp-api';
 import { calendarSharedStampPublishAdminApi } from './calendar-shared-stamp-publish-api';
 import { messageStampApi } from './message-stamp-api';
@@ -60,7 +62,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);
   if(url.pathname==='/api/task-parent-completion') return await taskParentCompletionApi(request,context);
-  if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request),context);
+  if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request,familyDate(String(context.member?.family_timezone||context.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE))),context);
   if(url.pathname==='/api/checklist/inline-title') return await checklistInlineTitleApi(request,context);
   if(url.pathname==='/api/item') return await itemApi(request,context);
   if(url.pathname==='/api/messages') return await messages(request,context);
@@ -89,6 +91,9 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/calendar-stamp-options') return await calendarStampOptionsApi(request,context);
   if(url.pathname==='/api/calendar-stamp-placement') return await calendarStampPlacementApi(request,context);
   if(url.pathname==='/api/calendar-stamp-media') return await calendarStampMediaReadApi(request,context);
+  if(url.pathname==='/api/calendar-sticker-admin') return await calendarStickerAdminApi(request,context);
+  if(url.pathname==='/api/calendar-sticker-media') return await calendarStickerMediaApi(request,context);
+  if(url.pathname==='/api/calendar-stickers') return await calendarStickerDaysApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/assets') return await calendarStampAdminAssetsApi(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/global-deletion') return await calendarStampGlobalDeleteAdmin(request,context);
   if(url.pathname==='/api/calendar-stamp-admin/shared-catalog') return await calendarSharedStampCatalogAdminApi(request,context);

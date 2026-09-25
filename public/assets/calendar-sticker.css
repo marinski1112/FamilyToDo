@@ -1,0 +1,12 @@
+.calendar-cell.has-day-sticker{isolation:isolate}
+.calendar-day-sticker{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.22;pointer-events:none;z-index:0;border-radius:inherit}
+.calendar-cell.has-day-sticker>.num,.calendar-cell.has-day-sticker>.calendar-items,.calendar-cell.has-day-sticker>.calendar-stamp-stack{position:relative;z-index:1}
+.calendar-decoration-dialog:not([hidden]){position:fixed;inset:0;z-index:230;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.35)}
+.calendar-decoration-card{position:relative;width:min(92vw,500px);max-height:85vh;overflow:auto;padding:20px;border-radius:18px;background:var(--surface,#fff);color:var(--text,#1e293b);box-shadow:0 20px 64px rgba(0,0,0,.18)}
+.calendar-decoration-card h3{margin:0 40px 4px 0}.calendar-decoration-date{margin:0 0 12px;color:var(--muted,#64748b)}
+.calendar-decoration-close{position:absolute;right:12px;top:12px;border:0;background:transparent;color:inherit;font-size:28px;cursor:pointer}
+.calendar-decoration-tabs{display:flex;gap:8px;flex-wrap:wrap}.calendar-decoration-tabs button,.calendar-decoration-remove{padding:9px 12px;border:1px solid var(--border,#cbd5e1);border-radius:10px;background:var(--surface,#fff);color:inherit;cursor:pointer}
+.calendar-decoration-stickers{margin-top:14px}.calendar-decoration-stickers select{margin-left:8px;min-height:36px}.calendar-decoration-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:44vh;overflow:auto;margin:12px 0}
+.calendar-decoration-option{min-width:0;padding:6px;border:1px solid var(--border,#cbd5e1);border-radius:12px;background:var(--surface,#fff);color:inherit;cursor:pointer}.calendar-decoration-option img{display:block;width:100%;height:70px;object-fit:contain}.calendar-decoration-option span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calendar-decoration-status{min-height:1.4em;color:var(--muted,#64748b)}
+@media(max-width:520px){.calendar-decoration-options{grid-template-columns:repeat(2,minmax(0,1fr))}}

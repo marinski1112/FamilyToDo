@@ -133,8 +133,9 @@ try{
       const label=document.createElement('span');label.textContent=option.name||'スタンプ';button.appendChild(label);pickerGrid.appendChild(button);
     }
   };
-  const openPicker=async()=>{
-    const date=selectedModalDate();if(!date||!csrf)return;
+  const openPicker=async(requestedDate)=>{
+    const date=safeDate(requestedDate)?requestedDate:selectedModalDate();if(!date||!csrf)return;
+    if(stampDate)stampDate.value=date;
     pickerTargetDate=date;if(pickerDate)pickerDate.textContent=date;if(pickerGrid)pickerGrid.innerHTML='<div class="calendar-stamp-picker-status">読み込み中…</div>';picker.classList.add('open');
     try{renderOptions(await loadOptions());}catch{if(pickerGrid)pickerGrid.innerHTML='<div class="calendar-stamp-picker-status">スタンプを読み込めませんでした。</div>';}
     picker.querySelector('.calendar-stamp-picker-close')?.focus();
@@ -150,6 +151,7 @@ try{
     button.dataset.assetId=String(assetId);optionsCache=null;return assetId;
   };
   pickerButton.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openPicker();});
+  window.familyCalendarOpenStampPicker=date=>openPicker(date);
   pickerGrid?.addEventListener('click',async event=>{
     const button=event.target?.closest?.('.calendar-stamp-option');if(!button||placing)return;
     const stampDate=pickerTargetDate,visibilityScope=String(pickerScope?.value||'FAMILY');
@@ -198,7 +200,7 @@ try{
   document.addEventListener('click',event=>{const stamp=stampFromTarget(event.target);if(!stamp)return;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openViewer(stamp);},true);
   document.addEventListener('touchend',event=>{const stamp=stampFromTarget(event.target);if(!stamp)return;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openViewer(stamp);},true);
   document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(picker.classList.contains('open'))closePicker();else if(viewer.classList.contains('open'))closeViewer();});
-  const grid=document.querySelector('.calendar-grid');if(grid){let timer=0;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(renderStamps,40);}).observe(grid,{childList:true,subtree:true});}
+  const grid=document.querySelector('.calendar-grid');if(grid){let timer=0;new MutationObserver(records=>{if(!records.some(record=>record.target===grid))return;clearTimeout(timer);timer=setTimeout(renderStamps,40);}).observe(grid,{childList:true});}
   if(!csrf)pickerButton.hidden=true;
   renderStamps();
   document.documentElement.dataset.calendarStampUi='ready';
