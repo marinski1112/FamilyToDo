@@ -22,7 +22,7 @@ export async function journalLocationDiagnostics(request:Request,ctx:AppContext)
   const from=new Date(start).toISOString(),until=new Date(start+86400000).toISOString();
   const [raw,archive,stays,journal]=await Promise.all([
     ctx.env.DB.prepare(`SELECT COALESCE(SUM(points),0) points,COUNT(*) members,COALESCE(MAX(points),0) max_points_per_member,
-      SUM(CASE WHEN points>2000 THEN 1 ELSE 0 END) over_archive_limit_members
+      SUM(CASE WHEN points>10000 THEN 1 ELSE 0 END) over_archive_limit_members
       FROM (SELECT COUNT(*) points FROM member_location_history
         WHERE family_id=? AND recorded_at>=? AND recorded_at<? GROUP BY member_id)`)
       .bind(familyId,from,until).first<Row>(),

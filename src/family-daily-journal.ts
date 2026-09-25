@@ -9,7 +9,7 @@ type Row=Record<string,unknown>;
 type LocationSummary={memberId:number;name:string;routePointCount:number;stays:Array<{from:string;to:string;minutes:number;place:string}>};
 type TaskSummary={taskId:number;title:string;memberId:number;memberName:string;completedAt:string};
 type HouseworkSummary={name:string;memberId:number;memberName:string;occurredAt:string};
-const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50,MAX_SEARCH_YEAR_ROWS=366,MAX_SUMMARY_DETAILS=3,MAX_SUMMARY_DETAIL_CHARS=60,JOURNAL_REFRESH_MS=24*60*60*1000;
+const MAX_FAMILIES=40,REPAIR_DAYS=7,MAX_ITEMS=200,MAX_SEARCH=50,MAX_SEARCH_YEAR_ROWS=366,MAX_SUMMARY_DETAILS=3,MAX_SUMMARY_DETAIL_CHARS=60;
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const validDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}T00:00:00Z`));
 const validMonth=(v:string)=>/^\d{4}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(`${v}-01T00:00:00Z`));
@@ -17,20 +17,17 @@ const validYear=(v:string)=>/^\d{4}$/.test(v)&&Number(v)>=2000&&Number(v)<=9998;
 const shiftDate=(date:string,days:number)=>{const d=new Date(`${date}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);};
 const shiftMonth=(month:string,delta:number)=>{const d=new Date(`${month}-01T12:00:00Z`);d.setUTCMonth(d.getUTCMonth()+delta);return d.toISOString().slice(0,7);};
 const todayJst=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const hourJst=()=>Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Tokyo',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
 const parseArray=<T>(raw:unknown):T[]=>{try{const v=JSON.parse(String(raw??'[]'));return Array.isArray(v)?v as T[]:[];}catch{return [];}};
 const timeOnly=(v:string)=>/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(v)?v.slice(11,16):'';
 const locationTimeOnly=(value:string,timeZone:string)=>{const raw=String(value||'').trim();if(!raw)return '';const instant=new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)?raw:raw.replace(' ','T')+'Z');return Number.isFinite(instant.getTime())?formatFamilyDateTime(instant,timeZone).slice(11,16):'';};
-const journalFresh=(raw:unknown,nowMs:number)=>{const generated=Date.parse(String(raw||''));return Number.isFinite(generated)&&generated<=nowMs&&nowMs-generated<JOURNAL_REFRESH_MS;};
-
-async function readSharedLocationMemberIds(db:D1Database,familyId:number):Promise<Set<number>>{
-  const rows=await db.prepare(`SELECT DISTINCT d.member_id FROM location_devices d JOIN members m ON m.id=d.member_id AND m.family_id=d.family_id AND m.active=1 WHERE d.family_id=? AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL ORDER BY d.member_id LIMIT ?`).bind(familyId,MAX_ITEMS).all<Row>();
-  return new Set(rows.results.map(row=>Number(row.member_id)).filter(id=>Number.isSafeInteger(id)&&id>0));
-}
 
 async function readLocation(db:D1Database,familyId:number,date:string):Promise<LocationSummary[]>{
   const [days,stays]=await Promise.all([
-    db.prepare(`SELECT a.member_id,m.name,a.route_point_count FROM location_history_archive_days a JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id AND m.active=1 WHERE a.family_id=? AND a.local_date=? AND EXISTS (SELECT 1 FROM location_devices d WHERE d.family_id=a.family_id AND d.member_id=a.member_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL) ORDER BY m.id`).bind(familyId,date).all<Row>(),
-    db.prepare(`SELECT s.member_id,s.started_at,s.ended_at,s.duration_minutes,CASE WHEN (s.place_label IN ('自宅','家','我が家','職場','会社','勤務先') OR s.place_label LIKE '自宅付近%' OR s.place_label LIKE '職場付近%') THEN s.place_label ELSE COALESCE(NULLIF(s.address_label,''),s.place_label) END place_label FROM location_history_stays s WHERE s.family_id=? AND s.local_date=? AND EXISTS (SELECT 1 FROM members m JOIN location_devices d ON d.member_id=m.id AND d.family_id=m.family_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL WHERE m.id=s.member_id AND m.family_id=s.family_id AND m.active=1) ORDER BY s.member_id,s.started_at,s.id LIMIT 300`).bind(familyId,date).all<Row>(),
+    // Archive contains only points accepted while device sharing was enabled.
+    // Current device state cannot retroactively remove that past-day evidence.
+    db.prepare(`SELECT a.member_id,m.name,a.route_point_count FROM location_history_archive_days a JOIN members m ON m.id=a.member_id AND m.family_id=a.family_id WHERE a.family_id=? AND a.local_date=? ORDER BY m.id`).bind(familyId,date).all<Row>(),
+    db.prepare(`SELECT s.member_id,s.started_at,s.ended_at,s.duration_minutes,CASE WHEN (s.place_label IN ('自宅','家','我が家','職場','会社','勤務先') OR s.place_label LIKE '自宅付近%' OR s.place_label LIKE '職場付近%') THEN s.place_label ELSE COALESCE(NULLIF(s.address_label,''),s.place_label) END place_label FROM location_history_stays s JOIN members m ON m.id=s.member_id AND m.family_id=s.family_id WHERE s.family_id=? AND s.local_date=? ORDER BY s.member_id,s.started_at,s.id LIMIT 300`).bind(familyId,date).all<Row>(),
   ]);
   const grouped=new Map<number,LocationSummary['stays']>();
   for(const row of stays.results){const id=Number(row.member_id),list=grouped.get(id)||[];list.push({from:String(row.started_at||''),to:String(row.ended_at||''),minutes:Number(row.duration_minutes||0),place:String(row.place_label||'未登録地点付近')});grouped.set(id,list);}
@@ -69,24 +66,53 @@ function summary(location:LocationSummary[],tasks:TaskSummary[],housework:Housew
 
 export async function generateFamilyDailyJournal(db:D1Database,familyId:number,date:string):Promise<void>{
   if(!Number.isSafeInteger(familyId)||familyId<=0||!validDate(date)||date>=todayJst())return;
-  const [location,tasks,housework]=await Promise.all([readLocation(db,familyId,date),readTasks(db,familyId,date),readHousework(db,familyId,date)]),now=new Date().toISOString();
-  await db.prepare(`INSERT INTO family_daily_journals(family_id,journal_date,summary_text,location_json,tasks_json,housework_json,generated_at,updated_at,content_version,storage_tier,archive_object_key,archived_at) VALUES(?,?,?,?,?,?,?,?,1,'HOT',NULL,NULL) ON CONFLICT(family_id,journal_date) DO UPDATE SET summary_text=excluded.summary_text,location_json=excluded.location_json,tasks_json=excluded.tasks_json,housework_json=excluded.housework_json,generated_at=excluded.generated_at,updated_at=excluded.updated_at,content_version=family_daily_journals.content_version+1 WHERE family_daily_journals.storage_tier='HOT'`).bind(familyId,date,summary(location,tasks,housework),JSON.stringify(location),JSON.stringify(tasks),JSON.stringify(housework),now,now).run();
+  const [currentLocation,tasks,housework,existing]=await Promise.all([
+    readLocation(db,familyId,date),readTasks(db,familyId,date),readHousework(db,familyId,date),
+    db.prepare("SELECT location_json FROM family_daily_journals WHERE family_id=? AND journal_date=? AND storage_tier='HOT' LIMIT 1").bind(familyId,date).first<Row>(),
+  ]),now=new Date().toISOString();
+  // A device being disabled later must not erase an already finalized day.
+  // New projection rows still require sharing at generation time.
+  const currentIds=new Set(currentLocation.map(member=>member.memberId));
+  const previouslySaved=parseArray<LocationSummary>(existing?.location_json);
+  const location=[...currentLocation,...previouslySaved.filter(member=>!currentIds.has(member.memberId))].sort((a,b)=>a.memberId-b.memberId);
+  await db.prepare(`INSERT INTO family_daily_journals(family_id,journal_date,summary_text,location_json,tasks_json,housework_json,generated_at,updated_at,content_version,storage_tier,archive_object_key,archived_at) VALUES(?,?,?,?,?,?,?,?,1,'HOT',NULL,NULL) ON CONFLICT(family_id,journal_date) DO UPDATE SET summary_text=excluded.summary_text,location_json=excluded.location_json,tasks_json=excluded.tasks_json,housework_json=excluded.housework_json,generated_at=excluded.generated_at,updated_at=excluded.updated_at,content_version=family_daily_journals.content_version+1 WHERE family_daily_journals.storage_tier='HOT' AND (family_daily_journals.summary_text IS NOT excluded.summary_text OR family_daily_journals.location_json IS NOT excluded.location_json OR family_daily_journals.tasks_json IS NOT excluded.tasks_json OR family_daily_journals.housework_json IS NOT excluded.housework_json)`).bind(familyId,date,summary(location,tasks,housework),JSON.stringify(location),JSON.stringify(tasks),JSON.stringify(housework),now,now).run();
 }
 
 export async function generateFamilyDailyJournals(env:Env):Promise<void>{
-  const families=await env.DB.prepare('SELECT id FROM families ORDER BY id LIMIT ?').bind(MAX_FAMILIES).all<Row>(),yesterday=shiftDate(todayJst(),-1),dates=Array.from({length:REPAIR_DAYS},(_,i)=>shiftDate(yesterday,-i)),nowMs=Date.now();
+  // Wait for overnight Location ingress and archive work. If this hourly run
+  // fails, a later hour can create the same missing day without regenerating it.
+  if(hourJst()<9)return;
+  const families=await env.DB.prepare('SELECT id FROM families ORDER BY id LIMIT ?').bind(MAX_FAMILIES).all<Row>(),yesterday=shiftDate(todayJst(),-1);
   for(const row of families.results){
     const id=Number(row.id);if(!Number.isSafeInteger(id)||id<=0)continue;
-    const freshDates=new Set<string>();
-    try{const existing=await env.DB.prepare(`SELECT journal_date,generated_at FROM family_daily_journals WHERE family_id=? AND storage_tier='HOT' AND journal_date>=? AND journal_date<=? ORDER BY journal_date`).bind(id,dates[dates.length-1],dates[0]).all<Row>();for(const journal of existing.results){if(journalFresh(journal.generated_at,nowMs))freshDates.add(String(journal.journal_date));}}catch{}
-    for(const date of dates){if(freshDates.has(date))continue;try{await generateFamilyDailyJournal(env.DB,id,date);}catch{}}
+    const exists=await env.DB.prepare("SELECT 1 ok FROM family_daily_journals WHERE family_id=? AND journal_date=? AND storage_tier='HOT' LIMIT 1").bind(id,yesterday).first<Row>();
+    if(!exists)try{await generateFamilyDailyJournal(env.DB,id,yesterday);}catch{}
   }
 }
 
-function calendar(month:string,rows:Map<string,Row>,selected:string,sharedLocationMembers:Set<number>,diaryCounts:Map<string,number>):string{
+/** Daily bounded repair checks for actual source changes, never age alone. */
+export async function repairRecentFamilyDailyJournals(env:Env):Promise<void>{
+  if(hourJst()!==10)return;
+  const families=await env.DB.prepare('SELECT id FROM families ORDER BY id LIMIT ?').bind(MAX_FAMILIES).all<Row>();
+  const yesterday=shiftDate(todayJst(),-1),oldest=shiftDate(yesterday,1-REPAIR_DAYS);
+  for(const row of families.results){
+    const familyId=Number(row.id);if(!Number.isSafeInteger(familyId)||familyId<=0)continue;
+    const journals=await env.DB.prepare("SELECT journal_date FROM family_daily_journals WHERE family_id=? AND journal_date>=? AND journal_date<=? AND storage_tier='HOT' ORDER BY journal_date DESC")
+      .bind(familyId,oldest,yesterday).all<Row>();
+    for(const journal of journals.results){try{await generateFamilyDailyJournal(env.DB,familyId,String(journal.journal_date));}catch{}}
+  }
+}
+
+/** Repair only a newly archived day with an existing HOT journal. */
+export async function repairFamilyDailyJournal(db:D1Database,familyId:number,date:string):Promise<void>{
+  const exists=await db.prepare("SELECT 1 ok FROM family_daily_journals WHERE family_id=? AND journal_date=? AND storage_tier='HOT' LIMIT 1").bind(familyId,date).first<Row>();
+  if(exists)await generateFamilyDailyJournal(db,familyId,date);
+}
+
+function calendar(month:string,rows:Map<string,Row>,selected:string,diaryCounts:Map<string,number>):string{
   const first=new Date(`${month}-01T12:00:00Z`),days=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0,12)).getUTCDate(),cells:string[]=[];
   for(let i=0;i<(first.getUTCDay()+6)%7;i+=1)cells.push('<div class="family-journal-day muted"></div>');
-  for(let day=1;day<=days;day+=1){const date=`${month}-${String(day).padStart(2,'0')}`,row=rows.get(date),tasks=parseArray<TaskSummary>(row?.tasks_json).length,chores=parseArray<HouseworkSummary>(row?.housework_json).length,stays=parseArray<LocationSummary>(row?.location_json).filter(member=>sharedLocationMembers.has(member.memberId)).reduce((n,m)=>n+m.stays.length,0);cells.push(`<a class="family-journal-day${row||diaryCounts.has(date)?' has-entry':''}${date===selected?' selected':''}" href="/app/family_journal.php?month=${month}&date=${date}"><strong>${day}</strong>${row||diaryCounts.has(date)?`<small>${diaryCounts.has(date)?'📖'+diaryCounts.get(date)+' ':''}${tasks?'✅'+tasks+' ':''}${chores?'🧹'+chores+' ':''}${stays?'📍'+stays:''}</small>`:''}</a>`);}return cells.join('');
+  for(let day=1;day<=days;day+=1){const date=`${month}-${String(day).padStart(2,'0')}`,row=rows.get(date),tasks=parseArray<TaskSummary>(row?.tasks_json).length,chores=parseArray<HouseworkSummary>(row?.housework_json).length,stays=parseArray<LocationSummary>(row?.location_json).reduce((n,m)=>n+m.stays.length,0);cells.push(`<a class="family-journal-day${row||diaryCounts.has(date)?' has-entry':''}${date===selected?' selected':''}" href="/app/family_journal.php?month=${month}&date=${date}"><strong>${day}</strong>${row||diaryCounts.has(date)?`<small>${diaryCounts.has(date)?'📖'+diaryCounts.get(date)+' ':''}${tasks?'✅'+tasks+' ':''}${chores?'🧹'+chores+' ':''}${stays?'📍'+stays:''}</small>`:''}</a>`);}return cells.join('');
 }
 
 export async function familyDailyJournalPage(request:Request,ctx:AppContext):Promise<Response>{
@@ -94,19 +120,16 @@ export async function familyDailyJournalPage(request:Request,ctx:AppContext):Pro
   const timeZone=String(ctx.member.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);
   const url=new URL(request.url),today=todayJst(),month=String(url.searchParams.get('month')||today.slice(0,7));if(!validMonth(month))throw new BadRequest('月の指定が不正です。');
   const asked=String(url.searchParams.get('date')||''),selectedDate=validDate(asked)&&asked.startsWith(`${month}-`)?asked:'';
-  const [monthRows,sharedLocationMembers]=await Promise.all([
-    ctx.env.DB.prepare('SELECT journal_date,location_json,tasks_json,housework_json FROM family_daily_journals WHERE family_id=? AND storage_tier=\'HOT\' AND journal_date>=? AND journal_date<? ORDER BY journal_date').bind(familyId,`${month}-01`,`${shiftMonth(month,1)}-01`).all<Row>(),
-    readSharedLocationMemberIds(ctx.env.DB,familyId),
-  ]),byDate=new Map(monthRows.results.map(row=>[String(row.journal_date),row])),selected=selectedDate?byDate.get(selectedDate):undefined;
+  const monthRows=await ctx.env.DB.prepare('SELECT journal_date,location_json,tasks_json,housework_json FROM family_daily_journals WHERE family_id=? AND storage_tier=\'HOT\' AND journal_date>=? AND journal_date<? ORDER BY journal_date').bind(familyId,`${month}-01`,`${shiftMonth(month,1)}-01`).all<Row>(),byDate=new Map(monthRows.results.map(row=>[String(row.journal_date),row])),selected=selectedDate?byDate.get(selectedDate):undefined;
   const diaryPage=Math.min(10000,Math.max(1,Math.floor(Number(url.searchParams.get('diary_page'))||1)));
   const imported=await importedFamilyDiary(ctx.env.DB,familyId,month,`${shiftMonth(month,1)}-01`,selectedDate,diaryPage);
   const q=String(url.searchParams.get('q')||'').trim().slice(0,80),requestedSearchYear=String(url.searchParams.get('search_year')||today.slice(0,4)),searchYear=validYear(requestedSearchYear)?requestedSearchYear:today.slice(0,4),searchFrom=`${searchYear}-01-01`,searchTo=`${String(Number(searchYear)+1).padStart(4,'0')}-01-01`;
   const searchRows=q?await ctx.env.DB.prepare(`SELECT journal_date,location_json,tasks_json,housework_json FROM family_daily_journals WHERE family_id=? AND journal_date>=? AND journal_date<? AND storage_tier='HOT' ORDER BY journal_date DESC LIMIT ?`).bind(familyId,searchFrom,searchTo,MAX_SEARCH_YEAR_ROWS).all<Row>():{results:[] as Row[]};
   const normalizedQuery=q.toLocaleLowerCase();
-  const found=q?searchRows.results.map(row=>{const location=parseArray<LocationSummary>(row.location_json).filter(member=>sharedLocationMembers.has(member.memberId)),tasks=parseArray<TaskSummary>(row.tasks_json),housework=parseArray<HouseworkSummary>(row.housework_json);return{journal_date:row.journal_date,safe_summary:summary(location,tasks,housework)};}).filter(row=>String(row.safe_summary).toLocaleLowerCase().includes(normalizedQuery)).slice(0,MAX_SEARCH):[];
-  const location=parseArray<LocationSummary>(selected?.location_json).filter(member=>sharedLocationMembers.has(member.memberId)),tasks=parseArray<TaskSummary>(selected?.tasks_json),housework=parseArray<HouseworkSummary>(selected?.housework_json),safeSelectedSummary=selected?summary(location,tasks,housework):'';
+  const found=q?searchRows.results.map(row=>{const location=parseArray<LocationSummary>(row.location_json),tasks=parseArray<TaskSummary>(row.tasks_json),housework=parseArray<HouseworkSummary>(row.housework_json);return{journal_date:row.journal_date,safe_summary:summary(location,tasks,housework)};}).filter(row=>String(row.safe_summary).toLocaleLowerCase().includes(normalizedQuery)).slice(0,MAX_SEARCH):[];
+  const location=parseArray<LocationSummary>(selected?.location_json),tasks=parseArray<TaskSummary>(selected?.tasks_json),housework=parseArray<HouseworkSummary>(selected?.housework_json),safeSelectedSummary=selected?summary(location,tasks,housework):'';
   const search=q?`<section class="card"><h2>${esc(searchYear)}年「${esc(q)}」の振り返り</h2>${found.length?found.map(r=>`<a class="journal-result" href="/app/family_journal.php?month=${esc(String(r.journal_date).slice(0,7))}&date=${esc(r.journal_date)}"><strong>${esc(r.journal_date)}</strong><span>${esc(r.safe_summary)}</span></a>`).join(''):'<p class="small">一致する総括はありません。</p>'}</section>`:'';
   const detail=selected?`<section class="card"><h2>${esc(selectedDate)} の総括</h2><p>${esc(safeSelectedSummary)}</p></section><section class="card"><h2>📍 移動・滞在</h2>${location.length?location.map(m=>`<div class="journal-member"><strong>${esc(m.name)}</strong><small> 簡略ルート${m.routePointCount}点</small>${m.stays.map(s=>`<p>${esc(locationTimeOnly(s.from,timeZone))}〜${esc(locationTimeOnly(s.to,timeZone))} ${esc(s.place)}・${s.minutes}分</p>`).join('')||'<p class="small">まとまった滞在なし</p>'}</div>`).join(''):'<p class="small">位置記録なし</p>'}</section><section class="card"><h2>✅ 完了タスク</h2>${tasks.map(t=>`<p>${esc(timeOnly(t.completedAt))} ${esc(t.title)} <small>・${esc(t.memberName)}</small></p>`).join('')||'<p class="small">完了タスクなし</p>'}</section><section class="card"><h2>🧹 家事</h2>${housework.map(h=>`<p>${esc(timeOnly(h.occurredAt))} ${esc(h.name)} <small>・${esc(h.memberName)}</small></p>`).join('')||'<p class="small">家事記録なし</p>'}</section>`:'<section class="card"><p class="small">日付を選ぶと、その日の総括を表示します。総括は翌日以降に自動生成します。</p></section>';
-  const body=`<script type="application/json" id="mitenyaSharePayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c')}</script><script src="/assets/mitenya-photo-share.js?v=1" defer></script><div class="page-head"><h1>📘 家族日記</h1><a class="btn gray small" href="/app/family_log.php">家族ログへ</a></div><p class="small">移動・滞在、家族共有タスクの完了、家事を1日単位で長期保存します。位置情報は現在共有中の家族分だけ表示・検索し、位置RAWは日記生成では削除しません。</p><form method="get" class="card"><label>日記を検索</label><div class="actions"><input name="search_year" type="number" min="2000" max="9998" value="${esc(searchYear)}" aria-label="検索年"><input name="q" maxlength="80" value="${esc(q)}" placeholder="場所・タスク・家事などで検索"><button class="btn small">検索</button></div><p class="small">D1負荷を一定にするため、検索は指定した1年単位で行います。過去の年も指定できます。</p></form>${search}<section class="card"><div class="section-head"><a class="btn gray small" href="?month=${shiftMonth(month,-1)}">‹ 前月</a><h2>${esc(month.replace('-','年'))}月</h2><a class="btn gray small" href="?month=${shiftMonth(month,1)}">翌月 ›</a></div><div class="journal-week"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div class="journal-grid">${calendar(month,byDate,selectedDate,sharedLocationMembers,imported.counts)}</div></section>${imported.html}${detail}<style>.journal-week,.journal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.journal-week span{text-align:center;font-size:12px}.family-journal-day{min-height:54px;padding:6px;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:3px}.family-journal-day.muted{border-color:transparent}.family-journal-day.selected{outline:2px solid currentColor}.family-journal-day small{font-size:10px}.journal-member{padding:8px 0;border-bottom:1px solid #eee}.journal-member p{margin:5px 0}.journal-result{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #eee;text-decoration:none;color:inherit}.journal-result span{flex:1}</style>`;
+  const body=`<script type="application/json" id="mitenyaSharePayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c')}</script><script src="/assets/mitenya-photo-share.js?v=1" defer></script><div class="page-head"><h1>📘 家族日記</h1><a class="btn gray small" href="/app/family_log.php">家族ログへ</a></div><p class="small">移動・滞在、家族共有タスクの完了、家事を1日単位で長期保存します。確定保存された過去の日誌は、端末の現在の共有状態にかかわらず表示します。位置RAWは日記生成では削除しません。</p><form method="get" class="card"><label>日記を検索</label><div class="actions"><input name="search_year" type="number" min="2000" max="9998" value="${esc(searchYear)}" aria-label="検索年"><input name="q" maxlength="80" value="${esc(q)}" placeholder="場所・タスク・家事などで検索"><button class="btn small">検索</button></div><p class="small">D1負荷を一定にするため、検索は指定した1年単位で行います。過去の年も指定できます。</p></form>${search}<section class="card"><div class="section-head"><a class="btn gray small" href="?month=${shiftMonth(month,-1)}">‹ 前月</a><h2>${esc(month.replace('-','年'))}月</h2><a class="btn gray small" href="?month=${shiftMonth(month,1)}">翌月 ›</a></div><div class="journal-week"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div class="journal-grid">${calendar(month,byDate,selectedDate,imported.counts)}</div></section>${imported.html}${detail}<style>.journal-week,.journal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.journal-week span{text-align:center;font-size:12px}.family-journal-day{min-height:54px;padding:6px;border:1px solid #e5e7eb;border-radius:10px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:3px}.family-journal-day.muted{border-color:transparent}.family-journal-day.selected{outline:2px solid currentColor}.family-journal-day small{font-size:10px}.journal-member{padding:8px 0;border-bottom:1px solid #eee}.journal-member p{margin:5px 0}.journal-result{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #eee;text-decoration:none;color:inherit}.journal-result span{flex:1}</style>`;
   const response=html(layout('家族日記',body,'/app/family_log.php'));response.headers.set('cache-control','no-store');return response;
 }

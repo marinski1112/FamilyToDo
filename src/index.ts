@@ -3,7 +3,7 @@ import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
 import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
 import {cleanupLocationArrivals} from './location-arrival-push';
 import {archiveLocationHistory} from './location-history-archive';
-import {generateFamilyDailyJournals} from './family-daily-journal';
+import {generateFamilyDailyJournals,repairFamilyDailyJournal,repairRecentFamilyDailyJournals} from './family-daily-journal';
 import {generateFamilyDailyJournalAi} from './family-daily-journal-ai';
 import { json, redirect } from './response';
 import { cleanupFamilyLogDiagnostics } from './family-log-diagnostics';
@@ -82,7 +82,11 @@ export default {
       ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
       ctx.waitUntil(cleanupCompletedTaskCreateRequests(env.DB));
       ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
-      ctx.waitUntil(archiveLocationHistory(env).then(()=>generateFamilyDailyJournals(env)).then(()=>generateFamilyDailyJournalAi(env)).catch(()=>{}));
+      ctx.waitUntil(archiveLocationHistory(env).then(async archived=>{
+        await generateFamilyDailyJournals(env);
+        for(const group of archived)await repairFamilyDailyJournal(env.DB,group.family_id,group.local_date);
+        await repairRecentFamilyDailyJournals(env);
+      }).then(()=>generateFamilyDailyJournalAi(env)).catch(()=>{}));
     }
 
     if(plan.dailyNotificationAudit) ctx.waitUntil(auditNotificationLifecycle(env));

@@ -17,11 +17,11 @@ assert.ok(ai.includes("ai_source_content_version<>content_version"),'journal AI 
 assert.ok(ai.includes('parseLocationMemberIds(row.location_json)'),'AI narrative must retain the Location member provenance needed for revocation');
 assert.ok(ai.includes("ai_status='AI_OK'"),'successful AI generation must be classified');
 assert.ok(!ai.includes('console.log'),'journal AI must not log prompts, responses or private journal text');
-assert.ok(page.includes('required.some(id=>!shared.has(id))'),'AI narrative must fail closed after Location sharing stops');
+assert.ok(!page.includes('required.some(id=>!shared.has(id))')&&page.includes('family_id=? AND journal_date=?'),'saved AI narrative is family-scoped and persists after later sharing stops');
 assert.ok(page.includes('familyDailyJournalPage(request,ctx)'),'AI page must layer on the existing deterministic/privacy-filtered journal');
 assert.ok(page.includes('✨ AI日誌'),'journal detail must visibly distinguish AI narrative from deterministic evidence');
 assert.ok(routes.includes('familyDailyJournalPageWithAi'),'Family Journal route must use the privacy-gated AI page');
-assert.ok(index.includes('generateFamilyDailyJournals(env)).then(()=>generateFamilyDailyJournalAi(env))'),'AI generation must run only after deterministic journal refresh');
+assert.ok(index.includes('await repairRecentFamilyDailyJournals(env)')&&index.includes('.then(()=>generateFamilyDailyJournalAi(env))'),'AI generation follows deterministic journal creation and repair');
 assert.ok(!ai.includes('latitude')&&!ai.includes('longitude'),'journal AI must not introduce raw-coordinate fields');
 
 console.log('Family daily journal AI contract OK');

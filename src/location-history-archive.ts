@@ -3,7 +3,9 @@ import {buildLocationStayReport,locationDistance} from './location-stay-report';
 import type {LocationPoint} from './location-providers';
 
 const MAX_ARCHIVE_GROUPS_PER_RUN=8;
-const MAX_RAW_POINTS_PER_DAY=2000;
+// OwnTracks can produce more than 2,000 points on an ordinary day. Keep the
+// archive read bounded, but allow the observed full-day volume (2,672) through.
+const MAX_RAW_POINTS_PER_DAY=10000;
 const MAX_ROUTE_POINTS=72;
 const ROUTE_DISTANCE_STEP_METERS=200;
 const ROUTE_TIME_STEP_MS=10*60*1000;
@@ -102,7 +104,7 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup):Promise<boolean>{
   return marker?.ok===1;
 }
 
-async function archivePendingDays(db:D1Database):Promise<void>{
+async function archivePendingDays(db:D1Database):Promise<ArchiveGroup[]>{
   const groups=await db.prepare(`
     SELECT h.family_id,h.member_id,date(h.recorded_at,'+9 hours') AS local_date
     FROM member_location_history h
@@ -117,9 +119,11 @@ async function archivePendingDays(db:D1Database):Promise<void>{
     ORDER BY local_date DESC
     LIMIT ?
   `).bind(todayJst(),MAX_RAW_POINTS_PER_DAY,MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
+  const archived:ArchiveGroup[]=[];
   for(const group of groups.results){
-    try{await archiveOneDay(db,group);}catch{/* Archive failure must never mutate raw history. */}
+    try{if(await archiveOneDay(db,group))archived.push(group);}catch{/* Archive failure must never mutate raw history. */}
   }
+  return archived;
 }
 
 /**
@@ -127,8 +131,8 @@ async function archivePendingDays(db:D1Database):Promise<void>{
  * is intentionally NOT deleted here. Raw cleanup belongs to a separate explicit
  * data-maintenance/archive workflow after durable family-day summaries exist.
  */
-export async function archiveLocationHistory(env:Env):Promise<void>{
-  await archivePendingDays(env.DB);
+export async function archiveLocationHistory(env:Env):Promise<ArchiveGroup[]>{
+  return archivePendingDays(env.DB);
 }
 
 // Compatibility for any branch/runtime caller created before the retention policy
