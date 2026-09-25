@@ -93,10 +93,9 @@ for(const reportType of ['WEEKLY','MONTHLY'])for(const size of [0,2,12]){
 }
 
 const daily=fs.readFileSync('src/line-daily-digest.ts','utf8');
-const dailyRender=daily.slice(daily.indexOf('function fitMorningDigest('),daily.indexOf('\nexport async function processLineDailyDigests('));
-vm.runInContext(transpile('const MAX_MORNING_DIGEST_CHARS=1000,MAX_MORNING_NARRATIVE_CHARS=320; const buildEvidencePraise=()=>[],buildDeterministicAdvice=()=>[];\n'+dailyRender),context);
-const payload={localDate:'2026-09-07',previousDate:'2026-09-06',familyLog:{previous:Array(12).fill('記録'.repeat(100)),today:[]},today:{events:[],tasks:[],bringItems:[],completed:3,incomplete:4,overdue:2},location:{previous:[],today:[]},fortune:context.dailyFortune(42,0,'2026-09-07')};
-const dailyMessage=context.renderDeterministicFacts(payload,{opener:'おはよう',closing:'またね',personalNote:'家族の自由な文章。'.repeat(30)},null);
-if(dailyMessage.length>1000||!dailyMessage.includes('家族の自由な文章。'.repeat(30))||!dailyMessage.includes('完了3・未完了4／期限切れ2件')||dailyMessage.includes('お楽しみ占い')||!dailyMessage.endsWith('またね'))throw new Error('busy morning must retain recap and totals without obsolete fortune');
+const dailyRender=daily.slice(daily.indexOf('function fallbackMorningMessage('),daily.indexOf('\nasync function morningDestinationKey('));
+vm.runInContext(transpile(dailyRender),context);
+const dailyMessage=context.fallbackMorningMessage({remaining_tasks:Array(40).fill('提出物'.repeat(10)),remaining_shopping:['牛乳'],today_bring_items:['水筒'],today_events:['学校行事'],home_weather:'晴れ'});
+if(dailyMessage.length>1000||!dailyMessage.includes('牛乳')||!dailyMessage.includes('水筒')||!dailyMessage.includes('学校行事')||!dailyMessage.includes('晴れ')||dailyMessage.includes('おはよう')||dailyMessage.includes('完了3・未完了4'))throw new Error('busy morning fallback must retain five fact categories without greeting or duplicate task totals');
 if(!daily.includes("if(!String(env.LINE_ACCESS_TOKEN||'').trim())return"))throw new Error('daily missing token must not consume receipts');
 console.log('line-periodic-digest-contract: scheduling, privacy, dedupe, lazy shared generation, missing-token guards and daily/periodic overflow behavior ok');
