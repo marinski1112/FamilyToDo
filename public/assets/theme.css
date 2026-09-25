@@ -266,3 +266,14 @@
 .calendar-topline .calendar-month-picker input{width:124px;min-width:0;min-height:42px;padding-inline:8px}
 @media(max-width:600px){.calendar-topline{gap:6px}.calendar-topline .calendar-month-picker{flex-basis:116px}.calendar-topline .calendar-month-picker input{width:116px;font-size:15px}}
 .calendar-stamp-option-placeholder{background:transparent!important}
+
+/* Exact late dark overrides for retained unified-goods controls. */
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section input.check.toggle:not(:checked),
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section :is(.shopping-check-row,.item-check-row) input.check.toggle:not(:checked){
+  background:var(--theme-input)!important;border-color:#718198!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui .checklist-row-action::after,
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-category-row a[aria-label="編集"],
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-category-row a[aria-label="編集"]::after{
+  background:var(--theme-raised)!important;color:var(--theme-link)!important;border-color:var(--line)!important;
+}
