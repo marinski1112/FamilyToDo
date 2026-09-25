@@ -1,0 +1,111 @@
+/* App appearance. Keep the light palette in the existing page styles. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101827;--card:#1b2637;--text:#eef3fa;--muted:#a6b3c6;
+  --line:#35465c;--primary:#6366f1;--primary-soft:#293452;
+  --danger:#ff8585;--surface:#1b2637;
+  --theme-raised:#263449;--theme-input:#1d2b3d;--theme-link:#a8c7ff;
+}
+:root[data-theme="dark"],:root[data-theme="dark"] body{
+  background:#101827!important;color:var(--text)!important;
+}
+:root[data-theme="dark"] body{background-image:linear-gradient(180deg,#101827,#152035)!important}
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .sub-card,
+:root[data-theme="dark"] .section-card,
+:root[data-theme="dark"] .calendar-card,
+:root[data-theme="dark"] .history-card,
+:root[data-theme="dark"] .content-admin,
+:root[data-theme="dark"] .zero-category-cluster,
+:root[data-theme="dark"] .checklist-dialog,
+:root[data-theme="dark"] .expired-box,
+:root[data-theme="dark"] .calendar-decoration-card,
+:root[data-theme="dark"] [role="dialog"]:not(.calendar-decoration-dialog){
+  background:var(--card)!important;color:var(--text)!important;border-color:var(--line)!important;
+  box-shadow:0 6px 24px rgba(0,0,0,.2)!important;
+}
+:root[data-theme="dark"] .bottom-nav{background:rgba(27,38,55,.97)!important;border-color:var(--line)!important}
+:root[data-theme="dark"] .bottom-nav a{color:var(--muted)!important}
+:root[data-theme="dark"] .bottom-nav a.active{background:var(--primary-soft)!important;color:#c3c9ff!important}
+:root[data-theme="dark"] .calendar-grid,
+:root[data-theme="dark"] .calendar-grid .weekday,
+:root[data-theme="dark"] .calendar-move,
+:root[data-theme="dark"] .calendar-jump-panel,
+:root[data-theme="dark"] .calendar-view-filter a,
+:root[data-theme="dark"] .message-compose,
+:root[data-theme="dark"] .message-more[open],
+:root[data-theme="dark"] .message-edit-dialog,
+:root[data-theme="dark"] .message-shopping-dialog,
+:root[data-theme="dark"] .message-task-dialog,
+:root[data-theme="dark"] .exception-delete-sheet,
+:root[data-theme="dark"] .rec-edit-scope,
+:root[data-theme="dark"] .family-log-sheet,
+:root[data-theme="dark"] .family-log-record-sheet,
+:root[data-theme="dark"] .family-log-dashboard-card,
+:root[data-theme="dark"] .family-log-compact-toolbar,
+:root[data-theme="dark"] .family-log-bars,
+:root[data-theme="dark"] .family-log-chart svg,
+:root[data-theme="dark"] .family-log-quick,
+:root[data-theme="dark"] .family-log-summary>div,
+:root[data-theme="dark"] .native-control-shell{
+  background:var(--card)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] .calendar-view-filter a.active,
+:root[data-theme="dark"] .task-event-tabs a.active{background:var(--primary-soft)!important;color:#c3c9ff!important}
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="dark"] select,:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] .section-button,
+:root[data-theme="dark"] .calendar-cell,
+:root[data-theme="dark"] .family-log-input-dock,
+:root[data-theme="dark"] .family-log-subject-select,
+:root[data-theme="dark"] .family-log-date-picker-label{
+  background:var(--theme-input)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] input::placeholder,:root[data-theme="dark"] textarea::placeholder{color:var(--muted)}
+:root[data-theme="dark"] input[type="checkbox"],:root[data-theme="dark"] input[type="radio"]{accent-color:var(--primary)}
+:root[data-theme="dark"] .btn.gray,:root[data-theme="dark"] .btn.secondary,
+:root[data-theme="dark"] .section-head>.btn.small,
+:root[data-theme="dark"] .checklist-dialog button,
+:root[data-theme="dark"] .checklist-status-tabs,
+:root[data-theme="dark"] .checklist-status-tabs button.active,
+:root[data-theme="dark"] .converted-badge{
+  background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] .meta,:root[data-theme="dark"] .small,
+:root[data-theme="dark"] .eyebrow,:root[data-theme="dark"] .empty,
+:root[data-theme="dark"] .checklist-dialog p,
+:root[data-theme="dark"] .checklist-dialog button small{color:var(--muted)!important}
+:root[data-theme="dark"] .form-card label,
+:root[data-theme="dark"] .card>form>label,
+:root[data-theme="dark"] .task-shopping summary,
+:root[data-theme="dark"] .zero-category-cluster>summary,
+:root[data-theme="dark"] .zero-category-name,
+:root[data-theme="dark"] .shopping-category-name,
+:root[data-theme="dark"] .family-log-visible-date{color:var(--text)!important}
+:root[data-theme="dark"] .row,:root[data-theme="dark"] .content-row,
+:root[data-theme="dark"] .linked-shopping-row,
+:root[data-theme="dark"] .calendar-cell,
+:root[data-theme="dark"] .section-link{border-color:var(--line)!important}
+:root[data-theme="dark"] .task-shopping,
+:root[data-theme="dark"] .assignee-list,
+:root[data-theme="dark"] .checklist-inline-search,
+:root[data-theme="dark"] .checklist-status-tabs,
+:root[data-theme="dark"] .calendar-stamp-controls,
+:root[data-theme="dark"] .family-log-detail-choice,
+:root[data-theme="dark"] .family-log-type-choice,
+:root[data-theme="dark"] .family-log-preset-values button,
+:root[data-theme="dark"] .family-quick-chore-record,
+:root[data-theme="dark"] .family-log-input-swap,
+:root[data-theme="dark"] .family-log-bottom-journal,
+:root[data-theme="dark"] .family-log-compact-link,
+:root[data-theme="dark"] .category-inline-rename,
+:root[data-theme="dark"] .product-url-popover,
+:root[data-theme="dark"] .diagnostic-sample,
+:root[data-theme="dark"] .notice{
+  background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] .calendar-day-sticker{opacity:.24}
+:root[data-theme="dark"] a:not(.btn):not(.bottom-nav a){color:var(--theme-link)}
+:root[data-theme="dark"] .error{background:#482a37!important;color:#ffd6dc!important;border-color:#8b475b!important}
+:root[data-theme="dark"] .btn.danger{background:#522c38!important;color:#ffd1d9!important}
+:root[data-theme="dark"] ::selection{background:#4f5da4;color:#fff}
