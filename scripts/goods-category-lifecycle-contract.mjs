@@ -13,6 +13,7 @@ assert.equal(categoryState({enabled:0},5),'DISABLED');
 const db=database(true),ctx=context(db),old='2000-01-02 03:04:05';
 for(const kind of ['shopping','item'])db.prepare(`INSERT INTO ${kind}_category_catalog(family_id,name,created_at) VALUES(1,'昔',?)`).run(old);
 db.exec(readFileSync('migrations/0101_goods_category_lifecycle.sql','utf8'));
+db.exec(readFileSync('migrations/0105_shopping_empty_category_completion_clock.sql','utf8'));
 for(const kind of ['shopping','item']){
  const other=kind==='shopping'?'item':'shopping',table=kind==='shopping'?'shopping_items':'items',date=kind==='shopping'?'due_date':'due_at',cat=`${kind}_category_catalog`,op=operations(ctx,kind),peer=operations(ctx,other);
  const read=name=>db.prepare(`SELECT * FROM ${cat} WHERE family_id=1 AND name=?`).get(name);
@@ -28,13 +29,24 @@ for(const kind of ['shopping','item']){
  const insert=(name,day='2026-09-22')=>db.prepare(`INSERT INTO ${table}(family_id,name,category,${date},created_at,updated_at) VALUES(1,?,'消失',?,'old','old')`).run(name,day);
  insert('first');insert('last');reset();db.exec(`DELETE FROM ${table} WHERE name='first'`);assert.equal(read('消失').activated_at,'2000-01-01T00:00:00Z','not final row');
  db.exec(`UPDATE ${table} SET status='completed' WHERE name='last'`);await op.reorder(['消失']);assert.equal(read('消失').activated_at,'2000-01-01T00:00:00Z','completion and order never activate');
- db.exec(`DELETE FROM ${table} WHERE name='last'`);assert.equal(categoryState(read('消失'),0),'FRESH_EMPTY');
+ db.exec(`DELETE FROM ${table} WHERE name='last'`);
+ assert.equal(kind==='shopping'?read('消失').activated_at==='2000-01-01T00:00:00Z':categoryState(read('消失'),0)==='FRESH_EMPTY',true,'completed Shopping cleanup must not restart the empty-category clock');
  insert('move');reset();db.exec(`UPDATE ${table} SET category='移動先' WHERE name='move'`);assert.equal(categoryState(read('消失'),0),'FRESH_EMPTY');
  insert('date');insert('historical','2020-01-01');reset();db.exec(`UPDATE ${table} SET ${date}='2026-09-23' WHERE name='date'`);assert.equal(categoryState(read('消失'),0),'FRESH_EMPTY','historical rows cannot suppress date-cohort freshness');
  insert('public');insert('private');db.exec(`UPDATE ${table} SET visibility_scope='PRIVATE',private_owner_id=1 WHERE name='private'`);reset();db.exec(`DELETE FROM ${table} WHERE name='public'`);assert.equal(categoryState(read('消失'),0),'FRESH_EMPTY','private row cannot suppress family-visible empty transition');
  await op.create('delete-all');await peer.create('delete-all');db.exec(`INSERT INTO ${table}(family_id,name,category,created_at,updated_at) VALUES(1,'delete-target','delete-all','old','old')`);await op.remove('delete-all','delete');assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE name='delete-target'`).get().n,0);assert((await peer.load()).categories.includes('delete-all'));
  db.exec(`DELETE FROM ${cat} WHERE family_id=2 AND name='同名'`);
 }
+// A recent UTC completion must remain in the same JST wall-clock cohort as
+// checklist-completion.ts and suppress a spurious empty-category transition.
+const recent=new Date().toISOString();
+db.exec("INSERT INTO shopping_category_catalog(family_id,name,activated_at) VALUES(1,'時差','2000-01-01T00:00:00Z')");
+db.prepare("INSERT INTO shopping_items(family_id,name,category,due_date,status,created_at,updated_at,completed_at) VALUES(1,'recent','時差',date('now','+9 hours'),'completed',?,?,?)").run(recent,recent,recent);
+db.prepare("INSERT INTO shopping_items(family_id,name,category,due_date,created_at,updated_at) VALUES(1,'pending','時差',date('now','+9 hours'),?,?)").run(recent,recent);
+db.exec("DELETE FROM shopping_items WHERE name='pending'");
+assert.equal(db.prepare("SELECT activated_at FROM shopping_category_catalog WHERE name='時差'").get().activated_at,'2000-01-01T00:00:00Z','explicit UTC completion stays in the current JST cohort');
+db.exec("DELETE FROM shopping_items WHERE name='recent'");
+assert.equal(db.prepare("SELECT activated_at FROM shopping_category_catalog WHERE name='時差'").get().activated_at,'2000-01-01T00:00:00Z','completed-row physical cleanup does not restart the category clock');
 // Failed item rename must roll back row rename, target creation, old disable AND order.
 await operations(ctx,'item').create('atomic');ctx.failSql=/INSERT INTO family_settings/;await assert.rejects(()=>operations(ctx,'item').rename('atomic','broken'));ctx.failSql=null;assert(db.prepare("SELECT 1 FROM item_category_catalog WHERE name='atomic' AND enabled=1").get());assert(!db.prepare("SELECT 1 FROM item_category_catalog WHERE name='broken'").get());
 assert.equal((await api(ctx,'/api/shopping-category-mutation',{csrf:'wrong',action:'delete_many',kind:'shopping',names:['消失']})).status,403);
