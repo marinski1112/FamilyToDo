@@ -16,7 +16,6 @@ if(page.includes("from './app'"))throw new Error('Location page must not depend 
 for(const marker of [
   "import type { AppContext } from './app-context';",
   "import { layout } from './app-shell';",
-  "import { LOCATION_PRIVACY_DEFAULTS } from './location-domain';",
   "export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{",
   "const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');",
   "const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');",
@@ -34,13 +33,8 @@ for(const marker of [
   'data-location-home-eta-result',
   'aria-label="家族の最新位置を更新"',
   'この画面は端末の現在地を自動取得しません。',
-  '位置が古い場合は「現在地」と断定せず',
-  '「車で何分？」または「家まで何分？」を押した時だけRoutes APIへ問い合わせます。',
-  '位置共有の既定値: ${privacy.sharingEnabled?\'ON\':\'OFF\'}',
-  '登録した端末も最初は共有OFFです。',
-  'OWNER / ADMIN が「管理 → 位置情報・OwnTracks」で',
-  '自宅地点も明示的な管理操作でのみ設定され',
 ])if(!page.includes(marker))throw new Error(`Location page boundary marker missing: ${marker}`);
+for(const removed of ['共有設定・使い方','位置共有の既定値:','プライバシー方針'])if(page.includes(removed))throw new Error(`Location page obsolete help copy remains: ${removed}`);
 
 for(const marker of [
   "fetch('/api/location/latest'",
