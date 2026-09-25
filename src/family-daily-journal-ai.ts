@@ -3,7 +3,6 @@ import { geminiFetch, safeGeminiError, geminiFailureCategory } from './family-ai
 import { resolveFeatureModels } from './ai-model-routing';
 
 const MAX_AI_GENERATIONS_PER_RUN=3;
-const AI_RETRY_HOURS=6;
 const AI_SUMMARY_MAX_CHARS=320;
 type Row=Record<string,unknown>;
 
@@ -33,39 +32,37 @@ function bodyForJournal(date:string,deterministicSummary:string){
   };
 }
 
-async function markFailure(db:D1Database,id:number,status:string,now:string,model=FAMILY_JOURNAL_GEMINI_MODEL):Promise<void>{
-  await db.prepare('UPDATE family_daily_journals SET ai_summary_text=NULL,ai_model=?,ai_status=?,ai_generated_at=?,ai_location_member_ids_json=\'[]\' WHERE id=? AND storage_tier=\'HOT\'')
-    .bind(model,safeStatus(status),now,id).run();
+async function markFailure(db:D1Database,id:number,version:number,status:string,now:string,model=FAMILY_JOURNAL_GEMINI_MODEL):Promise<void>{
+  // A failed attempt also consumes this content version. A later factual change
+  // increments the version and is the only automatic reason to call Gemini again.
+  await db.prepare('UPDATE family_daily_journals SET ai_summary_text=NULL,ai_model=?,ai_status=?,ai_generated_at=?,ai_source_content_version=?,ai_location_member_ids_json=\'[]\' WHERE id=? AND storage_tier=\'HOT\' AND content_version=?')
+    .bind(model,safeStatus(status),now,version,id,version).run();
 }
 
 export async function generateFamilyDailyJournalAi(env:Env):Promise<void>{
-  const cutoff=new Date(Date.now()-AI_RETRY_HOURS*60*60*1000).toISOString();
-  const rows=await env.DB.prepare(`SELECT id,family_id,journal_date,summary_text,location_json,content_version FROM family_daily_journals WHERE storage_tier='HOT' AND journal_date<? AND (ai_source_content_version IS NULL OR ai_source_content_version<>content_version) AND (ai_generated_at IS NULL OR ai_generated_at<=?) ORDER BY journal_date DESC,id DESC LIMIT ?`)
-    .bind(todayJst(),cutoff,MAX_AI_GENERATIONS_PER_RUN).all<Row>();
+  const rows=await env.DB.prepare(`SELECT id,family_id,journal_date,summary_text,location_json,content_version FROM family_daily_journals WHERE storage_tier='HOT' AND journal_date<? AND (ai_source_content_version IS NULL OR ai_source_content_version<>content_version) ORDER BY journal_date DESC,id DESC LIMIT ?`)
+    .bind(todayJst(),MAX_AI_GENERATIONS_PER_RUN).all<Row>();
   if(!rows.results.length)return;
   if(!String(env.GEMINI_API_KEY||'').trim()){
     const now=new Date().toISOString();
-    for(const row of rows.results){const id=Number(row.id);if(Number.isSafeInteger(id)&&id>0)await markFailure(env.DB,id,'NOT_CONFIGURED',now);}
+    for(const row of rows.results){const id=Number(row.id),version=Number(row.content_version);if(Number.isSafeInteger(id)&&id>0&&Number.isSafeInteger(version)&&version>0)await markFailure(env.DB,id,version,'NOT_CONFIGURED',now);}
     return;
   }
   for(const row of rows.results){
     const id=Number(row.id),version=Number(row.content_version),date=String(row.journal_date||''),summary=String(row.summary_text||'').trim();
     if(!Number.isSafeInteger(id)||id<=0||!Number.isSafeInteger(version)||version<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!summary)continue;
     const now=new Date().toISOString(),locationMemberIds=parseLocationMemberIds(row.location_json);
-    const models=(await resolveFeatureModels(env.DB,Number(row.family_id),'FAMILY_DAILY_JOURNAL','OWNER')).models;
-    let usedModel=models[0];
+    const usedModel=(await resolveFeatureModels(env.DB,Number(row.family_id),'FAMILY_DAILY_JOURNAL','OWNER')).models[0]||FAMILY_JOURNAL_GEMINI_MODEL;
     try{
-      let response:Response|undefined;
-      for(const model of models){usedModel=model;response=await geminiFetch(env,model,bodyForJournal(date,summary));if(response.ok||response.status!==429&&response.status<500)break;}
-      if(!response)continue;
-      if(!response.ok){const safe=await safeGeminiError(response);await markFailure(env.DB,id,geminiFailureCategory(response.status,safe),now,usedModel);continue;}
-      let payload:any;try{payload=await response.json();}catch{await markFailure(env.DB,id,'INVALID_RESPONSE',now,usedModel);continue;}
+      const response=await geminiFetch(env,usedModel,bodyForJournal(date,summary));
+      if(!response.ok){const safe=await safeGeminiError(response);await markFailure(env.DB,id,version,geminiFailureCategory(response.status,safe),now,usedModel);continue;}
+      let payload:any;try{payload=await response.json();}catch{await markFailure(env.DB,id,version,'INVALID_RESPONSE',now,usedModel);continue;}
       const narrative=normalizeNarrative(candidateText(payload));
-      if(!narrative){await markFailure(env.DB,id,'INVALID_OUTPUT',now,usedModel);continue;}
+      if(!narrative){await markFailure(env.DB,id,version,'INVALID_OUTPUT',now,usedModel);continue;}
       await env.DB.prepare(`UPDATE family_daily_journals SET ai_summary_text=?,ai_model=?,ai_status='AI_OK',ai_generated_at=?,ai_source_content_version=?,ai_location_member_ids_json=? WHERE id=? AND storage_tier='HOT' AND content_version=?`)
         .bind(narrative,usedModel,now,version,JSON.stringify(locationMemberIds),id,version).run();
     }catch(error:any){
-      await markFailure(env.DB,id,error?.name==='AbortError'?'PROVIDER_TIMEOUT':'UPSTREAM_UNAVAILABLE',now,usedModel);
+      await markFailure(env.DB,id,version,error?.name==='AbortError'?'PROVIDER_TIMEOUT':'UPSTREAM_UNAVAILABLE',now,usedModel);
     }
   }
 }
