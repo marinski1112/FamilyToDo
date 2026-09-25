@@ -79,10 +79,10 @@ try{
   const closePicker=()=>{if(placing)return;picker.classList.remove('open');pickerTargetDate='';};
   picker.querySelector('.calendar-stamp-picker-close')?.addEventListener('click',closePicker);
   picker.addEventListener('click',event=>{if(event.target===picker)closePicker();});
-  const stampDate=document.getElementById('calendarStampDate');
+  const stampDate=null;
   const pickerButton=document.createElement('button');pickerButton.type='button';pickerButton.className='btn gray small calendar-stamp-picker-button';pickerButton.textContent='＋ スタンプ';pickerButton.setAttribute('aria-label','指定した日にスタンプを追加');
-  stampDate?.parentElement?.appendChild(pickerButton);
-  const selectedModalDate=()=>{const date=String(stampDate?.value||'');return safeDate(date)?date:'';};
+  /* Calendar day long-press/detail actions open the picker; no redundant top-level stamp-date control. */
+  const selectedModalDate=()=>String(calendarPayload?.today||'');
   const localOptions=async()=>{
     const response=await fetch('/api/calendar-stamp-options',{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});
     const data=await response.json().catch(()=>null);
@@ -129,13 +129,11 @@ try{
     for(const option of options){
       const button=document.createElement('button');button.type='button';button.className='calendar-stamp-option';button.dataset.source=option.source;button.dataset.assetId=String(option.id||0);button.setAttribute('aria-label',option.name?`${option.name}を追加`:'スタンプを追加');
       if(option.source==='shared'){button.dataset.sharedId=option.sharedId;button.dataset.sharedVersion=String(option.sharedVersion);const badge=document.createElement('b');badge.className='calendar-stamp-option-source';badge.textContent='共有';button.appendChild(badge);}
-      if(option.thumbnailUrl){const image=document.createElement('img');image.src=option.thumbnailUrl;image.alt='';image.draggable=false;button.appendChild(image);}else{const placeholder=document.createElement('div');placeholder.className='calendar-stamp-option-placeholder';placeholder.textContent='共有スタンプ';button.appendChild(placeholder);}
-      const label=document.createElement('span');label.textContent=option.name||'スタンプ';button.appendChild(label);pickerGrid.appendChild(button);
+      if(option.thumbnailUrl){const image=document.createElement('img');image.src=option.thumbnailUrl;image.alt=option.name||'スタンプ';image.draggable=false;button.appendChild(image);}else{const placeholder=document.createElement('div');placeholder.className='calendar-stamp-option-placeholder';placeholder.setAttribute('aria-hidden','true');button.appendChild(placeholder);}pickerGrid.appendChild(button);
     }
   };
   const openPicker=async(requestedDate)=>{
     const date=safeDate(requestedDate)?requestedDate:selectedModalDate();if(!date||!csrf)return;
-    if(stampDate)stampDate.value=date;
     pickerTargetDate=date;if(pickerDate)pickerDate.textContent=date;if(pickerGrid)pickerGrid.innerHTML='<div class="calendar-stamp-picker-status">読み込み中…</div>';picker.classList.add('open');
     try{renderOptions(await loadOptions());}catch{if(pickerGrid)pickerGrid.innerHTML='<div class="calendar-stamp-picker-status">スタンプを読み込めませんでした。</div>';}
     picker.querySelector('.calendar-stamp-picker-close')?.focus();
