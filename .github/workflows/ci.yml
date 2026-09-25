@@ -55,6 +55,8 @@ jobs:
         if: always()
       - run: npm run check:calendar-stickers
         if: always()
+      - run: node scripts/theme-contract.mjs
+        if: always()
       - run: node scripts/regression-suite.mjs
         if: always()
       - run: git diff --check HEAD^
