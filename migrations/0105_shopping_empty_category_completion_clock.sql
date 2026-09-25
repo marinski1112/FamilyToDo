@@ -43,4 +43,3 @@ BEGIN
   UPDATE shopping_category_catalog SET activated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
     WHERE family_id=OLD.family_id AND name=OLD.category COLLATE NOCASE AND enabled=1;
 END;
-
