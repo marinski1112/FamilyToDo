@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const read=path=>fs.readFileSync(path,'utf8');
 const index=read('src/index.ts'),digest=read('src/line-daily-digest.ts'),guard=read('src/line-daily-digest-ai-guard.ts');
 const weather=read('src/line-daily-digest-weather.ts'),migration=read('migrations/0061_line_daily_digest_ai_cost_guard.sql');
+const notificationPage=read('src/settings-notifications-page.ts'),notificationClient=read('public/assets/settings-notifications.js');
 assert.ok(index.includes("import { processLineDailyDigests } from './line-daily-digest';")&&index.includes('ctx.waitUntil(processLineDailyDigests(env));'));
 for(const marker of [
   'line_daily_digest_settings','line_daily_digest_recipients','line_daily_digest_receipts',
@@ -23,4 +24,7 @@ assert.ok(digest.includes('JSON.stringify({narrativeVersion:4,message:null,gener
 for(const marker of ['MAX_MORNING_AI_REQUESTS_GLOBAL_DAY=120','blocked_until','finalized=0 AND request_count<?'])assert.ok(guard.includes(marker));
 assert.ok(migration.includes('PRIMARY KEY(family_id, local_date)'));
 assert.ok(weather.includes("const WEATHER_ENDPOINT='https://api.open-meteo.com/v1/forecast'"));
+assert.ok(notificationPage.includes('未完了タスク・残りの買い物・今日の持ち物・イベント・自宅地点の天気'));
+assert.ok(!notificationPage.includes('朝まとめに含める記録対象')&&!notificationPage.includes('<select name="digest_tone">'));
+assert.ok(!notificationClient.includes('digest_subjects:'),'saving the five-fact settings must not clear legacy subject preferences');
 console.log('LINE morning: five facts, destination privacy, one Gemini call, retry receipts and global budget verified');
