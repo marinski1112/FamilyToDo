@@ -179,3 +179,52 @@
 :root[data-theme="dark"] :is(.chat-tool-icon,.chat-stamp-picker button,.chat-menu button,.chat-archive-link,.chat-latest-link){background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important}
 :root[data-theme="dark"] .chat-menu button.danger{color:var(--danger)!important}
 :root[data-theme="dark"] .chat-menu button:disabled{color:var(--muted)!important}
+
+/* Calendar stamp picker/viewer: the role=dialog nodes are full-screen shells,
+ * so keep the shell dark and theme the inner cards/options explicitly. */
+:root[data-theme="dark"] .calendar-stamp-picker[role="dialog"],
+:root[data-theme="dark"] .calendar-stamp-viewer[role="dialog"]{
+  background:rgba(7,13,24,.84)!important;color:var(--text)!important;
+  border-color:transparent!important;box-shadow:none!important;
+}
+:root[data-theme="dark"] .calendar-stamp-picker-card,
+:root[data-theme="dark"] .calendar-stamp-viewer-card{
+  background:var(--card)!important;color:var(--text)!important;border:1px solid var(--line)!important;
+  box-shadow:0 24px 64px rgba(0,0,0,.5)!important;
+}
+:root[data-theme="dark"] .calendar-stamp-picker-header h3,
+:root[data-theme="dark"] .calendar-stamp-picker-scope{color:var(--text)!important}
+:root[data-theme="dark"] .calendar-stamp-picker-date,
+:root[data-theme="dark"] .calendar-stamp-picker-status{color:var(--muted)!important}
+:root[data-theme="dark"] .calendar-stamp-option{
+  background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] .calendar-stamp-option:hover{background:#304159!important;border-color:#7f9fc8!important}
+:root[data-theme="dark"] .calendar-stamp-option[data-source="shared"]{
+  background:var(--primary-soft)!important;border-color:#7c83ef!important;
+}
+:root[data-theme="dark"] .calendar-stamp-option img,
+:root[data-theme="dark"] .calendar-stamp-option-placeholder{background:var(--theme-input)!important}
+:root[data-theme="dark"] .calendar-stamp-option-placeholder{color:var(--muted)!important}
+:root[data-theme="dark"] .calendar-stamp-viewer-edit{
+  background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
+:root[data-theme="dark"] .calendar-stamp-viewer-delete{
+  background:#482a37!important;color:#ffd6dc!important;border-color:#8b475b!important;
+}
+
+/* Checklist add-item disclosures are injected by the category follow-up scripts and
+ * carry their own light palette, so override those surfaces at the central theme layer. */
+:root[data-theme="dark"] .checklist-page :is(.shopping-category-footer,.shopping-section-continuous-footer,.shopping-section-add-disclosure){
+  background:var(--card)!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important;
+}
+:root[data-theme="dark"] .checklist-page .shopping-section-continuous-composer{background:var(--theme-raised)!important}
+:root[data-theme="dark"] .checklist-page .shopping-category-footer-title{color:var(--text)!important}
+:root[data-theme="dark"] .checklist-page :is(.shopping-category-footer-controls label,.shopping-section-continuous-row label){color:var(--muted)!important}
+:root[data-theme="dark"] .checklist-page :is(.shopping-section-continuous-footer,.shopping-section-add-disclosure)>summary{color:var(--theme-link)!important}
+:root[data-theme="dark"] .checklist-page .shopping-section-continuous-footer[open]>summary,
+:root[data-theme="dark"] .checklist-page .shopping-section-add-disclosure .shopping-category-footer{border-color:var(--line)!important}
+:root[data-theme="dark"] .checklist-page .shopping-category-footer-controls :is(input,select),
+:root[data-theme="dark"] .checklist-page .shopping-section-continuous-row :is(input,select){
+  background:var(--theme-input)!important;color:var(--text)!important;border-color:var(--line)!important;
+}
