@@ -3,9 +3,7 @@ import {buildLocationStayReport,locationDistance} from './location-stay-report';
 import type {LocationPoint} from './location-providers';
 
 const MAX_ARCHIVE_GROUPS_PER_RUN=8;
-// OwnTracks can produce more than 2,000 points on an ordinary day. Keep the
-// archive read bounded, but allow the observed full-day volume (2,672) through.
-const MAX_RAW_POINTS_PER_DAY=10000;
+const MAX_MINUTE_POINTS_PER_DAY=1440;
 const MAX_ROUTE_POINTS=72;
 const ROUTE_DISTANCE_STEP_METERS=200;
 const ROUTE_TIME_STEP_MS=10*60*1000;
@@ -56,17 +54,32 @@ function routeJson(points:readonly LocationPoint[]):string{
 }
 
 async function archiveOneDay(db:D1Database,group:ArchiveGroup):Promise<boolean>{
-  const raw=await db.prepare(`
-    SELECT latitude,longitude,accuracy_meters,recorded_at
+  const count=await db.prepare(`
+    SELECT COUNT(*) AS raw_point_count
     FROM member_location_history
     WHERE family_id=? AND member_id=? AND date(recorded_at,'+9 hours')=?
+  `).bind(group.family_id,group.member_id,group.local_date).first<{raw_point_count:number}>();
+  const rawPointCount=Math.max(0,Number(count?.raw_point_count)||0);
+  if(rawPointCount===0)return false;
+  // Dense Overland ingress can exceed 10k raw fixes/day. Archive from one
+  // representative fix per local minute so a full day stays bounded without
+  // excluding high-volume days from durable stay/search projections.
+  const raw=await db.prepare(`
+    SELECT latitude,longitude,accuracy_meters,recorded_at
+    FROM (
+      SELECT h.id,h.latitude,h.longitude,h.accuracy_meters,h.recorded_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY substr(h.recorded_at,1,16)
+          ORDER BY CASE WHEN h.accuracy_meters IS NULL THEN 1 ELSE 0 END,
+                   h.accuracy_meters ASC,h.recorded_at DESC,h.id DESC
+        ) AS minute_rank
+      FROM member_location_history h
+      WHERE h.family_id=? AND h.member_id=? AND date(h.recorded_at,'+9 hours')=?
+    ) sampled
+    WHERE minute_rank=1
     ORDER BY recorded_at ASC,id ASC
     LIMIT ?
-  `).bind(group.family_id,group.member_id,group.local_date,MAX_RAW_POINTS_PER_DAY+1).all<RawRow>();
-  if(raw.results.length===0)return false;
-  // Do not create a silently truncated archive. Raw source rows remain untouched
-  // so a future maintenance/backfill can retry with a larger bounded strategy.
-  if(raw.results.length>MAX_RAW_POINTS_PER_DAY)return false;
+  `).bind(group.family_id,group.member_id,group.local_date,MAX_MINUTE_POINTS_PER_DAY).all<RawRow>();
   const points=raw.results.map(toPoint).filter((point):point is LocationPoint=>Boolean(point));
   if(points.length===0)return false;
 
@@ -95,7 +108,7 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup):Promise<boolean>{
     ON CONFLICT(family_id,member_id,local_date) DO NOTHING
   `).bind(
     group.family_id,group.member_id,group.local_date,
-    points[0].recordedAt,points[points.length-1].recordedAt,points.length,
+    points[0].recordedAt,points[points.length-1].recordedAt,rawPointCount,
     route.length,routeJson(route),
   ));
   await db.batch(statements);
@@ -115,10 +128,9 @@ async function archivePendingDays(db:D1Database):Promise<ArchiveGroup[]>{
           AND a.local_date=date(h.recorded_at,'+9 hours')
       )
     GROUP BY h.family_id,h.member_id,local_date
-    HAVING COUNT(*)<=?
     ORDER BY local_date DESC
     LIMIT ?
-  `).bind(todayJst(),MAX_RAW_POINTS_PER_DAY,MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
+  `).bind(todayJst(),MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
   const archived:ArchiveGroup[]=[];
   for(const group of groups.results){
     try{if(await archiveOneDay(db,group))archived.push(group);}catch{/* Archive failure must never mutate raw history. */}
