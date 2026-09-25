@@ -1,6 +1,5 @@
 import type { AppContext } from './app-context';
 import { layout } from './app-shell';
-import { LOCATION_PRIVACY_DEFAULTS } from './location-domain';
 import { html } from './response';
 
 const esc=(v:unknown)=>String(v??'')
@@ -18,7 +17,6 @@ const esc=(v:unknown)=>String(v??'')
  * family-scoped latest-location API boundary.
  */
 export async function locationPage(_request:Request,ctx:AppContext,env:Env):Promise<Response>{
-  const privacy=LOCATION_PRIVACY_DEFAULTS;
   const mapsKey=esc(env.GOOGLE_MAPS_BROWSER_API_KEY||'');
   const mapsMapId=esc(env.GOOGLE_MAPS_MAP_ID||'');
   const csrf=esc(ctx.session.csrfToken||'');
@@ -65,6 +63,20 @@ export async function locationPage(_request:Request,ctx:AppContext,env:Env):Prom
 .location-page .location-secondary,.location-info .card{padding:10px 0!important;margin:0;border:0;box-shadow:none;border-radius:0}.location-secondary h2,.location-info h2{font-size:16px!important;margin:8px 0}
 .location-history-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;grid-column:1/-1}.location-history-dates label{min-width:0;margin:0;font-size:12px}.location-history-dates input{box-sizing:border-box;width:100%;min-width:0;font-size:16px;margin:4px 0}.location-history-presets{display:flex;gap:6px;grid-column:1/-1}.location-history-presets button{flex:1;padding:8px}.location-history-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.location-history-controls select{min-width:0;max-width:100%;margin:0;font-size:16px}.location-history-controls button{min-height:44px}
 .location-history-links{display:flex;gap:8px;flex-wrap:wrap}.location-history-summary,.location-map-note{font-size:12px;line-height:1.6;margin:8px 0}.location-empty{padding:14px;color:#475569}
+:root[data-theme="dark"] .location-page .location-family-sheet{background:#182538!important;color:#f3f7fc!important;box-shadow:0 -6px 24px rgba(0,0,0,.38)}
+:root[data-theme="dark"] .location-page .location-family-sheet>summary{color:#f3f7fc!important}
+:root[data-theme="dark"] .location-page .location-family-sheet>summary::before{background:#71839b!important}
+:root[data-theme="dark"] .location-page :is(.location-sheet-hint,.location-auto-note,.location-map-note,.location-member-meta,.location-history-summary,.location-empty){color:#b9c6d8!important}
+:root[data-theme="dark"] .location-page :is(.location-member-row,.location-tools){border-color:#3b4d65!important}
+:root[data-theme="dark"] .location-page :is(.location-member-name,.location-tools>summary,.location-secondary h2){color:#f3f7fc!important}
+:root[data-theme="dark"] .location-page .location-avatar-fallback{background:#34365f!important;color:#d8d8ff!important}
+:root[data-theme="dark"] .location-page .location-state-badge{background:#334568!important;color:#dbe5ff!important}
+:root[data-theme="dark"] .location-page .location-member-row:is([data-state="STALE"],[data-state="SHARING_OFF"],[data-state="NO_LOCATION"]) .location-state-badge{background:#2b3a4e!important;color:#c5d0df!important}
+:root[data-theme="dark"] .location-page :is(.location-member-details>summary,.location-history-links a){color:#a8c7ff!important}
+:root[data-theme="dark"] .location-page .location-secondary{background:transparent!important;color:#f3f7fc!important}
+:root[data-theme="dark"] .location-page .location-history-controls :is(select,input){background:#213149!important;color:#f3f7fc!important;border-color:#526781!important}
+:root[data-theme="dark"] .location-page .location-history-controls label{color:#d9e3ef!important}
+:root[data-theme="dark"] .location-page .location-history-controls :is(.btn.gray,.location-history-clear){background:#2a3b53!important;color:#f3f7fc!important;border-color:#526781!important}
 @media(max-width:560px){.location-page{margin:0 -8px}.location-map-head{top:8px;right:8px}.location-map-surface{height:clamp(320px,66svh,640px)}.location-history-controls{grid-template-columns:1fr}.location-page .location-map-card{border-radius:0}}
 @media(max-width:360px){.location-member-row{grid-template-columns:34px minmax(0,1fr);gap:8px}.location-state-badge{grid-column:2;justify-self:start}.location-avatar-fallback{width:32px;height:32px}}
   </style>
@@ -75,9 +87,6 @@ export async function locationPage(_request:Request,ctx:AppContext,env:Env):Prom
     <details class="location-family-sheet" data-location-family-sheet><summary class="location-sheet-handle" aria-controls="locationSheetBody"><span class="location-family-sheet-label">家族の位置・メニュー</span><span class="location-sheet-hint" aria-hidden="true"></span></summary><div class="location-sheet-body" id="locationSheetBody"><div class="location-map-note" data-location-status aria-live="polite">最新位置を確認しています…</div><div class="location-list" data-location-list aria-live="polite"><div class="location-empty">家族の位置一覧を読み込んでいます…</div></div>
   <details class="location-tools"><summary>経路・移動履歴</summary><div class="location-map-head-actions"><button class="btn small" type="button" data-location-home-eta>🏠 家まで何分？</button><span class="location-home-eta-result" data-location-home-eta-result aria-live="polite"></span></div>
   <section class="card section-card location-secondary" data-location-history-panel><h2>🧭 移動履歴</h2><div class="location-history-controls"><select data-location-history-member disabled aria-label="移動履歴を確認する家族"><option value="">家族を読み込みます</option></select><div class="location-history-dates"><label>開始日<input type="date" data-location-history-from required></label><label>終了日<input type="date" data-location-history-to required></label></div><div class="location-history-presets"><button type="button" class="btn gray small" data-location-history-days="1">今日</button><button type="button" class="btn gray small" data-location-history-days="7">7日間</button><button type="button" class="btn gray small" data-location-history-days="31">31日間</button></div><button class="btn small" type="button" data-location-history-load>地図に表示</button><button class="btn gray small location-history-clear" type="button" data-location-history-clear>軌跡を消す</button></div><div class="meta location-history-summary" data-location-history-status aria-live="polite">まだ読み込んでいません。</div><div class="meta location-history-summary" data-location-history-summary></div><div class="location-history-links" data-location-history-links></div></section>
-  </details><details class="location-info"><summary>共有設定・使い方</summary><div class="location-map-note meta">位置が古い場合は「現在地」と断定せず、最終更新からの経過時間を表示します。車の所要時間は「車で何分？」または「家まで何分？」を押した時だけRoutes APIへ問い合わせます。</div>
-  <div class="card section-card location-secondary"><h2>🔒 共有設定</h2><div class="row"><strong>位置共有の既定値: ${privacy.sharingEnabled?'ON':'OFF'}</strong><div class="meta">登録した端末も最初は共有OFFです。共有ONにした有効な端末だけが、認証済みの位置送信と保存の対象になります。</div></div><div class="row"><strong>🏠 自宅地点</strong><div class="meta">OWNER / ADMIN が「管理 → 位置情報・OwnTracks」で、共有中の最新位置から家族共通の自宅地点を設定できます。</div></div></div>
-
-  <div class="card section-card"><h2>プライバシー方針</h2><p>この画面自体はブラウザの現在地を取得しません。共有ONの登録端末から認証済みの位置情報が届いた場合にだけ、FamilyToDoのlatest/history基盤へ保存されます。</p><p class="meta">端末は個別に共有停止・失効でき、共有OFFまたは失効済みの端末は位置送信・参照の対象外になります。自宅地点も明示的な管理操作でのみ設定され、経路時間はボタン操作時だけ計算します。</p></div></details></div></details></section></div><script defer src="/assets/location-history-ui.js?v=history3"></script>`;
+  </details></div></details></section></div><script defer src="/assets/location-history-ui.js?v=history3"></script>`;
   return html(layout('家族の場所',body,'/app/location.php'));
 }
