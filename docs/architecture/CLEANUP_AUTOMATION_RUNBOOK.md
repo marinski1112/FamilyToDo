@@ -1,37 +1,25 @@
 # Cleanup automation runbook
 
-This runbook defines the safe execution contract for future FamilyToDo structural-cleanup automation. It is a navigation and execution policy only. Current `main`, runtime source, migrations, and active regression contracts remain authoritative.
+This runbook defines the safe execution contract for bounded FamilyToDo structural cleanup. Current `main`, runtime source, migrations, active regression contracts, `.github/workflows/ci.yml`, and `package.json` remain authoritative.
 
-## Preconditions
+## Current coordination
 
-Do not write unless all of the following are true:
+Current coordination issue: **#1102**.
 
-1. current `main` SHA, package version, open PRs, recent commits, and issue #381 lease state were actual-read in the current run;
-2. `docs/architecture/README.md`, the relevant architecture map, and the exact current source for the candidate were read;
-3. the candidate is bounded to one concern;
-4. reachability is evidenced across the applicable runtime/import/static/test/contract/cron/OAuth/webhook surfaces;
-5. no conflicting write lease is HELD;
-6. the change does not require reconstructing source that is absent from current `main`.
+Issue #381 is archived historical evidence and must not be used for new leases, heartbeats, or coordination.
 
-If any prerequisite is uncertain, classify the candidate as `UNKNOWN` and do not write.
+Before a write, actual-read:
 
-## One-run limit
+1. current `main` SHA and package version;
+2. open PRs and recent commits;
+3. #1102 current lease state;
+4. exact source/docs/tests relevant to the change.
 
-One run may perform at most one bounded cleanup concern.
+Never reconstruct source from old chat, old SHA, historical issue comments, or partial output.
 
-Priority order:
+## One bounded concern
 
-1. canonical config/timezone drift;
-2. completely equivalent helper duplication;
-3. unused export or unreachable function with proven reachability evidence;
-4. dead compatibility code after external/runtime callers are proven absent;
-5. historical Wave artifact cleanup.
-
-If no safe candidate exists, finish read-only and report `NO_SAFE_WRITE_CANDIDATE`.
-
-## Required classification
-
-Every candidate must be classified before change:
+A cleanup change should address one bounded concern. Classify the candidate before changing it:
 
 - `ACTIVE`
 - `COMPAT`
@@ -40,157 +28,121 @@ Every candidate must be classified before change:
 - `DEAD`
 - `UNKNOWN`
 
-`UNKNOWN` is never permission to delete.
+`UNKNOWN` is never permission to delete. A zero-result GitHub code search is not proof of non-use; check direct routes/imports/static assets/contracts/cron/OAuth/webhook reachability where applicable.
 
-A zero-result GitHub code search is not proof of non-use. Search indexes can be incomplete. Use direct current-source reads and route/import/contract evidence.
+## Write lease
 
-## Source reconstruction prohibition
-
-Never recreate a source file or implementation from memory, prior chats, old SHAs, generated summaries, or historical assumptions.
-
-If the expected source is absent from current `main`, report:
-
-`source unavailable / current mainでは存在しない`
-
-and leave it absent unless a separate user-scoped feature explicitly requires new implementation.
-
-The retired task-new source is a known example: do not recreate it. A live compatibility URL such as `/task/new.php` must be judged from its current dispatcher/handler path, not from the historical filename.
-
-## Active barrel-module warning
-
-Small re-export modules are not automatically dead wrappers.
-
-At baseline `aa8a49bbec8505d358525f40d335e76f9ecce395`, `src/page-routes.ts` directly imports these barrel modules:
-
-- `src/auth-page-handlers.ts`
-- `src/task-page-handlers.ts`
-- `src/message-page-handlers.ts`
-- `src/shopping-page-handlers.ts`
-- `src/settings-page-handlers.ts`
-
-They are therefore `ACTIVE` at module level. Consolidation would be an intentional route-ownership refactor, not unused-code deletion.
-
-## Lease and branch protocol
-
-Before any write, add a bounded lease to issue #381:
+Acquire the #1102 lease immediately before the contiguous GitHub write sequence:
 
 ```text
-[LEASE:ACQUIRED][<scope-id>]
-owner=<worker>
-base_main=<exact SHA>
-scope=<one bounded concern>
-status=HELD
-cloudflare_observability=NOT_USED
+[LEASE:ACQUIRED] owner=<owner> scope=<bounded scope> base=<exact main SHA>
 ```
 
 Rules:
 
 - never commit directly to `main`;
-- create a short-lived branch from the exact observed base SHA;
-- one PR = one bounded concern;
-- do not mix structural cleanup with feature/bug work;
-- PR body must state deletion/consolidation reason, canonical replacement, and reachability evidence.
+- branch from the exact observed base SHA;
+- one PR should represent one bounded concern;
+- do not hold the lease during read-only investigation, CI waiting, review waiting, or deployment waiting;
+- release the lease as soon as the contiguous write/merge critical section finishes.
 
-## Validation protocol
-
-Before merge:
-
-1. re-read current `main` and ensure the base did not advance incompatibly;
-2. verify the PR head SHA;
-3. inspect all changed files/diff for scope drift;
-4. require GitHub Actions CI success;
-5. require `Workers Builds: familytodo` success;
-6. require zero blocking review threads.
-
-On CI failure, inspect the exact failed job/step/log. Distinguish source-string contract failures from runtime-behavior failures.
-
-After merge, keep the lease HELD until all of the following succeed on the exact merged `main` SHA:
-
-1. exact-main GitHub Actions CI;
-2. exact-main Workers Build;
-3. PR review-thread check;
-4. current main SHA verification.
-
-Then release:
+Release format:
 
 ```text
-[LEASE:RELEASE][<scope-id>]
-merged_pr=#<number>
-merged_main=<exact SHA>
-premerge_ci=SUCCESS
-postmerge_exact_main=SUCCESS
-workers_build=SUCCESS
-open_threads=0
-cloudflare_observability=NOT_USED
-status=RELEASED
+[LEASE:RELEASED] owner=<owner> result=<PR/merge/parked summary>
 ```
+
+If another active writer owns the lease, remain read-only or work on a non-overlapping investigation without GitHub writes.
+
+## Current CI/CD model
+
+### GitHub Actions
+
+The repository currently has one GitHub Actions workflow: `.github/workflows/ci.yml`.
+
+It runs on:
+
+- every pull request;
+- pushes to `main`.
+
+Its `checks` job is the canonical repository test gate. It installs dependencies and runs TypeScript checks, targeted contracts, browser/static checks, migration smoke tests, the regression suite, and `git diff --check`.
+
+For a code or documentation PR:
+
+1. verify the PR head SHA;
+2. require the GitHub Actions `CI` workflow for that head to finish successfully before merge;
+3. inspect blocking review threads/comments if present;
+4. confirm the PR is mergeable and still based on a compatible current `main`.
+
+Do not weaken, skip, or delete regression checks merely to obtain green CI.
+
+### Cloudflare preview/build signal
+
+Cloudflare Git integration may attach a Workers preview/build result to PR commits. Treat that as an additional deployment/build signal when it is produced.
+
+Do **not** encode a universal rule that every PR must expose a `Workers Builds: familytodo` check by that exact name. The Cloudflare build is external to `.github/workflows/ci.yml`, and its presentation/availability can vary independently of GitHub Actions.
+
+For runtime/deployment-affecting changes, a failed Cloudflare preview/build is blocking until understood. For docs-only changes, absence of a Cloudflare preview is not by itself a reason to block merge when GitHub Actions CI is green.
+
+### Production deploy and migrations
+
+Production deployment is not performed by the GitHub Actions `CI` workflow.
+
+The current repository deployment command is:
+
+```text
+npm run deploy
+```
+
+which executes:
+
+```text
+wrangler d1 migrations apply DB --remote && wrangler deploy
+```
+
+The production path is the authenticated Cloudflare Git integration triggered from `main`. Therefore:
+
+- PR previews must not apply production D1 migrations;
+- production D1 migrations are applied only from the `main` production deployment path;
+- if migration application fails, `&&` prevents Worker deployment from continuing;
+- ChatGPT must not directly operate production D1 as a substitute for this path;
+- already-applied migrations are immutable; schema/index/column changes require a new migration.
+
+### Post-merge verification
+
+After merge:
+
+- re-read the resulting `main` SHA;
+- GitHub Actions CI on `main` is the canonical repository post-merge test signal;
+- for runtime or migration changes, check available Cloudflare production deployment evidence when the connector/UI exposes it;
+- do not claim production deployment or migration success without evidence;
+- do not keep the #1102 write lease HELD merely while waiting for post-merge CI or Cloudflare deployment evidence.
+
+A later corrective GitHub write requires a fresh actual-read and a new lease.
+
+## Cloudflare Observability
+
+Cloudflare Observability is not part of this cleanup/CI gate and must not be treated as required validation. Do not use it unless the user explicitly changes that policy for a separate task.
 
 ## Change-size guardrails
 
-Default maximum per run:
+Default expectations:
 
 - one semantic concern;
-- preferably 1–5 files;
-- no cross-cutting refactor across Google Calendar, Location, Family Log, AI, auth, or tenant boundaries;
-- no DB schema/migration deletion during routine cleanup;
-- no mass Wave-file deletion;
-- no compatibility-route retirement without explicit reachability evidence.
+- preferably a small number of files;
+- no unrelated cross-cutting refactor;
+- no migration deletion during routine cleanup;
+- no compatibility-route retirement without explicit reachability evidence;
+- no source reconstruction.
 
-If the candidate expands while investigating, stop before write and reclassify/split it.
+If scope expands while investigating, stop before write and split/reclassify the work.
 
 ## Timezone/config guardrails
 
-Canonical family time helpers are owned by `src/timezone.ts`. Family-facing logic should prefer the available family timezone. Do not mechanically remove `Asia/Tokyo`: `DEFAULT_FAMILY_TIMEZONE` and `APP_TIMEZONE` are legitimate fallback/config values unless current source proves a bypass of available `family_timezone`.
+Canonical family time helpers are owned by `src/timezone.ts`. Family-facing logic should prefer the available family timezone. Do not mechanically remove `Asia/Tokyo`: `DEFAULT_FAMILY_TIMEZONE` and `APP_TIMEZONE` remain legitimate fallback/config values unless exact current source proves a bypass of available `family_timezone`.
 
 Likewise, `new Date()` is not automatically a timezone defect. Infrastructure UTC timestamps can be correct; family wall-clock domain logic must be evaluated separately.
 
-## Successful reference cleanup
+## Historical automation material
 
-PR #778 (`refactor: centralize family date offset helper`) is the first reference cleanup for this runbook:
-
-- exact duplicate helper body/signature confirmed in two ACTIVE route modules;
-- live callers were preserved;
-- canonical owner moved to `src/timezone.ts`;
-- no route/auth/tenant/DB/external behavior changed;
-- pre-merge CI and Workers Build succeeded;
-- exact-main post-merge CI and Workers Build succeeded;
-- lease was released only after post-merge validation.
-
-## Autonomous-task prompt contract
-
-A future autonomous task should execute the following instruction each run:
-
-```text
-You are the FamilyToDo v1.00 bounded structural-cleanup worker.
-
-Repository: marinski1112/FamilyToDo
-Canonical branch: main
-Coordination issue: #381
-Timezone: Asia/Tokyo
-Cloudflare Observability: do not use.
-
-At the start of every run, actual-read current main SHA, package version, open PRs, recent commits, #381 lease state, docs/architecture/README.md, and the relevant architecture map. Never treat prior chat, memory, old SHA, or architecture docs as authoritative over current source.
-
-Choose at most one bounded cleanup candidate, in this priority order:
-P1 canonical config/timezone drift
-P2 completely equivalent helper duplication
-P3 unused export/unreachable function with proven reachability
-P4 dead compatibility code with all callers proven absent
-P5 historical Wave artifact cleanup
-
-Before writing, prove applicable reachability across routes, imports, dynamic/string dispatch, static assets, tests/contracts, cron, OAuth callbacks, webhooks, and external compatibility URLs. A zero-result GitHub search is not proof of non-use.
-
-Classify the candidate ACTIVE, COMPAT, TEST/CONTRACT, HISTORICAL, DEAD, or UNKNOWN. Never delete UNKNOWN. Never reconstruct source absent from current main. Do not recreate retired task-new source.
-
-If no safe candidate exists, do not write and report NO_SAFE_WRITE_CANDIDATE.
-
-If a safe candidate exists and #381 has no conflicting HELD lease, acquire a bounded lease, create a short-lived branch from exact current main, make only that change, update architecture navigation if source ownership changed, and open one PR. Never commit directly to main.
-
-Require pre-merge GitHub Actions CI, Workers Builds: familytodo, and zero blocking review threads. If main advances incompatibly, stop/rebase/revalidate rather than blind merge. Merge only when all conditions pass.
-
-After merge, verify exact merged-main GitHub Actions CI and Workers Build. Release the lease only after post-merge success. Never broaden the run into feature work, schema/migration cleanup, Google Calendar/Location/Family Log/AI/auth/tenant-wide refactors, or mass deletion.
-
-One run = at most one bounded cleanup.
-```
-
-Do not schedule this task merely because this file exists. Scheduling requires an explicit user decision after the manual workflow is judged stable.
+Older five-worker cleanup scheduling and #381 heartbeat/watchdog protocols are historical, not current execution requirements. `FIVE_WORKER_AUTONOMY.md` is retained only as an archived design note and must not override this runbook, #1102, current source, or current CI/CD configuration.
