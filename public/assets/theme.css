@@ -250,3 +250,19 @@
 .calendar-stamp-option-placeholder{font-size:0!important}
 .calendar-stamp-option>span:not(.calendar-stamp-option-source){display:none!important}
 @media(max-width:600px){.calendar-toolbar{gap:6px}.calendar-month-picker input{width:122px}}
+
+/* iOS dark follow-up: exact retained Checklist controls. */
+:root[data-theme="dark"] .checklist-page.reminders-ui input.check.toggle{
+  -webkit-appearance:none!important;appearance:none!important;background:var(--theme-input)!important;border:2px solid #718198!important;color:transparent!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui input.check.toggle:checked{background:var(--primary)!important;border-color:var(--primary)!important}
+:root[data-theme="dark"] .checklist-page.reminders-ui .checklist-row-action{
+  background:var(--theme-raised)!important;color:var(--theme-link)!important;border:0!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui .checklist-row-action::after{color:var(--theme-link)!important}
+.calendar-topline{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.calendar-topline .calendar-view-filter{flex:1 1 auto;min-width:0}
+.calendar-topline .calendar-month-picker{flex:0 0 124px}
+.calendar-topline .calendar-month-picker input{width:124px;min-width:0;min-height:42px;padding-inline:8px}
+@media(max-width:600px){.calendar-topline{gap:6px}.calendar-topline .calendar-month-picker{flex-basis:116px}.calendar-topline .calendar-month-picker input{width:116px;font-size:15px}}
+.calendar-stamp-option-placeholder{background:transparent!important}
