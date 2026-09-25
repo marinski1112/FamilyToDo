@@ -15,6 +15,8 @@ try{
     body.calendar-compact-ui .calendar-month-actions .btn{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;padding:0!important;border-radius:10px!important;font-size:22px!important;line-height:1!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
     body.calendar-compact-ui .calendar-filter-toggle{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;font-size:0!important}
     body.calendar-compact-ui .calendar-filter-toggle svg{width:17px!important;height:17px!important;display:block!important;pointer-events:none!important}
+    body.calendar-compact-ui .calendar-month-picker{display:block!important;flex:0 0 118px!important;width:118px!important;margin:0!important}
+    body.calendar-compact-ui .calendar-month-picker input{box-sizing:border-box!important;width:118px!important;min-width:118px!important;height:36px!important;min-height:36px!important;margin:0!important;padding:4px 7px!important;border-radius:10px!important;font-size:14px!important;white-space:nowrap!important}
     body.calendar-compact-ui .calendar-view-filter[hidden]{display:none!important}
     body.calendar-compact-ui .calendar-view-filter{display:flex!important;gap:5px!important;overflow-x:auto!important;scrollbar-width:none!important;margin:0 2px 7px!important;padding:5px!important;border:1px solid #e5e7eb!important;border-radius:11px!important;background:#f8fafc!important}
     body.calendar-compact-ui .calendar-view-filter::-webkit-scrollbar{display:none!important}
@@ -69,6 +71,11 @@ try{
       filter.hidden=!opening;
       toggle.setAttribute('aria-expanded',opening?'true':'false');
     });
+  }
+  const monthPickerLabel=document.querySelector('.calendar-month-picker');
+  if(actions&&monthPickerLabel&&monthPickerLabel.parentElement!==actions){
+    const filterToggle=document.getElementById('calendarFilterToggle');
+    if(filterToggle)filterToggle.insertAdjacentElement('afterend',monthPickerLabel);else actions.insertBefore(monthPickerLabel,actions.firstChild);
   }
 
   const TIMETREE_COLORS=new Set(['#f35f8c','#2ecc87','#47b2f7','#b38bdc','#fdc02d','#fb7f77']);
