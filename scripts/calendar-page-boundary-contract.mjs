@@ -28,7 +28,7 @@ for(const marker of [
   'recurrence_occurrence_id:t.recurrence_occurrence_id??0',
   'id="calendarPayload"',
   '/assets/calendar.js?v=${APP_VERSION}',
-  'id="calendarStampDate"',
+  'id="calendarMonthPicker"',
   'id="calendarFab"',
   "layout('カレンダー',body,'/app/calendar.php')",
 ]) if(!page.includes(marker)) throw new Error(`calendar retained page lost behavior marker: ${marker}`);
