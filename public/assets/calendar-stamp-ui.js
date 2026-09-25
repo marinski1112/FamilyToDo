@@ -101,7 +101,7 @@ try{
       const representation=String(stamp?.representation||''),mimeType=String(stamp?.mimeType||'');
       if(!['image/png','image/webp','image/gif'].includes(mimeType))return null;
       if(representation!=='SINGLE_FILE'&&representation!=='FRAME_SEQUENCE')return null;
-      const previewPath=String(stamp?.thumbnailPath||(representation==='SINGLE_FILE'?stamp?.contentPath:'')||'');
+      const previewPath=String(stamp?.thumbnailPath||(representation==='SINGLE_FILE'?stamp?.contentPath:(stamp?.framesPath?String(stamp.framesPath).replace(/\/$/,'')+'/0':''))||'');
       return {
         source:'shared',
         id:Number.isSafeInteger(localAssetId)&&localAssetId>0?localAssetId:0,
