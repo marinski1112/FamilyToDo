@@ -3,9 +3,6 @@ import {buildLocationStayReport,locationDistance} from './location-stay-report';
 import type {LocationPoint} from './location-providers';
 
 const MAX_ARCHIVE_GROUPS_PER_RUN=8;
-const ARCHIVE_REBUILD_FROM_LOCAL_DATE='2026-09-14';
-const ARCHIVE_REBUILD_BEFORE='2026-09-25T14:00:00Z';
-const ARCHIVE_REBUILT_AT='2026-09-25T14:00:01Z';
 const MAX_MINUTE_POINTS_PER_DAY=1440;
 const MAX_ROUTE_POINTS=72;
 const ROUTE_DISTANCE_STEP_METERS=200;
@@ -56,7 +53,7 @@ function routeJson(points:readonly LocationPoint[]):string{
   ]));
 }
 
-async function archiveOneDay(db:D1Database,group:ArchiveGroup,{replaceExisting=false}:{replaceExisting?:boolean}={}):Promise<boolean>{
+async function archiveOneDay(db:D1Database,group:ArchiveGroup):Promise<boolean>{
   const count=await db.prepare(`
     SELECT COUNT(*) AS raw_point_count
     FROM member_location_history
@@ -91,17 +88,6 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup,{replaceExisting=f
   const anchors=new Map(points.map(point=>[point.recordedAt,point]));
   const route=simplifyRoute(points);
   const statements=[] as D1PreparedStatement[];
-  if(replaceExisting){
-    // Rebuild only the derived projection. Raw GPS remains untouched.
-    statements.push(db.prepare(`
-      DELETE FROM location_history_stays
-      WHERE family_id=? AND member_id=? AND local_date=?
-    `).bind(group.family_id,group.member_id,group.local_date));
-    statements.push(db.prepare(`
-      DELETE FROM location_history_archive_days
-      WHERE family_id=? AND member_id=? AND local_date=?
-    `).bind(group.family_id,group.member_id,group.local_date));
-  }
   for(const stay of stays){
     const anchor=anchors.get(stay.from);
     statements.push(db.prepare(`
@@ -118,46 +104,17 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup,{replaceExisting=f
     INSERT INTO location_history_archive_days(
       family_id,member_id,local_date,started_at,ended_at,raw_point_count,
       route_point_count,route_json,archived_at
-    ) VALUES(?,?,?,?,?,?,?,?,CASE WHEN ? THEN ? ELSE CURRENT_TIMESTAMP END)
+    ) VALUES(?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(family_id,member_id,local_date) DO NOTHING
   `).bind(
     group.family_id,group.member_id,group.local_date,
     points[0].recordedAt,points[points.length-1].recordedAt,rawPointCount,
-    route.length,routeJson(route),replaceExisting?1:0,ARCHIVE_REBUILT_AT,
+    route.length,routeJson(route),
   ));
   await db.batch(statements);
   const marker=await db.prepare(`SELECT 1 AS ok FROM location_history_archive_days WHERE family_id=? AND member_id=? AND local_date=? LIMIT 1`)
     .bind(group.family_id,group.member_id,group.local_date).first<{ok:number}>();
   return marker?.ok===1;
-}
-
-async function rebuildIncompleteArchivedDays(db:D1Database):Promise<ArchiveGroup[]>{
-  // 9/14 onward was already marked archived by the previous projection logic.
-  // Rebuild those derived rows once from retained raw GPS when no STAY rows exist.
-  const groups=await db.prepare(`
-    SELECT a.family_id,a.member_id,a.local_date
-    FROM location_history_archive_days a
-    WHERE a.local_date>=? AND a.local_date<?
-      AND a.archived_at<?
-      AND a.raw_point_count>0
-      AND NOT EXISTS(
-        SELECT 1 FROM location_history_stays s
-        WHERE s.family_id=a.family_id AND s.member_id=a.member_id AND s.local_date=a.local_date
-      )
-      AND EXISTS(
-        SELECT 1 FROM member_location_history h
-        WHERE h.family_id=a.family_id AND h.member_id=a.member_id
-          AND date(h.recorded_at,'+9 hours')=a.local_date
-      )
-    ORDER BY a.local_date DESC
-    LIMIT ?
-  `).bind(ARCHIVE_REBUILD_FROM_LOCAL_DATE,todayJst(),ARCHIVE_REBUILD_BEFORE,MAX_ARCHIVE_GROUPS_PER_RUN).all<ArchiveGroup>();
-  const rebuilt:ArchiveGroup[]=[];
-  for(const group of groups.results){
-    try{if(await archiveOneDay(db,group,{replaceExisting:true}))rebuilt.push(group);}
-    catch{/* Rebuild failure must never mutate raw history. */}
-  }
-  return rebuilt;
 }
 
 async function archivePendingDays(db:D1Database):Promise<ArchiveGroup[]>{
@@ -187,9 +144,7 @@ async function archivePendingDays(db:D1Database):Promise<ArchiveGroup[]>{
  * data-maintenance/archive workflow after durable family-day summaries exist.
  */
 export async function archiveLocationHistory(env:Env):Promise<ArchiveGroup[]>{
-  const rebuilt=await rebuildIncompleteArchivedDays(env.DB);
-  const archived=await archivePendingDays(env.DB);
-  return [...rebuilt,...archived];
+  return archivePendingDays(env.DB);
 }
 
 // Compatibility for any branch/runtime caller created before the retention policy
