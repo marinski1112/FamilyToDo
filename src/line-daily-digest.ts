@@ -47,8 +47,11 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
       AND (${effectiveKind}='EVENT' OR lower(COALESCE(t.status,''))<>'completed')
       AND ((date(COALESCE(t.start_at,t.due_at))<=date(?) AND date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?))
         OR (${effectiveKind}='TASK' AND date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)))
-      ORDER BY COALESCE(t.start_at,t.due_at),t.id LIMIT 50`)
-      .bind(memberId,familyId,memberId,memberId,memberId,localDate,localDate,memberId,localDate).all<Row>(),
+      ORDER BY CASE
+        WHEN date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?) THEN 2
+        WHEN ${effectiveKind}='EVENT' THEN 0 ELSE 1 END,
+        COALESCE(t.start_at,t.due_at),t.id LIMIT 50`)
+      .bind(memberId,familyId,memberId,memberId,memberId,localDate,localDate,memberId,localDate,localDate,memberId).all<Row>(),
     recurringForFamilyRange(env.DB,familyId,memberId,localDate,localDate),
     env.DB.prepare(`SELECT i.name,i.status
       FROM items i
@@ -60,7 +63,8 @@ async function buildFactPayload(env:Env,familyId:number,memberId:number,localDat
   const recurringToday:Row[]=recurringRows.map(x=>({...x,task_kind:String(x.task_kind).toUpperCase()==='EVENT'?'EVENT':'TASK',at:x.start_at||x.due_at}));
   const todayRows=[...taskRows.results,...recurringToday].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
   const eventRows=todayRows.filter(x=>String(x.task_kind).toUpperCase()==='EVENT');
-  const taskOnly=todayRows.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK');
+  const taskOnly=todayRows.filter(x=>String(x.task_kind||'TASK').toUpperCase()==='TASK')
+    .sort((a,b)=>Number(String(a.at).slice(0,10)<localDate)-Number(String(b.at).slice(0,10)<localDate));
   const events=eventRows.slice(0,5).map(x=>`${String(x.at).slice(0,10)<localDate?'継続中 ':Number(x.all_day)!==1&&localClock(x.at)?`${localClock(x.at)} `:''}${clean(x.title)}`.trim());
   const tasks=taskOnly.filter(x=>String(x.status).toLowerCase()!=='completed').slice(0,6).map(x=>`□ ${clean(x.title)}`);
   const bringItems=bringItemRows.results.map(x=>`${String(x.status).toLowerCase()==='completed'?'✓':'□'} ${clean(x.name)}`).filter(x=>x.length>2);
@@ -119,7 +123,7 @@ async function renderMorningMessage(env:Env,familyId:number,localDate:string,lin
   if(familyAiProvider(env)!=='GEMINI'||!env.GEMINI_API_KEY)return finalize(null,{status:'FALLBACK',reason:'NOT_CONFIGURED'});
   if(!morningDigestAiEnabled(env))return finalize(null,{status:'FALLBACK',reason:'DISABLED'});
   let model=MORNING_DIGEST_GEMINI_MODEL_PRIMARY_DEFAULT;
-  try{model=(await resolveFeatureModels(env.DB,familyId,'MORNING_DIGEST','OWNER')).models[0]||morningDigestModels(env)[0];}
+  try{const route=await resolveFeatureModels(env.DB,familyId,'MORNING_DIGEST','OWNER');model=route.source==='FAMILY_SETTING'?route.models[0]:morningDigestModels(env)[0];}
   catch{return finalize(null,{status:'FALLBACK',reason:'STORAGE'});}
   let reserved=false;
   try{reserved=await reserveMorningDigestAiRequest(env.DB,familyId,key,false,1);}catch{return fallback;}
