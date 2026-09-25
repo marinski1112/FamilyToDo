@@ -277,3 +277,18 @@
 :root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-category-row a[aria-label="編集"]::after{
   background:var(--theme-raised)!important;color:var(--theme-link)!important;border-color:var(--line)!important;
 }
+
+/* Real-device dark contrast follow-up. */
+:root[data-theme="dark"] .calendar-band{color:#0b1220!important;text-shadow:0 1px rgba(255,255,255,.18)}
+:root[data-theme="dark"] .checklist-page.reminders-ui :is(.task-row,.unorganized-task-row) input.check.toggle:not(:checked),
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section input.check.toggle:not(:checked){
+  -webkit-appearance:none!important;appearance:none!important;background:#26354a!important;border-color:#8292aa!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui :is(.checklist-row-action,.belongings-composer-detail),
+:root[data-theme="dark"] .checklist-page.reminders-ui .checklist-row-action::after,
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-category-row a[aria-label="編集"],
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-category-row a[aria-label="編集"]::after{
+  background:#26354a!important;color:#8ec5ff!important;border-color:#40536d!important;
+}
+:root[data-theme="dark"] .calendar-month-draft select{background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important}
+:root[data-theme="dark"] .calendar-month-draft-confirm{background:var(--primary)!important;color:#fff!important;border-color:var(--primary)!important}
