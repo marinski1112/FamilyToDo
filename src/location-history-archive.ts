@@ -5,6 +5,7 @@ import type {LocationPoint} from './location-providers';
 const MAX_ARCHIVE_GROUPS_PER_RUN=8;
 const ARCHIVE_REBUILD_FROM_LOCAL_DATE='2026-09-14';
 const ARCHIVE_REBUILD_BEFORE='2026-09-25T14:00:00Z';
+const ARCHIVE_REBUILT_AT='2026-09-25T14:00:01Z';
 const MAX_MINUTE_POINTS_PER_DAY=1440;
 const MAX_ROUTE_POINTS=72;
 const ROUTE_DISTANCE_STEP_METERS=200;
@@ -117,12 +118,12 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup,{replaceExisting=f
     INSERT INTO location_history_archive_days(
       family_id,member_id,local_date,started_at,ended_at,raw_point_count,
       route_point_count,route_json,archived_at
-    ) VALUES(?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ) VALUES(?,?,?,?,?,?,?,?,CASE WHEN ? THEN ? ELSE CURRENT_TIMESTAMP END)
     ON CONFLICT(family_id,member_id,local_date) DO NOTHING
   `).bind(
     group.family_id,group.member_id,group.local_date,
     points[0].recordedAt,points[points.length-1].recordedAt,rawPointCount,
-    route.length,routeJson(route),
+    route.length,routeJson(route),replaceExisting?1:0,ARCHIVE_REBUILT_AT,
   ));
   await db.batch(statements);
   const marker=await db.prepare(`SELECT 1 AS ok FROM location_history_archive_days WHERE family_id=? AND member_id=? AND local_date=? LIMIT 1`)
