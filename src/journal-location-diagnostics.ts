@@ -31,11 +31,11 @@ export async function journalLocationDiagnostics(request:Request,ctx:AppContext)
     ctx.env.DB.prepare(`SELECT COUNT(*) points,
       SUM(CASE WHEN accuracy_meters IS NOT NULL AND accuracy_meters>=0 AND accuracy_meters<=100 THEN 1 ELSE 0 END) accuracy_le_100,
       SUM(CASE WHEN accuracy_meters IS NOT NULL AND accuracy_meters>=0 AND accuracy_meters<=150 THEN 1 ELSE 0 END) accuracy_le_150,
-      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_seconds>0 AND elapsed_seconds<60 THEN 1 ELSE 0 END) pairs_under_one_minute,
-      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_seconds>=60 AND elapsed_seconds<=1800 THEN 1 ELSE 0 END) pairs_one_to_thirty_minutes,
-      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_seconds>1800 THEN 1 ELSE 0 END) pairs_over_thirty_minutes
+      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_ms>0 AND elapsed_ms<60000 THEN 1 ELSE 0 END) pairs_under_one_minute,
+      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_ms>=60000 AND elapsed_ms<=1800000 THEN 1 ELSE 0 END) pairs_one_to_thirty_minutes,
+      SUM(CASE WHEN previous_at IS NOT NULL AND elapsed_ms>1800000 THEN 1 ELSE 0 END) pairs_over_thirty_minutes
       FROM (SELECT accuracy_meters,previous_at,
-        (julianday(recorded_at)-julianday(previous_at))*86400 elapsed_seconds
+        CAST(ROUND((julianday(recorded_at)-julianday(previous_at))*86400000) AS INTEGER) elapsed_ms
         FROM (SELECT accuracy_meters,recorded_at,
           LAG(recorded_at) OVER (PARTITION BY member_id ORDER BY recorded_at,id) previous_at
           FROM member_location_history WHERE family_id=? AND recorded_at>=? AND recorded_at<?))`)
