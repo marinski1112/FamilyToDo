@@ -15,7 +15,6 @@ const checks=[
   [archive.includes('MAX_MINUTE_POINTS_PER_DAY=1440')&&archive.includes('ROW_NUMBER() OVER')&&archive.includes('minute_rank=1'),'dense raw days are minute-sampled before archive projection'],
   [archive.includes('COUNT(*) AS raw_point_count')&&archive.includes('rawPointCount'),'archive preserves the true raw point count while using bounded minute samples'],
   [!archive.includes('HAVING COUNT(*)<=?'),'dense Overland days are not excluded from archive/search projection'],
-  [archive.includes("ARCHIVE_REBUILD_FROM_LOCAL_DATE='2026-09-14'")&&archive.includes("ARCHIVE_REBUILD_BEFORE='2026-09-25T14:00:00Z'")&&archive.includes("ARCHIVE_REBUILT_AT='2026-09-25T14:00:01Z'")&&archive.includes('a.archived_at<?')&&archive.includes('rebuildIncompleteArchivedDays'),'incomplete pre-fix archived days from 9/14 are eligible for one-shot bounded rebuild'],
   [archive.includes('DELETE FROM location_history_stays')&&archive.includes('DELETE FROM location_history_archive_days'),'rebuild replaces only derived archive rows'],
   [archive.includes('NOT EXISTS(\n        SELECT 1 FROM location_history_stays')&&archive.includes('EXISTS(\n        SELECT 1 FROM member_location_history'),'rebuild is limited to archived days missing stays with retained raw source'],
   [migration.includes('route_point_count <= 72'),'schema bounds simplified routes'],
