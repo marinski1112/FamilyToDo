@@ -133,7 +133,7 @@ export async function settingsNotifications(request:Request,ctx:AppContext):Prom
         )`).bind(m.family_id,m.family_id).all<Row>();
       digestDiagnostics=generationRows.results.map(row=>{
         const model=row.report_type==='DAILY'?morningAttemptModel(row.frame_json):row.generation_model;
-        return `<li><strong>${esc(row.report_type==='DAILY'?'朝':row.report_type==='WEEKLY'?'週次':'月次')} · ${esc(row.period_key)}</strong><p class="small">${row.generation_status==='AI'?'Gemini文章':'通常の文章・未確定'}：${esc(digestReasonLabel(row.generation_reason))}<br>モデル ${esc(model||'記録なし')} · 生成要求 ${esc(row.request_count)}回</p></li>`;
+        return `<li><strong>${esc(row.report_type==='DAILY'?'朝':row.report_type==='WEEKLY'?'週次':'月次')} · ${esc(row.report_type==='DAILY'?String(row.period_key||'').slice(0,10):row.period_key)}</strong><p class="small">${row.generation_status==='AI'?'Gemini文章':'通常の文章・未確定'}：${esc(digestReasonLabel(row.generation_reason))}<br>モデル ${esc(model||'記録なし')} · 生成要求 ${esc(row.request_count)}回</p></li>`;
       }).join('')||'<li>生成履歴はまだありません。</li>';
     }catch{digestDiagnostics='<li>生成履歴を取得できませんでした。時間をおいて再度開いてください。</li>';}
     digestDiagnostics=`<details class="card"><summary>レポートのAI生成状況</summary><p class="small">生成結果の確認欄です。LINEへの配信成功を示すものではありません。</p>${String(ctx.env.LINE_ACCESS_TOKEN||'').trim()?'':'<p class="error">LINE送信トークンが未設定です。</p>'}<ul>${digestDiagnostics}</ul></details>`;

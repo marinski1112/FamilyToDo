@@ -25,7 +25,8 @@ for(const marker of [
   "import { formatMorningWeather, loadMorningWeatherFact, type MorningWeatherFact } from './line-daily-digest-weather'",
   'let weatherFact:MorningWeatherFact|null|undefined',
   'loadMorningWeatherFact(env.DB,Number(setting.family_id),localDate,timezone)',
-  "authoritative.push('【今日の天気】',formatMorningWeather(weather))",
+  'home_weather:weather?formatMorningWeather(weather):null',
+  '【自宅の今日の天気】',
 ])if(!digest.includes(marker))throw new Error(`morning weather wiring missing: ${marker}`);
 
 await import('./line-daily-digest-destination-contract.mjs');

@@ -30,14 +30,7 @@ for(const field of ['personality_note','birthplace','sex_gender','blood_type']){
   if(!helper.includes(field))throw new Error(`expected field-level projection support missing: ${field}`);
 }
 if(familyAi.includes("from './family-ai-profile-context'"))throw new Error('general FamilyAI path must remain unwired from profile projection in this bounded scope');
-for(const marker of [
-  "from './family-ai-profile-context'",
-  'await loadSafeFamilyAiProfileContext(env.DB,familyId,localDate)',
-  'MAX_MORNING_PROFILE_SUBJECTS=8',
-  'MAX_MORNING_PROFILE_CONTEXT_CHARS=2400',
-  'Optional personalization context must never block the deterministic morning digest',
-])if(!digest.includes(marker))throw new Error(`bounded morning digest profile wiring marker missing: ${marker}`);
-if(/FROM\s+family_log_subjects/i.test(digest))throw new Error('morning digest must consume the privacy boundary instead of reading raw profile columns directly');
+if(digest.includes("from './family-ai-profile-context'")||/FROM\s+family_log_subjects/i.test(digest))throw new Error('five-fact morning digest must exclude profiles and Family Log');
 if(helper.includes('generateContent')||helper.includes('GEMINI_API_KEY')||helper.includes('geminiFetch('))throw new Error('profile projection helper must not call Gemini');
 
-console.log('family-ai-profile-context-contract: master opt-in + field permissions stay in the projection boundary; only bounded morning digest wiring is allowed');
+console.log('family-ai-profile-context-contract: opt-in profile projection stays bounded; five-fact morning digest excludes profiles');

@@ -57,7 +57,7 @@ function morningItem(row:Row){
     attempt_count:requestCount,
     attempts,
     item_count:null,
-    local_date:String(row.local_date||''),
+    local_date:String(row.local_date||'').slice(0,10),
     created_at:String(row.updated_at||row.created_at||''),
   };
 }

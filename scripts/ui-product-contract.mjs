@@ -77,7 +77,7 @@ assert.match(digest,/current<target\|\|current>target\+29/,'daily digest must to
 const morningStart=digest.indexOf('env.DB.prepare(`SELECT t.title,');
 assert.ok(morningStart>=0,'morning task query must exist');
 const morningRows=digest.slice(morningStart,digest.indexOf('.all<Row>()',morningStart));
-assert.ok(morningRows.includes('date(COALESCE(t.start_at,t.due_at))<=date(?)')&&morningRows.includes('date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)')&&morningRows.includes('LIMIT 12'),'today range must exclude overdue rows before the display budget');
+assert.ok(morningRows.includes('date(COALESCE(t.start_at,t.due_at))<=date(?)')&&morningRows.includes('date(COALESCE(t.end_at,t.due_at,t.start_at))>=date(?)')&&morningRows.includes("lower(COALESCE(t.status,''))<>'completed'")&&morningRows.includes('date(COALESCE(t.end_at,t.due_at,t.start_at))<date(?)')&&morningRows.includes('LIMIT 50'),'today and overdue pending Tasks must survive before the display budget; completed Tasks are excluded');
 assert.match(digest,/INSERT OR IGNORE INTO line_daily_digest_receipts/,'daily digest retry tolerance must retain per-day idempotency receipts');
 assert.match(digest,/String\(receipt\.status\)==='SENT'/,'daily digest must not resend after a successful receipt');
 
