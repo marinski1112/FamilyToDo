@@ -15,8 +15,12 @@ try{
     body.calendar-compact-ui .calendar-month-actions .btn{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;padding:0!important;border-radius:10px!important;font-size:22px!important;line-height:1!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
     body.calendar-compact-ui .calendar-filter-toggle{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;padding:0!important;font-size:0!important}
     body.calendar-compact-ui .calendar-filter-toggle svg{width:17px!important;height:17px!important;display:block!important;pointer-events:none!important}
-    body.calendar-compact-ui .calendar-month-picker{display:block!important;flex:0 0 118px!important;width:118px!important;margin:0!important}
+    body.calendar-compact-ui .calendar-month-picker{display:block!important;flex:0 0 136px!important;width:136px!important;margin:0!important}
     body.calendar-compact-ui .calendar-month-picker input{box-sizing:border-box!important;width:118px!important;min-width:118px!important;height:36px!important;min-height:36px!important;margin:0!important;padding:4px 7px!important;border-radius:10px!important;font-size:14px!important;white-space:nowrap!important}
+    body.calendar-compact-ui .calendar-month-draft{display:flex!important;align-items:center!important;gap:2px!important;width:100%!important}
+    body.calendar-compact-ui .calendar-month-draft select{min-width:0!important;height:36px!important;padding:0 2px!important;border-radius:8px!important;font-size:12px!important}
+    body.calendar-compact-ui .calendar-month-draft-year{width:58px!important}.calendar-month-draft-month{width:42px!important}
+    body.calendar-compact-ui .calendar-month-draft-confirm{width:30px!important;min-width:30px!important;height:36px!important;padding:0!important;border-radius:8px!important;font-weight:900!important}
     body.calendar-compact-ui .calendar-view-filter[hidden]{display:none!important}
     body.calendar-compact-ui .calendar-view-filter{display:flex!important;gap:5px!important;overflow-x:auto!important;scrollbar-width:none!important;margin:0 2px 7px!important;padding:5px!important;border:1px solid #e5e7eb!important;border-radius:11px!important;background:#f8fafc!important}
     body.calendar-compact-ui .calendar-view-filter::-webkit-scrollbar{display:none!important}
@@ -73,7 +77,15 @@ try{
     });
   }
   const monthPickerLabel=document.querySelector('.calendar-month-picker');
-  if(actions&&monthPickerLabel&&monthPickerLabel.parentElement!==actions){
+  const nativeMonthPicker=document.getElementById('calendarMonthPicker');
+  if(actions&&monthPickerLabel&&nativeMonthPicker){
+    const initial=String(nativeMonthPicker.value||'').split('-');
+    monthPickerLabel.innerHTML='<span class="calendar-month-draft"><select class="calendar-month-draft-year" aria-label="年"></select><select class="calendar-month-draft-month" aria-label="月"></select><button type="button" class="calendar-month-draft-confirm" aria-label="選択した年月へ移動">✓</button></span>';
+    const year=monthPickerLabel.querySelector('.calendar-month-draft-year'),mon=monthPickerLabel.querySelector('.calendar-month-draft-month'),confirm=monthPickerLabel.querySelector('.calendar-month-draft-confirm');
+    for(let y=2000;y<=2100;y++){const o=document.createElement('option');o.value=String(y);o.textContent=y+'年';o.selected=String(y)===initial[0];year.appendChild(o);}
+    for(let m=1;m<=12;m++){const o=document.createElement('option');o.value=String(m).padStart(2,'0');o.textContent=m+'月';o.selected=o.value===initial[1];mon.appendChild(o);}
+    confirm.addEventListener('click',()=>{nativeMonthPicker.value=year.value+'-'+mon.value;document.dispatchEvent(new CustomEvent('calendar-month-confirm'));});
+    monthPickerLabel.appendChild(nativeMonthPicker);nativeMonthPicker.hidden=true;
     const filterToggle=document.getElementById('calendarFilterToggle');
     if(filterToggle)filterToggle.insertAdjacentElement('afterend',monthPickerLabel);else actions.insertBefore(monthPickerLabel,actions.firstChild);
   }
