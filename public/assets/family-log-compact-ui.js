@@ -157,5 +157,5 @@ const enhance=()=>{renameHousework();compactQuickCards();constrainEditors();buil
 enhance();
 let queued=false;
 new MutationObserver(()=>{if(queued)return;queued=true;queueMicrotask(()=>{queued=false;renameHousework();compactQuickCards();constrainEditors();});}).observe(document.body,{childList:true,subtree:true});
-document.documentElement.dataset.familyLogCompactUi=location.pathname===MANAGE_PATH?'manage':'ready';
+document.documentElement.dataset.familyLogCompactUi=location.pathname===MANAGE_PATH?'manage':'ready';document.body.classList.remove('family-log-boot');
 })();
