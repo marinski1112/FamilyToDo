@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {loadTs,database,context} from './goods-category-test-support.mjs';
+
+const db=database(),ctx=context(db),media=new Map();
+ctx.env.MEDIA={async put(key,bytes){media.set(key,new Uint8Array(bytes));},async get(key){const body=media.get(key);return body?{body}:null;},async delete(key){media.delete(key);}};
+const {calendarStickerAdminApi,calendarStickerDaysApi,calendarStickerMediaApi}=loadTs('src/calendar-sticker-api.ts');
+const png=new Uint8Array(24);png.set([137,80,78,71,13,10,26,10]);new DataView(png.buffer).setUint32(16,320);new DataView(png.buffer).setUint32(20,320);
+const admin=await calendarStickerAdminApi(new Request('https://familytodo.test/api/calendar-sticker-admin',{method:'POST',headers:{'content-type':'image/png','x-csrf-token':'goods-test','x-sticker-name':encodeURIComponent('お祝い')},body:png}),ctx);
+assert.equal(admin.status,201);const {id}=await admin.json();assert.ok(id>0);
+const place=async(scope='FAMILY',date='2026-09-25',assetId=id)=>calendarStickerDaysApi(new Request('https://familytodo.test/api/calendar-stickers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:'goods-test',date,visibilityScope:scope,assetId})}),ctx);
+assert.equal((await place()).status,200);assert.equal((await place('PRIVATE')).status,200);
+const url='https://familytodo.test/api/calendar-stickers?from=2026-09-01&to=2026-10-10';
+let result=await (await calendarStickerDaysApi(new Request(url),ctx)).json();assert.equal(result.days.length,2);assert.deepEqual(result.days.map(x=>x.scope),['FAMILY','PRIVATE']);
+ctx.member={id:2,family_id:2,role:'OWNER'};result=await (await calendarStickerDaysApi(new Request(url),ctx)).json();assert.equal(result.days.length,0);
+assert.equal((await calendarStickerMediaApi(new Request('https://familytodo.test/api/calendar-sticker-media?asset='+id),ctx)).status,404);
+ctx.member={id:1,family_id:1,role:'OWNER'};
+assert.equal((await calendarStickerMediaApi(new Request('https://familytodo.test/api/calendar-sticker-media?asset='+id),ctx)).status,200);
+assert.equal((await calendarStickerDaysApi(new Request('https://familytodo.test/api/calendar-stickers',{method:'DELETE',headers:{'content-type':'application/json'},body:JSON.stringify({csrf:'goods-test',date:'2026-09-25',visibilityScope:'PRIVATE'})}),ctx)).status,200);
+assert.equal((await (await calendarStickerDaysApi(new Request(url),ctx)).json()).days.length,1);
+assert.equal((await place('FAMILY','2026-02-30')).status,400);
+db.close();
+
+const {normalizeEventDateTitleText}=loadTs('src/task-rough-input-event-normalize.ts');
+assert.equal(normalizeEventDateTitleText('9/25 大森へ遊びに行く','2026-09-25'),'大森へ遊びに行く\n期限: 2026-09-25');
+assert.equal(normalizeEventDateTitleText('9月25日 大森へ遊びに行く','2026-09-25'),'大森へ遊びに行く\n期限: 2026-09-25');
+assert.equal(normalizeEventDateTitleText('2/30 大森へ遊びに行く','2026-09-25'),'2/30 大森へ遊びに行く');
+assert.equal(normalizeEventDateTitleText('家族で遊びに行く','2026-09-25'),'家族で遊びに行く');
+const calendar=fs.readFileSync('src/calendar-page.ts','utf8'),client=fs.readFileSync('public/assets/calendar.js','utf8');
+assert.match(calendar,/calendarFab.*type=event/);assert.match(client,/type=event&date=/);
+assert.match(fs.readFileSync('public/assets/calendar-sticker-ui.js','utf8'),/setTimeout\(\(\)=>\{held=true;.*open\(cell.dataset.date\);\},550\)/);
+console.log('calendar sticker upload, tenant isolation, day placement, long press and inline EVENT date: ok');

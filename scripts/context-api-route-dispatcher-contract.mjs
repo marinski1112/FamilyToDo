@@ -15,7 +15,7 @@ const routeLines=[
   "if(url.pathname==='/api/toggle') return await toggle(request,context);",
   "if(url.pathname==='/api/task') return await taskApi(request,context);",
   "if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);",
-  "if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request),context);",
+  "if(url.pathname==='/api/task-rough-input') return await taskRoughInputApi(await normalizeEventRoughInputRequest(request,familyDate(String(context.member?.family_timezone||context.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE))),context);",
   "if(url.pathname==='/api/item') return await itemApi(request,context);",
   "if(url.pathname==='/api/messages') return await messages(request,context);",
   "if(url.pathname==='/api/message-stamps') return await messageStampApi(request,context);",
