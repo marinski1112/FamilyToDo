@@ -26,6 +26,12 @@ style.textContent=`
 .checklist-page.reminders-ui .shopping-checklist-section input.check.toggle[data-type="shopping"]:checked{background:#007aff!important;border-color:#007aff!important}
 .shopping-continuous-name{min-height:44px!important;max-height:84px!important;padding:10px 0 8px!important;font-size:17px!important;line-height:1.35!important}
 .shopping-inline-detail-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;border:0;border-radius:20px;background:transparent;color:#007aff;font:inherit;font-size:20px;font-weight:700;padding:0}
+:root[data-theme="dark"] .shopping-category-add-item::before{background:#26354a!important;border-color:#8292aa!important}
+:root[data-theme="dark"] .checklist-page.reminders-ui .shopping-checklist-section input.check.toggle[data-type="shopping"]:not(:checked){background:#26354a!important;border-color:#8292aa!important}
+:root[data-theme="dark"] .checklist-page.reminders-ui .shopping-checklist-section .linked-shopping-row .checklist-row-action,
+:root[data-theme="dark"] .checklist-page.reminders-ui .shopping-checklist-section .linked-shopping-row .checklist-row-action::after{background:#26354a!important;color:#8ec5ff!important;border-color:#40536d!important}
+:root[data-theme="dark"] .shopping-continuous-composer{background:transparent!important}
+
 .shopping-continuous-composer[data-inline-details="closed"] .shopping-continuous-fields,
 .shopping-continuous-composer[data-inline-details="closed"] .shopping-continuous-actions{display:none!important}
 .shopping-continuous-fields{gap:6px!important;margin:2px 0 8px 32px!important}
