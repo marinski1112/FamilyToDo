@@ -133,6 +133,7 @@ export const activeRegressionGroups=[
       ['calendar-shared-stamp-catalog-api','node scripts/calendar-shared-stamp-catalog-api-contract.mjs'],
       ['calendar-stamp-picker-cache','node scripts/calendar-stamp-picker-cache-contract.mjs'],
       ['calendar-mobile-ui-error-privacy','node scripts/calendar-mobile-ui-error-privacy-contract.mjs'],
+      ['calendar-mobile-detail-activation','node scripts/calendar-mobile-detail-activation-contract.mjs'],
     ],
   },
   {

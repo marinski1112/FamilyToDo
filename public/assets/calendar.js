@@ -5,7 +5,7 @@ try {
   let detail=payload.detail||{};
   let currentMonth=payload.month||'',currentPrev=payload.prev||'',currentNext=payload.next||'',currentView=payload.view||'all',calendarBusy=false;
   document.documentElement.dataset.calendarJs='ready';
-  const compactUiScript=document.createElement('script');compactUiScript.src='/assets/calendar-mobile-ui.js?v=wave128-fix14';compactUiScript.defer=true;document.head.append(compactUiScript);
+  const compactUiScript=document.createElement('script');compactUiScript.src='/assets/calendar-mobile-ui.js?v=wave128-fix15';compactUiScript.defer=true;document.head.append(compactUiScript);
   const monthLabel=document.getElementById('monthLabel'),prevMonth=document.getElementById('prevMonth'),nextMonth=document.getElementById('nextMonth');
   const calendarFab=document.getElementById('calendarFab');
   if(calendarFab)calendarFab.href='/task/new.php?type=event&date='+(payload.today||'')+'&return=calendar';
