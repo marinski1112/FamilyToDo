@@ -17,7 +17,7 @@ for(const marker of [
   'class="chat-photo"',
   'data-photo-share="1"',
   '/assets/messages-chat-diagnostics.js',
-  '/assets/messages-chat.js?v=${APP_VERSION}-chat11',
+  '/assets/messages-chat.js?v=${APP_VERSION}-chat12',
   "${back}${messages||",
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
