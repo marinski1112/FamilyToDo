@@ -21,7 +21,7 @@ assert.ok(!page.includes('required.some(id=>!shared.has(id))')&&page.includes('f
 assert.ok(page.includes('familyDailyJournalPage(request,ctx)'),'AI page must layer on the existing deterministic/privacy-filtered journal');
 assert.ok(page.includes('✨ AI日誌'),'journal detail must visibly distinguish AI narrative from deterministic evidence');
 assert.ok(routes.includes('familyDailyJournalPageWithAi'),'Family Journal route must use the privacy-gated AI page');
-assert.ok(index.includes('await repairRecentFamilyDailyJournals(env)')&&index.includes('.then(()=>generateFamilyDailyJournalAi(env))'),'AI generation follows deterministic journal creation and repair');
+assert.ok(index.includes('await repairRecentFamilyDailyJournals(observed)')&&index.includes('.then(()=>generateFamilyDailyJournalAi(observed))'),'AI generation follows deterministic journal creation and repair');
 assert.ok(!ai.includes('latitude')&&!ai.includes('longitude'),'journal AI must not introduce raw-coordinate fields');
 
 console.log('Family daily journal AI contract OK');
