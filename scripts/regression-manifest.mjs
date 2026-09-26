@@ -153,6 +153,7 @@ export const activeRegressionGroups=[
       ['feature-contracts','node scripts/feature-contract-bundle.mjs ui-product'],
       ['messages-action-error-display-privacy','node scripts/messages-action-error-display-privacy-contract.mjs'],
       ['message-reactions','node scripts/message-reactions-contract.mjs'],
+      ['family-log-media-global-drain','node scripts/family-log-media-global-drain-contract.mjs'],
       ['message-stamp-sharing','node scripts/message-stamp-sharing-contract.mjs'],
       ['task-shopping-error-display-privacy','node scripts/task-shopping-error-display-privacy-contract.mjs'],
       ['shopping-edit-url-disclosure','node scripts/shopping-edit-url-disclosure-contract.mjs'],
