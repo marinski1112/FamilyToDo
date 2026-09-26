@@ -28,10 +28,14 @@ import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchC
 import { cleanupCompletedGoods } from './checklist-completion';
 import { scheduledDispatchPlanAt } from './scheduled-dispatch';
 import {trackScheduledD1Reads,cleanupScheduledD1ReadDiagnostics} from './d1-read-diagnostics';
+import {HTTP_READ_SAMPLE_RATE,httpReadRouteGroup,trackHttpD1Reads,cleanupHttpD1ReadDiagnostics} from './d1-http-read-diagnostics';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url=new URL(request.url);
+    const diagnostic=Math.random()<1/HTTP_READ_SAMPLE_RATE
+      ?trackHttpD1Reads(env,httpReadRouteGroup(url.pathname,request.method)):null;
+    if(diagnostic)env=diagnostic.env;
     try{
       if(url.pathname==='/api/photo-transfer/redeem')return redeemPhotoTransfer(request,env);
       if(url.pathname==='/api/photo-transfer/consume')return consumePhotoTransferRequest(request,env);
@@ -59,6 +63,8 @@ export default {
       }
       if(url.pathname.startsWith('/api/calendar-import/')) return json({ok:false,error:'カレンダーの確認処理に失敗しました。',code:'CALENDAR_IMPORT_INTERNAL_ERROR',request_id:requestId},500);
       return json({ok:false,error:'内部エラーです。',code:'INTERNAL_ERROR',path:url.pathname,request_id:requestId},500);
+    }finally{
+      if(diagnostic)ctx.waitUntil(diagnostic.flush());
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
@@ -99,6 +105,7 @@ export default {
     if(plan.dailyNotificationAudit){
       run('notification_audit',auditNotificationLifecycle);
       ctx.waitUntil(cleanupScheduledD1ReadDiagnostics(env.DB));
+      ctx.waitUntil(cleanupHttpD1ReadDiagnostics(env.DB));
     }
     if(plan.calendarWatchRenewal) run('calendar_watch_renewal',renewCalendarWatches);
   }

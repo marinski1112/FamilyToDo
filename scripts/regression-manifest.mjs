@@ -94,6 +94,7 @@ export const activeRegressionGroups=[
       ['notification-lifecycle-modularity','node scripts/notification-lifecycle-modularity-contract.mjs'],
       ['notification-delivery-modularity','node scripts/notification-delivery-modularity-contract.mjs'],
       ['d1-rows-read-hotpath','node --test scripts/d1-rows-read-hotpath.test.mjs'],
+      ['d1-http-read-diagnostics','node --test scripts/d1-http-read-diagnostics.test.mjs'],
       ['line-daily-digest-modularity','node scripts/line-daily-digest-modularity-contract.mjs'],
       ['journal-location-narrative','node scripts/journal-location-narrative-contract.mjs'],
       ['journal-archive-overflow','node scripts/journal-archive-overflow-contract.mjs'],
