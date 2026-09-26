@@ -37,8 +37,8 @@ export default {
       ?trackHttpD1Reads(env,httpReadRouteGroup(url.pathname,request.method)):null;
     if(diagnostic)env=diagnostic.env;
     try{
-      if(url.pathname==='/api/photo-transfer/redeem')return redeemPhotoTransfer(request,env);
-      if(url.pathname==='/api/photo-transfer/consume')return consumePhotoTransferRequest(request,env);
+      if(url.pathname==='/api/photo-transfer/redeem')return await redeemPhotoTransfer(request,env);
+      if(url.pathname==='/api/photo-transfer/consume')return await consumePhotoTransferRequest(request,env);
       const publicResponse=await dispatchPublicRoute(request,env,ctx,url);
       if(publicResponse) return publicResponse;
       const earlyAuthenticatedResponse=await dispatchEarlyAuthenticatedRoute(request,env,ctx,url);
