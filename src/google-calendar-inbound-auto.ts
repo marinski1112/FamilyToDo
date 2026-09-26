@@ -30,6 +30,8 @@ const LEASE_SECONDS=120;
 const INITIAL_OVERLAP_MS=10*60*1000;
 
 class AutoSyncError extends Error{constructor(public code:string,public status=500){super(code);}}
+class LeaseLost extends Error{}
+const owned=(result:{meta?:{changes?:number}})=>{if(Number(result.meta?.changes||0)!==1)throw new LeaseLost();};
 
 const scopeReady=(value:unknown)=>{
   const granted=new Set(String(value||'').split(/\s+/).map(v=>v.trim()).filter(Boolean));
@@ -198,7 +200,7 @@ async function ensureState(env:Env,target:EligibleCalendar){
 
 async function acquireState(env:Env,familyId:number){
   const leaseToken=crypto.randomUUID(),nowEpoch=Math.floor(Date.now()/1000),expires=nowEpoch+LEASE_SECONDS;
-  const result=await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET lease_token=?,lease_expires_at=?,updated_at=? WHERE family_id=? AND (lease_expires_at IS NULL OR lease_expires_at<?)')
+  const result=await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET lease_token=?,lease_expires_at=?,updated_at=? WHERE family_id=? AND (lease_expires_at IS NULL OR lease_expires_at<=?)')
     .bind(leaseToken,expires,utcNow(),familyId,nowEpoch).run();
   if(Number(result.meta?.changes||0)!==1)return null;
   const row=await env.DB.prepare('SELECT phase,sync_token,page_token,bootstrap_since,last_synced_at,lease_token FROM google_calendar_inbound_sync_state WHERE family_id=? AND lease_token=? LIMIT 1').bind(familyId,leaseToken).first<Row>();
@@ -207,11 +209,20 @@ async function acquireState(env:Env,familyId:number){
 }
 
 async function releaseState(env:Env,familyId:number,leaseToken:string){
-  await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET lease_token=NULL,lease_expires_at=NULL,updated_at=? WHERE family_id=? AND lease_token=?').bind(utcNow(),familyId,leaseToken).run().catch(()=>{});
+  try{owned(await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET lease_token=NULL,lease_expires_at=NULL,updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?').bind(utcNow(),familyId,leaseToken,Math.floor(Date.now()/1000)).run());}
+  catch{/* A previous owner must not alter or report an error against the new owner. */}
 }
 
 async function recordError(env:Env,familyId:number,leaseToken:string,code:string){
-  await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET last_error=?,updated_at=? WHERE family_id=? AND lease_token=?').bind(code.slice(0,80),utcNow(),familyId,leaseToken).run().catch(()=>{});
+  try{owned(await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET last_error=?,updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?').bind(code.slice(0,80),utcNow(),familyId,leaseToken,Math.floor(Date.now()/1000)).run());}
+  catch{/* A previous owner must not alter or report an error against the new owner. */}
+}
+
+async function renewState(env:Env,familyId:number,leaseToken:string){
+  const now=Math.floor(Date.now()/1000);
+  const result=await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET lease_expires_at=?,updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?')
+    .bind(now+LEASE_SECONDS,utcNow(),familyId,leaseToken,now).run();
+  owned(result);
 }
 
 async function fetchEventPage(access:string,calendarId:string,state:SyncState){
@@ -235,9 +246,12 @@ function identityConflict(error:unknown){
   return text.includes('unique')&&text.includes('google_calendar_inbound_links');
 }
 
-async function insertCandidates(env:Env,target:EligibleCalendar,events:NormalizedEvent[]){
+async function insertCandidates(env:Env,target:EligibleCalendar,state:SyncState,events:NormalizedEvent[]){
   if(!events.length)return true;
-  const taskNow=familyNow(target.familyZone),identityNow=utcNow(),statements:D1PreparedStatement[]=[];
+  const taskNow=familyNow(target.familyZone),identityNow=utcNow(),statements:D1PreparedStatement[]=[
+    env.DB.prepare('INSERT INTO google_calendar_inbound_lease_fence(family_id,lease_token,checked_at) VALUES(?,?,?) ON CONFLICT(family_id) DO UPDATE SET lease_token=excluded.lease_token,checked_at=excluded.checked_at')
+      .bind(target.familyId,state.leaseToken,identityNow),
+  ];
   for(const event of events){
     statements.push(
       env.DB.prepare("INSERT INTO tasks(family_id,title,description,due_at,status,completion_mode,created_by,created_at,updated_at,start_at,end_at,location,all_day,calendar_visible,calendar_color,task_kind,sort_order,visibility_scope,private_owner_id) VALUES(?,?,?,NULL,'pending','ANY',?,?,?,?,?,?,?,1,?,'EVENT',0,'FAMILY',NULL)")
@@ -246,31 +260,35 @@ async function insertCandidates(env:Env,target:EligibleCalendar,events:Normalize
         .bind(target.familyId,target.accountId,target.calendarId,event.eventId,event.iCalUID||null,event.etag||null,identityNow,identityNow),
     );
   }
-  try{await env.DB.batch(statements);}catch(error){if(identityConflict(error))return false;throw error;}
-  await env.DB.prepare("INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,'GOOGLE_CALENDAR_INBOUND_AUTO_IMPORT','google_calendar',NULL,?,?)")
-    .bind(target.familyId,target.memberId,JSON.stringify({created_count:events.length,provider:PROVIDER}),identityNow).run().catch(()=>{});
+  statements.push(env.DB.prepare("INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,'GOOGLE_CALENDAR_INBOUND_AUTO_IMPORT','google_calendar',NULL,?,?)")
+    .bind(target.familyId,target.memberId,JSON.stringify({created_count:events.length,provider:PROVIDER}),identityNow));
+  try{await env.DB.batch(statements);}catch(error){
+    if(String(error).includes('INBOUND_LEASE_LOST'))throw new LeaseLost();
+    if(identityConflict(error))return false;
+    throw error;
+  }
   return true;
 }
 
 async function advanceState(env:Env,target:EligibleCalendar,state:SyncState,data:Record<string,unknown>){
   const nextPage=String(data.nextPageToken||''),nextSync=String(data.nextSyncToken||''),timestamp=utcNow();
   if(nextPage){
-    await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET page_token=?,last_error=NULL,updated_at=? WHERE family_id=? AND lease_token=?')
-      .bind(nextPage,timestamp,target.familyId,state.leaseToken).run();
+    owned(await env.DB.prepare('UPDATE google_calendar_inbound_sync_state SET page_token=?,last_error=NULL,updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?')
+      .bind(nextPage,timestamp,target.familyId,state.leaseToken,Math.floor(Date.now()/1000)).run());
     state.pageToken=nextPage;
     return true;
   }
   if(!nextSync)throw new AutoSyncError('SYNC_TOKEN_MISSING',502);
-  await env.DB.prepare("UPDATE google_calendar_inbound_sync_state SET phase='ACTIVE',sync_token=?,page_token=NULL,bootstrap_since='',last_synced_at=?,last_error=NULL,updated_at=? WHERE family_id=? AND lease_token=?")
-    .bind(nextSync,timestamp,timestamp,target.familyId,state.leaseToken).run();
+  owned(await env.DB.prepare("UPDATE google_calendar_inbound_sync_state SET phase='ACTIVE',sync_token=?,page_token=NULL,bootstrap_since='',last_synced_at=?,last_error=NULL,updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?")
+    .bind(nextSync,timestamp,timestamp,target.familyId,state.leaseToken,Math.floor(Date.now()/1000)).run());
   state.phase='ACTIVE';state.syncToken=nextSync;state.pageToken='';state.bootstrapSince='';state.lastSyncedAt=timestamp;
   return false;
 }
 
 async function resetExpiredToken(env:Env,target:EligibleCalendar,state:SyncState){
   const recoverySince=state.lastSyncedAt||utcNow(new Date(Date.now()-INITIAL_OVERLAP_MS));
-  await env.DB.prepare("UPDATE google_calendar_inbound_sync_state SET phase='BOOTSTRAP',sync_token=NULL,page_token=NULL,bootstrap_since=?,last_error='SYNC_TOKEN_EXPIRED',updated_at=? WHERE family_id=? AND lease_token=?")
-    .bind(recoverySince,utcNow(),target.familyId,state.leaseToken).run();
+  owned(await env.DB.prepare("UPDATE google_calendar_inbound_sync_state SET phase='BOOTSTRAP',sync_token=NULL,page_token=NULL,bootstrap_since=?,last_error='SYNC_TOKEN_EXPIRED',updated_at=? WHERE family_id=? AND lease_token=? AND lease_expires_at>?")
+    .bind(recoverySince,utcNow(),target.familyId,state.leaseToken,Math.floor(Date.now()/1000)).run());
 }
 
 async function syncCalendar(env:Env,target:EligibleCalendar){
@@ -280,24 +298,29 @@ async function syncCalendar(env:Env,target:EligibleCalendar){
   try{
     const access=await inboundAccessToken(env,target.familyId);
     for(let page=0;page<PAGE_MAX_PER_RUN;page++){
+      await renewState(env,target.familyId,state.leaseToken);
       if(state.phase==='ACTIVE'&&!state.syncToken)throw new AutoSyncError('SYNC_TOKEN_MISSING',502);
       const result=await fetchEventPage(access,target.calendarId,state);
+      await renewState(env,target.familyId,state.leaseToken);
       if(result.expired){await resetExpiredToken(env,target,state);return;}
       const data=result.data||{};
       const items=Array.isArray(data.items)?data.items as GoogleCalendarEvent[]:[];
       const candidates=await newCandidates(env,target.familyId,target.calendarId,target.familyZone,items,state.phase==='BOOTSTRAP'?state.bootstrapSince:'');
       const selected=candidates.slice(0,AUTO_CREATE_MAX);
       if(selected.length){
-        const inserted=await insertCandidates(env,target,selected);
+        await renewState(env,target.familyId,state.leaseToken);
+        const inserted=await insertCandidates(env,target,state,selected);
         if(!inserted)return;
       }
       // Do not advance the Google page while unprocessed NEW_CANDIDATE rows remain. The next run
       // re-reads the same page; newly linked rows become ALREADY_IMPORTED, making batching idempotent.
       if(candidates.length>AUTO_CREATE_MAX)return;
+      await renewState(env,target.familyId,state.leaseToken);
       const more=await advanceState(env,target,state,data);
       if(!more)return;
     }
   }catch(error){
+    if(error instanceof LeaseLost)return;
     const code=error instanceof AutoSyncError?error.code:'AUTO_SYNC_FAILED';
     await recordError(env,target.familyId,state.leaseToken,code);
   }finally{
