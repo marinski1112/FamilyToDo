@@ -53,7 +53,7 @@ test('global cleanup query is indexed, bounded and skips active writers',async()
 });
 const workerSource=readFileSync('src/index.ts','utf8');
 assert.ok(workerSource.includes("import {drainDeletedMessagePhotosGlobal} from './message-photo-service';"),'scheduled worker must import global message photo cleanup');
-assert.ok(workerSource.includes('ctx.waitUntil(drainDeletedMessagePhotosGlobal(env.DB,env.MEDIA));'),'hourly cleanup must schedule bounded global message photo cleanup');
+assert.ok(workerSource.includes(`run('message_photo_cleanup',observed=>drainDeletedMessagePhotosGlobal(observed.DB,observed.MEDIA));`),'hourly cleanup must schedule bounded global message photo cleanup');
 
 test('checks image size and signature before object writes',async()=>{const f=fixture();try{await assert.rejects(createMessagePhoto(f.db,f.bucket,{...f.input,bytes:new ArrayBuffer(4194305)}),/PHOTO_TOO_LARGE/);await assert.rejects(createMessagePhoto(f.db,f.bucket,{...f.input,bytes:new ArrayBuffer(10)}),/INVALID_IMAGE/);assert.equal(f.objects.size,0);}finally{f.sql.close();}});
 test('parallel identical upload creates one destination',async()=>{const f=fixture();try{const ids=await Promise.all([createMessagePhoto(f.db,f.bucket,f.input),createMessagePhoto(f.db,f.bucket,f.input)]);assert.equal(ids[0],ids[1]);assert.equal(f.sql.prepare('SELECT count(*) n FROM messages').get().n,1);}finally{f.sql.close();}});
