@@ -17,7 +17,7 @@ for(const marker of [
   'class="chat-photo"',
   'data-photo-share="1"',
   '/assets/messages-chat-diagnostics.js',
-  '/assets/messages-chat.js?v=${APP_VERSION}-chat9',
+  '/assets/messages-chat.js?v=${APP_VERSION}-chat10',
   "${back}${messages||",
 ]) if(!page.includes(marker)) throw new Error(`messages chat bounded-read contract lost: ${marker}`);
 if(page.indexOf('/assets/messages-chat-diagnostics.js')>page.indexOf('/assets/messages-chat.js'))throw new Error('message diagnostics must load before the chat runtime');
@@ -26,6 +26,8 @@ if(/SELECT[\s\S]{0,300}FROM tasks/i.test(page)) throw new Error('messages chat m
 if(/MEDIA\.(put|get|delete)/.test(page)) throw new Error('message page must not access R2 directly');
 const client=fs.readFileSync('public/assets/messages-chat.js','utf8');
 for(const marker of ["post('/api/task-rough-input'","primaryType:'shopping'","draft?.requiresConfirmation!==true","message_updated_at:String(row.dataset.updatedAt||'')","message_original_text:text","item.dueDate","item.dueTime","AIでタスクに追加","diag?.mark('OUTSIDE_TAP')","'CYCLE_2_DONE'","diag?.mark('THUMBNAIL_RESTORED')","await syncMessages(true)","new URL('/api/message-chat-sync',location.origin)","setInterval(()=>{if(!document.hidden)syncMessages(false);},2500)","'IntersectionObserver'in window","stampObserver.unobserve(entry.target)","className='chat-photo-overlay'","className='chat-photo-large'","window.addEventListener('familytodo:message-created'","img.className='chat-photo'","img.dataset.photoShare='1'"]) if(!client.includes(marker)) throw new Error(`messages chat realtime/lazy/media contract lost: ${marker}`);
+for(const marker of ["const READ_RETRY_LIMIT=5,READ_RETRY_BASE_MS=2500,READ_RETRY_MAX_MS=30000;","readRetryCount+=1;if(readRetryCount>=READ_RETRY_LIMIT)return;","Math.min(READ_RETRY_MAX_MS,READ_RETRY_BASE_MS*(2**(readRetryCount-1)))","window.addEventListener('online',resumeReadFlush)","if(!document.hidden)resumeReadFlush()","ids.forEach(id=>pendingReads.add(id))"]) if(!client.includes(marker)) throw new Error('message read retry budget contract lost: '+marker);
+if(/catch\{ids\.forEach\(id=>pendingReads\.add\(id\)\);\}if\(pendingReads\.size\)readTimer=setTimeout\(flushReads,2500\)/.test(client))throw new Error('message read failures must not retry forever every 2.5 seconds');
 if(client.includes("location.href='/app/messages.php'"))throw new Error('message send must not reload the whole chat page');
 if(client.includes('preloadFirstFrame')||client.includes('firstFramePreloads'))throw new Error('message stamp runtime must not eagerly preload animation frames');
 if(client.includes("action:'convert_shopping',id:Number(row.dataset.messageId),name:String(row.dataset.text||'')")) throw new Error('shopping conversion must not bypass the rough-input draft');
