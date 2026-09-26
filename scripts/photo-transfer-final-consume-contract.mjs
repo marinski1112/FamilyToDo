@@ -44,8 +44,8 @@ const recoveryEncodePos=api.indexOf('return encodeTransferPhoto(photo,consumed.s
 assert.ok(recoveryInspectPos>=0&&recoveryInspectPos<recoveryResolvePos&&recoveryResolvePos<recoveryConsumePos&&recoveryConsumePos<recoverySamePos&&recoverySamePos<recoveryEncodePos,'recovery flow must revalidate the exact current source snapshot before atomically burning recovery and returning that snapshot');
 assert.ok(api.includes("return reply({ok:true,mime:photo.mime,base64:btoa(binary),caption:photo.caption,capturedAt:photo.capturedAt,...(sourceSha256?{sourceSha256}:{})});"),'final/recovery response must expose the verified immutable source SHA for downstream idempotency');
 
-const redeemRoute=index.indexOf("if(url.pathname==='/api/photo-transfer/redeem')return redeemPhotoTransfer(request,env);");
-const consumeRoute=index.indexOf("if(url.pathname==='/api/photo-transfer/consume')return consumePhotoTransferRequest(request,env);");
+const redeemRoute=index.indexOf("if(url.pathname==='/api/photo-transfer/redeem')return await redeemPhotoTransfer(request,env);");
+const consumeRoute=index.indexOf("if(url.pathname==='/api/photo-transfer/consume')return await consumePhotoTransferRequest(request,env);");
 const context=index.indexOf('const context=await makeContext(request,env,ctx);');
 assert.ok(redeemRoute>=0&&consumeRoute>redeemRoute&&consumeRoute<context,'redeem/consume capability routes must remain isolated before ordinary FamilyToDo session context creation');
 assert.ok(!api.includes("role==='admin'")&&!api.includes('role === \'admin\''),'photo transfer capability redemption must not become admin-only');
