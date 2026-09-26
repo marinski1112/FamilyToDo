@@ -41,10 +41,11 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
     return reply({ok:true,counts:counts.results});
   }
   if(request.method!=='GET')return reply({ok:false,error:'GET or POST only'},405);
-  const url=new URL(request.url),after=Number(url.searchParams.get('after')||0),before=Number(url.searchParams.get('before')||0),releasedAfter=String(url.searchParams.get('released_after')||'');
+  const url=new URL(request.url),after=Number(url.searchParams.get('after')||0),before=Number(url.searchParams.get('before')||0),releasedAfter=String(url.searchParams.get('released_after')||''),releasedAfterId=Number(url.searchParams.get('released_after_id')||0);
   if(!Number.isSafeInteger(after)||after<0)return reply({ok:false,error:'INVALID_CURSOR'},400);
   if(!Number.isSafeInteger(before)||before<0)return reply({ok:false,error:'INVALID_CURSOR'},400);
   if(releasedAfter&&!validJst(releasedAfter))return reply({ok:false,error:'INVALID_CURSOR'},400);
+  if(!Number.isSafeInteger(releasedAfterId)||releasedAfterId<0||(!releasedAfter&&releasedAfterId!==0))return reply({ok:false,error:'INVALID_CURSOR'},400);
   const now=nowJst();
   const projection=`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name,s.line_picture_url,
     EXISTS(SELECT 1 FROM message_stamp_attachments a JOIN calendar_stamp_assets asset ON asset.id=a.asset_id AND asset.family_id=a.family_id AND asset.active=1 WHERE a.family_id=msg.family_id AND a.message_id=msg.id) has_stamp,
@@ -62,20 +63,35 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
     WHERE msg.family_id=? AND msg.id>? AND (msg.target_member_id IS NULL OR msg.target_member_id IN (?,msg.sender_id)) AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?)
     ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}`)
     .bind(m.family_id,after,m.id,now,m.id);
-  const releasedStatement=releasedAfter&&releasedAfter<now
+  const releasedStatement=releasedAfter&&(releasedAfter<now||(releasedAfter===now&&releasedAfterId>0))
     ?ctx.env.DB.prepare(`${projection}
       FROM messages msg JOIN members s ON s.id=msg.sender_id AND s.family_id=msg.family_id
       WHERE msg.family_id=? AND msg.sender_id<>? AND msg.reminder_at IS NOT NULL
-        AND (msg.target_member_id IS NULL OR msg.target_member_id=?) AND msg.reminder_at>? AND msg.reminder_at<=?
-      ORDER BY msg.id ASC LIMIT ${PAGE_SIZE}`)
-      .bind(m.family_id,m.id,m.id,releasedAfter,now)
+        AND (msg.target_member_id IS NULL OR msg.target_member_id=?)
+        AND (msg.reminder_at>? OR (msg.reminder_at=? AND msg.id>?)) AND msg.reminder_at<=?
+      ORDER BY msg.reminder_at ASC,msg.id ASC LIMIT ${PAGE_SIZE}`)
+      .bind(m.family_id,m.id,m.id,releasedAfter,releasedAfter,releasedAfterId,now)
     :null;
   const statements=[newStatement];
   if(releasedStatement)statements.push(releasedStatement);
   const results=await ctx.env.DB.batch(statements);
+  const newRows=(results[0]?.results||[]) as SyncRow[];
+  const releasedRows=releasedStatement?((results[1]?.results||[]) as SyncRow[]):[];
   const byId=new Map<number,SyncRow>();
-  for(const row of results.flatMap(result=>result.results))byId.set(Number(row.id),row as SyncRow);
-  const rows=[...byId.values()].sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,PAGE_SIZE);
+  for(const row of [...newRows,...releasedRows])byId.set(Number(row.id),row);
+  const rows=[...byId.values()].sort((a,b)=>Number(a.id)-Number(b.id));
+  const nextAfter=newRows.length?Number(newRows[newRows.length-1].id):after;
+  let nextReleasedAfter=releasedAfter||now,nextReleasedAfterId=releasedAfter?releasedAfterId:0;
+  if(releasedStatement){
+    if(releasedRows.length>=PAGE_SIZE){
+      const last=releasedRows[releasedRows.length-1];
+      nextReleasedAfter=String(last.reminder_at||releasedAfter);
+      nextReleasedAfterId=Number(last.id)||releasedAfterId;
+    }else{
+      nextReleasedAfter=now;
+      nextReleasedAfterId=0;
+    }
+  }
   const readIds=String(url.searchParams.get('read_ids')||'').split(',').map(Number).filter(id=>Number.isSafeInteger(id)&&id>0).slice(0,40);
   const counts=readIds.length?await ctx.env.DB.prepare(`SELECT r.message_id id,COUNT(*) count FROM message_reads r
     JOIN members reader ON reader.id=r.member_id AND reader.family_id=r.family_id AND reader.active=1 AND reader.deleted_at IS NULL
@@ -84,6 +100,9 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
   return reply({
     ok:true,
     serverNow:now,
+    nextAfter,
+    releasedAfter:nextReleasedAfter,
+    releasedAfterId:nextReleasedAfterId,
     messages:rows.map(mapRow),
     counts:counts?.results||[],
   });
