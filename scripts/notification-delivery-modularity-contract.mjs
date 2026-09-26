@@ -6,7 +6,7 @@ const leaseMigration=fs.readFileSync('migrations/0091_notification_delivery_leas
 
 if(!index.includes("import { processNotifications } from './notification-delivery';")) throw new Error('index must import notification delivery orchestration');
 if(index.includes('async function processNotifications(')) throw new Error('notification delivery implementation must not remain in index');
-if(!index.includes('ctx.waitUntil(processNotifications(env));')) throw new Error('scheduled notification delivery wiring changed');
+if(!index.includes(`run('notifications',processNotifications);`)) throw new Error('scheduled notification delivery wiring changed');
 if(delivery.includes('cleanupNotificationLifecycle')||delivery.includes('auditNotificationLifecycle')) throw new Error('five-minute delivery path must not run lifecycle maintenance/audit');
 for(const marker of [
   'export async function processNotifications(env: Env): Promise<void> {',

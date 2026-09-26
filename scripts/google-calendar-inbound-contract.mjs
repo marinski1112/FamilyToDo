@@ -46,9 +46,9 @@ assert.ok(oneWay.includes("inbound_stage: 'AUTHORIZATION'"),'legacy manual sync 
 assert.ok(oneWay.includes("inbound_reason: 'APP_CREATED_SCOPE_ONLY'"),'legacy outbound adapter must continue to describe its own app-created-only scope');
 assert.ok(oneWay.includes('inbound_more: false'),'existing outbound adapter must preserve inbound_more compatibility as false');
 assert.ok(oneWay.includes("UPDATE external_calendar_watch_channels SET last_notification_at=?"),'watch notification health timestamp must remain present');
-assert.ok(index.includes('processCalendarOutbox(env)'),'scheduled outbound Calendar projection must remain present');
-assert.ok(index.includes('processGoogleCalendarInboundAuto(env)'),'five-minute inbound recovery must remain present');
-assert.ok(index.includes('renewCalendarWatches(env)'),'calendar watch renewal must remain present');
+assert.ok(index.includes(`run('calendar_outbox',processCalendarOutbox)`),'scheduled outbound Calendar projection must remain present');
+assert.ok(index.includes(`run('calendar_inbound',processGoogleCalendarInboundAuto)`),'five-minute inbound recovery must remain present');
+assert.ok(index.includes(`run('calendar_watch_renewal',renewCalendarWatches)`),'calendar watch renewal must remain present');
 for(const marker of ['google_calendar_inbound_sync_state','sync_token','page_token','bootstrap_since'])assert.ok(inboundAutoMigration.includes(marker),`automatic inbound state missing: ${marker}`);
 for(const marker of ["a.provider=? AND a.status='ACTIVE'","String(event.status||'')==='cancelled'","==='NEW_CANDIDATE'",'env.DB.batch(statements)','INSERT INTO google_calendar_inbound_links'])assert.ok(inboundAuto.includes(marker),`automatic inbound guard missing: ${marker}`);
 for(const forbidden of ['UPDATE tasks SET','DELETE FROM tasks'])assert.ok(!inboundAuto.includes(forbidden),`automatic inbound must not overwrite/delete local task data: ${forbidden}`);

@@ -39,7 +39,7 @@ test('five-minute notification path is bounded and does not run lifecycle mainte
   const fiveBody=index.slice(fiveStart,hourlyStart);
   assert.equal(fiveBody.includes('cleanupNotificationLifecycle'),false);
   assert.equal(fiveBody.includes('auditNotificationLifecycle'),false);
-  assert.match(fiveBody,/processNotifications\(env\)/);
+  assert.match(fiveBody,/run\('notifications',processNotifications\)/);
   assert.match(schedule,/fiveMinuteCore: minute % 5 === 0/);
 });
 
@@ -59,8 +59,8 @@ test('cleanup and full integrity audit run at low frequency',()=>{
   assert.match(wrangler,/"\* \* \* \* \*"/);
   assert.match(schedule,/hourlyCleanup: minute === 17/);
   assert.match(schedule,/dailyNotificationAudit: hour === 18 && minute === 29/);
-  assert.match(index,/if\(plan\.hourlyCleanup\)[\s\S]*cleanupNotificationLifecycle\(env\)/);
-  assert.match(index,/if\(plan\.dailyNotificationAudit\)[\s\S]*auditNotificationLifecycle\(env\)/);
+  assert.match(index,/if\(plan\.hourlyCleanup\)[\s\S]*run\('notification_lifecycle',cleanupNotificationLifecycle\)/);
+  assert.match(index,/if\(plan\.dailyNotificationAudit\)[\s\S]*run\('notification_audit',auditNotificationLifecycle\)/);
 });
 
 test('recurrence completion read is bounded to projected rules and dates',()=>{

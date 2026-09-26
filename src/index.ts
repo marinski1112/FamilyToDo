@@ -26,6 +26,7 @@ import { dispatchPublicRoute } from './public-routes';
 import { dispatchEarlyAuthenticatedRoute, dispatchContextPreludeRoute, dispatchContextFallbackRoute } from './exception-routes';
 import { cleanupCompletedGoods } from './checklist-completion';
 import { scheduledDispatchPlanAt } from './scheduled-dispatch';
+import {trackScheduledD1Reads,cleanupScheduledD1ReadDiagnostics} from './d1-read-diagnostics';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -62,34 +63,41 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext){
     const plan=scheduledDispatchPlanAt(controller.scheduledTime);
     console.log(`[Family TODO LINE] scheduled ${controller.cron} at ${new Date(controller.scheduledTime).toISOString()}`);
+    const run=(job:string,work:(observed:Env)=>Promise<unknown>)=>{
+      const tracked=trackScheduledD1Reads(env,job);
+      ctx.waitUntil(Promise.resolve().then(()=>work(tracked.env)).finally(()=>tracked.flush()));
+    };
 
-    if(plan.googleTasksInbound) ctx.waitUntil(processGoogleTasksInbound(env));
+    if(plan.googleTasksInbound) run('google_tasks_inbound',processGoogleTasksInbound);
 
     if(plan.fiveMinuteCore){
-      ctx.waitUntil(cleanupCompletedGoods(env.DB,controller.scheduledTime));
-      ctx.waitUntil(processNotifications(env));
-      ctx.waitUntil(processLineDailyDigests(env));
-      ctx.waitUntil(processLinePeriodicDigests(env));
-      ctx.waitUntil(processCalendarOutbox(env));
-      ctx.waitUntil(processGoogleCalendarInboundAuto(env));
-      ctx.waitUntil(processChildJournalCalendarOutbox(env));
+      run('completed_goods',observed=>cleanupCompletedGoods(observed.DB,controller.scheduledTime));
+      run('notifications',processNotifications);
+      run('line_daily_digest',processLineDailyDigests);
+      run('line_periodic_digest',processLinePeriodicDigests);
+      run('calendar_outbox',processCalendarOutbox);
+      run('calendar_inbound',processGoogleCalendarInboundAuto);
+      run('child_journal_outbox',processChildJournalCalendarOutbox);
     }
 
     if(plan.hourlyCleanup){
-      ctx.waitUntil(cleanupExpiredPhotoTransfers(env.DB));
-      ctx.waitUntil(drainDeletedMessagePhotosGlobal(env.DB,env.MEDIA));
-      ctx.waitUntil(cleanupNotificationLifecycle(env));
-      ctx.waitUntil(cleanupFamilyLogDiagnostics(env));
-      ctx.waitUntil(cleanupCompletedTaskCreateRequests(env.DB));
-      ctx.waitUntil(cleanupLocationArrivals(env).catch(()=>{}));
-      ctx.waitUntil(archiveLocationHistory(env).then(async archived=>{
-        await generateFamilyDailyJournals(env);
-        for(const group of archived)await repairFamilyDailyJournal(env.DB,group.family_id,group.local_date);
-        await repairRecentFamilyDailyJournals(env);
-      }).then(()=>generateFamilyDailyJournalAi(env)).catch(()=>{}));
+      run('photo_transfer_cleanup',observed=>cleanupExpiredPhotoTransfers(observed.DB));
+      run('message_photo_cleanup',observed=>drainDeletedMessagePhotosGlobal(observed.DB,observed.MEDIA));
+      run('notification_lifecycle',cleanupNotificationLifecycle);
+      run('family_log_diagnostics',cleanupFamilyLogDiagnostics);
+      run('task_claim_cleanup',observed=>cleanupCompletedTaskCreateRequests(observed.DB));
+      run('location_arrivals',observed=>cleanupLocationArrivals(observed).catch(()=>{}));
+      run('location_archive_journal',observed=>archiveLocationHistory(observed).then(async archived=>{
+        await generateFamilyDailyJournals(observed);
+        for(const group of archived)await repairFamilyDailyJournal(observed.DB,group.family_id,group.local_date);
+        await repairRecentFamilyDailyJournals(observed);
+      }).then(()=>generateFamilyDailyJournalAi(observed)).catch(()=>{}));
     }
 
-    if(plan.dailyNotificationAudit) ctx.waitUntil(auditNotificationLifecycle(env));
-    if(plan.calendarWatchRenewal) ctx.waitUntil(renewCalendarWatches(env));
+    if(plan.dailyNotificationAudit){
+      run('notification_audit',auditNotificationLifecycle);
+      ctx.waitUntil(cleanupScheduledD1ReadDiagnostics(env.DB));
+    }
+    if(plan.calendarWatchRenewal) run('calendar_watch_renewal',renewCalendarWatches);
   }
 } satisfies ExportedHandler<Env>;

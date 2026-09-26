@@ -50,7 +50,7 @@ if(journal.includes('childJournalCalendarStatus')||journal.includes('📅 Google
 if(!sync.includes("return String(row.value_text||row.note||'成長メモ');"))throw new Error('Manual journal title stored in value_text must project into the Child Journal event label');
 if(!sync.includes("const description=note&&note!==valueText?note:'';"))throw new Error('Manual journal memo stored in note must project into the Google Calendar description');
 if(!index.includes("import { processChildJournalCalendarOutbox } from './child-journal-calendar';"))throw new Error('Worker must import Child Journal calendar processor');
-if(!index.includes('ctx.waitUntil(processChildJournalCalendarOutbox(env));'))throw new Error('Worker cron must process Child Journal calendar outbox');
+if(!index.includes(`run('child_journal_outbox',processChildJournalCalendarOutbox);`))throw new Error('Worker cron must process Child Journal calendar outbox');
 if(!manifest.includes("['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs']"))throw new Error('Child Journal calendar regression contract must be active');
 
 console.log('child journal google calendar title/memo projection contract ok');

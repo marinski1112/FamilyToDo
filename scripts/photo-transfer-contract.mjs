@@ -26,5 +26,5 @@ test('scheduled cleanup removes expired transfers without requiring a new mint a
 const scheduledIndex=readFileSync('src/index.ts','utf8');
 assert.ok(scheduledIndex.includes("import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';"),'scheduled cleanup must use the canonical photo-transfer service');
 const hourlyPos=scheduledIndex.indexOf('if(plan.hourlyCleanup){');
-const cleanupPos=scheduledIndex.indexOf('ctx.waitUntil(cleanupExpiredPhotoTransfers(env.DB));',hourlyPos);
+const cleanupPos=scheduledIndex.indexOf(`run('photo_transfer_cleanup',observed=>cleanupExpiredPhotoTransfers(observed.DB));`,hourlyPos);
 assert.ok(hourlyPos>=0&&cleanupPos>hourlyPos,'expired photo transfers must be drained by the existing hourly cleanup slot');

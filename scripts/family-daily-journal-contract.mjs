@@ -37,7 +37,7 @@ const checks=[
   [journal.includes("url.searchParams.get('search_year')")&&journal.includes('name="search_year"')&&journal.includes('検索は指定した1年単位'),'journal UI exposes the bounded search year'],
   [journal.includes('placeholder="場所・タスク・家事などで検索"'),'journal search copy matches searchable deterministic evidence'],
   [routes.includes("url.pathname==='/app/family_journal.php'")&&routes.includes('familyDailyJournalPage'),'family journal page is routed'],
-  [index.includes('archiveLocationHistory(env).then(async archived=>')&&index.includes('repairFamilyDailyJournal(env.DB,group.family_id,group.local_date)'),'journal generation and archive-driven repair follow Location projection'],
+  [index.includes('archiveLocationHistory(observed).then(async archived=>')&&index.includes('repairFamilyDailyJournal(observed.DB,group.family_id,group.local_date)'),'journal generation and archive-driven repair follow Location projection'],
   [shell.includes('/assets/family-journal-link.js')&&link.includes('/app/family_journal.php'),'Family Log exposes family journal'],
   [!calendarPage.includes('SELECT journal_date FROM family_daily_journals')&&!calendarPage.includes('journalDates'),'Calendar month view avoids unused journal reads'],
   [calendarJs.includes('/app/tasks.php?date=')&&shell.includes('/assets/family-journal-link.js'),'Calendar dates open Checklist and Family Log retains journal entry'],

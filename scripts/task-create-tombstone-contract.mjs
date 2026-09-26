@@ -77,7 +77,7 @@ UPDATE task_create_requests SET status='DONE',task_id=102,lease_token=NULL,lease
   assert.match(idempotencySource,/function tombstoneClaim[\s\S]*?request_hash\) !== requestHash[\s\S]*?state: 'CONFLICT'/,'tombstone hash mismatch must remain a conflict');
   assert.match(idempotencySource,/function tombstoneClaim[\s\S]*?task_exists[\s\S]*?state: 'REPLAY'[\s\S]*?state: 'GONE'/,'tombstone must distinguish live replay from a deleted target');
   assert.match(idempotencySource,/readCompletedTaskCreate[\s\S]*?FROM task_create_tombstones/,'post-create read must survive operational row cleanup');
-  assert.match(indexSource,/cleanupCompletedTaskCreateRequests\(env\.DB\)/,'hourly cleanup must invoke bounded completed-row pruning');
+  assert.match(indexSource,/run\('task_claim_cleanup',observed=>cleanupCompletedTaskCreateRequests\(observed\.DB\)\)/,'hourly cleanup must invoke bounded completed-row pruning');
 
   const cleanupMatch=idempotencySource.match(/DELETE FROM task_create_requests[\s\S]*?ORDER BY r\.id\s+LIMIT \?\s+\)/);
   assert.ok(cleanupMatch,'bounded completed-row cleanup SQL must remain present');

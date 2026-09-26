@@ -38,14 +38,14 @@ assert.ok(!auto.includes("method:'PATCH'")&&!auto.includes("method:'DELETE'"),'a
 assert.ok(oneWay.includes("import { processGoogleCalendarInboundAuto } from './google-calendar-inbound-auto'"),'verified Calendar watch must wire automatic inbound');
 assert.ok(oneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'verified watch must only wake background auto-sync after channel authentication');
 assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'),'watch route must pass ExecutionContext for non-blocking wake-up');
-assert.ok(index.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env))'),'five-minute fallback must recover missed watch notifications');
+assert.ok(index.includes(`run('calendar_inbound',processGoogleCalendarInboundAuto)`),'five-minute fallback must recover missed watch notifications');
 assert.ok(index.includes('if(plan.fiveMinuteCore)'),'Calendar fallback must remain on the consolidated five-minute dispatch path');
 assert.ok(schedule.includes('fiveMinuteCore: minute % 5 === 0'),'Calendar fallback cadence must remain bounded at five minutes');
 
 // Google Tasks keeps its own independent minute-3 modulo-five cadence; this Calendar change must not replace it.
 assert.ok(index.includes('if(plan.googleTasksInbound)'));
 assert.ok(schedule.includes('googleTasksInbound: minute % 5 === 3'));
-assert.ok(index.includes('processGoogleTasksInbound(env)'));
+assert.ok(index.includes(`run('google_tasks_inbound',processGoogleTasksInbound)`));
 assert.ok(tasks.includes('processGoogleTasksInbound'));
 
 console.log('google-calendar-inbound-auto-sync-contract: verified watch + 5-minute fallback, syncToken pagination, bounded NEW_CANDIDATE creation, loop/delete/recurrence guards, and existing Google Tasks auto-inbound are intact');

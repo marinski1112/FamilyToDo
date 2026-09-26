@@ -72,7 +72,7 @@ try{
  const calendarHtml=await(await calendar(new Request('https://familytodo.test/app/calendar.php'),ctx,'2026-09')).text();assert(calendarHtml.includes('expired-task'));assert(calendarHtml.includes('late-recurring'));assert(calendarHtml.includes('expired-recurring'));assert.equal(db.prepare('SELECT count(*) n FROM recurrence_occurrence_completions').get().n,2);assert(calendarHtml.includes('late-task'),'actual Calendar still renders completed task history');
  assert.equal(db.prepare('SELECT count(*) n FROM items').get().n,1,'undated pending is never purged');assert.equal(db.prepare('SELECT count(*) n FROM shopping_items').get().n,0);
 }finally{globalThis.Date=realDate;db.close();}
-assert(readFileSync('src/index.ts','utf8').includes('cleanupCompletedGoods(env.DB,controller.scheduledTime)'));
+assert(readFileSync('src/index.ts','utf8').includes('cleanupCompletedGoods(observed.DB,controller.scheduledTime)'));
 // Only Item expires with its due date. Shopping remains in the overdue list;
 // freshly completed Item retains the 23:00/00:00 completion grace window.
 {
