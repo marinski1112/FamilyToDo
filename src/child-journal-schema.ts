@@ -11,11 +11,19 @@ const CALENDAR_TABLES = [
 ] as const;
 
 async function existingTables(db: D1Database, names: readonly string[]): Promise<Set<string>> {
-  const placeholders = names.map(() => '?').join(',');
-  const rows = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${placeholders})`)
-    .bind(...names)
-    .all<{name?: string}>();
-  return new Set(rows.results.map(row => String(row.name || '')).filter(Boolean));
+  // sqlite_master has no useful name index in D1: this check ran every five
+  // minutes and scanned the entire schema even when there was no outbox work.
+  // Identifiers come only from the fixed lists above, never from a request.
+  const present=await Promise.all(names.map(async name=>{
+    try{
+      await db.prepare(`SELECT 1 FROM "${name}" LIMIT 1`).all();
+      return name;
+    }catch(error){
+      if(/no such table:/i.test(String(error)))return null;
+      throw error;
+    }
+  }));
+  return new Set(present.filter((name):name is string=>name!==null));
 }
 
 export async function childJournalSchemaStatus(db: D1Database): Promise<ChildJournalSchemaStatus> {
