@@ -122,6 +122,7 @@ export const activeRegressionGroups=[
       ['child-growth-journal','node scripts/child-growth-journal-contract.mjs'],
       ['child-journal-photo','node scripts/child-journal-photo-contract.mjs'],
       ['child-journal-google-calendar','node scripts/child-journal-google-calendar-contract.mjs'],
+      ['child-journal-schema-read','node --test scripts/child-journal-schema-read.test.mjs'],
     ],
   },
   {
