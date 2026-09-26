@@ -236,6 +236,7 @@ try{
   document.addEventListener('touchmove',event=>{if(preview)event.stopPropagation();},{capture:true,passive:true});
   document.addEventListener('touchend',event=>{
     if(!preview&&!scheduleTarget(event.target))return;
+    event.stopPropagation();
     clearPreview();
   },{capture:true,passive:true});
   document.addEventListener('touchcancel',()=>clearPreview(),{capture:true,passive:true});
