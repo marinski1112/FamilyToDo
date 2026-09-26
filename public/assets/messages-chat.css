@@ -12,3 +12,4 @@
 .chat-message.has-stamp .chat-bubble{box-sizing:border-box;width:132px;height:132px;padding:2px;background:transparent;box-shadow:none;display:grid;place-items:center;color:#64748b;font-size:11px}
 .chat-message.has-stamp .chat-stamp{width:128px;height:128px;object-fit:contain}
 .chat-photo{box-sizing:border-box;width:min(56vw,240px);height:min(56vw,240px);max-height:none;object-fit:contain}
+.chat-reactions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:4px 2px;max-width:100%}.chat-reactions button{min-width:32px;min-height:30px;padding:3px 7px;border:1px solid #dbe1e8;border-radius:16px;background:#fff;color:#374151;font-size:13px}.chat-reaction-chip.mine{background:#dcfce7;border-color:#4ade80}.chat-reaction-picker{display:flex;flex-wrap:wrap;gap:4px;width:100%;padding:5px;border-radius:12px;background:#f1f5f9}.chat-reactions button:focus-visible{outline:2px solid #15803d;outline-offset:2px}
