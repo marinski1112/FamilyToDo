@@ -10,6 +10,7 @@ const db=new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE member_location_history(id INTEGER PRIMARY KEY,family_id INTEGER,member_id INTEGER,latitude REAL,longitude REAL,accuracy_meters REAL,recorded_at TEXT);
 CREATE TABLE location_history_archive_days(family_id INTEGER,member_id INTEGER,local_date TEXT,started_at TEXT,ended_at TEXT,raw_point_count INTEGER,route_point_count INTEGER,route_json TEXT,archived_at TEXT,PRIMARY KEY(family_id,member_id,local_date));
 CREATE TABLE location_history_stays(id INTEGER PRIMARY KEY AUTOINCREMENT,family_id INTEGER,member_id INTEGER,local_date TEXT,started_at TEXT,ended_at TEXT,minutes INTEGER,place_label TEXT,anchor_latitude REAL,anchor_longitude REAL,created_at TEXT);`);
+db.exec(fs.readFileSync('migrations/0107_location_archive_scan_cursor.sql','utf8'));
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const archiveDate=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
 const insert=db.prepare('INSERT INTO member_location_history(family_id,member_id,latitude,longitude,accuracy_meters,recorded_at) VALUES(1,1,35,139,5,?)');
