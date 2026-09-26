@@ -304,3 +304,9 @@
 :root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action::after{
   background:#26354a!important;color:#8ec5ff!important;border-color:#40536d!important;
 }
+
+/* Final cascade: the unified-goods edit anchor itself is painted by late dark rules, so keep that 32x32 surface circular too. */
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action,
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action::after{
+  border-radius:50%!important;
+}
