@@ -69,7 +69,7 @@ for(const token of ['external_calendar_watch_channels','token_hash','createCalen
 assert.ok(publicRoutes.includes("'/api/google-calendar/watch'"));
 assert.ok(publicRoutes.includes('calendarWatchNotification(request,env,ctx)'));
 assert.ok(calendarOneWay.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env,familyId))'),'authenticated watch must wake separate inbound auto processing');
-assert.ok(index.includes('ctx.waitUntil(processGoogleCalendarInboundAuto(env))'),'five-minute Calendar inbound fallback must remain wired');
+assert.ok(index.includes(`run('calendar_inbound',processGoogleCalendarInboundAuto)`),'five-minute Calendar inbound fallback must remain wired');
 assert.ok(inboundAuto.includes("a.provider=? AND a.status='ACTIVE'"),'auto inbound must stay scoped to the app-owned Family TODO calendar');
 assert.ok(apiRoutes.includes('calendarSyncOutboundOnly(request,context)'));
 assert.ok(index.includes('if(plan.calendarWatchRenewal)'));
