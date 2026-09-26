@@ -8,6 +8,6 @@ assert.match(source,/Array\.isArray\(optionsCache\)&&now-optionsCacheAt<OPTIONS_
 assert.match(source,/optionsCacheAt=Date\.now\(\);/,'successful refresh must timestamp the cache');
 assert.match(source,/catch\(error\)\{\s*if\(Array\.isArray\(optionsCache\)\)return optionsCache;\s*throw error;/,'stale cache must be used only as a refresh-failure fallback');
 assert.match(source,/button\.dataset\.assetId=String\(assetId\);optionsCache=null;optionsCacheAt=0;return assetId;/,'shared materialization must invalidate both cache data and timestamp');
-assert.doesNotMatch(source,/if\(Array\.isArray\(optionsCache\)\)return optionsCache;/,'unbounded cache short-circuit must not return');
+assert.doesNotMatch(source,/const loadOptions=async\(\)=>\{\s*if\(Array\.isArray\(optionsCache\)\)return optionsCache;/,'loadOptions must not use the old unconditional cache short-circuit');
 
 console.log('calendar stamp picker cache contract: options refresh after bounded TTL with stale fallback only on fetch failure');
