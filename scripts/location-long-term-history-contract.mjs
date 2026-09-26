@@ -28,7 +28,7 @@ const checks=[
   [api.includes('d.member_id=location_history_stays.member_id')&&api.includes('d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL'),'archived stay address writes preserve current sharing/revoke gate'],
   [ui.includes("new URLSearchParams({memberId:String(memberId),date})"),'UI requests one day'],
   [ui.includes("history-search")&&ui.includes('いつ行った？'),'UI exposes stay search'],
-  [index.includes('archiveLocationHistory(env)'),'hourly lifecycle schedules archive projection'],
+  [index.includes('archiveLocationHistory(observed)'),'hourly lifecycle schedules archive projection'],
 ];
 
 const failed=checks.filter(([ok])=>!ok).map(([,label])=>label);
