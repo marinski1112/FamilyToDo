@@ -28,5 +28,7 @@
     catch{}finally{busy=false;button.disabled=false;}
   });
   new MutationObserver(records=>{if(records.some(record=>[...record.addedNodes].some(node=>node.nodeType===1&&node.matches?.('.chat-message'))))schedule();}).observe(chat,{childList:true});
+  setInterval(()=>{if(!document.hidden)schedule();},60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});
   schedule();
 })();
