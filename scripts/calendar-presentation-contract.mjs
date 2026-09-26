@@ -21,7 +21,7 @@ assert.equal(app.match(/>移動<\/button>/g)?.length,2,'Calendar must retain bot
 for(const token of ['native-control-shell','repeat(4,minmax(0,1fr))','white-space:nowrap'])assert.ok(family.includes(token),`missing shared compact-control CSS: ${token}`);
 for(const token of ['minmax(0,1fr) 72px 56px','minmax(0,1fr) 56px','width:min(292px','width:min(300px,calc(100vw - 24px))','minmax(0,.65fr)','min-width:0','min-height:40px','position:static','min-width:52px','color:#fff'])assert.ok(calendarCss.includes(token),`missing Calendar compact geometry: ${token}`);
 for(const width of [320,360,375,390,430]){const panel=Math.min(292,width-20),inner=panel-24;assert.ok(72+56+16<=inner,`month geometry overflow at ${width}`);assert.ok(56+8<=inner,`date geometry overflow at ${width}`);}
-assert.match(calendar,/calendar-mobile-ui\.js\?v=wave128-fix14/,'Calendar must load the compact UI module');
+assert.match(calendar,/calendar-mobile-ui\.js\?v=wave128-fix15/,'Calendar must load the compact UI module');
 assert.match(calendar,/monthLabel\.textContent=currentMonth\.slice\(0,4\)\+'年'\+Number\(currentMonth\.slice\(5\)\)\+'月'/,'month navigation must keep the compact year/month label');
 assert.match(ui,/calendar-page-head h1\{display:none/,'Calendar heading must remain hidden in compact mobile chrome');
 assert.match(ui,/calendarFilterToggle/,'Calendar filter must retain an explicit expandable control');
