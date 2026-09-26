@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 const api=fs.readFileSync('src/message-chat-sync-api.ts','utf8'),routes=fs.readFileSync('src/context-api-routes.ts','utf8'),client=fs.readFileSync('public/assets/messages-chat.js','utf8'),migration=fs.readFileSync('migrations/0096_message_chat_sync_indexes.sql','utf8');
