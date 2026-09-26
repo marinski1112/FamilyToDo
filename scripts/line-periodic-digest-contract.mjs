@@ -53,7 +53,7 @@ if(/geminiFetch|fetch\(/.test(guard))throw new Error('periodic AI budget guard m
 
 for(const marker of [
   "import { processLinePeriodicDigests } from './line-periodic-digest';",
-  'ctx.waitUntil(processLinePeriodicDigests(env));',
+  `run('line_periodic_digest',processLinePeriodicDigests);`,
 ])if(!index.includes(marker))throw new Error(`periodic scheduler wiring missing: ${marker}`);
 
 for(const marker of [
