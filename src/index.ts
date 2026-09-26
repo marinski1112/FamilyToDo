@@ -1,6 +1,7 @@
 import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
 import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
+import {drainFamilyLogMediaGlobal} from './family-log-media-api';
 import {cleanupLocationArrivals} from './location-arrival-push';
 import {archiveLocationHistory} from './location-history-archive';
 import {generateFamilyDailyJournals,repairFamilyDailyJournal,repairRecentFamilyDailyJournals} from './family-daily-journal';
@@ -83,6 +84,7 @@ export default {
     if(plan.hourlyCleanup){
       run('photo_transfer_cleanup',observed=>cleanupExpiredPhotoTransfers(observed.DB));
       run('message_photo_cleanup',observed=>drainDeletedMessagePhotosGlobal(observed.DB,observed.MEDIA));
+      run('family_log_media_cleanup',drainFamilyLogMediaGlobal);
       run('notification_lifecycle',cleanupNotificationLifecycle);
       run('family_log_diagnostics',cleanupFamilyLogDiagnostics);
       run('task_claim_cleanup',observed=>cleanupCompletedTaskCreateRequests(observed.DB));

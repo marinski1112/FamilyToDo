@@ -42,6 +42,7 @@ import { webPushApi } from './web-push-api';
 import { messages } from './messages-api';
 import { settings } from './settings-root';
 import { messageReactionsApi } from './message-reactions-api';
+import { familyLogMediaCleanupAdmin } from './family-log-media-cleanup-admin';
 import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
 import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
@@ -129,6 +130,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/recurrence/family-log-complete') return await recordOccurrenceFamilyLog(request,context);
   if(url.pathname==='/api/settings') return await settings(request,context);
   if(url.pathname==='/api/message-reactions') return await messageReactionsApi(request,context);
+  if(url.pathname==='/api/family-log-media-cleanup-admin') return await familyLogMediaCleanupAdmin(request,context);
   if(url.pathname==='/api/pwa-branding') return await familyPwaBrandingApi(request,context);
   if(url.pathname==='/api/pwa-icon') return await familyPwaIconApi(request,context);
   if(url.pathname==='/api/push/subscribe'||url.pathname==='/api/push/unsubscribe'||url.pathname==='/api/push/test') return await webPushApi(request,context);

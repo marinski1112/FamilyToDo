@@ -121,11 +121,16 @@ function publicMetadata(row:MediaRow){
 async function queueObjectCleanup(env:Env,familyId:number,storageKey:string,purpose:CleanupPurpose):Promise<void>{
   await env.DB.prepare(`INSERT INTO family_log_media_cleanup_queue(family_id,storage_key,purpose,created_at,attempts,last_attempt_at)
     VALUES(?,?,?,?,0,NULL)
-    ON CONFLICT(storage_key) DO UPDATE SET purpose=excluded.purpose,created_at=excluded.created_at`).bind(familyId,storageKey,purpose,new Date().toISOString()).run();
+    ON CONFLICT(storage_key) DO UPDATE SET purpose=excluded.purpose,
+      created_at=CASE WHEN purpose<>excluded.purpose THEN excluded.created_at ELSE created_at END,
+      attempts=CASE WHEN purpose<>excluded.purpose THEN 0 ELSE attempts END,
+      last_attempt_at=CASE WHEN purpose<>excluded.purpose THEN NULL ELSE last_attempt_at END,
+      next_attempt_at=CASE WHEN purpose<>excluded.purpose THEN NULL ELSE next_attempt_at END,
+      status=CASE WHEN purpose<>excluded.purpose THEN 'PENDING' ELSE status END`).bind(familyId,storageKey,purpose,new Date().toISOString()).run();
 }
 
 async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Promise<boolean>{
-  const queued=await env.DB.prepare('SELECT purpose FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first<{purpose:string}>();
+  const queued=await env.DB.prepare('SELECT purpose,created_at,status,next_attempt_at,attempts FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=? LIMIT 1').bind(familyId,storageKey).first<{purpose:string;created_at:string;status:string;next_attempt_at:string|null;attempts:number}>();
   if(!queued)return true;
   const purpose=String(queued.purpose);
   if(purpose==='ORPHAN'){
@@ -135,6 +140,9 @@ async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Pro
       return true;
     }
   }
+  const now=new Date();
+  if(queued.status==='DEAD'||(queued.next_attempt_at&&queued.next_attempt_at>now.toISOString())||
+    (purpose==='ORPHAN'&&Date.parse(queued.created_at)>now.getTime()-5*60*1000))return false;
   try{
     await env.MEDIA.delete(storageKey);
     if(purpose==='DELETE'){
@@ -143,7 +151,9 @@ async function deleteQueuedObject(env:Env,familyId:number,storageKey:string):Pro
     await env.DB.prepare('DELETE FROM family_log_media_cleanup_queue WHERE family_id=? AND storage_key=?').bind(familyId,storageKey).run();
     return true;
   }catch{
-    await env.DB.prepare('UPDATE family_log_media_cleanup_queue SET attempts=attempts+1,last_attempt_at=? WHERE family_id=? AND storage_key=?').bind(new Date().toISOString(),familyId,storageKey).run().catch(()=>{});
+    const attempts=Number(queued.attempts||0)+1,delay=Math.min(3600,30*2**Math.min(attempts-1,10));
+    await env.DB.prepare('UPDATE family_log_media_cleanup_queue SET attempts=attempts+1,last_attempt_at=?,next_attempt_at=?,status=? WHERE family_id=? AND storage_key=?')
+      .bind(now.toISOString(),attempts>=8?null:new Date(now.getTime()+delay*1000).toISOString(),attempts>=8?'DEAD':'PENDING',familyId,storageKey).run().catch(()=>{});
     return false;
   }
 }
@@ -174,8 +184,9 @@ export async function reconcilePendingFamilyLogMedia(env:Env,familyId:number,lim
   if(!Number.isSafeInteger(familyId)||familyId<=0)return;
   const cap=Math.max(1,Math.min(24,Math.trunc(limit)||8));
   const queued=await env.DB.prepare(`SELECT storage_key FROM family_log_media_cleanup_queue
-    WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))
-    ORDER BY id LIMIT ?`).bind(familyId,cap).all<{storage_key:string}>();
+    WHERE family_id=? AND status='PENDING' AND (next_attempt_at IS NULL OR next_attempt_at<=?)
+      AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))
+    ORDER BY id LIMIT ?`).bind(familyId,new Date().toISOString(),cap).all<{storage_key:string}>();
   for(const item of queued.results||[])await deleteQueuedObject(env,familyId,String(item.storage_key));
   const pending=await env.DB.prepare('SELECT log_id FROM family_log_media WHERE family_id=? AND reconcile_pending=1 ORDER BY id LIMIT ?').bind(familyId,cap).all<{log_id:number}>();
   for(const item of pending.results||[])await reconcileFamilyLogMediaForLog(env,familyId,Number(item.log_id));
@@ -187,15 +198,49 @@ export async function drainPendingFamilyLogMedia(env:Env,familyId:number):Promis
   for(let batch=0;batch<128;batch++){
     const before=await env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM family_log_media WHERE family_id=? AND reconcile_pending=1) +
-      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
+      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND status='PENDING' AND (next_attempt_at IS NULL OR next_attempt_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
     const count=Number(before?.count||0);
     if(count<=0)return;
     await reconcilePendingFamilyLogMedia(env,familyId,24);
     const after=await env.DB.prepare(`SELECT
       (SELECT COUNT(*) FROM family_log_media WHERE family_id=? AND reconcile_pending=1) +
-      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
+      (SELECT COUNT(*) FROM family_log_media_cleanup_queue WHERE family_id=? AND status='PENDING' AND (next_attempt_at IS NULL OR next_attempt_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')) AND (purpose='DELETE' OR datetime(created_at)<=datetime('now','-5 minutes'))) AS count`).bind(familyId,familyId).first<{count:number}>();
     if(Number(after?.count||0)>=count)return;
   }
+}
+
+/** Hourly global pass: cursor advances over even broken/future rows, so one family cannot block another. */
+export async function drainFamilyLogMediaGlobal(env:Env):Promise<void>{
+  const cursor=await env.DB.prepare('SELECT queue_id,media_id FROM family_log_media_cleanup_cursor WHERE singleton=1').first<{queue_id:number;media_id:number}>();
+  if(!cursor)return;
+  const scanQueue=async(after:number)=>env.DB.prepare('SELECT id,family_id,storage_key,purpose,created_at,status,next_attempt_at FROM family_log_media_cleanup_queue WHERE id>? ORDER BY id LIMIT 64')
+    .bind(after).all<{id:number;family_id:number;storage_key:string;purpose:string;created_at:string;status:string;next_attempt_at:string|null}>();
+  let queued=await scanQueue(Number(cursor.queue_id)||0);
+  if(!queued.results.length)queued=await scanQueue(0);
+  const now=Date.now(),families=new Set<number>();let r2Budget=0;
+  for(const row of queued.results){
+    const familyId=Number(row.family_id);
+    if(r2Budget>=6||families.has(familyId)||row.status!=='PENDING'||
+      (row.next_attempt_at&&Date.parse(row.next_attempt_at)>now)||
+      (row.purpose==='ORPHAN'&&Date.parse(row.created_at)>now-5*60*1000))continue;
+    families.add(familyId);r2Budget++;
+    await deleteQueuedObject(env,familyId,String(row.storage_key)).catch(()=>{});
+  }
+  await env.DB.prepare('UPDATE family_log_media_cleanup_cursor SET queue_id=? WHERE singleton=1')
+    .bind(queued.results.length?Number(queued.results[queued.results.length-1].id):0).run();
+
+  const scanPending=async(after:number)=>env.DB.prepare('SELECT id,family_id,log_id FROM family_log_media WHERE reconcile_pending=1 AND id>? ORDER BY id LIMIT 16')
+    .bind(after).all<{id:number;family_id:number;log_id:number}>();
+  let pending=await scanPending(Number(cursor.media_id)||0);
+  if(!pending.results.length)pending=await scanPending(0);
+  families.clear();let pendingBudget=0;
+  for(const row of pending.results){
+    if(pendingBudget>=2||families.has(Number(row.family_id)))continue;
+    families.add(Number(row.family_id));pendingBudget++;
+    await reconcileFamilyLogMediaForLog(env,Number(row.family_id),Number(row.log_id)).catch(()=>{});
+  }
+  await env.DB.prepare('UPDATE family_log_media_cleanup_cursor SET media_id=? WHERE singleton=1')
+    .bind(pending.results.length?Number(pending.results[pending.results.length-1].id):0).run();
 }
 
 /** Remove the private object and metadata after a canonical Family Log soft-delete, preserving retry state on transient R2 failure. */
