@@ -279,7 +279,7 @@
 }
 
 /* Real-device dark contrast follow-up. */
-:root[data-theme="dark"] .calendar-band{color:#0b1220!important;text-shadow:0 1px rgba(255,255,255,.18)}
+:root[data-theme="dark"] .calendar-band{color:#fff!important;text-shadow:none!important}
 :root[data-theme="dark"] .checklist-page.reminders-ui :is(.task-row,.unorganized-task-row) input.check.toggle:not(:checked),
 :root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section input.check.toggle:not(:checked){
   -webkit-appearance:none!important;appearance:none!important;background:#26354a!important;border-color:#8292aa!important;
@@ -292,3 +292,15 @@
 }
 :root[data-theme="dark"] .calendar-month-draft select{background:var(--theme-raised)!important;color:var(--text)!important;border-color:var(--line)!important}
 :root[data-theme="dark"] .calendar-month-draft-confirm{background:var(--primary)!important;color:#fff!important;border-color:var(--primary)!important}
+
+/* Screenshot-targeted Checklist controls: category composer square and row info glyph. */
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .belongings-composer-square{
+  background:#26354a!important;border-color:#8292aa!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .shopping-category-add-item .belongings-composer-square{
+  background:#26354a!important;border-color:#8292aa!important;
+}
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action,
+:root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action::after{
+  background:#26354a!important;color:#8ec5ff!important;border-color:#40536d!important;
+}
