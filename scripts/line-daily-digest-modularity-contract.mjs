@@ -4,7 +4,7 @@ const read=path=>fs.readFileSync(path,'utf8');
 const index=read('src/index.ts'),digest=read('src/line-daily-digest.ts'),guard=read('src/line-daily-digest-ai-guard.ts');
 const weather=read('src/line-daily-digest-weather.ts'),migration=read('migrations/0061_line_daily_digest_ai_cost_guard.sql');
 const notificationPage=read('src/settings-notifications-page.ts'),notificationClient=read('public/assets/settings-notifications.js');
-assert.ok(index.includes("import { processLineDailyDigests } from './line-daily-digest';")&&index.includes('ctx.waitUntil(processLineDailyDigests(env));'));
+assert.ok(index.includes("import { processLineDailyDigests } from './line-daily-digest';")&&index.includes(`run('line_daily_digest',processLineDailyDigests);`));
 for(const marker of [
   'line_daily_digest_settings','line_daily_digest_recipients','line_daily_digest_receipts',
   "t.visibility_scope='PRIVATE' AND t.private_owner_id=?",'goodsVisibilitySql',
