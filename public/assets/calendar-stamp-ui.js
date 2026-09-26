@@ -75,7 +75,8 @@ try{
 
   const picker=document.createElement('div');picker.className='calendar-stamp-picker';picker.setAttribute('role','dialog');picker.setAttribute('aria-modal','true');picker.setAttribute('aria-label','スタンプを選択');picker.innerHTML='<div class="calendar-stamp-picker-card"><button type="button" class="calendar-stamp-picker-close" aria-label="閉じる">×</button><h3>スタンプを選択</h3><p class="calendar-stamp-picker-date"></p><label class="calendar-stamp-picker-scope">公開範囲 <select><option value="FAMILY">家族共有</option><option value="PRIVATE">自分専用</option></select></label><div class="calendar-stamp-picker-grid"><div class="calendar-stamp-picker-status">読み込み中…</div></div></div>';document.body.appendChild(picker);
   const pickerGrid=picker.querySelector('.calendar-stamp-picker-grid'),pickerDate=picker.querySelector('.calendar-stamp-picker-date'),pickerScope=picker.querySelector('.calendar-stamp-picker-scope select');
-  let pickerTargetDate='',optionsCache=null,placing=false;
+  const OPTIONS_CACHE_TTL_MS=60*1000;
+  let pickerTargetDate='',optionsCache=null,optionsCacheAt=0,placing=false;
   const closePicker=()=>{if(placing)return;picker.classList.remove('open');pickerTargetDate='';};
   picker.querySelector('.calendar-stamp-picker-close')?.addEventListener('click',closePicker);
   picker.addEventListener('click',event=>{if(event.target===picker)closePicker();});
@@ -114,13 +115,20 @@ try{
     }).filter(option=>option&&/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(option.sharedId)&&Number.isSafeInteger(option.sharedVersion)&&option.sharedVersion>0);
   };
   const loadOptions=async()=>{
-    if(Array.isArray(optionsCache))return optionsCache;
-    const locals=await localOptions();
-    let shared=[];
-    try{shared=await sharedOptions();}catch{shared=[];}
-    const mappedIds=new Set(shared.map(option=>Number(option.id)).filter(id=>Number.isSafeInteger(id)&&id>0));
-    optionsCache=[...locals.filter(option=>!mappedIds.has(option.id)),...shared];
-    return optionsCache;
+    const now=Date.now();
+    if(Array.isArray(optionsCache)&&now-optionsCacheAt<OPTIONS_CACHE_TTL_MS)return optionsCache;
+    try{
+      const locals=await localOptions();
+      let shared=[];
+      try{shared=await sharedOptions();}catch{shared=[];}
+      const mappedIds=new Set(shared.map(option=>Number(option.id)).filter(id=>Number.isSafeInteger(id)&&id>0));
+      optionsCache=[...locals.filter(option=>!mappedIds.has(option.id)),...shared];
+      optionsCacheAt=Date.now();
+      return optionsCache;
+    }catch(error){
+      if(Array.isArray(optionsCache))return optionsCache;
+      throw error;
+    }
   };
   const renderOptions=options=>{
     if(!pickerGrid)return;
@@ -146,7 +154,7 @@ try{
     const data=await response.json().catch(()=>null);
     const assetId=Number(data?.assetId||0);
     if(!response.ok||!data?.ok||!Number.isSafeInteger(assetId)||assetId<=0)throw new Error(String(data?.error||'SHARED_STAMP_IMPORT_FAILED'));
-    button.dataset.assetId=String(assetId);optionsCache=null;return assetId;
+    button.dataset.assetId=String(assetId);optionsCache=null;optionsCacheAt=0;return assetId;
   };
   pickerButton.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openPicker();});
   window.familyCalendarOpenStampPicker=date=>openPicker(date);
