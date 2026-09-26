@@ -131,6 +131,7 @@ export const activeRegressionGroups=[
       ['calendar-stamp-global-cleanup','node scripts/calendar-stamp-global-cleanup-contract.mjs'],
       ['calendar-stamp-read-api','node scripts/calendar-animated-stamps-read-api-contract.mjs'],
       ['calendar-shared-stamp-catalog-api','node scripts/calendar-shared-stamp-catalog-api-contract.mjs'],
+      ['calendar-stamp-picker-cache','node scripts/calendar-stamp-picker-cache-contract.mjs'],
       ['calendar-mobile-ui-error-privacy','node scripts/calendar-mobile-ui-error-privacy-contract.mjs'],
     ],
   },
