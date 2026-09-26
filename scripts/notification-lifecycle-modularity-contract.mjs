@@ -10,8 +10,8 @@ const migration=fs.readFileSync('migrations/0064_d1_scheduled_hotpath_indexes.sq
 if(delivery.includes('cleanupNotificationLifecycle')||delivery.includes('auditNotificationLifecycle')) throw new Error('five-minute notification delivery must not run full lifecycle maintenance');
 if(index.includes('async function cleanupNotificationLifecycle(')||delivery.includes('async function cleanupNotificationLifecycle(')) throw new Error('notification lifecycle cleanup must remain isolated from index and delivery modules');
 if(!index.includes("import { cleanupNotificationLifecycle, auditNotificationLifecycle } from './notification-lifecycle';")) throw new Error('index must import low-frequency lifecycle jobs');
-if(!index.includes('if(plan.hourlyCleanup)')||!index.includes('ctx.waitUntil(cleanupNotificationLifecycle(env));')) throw new Error('hourly lifecycle repair dispatch wiring missing');
-if(!index.includes('if(plan.dailyNotificationAudit)')||!index.includes('ctx.waitUntil(auditNotificationLifecycle(env));')) throw new Error('daily lifecycle audit dispatch wiring missing');
+if(!index.includes('if(plan.hourlyCleanup)')||!index.includes(`run('notification_lifecycle',cleanupNotificationLifecycle);`)) throw new Error('hourly lifecycle repair dispatch wiring missing');
+if(!index.includes('if(plan.dailyNotificationAudit)')||!index.includes(`run('notification_audit',auditNotificationLifecycle);`)) throw new Error('daily lifecycle audit dispatch wiring missing');
 if(!schedule.includes('hourlyCleanup: minute === 17')||!schedule.includes('dailyNotificationAudit: hour === 18 && minute === 29')) throw new Error('low-frequency lifecycle schedule mapping missing');
 if(!wrangler.includes('"* * * * *"')) throw new Error('wrangler consolidated scheduler configuration missing');
 if(!lifecycle.includes('export async function cleanupNotificationLifecycle(env: Env): Promise<void> {')) throw new Error('notification lifecycle module must export cleanupNotificationLifecycle');
