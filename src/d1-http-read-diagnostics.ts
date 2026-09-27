@@ -6,7 +6,10 @@ export function httpReadRouteGroup(path:string,method:string):string {
   const page=path.startsWith('/app/');
   const area=/location/.test(path)?'location':
     /calendar/.test(path)?'calendar':
-    /family.log|journal|child/.test(path)?'family_log':
+    page&&(path==='/app/family_log.php'||path==='/app/settings_family_log.php')?'family_log':
+    page&&path==='/app/family_journal.php'?'family_journal':
+    page&&path==='/app/child_journal.php'?'child_journal':
+    /family.log|journal|child/.test(path)?'family_related':
     /message|photo.transfer/.test(path)?'messages':
     /shopping|checklist|item|goods/.test(path)?'goods':
     /settings/.test(path)?'settings':'other';

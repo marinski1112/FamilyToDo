@@ -23,6 +23,13 @@ test('fixed labels exclude URL identifiers and query strings',()=>{
   assert.equal(HTTP_READ_SAMPLE_RATE,8);
   assert.equal(httpReadRouteGroup('/api/location/history/123?token=secret','GET'),'api_location_GET');
   assert.equal(httpReadRouteGroup('/app/messages.php','GET'),'page_messages_GET');
+  assert.equal(httpReadRouteGroup('/app/family_log.php','GET'),'page_family_log_GET');
+  assert.equal(httpReadRouteGroup('/app/settings_family_log.php','GET'),'page_family_log_GET');
+  assert.equal(httpReadRouteGroup('/app/family_journal.php','GET'),'page_family_journal_GET');
+  assert.equal(httpReadRouteGroup('/app/child_journal.php','GET'),'page_child_journal_GET');
+  assert.equal(httpReadRouteGroup('/app/family_log_import.php','GET'),'page_family_related_GET');
+  assert.equal(httpReadRouteGroup('/app/child_foods.php','GET'),'page_family_related_GET');
+  assert.equal(httpReadRouteGroup('/api/child-journal/123','GET'),'api_family_related_GET');
   assert.equal(httpReadRouteGroup('/api/calendar/abcdef','POST'),'api_calendar_WRITE');
 });
 
