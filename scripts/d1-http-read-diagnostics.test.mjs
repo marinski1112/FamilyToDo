@@ -49,17 +49,19 @@ test('requests without D1 calls do not write diagnostics',async()=>{
 
 test('Family Log attribution uses only fixed labels and keeps page totals separate',async()=>{
   assert.equal(familyLogReadQueryGroup('SELECT subject_id,amount,ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC) FROM family_logs'),'latest_milk');
+  assert.equal(familyLogReadQueryGroup("WITH selected_subjects(subject_id) AS (VALUES (?)) SELECT subject_id,(SELECT l.amount FROM family_logs l WHERE l.family_id=? AND l.subject_id=selected_subjects.subject_id AND l.log_type='MILK' ORDER BY l.occurred_at DESC LIMIT 1) amount FROM selected_subjects"),'latest_milk');
   assert.equal(familyLogReadQueryGroup('SELECT l.*,ib.source import_source FROM family_logs l'),'timeline');
   assert.equal(familyLogReadQueryGroup('WITH periods(period,start_at) AS (SELECT 1,2) SELECT * FROM family_logs'),'housework');
   assert.equal(familyLogReadQueryGroup("SELECT id FROM tasks WHERE family_id=? AND visibility_scope='FAMILY'"),'physical_tasks');
   const {db,writes}=fakeDb();
   const tracked=trackHttpD1Reads({DB:db},'page_family_log_GET');
   await tracked.env.DB.prepare('SELECT subject_id,ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC) FROM family_logs WHERE family_id=?').bind(42).all();
+  await tracked.env.DB.prepare("WITH selected_subjects(subject_id) AS (VALUES (?)) SELECT (SELECT l.amount FROM family_logs l WHERE l.family_id=? AND l.log_type='MILK' LIMIT 1) FROM selected_subjects").bind(1,42).all();
   await tracked.env.DB.prepare('SELECT l.*,ib.source import_source FROM family_logs l WHERE l.family_id=?').bind(42).all();
   await tracked.env.DB.prepare('SELECT 1 FROM members LIMIT 1').first();
   await tracked.flush();
   assert.deepEqual(writes.map(args=>args[1]),['page_family_log_GET','query_family_log_latest_milk','query_family_log_timeline','query_family_log_other']);
-  assert.equal(writes[0][2],750);
+  assert.equal(writes[0][2],1000);
   assert.equal(writes.slice(1).reduce((total,args)=>total+args[2],0),writes[0][2]);
   assert.equal(writes.every(args=>!args.includes(42)),true);
 });

@@ -16,6 +16,7 @@ export function httpReadRouteGroup(path:string,method:string):string {
 // Only fixed source categories are persisted. SQL text and bound values are not.
 export function familyLogReadQueryGroup(sql:string):string {
   if(/ROW_NUMBER\s*\(\)\s*OVER\s*\(PARTITION BY subject_id/i.test(sql))return 'latest_milk';
+  if(/WITH\s+selected_subjects\s*\(subject_id\)\s+AS\s*\(VALUES/i.test(sql)&&/l\.log_type='MILK'/i.test(sql))return 'latest_milk';
   if(/SELECT\s+l\.\*,ib\.source/i.test(sql))return 'timeline';
   if(/WITH\s+periods\s*\(period,start_at\)/i.test(sql))return 'housework';
   if(/FROM\s+tasks\s+WHERE\s+family_id=\?\s+AND\s+visibility_scope='FAMILY'/i.test(sql))return 'physical_tasks';
