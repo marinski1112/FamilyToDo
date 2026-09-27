@@ -49,6 +49,8 @@ jobs:
         if: always()
       - run: node scripts/family-log-latest-milk-contract.mjs
         if: always()
+      - run: node scripts/family-log-housework-range-contract.mjs
+        if: always()
       - run: npm run check:ai-model-usage-visibility
         if: always()
       - run: npm run check:static-assets
