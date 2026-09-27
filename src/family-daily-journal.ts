@@ -47,12 +47,14 @@ async function displayLocation(db:D1Database,familyId:number,date:string,snapsho
 }
 
 async function readTasks(db:D1Database,familyId:number,date:string):Promise<TaskSummary[]>{
-  const rows=await db.prepare(`SELECT task_id,title,member_id,member_name,occurred_at FROM (SELECT h.task_id,t.title,h.member_id,m.name member_name,h.action,h.occurred_at,h.id,ROW_NUMBER() OVER(PARTITION BY h.task_id,h.member_id ORDER BY h.occurred_at DESC,h.id DESC) rn FROM task_completion_history h JOIN tasks t ON t.id=h.task_id AND t.family_id=? AND t.visibility_scope='FAMILY' JOIN members m ON m.id=h.member_id AND m.family_id=t.family_id WHERE date(h.occurred_at)=? AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')) latest WHERE rn=1 AND action='COMPLETED' ORDER BY occurred_at,id LIMIT ?`).bind(familyId,date,MAX_ITEMS).all<Row>();
+  const start=`${date} 00:00:00`,end=`${shiftDate(date,1)} 00:00:00`;
+  const rows=await db.prepare(`SELECT task_id,title,member_id,member_name,occurred_at FROM (SELECT h.task_id,t.title,h.member_id,m.name member_name,h.action,h.occurred_at,h.id,ROW_NUMBER() OVER(PARTITION BY h.task_id,h.member_id ORDER BY h.occurred_at DESC,h.id DESC) rn FROM task_completion_history h INDEXED BY idx_task_history_occurred_journal JOIN tasks t ON t.id=h.task_id AND t.family_id=? AND t.visibility_scope='FAMILY' JOIN members m ON m.id=h.member_id AND m.family_id=t.family_id WHERE h.occurred_at>=? AND h.occurred_at<? AND (t.task_kind IS NULL OR lower(t.task_kind)<>'event')) latest WHERE rn=1 AND action='COMPLETED' ORDER BY occurred_at,id LIMIT ?`).bind(familyId,start,end,MAX_ITEMS).all<Row>();
   return rows.results.map(row=>({taskId:Number(row.task_id),title:String(row.title||'タスク'),memberId:Number(row.member_id),memberName:String(row.member_name||'家族'),completedAt:String(row.occurred_at||'')}));
 }
 
 async function readHousework(db:D1Database,familyId:number,date:string):Promise<HouseworkSummary[]>{
-  const rows=await db.prepare(`SELECT l.value_text,l.created_by,m.name member_name,l.occurred_at FROM family_logs l LEFT JOIN members m ON m.id=l.created_by AND m.family_id=l.family_id WHERE l.family_id=? AND l.log_type='HOUSEWORK' AND l.deleted_at IS NULL AND date(l.occurred_at)=? ORDER BY l.occurred_at,l.id LIMIT ?`).bind(familyId,date,MAX_ITEMS).all<Row>();
+  const start=`${date} 00:00:00`,end=`${shiftDate(date,1)} 00:00:00`;
+  const rows=await db.prepare(`SELECT l.value_text,l.created_by,m.name member_name,l.occurred_at FROM family_logs l LEFT JOIN members m ON m.id=l.created_by AND m.family_id=l.family_id WHERE l.family_id=? AND l.log_type='HOUSEWORK' AND l.deleted_at IS NULL AND l.occurred_at>=? AND l.occurred_at<? ORDER BY l.occurred_at,l.id LIMIT ?`).bind(familyId,start,end,MAX_ITEMS).all<Row>();
   return rows.results.map(row=>({name:String(row.value_text||'家事'),memberId:Number(row.created_by||0),memberName:String(row.member_name||'家族'),occurredAt:String(row.occurred_at||'')}));
 }
 
