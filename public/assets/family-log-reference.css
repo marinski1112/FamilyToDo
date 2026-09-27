@@ -109,3 +109,33 @@
   .family-log-reference-layout .family-log-main>.family-log-value:not(.family-log-inline-value),
   .family-log-reference-layout .family-log-description-text{font-size:13.5px!important}
 }
+
+/* The mobile reference layout loads after theme.css and uses !important light
+ * surfaces. Keep its compact geometry while restoring dark-mode contrast. */
+@media(max-width:720px){
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-row{
+    background:var(--card)!important;border-bottom-color:var(--line)!important;
+  }
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-time,
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-time-subject,
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-main>div:first-child,
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-main>.family-log-value:not(.family-log-inline-value),
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-description-text{
+    color:var(--text)!important;
+  }
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-value-pill{
+    background:var(--theme-raised)!important;color:var(--text)!important;
+  }
+  :root[data-theme="dark"] .family-log-reference-layout .family-log-main>.family-log-recorder{
+    color:var(--muted)!important;
+  }
+  :root[data-theme="dark"] .family-log-record-sheet .family-log-form-actions{
+    background:var(--card)!important;border-top-color:var(--line)!important;
+  }
+  :root[data-theme="dark"] .family-log-record-sheet #familyLogDelete{
+    background:#83374a!important;color:#fff!important;border:1px solid #bb6578!important;
+  }
+  :root[data-theme="dark"] .family-log-record-sheet #familyLogDelete:focus-visible{
+    outline:2px solid #ffd1d9;outline-offset:2px;
+  }
+}
