@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+
+const source=fs.readFileSync('src/family-log-page.ts','utf8');
+assert.ok(source.includes('WITH selected_subjects(subject_id) AS (VALUES ${activeSubjectIds.map(()=>\'(?)\').join(\',\')})'));
+assert.ok(source.includes('ORDER BY l.occurred_at DESC,l.id DESC LIMIT 1) amount FROM selected_subjects'));
+assert.ok(source.includes('.bind(...activeSubjectIds,m.family_id).all<Row>()'));
+assert.ok(source.includes('if(row.amount===null||row.amount===undefined)continue'));
+
+const db=new DatabaseSync(':memory:');
+db.exec(`CREATE TABLE family_logs(id INTEGER PRIMARY KEY,family_id INTEGER,subject_id INTEGER,log_type TEXT,occurred_at TEXT,deleted_at TEXT,amount REAL);
+CREATE INDEX idx_family_logs_active_subject_type_occurred ON family_logs(family_id,subject_id,log_type,occurred_at) WHERE deleted_at IS NULL;`);
+const insert=db.prepare('INSERT INTO family_logs VALUES(?,?,?,?,?,?,?)');
+for(let i=1;i<=3000;i++)insert.run(i,1,i%3+1,i%5?'MILK':'MEAL',`2026-09-${String(1+i%25).padStart(2,'0')} 08:00:00`,i%19===0?'deleted':null,i%23===0?3000:i%17===0?null:120+i%200);
+insert.run(4001,2,1,'MILK','2030-01-01 00:00:00',null,900);
+insert.run(4002,1,1,'MILK','2030-01-01 00:00:00',null,240);
+insert.run(4003,1,1,'MILK','2030-01-01 00:00:00',null,160);
+insert.run(4004,1,2,'MILK','2030-01-01 00:00:00','deleted',180);
+insert.run(4005,1,3,'MILK','2030-01-01 00:00:00',null,0);
+const old=`SELECT subject_id,amount FROM (SELECT subject_id,amount,ROW_NUMBER() OVER(PARTITION BY subject_id ORDER BY occurred_at DESC,id DESC) latest_rank FROM family_logs WHERE family_id=? AND subject_id IN (?,?,?,?) AND log_type='MILK' AND deleted_at IS NULL AND amount IS NOT NULL AND amount>0 AND amount<=2000) WHERE latest_rank=1`;
+const next=`WITH selected_subjects(subject_id) AS (VALUES (?),(?),(?),(?)) SELECT subject_id,(SELECT l.amount FROM family_logs l WHERE l.family_id=? AND l.subject_id=selected_subjects.subject_id AND l.log_type='MILK' AND l.deleted_at IS NULL AND l.amount IS NOT NULL AND l.amount>0 AND l.amount<=2000 ORDER BY l.occurred_at DESC,l.id DESC LIMIT 1) amount FROM selected_subjects`;
+const expected=db.prepare(old).all(1,1,2,3,4).sort((a,b)=>a.subject_id-b.subject_id);
+const actual=db.prepare(next).all(1,2,3,4,1).filter(row=>row.amount!==null).sort((a,b)=>a.subject_id-b.subject_id);
+assert.deepEqual(actual,expected,'latest eligible milk amount, tie order and missing subject remain identical');
+assert.equal(actual.find(row=>row.subject_id===1).amount,160);
+const plan=db.prepare(`EXPLAIN QUERY PLAN ${next}`).all(1,2,3,4,1).map(row=>row.detail).join(' ');
+assert.match(plan,/idx_family_logs_active_subject_type_occurred/,'each subject uses the existing partial index');
+db.close();
+console.log('family log latest milk: indexed per-subject lookup matches window projection');
