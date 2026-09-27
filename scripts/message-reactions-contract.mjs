@@ -34,5 +34,16 @@ assert.equal(sql.prepare('SELECT count(*) n FROM message_reactions WHERE message
 sql.close();
 const page=readFileSync('src/messages-chat-page.ts','utf8'),client=readFileSync('public/assets/messages-chat.js','utf8'),settings=readFileSync('src/settings-root.ts','utf8');
 assert.match(page,/mine\?avatarMarkup:''/);assert.match(client,/if\(mine\)row\.append\(avatar\)/);assert.match(settings,/messageReactionSettings/);
+const reactions=readFileSync('public/assets/messages-reactions.js','utf8');
+assert.match(client,/dispatchEvent\(new CustomEvent\('message-chat-menu-open',\{detail:\{row\}\}\)\)/);
+assert.match(client,/suppressLongPressClick=true/,'long press must not also open a photo or stamp on release');
+assert.match(client,/addEventListener\('contextmenu'/,'native long press and desktop context menu should use the same menu');
+assert.match(reactions,/backdrop\.addEventListener\('message-chat-menu-open'/);
+assert.match(reactions,/menu\.insertBefore\(button,menu\.querySelector\('\.chat-menu-cancel'\)\)/);
+assert.match(reactions,/button\.textContent='リアクション'/);
+assert.doesNotMatch(reactions,/chat-reaction-add|add\.textContent='＋'/,'new reaction choices belong to the long-press menu');
+assert.match(reactions,/chat\.addEventListener\('click'/,'existing reaction chips still toggle directly');
+assert.match(page,/messages-reactions\.js\?v=\$\{APP_VERSION\}-2/);
 for(const path of ['public/assets/messages-reactions.js','public/assets/settings-message-reactions.js'])execFileSync(process.execPath,['--check',path]);
+await import('./message-reactions-menu-contract.mjs');
 console.log('Message reactions: admin/CSRF, family visibility, schedule, toggle, catalog removal, cascade and LINE avatars OK');
