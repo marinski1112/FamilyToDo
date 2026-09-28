@@ -134,25 +134,34 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject uploadStaticStamp(MessagePhotoUpload.PngDraft image,String name,String csrf) throws Exception {
-        if(image==null||image.png.length==0||image.png.length>4*1024*1024) throw new IllegalArgumentException("Invalid stamp");
+        return uploadStampPng(image.png,name,image.width,image.height,csrf);
+    }
+    static JSONObject uploadStampFrame(byte[] png,String csrf) throws Exception {
+        return uploadStampPng(png,null,0,0,csrf);
+    }
+    private static JSONObject uploadStampPng(byte[] png,String name,int width,int height,String csrf) throws Exception {
+        if(png==null||png.length==0||png.length>4*1024*1024) throw new IllegalArgumentException("Invalid stamp");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/calendar-stamp-admin/upload").openConnection();
         try {
             connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
             connection.setInstanceFollowRedirects(false);connection.setRequestMethod("POST");connection.setDoOutput(true);
             connection.setRequestProperty("Accept","application/json");connection.setRequestProperty("Content-Type","image/png");
             connection.setRequestProperty("x-csrf-token",csrf);
-            connection.setRequestProperty("x-stamp-name-b64",android.util.Base64.encodeToString(name.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP));
-            connection.setRequestProperty("x-stamp-width",String.valueOf(image.width));
-            connection.setRequestProperty("x-stamp-height",String.valueOf(image.height));
+            if(name!=null) {
+                connection.setRequestProperty("x-stamp-name-b64",android.util.Base64.encodeToString(name.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP));
+                connection.setRequestProperty("x-stamp-width",String.valueOf(width));
+                connection.setRequestProperty("x-stamp-height",String.valueOf(height));
+            }
             String cookies=CookieManager.getInstance().getCookie(ORIGIN);if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
-            try(OutputStream output=connection.getOutputStream()) { output.write(image.png); }
+            try(OutputStream output=connection.getOutputStream()) { output.write(png); }
             int status=connection.getResponseCode();if(status==401) throw new SecurityException("ログインしてください");
             try(var stream=status<400?connection.getInputStream():connection.getErrorStream()) {
                 if(stream==null) throw new IllegalStateException("応答がありません");
                 ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
                 while((n=stream.read(buffer))!=-1) { data.write(buffer,0,n); if(data.size()>65536) throw new IllegalStateException("応答が大きすぎます"); }
                 JSONObject result=new JSONObject(data.toString("UTF-8"));
-                if(status>=400||!result.optBoolean("ok")||result.optInt("assetId")<=0)
+                if(status>=400||!result.optBoolean("ok")||(name!=null&&result.optInt("assetId")<=0)||
+                    (name==null&&!result.optString("storageKey").startsWith("uploads/")))
                     throw new IllegalStateException(result.optString("error","スタンプを登録できませんでした"));
                 return result;
             }

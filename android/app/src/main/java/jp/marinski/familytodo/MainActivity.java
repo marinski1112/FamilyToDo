@@ -57,6 +57,8 @@ public final class MainActivity extends Activity {
     private int pendingFamilyLogPhotoId;
     private boolean familyPhotoSending;
     private String pendingStampName="";
+    private String pendingAnimatedStampName="";
+    private int pendingAnimatedFrameMs=120;
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
         @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
@@ -221,6 +223,7 @@ public final class MainActivity extends Activity {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
         content.addView(button("＋ スタンプ",this::addStamp));
         if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 新しいスタンプ画像",this::chooseStaticStamp));
+        if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 動くPNGスタンプ",this::chooseAnimatedStamp));
         LinearLayout weekdays=new LinearLayout(this);
         for(String weekday:new String[]{"日","月","火","水","木","金","土"})
             weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
@@ -640,6 +643,87 @@ public final class MainActivity extends Activity {
                 Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("image/*");
                 startActivityForResult(picker,43);
             }).setNegativeButton("閉じる",null).show();
+    }
+    private void chooseAnimatedStamp() {
+        if(snapshot==null||!snapshot.optBoolean("canManageStamps")) return;
+        EditText name=new EditText(this);name.setHint("スタンプ名（80文字以内）");name.setSingleLine(true);
+        EditText duration=new EditText(this);duration.setHint("1コマの表示時間（40〜2000ミリ秒）");
+        duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);duration.setText("120");
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(name);form.addView(duration);form.addView(label("PNGを2〜48枚選択します。再生順はファイル名順です。同じ縦横サイズの画像を選んでください。"));
+        new AlertDialog.Builder(this).setTitle("動くPNGスタンプ").setView(form)
+            .setPositiveButton("画像を選択",(dialog,which) -> {
+                String value=name.getText().toString().trim();int frameMs;
+                try {frameMs=Integer.parseInt(duration.getText().toString().trim());}
+                catch(Exception error) {Toast.makeText(this,"表示時間を確認してください",Toast.LENGTH_SHORT).show();return;}
+                if(value.isEmpty()||value.codePointCount(0,value.length())>80||frameMs<40||frameMs>2000) {
+                    Toast.makeText(this,"名前・表示時間を確認してください",Toast.LENGTH_SHORT).show();return;
+                }
+                pendingAnimatedStampName=value;pendingAnimatedFrameMs=frameMs;
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);
+                picker.setType("image/png");picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);
+                startActivityForResult(picker,44);
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private String stampFileName(android.net.Uri uri) {
+        try(android.database.Cursor cursor=getContentResolver().query(uri,
+            new String[]{android.provider.OpenableColumns.DISPLAY_NAME},null,null,null)) {
+            if(cursor!=null&&cursor.moveToFirst()) return cursor.getString(0);
+        } catch(Exception ignored) { }
+        return uri.toString();
+    }
+    private void uploadAnimatedStamp(Intent data,int epoch) {
+        String name=pendingAnimatedStampName,csrf=snapshot==null?"":snapshot.optString("csrf");
+        if(name.isEmpty()||csrf.isEmpty()) return;
+        ArrayList<android.net.Uri> uris=new ArrayList<>();
+        android.content.ClipData clips=data.getClipData();
+        if(clips!=null) for(int i=0;i<clips.getItemCount();i++) uris.add(clips.getItemAt(i).getUri());
+        else if(data.getData()!=null) uris.add(data.getData());
+        if(uris.size()<2||uris.size()>48||new HashSet<>(uris).size()!=uris.size()) {
+            Toast.makeText(this,"重複のないPNGを2〜48枚選択してください",Toast.LENGTH_LONG).show();return;
+        }
+        uris.sort((left,right) -> stampFileName(left).compareToIgnoreCase(stampFileName(right)));
+        for(int i=1;i<uris.size();i++) if(stampFileName(uris.get(i-1)).equalsIgnoreCase(stampFileName(uris.get(i)))) {
+            Toast.makeText(this,"同じファイル名の画像は選択できません",Toast.LENGTH_LONG).show();return;
+        }
+        int duration=pendingAnimatedFrameMs;
+        Toast.makeText(this,"PNGフレームを準備しています",Toast.LENGTH_SHORT).show();
+        network.execute(() -> {
+            try {
+                ArrayList<MessagePhotoUpload.PngDraft> prepared=null;
+                for(int edge:new int[]{256,192,128,96,64,48,32}) {
+                    ArrayList<MessagePhotoUpload.PngDraft> current=new ArrayList<>();long bytes=0;
+                    int width=0,height=0;
+                    for(android.net.Uri uri:uris) {
+                        if(epoch!=sessionEpoch) return;
+                        MessagePhotoUpload.PngDraft png=MessagePhotoUpload.prepareStamp(this,uri,edge);
+                        if(width==0) {width=png.width;height=png.height;}
+                        else if(width!=png.width||height!=png.height) throw new IllegalArgumentException("画像サイズを揃えてください");
+                        bytes+=png.png.length;
+                        if(bytes>1024*1024) break;
+                        current.add(png);
+                    }
+                    if(current.size()==uris.size()&&bytes<=1024*1024) {prepared=current;break;}
+                }
+                if(prepared==null) throw new IllegalArgumentException("画像を1MiB以内にできませんでした");
+                if(epoch!=sessionEpoch) return;
+                JSONArray frames=new JSONArray();
+                for(MessagePhotoUpload.PngDraft png:prepared) {
+                    if(epoch!=sessionEpoch) return;
+                    JSONObject uploaded=ApiClient.uploadStampFrame(png.png,csrf);
+                    frames.put(new JSONObject().put("storageKey",uploaded.getString("storageKey")).put("durationMs",duration));
+                }
+                JSONObject body=new JSONObject().put("csrf",csrf).put("name",name).put("storageProvider","UPLOAD")
+                    .put("frames",frames).put("width",prepared.get(0).width).put("height",prepared.get(0).height);
+                ApiClient.request("/api/calendar-stamp-admin/png-sequence",body);
+                runOnUiThread(() -> {if(epoch==sessionEpoch) {
+                    pendingAnimatedStampName="";load();Toast.makeText(this,"動くスタンプを登録しました",Toast.LENGTH_LONG).show();
+                }});
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,
+                    "動くスタンプを登録できませんでした: "+error.getMessage(),Toast.LENGTH_LONG).show();});
+            }
+        });
     }
     private void deleteStamp(JSONObject stamp) {
         int placementId=stamp.optInt("placementId");
@@ -2430,7 +2514,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if((requestCode!=41 && requestCode!=42 && requestCode!=43) || resultCode!=RESULT_OK || data==null || data.getData()==null) return;
+        if((requestCode!=41 && requestCode!=42 && requestCode!=43 && requestCode!=44) || resultCode!=RESULT_OK || data==null) return;
+        if(requestCode==44) {uploadAnimatedStamp(data,sessionEpoch);return;}
+        if(data.getData()==null) return;
         android.net.Uri uri=data.getData(); int epoch=sessionEpoch,pickedLogId=pendingFamilyLogPhotoId;
         if(requestCode==43) {
             String name=pendingStampName,csrf=snapshot==null?"":snapshot.optString("csrf");
@@ -2577,6 +2663,7 @@ public final class MainActivity extends Activity {
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
+                pendingAnimatedStampName="";
                 stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
@@ -2590,6 +2677,7 @@ public final class MainActivity extends Activity {
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";
+        pendingAnimatedStampName="";
         stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);

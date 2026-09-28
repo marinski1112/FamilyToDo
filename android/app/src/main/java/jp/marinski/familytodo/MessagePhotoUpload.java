@@ -81,6 +81,10 @@ final class MessagePhotoUpload {
         }
     }
     static PngDraft prepareStamp(Context context,Uri uri) throws Exception {
+        return prepareStamp(context,uri,512);
+    }
+    static PngDraft prepareStamp(Context context,Uri uri,int maxEdge) throws Exception {
+        if(maxEdge<1||maxEdge>512) throw new IllegalArgumentException("Invalid stamp size");
         ByteArrayOutputStream raw=new ByteArrayOutputStream();
         try(InputStream input=context.getContentResolver().openInputStream(uri)) {
             if(input==null) throw new IllegalArgumentException("画像を開けません");
@@ -108,7 +112,7 @@ final class MessagePhotoUpload {
             if(orientation==ExifInterface.ORIENTATION_ROTATE_180) transform.postRotate(180);
             if(orientation==ExifInterface.ORIENTATION_ROTATE_270||orientation==ExifInterface.ORIENTATION_TRANSVERSE) transform.postRotate(270);
             if(!transform.isIdentity()) oriented=Bitmap.createBitmap(decoded,0,0,decoded.getWidth(),decoded.getHeight(),transform,true);
-            float scale=Math.min(1f,512f/Math.max(oriented.getWidth(),oriented.getHeight()));
+            float scale=Math.min(1f,(float)maxEdge/Math.max(oriented.getWidth(),oriented.getHeight()));
             int width=Math.max(1,Math.round(oriented.getWidth()*scale)),height=Math.max(1,Math.round(oriented.getHeight()*scale));
             output=Bitmap.createScaledBitmap(oriented,width,height,true);
             ByteArrayOutputStream png=new ByteArrayOutputStream();
