@@ -61,7 +61,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family/join') return await joinFamily(request,context);
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
   if(url.pathname==='/api/me') return await apiMe(context);
-  if(url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
+  if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);

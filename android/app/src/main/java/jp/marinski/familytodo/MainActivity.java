@@ -82,7 +82,7 @@ public final class MainActivity extends Activity {
                 });
             }
             try {
-                JSONObject data = ApiClient.request("/api/android/overview?month=" + requested, null);
+                JSONObject data = ApiClient.request("/api/android/v1/overview?month=" + requested, null);
                 if(epoch!=sessionEpoch) return;
                 JSONObject previous=monthCache.get(requested);
                 boolean accountChanged=previous!=null && (previous.optInt("familyId")!=data.optInt("familyId") || previous.optInt("memberId")!=data.optInt("memberId"));
@@ -97,7 +97,8 @@ public final class MainActivity extends Activity {
                 for (String nearby : new String[]{YearMonth.parse(requested).minusMonths(1).toString(), YearMonth.parse(requested).plusMonths(1).toString()}) {
                     if (epoch!=sessionEpoch) return;
                     if (!monthCache.containsKey(nearby)) {
-                        JSONObject prefetched = ApiClient.request("/api/android/overview?month=" + nearby, null);
+                        JSONObject prefetched = ApiClient.request("/api/android/v1/overview?month=" + nearby, null);
+                        if(prefetched.optInt("schemaVersion")!=1) return;
                         SnapshotCache.write(this,nearby,prefetched);
                         runOnUiThread(() -> { if(epoch==sessionEpoch) monthCache.put(nearby, prefetched); });
                     }

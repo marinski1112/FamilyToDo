@@ -46,7 +46,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
     return scope==='FAMILY'||(scope==='PRIVATE'&&Number(t.private_owner_id)===mid);
   }).slice(0,LIMIT+1);
   if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();
-  const result=json({ok:true,month:raw,from,to,familyId:fid,memberId:mid,csrf:ctx.session.csrfToken,
+  const result=json({ok:true,schemaVersion:1,month:raw,from,to,familyId:fid,memberId:mid,csrf:ctx.session.csrfToken,
     tasks:[...taskResult.results.slice(0,LIMIT),...visibleRecurrent.slice(0,LIMIT)].slice(0,LIMIT),
     shopping:shoppingResult.results.slice(0,LIMIT),items:itemResult.results.slice(0,LIMIT),
     truncated:taskResult.results.length>LIMIT||visibleRecurrent.length>LIMIT||

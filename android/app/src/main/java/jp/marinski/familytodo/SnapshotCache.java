@@ -34,7 +34,7 @@ final class SnapshotCache {
     }
     static void write(Context context,String month,JSONObject data) {
         try {
-            if(!month.equals(data.optString("month"))||!data.optBoolean("ok")) return;
+            if(!month.equals(data.optString("month"))||!data.optBoolean("ok")||data.optInt("schemaVersion")!=1) return;
             JSONObject wrapper=new JSONObject().put("savedAt",System.currentTimeMillis()).put("data",data);
             byte[] source=wrapper.toString().getBytes(StandardCharsets.UTF_8);
             if(source.length>2_000_000) return;
@@ -60,7 +60,7 @@ final class SnapshotCache {
             long age=System.currentTimeMillis()-wrapper.getLong("savedAt");
             if(age<0||age>MAX_AGE_MS) return null;
             JSONObject data=wrapper.getJSONObject("data");
-            return month.equals(data.optString("month"))&&data.optBoolean("ok")?data:null;
+            return month.equals(data.optString("month"))&&data.optBoolean("ok")&&data.optInt("schemaVersion")==1?data:null;
         } catch(Exception ignored) { return null; }
     }
     private static void prune(Context context,String current) {
