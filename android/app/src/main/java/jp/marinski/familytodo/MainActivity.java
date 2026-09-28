@@ -403,9 +403,52 @@ public final class MainActivity extends Activity {
     }
     private void goodsActions(boolean shopping,JSONObject row) {
         new AlertDialog.Builder(this).setTitle(row.optString("name"))
-            .setItems(new String[]{"詳細を編集","カテゴリを変更"},(dialog,which) -> {
-                if(which==0) editGoods(shopping,row); else changeGoodsCategory(shopping,row);
+            .setItems(new String[]{"詳細を編集","カテゴリを変更","完了履歴","削除"},(dialog,which) -> {
+                if(which==0) editGoods(shopping,row);
+                else if(which==1) changeGoodsCategory(shopping,row);
+                else if(which==2) showGoodsHistory(shopping,row);
+                else deleteGoods(shopping,row);
             }).show();
+    }
+    private void showGoodsHistory(boolean shopping,JSONObject row) {
+        int id=row.optInt("id"),epoch=sessionEpoch; if(id<=0) return;
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/android/v1/goods-history?kind="+
+                    (shopping?"shopping":"item")+"&id="+id,null);
+                JSONArray history=result.optJSONArray("history"); StringBuilder lines=new StringBuilder();
+                if(history!=null) for(int i=0;i<history.length();i++) {
+                    JSONObject entry=history.optJSONObject(i); if(entry==null) continue;
+                    if(lines.length()>0) lines.append("\n");
+                    lines.append(entry.optString("occurred_at")).append("  ")
+                        .append(entry.optString("member_name","家族")).append("  ")
+                        .append("COMPLETED".equals(entry.optString("action"))?"完了":"未完了");
+                }
+                String message=lines.length()==0?"履歴はありません。":lines.toString();
+                runOnUiThread(() -> { if(epoch==sessionEpoch) new AlertDialog.Builder(this)
+                    .setTitle(row.optString("name")+" の完了履歴").setMessage(message).setPositiveButton("閉じる",null).show(); });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"履歴を取得できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void deleteGoods(boolean shopping,JSONObject row) {
+        if(snapshot==null || row.optInt("id")<=0) return;
+        new AlertDialog.Builder(this).setTitle(row.optString("name")+" を削除")
+            .setMessage("この項目を削除します。完了履歴は既存の保全処理に従います。")
+            .setPositiveButton("削除",(dialog,which) -> {
+                int id=row.optInt("id"),epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request(shopping?"/api/shopping":"/api/item",new JSONObject()
+                            .put("csrf",csrf).put("action","delete").put("id",id));
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"項目を削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
     }
     private void editGoods(boolean shopping,JSONObject row) {
         if(snapshot==null || row.optInt("id")<=0) return;
@@ -758,6 +801,7 @@ public final class MainActivity extends Activity {
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
+        content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
         content.addView(button("＋ 記録を追加",this::addFamilyLog));
         content.addView(button("＋ タイマー",this::startFamilyLogTimer));
         JSONArray timers=familyLog.optJSONArray("timers");
@@ -901,6 +945,76 @@ public final class MainActivity extends Activity {
                     }
                 });
             }).setNegativeButton("閉じる",null).show();
+    }
+    private void manageFamilyLogSubjects() {
+        JSONArray subjects=familyLog==null?null:familyLog.optJSONArray("subjects");
+        if(subjects==null) return;
+        ArrayList<JSONObject> rows=new ArrayList<>(); ArrayList<String> names=new ArrayList<>();
+        for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i); if(subject==null || subject.optInt("id")<=0) continue;
+            rows.add(subject); names.add(subject.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle("記録対象を選択")
+            .setItems(names.toArray(new String[0]),(dialog,which) -> familyLogSubjectActions(rows.get(which))).show();
+    }
+    private void familyLogSubjectActions(JSONObject subject) {
+        boolean linked=subject.optInt("member_id")>0;
+        String[] actions=linked?new String[]{"名前を変更"}:new String[]{"名前を変更","対象を非表示"};
+        new AlertDialog.Builder(this).setTitle(subject.optString("name"))
+            .setItems(actions,(dialog,which) -> {
+                if(which==0) renameFamilyLogSubject(subject); else disableFamilyLogSubject(subject);
+            }).show();
+    }
+    private void renameFamilyLogSubject(JSONObject subject) {
+        if(snapshot==null) return;
+        EditText input=new EditText(this); input.setText(subject.optString("name")); input.setSingleLine(true);
+        new AlertDialog.Builder(this).setTitle("記録対象の名前を変更").setView(input)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String name=input.getText().toString().trim();
+                if(name.isEmpty()||name.length()>80) { Toast.makeText(this,"名前を80文字以内で入力してください",Toast.LENGTH_SHORT).show(); return; }
+                JSONArray enabled=new JSONArray();
+                for(String type:allowedLogTypes(subject)) enabled.put(type);
+                JSONArray overview=new JSONArray();
+                try {
+                    String raw=subject.optString("overview_quick_types_json");
+                    if(!raw.isEmpty()) overview=new JSONArray(raw);
+                } catch(Exception ignored) { }
+                JSONArray overviewTypes=overview;
+                int epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/family-log",new JSONObject().put("action","subject_update")
+                            .put("csrf",csrf).put("id",subject.optInt("id")).put("name",name)
+                            .put("subject_kind",subject.optString("subject_kind"))
+                            .put("birth_date",subject.optString("birth_date",""))
+                            .put("enabled_types",enabled).put("auto_complete_linked_task",subject.optInt("auto_complete_linked_task")==1)
+                            .put("show_on_family_overview",subject.optInt("show_on_family_overview")==1)
+                            .put("overview_quick_types",overviewTypes));
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"名前を変更できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void disableFamilyLogSubject(JSONObject subject) {
+        if(snapshot==null || subject.optInt("member_id")>0) return;
+        new AlertDialog.Builder(this).setTitle(subject.optString("name")+" を非表示")
+            .setMessage("対象は一覧から非表示になり、実行中のタイマーは中止されます。")
+            .setPositiveButton("非表示",(dialog,which) -> {
+                int epoch=sessionEpoch,id=subject.optInt("id"); String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/family-log",new JSONObject().put("action","subject_disable")
+                            .put("csrf",csrf).put("id",id));
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"非表示にできませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
     }
     private void deleteFamilyLog(JSONObject row) {
         if(snapshot==null || row.optInt("id")<=0) return;
@@ -1149,7 +1263,27 @@ public final class MainActivity extends Activity {
             JSONObject row=messages.optJSONObject(n); if(row==null) continue;
             content.addView(label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
                 +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")));
+            if(row.optBoolean("hasImage") && row.optInt("id")>0)
+                content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
         }
+    }
+    private void showMessagePhoto(int id) {
+        int epoch=sessionEpoch;
+        Toast.makeText(this,"写真を読み込みます",Toast.LENGTH_SHORT).show();
+        network.execute(() -> {
+            try {
+                Bitmap bitmap=ApiClient.thumbnail("/api/messages?photo="+id);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !tab.equals("messages")) return;
+                    ImageView view=new ImageView(this); view.setImageBitmap(bitmap);
+                    view.setAdjustViewBounds(true); view.setContentDescription("伝言の写真");
+                    new AlertDialog.Builder(this).setTitle("伝言の写真").setView(view)
+                        .setPositiveButton("閉じる",null).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"写真を表示できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void addMessage() {
         if(snapshot==null) { load(); return; }

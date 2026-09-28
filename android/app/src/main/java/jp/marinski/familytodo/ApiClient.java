@@ -16,9 +16,10 @@ final class ApiClient {
     private ApiClient() {}
     /** Fetch a bounded same-origin thumbnail, including private upload media. */
     static Bitmap thumbnail(String path) throws Exception {
+        boolean messagePhoto=path.matches("/api/messages\\?photo=[1-9][0-9]*");
         if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
             path.contains("..") || path.contains("#") || path.contains(":") ||
-            !(path.startsWith("/api/calendar-stamp-media?") ||
+            !(messagePhoto || path.startsWith("/api/calendar-stamp-media?") ||
               (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
             throw new IllegalArgumentException("Invalid image path");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
@@ -35,10 +36,18 @@ final class ApiClient {
                 byte[] buffer=new byte[4096]; int count;
                 while((count=stream.read(buffer))!=-1) {
                     data.write(buffer,0,count);
-                    if(data.size()>1_000_000) throw new IllegalStateException("Image too large");
+                    if(data.size()>(messagePhoto?4*1024*1024:1_000_000)) throw new IllegalStateException("Image too large");
                 }
-                BitmapFactory.Options options=new BitmapFactory.Options(); options.inSampleSize=2;
-                Bitmap image=BitmapFactory.decodeByteArray(data.toByteArray(),0,data.size(),options);
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inJustDecodeBounds=true;
+                byte[] bytes=data.toByteArray();
+                BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                if(options.outWidth<=0 || options.outHeight<=0 || options.outWidth>16000 || options.outHeight>16000)
+                    throw new IllegalStateException("Invalid image dimensions");
+                options.inJustDecodeBounds=false; options.inSampleSize=messagePhoto?1:2;
+                while(options.outWidth/options.inSampleSize>1024 || options.outHeight/options.inSampleSize>1024)
+                    options.inSampleSize*=2;
+                Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
                 if(image==null || image.getWidth()>1024 || image.getHeight()>1024) throw new IllegalStateException("Invalid thumbnail");
                 return image;
             }

@@ -16,7 +16,8 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     return json({ok:false,code:'INVALID_DATE'},400,headers);
   const familyId=Number(member.family_id);
   const [subjects,logs,settings,timers]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json FROM family_log_subjects s
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json,s.birth_date,
+      s.auto_complete_linked_task,s.show_on_family_overview,s.overview_quick_types_json,s.member_id FROM family_log_subjects s
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
       WHERE s.family_id=? AND s.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
       ORDER BY CASE WHEN s.member_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(fm.id,s.id),s.id LIMIT 100`).bind(familyId).all<Row>(),

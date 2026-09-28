@@ -1,5 +1,6 @@
 import { checklistCompletionSql } from './checklist-completion';
 import { goodsVisibilitySql } from './goods-visibility';
+import { archiveItemCompletionStatements } from './lifecycle';
 import { json } from './response';
 import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';
 
@@ -106,6 +107,19 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
     await ctx.env.DB.prepare('UPDATE items SET name=?,category=?,memo=?,url=?,due_at=?,updated_at=? WHERE id=? AND family_id=?')
       .bind(name,category||null,memo||null,url||null,due||null,nowJst(),id,m.family_id).run();
     if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
+    return json({ok:true,id});
+  }
+  if(action==='delete'){
+    const id=Number(b.id||0);
+    if(!Number.isSafeInteger(id)||id<=0)return bad('持ち物が不正です。');
+    const current=await ctx.env.DB.prepare(`SELECT i.created_by FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first() as Row|null;
+    if(!current)return bad('持ち物が見つかりません。',404);
+    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())&&Number(current.created_by)!==m.id)
+      return bad('削除権限がありません。',403,'FORBIDDEN');
+    await ctx.env.DB.batch([
+      ...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
+      ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(id,m.family_id),
+    ]);
     return json({ok:true,id});
   }
 
