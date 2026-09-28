@@ -32,10 +32,10 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
       AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
         OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at) BETWEEN date(?) AND date(?)))
       ORDER BY coalesce(t.start_at,t.due_at),t.id LIMIT ?`).bind(fid,mid,to,from,from,to,LIMIT+1).all<Row>(),
-    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date FROM shopping_items s
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,s.memo,s.url FROM shopping_items s
       WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND (s.status<>'completed' OR s.due_date BETWEEN ? AND ?)
       ORDER BY s.status,s.due_date,s.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.id,i.name,i.category,i.status,i.due_at FROM items i
+    ctx.env.DB.prepare(`SELECT i.id,i.name,i.category,i.status,i.due_at,i.memo,i.url FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND (i.status<>'completed' OR date(i.due_at) BETWEEN date(?) AND date(?))
       ORDER BY i.status,i.due_at,i.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT 100').bind(fid).all<Row>(),

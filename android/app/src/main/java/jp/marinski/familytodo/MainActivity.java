@@ -390,7 +390,7 @@ public final class MainActivity extends Activity {
                 box.setText(row.optString("name")+(shopping?" ×"+row.optString("quantity","1"):""));
                 box.setChecked("completed".equals(row.optString("status")));
                 box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
-                box.setOnLongClickListener(v -> { changeGoodsCategory(shopping,row); return true; });
+                box.setOnLongClickListener(v -> { goodsActions(shopping,row); return true; });
                 group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
@@ -400,6 +400,62 @@ public final class MainActivity extends Activity {
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
         }
+    }
+    private void goodsActions(boolean shopping,JSONObject row) {
+        new AlertDialog.Builder(this).setTitle(row.optString("name"))
+            .setItems(new String[]{"詳細を編集","カテゴリを変更"},(dialog,which) -> {
+                if(which==0) editGoods(shopping,row); else changeGoodsCategory(shopping,row);
+            }).show();
+    }
+    private void editGoods(boolean shopping,JSONObject row) {
+        if(snapshot==null || row.optInt("id")<=0) return;
+        // The server checks edit rights even if the cached snapshot is stale.
+        EditText name=new EditText(this); name.setHint(shopping?"買い物名":"持ち物名"); name.setText(row.optString("name"));
+        EditText quantity=new EditText(this); quantity.setHint("数量"); quantity.setText(row.optString("quantity","1"));
+        EditText memo=new EditText(this); memo.setHint("メモ"); memo.setText(row.optString("memo",""));
+        EditText url=new EditText(this); url.setHint("URL"); url.setText(row.optString("url",""));
+        url.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        ArrayList<String> categories=new ArrayList<>(); categories.add("未分類"); categories.addAll(categoryOrder(shopping));
+        String oldCategory=category(row); if(!categories.contains(oldCategory)) categories.add(oldCategory);
+        Spinner choice=new Spinner(this); choice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,categories));
+        choice.setSelection(categories.indexOf(oldCategory));
+        String rawDate=shopping?row.optString("due_date"):row.optString("due_at");
+        final String[] due={rawDate.length()>=10?rawDate.substring(0,10):""};
+        final Button[] dateRef=new Button[1];
+        Button date=button("日付: "+(due[0].isEmpty()?"指定なし":due[0]),() -> {
+            LocalDate current=due[0].isEmpty()?selectedDay:LocalDate.parse(due[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                due[0]=LocalDate.of(y,m+1,d).toString(); dateRef[0].setText("日付: "+due[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        }); dateRef[0]=date;
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(name); form.addView(label("カテゴリ")); form.addView(choice);
+        if(shopping) form.addView(quantity);
+        form.addView(memo); form.addView(url); form.addView(date);
+        form.addView(button("日付を解除",() -> { due[0]=""; dateRef[0].setText("日付: 指定なし"); }));
+        ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle(shopping?"買い物を編集":"持ち物を編集").setView(scroll)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String title=name.getText().toString().trim(),amount=quantity.getText().toString().trim();
+                String note=memo.getText().toString().trim(),link=url.getText().toString().trim();
+                if(title.isEmpty()||title.length()>200||note.length()>2000||link.length()>2048||shopping&&amount.length()>80) {
+                    Toast.makeText(this,"入力内容を確認してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                String csrf=snapshot.optString("csrf"),cat=categories.get(choice.getSelectedItemPosition());
+                int id=row.optInt("id"),epoch=sessionEpoch; String deadline=due[0];
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request(shopping?"/api/shopping":"/api/item",new JSONObject()
+                            .put("csrf",csrf).put("action","update_details").put("id",id).put("name",title)
+                            .put("quantity",amount).put("category","未分類".equals(cat)?"":cat)
+                            .put("memo",note).put("url",link).put("due_date",deadline));
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"項目を編集できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private void categoryActions(boolean shopping,String name) {
         ArrayList<String> actions=new ArrayList<>();
@@ -703,12 +759,36 @@ public final class MainActivity extends Activity {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
         content.addView(button("＋ 記録を追加",this::addFamilyLog));
+        content.addView(button("＋ タイマー",this::startFamilyLogTimer));
+        JSONArray timers=familyLog.optJSONArray("timers");
+        if(timers!=null && timers.length()>0) {
+            content.addView(label("実行中のタイマー"));
+            for(int i=0;i<timers.length();i++) {
+                JSONObject timer=timers.optJSONObject(i); if(timer==null) continue;
+                String name=timer.optString("timer_label","タイマー"),subject=timer.optString("subject_name");
+                long started=timer.optLong("started_at_ms"),minutes=started>0?
+                    Math.max(0,(System.currentTimeMillis()-started)/60000):0;
+                content.addView(button((subject.isEmpty()?"":subject+" ・ ")+name+" "+minutes+"分  終了",() -> finishFamilyLogTimer(timer,false)));
+                if(!"SLEEP".equals(timer.optString("log_type")))
+                    content.addView(button(name+"を記録せず中止",() -> finishFamilyLogTimer(timer,true)));
+            }
+        }
+        if(familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
         for(int i=0;i<subjects.length();i++) {
             JSONObject subject=subjects.optJSONObject(i);
             if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
             content.addView(label(subject.optString("name")));
             LinearLayout actions=new LinearLayout(this);
             ArrayList<String> enabled=allowedLogTypes(subject);
+            if(enabled.contains("SLEEP")) {
+                boolean sleeping=false;
+                if(timers!=null) for(int n=0;n<timers.length();n++) {
+                    JSONObject running=timers.optJSONObject(n);
+                    if(running!=null && running.optInt("subject_id")==subject.optInt("id") &&
+                        "SLEEP".equals(running.optString("log_type"))) sleeping=true;
+                }
+                if(!sleeping) actions.addView(button("😴 睡眠開始",() -> changeFamilyLogTimer("sleep_start",subject.optInt("id"),0,"")));
+            }
             if(enabled.contains("MILK")) actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
             if(enabled.contains("DIAPER")) {
                 actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
@@ -717,6 +797,20 @@ public final class MainActivity extends Activity {
             if(actions.getChildCount()>0) content.addView(actions);
         }
         if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
+        if(logs!=null && !familyLog.optBoolean("truncated")) {
+            double milk=0; int diaper=0,sleep=0;
+            for(int i=0;i<logs.length();i++) {
+                JSONObject log=logs.optJSONObject(i); if(log==null) continue;
+                switch(log.optString("log_type")) {
+                    case "MILK": if("ml".equalsIgnoreCase(log.optString("unit"))) milk+=log.optDouble("amount",0); break;
+                    case "DIAPER": diaper++; break;
+                    case "SLEEP": sleep+=log.optInt("duration_minutes"); break;
+                    default: break;
+                }
+            }
+            content.addView(label("当日の集計（表示中の全対象）  ミルク "+java.text.NumberFormat.getNumberInstance().format(milk)+
+                "ml ・ おむつ "+diaper+"回 ・ 睡眠 "+sleep+"分"));
+        }
         content.addView(label("当日の記録"));
         if(logs==null || logs.length()==0) { content.addView(label("記録はありません")); return; }
         for(int i=0;i<logs.length();i++) {
@@ -732,6 +826,49 @@ public final class MainActivity extends Activity {
             entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
             content.addView(entry);
         }
+    }
+    private void startFamilyLogTimer() {
+        if(snapshot==null || familyLog==null) return;
+        EditText name=new EditText(this); name.setHint("タイマー名（例: お散歩）"); name.setSingleLine(true);
+        JSONArray subjects=familyLog.optJSONArray("subjects");
+        ArrayList<String> labels=new ArrayList<>(); labels.add("家族共通");
+        ArrayList<Integer> ids=new ArrayList<>(); ids.add(0);
+        if(subjects!=null) for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i);
+            if(subject!=null && subject.optInt("id")>0) { labels.add(subject.optString("name")); ids.add(subject.optInt("id")); }
+        }
+        Spinner choice=new Spinner(this);
+        choice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(name); form.addView(label("対象")); form.addView(choice);
+        new AlertDialog.Builder(this).setTitle("タイマーを開始").setView(form)
+            .setPositiveButton("開始",(dialog,which) -> {
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()||value.length()>80) { Toast.makeText(this,"名前を1〜80文字で入力してください",Toast.LENGTH_SHORT).show(); return; }
+                changeFamilyLogTimer("timer_start",ids.get(choice.getSelectedItemPosition()),0,value);
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void finishFamilyLogTimer(JSONObject timer,boolean cancel) {
+        int id=timer.optInt("id"); if(id<=0) return;
+        String action=cancel?"timer_cancel":"SLEEP".equals(timer.optString("log_type"))?"sleep_stop":"timer_stop";
+        new AlertDialog.Builder(this).setTitle(cancel?"タイマーを中止":"タイマーを終了")
+            .setMessage(cancel?"記録を残さずに中止します。":"終了時刻までを記録します。")
+            .setPositiveButton(cancel?"中止":"終了",(dialog,which) -> changeFamilyLogTimer(action,0,id,""))
+            .setNegativeButton("戻る",null).show();
+    }
+    private void changeFamilyLogTimer(String action,int subjectId,int timerId,String timerLabel) {
+        if(snapshot==null) return;
+        String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/family-log",new JSONObject().put("csrf",csrf).put("action",action)
+                    .put("subject_id",subjectId).put("timer_id",timerId).put("timer_label",timerLabel).put("log_type","TIMER"));
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"タイマーを操作できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void familyLogActions(JSONObject row) {
         boolean editable=row.optInt("subject_id")>0;

@@ -15,7 +15,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     Number.isNaN(Date.parse(`${date}T00:00:00Z`))||new Date(`${date}T00:00:00Z`).toISOString().slice(0,10)!==date)
     return json({ok:false,code:'INVALID_DATE'},400,headers);
   const familyId=Number(member.family_id);
-  const [subjects,logs,settings]=await Promise.all([
+  const [subjects,logs,settings,timers]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json FROM family_log_subjects s
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
       WHERE s.family_id=? AND s.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
@@ -28,6 +28,12 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
           OR NOT EXISTS (SELECT 1 FROM family_log_subjects a WHERE a.id=l.subject_id AND a.family_id=l.family_id AND a.subject_kind='ADULT'))
       ORDER BY l.occurred_at DESC,l.id DESC LIMIT 201`).bind(familyId,`${date} 00:00:00`,`${date} 23:59:59`,familyId).all<Row>(),
     ctx.env.DB.prepare("SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key='family_log_milk_amount_presets' LIMIT 1").bind(familyId).first<Row>(),
+    ctx.env.DB.prepare(`SELECT x.id,x.subject_id,x.log_type,x.timer_label,x.started_at,x.started_at_ms,s.name subject_name
+      FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id
+      WHERE x.family_id=? AND x.status='running'
+        AND (COALESCE((SELECT show_adult_logs FROM family_log_settings WHERE family_id=?),1)=1
+          OR COALESCE(s.subject_kind,'')<>'ADULT')
+      ORDER BY x.started_at_ms LIMIT 101`).bind(familyId,familyId).all<Row>(),
   ]);
   let presets=[160,240];
   try{
@@ -35,5 +41,6 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     if(Array.isArray(values))presets=values.map(Number).filter(v=>Number.isInteger(v)&&v>0&&v<=2000).slice(0,6);
   }catch{/* defaults */}
   return json({ok:true,schemaVersion:1,date,familyId,memberId:Number(member.id),
-    subjects:subjects.results,logs:logs.results.slice(0,200),truncated:logs.results.length>200,milkPresets:presets},200,headers);
+    subjects:subjects.results,logs:logs.results.slice(0,200),truncated:logs.results.length>200,
+    timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets},200,headers);
 }
