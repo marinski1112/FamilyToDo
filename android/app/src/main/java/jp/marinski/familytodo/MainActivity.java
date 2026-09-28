@@ -216,7 +216,9 @@ public final class MainActivity extends Activity {
             JSONObject task=tasks.optJSONObject(n);
             if(task==null||!taskOnDay(task,selectedDay.toString())) continue;
             boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
-            CheckBox box=new CheckBox(this); box.setText((event?"📌 ":"")+task.optString("title"));
+            String start=dateValue(task,"start_at","due_at");
+            String time=task.optInt("all_day")!=1 && start.length()>=16?start.substring(11,16)+"  ":"";
+            CheckBox box=new CheckBox(this); box.setText(time+(event?"📌 ":"")+task.optString("title"));
             box.setChecked("completed".equals(task.optString("status")));
             int recurrenceId=task.optInt("recurrence_occurrence_id");
             int id=recurrenceId>0?recurrenceId:task.optInt("id");
@@ -522,16 +524,45 @@ public final class MainActivity extends Activity {
         });
         dateRef[0]=date;
         CheckBox event=new CheckBox(this); event.setText("イベントとして登録");
+        CheckBox allDay=new CheckBox(this); allDay.setText("終日"); allDay.setChecked(true);
+        final String[] startTime={"09:00"}, endTime={"10:00"};
+        final Button[] startTimeButton=new Button[1], endTimeButton=new Button[1];
+        Button startButton=button("開始: 09:00",() -> new TimePickerDialog(this,(picker,h,m) -> {
+            startTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);
+            startTimeButton[0].setText("開始: "+startTime[0]);
+        },9,0,true).show());
+        Button endButton=button("終了: 10:00",() -> new TimePickerDialog(this,(picker,h,m) -> {
+            endTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);
+            endTimeButton[0].setText("終了: "+endTime[0]);
+        },10,0,true).show());
+        startTimeButton[0]=startButton; endTimeButton[0]=endButton;
+        startButton.setVisibility(android.view.View.GONE); endButton.setVisibility(android.view.View.GONE);
+        allDay.setOnCheckedChangeListener((view,checked) -> {
+            startButton.setVisibility(checked?android.view.View.GONE:android.view.View.VISIBLE);
+            endButton.setVisibility(checked?android.view.View.GONE:android.view.View.VISIBLE);
+        });
+        EditText description=new EditText(this); description.setHint("説明（任意）");
+        EditText location=new EditText(this); location.setHint("場所（任意）");
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(32,8,32,8); form.addView(title); form.addView(date); form.addView(event);
-        new AlertDialog.Builder(this).setTitle("タスク・イベントを作成").setView(form)
+        form.addView(allDay); form.addView(startButton); form.addView(endButton);
+        form.addView(description); form.addView(location);
+        ScrollView formScroll=new ScrollView(this); formScroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("タスク・イベントを作成").setView(formScroll)
             .setPositiveButton("保存",(dialog,which)->{
                 String value=title.getText().toString().trim(); if(value.isEmpty()) return;
                 String csrf=snapshot.optString("csrf"); String day=selectedDate[0]; boolean isEvent=event.isChecked();
+                boolean isAllDay=allDay.isChecked(); String start=startTime[0], end=endTime[0];
+                String detail=description.getText().toString().trim(), place=location.getText().toString().trim();
+                if(!isAllDay && start.compareTo(end)>=0) {
+                    Toast.makeText(this,"終了時刻は開始時刻より後にしてください",Toast.LENGTH_SHORT).show(); return;
+                }
                 network.execute(() -> {
                     try {
                         ApiClient.request("/api/task",new JSONObject().put("csrf",csrf).put("title",value)
-                            .put("dateOnly",day).put("endDateOnly",day).put("allDay",true)
+                            .put("dateOnly",day).put("endDateOnly",day).put("allDay",isAllDay)
+                            .put("startTime",isAllDay?"":start).put("endTime",isAllDay?"":end)
+                            .put("description",detail).put("location",place)
                             .put("is_event",isEvent).put("idempotency_key",java.util.UUID.randomUUID().toString()));
                         runOnUiThread(this::load);
                     } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this,"保存できませんでした",Toast.LENGTH_SHORT).show()); }
