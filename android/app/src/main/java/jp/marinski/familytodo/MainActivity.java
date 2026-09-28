@@ -34,6 +34,8 @@ public final class MainActivity extends Activity {
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
     private boolean hasOlderMessages;
+    private int sessionEpoch;
+    private boolean showingCached;
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "calendar";
@@ -56,6 +58,7 @@ public final class MainActivity extends Activity {
         controls.addView(button("更新", this::load));
         controls.addView(button("▶", () -> { month=month.plusMonths(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
+        controls.addView(button("ログアウト", this::logout));
         root.addView(controls);
         ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
@@ -63,22 +66,41 @@ public final class MainActivity extends Activity {
     }
     private void load() {
         String requested = month.toString();
+        int epoch=sessionEpoch;
         snapshot = monthCache.get(requested);
+        showingCached=snapshot!=null;
         render();
         network.execute(() -> {
+            if(snapshot==null) {
+                JSONObject cached=SnapshotCache.read(this,requested);
+                if(cached!=null) runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    monthCache.put(requested,cached);
+                    if(requested.equals(month.toString())&&snapshot==null) { snapshot=cached; showingCached=true; render(); }
+                });
+            }
             try {
                 JSONObject data = ApiClient.request("/api/android/overview?month=" + requested, null);
+                if(epoch!=sessionEpoch) return;
+                JSONObject previous=monthCache.get(requested);
+                boolean accountChanged=previous!=null && (previous.optInt("familyId")!=data.optInt("familyId") || previous.optInt("memberId")!=data.optInt("memberId"));
+                if(accountChanged) SnapshotCache.clear(this);
+                SnapshotCache.write(this,requested,data);
                 runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); }
                     monthCache.put(requested, data);
-                    if (requested.equals(month.toString())) { snapshot=data; render(); }
+                    if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
                 for (String nearby : new String[]{YearMonth.parse(requested).minusMonths(1).toString(), YearMonth.parse(requested).plusMonths(1).toString()}) {
+                    if (epoch!=sessionEpoch) return;
                     if (!monthCache.containsKey(nearby)) {
                         JSONObject prefetched = ApiClient.request("/api/android/overview?month=" + nearby, null);
-                        runOnUiThread(() -> monthCache.put(nearby, prefetched));
+                        SnapshotCache.write(this,nearby,prefetched);
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) monthCache.put(nearby, prefetched); });
                     }
                 }
-            } catch (SecurityException e) { runOnUiThread(() -> { monthCache.clear(); snapshot=null; showLogin(); }); }
+            } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null; SnapshotCache.clear(this); showLogin(); }); }
             catch (Exception e) { runOnUiThread(() -> { if (snapshot == null) { content.removeAllViews(); content.addView(label("読み込めませんでした。更新を押してください。")); } }); }
         });
     }
@@ -89,6 +111,7 @@ public final class MainActivity extends Activity {
         content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
         if (tab.equals("calendar")) content.addView(button("＋ タスク・イベント", this::addTask));
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
+        if (showingCached) content.addView(label("保存済みデータを表示中・更新を確認しています"));
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
     }
@@ -228,6 +251,18 @@ public final class MainActivity extends Activity {
                         runOnUiThread(()->loadMessages(0));
                     } catch(Exception e) { runOnUiThread(()->Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show()); }
                 });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void logout() {
+        new AlertDialog.Builder(this).setTitle("ログアウト")
+            .setMessage("端末内のカレンダーとチェックリストを削除し、位置共有を停止します。")
+            .setPositiveButton("ログアウト",(dialog,which)->{
+                sessionEpoch++;
+                stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
+                network.execute(() -> SnapshotCache.clear(this));
+                monthCache.clear(); snapshot=null; messages=new JSONArray();
+                android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
+                android.webkit.CookieManager.getInstance().flush();
             }).setNegativeButton("閉じる",null).show();
     }
     private void showLogin() {
