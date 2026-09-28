@@ -273,15 +273,107 @@ public final class MainActivity extends Activity {
                 box.setText(row.optString("name")+(shopping?" ×"+row.optString("quantity","1"):""));
                 box.setChecked("completed".equals(row.optString("status")));
                 box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
+                box.setOnLongClickListener(v -> { changeGoodsCategory(shopping,row); return true; });
                 group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                TextView heading=label(category+"  ✎");
-                heading.setOnClickListener(v -> renameCategory(shopping,category));
+                TextView heading=label(category+"  ⋮");
+                heading.setOnClickListener(v -> categoryActions(shopping,category));
                 content.addView(heading);
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
         }
+    }
+    private void categoryActions(boolean shopping,String name) {
+        ArrayList<String> actions=new ArrayList<>();
+        actions.add("名前を変更"); actions.add("上へ移動"); actions.add("下へ移動");
+        JSONObject catalog=shopping?shoppingCategories:itemCategories;
+        if(catalog!=null && catalog.optBoolean("canManageCategories")) actions.add("カテゴリを削除（項目は未分類へ）");
+        new AlertDialog.Builder(this).setTitle(name).setItems(actions.toArray(new String[0]),(dialog,which) -> {
+            if(which==0) renameCategory(shopping,name);
+            else if(which==1 || which==2) moveCategory(shopping,name,which==1?-1:1);
+            else if(which==3) deleteCategory(shopping,name);
+        }).show();
+    }
+    private ArrayList<String> categoryOrder(boolean shopping) {
+        JSONObject catalog=shopping?shoppingCategories:itemCategories;
+        ArrayList<String> names=new ArrayList<>();
+        if(catalog==null) return names;
+        JSONArray order=catalog.optJSONArray("order"), available=catalog.optJSONArray("categories");
+        if(order!=null) for(int i=0;i<order.length();i++) {
+            String value=order.optString(i); if(contains(available,value) && !names.contains(value)) names.add(value);
+        }
+        if(available!=null) for(int i=0;i<available.length();i++) {
+            String value=available.optString(i); if(!value.isEmpty() && !names.contains(value)) names.add(value);
+        }
+        return names;
+    }
+    private void moveCategory(boolean shopping,String name,int direction) {
+        ArrayList<String> names=categoryOrder(shopping);
+        int from=names.indexOf(name), to=from+direction;
+        if(from<0 || to<0 || to>=names.size()) return;
+        java.util.Collections.swap(names,from,to);
+        String csrf=snapshot.optString("csrf"), path=shopping?"/api/shopping-categories":"/api/item";
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request(path,new JSONObject().put("csrf",csrf)
+                    .put("action",shopping?"reorder":"category_reorder").put("order",new JSONArray(names)));
+                JSONObject updated=ApiClient.request(path,null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    if(shopping) shoppingCategories=updated; else itemCategories=updated;
+                    if(tab.equals(shopping?"shopping":"item")) render();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"並べ替えできませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void deleteCategory(boolean shopping,String name) {
+        if(snapshot==null) return;
+        new AlertDialog.Builder(this).setTitle(name+" を削除")
+            .setMessage("このカテゴリの項目は削除せず、未分類に移動します。")
+            .setPositiveButton("カテゴリを削除",(dialog,which) -> {
+                String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/shopping-category-mutation",new JSONObject()
+                            .put("csrf",csrf).put("action","delete_many")
+                            .put("kind",shopping?"shopping":"item")
+                            .put("names",new JSONArray().put(name)).put("item_policy","unclassified"));
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"カテゴリを削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void changeGoodsCategory(boolean shopping,JSONObject row) {
+        if(snapshot==null || row.optInt("id")<=0) return;
+        ArrayList<String> options=new ArrayList<>(); options.add("未分類");
+        options.addAll(categoryOrder(shopping));
+        String current=category(row);
+        if(!options.contains(current)) options.add(current);
+        new AlertDialog.Builder(this).setTitle(row.optString("name")+" のカテゴリ")
+            .setSingleChoiceItems(options.toArray(new String[0]),options.indexOf(current),(dialog,which) -> {
+                dialog.dismiss(); String selected=options.get(which);
+                if(selected.equals(current)) return;
+                String csrf=snapshot.optString("csrf"); int id=row.optInt("id"), epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request(shopping?"/api/shopping":"/api/item",new JSONObject()
+                            .put("action","update_category").put("id",id).put("csrf",csrf)
+                            .put("category","未分類".equals(selected)?"":selected));
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"カテゴリを変更できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private void renameCategory(boolean shopping,String oldName) {
         if(snapshot==null || "未分類".equals(oldName)) return;
