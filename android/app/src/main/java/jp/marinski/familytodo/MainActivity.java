@@ -408,12 +408,14 @@ public final class MainActivity extends Activity {
                 else if(action==2) moveStamp(stamp); else deleteStamp(stamp);
             }).show();
     }
-    private void loadStampAssets() {
+    private void loadStampAssets() { loadStampAssets(""); }
+    private void loadStampAssets(String cursor) {
         if(snapshot==null) return;
         int epoch=sessionEpoch;
         network.execute(() -> {
             try {
-                JSONObject result=ApiClient.request("/api/calendar-stamp-admin/assets",null);
+                JSONObject result=ApiClient.request("/api/calendar-stamp-admin/assets"+
+                    (cursor.isEmpty()?"":"?cursor="+cursor),null);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
                     JSONArray assets=result.optJSONArray("assets");
@@ -424,9 +426,14 @@ public final class MainActivity extends Activity {
                         names.add(asset==null?"スタンプ":(asset.optBoolean("active")?"":"（無効）")+
                             asset.optString("name")+" ・ "+("ANIMATED".equals(asset.optString("kind"))?"動く":"静止画"));
                     }
+                    String next=result.optString("nextCursor","");
+                    if(!next.matches("[01]:[1-9][0-9]*")) next="";
+                    if(!next.isEmpty()) names.add("次のスタンプを表示");
                     if(names.isEmpty()) names.add("登録済みスタンプはありません");
+                    final String nextPage=next;
                     new AlertDialog.Builder(this).setTitle("スタンプ管理")
                         .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            if(which==assets.length()&&!nextPage.isEmpty()) {loadStampAssets(nextPage);return;}
                             JSONObject asset=assets.optJSONObject(which);
                             if(asset==null) return;
                             boolean active=asset.optBoolean("active");
