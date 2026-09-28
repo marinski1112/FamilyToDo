@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -63,7 +64,11 @@ public final class MainActivity extends Activity {
     }
     private TextView label(String value) { TextView t = new TextView(this); t.setText(value); t.setTextSize(17); t.setPadding(12, 12, 12, 12); return t; }
     private void showNative() {
-        if (login != null) { login.destroy(); login = null; }
+        if (login != null) {
+            login.destroy(); login = null;
+            monthCache.clear(); snapshot=null; messages=new JSONArray();
+            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
+        }
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         LinearLayout tabs = new LinearLayout(this);
         tabs.addView(button("カレンダー", () -> { tab="calendar"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
@@ -100,10 +105,10 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject data = ApiClient.request("/api/android/v1/overview?month=" + requested, null);
                 if(epoch!=sessionEpoch) return;
+                Map<String,JSONObject> fetched=new HashMap<>(); fetched.put(requested,data);
                 JSONObject previous=monthCache.get(requested);
                 boolean accountChanged=previous!=null && (previous.optInt("familyId")!=data.optInt("familyId") || previous.optInt("memberId")!=data.optInt("memberId"));
                 if(accountChanged) SnapshotCache.clear(this);
-                SnapshotCache.write(this,requested,data);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
                     if(accountChanged) { monthCache.clear(); messages=new JSONArray(); shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
@@ -135,9 +140,19 @@ public final class MainActivity extends Activity {
                     if (!monthCache.containsKey(nearby)) {
                         JSONObject prefetched = ApiClient.request("/api/android/v1/overview?month=" + nearby, null);
                         if(prefetched.optInt("schemaVersion")!=1) return;
-                        SnapshotCache.write(this,nearby,prefetched);
+                        if(prefetched.optInt("familyId")!=data.optInt("familyId") || prefetched.optInt("memberId")!=data.optInt("memberId")) return;
+                        fetched.put(nearby,prefetched);
                         runOnUiThread(() -> { if(epoch==sessionEpoch) monthCache.put(nearby, prefetched); });
                     }
+                }
+                if(epoch==sessionEpoch) {
+                    for(Map.Entry<String,JSONObject> entry:monthCache.entrySet()) {
+                        JSONObject value=entry.getValue();
+                        if(value.optInt("familyId")==data.optInt("familyId") && value.optInt("memberId")==data.optInt("memberId"))
+                            fetched.putIfAbsent(entry.getKey(),value);
+                    }
+                    for(Map.Entry<String,JSONObject> entry:fetched.entrySet())
+                        SnapshotCache.write(this,entry.getKey(),entry.getValue());
                 }
             } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null; SnapshotCache.clear(this); showLogin(); }); }
             catch (Exception e) { runOnUiThread(() -> { if (snapshot == null) { content.removeAllViews(); content.addView(label("読み込めませんでした。更新を押してください。")); } }); }
@@ -325,7 +340,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
                     if(shopping) shoppingCategories=updated; else itemCategories=updated;
-                    if(tab.equals(shopping?"shopping":"item")) render();
+                    load();
                 });
             } catch(Exception error) {
                 runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"並べ替えできませんでした",Toast.LENGTH_SHORT).show(); });
@@ -418,7 +433,7 @@ public final class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if(epoch!=sessionEpoch) return;
                             if(shopping) shoppingCategories=updated; else itemCategories=updated;
-                            if(tab.equals(shopping?"shopping":"item")) render();
+                            load();
                         });
                     } catch(Exception error) {
                         runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"カテゴリを追加できませんでした",Toast.LENGTH_SHORT).show(); });
@@ -555,7 +570,17 @@ public final class MainActivity extends Activity {
     }
     private void addMessage() {
         if(snapshot==null) { load(); return; }
-        EditText text=new EditText(this); text.setHint("家族全員への伝言"); text.setMinLines(3);
+        EditText text=new EditText(this); text.setHint("伝言を入力"); text.setMinLines(3);
+        ArrayList<String> recipients=new ArrayList<>(); recipients.add("家族全員");
+        ArrayList<Integer> recipientIds=new ArrayList<>(); recipientIds.add(0);
+        JSONArray members=snapshot.optJSONArray("members");
+        if(members!=null) for(int i=0;i<members.length();i++) {
+            JSONObject person=members.optJSONObject(i);
+            if(person==null || person.optInt("id")<=0) continue;
+            recipients.add(person.optString("name","メンバー")); recipientIds.add(person.optInt("id"));
+        }
+        Spinner recipient=new Spinner(this);
+        recipient.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,recipients));
         final String[] reminder={""};
         final Button[] reminderRef=new Button[1];
         Button when=button("通知予約: 指定なし",() -> {
@@ -570,17 +595,19 @@ public final class MainActivity extends Activity {
         reminderRef[0]=when;
         Button clear=button("通知予約を解除",() -> { reminder[0]=""; reminderRef[0].setText("通知予約: 指定なし"); });
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(32,8,32,8); form.addView(text); form.addView(when); form.addView(clear);
+        form.setPadding(32,8,32,8); form.addView(label("宛先")); form.addView(recipient);
+        form.addView(text); form.addView(when); form.addView(clear);
         new AlertDialog.Builder(this).setTitle("伝言する").setView(form)
             .setPositiveButton("送る",(dialog,which)->{
                 String body=text.getText().toString().trim(); if(body.isEmpty()) return;
                 String csrf=snapshot.optString("csrf"), notifyAt=reminder[0]; int epoch=sessionEpoch;
+                int recipientId=recipientIds.get(recipient.getSelectedItemPosition());
                 network.execute(() -> {
                     try {
                         if(epoch!=sessionEpoch) return;
                         ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body)
-                            .put("target_member_id",0).put("reminder_at",notifyAt));
-                        if(epoch==sessionEpoch) runOnUiThread(()->loadMessages(0));
+                            .put("target_member_id",recipientId).put("reminder_at",notifyAt));
+                        if(epoch==sessionEpoch) runOnUiThread(()->{ load(); loadMessages(0); });
                     } catch(Exception e) {
                         runOnUiThread(()->{ if(epoch==sessionEpoch) Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show(); });
                     }
@@ -602,6 +629,8 @@ public final class MainActivity extends Activity {
     }
     private void showLogin() {
         if (login != null) return;
+        monthCache.clear(); snapshot=null; shoppingCategories=null; itemCategories=null;
+        stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
         frame.addView(button("ログイン後、ネイティブ画面に戻る", () -> { showNative(); load(); }));

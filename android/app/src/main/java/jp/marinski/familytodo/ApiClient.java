@@ -60,7 +60,10 @@ final class ApiClient {
             }
             int status = connection.getResponseCode();
             String setCookie = connection.getHeaderField("Set-Cookie");
-            if (setCookie != null) CookieManager.getInstance().setCookie(ORIGIN, setCookie);
+            if (setCookie != null) {
+                CookieManager.getInstance().setCookie(ORIGIN, setCookie);
+                CookieManager.getInstance().flush();
+            }
             if (status == 401) throw new SecurityException("ログインしてください");
             try (var stream = status < 400 ? connection.getInputStream() : connection.getErrorStream()) {
                 if (stream == null) throw new IllegalStateException("応答がありません");

@@ -24,7 +24,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
   const from=day(start),to=day(end),fid=Number(member.family_id),mid=Number(member.id);
   if(!Number.isSafeInteger(fid)||fid<=0||!Number.isSafeInteger(mid)||mid<=0)return json({ok:false,code:'FORBIDDEN'},403,headers);
 
-  const [taskResult,shoppingResult,itemResult]=await Promise.all([
+  const [taskResult,shoppingResult,itemResult,memberResult]=await Promise.all([
     ctx.env.DB.prepare(`SELECT t.id,t.title,t.task_kind,t.status,t.start_at,t.end_at,t.due_at,t.all_day,t.calendar_color
       FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')}
       AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
@@ -38,6 +38,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
     ctx.env.DB.prepare(`SELECT i.id,i.name,i.category,i.status,i.due_at FROM items i
       WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND (i.status<>'completed' OR date(i.due_at) BETWEEN date(?) AND date(?))
       ORDER BY i.status,i.due_at,i.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
+    ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT 100').bind(fid).all<Row>(),
   ]);
   const recurrent=await recurringForRange(ctx,from,to);
   const visibleRecurrent=recurrent.filter(t=>{
@@ -49,6 +50,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
   const result=json({ok:true,schemaVersion:1,month:raw,from,to,familyId:fid,memberId:mid,csrf:ctx.session.csrfToken,
     tasks:[...taskResult.results.slice(0,LIMIT),...visibleRecurrent.slice(0,LIMIT)].slice(0,LIMIT),
     shopping:shoppingResult.results.slice(0,LIMIT),items:itemResult.results.slice(0,LIMIT),
+    members:memberResult.results,
     truncated:taskResult.results.length>LIMIT||visibleRecurrent.length>LIMIT||
       taskResult.results.length+visibleRecurrent.length>LIMIT||shoppingResult.results.length>LIMIT||itemResult.results.length>LIMIT,
   },200,headers);

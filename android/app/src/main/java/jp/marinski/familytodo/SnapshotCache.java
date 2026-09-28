@@ -4,10 +4,12 @@ import android.content.Context;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
+import android.webkit.CookieManager;
 import org.json.JSONObject;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.security.KeyStore;
 import java.time.YearMonth;
 import javax.crypto.Cipher;
@@ -32,10 +34,23 @@ final class SnapshotCache {
         YearMonth.parse(month); // Only ISO YYYY-MM may be used as a filename.
         return new File(context.getFilesDir(),"month-"+month+".enc");
     }
+    private static String sessionBinding() throws Exception {
+        String cookie=CookieManager.getInstance().getCookie(ApiClient.ORIGIN);
+        if(cookie==null || cookie.isEmpty()) return null;
+        for(String part:cookie.split(";")) {
+            String value=part.trim();
+            if(!value.startsWith("family_line_cf=") || value.length()<"family_line_cf=".length()+16) continue;
+            byte[] digest=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return Base64.encodeToString(digest,Base64.NO_WRAP);
+        }
+        return null;
+    }
     static void write(Context context,String month,JSONObject data) {
         try {
             if(!month.equals(data.optString("month"))||!data.optBoolean("ok")||data.optInt("schemaVersion")!=1) return;
-            JSONObject wrapper=new JSONObject().put("savedAt",System.currentTimeMillis()).put("data",data);
+            String binding=sessionBinding(); if(binding==null) return;
+            JSONObject wrapper=new JSONObject().put("savedAt",System.currentTimeMillis())
+                .put("sessionBinding",binding).put("data",data);
             byte[] source=wrapper.toString().getBytes(StandardCharsets.UTF_8);
             if(source.length>2_000_000) return;
             Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE,key());
@@ -57,6 +72,9 @@ final class SnapshotCache {
             byte[] value=Base64.decode(record.getString("value"),Base64.DEFAULT);
             Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,iv));
             JSONObject wrapper=new JSONObject(new String(cipher.doFinal(value),StandardCharsets.UTF_8));
+            String binding=sessionBinding();
+            if(binding==null || !MessageDigest.isEqual(binding.getBytes(StandardCharsets.UTF_8),
+                wrapper.optString("sessionBinding").getBytes(StandardCharsets.UTF_8))) return null;
             long age=System.currentTimeMillis()-wrapper.getLong("savedAt");
             if(age<0||age>MAX_AGE_MS) return null;
             JSONObject data=wrapper.getJSONObject("data");
