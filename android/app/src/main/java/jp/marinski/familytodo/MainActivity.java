@@ -472,7 +472,7 @@ public final class MainActivity extends Activity {
         JSONArray frames=stamp.optJSONArray("frames");
         if(frames==null || frames.length()==0) { showAnimatedStampFile(stamp); return; }
         if(frames==null || frames.length()<2 || frames.length()>48) return;
-        int epoch=sessionEpoch;
+        int epoch=sessionEpoch;String originatingTab=tab;
         Toast.makeText(this,"アニメーションを読み込みます",Toast.LENGTH_SHORT).show();
         stampMedia.execute(() -> {
             try {
@@ -498,7 +498,7 @@ public final class MainActivity extends Activity {
                         Math.max(40,Math.min(2000,frame.optInt("durationMs",120))));
                 }
                 runOnUiThread(() -> {
-                    if(epoch!=sessionEpoch || !(tab.equals("calendar")||tab.equals("messages"))) return;
+                    if(epoch!=sessionEpoch || !tab.equals(originatingTab)) return;
                     ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
                     view.setContentDescription("アニメーションスタンプ");
                     AlertDialog dialog=new AlertDialog.Builder(this).setTitle("アニメーションスタンプ")
@@ -512,7 +512,7 @@ public final class MainActivity extends Activity {
     }
     private void showAnimatedStampFile(JSONObject stamp) {
         if(Build.VERSION.SDK_INT<28) { Toast.makeText(this,"この端末ではアニメーションを再生できません",Toast.LENGTH_SHORT).show(); return; }
-        String path=stamp.optString("fullUrl");int epoch=sessionEpoch;
+        String path=stamp.optString("fullUrl");int epoch=sessionEpoch;String originatingTab=tab;
         stampMedia.execute(() -> {
             try {
                 byte[] bytes=SnapshotCache.readAnimation(this,path);
@@ -523,7 +523,7 @@ public final class MainActivity extends Activity {
                 android.graphics.drawable.Drawable animation=ApiClient.decodeAnimatedStamp(bytes);
                 if(!(animation instanceof android.graphics.drawable.AnimatedImageDrawable)) throw new IllegalStateException("Not animated");
                 runOnUiThread(() -> {
-                    if(epoch!=sessionEpoch || !(tab.equals("calendar")||tab.equals("messages"))) return;
+                    if(epoch!=sessionEpoch || !tab.equals(originatingTab)) return;
                     ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
                     view.setContentDescription("アニメーションスタンプ");
                     android.graphics.drawable.AnimatedImageDrawable animated=(android.graphics.drawable.AnimatedImageDrawable)animation;
@@ -2477,18 +2477,99 @@ public final class MainActivity extends Activity {
         content.addView(button("＋ 伝言する",this::addMessage));
         content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
         content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
+        if(snapshot!=null&&snapshot.optBoolean("canManageStamps"))
+            content.addView(button("リアクション設定",this::editMessageReactions));
         if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
         content.addView(button("更新",()->loadMessages(0)));
         if(hasOlderMessages && messages.length()>0) content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         for(int n=0;n<messages.length();n++) {
             JSONObject row=messages.optJSONObject(n); if(row==null) continue;
-            content.addView(label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
-                +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")));
+            TextView message=label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
+                +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")+"\n長押しでリアクション");
+            message.setOnLongClickListener(view -> {showMessageReactions(row.optInt("id"));return true;});
+            content.addView(message);
             if(row.optBoolean("hasImage") && row.optInt("id")>0)
                 content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
             if(row.optBoolean("hasStamp") && row.optInt("id")>0)
                 content.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
         }
+    }
+    private void showMessageReactions(int messageId) {
+        if(messageId<=0||snapshot==null) return;
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject response=ApiClient.request("/api/message-reactions?ids="+messageId,null);
+                JSONArray emojis=response.optJSONArray("emojis"),reactions=response.optJSONArray("reactions");
+                if(emojis==null) return;
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    ArrayList<String> names=new ArrayList<>();ArrayList<String> codes=new ArrayList<>();
+                    for(int i=0;i<emojis.length();i++) {
+                        String emoji=emojis.optString(i);if(emoji.isEmpty()) continue;
+                        int count=0;boolean mine=false;
+                        if(reactions!=null) for(int n=0;n<reactions.length();n++) {
+                            JSONObject row=reactions.optJSONObject(n);
+                            if(row!=null&&row.optInt("messageId")==messageId&&emoji.equals(row.optString("emoji"))) {
+                                count=row.optInt("count");mine=row.optBoolean("mine");break;
+                            }
+                        }
+                        codes.add(emoji);names.add(emoji+(count>0?" "+count:"")+(mine?" ✓":""));
+                    }
+                    new AlertDialog.Builder(this).setTitle("リアクション")
+                        .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            String csrf=snapshot.optString("csrf");
+                            network.execute(() -> {
+                                try {
+                                    if(epoch!=sessionEpoch) return;
+                                    ApiClient.request("/api/message-reactions",new JSONObject().put("csrf",csrf)
+                                        .put("messageId",messageId).put("emoji",codes.get(which)));
+                                    if(epoch==sessionEpoch) runOnUiThread(() -> showMessageReactions(messageId));
+                                } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"リアクションを更新できませんでした",Toast.LENGTH_SHORT).show();});}
+                            });
+                        }).setNegativeButton("閉じる",null).show();
+                });
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"リアクションを読み込めませんでした",Toast.LENGTH_SHORT).show();});}
+        });
+    }
+    private void editMessageReactions() {
+        if(snapshot==null||!snapshot.optBoolean("canManageStamps")) return;
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONArray emojis=ApiClient.request("/api/message-reactions",null).optJSONArray("emojis");
+                if(emojis==null) return;
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    ArrayList<String> values=new ArrayList<>();for(int i=0;i<emojis.length();i++) values.add(emojis.optString(i));
+                    EditText input=new EditText(this);input.setText(android.text.TextUtils.join("、",values));
+                    input.setHint("❤️、😆、👏");
+                    new AlertDialog.Builder(this).setTitle("家族のリアクション候補").setView(input)
+                        .setPositiveButton("保存",(dialog,which) -> {
+                            String[] parts=input.getText().toString().split("[、,]");
+                            JSONArray updated=new JSONArray();HashSet<String> seen=new HashSet<>();
+                            for(String part:parts) {
+                                String code=part.trim();
+                                if(code.isEmpty()||code.codePointCount(0,code.length())>32||!seen.add(code)) {
+                                    Toast.makeText(this,"候補を確認してください",Toast.LENGTH_LONG).show();return;
+                                }
+                                updated.put(code);
+                            }
+                            if(updated.length()<1||updated.length()>20) {
+                                Toast.makeText(this,"候補は1〜20個にしてください",Toast.LENGTH_LONG).show();return;
+                            }
+                            String csrf=snapshot.optString("csrf");
+                            network.execute(() -> {
+                                try {
+                                    if(epoch!=sessionEpoch) return;
+                                    ApiClient.request("/api/message-reactions",new JSONObject().put("csrf",csrf).put("emojis",updated),"PUT");
+                                    runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"リアクション候補を保存しました",Toast.LENGTH_SHORT).show();});
+                                } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"候補を保存できませんでした",Toast.LENGTH_SHORT).show();});}
+                            });
+                        }).setNegativeButton("閉じる",null).show();
+                });
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"候補を読み込めませんでした",Toast.LENGTH_SHORT).show();});}
+        });
     }
     private void showMessageStamp(int messageId) {
         int epoch=sessionEpoch;

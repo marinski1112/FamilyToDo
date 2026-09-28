@@ -188,7 +188,7 @@ final class ApiClient {
     }
     static JSONObject request(String path, JSONObject body, String method) throws Exception {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
-        if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"DELETE".equals(method))&&body!=null))
+        if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"PUT".equals(method)||"DELETE".equals(method))&&body!=null))
             throw new IllegalArgumentException("Invalid API method");
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
