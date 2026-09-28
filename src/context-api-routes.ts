@@ -47,6 +47,7 @@ import { familyLogMediaCleanupAdmin } from './family-log-media-cleanup-admin';
 import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
 import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
+import { androidFamilyLogApi } from './android-family-log-api';
 import { locationDeviceApi } from './location-device-api';
 import { locationLatestApi } from './location-latest-api';
 import { locationHistoryApi,locationHistorySearchApi,locationStayAddressApi } from './location-history-api';
@@ -62,6 +63,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
   if(url.pathname==='/api/me') return await apiMe(context);
   if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
+  if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);

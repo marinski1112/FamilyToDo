@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private WebView login;
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
+    private JSONObject familyLog;
     private JSONObject shoppingCategories, itemCategories;
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
@@ -67,15 +68,16 @@ public final class MainActivity extends Activity {
     private void showNative() {
         if (login != null) {
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null; messages=new JSONArray();
+            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null;
             shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
         }
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         LinearLayout tabs = new LinearLayout(this);
-        tabs.addView(button("カレンダー", () -> { tab="calendar"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("買い物", () -> { tab="shopping"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("持ち物", () -> { tab="item"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
+        tabs.addView(button("カレンダー", () -> { tab="calendar"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
+        tabs.addView(button("買い物", () -> { tab="shopping"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
+        tabs.addView(button("持ち物", () -> { tab="item"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
         tabs.addView(button("伝言", () -> { tab="messages"; loadMessages(0); }), new LinearLayout.LayoutParams(0, -2, 1));
+        tabs.addView(button("育児", () -> { tab="familylog"; loadFamilyLog(); }), new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(tabs);
         LinearLayout controls = new LinearLayout(this);
         controls.addView(button("◀", () -> { month=month.minusMonths(1); selectedDay=month.atDay(1); load(); }));
@@ -83,7 +85,8 @@ public final class MainActivity extends Activity {
         controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
         controls.addView(button("ログアウト", this::logout));
-        root.addView(controls);
+        HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
+        root.addView(controlScroll);
         ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
         render();
@@ -112,7 +115,7 @@ public final class MainActivity extends Activity {
                 if(accountChanged) SnapshotCache.clear(this);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
@@ -163,6 +166,7 @@ public final class MainActivity extends Activity {
         if (content == null) return;
         content.removeAllViews();
         if (tab.equals("messages")) { renderMessages(); return; }
+        if (tab.equals("familylog")) { renderFamilyLog(); return; }
         content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
         if (tab.equals("calendar")) content.addView(button("＋ タスク・イベント", this::addTask));
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
@@ -664,6 +668,234 @@ public final class MainActivity extends Activity {
                 });
             }).setNegativeButton("閉じる",null).show();
     }
+    private void loadFamilyLog() {
+        String day=selectedDay.toString(); int epoch=sessionEpoch;
+        familyLog=null; render();
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/android/v1/family-log?date="+day,null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !day.equals(selectedDay.toString())) return;
+                    if(snapshot!=null && (result.optInt("familyId")!=snapshot.optInt("familyId") ||
+                        result.optInt("memberId")!=snapshot.optInt("memberId"))) { showLogin(); return; }
+                    familyLog=result;
+                    if(tab.equals("familylog")) render();
+                });
+            } catch(SecurityException error) { runOnUiThread(() -> { if(epoch==sessionEpoch) showLogin(); }); }
+            catch(Exception error) { runOnUiThread(() -> {
+                if(epoch==sessionEpoch && tab.equals("familylog")) { content.removeAllViews(); content.addView(label("育児記録を取得できませんでした")); }
+            }); }
+        });
+    }
+    private void renderFamilyLog() {
+        LinearLayout days=new LinearLayout(this);
+        days.addView(button("◀",() -> { selectedDay=selectedDay.minusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
+        days.addView(label(selectedDay.toString()));
+        days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
+        days.addView(button("更新",this::loadFamilyLog));
+        content.addView(days);
+        if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
+            content.addView(label("読み込み中…")); return;
+        }
+        JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
+        content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
+        if(subjects==null || subjects.length()==0) {
+            content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
+        }
+        content.addView(button("＋ 記録を追加",this::addFamilyLog));
+        for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i);
+            if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
+            content.addView(label(subject.optString("name")));
+            LinearLayout actions=new LinearLayout(this);
+            actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
+            actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
+            actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
+            content.addView(actions);
+        }
+        if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
+        content.addView(label("当日の記録"));
+        if(logs==null || logs.length()==0) { content.addView(label("記録はありません")); return; }
+        for(int i=0;i<logs.length();i++) {
+            JSONObject row=logs.optJSONObject(i); if(row==null) continue;
+            String time=row.optString("occurred_at");
+            if(time.length()>=16) time=time.substring(11,16);
+            String detail=row.optString("detail_code");
+            String amount=row.isNull("amount")?"":row.optString("amount")+row.optString("unit");
+            TextView entry=label(time+"  "+row.optString("subject_name")+"  "+logTypeName(row.optString("log_type"))+
+                (detail.isEmpty()?"":" "+detail)+(amount.isEmpty()?"":" "+amount)+
+                (row.optString("value_text").isEmpty()?"":" "+row.optString("value_text"))+
+                (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
+            entry.setOnLongClickListener(v -> { deleteFamilyLog(row); return true; });
+            content.addView(entry);
+        }
+    }
+    private void addFamilyLogSubject() {
+        if(snapshot==null) return;
+        EditText name=new EditText(this); name.setHint("名前"); name.setSingleLine(true);
+        String[] kinds={"赤ちゃん","子ども","大人","ペット","その他"};
+        String[] codes={"BABY","CHILD","ADULT","PET","OTHER"};
+        Spinner kind=new Spinner(this);
+        kind.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,kinds));
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(32,8,32,8); form.addView(name); form.addView(kind);
+        new AlertDialog.Builder(this).setTitle("記録対象を追加").setView(form)
+            .setPositiveButton("追加",(dialog,which) -> {
+                String value=name.getText().toString().trim(); if(value.isEmpty()||value.length()>80) return;
+                String csrf=snapshot.optString("csrf"),code=codes[kind.getSelectedItemPosition()]; int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/family-log",new JSONObject().put("csrf",csrf)
+                            .put("action","subject_create").put("name",value).put("subject_kind",code));
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"記録対象を追加できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void deleteFamilyLog(JSONObject row) {
+        if(snapshot==null || row.optInt("id")<=0) return;
+        new AlertDialog.Builder(this).setTitle("記録を削除")
+            .setMessage("この記録を削除します。")
+            .setPositiveButton("削除",(dialog,which) -> {
+                String csrf=snapshot.optString("csrf"); int id=row.optInt("id"),epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/family-log",new JSONObject().put("csrf",csrf)
+                            .put("action","delete").put("id",id));
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"記録を削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private String logTypeName(String type) {
+        switch(type) {
+            case "MILK": return "🍼 ミルク"; case "DIAPER": return "🧷 おむつ";
+            case "MEAL": return "🍚 食事"; case "SLEEP": return "😴 睡眠";
+            case "BATH": return "🛁 お風呂"; case "TEMPERATURE": return "🌡️ 体温";
+            case "WEIGHT": return "⚖️ 体重"; case "MEMO": return "📝 メモ";
+            case "BREASTFEED": return "🤱 母乳"; case "MEDICINE": return "💊 薬";
+            case "VACCINE": return "💉 予防接種"; case "HEIGHT": return "📏 身長";
+            case "CONDITION": return "🙂 体調"; case "EXERCISE": return "🏃 運動";
+            case "WATER": return "💧 水分"; case "TOILET": return "🚻 トイレ";
+            case "WALK": return "🐕 散歩"; case "BLOOD_PRESSURE": return "🫀 血圧";
+            default: return type;
+        }
+    }
+    private ArrayList<String> allowedLogTypes(JSONObject subject) {
+        String kind=subject.optString("subject_kind");
+        String defaults;
+        switch(kind) {
+            case "BABY": defaults="MILK,BREASTFEED,MEAL,DIAPER,SLEEP,BATH,TEMPERATURE,MEDICINE,VACCINE,HEIGHT,WEIGHT,CONDITION,MEMO"; break;
+            case "CHILD": defaults="MEAL,TOILET,SLEEP,BATH,TEMPERATURE,MEDICINE,VACCINE,HEIGHT,WEIGHT,CONDITION,EXERCISE,MEMO"; break;
+            case "PET": defaults="MEAL,WATER,TOILET,WALK,SLEEP,BATH,WEIGHT,MEDICINE,CONDITION,MEMO"; break;
+            case "ADULT": defaults="CONDITION,SLEEP,EXERCISE,WEIGHT,BLOOD_PRESSURE,TEMPERATURE,MEDICINE,MEAL,BATH,MEMO"; break;
+            default: defaults="MEMO,CONDITION,TEMPERATURE,MEDICINE,SLEEP,WEIGHT";
+        }
+        ArrayList<String> result=new ArrayList<>();
+        String raw=subject.optString("enabled_types_json");
+        if(!raw.isEmpty()) try {
+            JSONArray enabled=new JSONArray(raw);
+            for(int i=0;i<enabled.length();i++) {
+                String type=enabled.optString(i);
+                if(!type.isEmpty()&&!result.contains(type)) result.add(type);
+            }
+        } catch(Exception ignored) { result.clear(); }
+        if(result.isEmpty()) java.util.Collections.addAll(result,defaults.split(","));
+        return result;
+    }
+    private void recordBaby(JSONObject subject,String type,String detail) {
+        if(snapshot==null) return;
+        if("MILK".equals(type)) {
+            EditText amount=new EditText(this); amount.setHint("ミルク量（ml）");
+            amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            new AlertDialog.Builder(this).setTitle(subject.optString("name")+" のミルク").setView(amount)
+                .setPositiveButton("記録",(dialog,which) -> {
+                    String value=amount.getText().toString().trim();
+                    try { int ml=Integer.parseInt(value); if(ml<=0 || ml>2000) throw new NumberFormatException();
+                        saveFamilyLog(subject.optInt("id"),type,"",ml,"ml","");
+                    } catch(NumberFormatException error) { Toast.makeText(this,"ミルク量を確認してください",Toast.LENGTH_SHORT).show(); }
+                }).setNegativeButton("閉じる",null).show();
+        } else {
+            new AlertDialog.Builder(this).setTitle(subject.optString("name")+" の"+("WET".equals(detail)?"おしっこ":"うんち"))
+                .setMessage(selectedDay.toString()+" に記録します。")
+                .setPositiveButton("記録",(dialog,which) -> saveFamilyLog(subject.optInt("id"),type,detail,null,"",""))
+                .setNegativeButton("閉じる",null).show();
+        }
+    }
+    private void saveFamilyLog(int subjectId,String type,String detail,Number amount,String unit,String note) {
+        if(snapshot==null || subjectId<=0) return;
+        String csrf=snapshot.optString("csrf"), day=selectedDay.toString(); int epoch=sessionEpoch;
+        String time=java.time.LocalTime.now(java.time.ZoneId.of("Asia/Tokyo")).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject body=new JSONObject().put("action","save").put("csrf",csrf).put("subject_id",subjectId)
+                    .put("log_type",type).put("occurred_at",day+" "+time).put("detail_code",detail)
+                    .put("unit",unit).put("note",note);
+                if(amount!=null) body.put("amount",amount);
+                ApiClient.request("/api/family-log",body);
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"記録できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void addFamilyLog() {
+        JSONArray subjects=familyLog==null?null:familyLog.optJSONArray("subjects");
+        if(subjects==null || subjects.length()==0) return;
+        ArrayList<String> names=new ArrayList<>();
+        ArrayList<Integer> ids=new ArrayList<>();
+        for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i);
+            if(subject!=null && subject.optInt("id")>0) { names.add(subject.optString("name")); ids.add(subject.optInt("id")); }
+        }
+        if(ids.isEmpty()) return;
+        Spinner subjectChoice=new Spinner(this),typeChoice=new Spinner(this);
+        subjectChoice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
+        ArrayList<String> typeCodes=new ArrayList<>();
+        ArrayAdapter<String> typeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new ArrayList<>());
+        typeChoice.setAdapter(typeAdapter);
+        subjectChoice.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,android.view.View view,int position,long id) {
+                typeCodes.clear();
+                for(int i=0;i<subjects.length();i++) {
+                    JSONObject subject=subjects.optJSONObject(i);
+                    if(subject!=null && subject.optInt("id")==ids.get(position)) { typeCodes.addAll(allowedLogTypes(subject)); break; }
+                }
+                typeAdapter.clear();
+                for(String code:typeCodes) typeAdapter.add(logTypeName(code));
+                typeAdapter.notifyDataSetChanged();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        EditText amount=new EditText(this); amount.setHint("数値（任意）"); amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText unit=new EditText(this); unit.setHint("単位（ml、℃、kgなど）");
+        EditText detail=new EditText(this); detail.setHint("詳細コード（任意）");
+        EditText note=new EditText(this); note.setHint("メモ（任意）");
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(label("対象")); form.addView(subjectChoice); form.addView(label("種類")); form.addView(typeChoice);
+        form.addView(amount); form.addView(unit); form.addView(detail); form.addView(note);
+        ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("記録を追加").setView(scroll)
+            .setPositiveButton("記録",(dialog,which) -> {
+                String raw=amount.getText().toString().trim(); Double number=null;
+                if(!raw.isEmpty()) {
+                    try {
+                        number=Double.valueOf(raw);
+                        if(!Double.isFinite(number)||number < -100000||number > 100000) throw new NumberFormatException();
+                    } catch(NumberFormatException error) { Toast.makeText(this,"数値を確認してください",Toast.LENGTH_SHORT).show(); return; }
+                }
+                if(typeCodes.isEmpty()||typeChoice.getSelectedItemPosition()<0) return;
+                saveFamilyLog(ids.get(subjectChoice.getSelectedItemPosition()),typeCodes.get(typeChoice.getSelectedItemPosition()),
+                    detail.getText().toString().trim(),number,unit.getText().toString().trim(),note.getText().toString().trim());
+            }).setNegativeButton("閉じる",null).show();
+    }
     private void loadMessages(int before) {
         content.removeAllViews(); content.addView(label("伝言を読み込み中…"));
         network.execute(() -> {
@@ -747,7 +979,7 @@ public final class MainActivity extends Activity {
                 sessionEpoch++;
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 network.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null; messages=new JSONArray(); shoppingCategories=null; itemCategories=null;
+                monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null;
                 stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
@@ -755,7 +987,7 @@ public final class MainActivity extends Activity {
     }
     private void showLogin() {
         if (login != null) return;
-        monthCache.clear(); snapshot=null; shoppingCategories=null; itemCategories=null;
+        monthCache.clear(); snapshot=null; familyLog=null; shoppingCategories=null; itemCategories=null;
         stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
