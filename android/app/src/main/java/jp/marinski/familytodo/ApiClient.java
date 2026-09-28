@@ -1,6 +1,8 @@
 package jp.marinski.familytodo;
 
 import android.webkit.CookieManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import org.json.JSONObject;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
@@ -12,6 +14,36 @@ import java.nio.charset.StandardCharsets;
 final class ApiClient {
     static final String ORIGIN = "https://familytodo.marinski1112.workers.dev";
     private ApiClient() {}
+    /** Fetch a bounded same-origin thumbnail, including private upload media. */
+    static Bitmap thumbnail(String path) throws Exception {
+        if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
+            path.contains("..") || path.contains("#") || path.contains(":") ||
+            !(path.startsWith("/api/calendar-stamp-media?") ||
+              (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
+            throw new IllegalArgumentException("Invalid image path");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
+        try {
+            connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
+            connection.setInstanceFollowRedirects(false);
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);
+            if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            String type=connection.getContentType();
+            if(connection.getResponseCode()!=200 || type==null || !type.startsWith("image/"))
+                throw new IllegalStateException("Image unavailable");
+            try(var stream=connection.getInputStream()) {
+                ByteArrayOutputStream data=new ByteArrayOutputStream();
+                byte[] buffer=new byte[4096]; int count;
+                while((count=stream.read(buffer))!=-1) {
+                    data.write(buffer,0,count);
+                    if(data.size()>1_000_000) throw new IllegalStateException("Image too large");
+                }
+                BitmapFactory.Options options=new BitmapFactory.Options(); options.inSampleSize=2;
+                Bitmap image=BitmapFactory.decodeByteArray(data.toByteArray(),0,data.size(),options);
+                if(image==null || image.getWidth()>1024 || image.getHeight()>1024) throw new IllegalStateException("Invalid thumbnail");
+                return image;
+            }
+        } finally { connection.disconnect(); }
+    }
     static JSONObject request(String path, JSONObject body) throws Exception {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();

@@ -18,6 +18,9 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
+import android.graphics.Bitmap;
+import android.util.LruCache;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -27,6 +30,8 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,6 +44,11 @@ public final class MainActivity extends Activity {
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
     private JSONObject shoppingCategories, itemCategories;
+    private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
+    private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
+        @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
+    };
+    private final Set<String> pendingStampImages=new HashSet<>();
     private boolean hasOlderMessages;
     private int sessionEpoch;
     private boolean showingCached;
@@ -95,7 +105,7 @@ public final class MainActivity extends Activity {
                 SnapshotCache.write(this,requested,data);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); shoppingCategories=null; itemCategories=null; }
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
@@ -109,6 +119,16 @@ public final class MainActivity extends Activity {
                         });
                     } catch(Exception ignored) { /* The checklist remains available. */ }
                 }
+                try {
+                    YearMonth target=YearMonth.parse(requested);
+                    JSONObject response=ApiClient.request("/api/calendar-stamps?from="+target.atDay(1)+"&to="+target.atEndOfMonth(),null);
+                    JSONArray stamps=response.optJSONArray("stamps");
+                    if(stamps!=null) runOnUiThread(() -> {
+                        if(epoch!=sessionEpoch) return;
+                        stampMonths.put(requested,stamps);
+                        if(tab.equals("calendar")&&requested.equals(month.toString())) render();
+                    });
+                } catch(Exception ignored) { /* Calendar tasks remain usable. */ }
                 for (String nearby : new String[]{YearMonth.parse(requested).minusMonths(1).toString(), YearMonth.parse(requested).plusMonths(1).toString()}) {
                     if (epoch!=sessionEpoch) return;
                     if (!monthCache.containsKey(nearby)) {
@@ -164,7 +184,8 @@ public final class MainActivity extends Activity {
                     JSONObject task=tasks.optJSONObject(n);
                     if(task!=null&&taskOnDay(task,day.toString())) count++;
                 }
-                Button cell=button(Integer.toString(date)+(count>0?" •":""),()->{selectedDay=day; render();});
+                int stampCount=stampsOnDay(day.toString()).length();
+                Button cell=button(Integer.toString(date)+(count>0?" •":"")+(stampCount>0?" ✦":""),()->{selectedDay=day; render();});
                 cell.setContentDescription(day.toString()+" 予定"+count+"件");
                 cell.setAllCaps(false); cell.setTextSize(12);
                 cell.setAlpha(day.equals(selectedDay)?1f:0.78f);
@@ -173,6 +194,7 @@ public final class MainActivity extends Activity {
             content.addView(week);
         }
         content.addView(label(selectedDay.toString()+" の予定"));
+        renderSelectedStamps();
         int count=0;
         for(int n=0;n<tasks.length();n++) {
             JSONObject task=tasks.optJSONObject(n);
@@ -187,6 +209,45 @@ public final class MainActivity extends Activity {
             content.addView(box);count++;
         }
         if(count==0) content.addView(label("予定はありません"));
+    }
+    private JSONArray stampsOnDay(String day) {
+        JSONArray result=new JSONArray();
+        JSONArray placements=stampMonths.get(month.toString());
+        if(placements!=null) for(int i=0;i<placements.length();i++) {
+            JSONObject stamp=placements.optJSONObject(i);
+            if(stamp!=null && day.equals(stamp.optString("date"))) result.put(stamp);
+        }
+        return result;
+    }
+    private void renderSelectedStamps() {
+        JSONArray stamps=stampsOnDay(selectedDay.toString());
+        if(stamps.length()==0) return;
+        content.addView(label("スタンプ"));
+        LinearLayout row=new LinearLayout(this);
+        for(int i=0;i<Math.min(stamps.length(),12);i++) {
+            JSONObject stamp=stamps.optJSONObject(i); if(stamp==null) continue;
+            String path=stamp.optString("thumbnailUrl"); if(path.isEmpty()) continue;
+            ImageView view=new ImageView(this);
+            int size=(int)(64*getResources().getDisplayMetrics().density);
+            row.addView(view,new LinearLayout.LayoutParams(size,size));
+            Bitmap cached=stampImages.get(path);
+            if(cached!=null) { view.setImageBitmap(cached); continue; }
+            if(!pendingStampImages.add(path)) continue;
+            int epoch=sessionEpoch;
+            network.execute(() -> {
+                Bitmap image=null;
+                try { image=ApiClient.thumbnail(path); } catch(Exception ignored) { }
+                Bitmap result=image;
+                runOnUiThread(() -> {
+                    pendingStampImages.remove(path);
+                    if(epoch!=sessionEpoch || result==null) return;
+                    stampImages.put(path,result);
+                    if(tab.equals("calendar")) render();
+                });
+            });
+        }
+        content.addView(row);
+        if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
     }
     private void renderGoods() {
         boolean shopping=tab.equals("shopping");
@@ -349,6 +410,7 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 network.execute(() -> SnapshotCache.clear(this));
                 monthCache.clear(); snapshot=null; messages=new JSONArray(); shoppingCategories=null; itemCategories=null;
+                stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
             }).setNegativeButton("閉じる",null).show();
