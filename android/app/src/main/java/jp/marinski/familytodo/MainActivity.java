@@ -848,16 +848,126 @@ public final class MainActivity extends Activity {
         if(entries!=null) for(int i=0;i<entries.length();i++) {
             JSONObject entry=entries.optJSONObject(i);if(entry!=null) names.add(entry.optString("name"));
         }
+        ArrayList<String> actions=new ArrayList<>();actions.add("日付を指定して呼び出す");
+        if(!shopping&&set.optBoolean("can_edit")) {
+            actions.add("セット名を変更");actions.add("セット内の項目を編集");
+            actions.add("セットに項目を追加");actions.add("セットから項目を外す");
+        }
+        if(canDelete) actions.add("セットを削除");
         new AlertDialog.Builder(this).setTitle(set.optString("name"))
             .setMessage(android.text.TextUtils.join("、",names))
-            .setItems(canDelete?new String[]{"日付を指定して呼び出す","セットを削除"}:new String[]{"日付を指定して呼び出す"},
+            .setItems(actions.toArray(new String[0]),
                 (dialog,which) -> {
-                    if(which==0) invokeReusableSet(shopping,set);
+                    String action=actions.get(which);
+                    if(action.equals("日付を指定して呼び出す")) invokeReusableSet(shopping,set);
+                    else if(action.equals("セット名を変更")) editItemSetName(set);
+                    else if(action.equals("セット内の項目を編集")) editItemSetEntries(set);
+                    else if(action.equals("セットに項目を追加")) addItemSetEntry(set);
+                    else if(action.equals("セットから項目を外す")) removeItemSetEntry(set);
                     else new AlertDialog.Builder(this).setTitle("セットを削除")
                         .setMessage("セットの登録だけを削除します。呼び出し済みの項目は残ります。")
                         .setPositiveButton("削除",(d,w) -> mutateReusableSet(shopping,id,"reusable_set_delete",null))
                         .setNegativeButton("戻る",null).show();
                 }).setNegativeButton("閉じる",null).show();
+    }
+    private void addItemSetEntry(JSONObject set) {
+        JSONArray entries=set.optJSONArray("entries");if(entries==null||entries.length()>=100) return;
+        EditText name=new EditText(this);name.setHint("持ち物名");
+        EditText category=new EditText(this);category.setHint("カテゴリ（任意）");
+        EditText memo=new EditText(this);memo.setHint("メモ（任意）");
+        EditText url=new EditText(this);url.setHint("URL（任意）");
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(name);form.addView(category);form.addView(memo);form.addView(url);
+        new AlertDialog.Builder(this).setTitle("セットに項目を追加").setView(form)
+            .setPositiveButton("追加",(dialog,which) -> {
+                String item=name.getText().toString().trim(),group=category.getText().toString().trim();
+                String note=memo.getText().toString().trim(),link=url.getText().toString().trim();
+                if(item.isEmpty()||item.length()>200||group.length()>255||note.length()>2000||
+                    !link.isEmpty()&&!(link.startsWith("https://")||link.startsWith("http://"))) {
+                    Toast.makeText(this,"項目の入力を確認してください",Toast.LENGTH_LONG).show();return;
+                }
+                JSONArray updated=new JSONArray();for(int i=0;i<entries.length();i++) updated.put(entries.optJSONObject(i));
+                try {updated.put(new JSONObject().put("name",item).put("category",group).put("memo",note).put("url",link));}
+                catch(Exception error) {return;}
+                saveItemSet(set,set.optString("name"),updated);
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void removeItemSetEntry(JSONObject set) {
+        JSONArray entries=set.optJSONArray("entries");if(entries==null||entries.length()<2) {
+            Toast.makeText(this,"セットには1件以上必要です",Toast.LENGTH_SHORT).show();return;
+        }
+        ArrayList<String> names=new ArrayList<>();for(int i=0;i<entries.length();i++) {
+            JSONObject entry=entries.optJSONObject(i);names.add(entry==null?"項目":entry.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle("セットから項目を外す")
+            .setItems(names.toArray(new String[0]),(dialog,which) ->
+                new AlertDialog.Builder(this).setTitle("項目を外す").setMessage(names.get(which))
+                    .setPositiveButton("外す",(d,w) -> {
+                        JSONArray updated=new JSONArray();
+                        for(int i=0;i<entries.length();i++) if(i!=which) updated.put(entries.optJSONObject(i));
+                        saveItemSet(set,set.optString("name"),updated);
+                    }).setNegativeButton("戻る",null).show())
+            .setNegativeButton("閉じる",null).show();
+    }
+    private void editItemSetName(JSONObject set) {
+        EditText name=new EditText(this);name.setText(set.optString("name"));
+        new AlertDialog.Builder(this).setTitle("セット名を変更").setView(name)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()||value.length()>120) {Toast.makeText(this,"セット名を確認してください",Toast.LENGTH_SHORT).show();return;}
+                saveItemSet(set,value,set.optJSONArray("entries"));
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void editItemSetEntries(JSONObject set) {
+        JSONArray entries=set.optJSONArray("entries");if(entries==null||entries.length()==0) return;
+        ArrayList<String> names=new ArrayList<>();for(int i=0;i<entries.length();i++) {
+            JSONObject entry=entries.optJSONObject(i);names.add(entry==null?"項目":entry.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle("セット内の項目")
+            .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                JSONObject entry=entries.optJSONObject(which);if(entry==null) return;
+                EditText name=new EditText(this);name.setHint("持ち物名");name.setText(entry.optString("name"));
+                EditText category=new EditText(this);category.setHint("カテゴリ");category.setText(entry.optString("category"));
+                EditText memo=new EditText(this);memo.setHint("メモ");memo.setText(entry.optString("memo"));
+                EditText url=new EditText(this);url.setHint("URL");url.setText(entry.optString("url"));
+                LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+                form.addView(name);form.addView(category);form.addView(memo);form.addView(url);
+                new AlertDialog.Builder(this).setTitle("セット項目を編集").setView(form)
+                    .setPositiveButton("保存",(d,w) -> {
+                        String item=name.getText().toString().trim(),group=category.getText().toString().trim();
+                        String note=memo.getText().toString().trim(),link=url.getText().toString().trim();
+                        if(item.isEmpty()||item.length()>200||group.length()>255||note.length()>2000||
+                            !link.isEmpty()&&!(link.startsWith("https://")||link.startsWith("http://"))) {
+                            Toast.makeText(this,"項目の入力を確認してください",Toast.LENGTH_LONG).show();return;
+                        }
+                        JSONArray updated=new JSONArray();
+                        for(int i=0;i<entries.length();i++) {
+                            JSONObject original=entries.optJSONObject(i);if(original==null) return;
+                            JSONObject copy=new JSONObject();
+                            try {
+                                copy.put("name",i==which?item:original.optString("name"))
+                                    .put("category",i==which?group:original.optString("category"))
+                                    .put("memo",i==which?note:original.optString("memo"))
+                                    .put("url",i==which?link:original.optString("url"));
+                            } catch(Exception error) {return;}
+                            updated.put(copy);
+                        }
+                        saveItemSet(set,set.optString("name"),updated);
+                    }).setNegativeButton("閉じる",null).show();
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void saveItemSet(JSONObject set,String name,JSONArray entries) {
+        if(snapshot==null||set.optInt("id")<=0||entries==null) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/item",new JSONObject().put("csrf",csrf)
+                    .put("action","reusable_set_update").put("set_id",set.optInt("id"))
+                    .put("name",name).put("entries",entries));
+                if(epoch==sessionEpoch) runOnUiThread(() -> loadReusableSets(false));
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"セットを編集できませんでした",Toast.LENGTH_LONG).show();});}
+        });
     }
     private void invokeReusableSet(boolean shopping,JSONObject set) {
         LocalDate day=selectedDay;
