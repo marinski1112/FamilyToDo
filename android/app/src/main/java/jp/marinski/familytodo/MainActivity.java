@@ -2486,13 +2486,87 @@ public final class MainActivity extends Activity {
             JSONObject row=messages.optJSONObject(n); if(row==null) continue;
             TextView message=label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
                 +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")+"\n長押しでリアクション");
-            message.setOnLongClickListener(view -> {showMessageReactions(row.optInt("id"));return true;});
+            message.setOnLongClickListener(view -> {messageActions(row);return true;});
             content.addView(message);
             if(row.optBoolean("hasImage") && row.optInt("id")>0)
                 content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
             if(row.optBoolean("hasStamp") && row.optInt("id")>0)
                 content.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
         }
+    }
+    private void messageActions(JSONObject row) {
+        int id=row.optInt("id");if(id<=0||snapshot==null) return;
+        boolean canManage=row.optInt("senderId")==snapshot.optInt("memberId")||snapshot.optBoolean("canManageStamps");
+        String[] actions=canManage?new String[]{"リアクション","編集","削除"}:new String[]{"リアクション"};
+        new AlertDialog.Builder(this).setTitle("伝言の操作")
+            .setItems(actions,(dialog,which) -> {
+                if(which==0) showMessageReactions(id);
+                else if(which==1) editMessage(row);
+                else deleteMessage(row);
+            }).show();
+    }
+    private void editMessage(JSONObject row) {
+        if(snapshot==null||row.optInt("id")<=0) return;
+        EditText body=new EditText(this);body.setText(row.optString("text"));body.setMinLines(2);
+        ArrayList<String> recipients=new ArrayList<>();recipients.add("家族全員");
+        ArrayList<Integer> ids=new ArrayList<>();ids.add(0);
+        JSONArray members=snapshot.optJSONArray("members");
+        if(members!=null) for(int i=0;i<members.length();i++) {
+            JSONObject member=members.optJSONObject(i);
+            if(member!=null&&member.optInt("id")>0) {
+                recipients.add(member.optString("name","メンバー"));ids.add(member.optInt("id"));
+            }
+        }
+        Spinner recipient=new Spinner(this);recipient.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,recipients));
+        recipient.setSelection(Math.max(0,ids.indexOf(row.optInt("targetMemberId"))));
+        String saved=row.optString("reminderAt");
+        final String[] reminder={saved.length()>=16?saved.substring(0,16).replace(' ','T'):""};
+        final Button[] whenRef=new Button[1];
+        Button when=button("通知予約: "+(reminder[0].isEmpty()?"指定なし":reminder[0]),() -> {
+            java.time.LocalDateTime base=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo")).plusHours(1);
+            new DatePickerDialog(this,(picker,y,m,d) ->
+                new TimePickerDialog(this,(clock,h,minute) -> {
+                    reminder[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02dT%02d:%02d",y,m+1,d,h,minute);
+                    whenRef[0].setText("通知予約: "+reminder[0]);
+                },base.getHour(),base.getMinute(),true).show(),
+                base.getYear(),base.getMonthValue()-1,base.getDayOfMonth()).show();
+        });whenRef[0]=when;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(label("宛先"));form.addView(recipient);form.addView(body);form.addView(when);
+        form.addView(button("通知予約を解除",() -> {reminder[0]="";whenRef[0].setText("通知予約: 指定なし");}));
+        new AlertDialog.Builder(this).setTitle("伝言を編集").setView(form)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String text=body.getText().toString().trim();
+                if(text.isEmpty()||!reminder[0].isEmpty()&&
+                    reminder[0].compareTo(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo"))
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")))<=0) {
+                    Toast.makeText(this,"本文・通知予約を確認してください",Toast.LENGTH_LONG).show();return;
+                }
+                int epoch=sessionEpoch,id=row.optInt("id"),target=ids.get(recipient.getSelectedItemPosition());
+                String csrf=snapshot.optString("csrf"),notifyAt=reminder[0];
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("action","edit")
+                            .put("id",id).put("text",text).put("target_member_id",target).put("reminder_at",notifyAt));
+                        if(epoch==sessionEpoch) runOnUiThread(() -> loadMessages(0));
+                    } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"伝言を編集できませんでした",Toast.LENGTH_LONG).show();});}
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void deleteMessage(JSONObject row) {
+        int id=row.optInt("id");if(snapshot==null||id<=0) return;
+        new AlertDialog.Builder(this).setTitle("伝言を削除").setMessage(row.optString("text"))
+            .setPositiveButton("削除",(dialog,which) -> {
+                int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("action","delete").put("id",id));
+                        if(epoch==sessionEpoch) runOnUiThread(() -> loadMessages(0));
+                    } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"伝言を削除できませんでした",Toast.LENGTH_LONG).show();});}
+                });
+            }).setNegativeButton("戻る",null).show();
     }
     private void showMessageReactions(int messageId) {
         if(messageId<=0||snapshot==null) return;
