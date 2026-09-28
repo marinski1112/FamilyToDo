@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
     private JSONObject familyLog;
+    private boolean familyLogCached;
     private JSONObject shoppingCategories, itemCategories;
     private MessagePhotoUpload.Draft pendingPhoto;
     private String pendingPhotoCaption="",pendingPhotoReminder="";
@@ -80,7 +81,7 @@ public final class MainActivity extends Activity {
         if (login != null) {
             stampGeneration++;
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null;
+            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false;
             shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
@@ -137,7 +138,7 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
@@ -1102,20 +1103,29 @@ public final class MainActivity extends Activity {
     }
     private void loadFamilyLog() {
         String day=selectedDay.toString(); int epoch=sessionEpoch;
-        familyLog=null; render();
+        familyLog=null; familyLogCached=false; render();
         network.execute(() -> {
+            JSONObject cached=SnapshotCache.readFamilyLog(this,day);
+            if(cached!=null) runOnUiThread(() -> {
+                if(epoch!=sessionEpoch||!day.equals(selectedDay.toString())||familyLog!=null) return;
+                if(snapshot!=null&&(cached.optInt("familyId")!=snapshot.optInt("familyId")||
+                    cached.optInt("memberId")!=snapshot.optInt("memberId"))) return;
+                familyLog=cached; familyLogCached=true;
+                if(tab.equals("familylog")) render();
+            });
             try {
                 JSONObject result=ApiClient.request("/api/android/v1/family-log?date="+day,null);
+                if(epoch==sessionEpoch) SnapshotCache.writeFamilyLog(this,day,result);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch || !day.equals(selectedDay.toString())) return;
                     if(snapshot!=null && (result.optInt("familyId")!=snapshot.optInt("familyId") ||
                         result.optInt("memberId")!=snapshot.optInt("memberId"))) { showLogin(); return; }
-                    familyLog=result;
+                    familyLog=result;familyLogCached=false;
                     if(tab.equals("familylog")) render();
                 });
             } catch(SecurityException error) { runOnUiThread(() -> { if(epoch==sessionEpoch) showLogin(); }); }
             catch(Exception error) { runOnUiThread(() -> {
-                if(epoch==sessionEpoch && tab.equals("familylog")) { content.removeAllViews(); content.addView(label("育児記録を取得できませんでした")); }
+                if(epoch==sessionEpoch && tab.equals("familylog") && familyLog==null) { content.removeAllViews(); content.addView(label("育児記録を取得できませんでした")); }
             }); }
         });
     }
@@ -1126,23 +1136,28 @@ public final class MainActivity extends Activity {
         days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
         days.addView(button("更新",this::loadFamilyLog));
         content.addView(days);
-        if(pendingFamilyLogPhoto!=null) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
+        if(pendingFamilyLogPhoto!=null && !familyLogCached) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
             content.addView(label("読み込み中…")); return;
         }
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
-        content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
-        if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
-        if(familyLog.optBoolean("canManageQuickActions")) content.addView(button("クイック記録を管理",this::manageQuickActions));
-        if(familyLog.optBoolean("canManageChores")) content.addView(button("ちょこっと家事の項目管理",this::manageQuickChores));
+        if(familyLogCached) content.addView(label("保存済みの記録を表示中（読み取り専用）"));
+        if(!familyLogCached) {
+            content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
+            if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
+            if(familyLog.optBoolean("canManageQuickActions")) content.addView(button("クイック記録を管理",this::manageQuickActions));
+            if(familyLog.optBoolean("canManageChores")) content.addView(button("ちょこっと家事の項目管理",this::manageQuickChores));
+        }
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
-        content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
-        content.addView(button("📊 期間の集計",this::chooseFamilyLogSummary));
-        content.addView(button("＋ 記録を追加",this::addFamilyLog));
-        content.addView(button("＋ タイマー",this::startFamilyLogTimer));
-        JSONArray timers=familyLog.optJSONArray("timers");
+        if(!familyLogCached) {
+            content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
+            content.addView(button("📊 期間の集計",this::chooseFamilyLogSummary));
+            content.addView(button("＋ 記録を追加",this::addFamilyLog));
+            content.addView(button("＋ タイマー",this::startFamilyLogTimer));
+        }
+        JSONArray timers=familyLogCached?null:familyLog.optJSONArray("timers");
         if(timers!=null && timers.length()>0) {
             content.addView(label("実行中のタイマー"));
             for(int i=0;i<timers.length();i++) {
@@ -1155,8 +1170,8 @@ public final class MainActivity extends Activity {
                     content.addView(button(name+"を記録せず中止",() -> finishFamilyLogTimer(timer,true)));
             }
         }
-        if(familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
-        boolean today=selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
+        if(!familyLogCached&&familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
+        boolean today=!familyLogCached&&selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
         JSONArray quickActions=today?familyLog.optJSONArray("quickActions"):null;
         if(today) {
             JSONArray chores=familyLog.optJSONArray("chores");
@@ -1169,7 +1184,7 @@ public final class MainActivity extends Activity {
                 }
             }
         }
-        for(int i=0;i<subjects.length();i++) {
+        for(int i=0;!familyLogCached&&i<subjects.length();i++) {
             JSONObject subject=subjects.optJSONObject(i);
             if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
             content.addView(label(subject.optString("name")));
@@ -1227,14 +1242,14 @@ public final class MainActivity extends Activity {
                 (detail.isEmpty()?"":" "+detail)+(amount.isEmpty()?"":" "+amount)+
                 (row.optString("value_text").isEmpty()?"":" "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
+            if(!familyLogCached) entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
             content.addView(entry);
             int mediaId=row.optInt("media_id");
-            if(mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
+            if(!familyLogCached&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
                 .setItems(new String[]{"表示","削除"},(dialog,which) -> {
                     if(which==0) showFamilyLogPhoto(mediaId); else deleteFamilyLogPhoto(mediaId);
                 }).show()));
-            else if("MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
+            else if(!familyLogCached&&"MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
                 ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
                 content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
         }
@@ -2247,7 +2262,7 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 SnapshotCache.clear(this);
                 stampMedia.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null;
+                monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
@@ -2260,7 +2275,7 @@ public final class MainActivity extends Activity {
         if (login != null) return;
         stampGeneration++;
         stampMedia.execute(() -> SnapshotCache.clear(this));
-        monthCache.clear(); snapshot=null; familyLog=null; shoppingCategories=null; itemCategories=null;
+        monthCache.clear(); snapshot=null; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";

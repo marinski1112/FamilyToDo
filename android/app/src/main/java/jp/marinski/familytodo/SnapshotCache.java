@@ -44,6 +44,11 @@ final class SnapshotCache {
         YearMonth.parse(month);
         return new File(context.getFilesDir(),"placements-"+month+".enc");
     }
+    private static File familyLogFile(Context context,String day) {
+        if(!day.matches("20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")||
+            !java.time.LocalDate.parse(day).toString().equals(day)) throw new IllegalArgumentException("Invalid day");
+        return new File(context.getFilesDir(),"family-log-"+day+".enc");
+    }
     private static String sessionBinding() throws Exception {
         String cookie=CookieManager.getInstance().getCookie(ApiClient.ORIGIN);
         if(cookie==null || cookie.isEmpty()) return null;
@@ -238,6 +243,45 @@ final class SnapshotCache {
             JSONArray stamps=payload.getJSONArray("stamps");return stamps.length()<=500?stamps:null;
         } catch(Exception ignored) { return null; }
     }
+    static void writeFamilyLog(Context context,String day,JSONObject data) {
+        try {
+            if(!day.equals(data.optString("date"))||!data.optBoolean("ok")||data.optInt("schemaVersion")!=1) return;
+            String binding=sessionBinding();if(binding==null) return;
+            JSONObject payload=new JSONObject().put("savedAt",System.currentTimeMillis())
+                .put("sessionBinding",binding).put("data",data);
+            byte[] source=payload.toString().getBytes(StandardCharsets.UTF_8);
+            if(source.length>2_000_000) return;
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key());
+            JSONObject record=new JSONObject().put("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
+                .put("value",Base64.encodeToString(cipher.doFinal(source),Base64.NO_WRAP));
+            File target=familyLogFile(context,day),temporary=new File(target.getAbsolutePath()+".tmp");
+            Files.write(temporary.toPath(),record.toString().getBytes(StandardCharsets.UTF_8));
+            if(!temporary.renameTo(target)) temporary.delete();
+            pruneFamilyLogs(context);
+        } catch(Exception ignored) { }
+    }
+    static JSONObject readFamilyLog(Context context,String day) {
+        try {
+            File target=familyLogFile(context,day);
+            if(!target.isFile()||target.length()>3_000_000) return null;
+            JSONObject record=new JSONObject(new String(Files.readAllBytes(target.toPath()),StandardCharsets.UTF_8));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(record.getString("iv"),Base64.DEFAULT)));
+            JSONObject payload=new JSONObject(new String(cipher.doFinal(Base64.decode(record.getString("value"),Base64.DEFAULT)),StandardCharsets.UTF_8));
+            String binding=sessionBinding();long age=System.currentTimeMillis()-payload.getLong("savedAt");
+            if(binding==null||!MessageDigest.isEqual(binding.getBytes(StandardCharsets.UTF_8),
+                payload.optString("sessionBinding").getBytes(StandardCharsets.UTF_8))||age<0||age>MAX_AGE_MS) return null;
+            JSONObject data=payload.getJSONObject("data");
+            return day.equals(data.optString("date"))&&data.optBoolean("ok")&&data.optInt("schemaVersion")==1?data:null;
+        } catch(Exception ignored) { return null; }
+    }
+    private static void pruneFamilyLogs(Context context) {
+        File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("family-log-")&&name.endsWith(".enc"));
+        if(files==null) return;
+        java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        for(int i=0;i<files.length;i++)
+            if(i>=7||System.currentTimeMillis()-files[i].lastModified()>MAX_AGE_MS) files[i].delete();
+    }
     private static void prune(Context context,String current) {
         YearMonth center=YearMonth.parse(current);
         File[] files=context.getFilesDir().listFiles((dir,name)->
@@ -253,7 +297,7 @@ final class SnapshotCache {
     }
     static void clear(Context context) {
         File[] files=context.getFilesDir().listFiles((dir,name)->
-            (name.startsWith("month-")||name.startsWith("stamp-")||name.startsWith("placements-")||name.startsWith("animation-"))&&
+            (name.startsWith("month-")||name.startsWith("stamp-")||name.startsWith("placements-")||name.startsWith("animation-")||name.startsWith("family-log-"))&&
             (name.endsWith(".enc")||name.endsWith(".enc.tmp")));
         if(files!=null) for(File f:files) f.delete();
     }
