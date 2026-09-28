@@ -3,6 +3,7 @@ package jp.marinski.familytodo;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -31,6 +32,8 @@ public final class MainActivity extends Activity {
     private LinearLayout root, content;
     private WebView login;
     private JSONObject snapshot;
+    private JSONArray messages = new JSONArray();
+    private boolean hasOlderMessages;
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "calendar";
@@ -46,6 +49,7 @@ public final class MainActivity extends Activity {
         tabs.addView(button("カレンダー", () -> { tab="calendar"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
         tabs.addView(button("買い物", () -> { tab="shopping"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
         tabs.addView(button("持ち物", () -> { tab="item"; render(); }), new LinearLayout.LayoutParams(0, -2, 1));
+        tabs.addView(button("伝言", () -> { tab="messages"; loadMessages(0); }), new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(tabs);
         LinearLayout controls = new LinearLayout(this);
         controls.addView(button("◀", () -> { month=month.minusMonths(1); load(); }));
@@ -81,7 +85,9 @@ public final class MainActivity extends Activity {
     private void render() {
         if (content == null) return;
         content.removeAllViews();
+        if (tab.equals("messages")) { renderMessages(); return; }
         content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
+        if (tab.equals("calendar")) content.addView(button("＋ タスク・イベント", this::addTask));
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
@@ -147,6 +153,80 @@ public final class MainActivity extends Activity {
                         .put("client_request_id",java.util.UUID.randomUUID().toString()));
                         runOnUiThread(this::load);
                     } catch (Exception e) { runOnUiThread(() -> Toast.makeText(this,"追加できませんでした",Toast.LENGTH_SHORT).show()); }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void addTask() {
+        if (snapshot == null) return;
+        EditText title=new EditText(this); title.setHint("タイトル"); title.setSingleLine(true);
+        final String[] selectedDate={month.atDay(1).toString()};
+        final Button[] dateRef=new Button[1];
+        Button date=button("日付: " + selectedDate[0], () -> {
+            java.time.LocalDate current=java.time.LocalDate.parse(selectedDate[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                selectedDate[0]=java.time.LocalDate.of(y,m+1,d).toString();
+                dateRef[0].setText("日付: " + selectedDate[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });
+        dateRef[0]=date;
+        CheckBox event=new CheckBox(this); event.setText("イベントとして登録");
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(32,8,32,8); form.addView(title); form.addView(date); form.addView(event);
+        new AlertDialog.Builder(this).setTitle("タスク・イベントを作成").setView(form)
+            .setPositiveButton("保存",(dialog,which)->{
+                String value=title.getText().toString().trim(); if(value.isEmpty()) return;
+                String csrf=snapshot.optString("csrf"); String day=selectedDate[0]; boolean isEvent=event.isChecked();
+                network.execute(() -> {
+                    try {
+                        ApiClient.request("/api/task",new JSONObject().put("csrf",csrf).put("title",value)
+                            .put("dateOnly",day).put("endDateOnly",day).put("allDay",true)
+                            .put("is_event",isEvent).put("idempotency_key",java.util.UUID.randomUUID().toString()));
+                        runOnUiThread(this::load);
+                    } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this,"保存できませんでした",Toast.LENGTH_SHORT).show()); }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void loadMessages(int before) {
+        content.removeAllViews(); content.addView(label("伝言を読み込み中…"));
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/message-chat-sync?before="+(before>0?before:9007199254740991L),null);
+                runOnUiThread(() -> {
+                    JSONArray page=result.optJSONArray("messages");
+                    if(before==0) messages=page==null?new JSONArray():page;
+                    else if(page!=null) {
+                        JSONArray combined=new JSONArray();
+                        for(int i=0;i<page.length();i++) combined.put(page.optJSONObject(i));
+                        for(int i=0;i<messages.length();i++) combined.put(messages.optJSONObject(i));
+                        messages=combined;
+                    }
+                    hasOlderMessages=result.optBoolean("hasOlder"); render();
+                });
+            } catch(SecurityException e) { runOnUiThread(() -> { monthCache.clear(); snapshot=null; showLogin(); }); }
+            catch(Exception e) { runOnUiThread(() -> { content.removeAllViews(); content.addView(label("伝言を取得できませんでした")); }); }
+        });
+    }
+    private void renderMessages() {
+        content.addView(button("＋ 伝言する",this::addMessage));
+        content.addView(button("更新",()->loadMessages(0)));
+        if(hasOlderMessages && messages.length()>0) content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
+        for(int n=0;n<messages.length();n++) {
+            JSONObject row=messages.optJSONObject(n); if(row==null) continue;
+            content.addView(label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
+                +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")));
+        }
+    }
+    private void addMessage() {
+        if(snapshot==null) { load(); return; }
+        EditText text=new EditText(this); text.setHint("家族全員への伝言"); text.setMinLines(3);
+        new AlertDialog.Builder(this).setTitle("伝言する").setView(text)
+            .setPositiveButton("送る",(dialog,which)->{
+                String body=text.getText().toString().trim(); if(body.isEmpty()) return;
+                String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try { ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body).put("target_member_id",0));
+                        runOnUiThread(()->loadMessages(0));
+                    } catch(Exception e) { runOnUiThread(()->Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show()); }
                 });
             }).setNegativeButton("閉じる",null).show();
     }

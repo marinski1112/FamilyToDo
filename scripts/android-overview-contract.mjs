@@ -10,4 +10,7 @@ assert.match(app,/\/api\/android\/overview\?month=/);
 assert.match(app,/\/api\/toggle/);
 assert.match(app,/\/api\/shopping/);
 assert.match(app,/\/api\/item/);
+assert.match(app,/\/api\/message-chat-sync\?before=/);
+assert.match(app,/\/api\/messages/);
+assert.match(app,/\/api\/task/);
 console.log('Android native overview contract: ok');
