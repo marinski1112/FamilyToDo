@@ -3,6 +3,7 @@ package jp.marinski.familytodo;
 import android.webkit.CookieManager;
 import org.json.JSONObject;
 import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +32,13 @@ final class ApiClient {
             if (status == 401) throw new SecurityException("ログインしてください");
             try (var stream = status < 400 ? connection.getInputStream() : connection.getErrorStream()) {
                 if (stream == null) throw new IllegalStateException("応答がありません");
-                String text = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                ByteArrayOutputStream data = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096]; int n;
+                while ((n = stream.read(buffer)) != -1) {
+                    data.write(buffer, 0, n);
+                    if (data.size() > 2_000_000) throw new IllegalStateException("応答が大きすぎます");
+                }
+                String text = new String(data.toByteArray(), StandardCharsets.UTF_8);
                 JSONObject response = new JSONObject(text);
                 if (status >= 400 || !response.optBoolean("ok")) throw new IllegalStateException(response.optString("error", "通信に失敗しました"));
                 return response;
