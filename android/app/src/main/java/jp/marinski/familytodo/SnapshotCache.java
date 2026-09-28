@@ -25,7 +25,8 @@ import javax.crypto.spec.GCMParameterSpec;
 final class SnapshotCache {
     private static final String ALIAS="familytodo_snapshot_v1";
     private static final long MAX_AGE_MS=7L*24*60*60*1000;
-    private static final int MAX_STAMP_FILES=40;
+    private static final int MAX_STAMP_FILES=64;
+    private static final long MAX_STAMP_BYTES=24L*1024*1024;
     private SnapshotCache() {}
     private static SecretKey key() throws Exception {
         KeyStore store=KeyStore.getInstance("AndroidKeyStore"); store.load(null);
@@ -64,6 +65,60 @@ final class SnapshotCache {
         for(byte b:hash) name.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
         return new File(context.getFilesDir(),name+".enc");
     }
+    private static File animationFile(Context context,String path) throws Exception {
+        if(!path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&variant=full") &&
+           !(path.startsWith("/")&&!path.startsWith("//")&&!path.contains("?")&&!path.contains("..")&&
+             (path.endsWith(".gif")||path.endsWith(".webp")))) throw new IllegalArgumentException("Invalid animation path");
+        byte[] hash=MessageDigest.getInstance("SHA-256").digest(path.getBytes(StandardCharsets.UTF_8));
+        StringBuilder name=new StringBuilder("animation-");
+        for(byte b:hash) name.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
+        return new File(context.getFilesDir(),name+".enc");
+    }
+    static void writeAnimation(Context context,String path,byte[] bytes) {
+        try {
+            if(bytes.length==0||bytes.length>4*1024*1024) return;
+            String binding=sessionBinding();if(binding==null) return;
+            JSONObject payload=new JSONObject().put("savedAt",System.currentTimeMillis())
+                .put("sessionBinding",binding).put("path",path)
+                .put("data",Base64.encodeToString(bytes,Base64.NO_WRAP));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key());
+            JSONObject record=new JSONObject().put("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
+                .put("value",Base64.encodeToString(cipher.doFinal(payload.toString().getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP));
+            File target=animationFile(context,path),temporary=new File(target.getAbsolutePath()+".tmp");
+            Files.write(temporary.toPath(),record.toString().getBytes(StandardCharsets.UTF_8));
+            if(!temporary.renameTo(target)) temporary.delete();
+            pruneAnimations(context);
+        } catch(Exception ignored) { }
+    }
+    static byte[] readAnimation(Context context,String path) {
+        try {
+            File target=animationFile(context,path);
+            if(!target.isFile()||target.length()>7_500_000) return null;
+            JSONObject record=new JSONObject(new String(Files.readAllBytes(target.toPath()),StandardCharsets.UTF_8));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(record.getString("iv"),Base64.DEFAULT)));
+            JSONObject payload=new JSONObject(new String(cipher.doFinal(Base64.decode(record.getString("value"),Base64.DEFAULT)),StandardCharsets.UTF_8));
+            String binding=sessionBinding();long age=System.currentTimeMillis()-payload.getLong("savedAt");
+            if(binding==null||!MessageDigest.isEqual(binding.getBytes(StandardCharsets.UTF_8),
+                payload.optString("sessionBinding").getBytes(StandardCharsets.UTF_8))||
+                age<0||age>MAX_AGE_MS||!path.equals(payload.optString("path"))) return null;
+            byte[] bytes=Base64.decode(payload.getString("data"),Base64.DEFAULT);
+            if(bytes.length==0||bytes.length>4*1024*1024) return null;
+            target.setLastModified(System.currentTimeMillis());return bytes;
+        } catch(Exception ignored) { return null; }
+    }
+    private static void pruneAnimations(Context context) {
+        File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("animation-")&&name.endsWith(".enc"));
+        if(files==null) return;
+        java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        long total=0;
+        for(int i=0;i<files.length;i++) {
+            total+=files[i].length();
+            if(i>=4||total>20L*1024*1024||System.currentTimeMillis()-files[i].lastModified()>MAX_AGE_MS) {
+                total-=files[i].length();files[i].delete();
+            }
+        }
+    }
     static void writeStamp(Context context,String path,Bitmap image) {
         try {
             String binding=sessionBinding(); if(binding==null) return;
@@ -99,15 +154,22 @@ final class SnapshotCache {
             BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;
             BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
             if(options.outWidth<=0||options.outHeight<=0||options.outWidth>1024||options.outHeight>1024) return null;
-            return BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+            Bitmap decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+            if(decoded!=null) target.setLastModified(System.currentTimeMillis());
+            return decoded;
         } catch(Exception ignored) { return null; }
     }
     private static void pruneStamps(Context context) {
         File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("stamp-")&&name.endsWith(".enc"));
         if(files==null) return;
         java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
-        for(int i=0;i<files.length;i++)
-            if(i>=MAX_STAMP_FILES||System.currentTimeMillis()-files[i].lastModified()>MAX_AGE_MS) files[i].delete();
+        long total=0;
+        for(int i=0;i<files.length;i++) {
+            total+=files[i].length();
+            if(i>=MAX_STAMP_FILES||total>MAX_STAMP_BYTES||System.currentTimeMillis()-files[i].lastModified()>MAX_AGE_MS) {
+                total-=files[i].length();files[i].delete();
+            }
+        }
     }
     static void write(Context context,String month,JSONObject data) {
         try {
@@ -191,7 +253,7 @@ final class SnapshotCache {
     }
     static void clear(Context context) {
         File[] files=context.getFilesDir().listFiles((dir,name)->
-            (name.startsWith("month-")||name.startsWith("stamp-")||name.startsWith("placements-"))&&
+            (name.startsWith("month-")||name.startsWith("stamp-")||name.startsWith("placements-")||name.startsWith("animation-"))&&
             (name.endsWith(".enc")||name.endsWith(".enc.tmp")));
         if(files!=null) for(File f:files) f.delete();
     }

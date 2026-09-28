@@ -61,6 +61,8 @@ public final class MainActivity extends Activity {
         @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
     };
     private final Set<String> pendingStampImages=new HashSet<>();
+    private final Set<String> scheduledFramePaths=new HashSet<>();
+    private final Set<String> scheduledAnimationPaths=new HashSet<>();
     private boolean hasOlderMessages;
     private volatile int sessionEpoch;
     private volatile int stampGeneration;
@@ -79,7 +81,7 @@ public final class MainActivity extends Activity {
             stampGeneration++;
             login.destroy(); login = null;
             monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null;
-            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
+            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         LinearLayout tabs = new LinearLayout(this);
@@ -135,7 +137,7 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
@@ -308,6 +310,57 @@ public final class MainActivity extends Activity {
         HorizontalScrollView horizontal=new HorizontalScrollView(this); horizontal.addView(row);
         content.addView(horizontal);
         if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
+        prefetchSelectedStampFrames(stamps);
+    }
+    private void prefetchSelectedStampFrames(JSONArray stamps) {
+        ArrayList<String> paths=new ArrayList<>();
+        for(int i=0;i<stamps.length()&&paths.size()<16;i++) {
+            JSONObject stamp=stamps.optJSONObject(i);
+            JSONArray frames=stamp==null?null:stamp.optJSONArray("frames");
+            if(frames==null||frames.length()<2||frames.length()>16||paths.size()+frames.length()>16) continue;
+            for(int n=0;n<frames.length();n++) {
+                JSONObject frame=frames.optJSONObject(n);
+                String path=frame==null?"":frame.optString("url");
+                if((path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&frame=[0-9]+") ||
+                    path.startsWith("/")&&!path.contains("?")&&path.endsWith(".png")) &&
+                    scheduledFramePaths.add(path)) paths.add(path);
+            }
+        }
+        if(!paths.isEmpty()) prefetchFrameStep(paths,0,sessionEpoch,stampGeneration);
+        int animations=0;
+        for(int i=0;i<stamps.length()&&animations<2;i++) {
+            JSONObject stamp=stamps.optJSONObject(i);
+            if(stamp==null||!"ANIMATED".equals(stamp.optString("kind"))||
+                !("image/gif".equals(stamp.optString("mimeType"))||"image/webp".equals(stamp.optString("mimeType")))) continue;
+            String path=stamp.optString("fullUrl");
+            if(!scheduledAnimationPaths.add(path)) continue;
+            animations++;
+            int epoch=sessionEpoch,generation=stampGeneration;
+            stampMedia.execute(() -> {
+                try {
+                    if(epoch!=sessionEpoch||generation!=stampGeneration) return;
+                    if(SnapshotCache.readAnimation(this,path)==null) {
+                        byte[] bytes=ApiClient.animatedStampBytes(path);
+                        if(epoch==sessionEpoch&&generation==stampGeneration) SnapshotCache.writeAnimation(this,path,bytes);
+                    }
+                } catch(Exception error) { runOnUiThread(() -> scheduledAnimationPaths.remove(path)); }
+            });
+        }
+    }
+    private void prefetchFrameStep(ArrayList<String> paths,int index,int epoch,int generation) {
+        if(stampMedia.isShutdown()) return;
+        stampMedia.execute(() -> {
+            if(epoch!=sessionEpoch||generation!=stampGeneration) return;
+            String path=paths.get(index);
+            try {
+                if(SnapshotCache.readStamp(this,path)==null) {
+                    Bitmap frame=ApiClient.thumbnail(path);
+                    if(epoch==sessionEpoch&&generation==stampGeneration) SnapshotCache.writeStamp(this,path,frame);
+                }
+            } catch(Exception error) { runOnUiThread(() -> scheduledFramePaths.remove(path)); }
+            if(index+1<paths.size()&&epoch==sessionEpoch&&generation==stampGeneration&&!stampMedia.isShutdown())
+                prefetchFrameStep(paths,index+1,epoch,generation);
+        });
     }
     private void prefetchStampThumbnails(JSONArray stamps,int epoch) {
         int generation=stampGeneration;
@@ -355,7 +408,7 @@ public final class MainActivity extends Activity {
         if(frames==null || frames.length()<2 || frames.length()>48) return;
         int epoch=sessionEpoch;
         Toast.makeText(this,"アニメーションを読み込みます",Toast.LENGTH_SHORT).show();
-        network.execute(() -> {
+        stampMedia.execute(() -> {
             try {
                 android.graphics.drawable.AnimationDrawable animation=new android.graphics.drawable.AnimationDrawable();
                 animation.setOneShot(false);
@@ -368,7 +421,11 @@ public final class MainActivity extends Activity {
                     if(!path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&frame=[0-9]+") &&
                         !(path.startsWith("/") && !path.contains("?") && path.endsWith(".png")))
                         throw new IllegalArgumentException("Invalid frame URL");
-                    Bitmap bitmap=ApiClient.thumbnail(path);
+                    Bitmap bitmap=SnapshotCache.readStamp(this,path);
+                    if(bitmap==null) {
+                        bitmap=ApiClient.thumbnail(path);
+                        if(epoch==sessionEpoch) SnapshotCache.writeStamp(this,path,bitmap);
+                    }
                     decodedBytes+=bitmap.getByteCount();
                     if(decodedBytes>24*1024*1024) throw new IllegalStateException("Animation too large");
                     animation.addFrame(new android.graphics.drawable.BitmapDrawable(getResources(),bitmap),
@@ -390,9 +447,14 @@ public final class MainActivity extends Activity {
     private void showAnimatedStampFile(JSONObject stamp) {
         if(Build.VERSION.SDK_INT<28) { Toast.makeText(this,"この端末ではアニメーションを再生できません",Toast.LENGTH_SHORT).show(); return; }
         String path=stamp.optString("fullUrl");int epoch=sessionEpoch;
-        network.execute(() -> {
+        stampMedia.execute(() -> {
             try {
-                android.graphics.drawable.Drawable animation=ApiClient.animatedStamp(path);
+                byte[] bytes=SnapshotCache.readAnimation(this,path);
+                if(bytes==null) {
+                    bytes=ApiClient.animatedStampBytes(path);
+                    if(epoch==sessionEpoch) SnapshotCache.writeAnimation(this,path,bytes);
+                }
+                android.graphics.drawable.Drawable animation=ApiClient.decodeAnimatedStamp(bytes);
                 if(!(animation instanceof android.graphics.drawable.AnimatedImageDrawable)) throw new IllegalStateException("Not animated");
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch || !tab.equals("calendar")) return;
@@ -1077,6 +1139,7 @@ public final class MainActivity extends Activity {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
         content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
+        content.addView(button("📊 期間の集計",this::chooseFamilyLogSummary));
         content.addView(button("＋ 記録を追加",this::addFamilyLog));
         content.addView(button("＋ タイマー",this::startFamilyLogTimer));
         JSONArray timers=familyLog.optJSONArray("timers");
@@ -1175,6 +1238,59 @@ public final class MainActivity extends Activity {
                 ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
                 content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
         }
+    }
+    private void chooseFamilyLogSummary() {
+        if(familyLog==null) return;
+        JSONArray subjects=familyLog.optJSONArray("subjects");
+        ArrayList<String> names=new ArrayList<>();ArrayList<Integer> ids=new ArrayList<>();
+        names.add("表示中の全対象");ids.add(0);
+        if(subjects!=null) for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i);
+            if(subject==null) continue;
+            names.add(subject.optString("name"));ids.add(subject.optInt("id"));
+        }
+        new AlertDialog.Builder(this).setTitle("集計する対象").setItems(names.toArray(new String[0]),(dialog,which) ->
+            new AlertDialog.Builder(this).setTitle("集計期間")
+                .setItems(new String[]{"今日","過去7日","過去30日"},(period,index) ->
+                    loadFamilyLogSummary(index==0?1:index==1?7:30,ids.get(which),names.get(which)))
+                .show()).show();
+    }
+    private void loadFamilyLogSummary(int days,int subjectId,String name) {
+        String to=selectedDay.toString(),from=selectedDay.minusDays(days-1).toString();
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject response=ApiClient.request("/api/android/v1/family-log-summary?from="+from+"&to="+to+
+                    "&subject="+(subjectId==0?"":subjectId),null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !tab.equals("familylog")) return;
+                    JSONObject totals=response.optJSONObject("totals");JSONArray daily=response.optJSONArray("daily");
+                    if(totals==null||daily==null) return;
+                    StringBuilder result=new StringBuilder(from+" 〜 "+to+"\n");
+                    result.append("記録 ").append(totals.optInt("entries")).append("件 ・ ミルク ")
+                        .append(totals.optString("milkMl","0")).append("ml\n")
+                        .append("おしっこ ").append(totals.optInt("wet")).append("回 ・ うんち ")
+                        .append(totals.optInt("dirty")).append("回 ・ 睡眠 ")
+                        .append(totals.optString("sleepMinutes","0")).append("分\n")
+                        .append("食事 ").append(totals.optInt("meals")).append("回 ・ トイレ ")
+                        .append(totals.optInt("toilet")).append("回 ・ 入浴 ")
+                        .append(totals.optInt("baths")).append("回\n")
+                        .append("薬 ").append(totals.optInt("medicine")).append("回 ・ 家事 ")
+                        .append(totals.optInt("chores")).append("回");
+                    if(days>1) for(int i=0;i<daily.length();i++) {
+                        JSONObject day=daily.optJSONObject(i);if(day==null) continue;
+                        result.append("\n\n").append(day.optString("day")).append("：記録 ").append(day.optInt("entries"))
+                            .append("件、ミルク ").append(day.optString("milkMl","0")).append("ml、睡眠 ")
+                            .append(day.optString("sleepMinutes","0")).append("分");
+                    }
+                    ScrollView scroll=new ScrollView(this);TextView text=label(result.toString());scroll.addView(text);
+                    new AlertDialog.Builder(this).setTitle(name+" の集計").setView(scroll)
+                        .setPositiveButton("閉じる",null).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"集計を取得できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void runFamilyLogQuickAction(JSONObject quick) {
         String mode=quick.optString("mode");
@@ -2135,7 +2251,7 @@ public final class MainActivity extends Activity {
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
-                stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
+                stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
             }).setNegativeButton("閉じる",null).show();
@@ -2148,7 +2264,7 @@ public final class MainActivity extends Activity {
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";
-        stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
+        stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
         frame.addView(button("ログイン後、ネイティブ画面に戻る", () -> { showNative(); load(); }));

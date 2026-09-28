@@ -48,6 +48,7 @@ import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
 import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
 import { androidFamilyLogApi } from './android-family-log-api';
+import { androidFamilyLogSummaryApi } from './android-family-log-summary-api';
 import { androidGoodsHistoryApi } from './android-goods-history-api';
 import {taskEdit} from './task-edit-page';
 import {validateTaskEditRequestHierarchy} from './task-edit-hierarchy-guard';
@@ -68,6 +69,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/me') return await apiMe(context);
   if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
   if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
+  if(url.pathname==='/api/android/v1/family-log-summary') return await androidFamilyLogSummaryApi(request,context);
   if(url.pathname==='/api/android/v1/goods-history') return await androidGoodsHistoryApi(request,context);
   if(url.pathname==='/api/android/v1/task-edit') {
     if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
