@@ -851,7 +851,7 @@ public final class MainActivity extends Activity {
         ArrayList<String> actions=new ArrayList<>();actions.add("日付を指定して呼び出す");
         if(!shopping&&set.optBoolean("can_edit")) {
             actions.add("セット名を変更");actions.add("セット内の項目を編集");
-            actions.add("セットに項目を追加");actions.add("セットから項目を外す");
+            actions.add("セットに項目を追加");actions.add("セットから項目を外す");actions.add("セット内の順序を変更");
         }
         if(canDelete) actions.add("セットを削除");
         new AlertDialog.Builder(this).setTitle(set.optString("name"))
@@ -864,11 +864,30 @@ public final class MainActivity extends Activity {
                     else if(action.equals("セット内の項目を編集")) editItemSetEntries(set);
                     else if(action.equals("セットに項目を追加")) addItemSetEntry(set);
                     else if(action.equals("セットから項目を外す")) removeItemSetEntry(set);
+                    else if(action.equals("セット内の順序を変更")) reorderItemSetEntry(set);
                     else new AlertDialog.Builder(this).setTitle("セットを削除")
                         .setMessage("セットの登録だけを削除します。呼び出し済みの項目は残ります。")
                         .setPositiveButton("削除",(d,w) -> mutateReusableSet(shopping,id,"reusable_set_delete",null))
                         .setNegativeButton("戻る",null).show();
                 }).setNegativeButton("閉じる",null).show();
+    }
+    private void reorderItemSetEntry(JSONObject set) {
+        JSONArray entries=set.optJSONArray("entries");if(entries==null||entries.length()<2) return;
+        ArrayList<String> names=new ArrayList<>();for(int i=0;i<entries.length();i++) {
+            JSONObject entry=entries.optJSONObject(i);names.add((i+1)+". "+(entry==null?"項目":entry.optString("name")));
+        }
+        new AlertDialog.Builder(this).setTitle("移動する項目")
+            .setItems(names.toArray(new String[0]),(dialog,which) ->
+                new AlertDialog.Builder(this).setTitle(names.get(which))
+                    .setItems(new String[]{"一つ上へ","一つ下へ"},(d,direction) -> {
+                        int target=which+(direction==0?-1:1);
+                        if(target<0||target>=entries.length()) return;
+                        JSONArray updated=new JSONArray();
+                        for(int i=0;i<entries.length();i++)
+                            updated.put(entries.optJSONObject(i==which?target:i==target?which:i));
+                        saveItemSet(set,set.optString("name"),updated);
+                    }).setNegativeButton("戻る",null).show())
+            .setNegativeButton("閉じる",null).show();
     }
     private void addItemSetEntry(JSONObject set) {
         JSONArray entries=set.optJSONArray("entries");if(entries==null||entries.length()>=100) return;
