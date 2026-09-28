@@ -708,10 +708,13 @@ public final class MainActivity extends Activity {
             if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
             content.addView(label(subject.optString("name")));
             LinearLayout actions=new LinearLayout(this);
-            actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
-            actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
-            actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
-            content.addView(actions);
+            ArrayList<String> enabled=allowedLogTypes(subject);
+            if(enabled.contains("MILK")) actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
+            if(enabled.contains("DIAPER")) {
+                actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
+                actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
+            }
+            if(actions.getChildCount()>0) content.addView(actions);
         }
         if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
         content.addView(label("当日の記録"));
