@@ -1,6 +1,5 @@
 export type CalendarStampPlacement = {
   placement_id: number;
-  created_by: number;
   stamp_date: string;
   visibility_scope: 'FAMILY' | 'PRIVATE';
   sort_order: number;
@@ -111,7 +110,7 @@ export async function calendarStampPlacementsForRange(
   while(placements.length<MAX_ROWS){
     const cursorClause=cursorDate===null?'':`\n      AND (p.stamp_date>? OR (p.stamp_date=? AND p.sort_order>?) OR (p.stamp_date=? AND p.sort_order=? AND p.id>?))`;
     const statement=env.DB.prepare(`SELECT
-        p.id placement_id,p.created_by,p.stamp_date,p.visibility_scope,p.sort_order,
+        p.id placement_id,p.stamp_date,p.visibility_scope,p.sort_order,
         a.id asset_id,a.asset_kind,a.mime_type,a.storage_provider,a.storage_key,a.thumbnail_storage_key,a.width,a.height
       FROM calendar_stamp_placements p
       JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id

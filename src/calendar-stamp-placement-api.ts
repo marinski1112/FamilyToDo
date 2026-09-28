@@ -48,7 +48,7 @@ export async function calendarStampPlacementApi(request:Request,context:any):Pro
       return json({ok:false,error:'STAMP_DELETE_FAILED'},500);
     }
   }
-  if(request.method==='PATCH'){
+  if(request.method==='PATCH'||(request.method==='POST'&&body.action==='move')){
     if(body.visibilityScope==null||body.sortOrder==null)return json({ok:false,error:'INVALID_PLACEMENT'},400);
     const placementId=Number(body.placementId||0),stampDate=String(body.stampDate||''),visibilityScope=String(body.visibilityScope),sortOrder=Number(body.sortOrder);
     if(!Number.isSafeInteger(placementId)||placementId<=0||!Number.isSafeInteger(sortOrder))return json({ok:false,error:'INVALID_PLACEMENT'},400);

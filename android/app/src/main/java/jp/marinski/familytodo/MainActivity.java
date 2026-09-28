@@ -20,6 +20,7 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
 import android.graphics.Bitmap;
 import android.util.LruCache;
 import android.widget.TextView;
@@ -249,10 +250,8 @@ public final class MainActivity extends Activity {
             ImageView view=new ImageView(this);
             int size=(int)(64*getResources().getDisplayMetrics().density);
             row.addView(view,new LinearLayout.LayoutParams(size,size));
-            if(stamp.optInt("createdBy")==snapshot.optInt("memberId")) {
-                view.setContentDescription("スタンプを削除");
-                view.setOnClickListener(v -> deleteStamp(stamp));
-            }
+            view.setContentDescription("スタンプの操作");
+            view.setOnClickListener(v -> stampActions(stamp));
             Bitmap cached=stampImages.get(path);
             if(cached!=null) { view.setImageBitmap(cached); continue; }
             if(!pendingStampImages.add(path)) continue;
@@ -269,8 +268,39 @@ public final class MainActivity extends Activity {
                 });
             });
         }
-        content.addView(row);
+        HorizontalScrollView horizontal=new HorizontalScrollView(this); horizontal.addView(row);
+        content.addView(horizontal);
         if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
+    }
+    private void stampActions(JSONObject stamp) {
+        new AlertDialog.Builder(this).setTitle("スタンプの操作")
+            .setItems(new String[]{"別の日に移動","削除"},(dialog,which) -> {
+                if(which==0) moveStamp(stamp); else deleteStamp(stamp);
+            }).show();
+    }
+    private void moveStamp(JSONObject stamp) {
+        int placementId=stamp.optInt("placementId");
+        if(snapshot==null || placementId<=0) return;
+        LocalDate current;
+        try { current=LocalDate.parse(stamp.optString("date")); }
+        catch(Exception error) { return; }
+        new DatePickerDialog(this,(picker,y,m,d) -> {
+            String day=LocalDate.of(y,m+1,d).toString();
+            if(day.equals(stamp.optString("date"))) return;
+            String csrf=snapshot.optString("csrf"), scope=stamp.optString("visibilityScope","FAMILY");
+            int order=stamp.optInt("sortOrder"),epoch=sessionEpoch;
+            network.execute(() -> {
+                try {
+                    if(epoch!=sessionEpoch) return;
+                    ApiClient.request("/api/calendar-stamp-placement",new JSONObject()
+                        .put("action","move").put("csrf",csrf).put("placementId",placementId)
+                        .put("stampDate",day).put("visibilityScope",scope).put("sortOrder",order));
+                    if(epoch==sessionEpoch) runOnUiThread(this::load);
+                } catch(Exception error) {
+                    runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを移動できませんでした",Toast.LENGTH_SHORT).show(); });
+                }
+            });
+        },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
     }
     private void addStamp() {
         if(snapshot==null) return;
@@ -315,9 +345,9 @@ public final class MainActivity extends Activity {
     }
     private void deleteStamp(JSONObject stamp) {
         int placementId=stamp.optInt("placementId");
-        if(snapshot==null || placementId<=0 || stamp.optInt("createdBy")!=snapshot.optInt("memberId")) return;
+        if(snapshot==null || placementId<=0) return;
         new AlertDialog.Builder(this).setTitle("スタンプを削除")
-            .setMessage("この日からスタンプを取り除きます。")
+            .setMessage("自分が置いたスタンプのみ、この日から取り除けます。")
             .setPositiveButton("削除",(dialog,which) -> {
                 String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
                 network.execute(() -> {
