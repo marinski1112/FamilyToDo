@@ -16,6 +16,8 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -23,6 +25,8 @@ import org.json.JSONObject;
 import java.time.YearMonth;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +38,7 @@ public final class MainActivity extends Activity {
     private WebView login;
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
+    private JSONObject shoppingCategories, itemCategories;
     private boolean hasOlderMessages;
     private int sessionEpoch;
     private boolean showingCached;
@@ -90,10 +95,20 @@ public final class MainActivity extends Activity {
                 SnapshotCache.write(this,requested,data);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); }
+                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); shoppingCategories=null; itemCategories=null; }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
                 });
+                for (boolean shopping : new boolean[]{true,false}) {
+                    try {
+                        JSONObject categories=ApiClient.request(shopping?"/api/shopping-categories":"/api/item",null);
+                        runOnUiThread(() -> {
+                            if(epoch!=sessionEpoch) return;
+                            if(shopping) shoppingCategories=categories; else itemCategories=categories;
+                            if(tab.equals(shopping?"shopping":"item")) render();
+                        });
+                    } catch(Exception ignored) { /* The checklist remains available. */ }
+                }
                 for (String nearby : new String[]{YearMonth.parse(requested).minusMonths(1).toString(), YearMonth.parse(requested).plusMonths(1).toString()}) {
                     if (epoch!=sessionEpoch) return;
                     if (!monthCache.containsKey(nearby)) {
@@ -177,13 +192,37 @@ public final class MainActivity extends Activity {
         boolean shopping=tab.equals("shopping");
         content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
-        for (int n=0; n<rows.length(); n++) {
-            JSONObject row=rows.optJSONObject(n); if (row==null) continue;
-            CheckBox box=new CheckBox(this); box.setText(row.optString("category", "未分類") + "  " + row.optString("name") +
-                (shopping?" ×"+row.optString("quantity", "1"):""));
-            box.setChecked("completed".equals(row.optString("status")));
-            box.setOnClickListener(v -> toggle(shopping?"shopping":"item", row.optInt("id"), box)); content.addView(box);
+        JSONObject catalog=shopping?shoppingCategories:itemCategories;
+        LinkedHashSet<String> names=new LinkedHashSet<>();
+        if(catalog!=null) {
+            JSONArray order=catalog.optJSONArray("order"), available=catalog.optJSONArray("categories");
+            if(order!=null) for(int i=0;i<order.length();i++) if(contains(available,order.optString(i))) names.add(order.optString(i));
+            if(available!=null) for(int i=0;i<available.length();i++) names.add(available.optString(i));
         }
+        for(int i=0;i<rows.length();i++) {
+            JSONObject row=rows.optJSONObject(i); if(row!=null) names.add(category(row));
+        }
+        for(String category:names) {
+            LinearLayout group=new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
+            int count=0;
+            for(int n=0;n<rows.length();n++) {
+                JSONObject row=rows.optJSONObject(n); if(row==null || !category.equals(category(row))) continue;
+                CheckBox box=new CheckBox(this);
+                box.setText(row.optString("name")+(shopping?" ×"+row.optString("quantity","1"):""));
+                box.setChecked("completed".equals(row.optString("status")));
+                box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
+                group.addView(box); count++;
+            }
+            if(count>0) { content.addView(label(category)); content.addView(group); }
+        }
+    }
+    private String category(JSONObject row) {
+        String value=row.optString("category","").trim(); return value.isEmpty()?"未分類":value;
+    }
+    private boolean contains(JSONArray values,String target) {
+        if(values==null) return false;
+        for(int i=0;i<values.length();i++) if(target.equals(values.optString(i))) return true;
+        return false;
     }
     private void toggle(String type, int id, CheckBox box) {
         box.setEnabled(false); boolean completed=box.isChecked();
@@ -196,12 +235,32 @@ public final class MainActivity extends Activity {
     }
     private void addGoods(boolean shopping) {
         EditText input=new EditText(this); input.setHint(shopping?"買い物名":"持ち物名");
-        new AlertDialog.Builder(this).setTitle(shopping?"買い物を追加":"持ち物を追加").setView(input)
+        EditText quantity=new EditText(this); quantity.setHint("数量（例: 2個）"); quantity.setSingleLine(true);
+        EditText memo=new EditText(this); memo.setHint("メモ");
+        JSONObject catalog=shopping?shoppingCategories:itemCategories;
+        ArrayList<String> choices=new ArrayList<>(); choices.add("未分類");
+        JSONArray available=catalog==null?null:catalog.optJSONArray("categories");
+        if(available!=null) for(int i=0;i<available.length();i++) {
+            String value=available.optString(i); if(!value.isEmpty()&&!choices.contains(value)) choices.add(value);
+        }
+        Spinner category=new Spinner(this);
+        category.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,choices));
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(32,8,32,8); form.addView(input); form.addView(label("カテゴリ")); form.addView(category);
+        if(shopping) form.addView(quantity);
+        form.addView(memo);
+        new AlertDialog.Builder(this).setTitle(shopping?"買い物を追加":"持ち物を追加").setView(form)
             .setPositiveButton("追加", (d,w) -> {
                 String name=input.getText().toString().trim(); if (name.isEmpty()) return;
+                String selected=category.getSelectedItem().toString();
+                String csrf=snapshot.optString("csrf");
+                String note=memo.getText().toString().trim();
+                String amount=quantity.getText().toString().trim();
                 network.execute(() -> {
                     try { ApiClient.request(shopping?"/api/shopping":"/api/item",new JSONObject()
-                        .put("action","add").put("name",name).put("csrf",snapshot.getString("csrf"))
+                        .put("action","add").put("name",name).put("csrf",csrf)
+                        .put("category","未分類".equals(selected)?"":selected)
+                        .put("memo",note).put("quantity",amount.isEmpty()?"1":amount)
                         .put("client_request_id",java.util.UUID.randomUUID().toString()));
                         runOnUiThread(this::load);
                     } catch (Exception e) { runOnUiThread(() -> Toast.makeText(this,"追加できませんでした",Toast.LENGTH_SHORT).show()); }
@@ -289,7 +348,7 @@ public final class MainActivity extends Activity {
                 sessionEpoch++;
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 network.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null; messages=new JSONArray();
+                monthCache.clear(); snapshot=null; messages=new JSONArray(); shoppingCategories=null; itemCategories=null;
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
             }).setNegativeButton("閉じる",null).show();
