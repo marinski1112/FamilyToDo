@@ -748,6 +748,7 @@ public final class MainActivity extends Activity {
         boolean shopping=tab.equals("shopping");
         content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
         content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
+        content.addView(button(shopping?"買い物セット":"持ち物セット",() -> loadReusableSets(shopping)));
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
@@ -778,6 +779,109 @@ public final class MainActivity extends Activity {
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
         }
+    }
+    private String reusableSetPath(boolean shopping) {return shopping?"/api/shopping":"/api/item";}
+    private void loadReusableSets(boolean shopping) {
+        if(snapshot==null) return;
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONArray sets=ApiClient.request(reusableSetPath(shopping)+"?view=reusable_sets",null).optJSONArray("sets");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||sets==null) return;
+                    ArrayList<String> names=new ArrayList<>();names.add("＋ 表示中の項目からセットを作成");
+                    for(int i=0;i<sets.length();i++) {
+                        JSONObject set=sets.optJSONObject(i);
+                        names.add(set==null?"セット":set.optString("name")+" ・ "+set.optInt("item_count")+"件");
+                    }
+                    new AlertDialog.Builder(this).setTitle(shopping?"買い物セット":"持ち物セット")
+                        .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            if(which==0) createReusableSet(shopping);
+                            else {
+                                JSONObject set=sets.optJSONObject(which-1);
+                                if(set!=null) reusableSetActions(shopping,set);
+                            }
+                        }).setNegativeButton("閉じる",null).show();
+                });
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"セットを読み込めませんでした",Toast.LENGTH_SHORT).show();});}
+        });
+    }
+    private void createReusableSet(boolean shopping) {
+        if(snapshot==null) return;
+        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items");
+        if(rows==null||rows.length()==0) {Toast.makeText(this,"先に項目を追加してください",Toast.LENGTH_SHORT).show();return;}
+        ArrayList<Integer> ids=new ArrayList<>();ArrayList<String> labels=new ArrayList<>();
+        for(int i=0;i<rows.length()&&ids.size()<100;i++) {
+            JSONObject row=rows.optJSONObject(i);
+            if(row!=null&&row.optInt("id")>0&&"pending".equals(row.optString("status"))) {
+                ids.add(row.optInt("id"));labels.add(row.optString("name"));
+            }
+        }
+        if(ids.isEmpty()) {Toast.makeText(this,"保存する未完了項目がありません",Toast.LENGTH_SHORT).show();return;}
+        boolean[] selected=new boolean[ids.size()];
+        new AlertDialog.Builder(this).setTitle("セットに保存する項目")
+            .setMultiChoiceItems(labels.toArray(new String[0]),selected,(dialog,which,checked) -> selected[which]=checked)
+            .setPositiveButton("次へ",(dialog,which) -> {
+                JSONArray chosen=new JSONArray();for(int i=0;i<ids.size();i++) if(selected[i]) chosen.put(ids.get(i));
+                if(chosen.length()==0) {Toast.makeText(this,"項目を選んでください",Toast.LENGTH_SHORT).show();return;}
+                EditText name=new EditText(this);name.setHint("セット名");
+                new AlertDialog.Builder(this).setTitle("セット名").setView(name)
+                    .setPositiveButton("保存",(d,w) -> {
+                        String value=name.getText().toString().trim();
+                        if(value.isEmpty()||value.length()>120) {Toast.makeText(this,"セット名を確認してください",Toast.LENGTH_SHORT).show();return;}
+                        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+                        network.execute(() -> {
+                            try {
+                                if(epoch!=sessionEpoch) return;
+                                ApiClient.request(reusableSetPath(shopping),new JSONObject().put("csrf",csrf)
+                                    .put("action","reusable_set_create").put("name",value).put("source_item_ids",chosen));
+                                if(epoch==sessionEpoch) runOnUiThread(() -> loadReusableSets(shopping));
+                            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"セットを作成できませんでした",Toast.LENGTH_LONG).show();});}
+                        });
+                    }).setNegativeButton("閉じる",null).show();
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void reusableSetActions(boolean shopping,JSONObject set) {
+        int id=set.optInt("id");if(id<=0||snapshot==null) return;
+        boolean canDelete=set.optBoolean("can_delete");
+        JSONArray entries=set.optJSONArray("entries");ArrayList<String> names=new ArrayList<>();
+        if(entries!=null) for(int i=0;i<entries.length();i++) {
+            JSONObject entry=entries.optJSONObject(i);if(entry!=null) names.add(entry.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle(set.optString("name"))
+            .setMessage(android.text.TextUtils.join("、",names))
+            .setItems(canDelete?new String[]{"日付を指定して呼び出す","セットを削除"}:new String[]{"日付を指定して呼び出す"},
+                (dialog,which) -> {
+                    if(which==0) invokeReusableSet(shopping,set);
+                    else new AlertDialog.Builder(this).setTitle("セットを削除")
+                        .setMessage("セットの登録だけを削除します。呼び出し済みの項目は残ります。")
+                        .setPositiveButton("削除",(d,w) -> mutateReusableSet(shopping,id,"reusable_set_delete",null))
+                        .setNegativeButton("戻る",null).show();
+                }).setNegativeButton("閉じる",null).show();
+    }
+    private void invokeReusableSet(boolean shopping,JSONObject set) {
+        LocalDate day=selectedDay;
+        new DatePickerDialog(this,(picker,y,m,d) -> {
+            String date=LocalDate.of(y,m+1,d).toString();
+            new AlertDialog.Builder(this).setTitle(set.optString("name"))
+                .setMessage(date+" に項目を追加します。")
+                .setPositiveButton("追加",(confirm,which) -> mutateReusableSet(shopping,set.optInt("id"),
+                    "reusable_set_invoke",date))
+                .setNegativeButton("戻る",null).show();
+        },day.getYear(),day.getMonthValue()-1,day.getDayOfMonth()).show();
+    }
+    private void mutateReusableSet(boolean shopping,int id,String action,String date) {
+        if(snapshot==null||id<=0) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf"),requestId=java.util.UUID.randomUUID().toString();
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject body=new JSONObject().put("csrf",csrf).put("action",action).put("set_id",id);
+                if(date!=null) body.put("date",date).put("client_request_id",requestId);
+                ApiClient.request(reusableSetPath(shopping),body);
+                if(epoch==sessionEpoch) runOnUiThread(() -> {load();loadReusableSets(shopping);});
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"セットを操作できませんでした。項目を更新して確認してください",Toast.LENGTH_LONG).show();});}
+        });
     }
     private void goodsActions(boolean shopping,JSONObject row) {
         new AlertDialog.Builder(this).setTitle(row.optString("name"))
