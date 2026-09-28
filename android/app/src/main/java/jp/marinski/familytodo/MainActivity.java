@@ -21,6 +21,7 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.time.YearMonth;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +39,7 @@ public final class MainActivity extends Activity {
     private boolean showingCached;
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
+    private LocalDate selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "calendar";
     @Override public void onCreate(Bundle state) { super.onCreate(state); showNative(); load(); }
     private Button button(String label, Runnable action) {
@@ -54,9 +56,9 @@ public final class MainActivity extends Activity {
         tabs.addView(button("伝言", () -> { tab="messages"; loadMessages(0); }), new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(tabs);
         LinearLayout controls = new LinearLayout(this);
-        controls.addView(button("◀", () -> { month=month.minusMonths(1); load(); }));
+        controls.addView(button("◀", () -> { month=month.minusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("更新", this::load));
-        controls.addView(button("▶", () -> { month=month.plusMonths(1); load(); }));
+        controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
         controls.addView(button("ログアウト", this::logout));
         root.addView(controls);
@@ -120,29 +122,55 @@ public final class MainActivity extends Activity {
         if (!first.isEmpty()) return first;
         return row.isNull(fallback) ? "" : row.optString(fallback, "");
     }
+    private boolean taskOnDay(JSONObject task,String day) {
+        String start=dateValue(task,"start_at","due_at");
+        String end=dateValue(task,"end_at","start_at");
+        if(end.isEmpty()) end=start;
+        return start.length()>=10 && day.compareTo(start.substring(0,10))>=0 &&
+            (end.length()<10 || day.compareTo(end.substring(0,10))<=0);
+    }
     private void renderCalendar() {
-        JSONArray tasks = snapshot.optJSONArray("tasks"); if (tasks == null) return;
-        for (int date=1; date<=month.lengthOfMonth(); date++) {
-            String day = month.atDay(date).toString();
-            LinearLayout group = new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
-            group.addView(label(day)); int count=0;
-            for (int n=0; n<tasks.length(); n++) {
-                JSONObject task=tasks.optJSONObject(n); if (task==null) continue;
-                String start=dateValue(task,"start_at","due_at");
-                String end=dateValue(task,"end_at","start_at");
-                if (end.isEmpty()) end=start;
-                if (start.length()<10 || day.compareTo(start.substring(0,10))<0 || (end.length()>=10 && day.compareTo(end.substring(0,10))>0)) continue;
-                boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
-                CheckBox box=new CheckBox(this); box.setText((event?"📌 ":"")+task.optString("title"));
-                box.setChecked("completed".equals(task.optString("status"))); box.setEnabled(!event);
-                int recurrenceId=task.optInt("recurrence_occurrence_id");
-                int id=recurrenceId>0?recurrenceId:task.optInt("id");
-                box.setEnabled(!event && id>0);
-                box.setOnClickListener(v -> toggle(recurrenceId>0?"recurrence":"task", id, box));
-                group.addView(box); count++;
+        JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
+        LinearLayout weekdays=new LinearLayout(this);
+        for(String weekday:new String[]{"日","月","火","水","木","金","土"})
+            weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
+        content.addView(weekdays);
+        int offset=month.atDay(1).getDayOfWeek().getValue()%7;
+        for(int row=0;row<6;row++) {
+            LinearLayout week=new LinearLayout(this);
+            for(int column=0;column<7;column++) {
+                int date=row*7+column-offset;
+                if(date<1||date>month.lengthOfMonth()) {
+                    week.addView(new TextView(this),new LinearLayout.LayoutParams(0,-2,1)); continue;
+                }
+                LocalDate day=month.atDay(date); int count=0;
+                for(int n=0;n<tasks.length();n++) {
+                    JSONObject task=tasks.optJSONObject(n);
+                    if(task!=null&&taskOnDay(task,day.toString())) count++;
+                }
+                Button cell=button(Integer.toString(date)+(count>0?" •":""),()->{selectedDay=day; render();});
+                cell.setContentDescription(day.toString()+" 予定"+count+"件");
+                cell.setAllCaps(false); cell.setTextSize(12);
+                cell.setAlpha(day.equals(selectedDay)?1f:0.78f);
+                week.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
             }
-            if (count>0) content.addView(group);
+            content.addView(week);
         }
+        content.addView(label(selectedDay.toString()+" の予定"));
+        int count=0;
+        for(int n=0;n<tasks.length();n++) {
+            JSONObject task=tasks.optJSONObject(n);
+            if(task==null||!taskOnDay(task,selectedDay.toString())) continue;
+            boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
+            CheckBox box=new CheckBox(this); box.setText((event?"📌 ":"")+task.optString("title"));
+            box.setChecked("completed".equals(task.optString("status")));
+            int recurrenceId=task.optInt("recurrence_occurrence_id");
+            int id=recurrenceId>0?recurrenceId:task.optInt("id");
+            box.setEnabled(!event&&id>0);
+            box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
+            content.addView(box);count++;
+        }
+        if(count==0) content.addView(label("予定はありません"));
     }
     private void renderGoods() {
         boolean shopping=tab.equals("shopping");
@@ -182,7 +210,7 @@ public final class MainActivity extends Activity {
     private void addTask() {
         if (snapshot == null) return;
         EditText title=new EditText(this); title.setHint("タイトル"); title.setSingleLine(true);
-        final String[] selectedDate={month.atDay(1).toString()};
+        final String[] selectedDate={selectedDay.toString()};
         final Button[] dateRef=new Button[1];
         Button date=button("日付: " + selectedDate[0], () -> {
             java.time.LocalDate current=java.time.LocalDate.parse(selectedDate[0]);
