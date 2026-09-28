@@ -195,7 +195,10 @@ public final class MainActivity extends Activity {
         if (tab.equals("messages")) { renderMessages(); return; }
         if (tab.equals("familylog")) { renderFamilyLog(); return; }
         content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
-        if (tab.equals("calendar")) content.addView(button("＋ タスク・イベント", this::addTask));
+        if (tab.equals("calendar")) {
+            content.addView(button("＋ タスク・イベント", this::addTask));
+            content.addView(button("🔁 定期タスク",this::loadRecurringRules));
+        }
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを表示中・更新を確認しています"));
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
@@ -258,7 +261,8 @@ public final class MainActivity extends Activity {
             int id=recurrenceId>0?recurrenceId:task.optInt("id");
             box.setEnabled(!event&&id>0);
             box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
-            if(recurrenceId<=0 && id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
+            if(recurrenceId>0) box.setOnLongClickListener(v -> { loadRecurringRule(task.optInt("recurrence_rule_id")); return true; });
+            else if(id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
             content.addView(box);count++;
         }
         if(count==0) content.addView(label("予定はありません"));
@@ -997,6 +1001,255 @@ public final class MainActivity extends Activity {
                         runOnUiThread(this::load);
                     } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this,"保存できませんでした",Toast.LENGTH_SHORT).show()); }
                 });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void loadRecurringRules() { loadRecurringRule(0); }
+    private void loadRecurringRule(int id) {
+        if(snapshot==null) { load(); return; }
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/android/v1/recurring"+(id>0?"?id="+id:""),null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    JSONArray rules=result.optJSONArray("rules"),subjects=result.optJSONArray("subjects");
+                    if(rules==null||subjects==null) return;
+                    if(id>0) {
+                        JSONObject rule=rules.optJSONObject(0);
+                        if(rule!=null) recurringActions(rule,subjects);
+                    } else showRecurringRules(rules,subjects,result.optJSONArray("excluded"),result.optBoolean("truncated"));
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"定期タスクを読み込めませんでした（管理者権限が必要です）",Toast.LENGTH_LONG).show(); });
+            }
+        });
+    }
+    private void showRecurringRules(JSONArray rules,JSONArray subjects,JSONArray excluded,boolean truncated) {
+        ArrayList<String> names=new ArrayList<>();names.add("＋ 定期タスクを作成");
+        for(int i=0;i<rules.length();i++) {
+            JSONObject rule=rules.optJSONObject(i);
+            names.add(rule==null?"定期タスク":(rule.optInt("active",1)==1?"":"（停止中）")+
+                rule.optString("title")+" ・ "+rule.optString("recurrence_type"));
+        }
+        int excludedCount=excluded==null?0:excluded.length();
+        for(int i=0;i<excludedCount;i++) {
+            JSONObject row=excluded.optJSONObject(i);
+            names.add("復活: "+(row==null?"定期タスク":row.optString("title"))+" ・ "+
+                (row==null?"":row.optString("occurrence_date")));
+        }
+        if(truncated) names.add("ほかの定期タスクは一覧の上限を超えています");
+        new AlertDialog.Builder(this).setTitle("定期タスク")
+            .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                if(which==0) editRecurring(null,subjects);
+                else if(which<=rules.length()) {
+                    JSONObject rule=rules.optJSONObject(which-1);
+                    if(rule!=null) recurringActions(rule,subjects);
+                } else if(which<=rules.length()+excludedCount) {
+                    JSONObject row=excluded.optJSONObject(which-rules.length()-1);
+                    if(row!=null) new AlertDialog.Builder(this).setTitle("除外した発生日を復活")
+                        .setMessage(row.optString("title")+" ・ "+row.optString("occurrence_date"))
+                        .setPositiveButton("復活",(d,w) -> {
+                            try {postRecurring(new JSONObject().put("action","restore_excluded")
+                                .put("occurrence_id",row.optInt("occurrence_id")));}
+                            catch(Exception ignored) { }
+                        }).setNegativeButton("戻る",null).show();
+                }
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void recurringActions(JSONObject rule,JSONArray subjects) {
+        boolean active=rule.optInt("active",1)==1;
+        new AlertDialog.Builder(this).setTitle(rule.optString("title"))
+            .setItems(new String[]{"編集",active?"一時停止":"再開","シリーズ全体を削除"},(dialog,which) -> {
+                if(which==0) editRecurring(rule,subjects);
+                else if(which==1) {
+                    try { postRecurring(new JSONObject().put("action","toggle").put("id",rule.optInt("id"))
+                        .put("active",active?0:1)); } catch(Exception ignored) { }
+                } else new AlertDialog.Builder(this).setTitle("定期タスクを削除")
+                    .setMessage("今後の予定を含むシリーズ全体を削除します。")
+                    .setPositiveButton("削除",(d,w) -> {
+                        try { postRecurring(new JSONObject().put("action","delete").put("id",rule.optInt("id"))); }
+                        catch(Exception ignored) { }
+                    }).setNegativeButton("戻る",null).show();
+            }).show();
+    }
+    private void postRecurring(JSONObject body) {
+        if(snapshot==null) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                body.put("csrf",csrf);
+                ApiClient.request("/api/android/v1/recurring",body);
+                if(epoch==sessionEpoch) runOnUiThread(this::load);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"定期タスクを保存できませんでした: "+error.getMessage(),Toast.LENGTH_LONG).show(); });
+            }
+        });
+    }
+    private boolean jsonContainsNumber(JSONObject row,String key,int value) {
+        try {
+            JSONArray values=new JSONArray(row.optString(key,"[]"));
+            for(int i=0;i<values.length();i++) if(values.optInt(i,-1)==value) return true;
+        } catch(Exception ignored) { }
+        return false;
+    }
+    private void editRecurring(JSONObject rule,JSONArray subjects) {
+        if(snapshot==null) return;
+        final boolean editing=rule!=null;
+        String[] typeCodes={"DAILY","INTERVAL_DAYS","WEEKLY","INTERVAL_WEEKS","MONTHLY_DAY",
+            "MONTHLY_WEEKDAY","MONTHLY_BUSINESS_DAY","YEARLY"};
+        String[] typeNames={"毎日","n日ごと","毎週","n週ごと","毎月指定日","毎月第n曜日","毎月第n営業日","毎年"};
+        Spinner type=new Spinner(this);type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,typeNames));
+        if(editing) type.setSelection(Math.max(0,java.util.Arrays.asList(typeCodes).indexOf(rule.optString("recurrence_type"))));
+        EditText title=new EditText(this);title.setHint("タイトル");title.setText(editing?rule.optString("title"):"");
+        EditText description=new EditText(this);description.setHint("説明");description.setText(editing?rule.optString("description"):"");
+        EditText location=new EditText(this);location.setHint("場所");location.setText(editing?rule.optString("location"):"");
+        EditText interval=new EditText(this);interval.setHint("間隔（1〜365）");interval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        interval.setText(editing&&!rule.isNull("interval_value")?rule.optString("interval_value"):"1");
+        final String[] start={editing?rule.optString("start_date"):selectedDay.toString()};
+        final String[] end={editing&&!rule.isNull("end_date")?rule.optString("end_date"):""};
+        final Button[] startRef=new Button[1],endRef=new Button[1];
+        Button startDate=button("開始日: "+start[0],() -> {
+            LocalDate current=LocalDate.parse(start[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                start[0]=LocalDate.of(y,m+1,d).toString();startRef[0].setText("開始日: "+start[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });startRef[0]=startDate;
+        Button endDate=button("終了日: "+(end[0].isEmpty()?"指定なし":end[0]),() -> {
+            LocalDate current=end[0].isEmpty()?LocalDate.parse(start[0]):LocalDate.parse(end[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                end[0]=LocalDate.of(y,m+1,d).toString();endRef[0].setText("終了日: "+end[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });endRef[0]=endDate;
+        CheckBox[] weekdays=new CheckBox[7],weekNumbers=new CheckBox[5];
+        EditText monthdays=new EditText(this);monthdays.setHint("毎月の日付（例: 1,15,25）");
+        if(editing) try {
+            JSONArray values=new JSONArray(rule.optString("monthdays_json","[]"));
+            ArrayList<String> parts=new ArrayList<>();for(int i=0;i<values.length();i++) parts.add(values.optString(i));
+            monthdays.setText(android.text.TextUtils.join(",",parts));
+        } catch(Exception ignored) { }
+        EditText businessDay=new EditText(this);businessDay.setHint("第n営業日（1〜23）");
+        businessDay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        businessDay.setText(editing&&!rule.isNull("business_day_ordinal")?rule.optString("business_day_ordinal"):"1");
+        CheckBox allDay=new CheckBox(this);allDay.setText("終日");allDay.setChecked(!editing||rule.optInt("all_day",1)==1);
+        String existingStart=editing?rule.optString("start_at"):"",existingEnd=editing?rule.optString("end_at"):"";
+        final String[] startTime={existingStart.length()>=16?existingStart.substring(11,16):"09:00"};
+        final String[] endTime={existingEnd.length()>=16?existingEnd.substring(11,16):"10:00"};
+        final Button[] startTimeRef=new Button[1],endTimeRef=new Button[1];
+        Button startClock=button("開始: "+startTime[0],() -> {
+            String[] values=startTime[0].split(":");
+            new TimePickerDialog(this,(picker,h,m) -> {
+                startTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);
+                startTimeRef[0].setText("開始: "+startTime[0]);
+            },Integer.parseInt(values[0]),Integer.parseInt(values[1]),true).show();
+        });startTimeRef[0]=startClock;
+        Button endClock=button("終了: "+endTime[0],() -> {
+            String[] values=endTime[0].split(":");
+            new TimePickerDialog(this,(picker,h,m) -> {
+                endTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);
+                endTimeRef[0].setText("終了: "+endTime[0]);
+            },Integer.parseInt(values[0]),Integer.parseInt(values[1]),true).show();
+        });endTimeRef[0]=endClock;
+        Spinner editScope=new Spinner(this);editScope.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,new String[]{"シリーズ全体","指定日以降"}));
+        final String[] effective={editing?selectedDay.toString():start[0]};
+        final Button[] effectiveRef=new Button[1];
+        Button effectiveDate=button("変更開始日: "+effective[0],() -> {
+            LocalDate current=LocalDate.parse(effective[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                effective[0]=LocalDate.of(y,m+1,d).toString();effectiveRef[0].setText("変更開始日: "+effective[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });effectiveRef[0]=effectiveDate;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(title);form.addView(description);form.addView(location);
+        if(editing) {form.addView(label("変更範囲"));form.addView(editScope);form.addView(effectiveDate);}
+        form.addView(label("繰り返し種類"));form.addView(type);form.addView(interval);
+        form.addView(startDate);form.addView(endDate);
+        form.addView(button("終了日を解除",() -> {end[0]="";endRef[0].setText("終了日: 指定なし");}));
+        form.addView(label("曜日（毎週・第n曜日）"));
+        String[] dayNames={"日","月","火","水","木","金","土"};
+        for(int i=0;i<7;i++) {
+            weekdays[i]=new CheckBox(this);weekdays[i].setText(dayNames[i]);
+            weekdays[i].setChecked(editing?jsonContainsNumber(rule,"weekdays_json",i):i==selectedDay.getDayOfWeek().getValue()%7);
+            form.addView(weekdays[i]);
+        }
+        form.addView(label("第n曜日（複数選択可）"));
+        for(int i=0;i<5;i++) {
+            weekNumbers[i]=new CheckBox(this);weekNumbers[i].setText("第"+(i+1));
+            weekNumbers[i].setChecked(editing?jsonContainsNumber(rule,"week_numbers_json",i+1):i==0);
+            form.addView(weekNumbers[i]);
+        }
+        form.addView(monthdays);form.addView(businessDay);form.addView(allDay);form.addView(startClock);form.addView(endClock);
+        CheckBox familyTemplate=new CheckBox(this);familyTemplate.setText("完了時に育児記録を作成");
+        familyTemplate.setChecked(editing&&!rule.isNull("family_log_type"));form.addView(familyTemplate);
+        ArrayList<String> subjectNames=new ArrayList<>();ArrayList<Integer> subjectIds=new ArrayList<>();
+        subjectNames.add("対象なし（家事用）");subjectIds.add(0);
+        for(int i=0;i<subjects.length();i++) {
+            JSONObject row=subjects.optJSONObject(i);if(row==null) continue;
+            subjectNames.add(row.optString("name"));subjectIds.add(row.optInt("id"));
+        }
+        Spinner subject=new Spinner(this);subject.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,subjectNames));
+        if(editing) subject.setSelection(Math.max(0,subjectIds.indexOf(rule.optInt("family_log_subject_id"))));
+        String[] logTypes={"MILK","DIAPER","MEAL","SLEEP","BATH","TEMPERATURE","WEIGHT","HEIGHT","CONDITION",
+            "BREASTFEED","MEDICINE","VACCINE","EXERCISE","WATER","TOILET","WALK","BLOOD_PRESSURE","HOUSEWORK","MEMO"};
+        ArrayList<String> logNames=new ArrayList<>();for(String code:logTypes)logNames.add(logTypeName(code));
+        Spinner logType=new Spinner(this);logType.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,logNames));
+        if(editing) logType.setSelection(Math.max(0,java.util.Arrays.asList(logTypes).indexOf(rule.optString("family_log_type"))));
+        EditText logDetail=new EditText(this);logDetail.setHint("記録の詳細コード");
+        EditText logAmount=new EditText(this);logAmount.setHint("数値");logAmount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+        EditText logUnit=new EditText(this);logUnit.setHint("単位");
+        EditText logDuration=new EditText(this);logDuration.setHint("時間（分）");logDuration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText logValue=new EditText(this);logValue.setHint("記録内容");
+        EditText logNote=new EditText(this);logNote.setHint("記録メモ");
+        if(editing) {
+            logDetail.setText(rule.optString("family_log_detail_code"));
+            if(!rule.isNull("family_log_amount")) logAmount.setText(rule.optString("family_log_amount"));
+            logUnit.setText(rule.optString("family_log_unit"));
+            if(!rule.isNull("family_log_duration_minutes")) logDuration.setText(rule.optString("family_log_duration_minutes"));
+            logValue.setText(rule.optString("family_log_value_text"));logNote.setText(rule.optString("family_log_note"));
+        }
+        form.addView(label("家族ログの対象"));form.addView(subject);form.addView(label("記録種類"));form.addView(logType);
+        form.addView(logDetail);form.addView(logAmount);form.addView(logUnit);form.addView(logDuration);form.addView(logValue);form.addView(logNote);
+        ScrollView scroll=new ScrollView(this);scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle(editing?"定期タスクを編集":"定期タスクを作成").setView(scroll)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String text=title.getText().toString().trim();
+                int spacing,ordinal;
+                try {spacing=Integer.parseInt(interval.getText().toString().trim());ordinal=Integer.parseInt(businessDay.getText().toString().trim());}
+                catch(Exception error) {Toast.makeText(this,"間隔と営業日を確認してください",Toast.LENGTH_SHORT).show();return;}
+                if(text.isEmpty()||text.length()>255||spacing<1||spacing>365||ordinal<1||ordinal>23||
+                    !end[0].isEmpty()&&end[0].compareTo(start[0])<0||
+                    !allDay.isChecked()&&startTime[0].compareTo(endTime[0])>0) {
+                    Toast.makeText(this,"日時・タイトルを確認してください",Toast.LENGTH_LONG).show();return;
+                }
+                if(editing&&editScope.getSelectedItemPosition()==1&&effective[0].compareTo(rule.optString("start_date"))<=0) {
+                    Toast.makeText(this,"変更開始日は元の開始日より後にしてください",Toast.LENGTH_LONG).show();return;
+                }
+                JSONArray days=new JSONArray(),weeks=new JSONArray();
+                for(int i=0;i<7;i++) if(weekdays[i].isChecked()) days.put(i);
+                for(int i=0;i<5;i++) if(weekNumbers[i].isChecked()) weeks.put(i+1);
+                try {
+                    JSONObject body=new JSONObject().put("action",editing?"update":"create")
+                        .put("id",editing?rule.optInt("id"):0).put("title",text)
+                        .put("description",description.getText().toString().trim()).put("location",location.getText().toString().trim())
+                        .put("recurrence_type",typeCodes[type.getSelectedItemPosition()]).put("interval_value",spacing)
+                        .put("start_date",start[0]).put("end_date",end[0]).put("weekdays",days)
+                        .put("week_numbers",weeks).put("monthdays",monthdays.getText().toString().trim())
+                        .put("business_day_ordinal",ordinal).put("all_day",allDay.isChecked())
+                        .put("start_time",startTime[0]).put("end_time",endTime[0])
+                        .put("calendar_color",editing?rule.optString("calendar_color"):"")
+                        .put("edit_scope",editScope.getSelectedItemPosition()==1?"future":"all")
+                        .put("effective_date",effective[0]).put("family_log_enabled",familyTemplate.isChecked());
+                    if(familyTemplate.isChecked()) body.put("family_log_subject_id",subjectIds.get(subject.getSelectedItemPosition()))
+                        .put("family_log_type",logTypes[logType.getSelectedItemPosition()])
+                        .put("family_log_detail_code",logDetail.getText().toString().trim())
+                        .put("family_log_amount",logAmount.getText().toString().trim())
+                        .put("family_log_unit",logUnit.getText().toString().trim())
+                        .put("family_log_duration_minutes",logDuration.getText().toString().trim())
+                        .put("family_log_value_text",logValue.getText().toString().trim())
+                        .put("family_log_note",logNote.getText().toString().trim());
+                    postRecurring(body);
+                } catch(Exception error) {Toast.makeText(this,"入力を確認してください",Toast.LENGTH_SHORT).show();}
             }).setNegativeButton("閉じる",null).show();
     }
     private void taskActions(JSONObject task) {
