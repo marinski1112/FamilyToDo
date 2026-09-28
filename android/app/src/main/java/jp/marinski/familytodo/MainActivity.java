@@ -2515,13 +2515,97 @@ public final class MainActivity extends Activity {
     private void messageActions(JSONObject row) {
         int id=row.optInt("id");if(id<=0||snapshot==null) return;
         boolean canManage=row.optInt("senderId")==snapshot.optInt("memberId")||snapshot.optBoolean("canManageStamps");
-        String[] actions=canManage?new String[]{"リアクション","編集","削除"}:new String[]{"リアクション"};
+        ArrayList<String> actions=new ArrayList<>();actions.add("リアクション");
+        if(row.optInt("convertedShoppingId")==0) actions.add("買い物に追加");
+        if(row.optInt("convertedTaskId")==0) actions.add("タスク・イベントに追加");
+        if(canManage) {actions.add("編集");actions.add("削除");}
         new AlertDialog.Builder(this).setTitle("伝言の操作")
-            .setItems(actions,(dialog,which) -> {
-                if(which==0) showMessageReactions(id);
-                else if(which==1) editMessage(row);
+            .setItems(actions.toArray(new String[0]),(dialog,which) -> {
+                String action=actions.get(which);
+                if(action.equals("リアクション")) showMessageReactions(id);
+                else if(action.equals("買い物に追加")) convertMessageShopping(row);
+                else if(action.equals("タスク・イベントに追加")) convertMessageTask(row);
+                else if(action.equals("編集")) editMessage(row);
                 else deleteMessage(row);
             }).show();
+    }
+    private void convertMessageShopping(JSONObject row) {
+        if(snapshot==null) return;
+        EditText name=new EditText(this);name.setHint("商品名");name.setText(row.optString("text"));
+        EditText quantity=new EditText(this);quantity.setHint("数量");quantity.setText("1");
+        EditText category=new EditText(this);category.setHint("カテゴリ（任意）");
+        final String[] due={""};final Button[] dueRef=new Button[1];
+        Button date=button("期限: 指定なし",() -> {
+            LocalDate current=due[0].isEmpty()?selectedDay:LocalDate.parse(due[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                due[0]=LocalDate.of(y,m+1,d).toString();dueRef[0].setText("期限: "+due[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });dueRef[0]=date;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(name);form.addView(quantity);form.addView(category);form.addView(date);
+        form.addView(button("期限を解除",() -> {due[0]="";dueRef[0].setText("期限: 指定なし");}));
+        new AlertDialog.Builder(this).setTitle("買い物に追加").setView(form)
+            .setPositiveButton("追加",(dialog,which) -> {
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()||value.length()>255) {Toast.makeText(this,"商品名を確認してください",Toast.LENGTH_SHORT).show();return;}
+                String count=quantity.getText().toString().trim(),group=category.getText().toString().trim(),deadline=due[0];
+                int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject result=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf)
+                            .put("action","convert_shopping").put("id",row.optInt("id"))
+                            .put("name",value).put("quantity",count)
+                            .put("category",group).put("due_date",deadline)
+                            .put("message_updated_at",row.optString("updatedAt"))
+                            .put("message_original_text",row.optString("text").trim()));
+                        runOnUiThread(() -> {if(epoch==sessionEpoch) {
+                            Toast.makeText(this,result.optBoolean("already")?"追加済みです":"買い物に追加しました",Toast.LENGTH_SHORT).show();
+                            load();loadMessages(0);
+                        }});
+                    } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"買い物に追加できませんでした。伝言を更新して確認してください",Toast.LENGTH_LONG).show();});}
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void convertMessageTask(JSONObject row) {
+        if(snapshot==null) return;
+        EditText title=new EditText(this);title.setHint("タスク名");title.setText(row.optString("text"));
+        EditText description=new EditText(this);description.setHint("説明");description.setText(row.optString("text"));
+        CheckBox noDate=new CheckBox(this);noDate.setText("日付なし");noDate.setChecked(true);
+        CheckBox isEvent=new CheckBox(this);isEvent.setText("イベントとして追加");
+        final String[] day={selectedDay.toString()};final Button[] dayRef=new Button[1];
+        Button date=button("日付: "+day[0],() -> {
+            LocalDate current=LocalDate.parse(day[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                day[0]=LocalDate.of(y,m+1,d).toString();dayRef[0].setText("日付: "+day[0]);noDate.setChecked(false);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });dayRef[0]=date;
+        isEvent.setOnCheckedChangeListener((button,checked) -> {if(checked) noDate.setChecked(false);});
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(title);form.addView(description);form.addView(isEvent);form.addView(noDate);form.addView(date);
+        new AlertDialog.Builder(this).setTitle("タスク・イベントに追加").setView(form)
+            .setPositiveButton("追加",(dialog,which) -> {
+                String value=title.getText().toString().trim();
+                if(value.isEmpty()||value.length()>255) {Toast.makeText(this,"タイトルを確認してください",Toast.LENGTH_SHORT).show();return;}
+                int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");boolean event=isEvent.isChecked(),undated=noDate.isChecked()&&!event;
+                String details=description.getText().toString().trim(),chosenDay=day[0];
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject result=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf)
+                            .put("action","convert_task").put("id",row.optInt("id")).put("mode","new")
+                            .put("title",value).put("description",details)
+                            .put("date",undated?"":chosenDay).put("end_date",undated?"":chosenDay)
+                            .put("no_date",undated).put("is_event",event).put("all_day",true)
+                            .put("message_updated_at",row.optString("updatedAt"))
+                            .put("message_original_text",row.optString("text").trim()));
+                        runOnUiThread(() -> {if(epoch==sessionEpoch) {
+                            Toast.makeText(this,result.optBoolean("already")?"追加済みです":"タスクに追加しました",Toast.LENGTH_SHORT).show();
+                            load();loadMessages(0);
+                        }});
+                    } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"タスクに追加できませんでした。伝言を更新して確認してください",Toast.LENGTH_LONG).show();});}
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private void editMessage(JSONObject row) {
         if(snapshot==null||row.optInt("id")<=0) return;
