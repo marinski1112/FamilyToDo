@@ -22,27 +22,29 @@ import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Explicitly started foreground location sharing; no silent boot restart. */
+/** Explicitly started foreground sharing; the system may restore the active service after process death. */
 public final class LocationService extends Service implements LocationListener {
     private static final String ENDPOINT = "https://familytodo.marinski1112.workers.dev/api/location/android";
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private LocationManager manager;
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (Credentials.read(this) == null) { stopSelf(); return START_NOT_STICKY; }
+        if (!Credentials.sharingEnabled(this) || Credentials.read(this) == null) { stopSelf(); return START_NOT_STICKY; }
         NotificationManager notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("location", "位置共有", NotificationManager.IMPORTANCE_LOW));
         Notification notification = new Notification.Builder(this, "location").setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentTitle("FamilyToDo 位置共有中").setContentText("アプリの位置設定から停止できます")
             .setOngoing(true).build();
-        startForeground(1, notification);
+        try { startForeground(1, notification); }
+        catch (SecurityException denied) { stopSelf(); return START_NOT_STICKY; }
         manager = getSystemService(LocationManager.class);
         try {
+            manager.removeUpdates(this);
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.GPS_PROVIDER))
                 manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60_000, 50, this);
             if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))
                 manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 60_000, 50, this);
-        } catch (SecurityException ignored) { stopSelf(); }
-        return START_NOT_STICKY;
+        } catch (SecurityException ignored) { stopSelf(); return START_NOT_STICKY; }
+        return START_STICKY;
     }
     @Override public void onLocationChanged(Location location) {
         if (!location.hasAccuracy() || location.getAccuracy() < 0 || location.getAccuracy() > 10_000) return;
@@ -51,7 +53,7 @@ public final class LocationService extends Service implements LocationListener {
     }
     private void send(Location location) {
         String credential = Credentials.read(this);
-        if (credential == null) return;
+        if (credential == null || !Credentials.sharingEnabled(this)) return;
         HttpURLConnection connection = null;
         try {
             JSONObject point = new JSONObject().put("latitude", location.getLatitude()).put("longitude", location.getLongitude())
@@ -63,7 +65,7 @@ public final class LocationService extends Service implements LocationListener {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(10_000); connection.setDoOutput(true);
             try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
             int code = connection.getResponseCode();
-            if (code == 401) stopSelf();
+            if (code == 401) { Credentials.setSharingEnabled(this,false); stopSelf(); }
         } catch (Exception ignored) { /* A later sensor update retries; never log coordinates or credentials. */ }
         finally { if (connection != null) connection.disconnect(); }
     }

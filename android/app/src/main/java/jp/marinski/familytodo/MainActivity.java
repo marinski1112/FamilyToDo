@@ -2117,7 +2117,10 @@ public final class MainActivity extends Activity {
             .setView(box).setPositiveButton("保存して開始",(d,w)->{
                 try { Credentials.save(this,id.getText().toString().trim(),secret.getText().toString().trim()); startSharing(); }
                 catch(Exception e) { Toast.makeText(this,"端末IDとSecretを確認してください",Toast.LENGTH_LONG).show(); }
-            }).setNeutralButton("共有を停止",(d,w)->stopService(new Intent(this,LocationService.class)))
+            }).setNeutralButton("共有を停止",(d,w)->{
+                Credentials.setSharingEnabled(this,false);
+                stopService(new Intent(this,LocationService.class));
+            })
             .setNegativeButton("閉じる",null).show();
     }
     private void startSharing() {
@@ -2125,14 +2128,19 @@ public final class MainActivity extends Activity {
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},11); return;
         }
-        if (Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},12); return;
+        if(Credentials.read(this)==null) {
+            Toast.makeText(this,"端末IDとSecretを保存してください",Toast.LENGTH_LONG).show(); return;
         }
-        startForegroundService(new Intent(this,LocationService.class));
+        Credentials.setSharingEnabled(this,true);
+        try { startForegroundService(new Intent(this,LocationService.class)); }
+        catch(RuntimeException error) {
+            Credentials.setSharingEnabled(this,false);
+            Toast.makeText(this,"位置共有を開始できませんでした",Toast.LENGTH_LONG).show();
+        }
     }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants) {
         super.onRequestPermissionsResult(code,permissions,grants);
-        if (grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
+        if (code==11 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
         else Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }

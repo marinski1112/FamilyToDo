@@ -40,5 +40,11 @@ final class Credentials {
             return new String(cipher.doFinal(value), StandardCharsets.UTF_8);
         } catch (Exception ignored) { return null; }
     }
+    static boolean sharingEnabled(Context context) {
+        return context.getSharedPreferences("device", 0).getBoolean("sharing_enabled", false);
+    }
+    static void setSharingEnabled(Context context, boolean enabled) {
+        context.getSharedPreferences("device", 0).edit().putBoolean("sharing_enabled", enabled).commit();
+    }
     static void clear(Context context) { context.getSharedPreferences("device", 0).edit().clear().apply(); }
 }
