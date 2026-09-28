@@ -106,7 +106,10 @@ public final class MainActivity extends Activity {
                 boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
                 CheckBox box=new CheckBox(this); box.setText((event?"📌 ":"")+task.optString("title"));
                 box.setChecked("completed".equals(task.optString("status"))); box.setEnabled(!event);
-                int id=task.optInt("id"); box.setOnClickListener(v -> toggle("task", id, box));
+                int recurrenceId=task.optInt("recurrence_occurrence_id");
+                int id=recurrenceId>0?recurrenceId:task.optInt("id");
+                box.setEnabled(!event && id>0);
+                box.setOnClickListener(v -> toggle(recurrenceId>0?"recurrence":"task", id, box));
                 group.addView(box); count++;
             }
             if (count>0) content.addView(group);
