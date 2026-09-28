@@ -198,6 +198,7 @@ public final class MainActivity extends Activity {
         if (tab.equals("calendar")) {
             content.addView(button("＋ タスク・イベント", this::addTask));
             content.addView(button("🔁 定期タスク",this::loadRecurringRules));
+            content.addView(button("🖼 スタンプ管理",this::loadStampAssets));
         }
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを表示中・更新を確認しています"));
@@ -406,6 +407,56 @@ public final class MainActivity extends Activity {
                 else if(action<2) reorderStamp(stamp,action==0);
                 else if(action==2) moveStamp(stamp); else deleteStamp(stamp);
             }).show();
+    }
+    private void loadStampAssets() {
+        if(snapshot==null) return;
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/calendar-stamp-admin/assets",null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    JSONArray assets=result.optJSONArray("assets");
+                    if(assets==null) return;
+                    ArrayList<String> names=new ArrayList<>();
+                    for(int i=0;i<assets.length();i++) {
+                        JSONObject asset=assets.optJSONObject(i);
+                        names.add(asset==null?"スタンプ":(asset.optBoolean("active")?"":"（無効）")+
+                            asset.optString("name")+" ・ "+("ANIMATED".equals(asset.optString("kind"))?"動く":"静止画"));
+                    }
+                    if(names.isEmpty()) names.add("登録済みスタンプはありません");
+                    new AlertDialog.Builder(this).setTitle("スタンプ管理")
+                        .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            JSONObject asset=assets.optJSONObject(which);
+                            if(asset==null) return;
+                            boolean active=asset.optBoolean("active");
+                            new AlertDialog.Builder(this).setTitle(asset.optString("name"))
+                                .setMessage(active?"無効にすると、このスタンプの配置は表示されなくなります。再度有効にできます。":"スタンプを再度表示します。")
+                                .setPositiveButton(active?"無効にする":"有効にする",(d,w) -> setStampAssetActive(asset.optInt("id"),!active))
+                                .setNegativeButton("戻る",null).show();
+                        }).setNegativeButton("閉じる",null).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプ管理を開けませんでした（管理者権限が必要です）",Toast.LENGTH_LONG).show();});
+            }
+        });
+    }
+    private void setStampAssetActive(int assetId,boolean active) {
+        if(snapshot==null||assetId<=0) return;
+        String csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/calendar-stamp-admin/assets",new JSONObject()
+                    .put("assetId",assetId).put("active",active).put("csrf",csrf));
+                if(epoch==sessionEpoch) runOnUiThread(() -> {
+                    stampMonths.clear();stampGeneration++;
+                    load();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプの状態を変更できませんでした",Toast.LENGTH_LONG).show();});
+            }
+        });
     }
     private void showStampAnimation(JSONObject stamp) {
         JSONArray frames=stamp.optJSONArray("frames");
