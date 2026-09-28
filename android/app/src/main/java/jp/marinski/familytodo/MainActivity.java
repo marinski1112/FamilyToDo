@@ -1893,34 +1893,66 @@ public final class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this).setTitle("集計する対象").setItems(names.toArray(new String[0]),(dialog,which) ->
             new AlertDialog.Builder(this).setTitle("集計期間")
-                .setItems(new String[]{"今日","過去7日","過去30日"},(period,index) ->
-                    loadFamilyLogSummary(index==0?1:index==1?7:30,ids.get(which),names.get(which)))
+                .setItems(new String[]{"今日","過去7日","過去30日","期間を指定"},(period,index) -> {
+                    if(index==3) chooseFamilyLogSummaryRange(ids.get(which),names.get(which));
+                    else loadFamilyLogSummary(selectedDay.minusDays((index==0?1:index==1?7:30)-1),selectedDay,ids.get(which),names.get(which));
+                })
                 .show()).show();
     }
-    private void loadFamilyLogSummary(int days,int subjectId,String name) {
-        String to=selectedDay.toString(),from=selectedDay.minusDays(days-1).toString();
+    private void chooseFamilyLogSummaryRange(int subjectId,String name) {
+        LocalDate[] range={selectedDay.minusDays(29),selectedDay};
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);
+        Button start=button("開始日: "+range[0],() -> new DatePickerDialog(this,(picker,y,m,d) -> {
+            range[0]=LocalDate.of(y,m+1,d);startRangeLabel(form,0,"開始日: "+range[0]);
+        },range[0].getYear(),range[0].getMonthValue()-1,range[0].getDayOfMonth()).show());
+        Button end=button("終了日: "+range[1],() -> new DatePickerDialog(this,(picker,y,m,d) -> {
+            range[1]=LocalDate.of(y,m+1,d);startRangeLabel(form,1,"終了日: "+range[1]);
+        },range[1].getYear(),range[1].getMonthValue()-1,range[1].getDayOfMonth()).show());
+        form.addView(start);form.addView(end);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("集計期間を指定（最大366日）").setView(form)
+            .setPositiveButton("集計",null).setNegativeButton("キャンセル",null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            long days=java.time.temporal.ChronoUnit.DAYS.between(range[0],range[1])+1;
+            if(days<1||days>366) { Toast.makeText(this,"1〜366日で指定してください",Toast.LENGTH_SHORT).show();return; }
+            dialog.dismiss();loadFamilyLogSummary(range[0],range[1],subjectId,name);
+        }));dialog.show();
+    }
+    private void startRangeLabel(LinearLayout form,int index,String value) { ((Button)form.getChildAt(index)).setText(value); }
+    private void loadFamilyLogSummary(LocalDate start,LocalDate end,int subjectId,String name) {
+        String to=end.toString(),from=start.toString();
         int epoch=sessionEpoch;
         network.execute(() -> {
             try {
-                JSONObject response=ApiClient.request("/api/android/v1/family-log-summary?from="+from+"&to="+to+
-                    "&subject="+(subjectId==0?"":subjectId),null);
+                JSONObject totals=new JSONObject();JSONArray daily=new JSONArray();
+                for(LocalDate cursor=start;!cursor.isAfter(end);cursor=cursor.plusDays(30)) {
+                    if(epoch!=sessionEpoch) return;
+                    LocalDate chunkEnd=cursor.plusDays(29).isBefore(end)?cursor.plusDays(29):end;
+                    JSONObject response=ApiClient.request("/api/android/v1/family-log-summary?from="+cursor+"&to="+chunkEnd+
+                        "&subject="+(subjectId==0?"":subjectId),null);
+                    JSONObject part=response.getJSONObject("totals");JSONArray rows=response.getJSONArray("daily");
+                    for(String key:new String[]{"entries","milkMl","wet","dirty","sleepMinutes","meals","toilet","baths","medicine","chores"})
+                        totals.put(key,totals.optDouble(key)+part.optDouble(key));
+                    JSONArray combined=new JSONArray();
+                    for(int i=0;i<rows.length();i++) combined.put(rows.getJSONObject(i));
+                    for(int i=0;i<daily.length();i++) combined.put(daily.getJSONObject(i));
+                    daily=combined;
+                }
+                final JSONArray resultDays=daily;
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch || !tab.equals("familylog")) return;
-                    JSONObject totals=response.optJSONObject("totals");JSONArray daily=response.optJSONArray("daily");
-                    if(totals==null||daily==null) return;
                     StringBuilder result=new StringBuilder(from+" 〜 "+to+"\n");
                     result.append("記録 ").append(totals.optInt("entries")).append("件 ・ ミルク ")
-                        .append(totals.optString("milkMl","0")).append("ml\n")
+                        .append((int)Math.round(totals.optDouble("milkMl"))).append("ml\n")
                         .append("おしっこ ").append(totals.optInt("wet")).append("回 ・ うんち ")
                         .append(totals.optInt("dirty")).append("回 ・ 睡眠 ")
-                        .append(totals.optString("sleepMinutes","0")).append("分\n")
+                        .append((int)Math.round(totals.optDouble("sleepMinutes"))).append("分\n")
                         .append("食事 ").append(totals.optInt("meals")).append("回 ・ トイレ ")
                         .append(totals.optInt("toilet")).append("回 ・ 入浴 ")
                         .append(totals.optInt("baths")).append("回\n")
                         .append("薬 ").append(totals.optInt("medicine")).append("回 ・ 家事 ")
                         .append(totals.optInt("chores")).append("回");
-                    if(days>1) for(int i=0;i<daily.length();i++) {
-                        JSONObject day=daily.optJSONObject(i);if(day==null) continue;
+                    if(start.isBefore(end)) for(int i=0;i<resultDays.length();i++) {
+                        JSONObject day=resultDays.optJSONObject(i);if(day==null) continue;
                         result.append("\n\n").append(day.optString("day")).append("：記録 ").append(day.optInt("entries"))
                             .append("件、ミルク ").append(day.optString("milkMl","0")).append("ml、睡眠 ")
                             .append(day.optString("sleepMinutes","0")).append("分");
