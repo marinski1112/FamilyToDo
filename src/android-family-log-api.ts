@@ -20,7 +20,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
       WHERE s.family_id=? AND s.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
       ORDER BY CASE WHEN s.member_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(fm.id,s.id),s.id LIMIT 100`).bind(familyId).all<Row>(),
-    ctx.env.DB.prepare(`SELECT l.id,l.subject_id,l.log_type,l.occurred_at,l.detail_code,l.amount,l.unit,l.duration_minutes,l.value_text,l.note,s.name subject_name
+    ctx.env.DB.prepare(`SELECT l.id,l.subject_id,l.log_type,l.occurred_at,l.detail_code,l.amount,l.unit,l.duration_minutes,l.value_text,l.note,l.linked_task_id,l.linked_occurrence_id,s.name subject_name
       FROM family_logs l LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
       WHERE l.family_id=? AND l.deleted_at IS NULL AND NOT ${IMPORTED_FAMILY_DIARY_SQL}
         AND l.occurred_at>=? AND l.occurred_at<=?

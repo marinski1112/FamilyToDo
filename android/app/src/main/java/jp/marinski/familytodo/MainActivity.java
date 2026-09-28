@@ -729,9 +729,16 @@ public final class MainActivity extends Activity {
                 (detail.isEmpty()?"":" "+detail)+(amount.isEmpty()?"":" "+amount)+
                 (row.optString("value_text").isEmpty()?"":" "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            entry.setOnLongClickListener(v -> { deleteFamilyLog(row); return true; });
+            entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
             content.addView(entry);
         }
+    }
+    private void familyLogActions(JSONObject row) {
+        boolean editable=row.optInt("subject_id")>0;
+        String[] actions=editable?new String[]{"編集","削除"}:new String[]{"削除"};
+        new AlertDialog.Builder(this).setTitle("記録の操作").setItems(actions,(dialog,which) -> {
+            if(editable&&which==0) showFamilyLogEditor(row); else deleteFamilyLog(row);
+        }).show();
     }
     private void addFamilyLogSubject() {
         if(snapshot==null) return;
@@ -849,7 +856,9 @@ public final class MainActivity extends Activity {
             }
         });
     }
-    private void addFamilyLog() {
+    private void addFamilyLog() { showFamilyLogEditor(null); }
+    private void showFamilyLogEditor(JSONObject existing) {
+        if(snapshot==null) { Toast.makeText(this,"ログイン情報を読み込み中です",Toast.LENGTH_SHORT).show(); load(); return; }
         JSONArray subjects=familyLog==null?null:familyLog.optJSONArray("subjects");
         if(subjects==null || subjects.length()==0) return;
         ArrayList<String> names=new ArrayList<>();
@@ -861,6 +870,20 @@ public final class MainActivity extends Activity {
         if(ids.isEmpty()) return;
         Spinner subjectChoice=new Spinner(this),typeChoice=new Spinner(this);
         subjectChoice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
+        int initialSubject=existing==null?0:ids.indexOf(existing.optInt("subject_id"));
+        if(existing!=null && initialSubject<0) {
+            Toast.makeText(this,"記録対象が現在利用できません",Toast.LENGTH_SHORT).show(); return;
+        }
+        if(existing!=null) {
+            JSONObject selectedSubject=null;
+            for(int i=0;i<subjects.length();i++) {
+                JSONObject candidate=subjects.optJSONObject(i);
+                if(candidate!=null && candidate.optInt("id")==existing.optInt("subject_id")) { selectedSubject=candidate; break; }
+            }
+            if(selectedSubject==null || !allowedLogTypes(selectedSubject).contains(existing.optString("log_type"))) {
+                Toast.makeText(this,"この記録種類は現在編集できません",Toast.LENGTH_SHORT).show(); return;
+            }
+        }
         ArrayList<String> typeCodes=new ArrayList<>();
         ArrayAdapter<String> typeAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new ArrayList<>());
         typeChoice.setAdapter(typeAdapter);
@@ -874,19 +897,48 @@ public final class MainActivity extends Activity {
                 typeAdapter.clear();
                 for(String code:typeCodes) typeAdapter.add(logTypeName(code));
                 typeAdapter.notifyDataSetChanged();
+                if(existing!=null && ids.get(position)==existing.optInt("subject_id")) {
+                    int selected=typeCodes.indexOf(existing.optString("log_type"));
+                    if(selected>=0) typeChoice.setSelection(selected);
+                }
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
+        subjectChoice.setSelection(initialSubject);
         EditText amount=new EditText(this); amount.setHint("数値（任意）"); amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText unit=new EditText(this); unit.setHint("単位（ml、℃、kgなど）");
         EditText detail=new EditText(this); detail.setHint("詳細コード（任意）");
+        EditText duration=new EditText(this); duration.setHint("時間（分、任意）"); duration.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        EditText valueText=new EditText(this); valueText.setHint("内容（任意）");
         EditText note=new EditText(this); note.setHint("メモ（任意）");
+        if(existing!=null) {
+            if(!existing.isNull("amount")) amount.setText(existing.optString("amount"));
+            unit.setText(existing.optString("unit","")); detail.setText(existing.optString("detail_code",""));
+            if(!existing.isNull("duration_minutes")) duration.setText(existing.optString("duration_minutes"));
+            valueText.setText(existing.optString("value_text","")); note.setText(existing.optString("note",""));
+        }
+        String defaultOccurred=selectedDay+" "+java.time.LocalTime.now(java.time.ZoneId.of("Asia/Tokyo"))
+            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        String oldOccurred=existing==null?"":existing.optString("occurred_at");
+        final String[] occurred={oldOccurred.length()>=16?oldOccurred.substring(0,16):defaultOccurred};
+        final Button[] dateRef=new Button[1];
+        Button dateButton=button("日時: "+occurred[0],() -> {
+            java.time.LocalDateTime current=java.time.LocalDateTime.parse(occurred[0].replace(' ','T'));
+            new DatePickerDialog(this,(picker,y,m,d) ->
+                new TimePickerDialog(this,(clock,h,minute) -> {
+                    occurred[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02d %02d:%02d",y,m+1,d,h,minute);
+                    dateRef[0].setText("日時: "+occurred[0]);
+                },current.getHour(),current.getMinute(),true).show(),
+                current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });
+        dateRef[0]=dateButton;
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
         form.addView(label("対象")); form.addView(subjectChoice); form.addView(label("種類")); form.addView(typeChoice);
-        form.addView(amount); form.addView(unit); form.addView(detail); form.addView(note);
+        form.addView(dateButton); form.addView(amount); form.addView(unit); form.addView(detail);
+        form.addView(duration); form.addView(valueText); form.addView(note);
         ScrollView scroll=new ScrollView(this); scroll.addView(form);
-        new AlertDialog.Builder(this).setTitle("記録を追加").setView(scroll)
-            .setPositiveButton("記録",(dialog,which) -> {
+        new AlertDialog.Builder(this).setTitle(existing==null?"記録を追加":"記録を編集").setView(scroll)
+            .setPositiveButton("保存",(dialog,which) -> {
                 String raw=amount.getText().toString().trim(); Double number=null;
                 if(!raw.isEmpty()) {
                     try {
@@ -895,8 +947,41 @@ public final class MainActivity extends Activity {
                     } catch(NumberFormatException error) { Toast.makeText(this,"数値を確認してください",Toast.LENGTH_SHORT).show(); return; }
                 }
                 if(typeCodes.isEmpty()||typeChoice.getSelectedItemPosition()<0) return;
-                saveFamilyLog(ids.get(subjectChoice.getSelectedItemPosition()),typeCodes.get(typeChoice.getSelectedItemPosition()),
-                    detail.getText().toString().trim(),number,unit.getText().toString().trim(),note.getText().toString().trim());
+                String minutes=duration.getText().toString().trim();
+                if(!minutes.isEmpty()) try {
+                    int value=Integer.parseInt(minutes);
+                    if(value<0||value>10080) throw new NumberFormatException();
+                } catch(NumberFormatException error) { Toast.makeText(this,"時間を確認してください",Toast.LENGTH_SHORT).show(); return; }
+                String details=detail.getText().toString().trim(),units=unit.getText().toString().trim();
+                String value=valueText.getText().toString().trim(),memo=note.getText().toString().trim();
+                if(details.length()>32||units.length()>16||value.length()>255||memo.length()>2000) {
+                    Toast.makeText(this,"入力が長すぎます",Toast.LENGTH_SHORT).show(); return;
+                }
+                int id=existing==null?0:existing.optInt("id"),subjectId=ids.get(subjectChoice.getSelectedItemPosition());
+                String type=typeCodes.get(typeChoice.getSelectedItemPosition()),csrf=snapshot.optString("csrf"),timestamp=occurred[0];
+                String linked="";
+                if(existing!=null) {
+                    if(existing.optInt("linked_task_id")>0) linked="task:"+existing.optInt("linked_task_id");
+                    else if(existing.optInt("linked_occurrence_id")>0) linked="occ:"+existing.optInt("linked_occurrence_id");
+                }
+                String linkedTarget=linked; Double amountValue=number; int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject body=new JSONObject().put("action","save").put("csrf",csrf).put("id",id)
+                            .put("subject_id",subjectId).put("log_type",type).put("occurred_at",timestamp)
+                            .put("detail_code",details).put("unit",units).put("duration_minutes",minutes)
+                            .put("value_text",value).put("note",memo).put("linked_target",linkedTarget);
+                        if(amountValue!=null) body.put("amount",amountValue);
+                        ApiClient.request("/api/family-log",body);
+                        if(epoch==sessionEpoch) runOnUiThread(() -> {
+                            selectedDay=LocalDate.parse(timestamp.substring(0,10)); month=YearMonth.from(selectedDay);
+                            loadFamilyLog();
+                        });
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"記録を保存できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
             }).setNegativeButton("閉じる",null).show();
     }
     private void loadMessages(int before) {
