@@ -854,8 +854,7 @@ public final class MainActivity extends Activity {
             actions.add("セットに項目を追加");actions.add("セットから項目を外す");actions.add("セット内の順序を変更");
         }
         if(canDelete) actions.add("セットを削除");
-        new AlertDialog.Builder(this).setTitle(set.optString("name"))
-            .setMessage(android.text.TextUtils.join("、",names))
+        new AlertDialog.Builder(this).setTitle(set.optString("name")+" ・ "+names.size()+"件")
             .setItems(actions.toArray(new String[0]),
                 (dialog,which) -> {
                     String action=actions.get(which);
