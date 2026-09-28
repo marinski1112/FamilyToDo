@@ -48,6 +48,9 @@ public final class MainActivity extends Activity {
     private JSONArray messages = new JSONArray();
     private JSONObject familyLog;
     private JSONObject shoppingCategories, itemCategories;
+    private MessagePhotoUpload.Draft pendingPhoto;
+    private String pendingPhotoCaption="",pendingPhotoReminder="";
+    private boolean photoSending;
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
         @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
@@ -278,9 +281,39 @@ public final class MainActivity extends Activity {
     }
     private void stampActions(JSONObject stamp) {
         new AlertDialog.Builder(this).setTitle("スタンプの操作")
-            .setItems(new String[]{"別の日に移動","削除"},(dialog,which) -> {
-                if(which==0) moveStamp(stamp); else deleteStamp(stamp);
+            .setItems(new String[]{"先頭へ移動","末尾へ移動","別の日に移動","削除"},(dialog,which) -> {
+                if(which<2) reorderStamp(stamp,which==0);
+                else if(which==2) moveStamp(stamp); else deleteStamp(stamp);
             }).show();
+    }
+    private void reorderStamp(JSONObject stamp,boolean first) {
+        if(snapshot==null || stamp.optInt("placementId")<=0) return;
+        JSONArray stamps=stampsOnDay(stamp.optString("date"));
+        if(stamps.length()<2) return;
+        int boundary=first?1000:-1000;
+        for(int i=0;i<stamps.length();i++) {
+            JSONObject row=stamps.optJSONObject(i);
+            if(row!=null) boundary=first?Math.min(boundary,row.optInt("sortOrder")):
+                Math.max(boundary,row.optInt("sortOrder"));
+        }
+        if(first && boundary<=-1000 || !first && boundary>=1000) {
+            Toast.makeText(this,"並び順の上限に達しました",Toast.LENGTH_SHORT).show(); return;
+        }
+        int target=first?boundary-1:boundary+1;
+        if(stamp.optInt("sortOrder")==target) return;
+        String csrf=snapshot.optString("csrf"),day=stamp.optString("date");
+        String scope=stamp.optString("visibilityScope","FAMILY"); int id=stamp.optInt("placementId"),epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/calendar-stamp-placement",new JSONObject().put("action","move")
+                    .put("csrf",csrf).put("placementId",id).put("stampDate",day)
+                    .put("visibilityScope",scope).put("sortOrder",target));
+                if(epoch==sessionEpoch) runOnUiThread(this::load);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"並び順を変更できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void moveStamp(JSONObject stamp) {
         int placementId=stamp.optInt("placementId");
@@ -1257,6 +1290,8 @@ public final class MainActivity extends Activity {
     }
     private void renderMessages() {
         content.addView(button("＋ 伝言する",this::addMessage));
+        content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
+        if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
         content.addView(button("更新",()->loadMessages(0)));
         if(hasOlderMessages && messages.length()>0) content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         for(int n=0;n<messages.length();n++) {
@@ -1282,6 +1317,82 @@ public final class MainActivity extends Activity {
                 });
             } catch(Exception error) {
                 runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"写真を表示できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void chooseMessagePhoto() {
+        if(snapshot==null) { load(); return; }
+        if(photoSending) { Toast.makeText(this,"写真を送信中です",Toast.LENGTH_SHORT).show(); return; }
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE); picker.setType("image/*");
+        startActivityForResult(picker,41);
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=41 || resultCode!=RESULT_OK || data==null || data.getData()==null) return;
+        android.net.Uri uri=data.getData(); int epoch=sessionEpoch;
+        Toast.makeText(this,"写真を準備しています",Toast.LENGTH_SHORT).show();
+        network.execute(() -> {
+            try {
+                MessagePhotoUpload.Draft draft=MessagePhotoUpload.prepare(this,uri);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    pendingPhoto=draft; pendingPhotoCaption=""; pendingPhotoReminder="";
+                    showPhotoComposer();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"写真を読み込めませんでした（20 MiB以内）",Toast.LENGTH_LONG).show(); });
+            }
+        });
+    }
+    private void showPhotoComposer() {
+        if(pendingPhoto==null || snapshot==null) return;
+        EditText caption=new EditText(this); caption.setHint("写真の説明（任意）"); caption.setText(pendingPhotoCaption);
+        final String[] reminder={pendingPhotoReminder}; final Button[] reminderRef=new Button[1];
+        Button when=button("通知予約: "+(reminder[0].isEmpty()?"指定なし":reminder[0]),() -> {
+            java.time.LocalDateTime base=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo")).plusHours(1);
+            new DatePickerDialog(this,(picker,y,m,d) ->
+                new TimePickerDialog(this,(clock,h,minute) -> {
+                    reminder[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02dT%02d:%02d",y,m+1,d,h,minute);
+                    reminderRef[0].setText("通知予約: "+reminder[0]);
+                },base.getHour(),base.getMinute(),true).show(),
+                base.getYear(),base.getMonthValue()-1,base.getDayOfMonth()).show();
+        }); reminderRef[0]=when;
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(label("写真は家族全員に送ります")); form.addView(caption); form.addView(when);
+        form.addView(button("通知予約を解除",() -> { reminder[0]=""; reminderRef[0].setText("通知予約: 指定なし"); }));
+        new AlertDialog.Builder(this).setTitle("写真付き伝言").setView(form)
+            .setPositiveButton("送信",(dialog,which) -> {
+                String text=caption.getText().toString().trim();
+                if(text.length()>2000) { Toast.makeText(this,"説明は2000文字以内にしてください",Toast.LENGTH_SHORT).show(); return; }
+                if(!reminder[0].isEmpty() && reminder[0].compareTo(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo"))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")))<=0) {
+                    Toast.makeText(this,"通知予約は未来の日時を選んでください",Toast.LENGTH_LONG).show(); return;
+                }
+                pendingPhotoCaption=text; pendingPhotoReminder=reminder[0]; retryMessagePhoto();
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void retryMessagePhoto() {
+        if(snapshot==null || pendingPhoto==null || photoSending) return;
+        photoSending=true;
+        MessagePhotoUpload.Draft draft=pendingPhoto;
+        String csrf=snapshot.optString("csrf"),caption=pendingPhotoCaption,reminder=pendingPhotoReminder;
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                MessagePhotoUpload.send(draft,csrf,caption,reminder);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || pendingPhoto!=draft) return;
+                    photoSending=false; pendingPhoto=null; pendingPhotoCaption=""; pendingPhotoReminder="";
+                    loadMessages(0);
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) {
+                    photoSending=false;
+                    Toast.makeText(this,"写真を送信できませんでした。再試行できます",Toast.LENGTH_LONG).show();
+                    if(tab.equals("messages")) render();
+                } });
             }
         });
     }
@@ -1339,6 +1450,7 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 network.execute(() -> SnapshotCache.clear(this));
                 monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null;
+                pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
@@ -1347,6 +1459,7 @@ public final class MainActivity extends Activity {
     private void showLogin() {
         if (login != null) return;
         monthCache.clear(); snapshot=null; familyLog=null; shoppingCategories=null; itemCategories=null;
+        pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
