@@ -238,6 +238,7 @@ public final class MainActivity extends Activity {
             int id=recurrenceId>0?recurrenceId:task.optInt("id");
             box.setEnabled(!event&&id>0);
             box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
+            if(recurrenceId<=0 && id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
             content.addView(box);count++;
         }
         if(count==0) content.addView(label("予定はありません"));
@@ -816,6 +817,108 @@ public final class MainActivity extends Activity {
                             .put("is_event",isEvent).put("idempotency_key",java.util.UUID.randomUUID().toString()));
                         runOnUiThread(this::load);
                     } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this,"保存できませんでした",Toast.LENGTH_SHORT).show()); }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void taskActions(JSONObject task) {
+        new AlertDialog.Builder(this).setTitle(task.optString("title"))
+            .setItems(new String[]{"編集","削除"},(dialog,which) -> {
+                if(which==0) editTask(task); else deleteTask(task);
+            }).show();
+    }
+    private void deleteTask(JSONObject task) {
+        if(snapshot==null || task.optInt("id")<=0) return;
+        new AlertDialog.Builder(this).setTitle("タスク・イベントを削除")
+            .setMessage(task.optString("title")+" を削除します。")
+            .setPositiveButton("削除",(dialog,which) -> {
+                int id=task.optInt("id"),epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.deleteTask(id,csrf);
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
+    }
+    private void editTask(JSONObject task) {
+        if(snapshot==null || task.optInt("id")<=0) return;
+        EditText title=new EditText(this); title.setText(task.optString("title")); title.setHint("タイトル");
+        String oldStart=dateValue(task,"start_at","due_at"),oldEnd=dateValue(task,"end_at","due_at");
+        if(oldEnd.isEmpty()) oldEnd=oldStart;
+        final String[] startDate={oldStart.length()>=10?oldStart.substring(0,10):selectedDay.toString()};
+        final String[] endDate={oldEnd.length()>=10?oldEnd.substring(0,10):startDate[0]};
+        final Button[] startRef=new Button[1],endRef=new Button[1];
+        Button startDay=button("開始日: "+startDate[0],() -> {
+            LocalDate current=LocalDate.parse(startDate[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> { startDate[0]=LocalDate.of(y,m+1,d).toString();startRef[0].setText("開始日: "+startDate[0]); },
+                current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        }); startRef[0]=startDay;
+        Button endDay=button("終了日: "+endDate[0],() -> {
+            LocalDate current=LocalDate.parse(endDate[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> { endDate[0]=LocalDate.of(y,m+1,d).toString();endRef[0].setText("終了日: "+endDate[0]); },
+                current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        }); endRef[0]=endDay;
+        CheckBox event=new CheckBox(this);event.setText("イベント");event.setChecked("EVENT".equalsIgnoreCase(task.optString("task_kind")));
+        CheckBox allDay=new CheckBox(this);allDay.setText("終日");allDay.setChecked(task.optInt("all_day")==1);
+        CheckBox privateTask=new CheckBox(this);privateTask.setText("自分専用");privateTask.setChecked("PRIVATE".equals(task.optString("visibility_scope")));
+        CheckBox visible=new CheckBox(this);visible.setText("カレンダーに表示");visible.setChecked(task.optInt("calendar_visible",1)==1);
+        final String[] startTime={oldStart.length()>=16?oldStart.substring(11,16):"09:00"};
+        final String[] endTime={oldEnd.length()>=16?oldEnd.substring(11,16):"10:00"};
+        final Button[] startTimeRef=new Button[1],endTimeRef=new Button[1];
+        Button startClock=button("開始時刻: "+startTime[0],() -> new TimePickerDialog(this,(picker,h,m) -> {
+            startTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);startTimeRef[0].setText("開始時刻: "+startTime[0]);
+        },9,0,true).show()); startTimeRef[0]=startClock;
+        Button endClock=button("終了時刻: "+endTime[0],() -> new TimePickerDialog(this,(picker,h,m) -> {
+            endTime[0]=String.format(java.util.Locale.ROOT,"%02d:%02d",h,m);endTimeRef[0].setText("終了時刻: "+endTime[0]);
+        },10,0,true).show()); endTimeRef[0]=endClock;
+        startClock.setVisibility(allDay.isChecked()?android.view.View.GONE:android.view.View.VISIBLE);
+        endClock.setVisibility(allDay.isChecked()?android.view.View.GONE:android.view.View.VISIBLE);
+        allDay.setOnCheckedChangeListener((v,checked) -> {
+            startClock.setVisibility(checked?android.view.View.GONE:android.view.View.VISIBLE);
+            endClock.setVisibility(checked?android.view.View.GONE:android.view.View.VISIBLE);
+        });
+        EditText description=new EditText(this);description.setHint("説明");description.setText(task.optString("description",""));
+        EditText place=new EditText(this);place.setHint("場所");place.setText(task.optString("location",""));
+        String rawReminder=task.optString("reminder_at","");
+        final String[] reminder={rawReminder.length()>=16?rawReminder.substring(0,16).replace(' ','T'):""};
+        final Button[] reminderRef=new Button[1];
+        Button reminderButton=button("通知日時: "+(reminder[0].isEmpty()?"指定なし":reminder[0]),() -> {
+            java.time.LocalDateTime now=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo")).plusHours(1);
+            new DatePickerDialog(this,(picker,y,m,d) -> new TimePickerDialog(this,(clock,h,min) -> {
+                reminder[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02dT%02d:%02d",y,m+1,d,h,min);
+                reminderRef[0].setText("通知日時: "+reminder[0]);
+            },now.getHour(),now.getMinute(),true).show(),now.getYear(),now.getMonthValue()-1,now.getDayOfMonth()).show();
+        }); reminderRef[0]=reminderButton;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(title);form.addView(startDay);form.addView(endDay);form.addView(event);form.addView(allDay);
+        form.addView(startClock);form.addView(endClock);form.addView(privateTask);form.addView(visible);
+        form.addView(description);form.addView(place);form.addView(reminderButton);
+        form.addView(button("通知を解除",() -> { reminder[0]="";reminderRef[0].setText("通知日時: 指定なし"); }));
+        ScrollView scroll=new ScrollView(this);scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("タスク・イベントを編集").setView(scroll)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String value=title.getText().toString().trim();if(value.isEmpty()) return;
+                if(endDate[0].compareTo(startDate[0])<0 || !allDay.isChecked() && endDate[0].equals(startDate[0]) && endTime[0].compareTo(startTime[0])<=0) {
+                    Toast.makeText(this,"日時を確認してください",Toast.LENGTH_SHORT).show();return;
+                }
+                String csrf=snapshot.optString("csrf"),details=description.getText().toString().trim(),location=place.getText().toString().trim();
+                int id=task.optInt("id"),epoch=sessionEpoch;String notifyAt=reminder[0];
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/android/v1/task-edit?id="+id,new JSONObject().put("csrf",csrf)
+                            .put("title",value).put("date",startDate[0]).put("end_date",endDate[0])
+                            .put("is_event",event.isChecked()).put("all_day",allDay.isChecked())
+                            .put("start_time",allDay.isChecked()?"":startTime[0]).put("end_time",allDay.isChecked()?"":endTime[0])
+                            .put("is_private",privateTask.isChecked()).put("calendar_visible",visible.isChecked())
+                            .put("description",details).put("location",location).put("reminder_at",notifyAt));
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"編集できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
                 });
             }).setNegativeButton("閉じる",null).show();
     }

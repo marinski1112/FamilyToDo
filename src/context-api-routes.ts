@@ -49,6 +49,9 @@ import { shoppingCategoryApi } from './shopping-category-api';
 import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
 import { androidFamilyLogApi } from './android-family-log-api';
 import { androidGoodsHistoryApi } from './android-goods-history-api';
+import {taskEdit} from './task-edit-page';
+import {validateTaskEditRequestHierarchy} from './task-edit-hierarchy-guard';
+import {json} from './response';
 import { locationDeviceApi } from './location-device-api';
 import { locationLatestApi } from './location-latest-api';
 import { locationHistoryApi,locationHistorySearchApi,locationStayAddressApi } from './location-history-api';
@@ -66,6 +69,18 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
   if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
   if(url.pathname==='/api/android/v1/goods-history') return await androidGoodsHistoryApi(request,context);
+  if(url.pathname==='/api/android/v1/task-edit') {
+    if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
+    if(!context.member)return json({ok:false,error:'ログインが必要です。'},401);
+    const id=Number(url.searchParams.get('id')||0);
+    if(!Number.isSafeInteger(id)||id<=0)return json({ok:false,error:'タスクが不正です。'},400);
+    const hierarchy=await validateTaskEditRequestHierarchy(request,context,id);
+    if(!hierarchy.ok)return json({ok:false,error:hierarchy.message},hierarchy.status);
+    const result=await taskEdit(request,context,id);
+    if(result.status>=300&&result.status<400&&result.headers.get('location')===`/task/view.php?id=${id}`)return json({ok:true,id});
+    if(result.headers.get('content-type')?.includes('application/json'))return result;
+    return json({ok:false,error:result.status===404?'タスクが見つかりません。':'編集権限がありません。'},result.status);
+  }
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);

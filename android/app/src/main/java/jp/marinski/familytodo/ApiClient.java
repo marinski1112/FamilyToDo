@@ -127,6 +127,25 @@ final class ApiClient {
             }
         } finally { connection.disconnect(); }
     }
+    static JSONObject deleteTask(int id,String csrf) throws Exception {
+        if(id<=0) throw new IllegalArgumentException("Invalid task");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/task?id="+id).openConnection();
+        try {
+            connection.setConnectTimeout(10000);connection.setReadTimeout(15000);
+            connection.setInstanceFollowRedirects(false);connection.setRequestMethod("DELETE");
+            connection.setRequestProperty("Accept","application/json");connection.setRequestProperty("x-csrf",csrf);
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            int status=connection.getResponseCode();if(status==401) throw new SecurityException("ログインしてください");
+            try(var stream=status<400?connection.getInputStream():connection.getErrorStream()) {
+                if(stream==null) throw new IllegalStateException("応答がありません");
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) { data.write(buffer,0,n); if(data.size()>65536) throw new IllegalStateException("応答が大きすぎます"); }
+                JSONObject result=new JSONObject(data.toString("UTF-8"));
+                if(status>=400||!result.optBoolean("ok")) throw new IllegalStateException(result.optString("error","削除できませんでした"));
+                return result;
+            }
+        } finally { connection.disconnect(); }
+    }
     static JSONObject request(String path, JSONObject body, String method) throws Exception {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
         if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"DELETE".equals(method))&&body!=null))

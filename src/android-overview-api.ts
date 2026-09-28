@@ -25,7 +25,8 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
   if(!Number.isSafeInteger(fid)||fid<=0||!Number.isSafeInteger(mid)||mid<=0)return json({ok:false,code:'FORBIDDEN'},403,headers);
 
   const [taskResult,shoppingResult,itemResult,memberResult]=await Promise.all([
-    ctx.env.DB.prepare(`SELECT t.id,t.title,t.task_kind,t.status,t.start_at,t.end_at,t.due_at,t.all_day,t.calendar_color
+    ctx.env.DB.prepare(`SELECT t.id,t.title,t.task_kind,t.status,t.start_at,t.end_at,t.due_at,t.all_day,t.calendar_color,
+      t.description,t.location,t.reminder_at,t.calendar_visible,t.visibility_scope
       FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')}
       AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
