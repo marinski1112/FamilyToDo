@@ -42,8 +42,10 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
       WHERE q.family_id=? AND q.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
       ORDER BY q.subject_id,q.sort_order,q.id LIMIT 201`).bind(familyId).all<Row>(),
-    ctx.env.DB.prepare('SELECT id,name,icon,weekday_mask FROM family_quick_chores WHERE family_id=? AND active=1 ORDER BY sort_order,id LIMIT 101').bind(familyId).all<Row>(),
+    ctx.env.DB.prepare('SELECT id,name,icon,weekday_mask,active FROM family_quick_chores WHERE family_id=? ORDER BY active DESC,sort_order,id LIMIT 101').bind(familyId).all<Row>(),
   ]);
+  const role=String(member.role||'').toUpperCase();
+  const delegated=role==='OWNER'||role==='ADMIN'?null:await ctx.env.DB.prepare("SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES' LIMIT 1").bind(familyId,member.id).first<Row>();
   let presets=[160,240];
   try{
     const values=JSON.parse(String(settings?.setting_value||''));
@@ -54,6 +56,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets,
     showAdultLogs:displaySettings?.show_adult_logs===undefined||Number(displaySettings.show_adult_logs)===1,
     canManageSettings:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase()),
+    canManageChores:role==='OWNER'||role==='ADMIN'||Boolean(delegated),
     quickActions:quickActions.results.slice(0,200),quickActionsTruncated:quickActions.results.length>200,
     chores:chores.results.slice(0,100),choresTruncated:chores.results.length>100},200,headers);
 }

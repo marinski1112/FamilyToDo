@@ -1020,6 +1020,7 @@ public final class MainActivity extends Activity {
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
         content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
         if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
+        if(familyLog.optBoolean("canManageChores")) content.addView(button("ちょこっと家事の項目管理",this::manageQuickChores));
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
@@ -1048,7 +1049,7 @@ public final class MainActivity extends Activity {
                 content.addView(label("ちょこっと家事"));
                 int weekday=selectedDay.getDayOfWeek().getValue()%7;
                 for(int i=0;i<chores.length();i++) {
-                    JSONObject chore=chores.optJSONObject(i);if(chore==null || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
+                    JSONObject chore=chores.optJSONObject(i);if(chore==null || chore.optInt("active",1)!=1 || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
                     content.addView(button(chore.optString("icon","✨")+" "+chore.optString("name"),() -> recordQuickChore(chore)));
                 }
             }
@@ -1308,6 +1309,86 @@ public final class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this).setTitle("記録対象を選択")
             .setItems(names.toArray(new String[0]),(dialog,which) -> familyLogSubjectActions(rows.get(which))).show();
+    }
+    private void manageQuickChores() {
+        if(familyLog==null || !familyLog.optBoolean("canManageChores")) return;
+        JSONArray chores=familyLog.optJSONArray("chores");
+        ArrayList<JSONObject> rows=new ArrayList<>(); ArrayList<String> names=new ArrayList<>();
+        names.add("＋ 家事項目を追加");
+        if(chores!=null) for(int i=0;i<chores.length();i++) {
+            JSONObject row=chores.optJSONObject(i); if(row==null) continue;
+            rows.add(row); names.add((row.optInt("active",1)==1?"":"（非表示）")+row.optString("icon","✨")+" "+row.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle("ちょこっと家事").setItems(names.toArray(new String[0]),(dialog,which) -> {
+            if(which==0) editQuickChore(null);
+            else quickChoreActions(rows.get(which-1));
+        }).setNegativeButton("閉じる",null).show();
+    }
+    private void quickChoreActions(JSONObject chore) {
+        boolean active=chore.optInt("active",1)==1;
+        String[] actions=active?new String[]{"編集","上へ移動","下へ移動","非表示にする"}:new String[]{"再表示する"};
+        new AlertDialog.Builder(this).setTitle(chore.optString("name")).setItems(actions,(dialog,which) -> {
+            if(!active) { changeQuickChore("quick_chore_restore",chore.optInt("id"),null); return; }
+            if(which==0) editQuickChore(chore);
+            else if(which==3) new AlertDialog.Builder(this).setTitle("非表示にする")
+                .setMessage(chore.optString("name")+"を一覧から隠しますか？")
+                .setPositiveButton("非表示",(d,w) -> changeQuickChore("quick_chore_remove",chore.optInt("id"),null))
+                .setNegativeButton("やめる",null).show();
+            else reorderQuickChore(chore.optInt("id"),which==1?-1:1);
+        }).show();
+    }
+    private void reorderQuickChore(int id,int direction) {
+        JSONArray chores=familyLog==null?null:familyLog.optJSONArray("chores");
+        if(chores==null) return;
+        ArrayList<Integer> ids=new ArrayList<>();
+        for(int i=0;i<chores.length();i++) {
+            JSONObject row=chores.optJSONObject(i);
+            if(row!=null && row.optInt("active",1)==1) ids.add(row.optInt("id"));
+        }
+        int from=ids.indexOf(id),to=from+direction;
+        if(from<0||to<0||to>=ids.size()) return;
+        java.util.Collections.swap(ids,from,to);
+        try { changeQuickChore("quick_chore_reorder",0,new JSONObject().put("ids",new JSONArray(ids))); }
+        catch(Exception ignored) { }
+    }
+    private void editQuickChore(JSONObject existing) {
+        EditText name=new EditText(this); name.setHint("名前（8文字以内）"); name.setSingleLine(true);
+        EditText icon=new EditText(this); icon.setHint("絵文字"); icon.setSingleLine(true);
+        if(existing!=null) { name.setText(existing.optString("name")); icon.setText(existing.optString("icon","✨")); }
+        CheckBox[] days=new CheckBox[7]; String[] labels={"日","月","火","水","木","金","土"};
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(name); form.addView(icon); form.addView(label("表示する曜日"));
+        for(int i=0;i<7;i++) {
+            days[i]=new CheckBox(this); days[i].setText(labels[i]);
+            days[i].setChecked(existing==null || (existing.optInt("weekday_mask",127)&(1<<i))!=0);
+            form.addView(days[i]);
+        }
+        new AlertDialog.Builder(this).setTitle(existing==null?"家事項目を追加":"家事項目を編集").setView(form)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String title=name.getText().toString().trim(),symbol=icon.getText().toString().trim();
+                if(title.isEmpty()||title.codePointCount(0,title.length())>8) {
+                    Toast.makeText(this,"名前は1〜8文字です",Toast.LENGTH_SHORT).show(); return;
+                }
+                int mask=0; for(int i=0;i<7;i++) if(days[i].isChecked()) mask|=1<<i;
+                try { changeQuickChore(existing==null?"quick_chore_add":"quick_chore_update",existing==null?0:existing.optInt("id"),
+                    new JSONObject().put("name",title).put("icon",symbol.isEmpty()?"✨":symbol).put("weekday_mask",mask)); }
+                catch(Exception ignored) { }
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void changeQuickChore(String action,int id,JSONObject extras) {
+        if(snapshot==null || familyLog==null || !familyLog.optBoolean("canManageChores")) return;
+        String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject body=extras==null?new JSONObject():new JSONObject(extras.toString());
+                body.put("action",action).put("csrf",csrf).put("id",id);
+                ApiClient.request("/api/family-log",body);
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"家事項目を更新できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void showFamilyLogSettings() {
         if(snapshot==null || familyLog==null || !familyLog.optBoolean("canManageSettings")) return;
