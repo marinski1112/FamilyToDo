@@ -276,10 +276,34 @@ public final class MainActivity extends Activity {
                 group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                content.addView(label(category));
+                TextView heading=label(category+"  ✎");
+                heading.setOnClickListener(v -> renameCategory(shopping,category));
+                content.addView(heading);
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
         }
+    }
+    private void renameCategory(boolean shopping,String oldName) {
+        if(snapshot==null || "未分類".equals(oldName)) return;
+        EditText input=new EditText(this); input.setText(oldName); input.setSingleLine(true);
+        new AlertDialog.Builder(this).setTitle("カテゴリ名を変更").setView(input)
+            .setPositiveButton("変更",(dialog,which) -> {
+                String name=input.getText().toString().trim();
+                if(name.isEmpty() || name.length()>255 || "未分類".equals(name) || name.equals(oldName)) return;
+                String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject body=new JSONObject().put("csrf",csrf).put("name",oldName).put("new_name",name)
+                            .put("action",shopping?"rename":"category_rename");
+                        if(shopping) body.put("kind","shopping");
+                        ApiClient.request(shopping?"/api/shopping-category-mutation":"/api/item",body);
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"カテゴリ名を変更できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private void addCategory(boolean shopping) {
         if(snapshot==null) return;
