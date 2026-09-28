@@ -1020,6 +1020,7 @@ public final class MainActivity extends Activity {
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
         content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
         if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
+        if(familyLog.optBoolean("canManageQuickActions")) content.addView(button("クイック記録を管理",this::manageQuickActions));
         if(familyLog.optBoolean("canManageChores")) content.addView(button("ちょこっと家事の項目管理",this::manageQuickChores));
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
@@ -1063,7 +1064,7 @@ public final class MainActivity extends Activity {
             boolean hasQuick=false;
             if(quickActions!=null) for(int n=0;n<quickActions.length();n++) {
                 JSONObject quick=quickActions.optJSONObject(n);
-                if(quick==null || quick.optInt("subject_id")!=subject.optInt("id")) continue;
+                if(quick==null || quick.optInt("active",1)!=1 || quick.optInt("subject_id")!=subject.optInt("id")) continue;
                 hasQuick=true;
                 actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
             }
@@ -1309,6 +1310,136 @@ public final class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this).setTitle("記録対象を選択")
             .setItems(names.toArray(new String[0]),(dialog,which) -> familyLogSubjectActions(rows.get(which))).show();
+    }
+    private void manageQuickActions() {
+        if(familyLog==null || !familyLog.optBoolean("canManageQuickActions")) return;
+        JSONArray subjects=familyLog.optJSONArray("subjects");
+        if(subjects==null || subjects.length()==0) return;
+        ArrayList<JSONObject> rows=new ArrayList<>(); ArrayList<String> names=new ArrayList<>();
+        for(int i=0;i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i); if(subject==null) continue;
+            rows.add(subject); names.add(subject.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle("記録対象を選択")
+            .setItems(names.toArray(new String[0]),(dialog,which) -> manageQuickActionsFor(rows.get(which)))
+            .setNegativeButton("閉じる",null).show();
+    }
+    private void manageQuickActionsFor(JSONObject subject) {
+        JSONArray all=familyLog==null?null:familyLog.optJSONArray("quickActions");
+        ArrayList<JSONObject> rows=new ArrayList<>(); ArrayList<String> names=new ArrayList<>();
+        names.add("＋ クイック記録を追加");
+        if(all!=null) for(int i=0;i<all.length();i++) {
+            JSONObject row=all.optJSONObject(i);
+            if(row==null || row.optInt("subject_id")!=subject.optInt("id")) continue;
+            rows.add(row);
+            names.add((row.optInt("active",1)==1?"":"（無効）")+row.optString("icon","＋")+" "+row.optString("name"));
+        }
+        new AlertDialog.Builder(this).setTitle(subject.optString("name")+" のクイック記録")
+            .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                if(which==0) editQuickAction(subject,null); else quickActionMenu(subject,rows.get(which-1));
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void quickActionMenu(JSONObject subject,JSONObject row) {
+        boolean active=row.optInt("active",1)==1;
+        String[] actions=active?new String[]{"編集","上へ移動","下へ移動","無効にする"}:new String[]{"編集して再有効化"};
+        new AlertDialog.Builder(this).setTitle(row.optString("name")).setItems(actions,(dialog,which) -> {
+            if(!active || which==0) { editQuickAction(subject,row); return; }
+            if(which==3) new AlertDialog.Builder(this).setTitle("クイック記録を無効にする")
+                .setMessage(row.optString("name")+"を一覧から隠しますか？")
+                .setPositiveButton("無効にする",(d,w) -> changeQuickAction("quick_action_disable",row.optInt("id"),null))
+                .setNegativeButton("やめる",null).show();
+            else {
+                try { changeQuickAction("quick_action_reorder",row.optInt("id"),
+                    new JSONObject().put("direction",which==1?"up":"down")); }
+                catch(Exception ignored) { }
+            }
+        }).show();
+    }
+    private void editQuickAction(JSONObject subject,JSONObject existing) {
+        if(snapshot==null) return;
+        ArrayList<String> codes=allowedLogTypes(subject);
+        codes.remove("HOUSEWORK"); codes.remove("TIMER");
+        if(codes.isEmpty()) { Toast.makeText(this,"利用できる記録種類がありません",Toast.LENGTH_SHORT).show(); return; }
+        ArrayList<String> types=new ArrayList<>(); for(String code:codes) types.add(logTypeName(code));
+        EditText name=new EditText(this); name.setHint("表示名"); name.setSingleLine(true);
+        EditText icon=new EditText(this); icon.setHint("アイコン"); icon.setSingleLine(true);
+        EditText detail=new EditText(this); detail.setHint("詳細コード（例: WET、BABY_FOOD）"); detail.setSingleLine(true);
+        EditText amount=new EditText(this); amount.setHint("量・数値（任意）"); amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+        EditText unit=new EditText(this); unit.setHint("単位（例: ml）"); unit.setSingleLine(true);
+        EditText value=new EditText(this); value.setHint("記録内容（任意）");
+        Spinner mode=new Spinner(this),type=new Spinner(this);
+        mode.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
+            new String[]{"ワンタッチ","入力して記録","睡眠開始・終了"}));
+        type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types));
+        if(existing!=null) {
+            name.setText(existing.optString("name")); icon.setText(existing.optString("icon","＋"));
+            detail.setText(existing.optString("detail_code"));
+            if(!existing.isNull("amount")) amount.setText(existing.optString("amount"));
+            unit.setText(existing.optString("unit")); value.setText(existing.optString("value_text"));
+            String oldMode=existing.optString("mode");
+            mode.setSelection("SLEEP_TOGGLE".equals(oldMode)?2:"FORM".equals(oldMode)?1:0);
+            int index=codes.indexOf(existing.optString("log_type")); if(index>=0) type.setSelection(index);
+        }
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(name); form.addView(icon); form.addView(label("動作")); form.addView(mode);
+        form.addView(label("記録種類")); form.addView(type); form.addView(detail); form.addView(amount); form.addView(unit); form.addView(value);
+        ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle(existing==null?"クイック記録を追加":"クイック記録を編集")
+            .setView(scroll).setPositiveButton("保存",(dialog,which) -> {
+                String title=name.getText().toString().trim(),number=amount.getText().toString().trim();
+                if(title.isEmpty()||title.length()>40||icon.length()>16||detail.length()>40||unit.length()>16||value.length()>255) {
+                    Toast.makeText(this,"入力内容を確認してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                if(!number.isEmpty()) try {
+                    double n=Double.parseDouble(number); if(!Double.isFinite(n)||n<-100000||n>100000) throw new NumberFormatException();
+                } catch(NumberFormatException error) {
+                    Toast.makeText(this,"数値を確認してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                String[] modes={"QUICK","FORM","SLEEP_TOGGLE"};
+                String selectedMode=modes[mode.getSelectedItemPosition()];
+                String selectedType=codes.get(type.getSelectedItemPosition());
+                String detailCode=detail.getText().toString().trim().toUpperCase(java.util.Locale.ROOT);
+                if(!quickDetailAllowed(selectedType,detailCode)) {
+                    Toast.makeText(this,"詳細コードを確認してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                if("SLEEP_TOGGLE".equals(selectedMode)&&!codes.contains("SLEEP")) {
+                    Toast.makeText(this,"この対象では睡眠を記録できません",Toast.LENGTH_SHORT).show(); return;
+                }
+                try {
+                    JSONObject body=new JSONObject().put("subject_id",subject.optInt("id"))
+                        .put("name",title).put("icon",icon.getText().toString().trim())
+                        .put("mode",selectedMode).put("log_type",selectedType)
+                        .put("detail_code",detailCode)
+                        .put("amount",number).put("unit",unit.getText().toString().trim())
+                        .put("value_text",value.getText().toString().trim()).put("active",true);
+                    changeQuickAction("quick_action_save",existing==null?0:existing.optInt("id"),body);
+                } catch(Exception ignored) { }
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private boolean quickDetailAllowed(String type,String detail) {
+        if(detail.isEmpty()) return true;
+        switch(type) {
+            case "DIAPER": return java.util.Arrays.asList("WET","DIRTY","BOTH").contains(detail);
+            case "MEAL": return java.util.Arrays.asList("BREAKFAST","LUNCH","DINNER","SNACK","BABY_FOOD","OTHER").contains(detail);
+            case "BATH": return java.util.Arrays.asList("BATH","SHOWER").contains(detail);
+            case "CONDITION": return java.util.Arrays.asList("GOOD","NORMAL","TIRED","SICK","VOMIT").contains(detail);
+            default: return false;
+        }
+    }
+    private void changeQuickAction(String action,int id,JSONObject extras) {
+        if(snapshot==null || familyLog==null || !familyLog.optBoolean("canManageQuickActions")) return;
+        String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject body=extras==null?new JSONObject():new JSONObject(extras.toString());
+                body.put("action",action).put("csrf",csrf).put("id",id);
+                ApiClient.request("/api/family-log",body);
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"クイック記録を更新できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void manageQuickChores() {
         if(familyLog==null || !familyLog.optBoolean("canManageChores")) return;
