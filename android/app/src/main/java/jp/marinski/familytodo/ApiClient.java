@@ -45,7 +45,12 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject request(String path, JSONObject body) throws Exception {
+        return request(path,body,body==null?"GET":"POST");
+    }
+    static JSONObject request(String path, JSONObject body, String method) throws Exception {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
+        if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"DELETE".equals(method))&&body!=null))
+            throw new IllegalArgumentException("Invalid API method");
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
@@ -53,7 +58,7 @@ final class ApiClient {
             String cookies = CookieManager.getInstance().getCookie(ORIGIN);
             if (cookies != null) connection.setRequestProperty("Cookie", cookies);
             if (body != null) {
-                connection.setRequestMethod("POST"); connection.setDoOutput(true);
+                connection.setRequestMethod(method); connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
                 try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }

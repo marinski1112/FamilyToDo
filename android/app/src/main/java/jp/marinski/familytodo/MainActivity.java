@@ -183,6 +183,7 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
+        content.addView(button("＋ スタンプ",this::addStamp));
         LinearLayout weekdays=new LinearLayout(this);
         for(String weekday:new String[]{"日","月","火","水","木","金","土"})
             weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
@@ -248,6 +249,10 @@ public final class MainActivity extends Activity {
             ImageView view=new ImageView(this);
             int size=(int)(64*getResources().getDisplayMetrics().density);
             row.addView(view,new LinearLayout.LayoutParams(size,size));
+            if(stamp.optInt("createdBy")==snapshot.optInt("memberId")) {
+                view.setContentDescription("スタンプを削除");
+                view.setOnClickListener(v -> deleteStamp(stamp));
+            }
             Bitmap cached=stampImages.get(path);
             if(cached!=null) { view.setImageBitmap(cached); continue; }
             if(!pendingStampImages.add(path)) continue;
@@ -266,6 +271,66 @@ public final class MainActivity extends Activity {
         }
         content.addView(row);
         if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
+    }
+    private void addStamp() {
+        if(snapshot==null) return;
+        String day=selectedDay.toString(), csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject result=ApiClient.request("/api/calendar-stamp-options",null);
+                JSONArray options=result.optJSONArray("options");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || options==null) return;
+                    if(options.length()==0) { Toast.makeText(this,"使えるスタンプがありません",Toast.LENGTH_SHORT).show(); return; }
+                    ArrayList<String> names=new ArrayList<>();
+                    for(int i=0;i<options.length();i++) {
+                        JSONObject option=options.optJSONObject(i);
+                        names.add(option==null?"スタンプ":option.optString("name","スタンプ"));
+                    }
+                    new AlertDialog.Builder(this).setTitle(day+" のスタンプ")
+                        .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            JSONObject chosen=options.optJSONObject(which);
+                            if(chosen==null || chosen.optInt("id")<=0) return;
+                            new AlertDialog.Builder(this).setTitle("公開範囲")
+                                .setItems(new String[]{"家族全員","自分だけ"},(scopeDialog,scope) -> {
+                                    int assetId=chosen.optInt("id");
+                                    network.execute(() -> {
+                                        try {
+                                            if(epoch!=sessionEpoch) return;
+                                            ApiClient.request("/api/calendar-stamp-placement",new JSONObject()
+                                                .put("csrf",csrf).put("assetId",assetId).put("stampDate",day)
+                                                .put("visibilityScope",scope==0?"FAMILY":"PRIVATE"));
+                                            if(epoch==sessionEpoch) runOnUiThread(this::load);
+                                        } catch(Exception error) {
+                                            runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを配置できませんでした",Toast.LENGTH_SHORT).show(); });
+                                        }
+                                    });
+                                }).show();
+                        }).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプ一覧を取得できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void deleteStamp(JSONObject stamp) {
+        int placementId=stamp.optInt("placementId");
+        if(snapshot==null || placementId<=0 || stamp.optInt("createdBy")!=snapshot.optInt("memberId")) return;
+        new AlertDialog.Builder(this).setTitle("スタンプを削除")
+            .setMessage("この日からスタンプを取り除きます。")
+            .setPositiveButton("削除",(dialog,which) -> {
+                String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/calendar-stamp-placement",new JSONObject()
+                            .put("csrf",csrf).put("placementId",placementId),"DELETE");
+                        if(epoch==sessionEpoch) runOnUiThread(this::load);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private void renderGoods() {
         boolean shopping=tab.equals("shopping");
