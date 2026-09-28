@@ -277,8 +277,8 @@ public final class MainActivity extends Activity {
                 group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                TextView heading=label(category+"  ⋮");
-                heading.setOnClickListener(v -> categoryActions(shopping,category));
+                TextView heading=label(category+("未分類".equals(category)?"":"  ⋮"));
+                if(!"未分類".equals(category)) heading.setOnClickListener(v -> categoryActions(shopping,category));
                 content.addView(heading);
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
@@ -301,10 +301,10 @@ public final class MainActivity extends Activity {
         if(catalog==null) return names;
         JSONArray order=catalog.optJSONArray("order"), available=catalog.optJSONArray("categories");
         if(order!=null) for(int i=0;i<order.length();i++) {
-            String value=order.optString(i); if(contains(available,value) && !names.contains(value)) names.add(value);
+            String value=order.optString(i); if(!"未分類".equals(value) && contains(available,value) && !names.contains(value)) names.add(value);
         }
         if(available!=null) for(int i=0;i<available.length();i++) {
-            String value=available.optString(i); if(!value.isEmpty() && !names.contains(value)) names.add(value);
+            String value=available.optString(i); if(!value.isEmpty() && !"未分類".equals(value) && !names.contains(value)) names.add(value);
         }
         return names;
     }
