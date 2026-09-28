@@ -2455,11 +2455,14 @@ public final class MainActivity extends Activity {
     }
     private void loadMessages(int before) {
         content.removeAllViews(); content.addView(label("伝言を読み込み中…"));
+        int epoch=sessionEpoch;
         network.execute(() -> {
             try {
                 JSONObject result=ApiClient.request("/api/message-chat-sync?before="+(before>0?before:9007199254740991L),null);
+                if(epoch!=sessionEpoch) return;
+                JSONArray page=result.optJSONArray("messages");
                 runOnUiThread(() -> {
-                    JSONArray page=result.optJSONArray("messages");
+                    if(epoch!=sessionEpoch||!tab.equals("messages")) return;
                     if(before==0) messages=page==null?new JSONArray():page;
                     else if(page!=null) {
                         JSONArray combined=new JSONArray();
@@ -2469,8 +2472,21 @@ public final class MainActivity extends Activity {
                     }
                     hasOlderMessages=result.optBoolean("hasOlder"); render();
                 });
-            } catch(SecurityException e) { runOnUiThread(() -> { monthCache.clear(); snapshot=null; showLogin(); }); }
-            catch(Exception e) { runOnUiThread(() -> { content.removeAllViews(); content.addView(label("伝言を取得できませんでした")); }); }
+                if(page!=null&&page.length()>0&&snapshot!=null) {
+                    JSONArray ids=new JSONArray();
+                    for(int i=0;i<Math.min(40,page.length());i++) {
+                        JSONObject row=page.optJSONObject(i);
+                        if(row!=null&&row.optInt("id")>0) ids.put(row.optInt("id"));
+                    }
+                    if(epoch==sessionEpoch&&ids.length()>0) try {
+                        ApiClient.request("/api/message-chat-sync",new JSONObject()
+                            .put("csrf",snapshot.optString("csrf")).put("ids",ids));
+                    } catch(Exception ignored) { /* Retry on a later read. */ }
+                }
+            } catch(SecurityException e) { runOnUiThread(() -> {if(epoch==sessionEpoch) {monthCache.clear(); snapshot=null; showLogin();}}); }
+            catch(Exception e) { runOnUiThread(() -> {if(epoch==sessionEpoch&&tab.equals("messages")) {
+                content.removeAllViews(); content.addView(label("伝言を取得できませんでした"));
+            }}); }
         });
     }
     private void renderMessages() {
@@ -2488,6 +2504,8 @@ public final class MainActivity extends Activity {
                 +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")+"\n長押しでリアクション");
             message.setOnLongClickListener(view -> {messageActions(row);return true;});
             content.addView(message);
+            if(snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId"))
+                content.addView(label("既読 "+row.optInt("readCount")));
             if(row.optBoolean("hasImage") && row.optInt("id")>0)
                 content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
             if(row.optBoolean("hasStamp") && row.optInt("id")>0)
