@@ -3,6 +3,7 @@ import { createFamily } from './family-create-api';
 import { joinFamily } from './family-join-api';
 import { inviteCreate } from './family-invite-api';
 import { apiMe } from './api-me';
+import { androidOverviewApi } from './android-overview-api';
 import { taskApi } from './task-api';
 import { taskChildrenApi } from './task-children-api';
 import { taskParentCompletionApi } from './task-parent-completion-api';
@@ -60,6 +61,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family/join') return await joinFamily(request,context);
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
   if(url.pathname==='/api/me') return await apiMe(context);
+  if(url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);

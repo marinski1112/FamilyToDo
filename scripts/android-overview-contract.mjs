@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const api=await readFile(new URL('../src/android-overview-api.ts',import.meta.url),'utf8');
+const routes=await readFile(new URL('../src/context-api-routes.ts',import.meta.url),'utf8');
+const app=await readFile(new URL('../android/app/src/main/java/jp/marinski/familytodo/MainActivity.java',import.meta.url),'utf8');
+assert.match(routes,/\/api\/android\/overview'[\s\S]{0,80}androidOverviewApi\(request,context\)/);
+for(const required of [/if\(!member\)return json\(\{ok:false,code:'AUTH_REQUIRED'\},401/,/taskVisibilitySql\('t'\)/,/goodsVisibilitySql\('s'\)/,/goodsVisibilitySql\('i'\)/,/LIMIT\+1/,/commitSession\(result,ctx\.session,ctx\.env\.APP_SECRET\)/]) assert.match(api,required);
+assert.doesNotMatch(api,/SELECT t\.\*|SELECT s\.\*|SELECT i\.\*|searchParams\.get\('family_id'\)/);
+assert.match(app,/\/api\/android\/overview\?month=/);
+assert.match(app,/\/api\/toggle/);
+assert.match(app,/\/api\/shopping/);
+assert.match(app,/\/api\/item/);
+console.log('Android native overview contract: ok');

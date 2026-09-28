@@ -47,7 +47,7 @@ export async function settingsLocation(_request:Request,ctx:AppContext):Promise<
   <div class="page-head"><div><div class="eyebrow">管理</div><h1>📍 位置情報・端末連携</h1></div><a class="btn gray" href="/app/settings.php">戻る</a></div>
   ${homeCard}${arrivalCard}
   <div class="card location-settings-grid">
-    <div><h2>位置連携端末を追加</h2><p class="small">iPhoneのOwnTracks／Overland、またはFamilyToDo Android用の接続情報を発行します。端末は最初は共有OFFです。</p></div>
+    <div><h2>位置連携端末を追加</h2><p class="small">iPhoneのOwnTracksまたはOverland、またはFamilyToDo Android用の接続情報を発行します。端末は最初は共有OFFです。</p></div>
     <div class="location-provision-row"><label>対象メンバー<select id="locationMember">${memberOptions}</select></label><button class="btn" id="provisionOwnTracks" type="button">iPhone接続情報を発行</button><button class="btn gray" id="provisionAndroid" type="button">Android接続情報を発行</button></div>
   </div>
   <div class="card owntracks-secret" id="ownTracksSecret" hidden>

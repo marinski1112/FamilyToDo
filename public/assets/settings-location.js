@@ -98,7 +98,9 @@ async function provisionDevice(provider){
   if(!confirm(`${provider==='FAMILYTODO_ANDROID'?'Android':'iPhone'}位置連携用の接続情報を発行しますか？ Secretは一度だけ表示されます。`))return;
   provision.disabled=true;if(provisionAndroid)provisionAndroid.disabled=true;
   try{
-    const data=await api({action:'provision',provider,member_id:memberId});
+    const data=provider==='OWNTRACKS'
+      ?await api({action:'provision',provider:'OWNTRACKS',member_id:memberId})
+      :await api({action:'provision',provider:'FAMILYTODO_ANDROID',member_id:memberId});
     const publicId=String(data.device.publicId||'');const secret=String(data.device.secret||'');
     document.getElementById('iphoneCredentials').hidden=provider==='FAMILYTODO_ANDROID';
     document.getElementById('androidCredentials').hidden=provider!=='FAMILYTODO_ANDROID';
