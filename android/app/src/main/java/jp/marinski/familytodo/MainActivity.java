@@ -446,6 +446,19 @@ public final class MainActivity extends Activity {
         EditText input=new EditText(this); input.setHint(shopping?"買い物名":"持ち物名");
         EditText quantity=new EditText(this); quantity.setHint("数量（例: 2個）"); quantity.setSingleLine(true);
         EditText memo=new EditText(this); memo.setHint("メモ");
+        EditText url=new EditText(this); url.setHint("商品・参考URL（任意）"); url.setSingleLine(true);
+        url.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        final String[] due={""};
+        final Button[] dateRef=new Button[1];
+        Button date=button("期限日: 指定なし",() -> {
+            LocalDate current=due[0].isEmpty()?selectedDay:LocalDate.parse(due[0]);
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                due[0]=LocalDate.of(y,m+1,d).toString();
+                dateRef[0].setText("期限日: "+due[0]);
+            },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
+        });
+        dateRef[0]=date;
+        Button clearDate=button("期限日を解除",() -> { due[0]=""; dateRef[0].setText("期限日: 指定なし"); });
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         ArrayList<String> choices=new ArrayList<>(); choices.add("未分類");
         JSONArray available=catalog==null?null:catalog.optJSONArray("categories");
@@ -457,19 +470,22 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(32,8,32,8); form.addView(input); form.addView(label("カテゴリ")); form.addView(category);
         if(shopping) form.addView(quantity);
-        form.addView(memo);
-        new AlertDialog.Builder(this).setTitle(shopping?"買い物を追加":"持ち物を追加").setView(form)
+        form.addView(memo); form.addView(url); form.addView(date); form.addView(clearDate);
+        ScrollView formScroll=new ScrollView(this); formScroll.addView(form);
+        new AlertDialog.Builder(this).setTitle(shopping?"買い物を追加":"持ち物を追加").setView(formScroll)
             .setPositiveButton("追加", (d,w) -> {
                 String name=input.getText().toString().trim(); if (name.isEmpty()) return;
                 String selected=category.getSelectedItem().toString();
                 String csrf=snapshot.optString("csrf");
                 String note=memo.getText().toString().trim();
                 String amount=quantity.getText().toString().trim();
+                String link=url.getText().toString().trim(), deadline=due[0];
                 network.execute(() -> {
                     try { ApiClient.request(shopping?"/api/shopping":"/api/item",new JSONObject()
                         .put("action","add").put("name",name).put("csrf",csrf)
                         .put("category","未分類".equals(selected)?"":selected)
                         .put("memo",note).put("quantity",amount.isEmpty()?"1":amount)
+                        .put("url",link).put(shopping?"due_date":"date",deadline)
                         .put("client_request_id",java.util.UUID.randomUUID().toString()));
                         runOnUiThread(this::load);
                     } catch (Exception e) { runOnUiThread(() -> Toast.makeText(this,"追加できませんでした",Toast.LENGTH_SHORT).show()); }
