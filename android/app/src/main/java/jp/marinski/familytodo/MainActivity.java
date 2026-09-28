@@ -498,7 +498,7 @@ public final class MainActivity extends Activity {
                         Math.max(40,Math.min(2000,frame.optInt("durationMs",120))));
                 }
                 runOnUiThread(() -> {
-                    if(epoch!=sessionEpoch || !tab.equals("calendar")) return;
+                    if(epoch!=sessionEpoch || !(tab.equals("calendar")||tab.equals("messages"))) return;
                     ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
                     view.setContentDescription("アニメーションスタンプ");
                     AlertDialog dialog=new AlertDialog.Builder(this).setTitle("アニメーションスタンプ")
@@ -523,7 +523,7 @@ public final class MainActivity extends Activity {
                 android.graphics.drawable.Drawable animation=ApiClient.decodeAnimatedStamp(bytes);
                 if(!(animation instanceof android.graphics.drawable.AnimatedImageDrawable)) throw new IllegalStateException("Not animated");
                 runOnUiThread(() -> {
-                    if(epoch!=sessionEpoch || !tab.equals("calendar")) return;
+                    if(epoch!=sessionEpoch || !(tab.equals("calendar")||tab.equals("messages"))) return;
                     ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
                     view.setContentDescription("アニメーションスタンプ");
                     android.graphics.drawable.AnimatedImageDrawable animated=(android.graphics.drawable.AnimatedImageDrawable)animation;
@@ -2475,6 +2475,7 @@ public final class MainActivity extends Activity {
     }
     private void renderMessages() {
         content.addView(button("＋ 伝言する",this::addMessage));
+        content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
         content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
         if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
         content.addView(button("更新",()->loadMessages(0)));
@@ -2485,7 +2486,118 @@ public final class MainActivity extends Activity {
                 +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")));
             if(row.optBoolean("hasImage") && row.optInt("id")>0)
                 content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
+            if(row.optBoolean("hasStamp") && row.optInt("id")>0)
+                content.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
         }
+    }
+    private void showMessageStamp(int messageId) {
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject response=ApiClient.request("/api/message-stamps?ids="+messageId,null);
+                JSONArray stamps=response.optJSONArray("stamps");
+                JSONObject stamp=stamps==null?null:stamps.optJSONObject(0);
+                if(stamp==null||stamp.optInt("messageId")!=messageId) throw new IllegalStateException("Unavailable");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||!tab.equals("messages")) return;
+                    if("ANIMATED".equals(stamp.optString("kind"))) {showStampAnimation(stamp);return;}
+                    String path=stamp.optString("fullUrl");
+                    stampMedia.execute(() -> {
+                        try {
+                            Bitmap image=SnapshotCache.readStamp(this,path);
+                            if(image==null) {
+                                image=ApiClient.thumbnail(path);
+                                if(epoch==sessionEpoch) SnapshotCache.writeStamp(this,path,image);
+                            }
+                            Bitmap ready=image;
+                            runOnUiThread(() -> {
+                                if(epoch!=sessionEpoch||!tab.equals("messages")) return;
+                                ImageView view=new ImageView(this);view.setImageBitmap(ready);view.setAdjustViewBounds(true);
+                                view.setContentDescription("伝言のスタンプ");
+                                new AlertDialog.Builder(this).setTitle("伝言のスタンプ").setView(view)
+                                    .setPositiveButton("閉じる",null).show();
+                            });
+                        } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを表示できませんでした",Toast.LENGTH_SHORT).show();});}
+                    });
+                });
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを取得できませんでした",Toast.LENGTH_SHORT).show();});}
+        });
+    }
+    private void chooseMessageStamp() {
+        if(snapshot==null) {load();return;}
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONArray options=ApiClient.request("/api/calendar-stamp-options",null).optJSONArray("options");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||options==null) return;
+                    if(options.length()==0) {Toast.makeText(this,"使えるスタンプがありません",Toast.LENGTH_SHORT).show();return;}
+                    ArrayList<String> names=new ArrayList<>();
+                    for(int i=0;i<options.length();i++) {
+                        JSONObject option=options.optJSONObject(i);names.add(option==null?"スタンプ":option.optString("name","スタンプ"));
+                    }
+                    new AlertDialog.Builder(this).setTitle("送るスタンプ")
+                        .setItems(names.toArray(new String[0]),(dialog,which) -> {
+                            JSONObject selected=options.optJSONObject(which);
+                            if(selected!=null&&selected.optInt("id")>0) composeMessageStamp(selected);
+                        }).setNegativeButton("閉じる",null).show();
+                });
+            } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプ一覧を取得できませんでした",Toast.LENGTH_SHORT).show();});}
+        });
+    }
+    private void composeMessageStamp(JSONObject stamp) {
+        if(snapshot==null) return;
+        ArrayList<String> recipients=new ArrayList<>();recipients.add("家族全員");
+        ArrayList<Integer> recipientIds=new ArrayList<>();recipientIds.add(0);
+        JSONArray members=snapshot.optJSONArray("members");
+        if(members!=null) for(int i=0;i<members.length();i++) {
+            JSONObject member=members.optJSONObject(i);
+            if(member!=null&&member.optInt("id")>0) {
+                recipients.add(member.optString("name","メンバー"));recipientIds.add(member.optInt("id"));
+            }
+        }
+        Spinner recipient=new Spinner(this);recipient.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,recipients));
+        EditText caption=new EditText(this);caption.setHint("ひとこと（任意）");
+        final String[] reminder={""};final Button[] whenRef=new Button[1];
+        Button when=button("通知予約: 指定なし",() -> {
+            java.time.LocalDateTime base=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo")).plusHours(1);
+            new DatePickerDialog(this,(picker,y,m,d) ->
+                new TimePickerDialog(this,(clock,h,minute) -> {
+                    reminder[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02dT%02d:%02d",y,m+1,d,h,minute);
+                    whenRef[0].setText("通知予約: "+reminder[0]);
+                },base.getHour(),base.getMinute(),true).show(),
+                base.getYear(),base.getMonthValue()-1,base.getDayOfMonth()).show();
+        });whenRef[0]=when;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
+        form.addView(label(stamp.optString("name","スタンプ")));form.addView(label("宛先"));form.addView(recipient);
+        form.addView(caption);form.addView(when);
+        form.addView(button("通知予約を解除",() -> {reminder[0]="";whenRef[0].setText("通知予約: 指定なし");}));
+        new AlertDialog.Builder(this).setTitle("スタンプを送る").setView(form)
+            .setPositiveButton("送る",(dialog,which) -> {
+                String text=caption.getText().toString().trim();
+                if(text.codePointCount(0,text.length())>5000||!reminder[0].isEmpty()&&
+                    reminder[0].compareTo(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo"))
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")))<=0) {
+                    Toast.makeText(this,"本文・通知予約を確認してください",Toast.LENGTH_LONG).show();return;
+                }
+                int epoch=sessionEpoch,recipientId=recipientIds.get(recipient.getSelectedItemPosition());
+                String csrf=snapshot.optString("csrf"),notifyAt=reminder[0];
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject saved=ApiClient.request("/api/message-stamps",new JSONObject()
+                            .put("csrf",csrf).put("assetId",stamp.optInt("id")).put("target_member_id",recipientId)
+                            .put("text",text).put("reminder_at",notifyAt));
+                        if(notifyAt.isEmpty()) notifyMessageImmediately(saved.optInt("id"),csrf);
+                        if(epoch==sessionEpoch) runOnUiThread(() -> {load();loadMessages(0);});
+                    } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを送れませんでした。伝言一覧を更新して確認してください",Toast.LENGTH_LONG).show();});}
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
+    private void notifyMessageImmediately(int id,String csrf) {
+        if(id<=0) return;
+        try {ApiClient.request("/api/message-immediate-notify",new JSONObject().put("csrf",csrf).put("message_id",id));}
+        catch(Exception ignored) { /* The message is saved; notification retry must not send it twice. */ }
     }
     private void showMessagePhoto(int id) {
         int epoch=sessionEpoch;
@@ -2641,8 +2753,9 @@ public final class MainActivity extends Activity {
                 network.execute(() -> {
                     try {
                         if(epoch!=sessionEpoch) return;
-                        ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body)
+                        JSONObject saved=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body)
                             .put("target_member_id",recipientId).put("reminder_at",notifyAt));
+                        if(notifyAt.isEmpty()) notifyMessageImmediately(saved.optInt("id"),csrf);
                         if(epoch==sessionEpoch) runOnUiThread(()->{ load(); loadMessages(0); });
                     } catch(Exception e) {
                         runOnUiThread(()->{ if(epoch==sessionEpoch) Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show(); });
