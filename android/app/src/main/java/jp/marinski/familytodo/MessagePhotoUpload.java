@@ -26,6 +26,10 @@ final class MessagePhotoUpload {
         final byte[] jpeg; final String sourceHash,uploadId;
         Draft(byte[] jpeg,String sourceHash) { this.jpeg=jpeg; this.sourceHash=sourceHash; uploadId=UUID.randomUUID().toString(); }
     }
+    static final class PngDraft {
+        final byte[] png; final int width,height;
+        PngDraft(byte[] png,int width,int height) { this.png=png; this.width=width; this.height=height; }
+    }
     private MessagePhotoUpload() { }
     static Draft prepare(Context context,Uri uri) throws Exception {
         ByteArrayOutputStream raw=new ByteArrayOutputStream();
@@ -73,6 +77,46 @@ final class MessagePhotoUpload {
             return new Draft(jpeg.toByteArray(),hex.toString());
         } finally {
             if(output!=null) output.recycle();
+            if(oriented!=decoded) oriented.recycle(); decoded.recycle();
+        }
+    }
+    static PngDraft prepareStamp(Context context,Uri uri) throws Exception {
+        ByteArrayOutputStream raw=new ByteArrayOutputStream();
+        try(InputStream input=context.getContentResolver().openInputStream(uri)) {
+            if(input==null) throw new IllegalArgumentException("画像を開けません");
+            byte[] buffer=new byte[8192];int n;
+            while((n=input.read(buffer))!=-1) { raw.write(buffer,0,n); if(raw.size()>20*1024*1024) throw new IllegalArgumentException("画像が大きすぎます"); }
+        }
+        byte[] original=raw.toByteArray();
+        BitmapFactory.Options options=new BitmapFactory.Options(); options.inJustDecodeBounds=true;
+        BitmapFactory.decodeByteArray(original,0,original.length,options);
+        if(options.outWidth<1||options.outHeight<1||options.outWidth>16000||options.outHeight>16000)
+            throw new IllegalArgumentException("画像のサイズを確認してください");
+        options.inJustDecodeBounds=false; options.inSampleSize=1;
+        while(options.outWidth/options.inSampleSize>1024||options.outHeight/options.inSampleSize>1024) options.inSampleSize*=2;
+        Bitmap decoded=BitmapFactory.decodeByteArray(original,0,original.length,options);
+        if(decoded==null) throw new IllegalArgumentException("画像を読み込めません");
+        Bitmap oriented=decoded,output=null;
+        try {
+            int orientation=ExifInterface.ORIENTATION_NORMAL;
+            try { orientation=new ExifInterface(new ByteArrayInputStream(original)).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_NORMAL); } catch(Exception ignored) { }
+            Matrix transform=new Matrix();
+            if(orientation==ExifInterface.ORIENTATION_FLIP_HORIZONTAL||orientation==ExifInterface.ORIENTATION_TRANSPOSE||orientation==ExifInterface.ORIENTATION_TRANSVERSE) transform.postScale(-1,1);
+            if(orientation==ExifInterface.ORIENTATION_FLIP_VERTICAL) transform.postScale(1,-1);
+            if(orientation==ExifInterface.ORIENTATION_ROTATE_90||orientation==ExifInterface.ORIENTATION_TRANSPOSE) transform.postRotate(90);
+            if(orientation==ExifInterface.ORIENTATION_ROTATE_180) transform.postRotate(180);
+            if(orientation==ExifInterface.ORIENTATION_ROTATE_270||orientation==ExifInterface.ORIENTATION_TRANSVERSE) transform.postRotate(270);
+            if(!transform.isIdentity()) oriented=Bitmap.createBitmap(decoded,0,0,decoded.getWidth(),decoded.getHeight(),transform,true);
+            float scale=Math.min(1f,512f/Math.max(oriented.getWidth(),oriented.getHeight()));
+            int width=Math.max(1,Math.round(oriented.getWidth()*scale)),height=Math.max(1,Math.round(oriented.getHeight()*scale));
+            output=Bitmap.createScaledBitmap(oriented,width,height,true);
+            ByteArrayOutputStream png=new ByteArrayOutputStream();
+            if(!output.compress(Bitmap.CompressFormat.PNG,100,png)||png.size()>4*1024*1024)
+                throw new IllegalArgumentException("PNGを圧縮できません");
+            return new PngDraft(png.toByteArray(),width,height);
+        } finally {
+            if(output!=null&&output!=oriented) output.recycle();
             if(oriented!=decoded) oriented.recycle(); decoded.recycle();
         }
     }

@@ -17,9 +17,10 @@ final class ApiClient {
     /** Fetch a bounded same-origin thumbnail, including private upload media. */
     static Bitmap thumbnail(String path) throws Exception {
         boolean messagePhoto=path.matches("/api/messages\\?photo=[1-9][0-9]*");
+        boolean familyLogPhoto=path.matches("/api/family-log-media\\?media=[1-9][0-9]*");
         if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
             path.contains("..") || path.contains("#") || path.contains(":") ||
-            !(messagePhoto || path.startsWith("/api/calendar-stamp-media?") ||
+            !(messagePhoto || familyLogPhoto || path.startsWith("/api/calendar-stamp-media?") ||
               (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
             throw new IllegalArgumentException("Invalid image path");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
@@ -36,7 +37,7 @@ final class ApiClient {
                 byte[] buffer=new byte[4096]; int count;
                 while((count=stream.read(buffer))!=-1) {
                     data.write(buffer,0,count);
-                    if(data.size()>(messagePhoto?4*1024*1024:1_000_000)) throw new IllegalStateException("Image too large");
+                    if(data.size()>(messagePhoto||familyLogPhoto?4*1024*1024:1_000_000)) throw new IllegalStateException("Image too large");
                 }
                 BitmapFactory.Options options=new BitmapFactory.Options();
                 options.inJustDecodeBounds=true;
@@ -44,7 +45,7 @@ final class ApiClient {
                 BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
                 if(options.outWidth<=0 || options.outHeight<=0 || options.outWidth>16000 || options.outHeight>16000)
                     throw new IllegalStateException("Invalid image dimensions");
-                options.inJustDecodeBounds=false; options.inSampleSize=messagePhoto?1:2;
+                options.inJustDecodeBounds=false; options.inSampleSize=messagePhoto||familyLogPhoto?1:2;
                 while(options.outWidth/options.inSampleSize>1024 || options.outHeight/options.inSampleSize>1024)
                     options.inSampleSize*=2;
                 Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
@@ -55,6 +56,76 @@ final class ApiClient {
     }
     static JSONObject request(String path, JSONObject body) throws Exception {
         return request(path,body,body==null?"GET":"POST");
+    }
+    static JSONObject uploadFamilyLogPhoto(int logId,byte[] jpeg,String csrf) throws Exception {
+        if(logId<=0||jpeg.length==0||jpeg.length>4*1024*1024) throw new IllegalArgumentException("Invalid photo");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media").openConnection();
+        try {
+            connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
+            connection.setInstanceFollowRedirects(false); connection.setRequestMethod("POST"); connection.setDoOutput(true);
+            connection.setRequestProperty("Accept","application/json"); connection.setRequestProperty("Content-Type","image/jpeg");
+            connection.setRequestProperty("x-csrf-token",csrf); connection.setRequestProperty("x-family-log-id",String.valueOf(logId));
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);
+            if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            try(OutputStream output=connection.getOutputStream()) { output.write(jpeg); }
+            int status=connection.getResponseCode();
+            if(status==401) throw new SecurityException("ログインしてください");
+            try(var stream=status<400?connection.getInputStream():connection.getErrorStream()) {
+                if(stream==null) throw new IllegalStateException("応答がありません");
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) { data.write(buffer,0,n); if(data.size()>65536) throw new IllegalStateException("応答が大きすぎます"); }
+                JSONObject result=new JSONObject(data.toString("UTF-8"));
+                if(status==409 && "PHOTO_ALREADY_EXISTS".equals(result.optString("error")))
+                    return request("/api/family-log-media?log="+logId,null);
+                if(status>=400||!result.optBoolean("ok")) throw new IllegalStateException(result.optString("error","写真を保存できませんでした"));
+                return result;
+            }
+        } finally { connection.disconnect(); }
+    }
+    static JSONObject deleteFamilyLogPhoto(int mediaId,String csrf) throws Exception {
+        if(mediaId<=0) throw new IllegalArgumentException("Invalid photo");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media?media="+mediaId).openConnection();
+        try {
+            connection.setConnectTimeout(10000); connection.setReadTimeout(15000);
+            connection.setInstanceFollowRedirects(false); connection.setRequestMethod("DELETE");
+            connection.setRequestProperty("Accept","application/json"); connection.setRequestProperty("x-csrf-token",csrf);
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);
+            if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            int status=connection.getResponseCode(); if(status==401) throw new SecurityException("ログインしてください");
+            try(var stream=status<400?connection.getInputStream():connection.getErrorStream()) {
+                if(stream==null) throw new IllegalStateException("応答がありません");
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) { data.write(buffer,0,n); if(data.size()>65536) throw new IllegalStateException("応答が大きすぎます"); }
+                JSONObject result=new JSONObject(data.toString("UTF-8"));
+                if(status>=400||!result.optBoolean("ok")) throw new IllegalStateException(result.optString("error","写真を削除できませんでした"));
+                return result;
+            }
+        } finally { connection.disconnect(); }
+    }
+    static JSONObject uploadStaticStamp(MessagePhotoUpload.PngDraft image,String name,String csrf) throws Exception {
+        if(image==null||image.png.length==0||image.png.length>4*1024*1024) throw new IllegalArgumentException("Invalid stamp");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/calendar-stamp-admin/upload").openConnection();
+        try {
+            connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
+            connection.setInstanceFollowRedirects(false);connection.setRequestMethod("POST");connection.setDoOutput(true);
+            connection.setRequestProperty("Accept","application/json");connection.setRequestProperty("Content-Type","image/png");
+            connection.setRequestProperty("x-csrf-token",csrf);
+            connection.setRequestProperty("x-stamp-name-b64",android.util.Base64.encodeToString(name.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP));
+            connection.setRequestProperty("x-stamp-width",String.valueOf(image.width));
+            connection.setRequestProperty("x-stamp-height",String.valueOf(image.height));
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            try(OutputStream output=connection.getOutputStream()) { output.write(image.png); }
+            int status=connection.getResponseCode();if(status==401) throw new SecurityException("ログインしてください");
+            try(var stream=status<400?connection.getInputStream():connection.getErrorStream()) {
+                if(stream==null) throw new IllegalStateException("応答がありません");
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) { data.write(buffer,0,n); if(data.size()>65536) throw new IllegalStateException("応答が大きすぎます"); }
+                JSONObject result=new JSONObject(data.toString("UTF-8"));
+                if(status>=400||!result.optBoolean("ok")||result.optInt("assetId")<=0)
+                    throw new IllegalStateException(result.optString("error","スタンプを登録できませんでした"));
+                return result;
+            }
+        } finally { connection.disconnect(); }
     }
     static JSONObject request(String path, JSONObject body, String method) throws Exception {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");

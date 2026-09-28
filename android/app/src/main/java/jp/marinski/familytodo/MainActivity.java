@@ -51,6 +51,10 @@ public final class MainActivity extends Activity {
     private MessagePhotoUpload.Draft pendingPhoto;
     private String pendingPhotoCaption="",pendingPhotoReminder="";
     private boolean photoSending;
+    private MessagePhotoUpload.Draft pendingFamilyLogPhoto;
+    private int pendingFamilyLogPhotoId;
+    private boolean familyPhotoSending;
+    private String pendingStampName="";
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
         @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
@@ -192,6 +196,7 @@ public final class MainActivity extends Activity {
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
         content.addView(button("＋ スタンプ",this::addStamp));
+        if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 新しいスタンプ画像",this::chooseStaticStamp));
         LinearLayout weekdays=new LinearLayout(this);
         for(String weekday:new String[]{"日","月","火","水","木","金","土"})
             weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
@@ -379,6 +384,20 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプ一覧を取得できませんでした",Toast.LENGTH_SHORT).show(); });
             }
         });
+    }
+    private void chooseStaticStamp() {
+        if(snapshot==null || !snapshot.optBoolean("canManageStamps")) return;
+        EditText name=new EditText(this); name.setHint("スタンプ名"); name.setSingleLine(true);
+        new AlertDialog.Builder(this).setTitle("新しいスタンプ画像").setView(name)
+            .setPositiveButton("画像を選択",(dialog,which) -> {
+                String value=name.getText().toString().trim();
+                if(value.isEmpty()||value.codePointCount(0,value.length())>80) {
+                    Toast.makeText(this,"スタンプ名を80文字以内で入力してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                pendingStampName=value;
+                Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);picker.addCategory(Intent.CATEGORY_OPENABLE);picker.setType("image/*");
+                startActivityForResult(picker,43);
+            }).setNegativeButton("閉じる",null).show();
     }
     private void deleteStamp(JSONObject stamp) {
         int placementId=stamp.optInt("placementId");
@@ -826,11 +845,13 @@ public final class MainActivity extends Activity {
         days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
         days.addView(button("更新",this::loadFamilyLog));
         content.addView(days);
+        if(pendingFamilyLogPhoto!=null) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
             content.addView(label("読み込み中…")); return;
         }
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
         content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
+        if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
@@ -867,6 +888,7 @@ public final class MainActivity extends Activity {
                 if(!sleeping) actions.addView(button("😴 睡眠開始",() -> changeFamilyLogTimer("sleep_start",subject.optInt("id"),0,"")));
             }
             if(enabled.contains("MILK")) actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
+            if(enabled.contains("MEAL")) actions.addView(button("🍚 離乳食",() -> recordBaby(subject,"MEAL","BABY_FOOD")));
             if(enabled.contains("DIAPER")) {
                 actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
                 actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
@@ -902,7 +924,75 @@ public final class MainActivity extends Activity {
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
             entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
             content.addView(entry);
+            int mediaId=row.optInt("media_id");
+            if(mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
+                .setItems(new String[]{"表示","削除"},(dialog,which) -> {
+                    if(which==0) showFamilyLogPhoto(mediaId); else deleteFamilyLogPhoto(mediaId);
+                }).show()));
+            else if("MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
+                ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
+                content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
         }
+    }
+    private void showFamilyLogPhoto(int mediaId) {
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                Bitmap image=ApiClient.thumbnail("/api/family-log-media?media="+mediaId);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !tab.equals("familylog")) return;
+                    ImageView view=new ImageView(this); view.setImageBitmap(image); view.setAdjustViewBounds(true);
+                    view.setContentDescription("離乳食の写真");
+                    new AlertDialog.Builder(this).setTitle("離乳食の写真").setView(view).setPositiveButton("閉じる",null).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"写真を表示できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void deleteFamilyLogPhoto(int mediaId) {
+        if(snapshot==null) return;
+        new AlertDialog.Builder(this).setTitle("写真を削除").setMessage("記録は残し、写真だけを削除します。")
+            .setPositiveButton("削除",(dialog,which) -> {
+                String csrf=snapshot.optString("csrf"); int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.deleteFamilyLogPhoto(mediaId,csrf);
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"写真を削除できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
+    }
+    private void chooseFamilyLogPhoto(int logId) {
+        if(snapshot==null || logId<=0) return;
+        if(familyPhotoSending) return;
+        pendingFamilyLogPhotoId=logId;
+        Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT); picker.addCategory(Intent.CATEGORY_OPENABLE); picker.setType("image/*");
+        startActivityForResult(picker,42);
+    }
+    private void sendFamilyLogPhoto() {
+        if(snapshot==null || pendingFamilyLogPhoto==null || pendingFamilyLogPhotoId<=0 || familyPhotoSending) return;
+        familyPhotoSending=true;
+        int id=pendingFamilyLogPhotoId,epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+        MessagePhotoUpload.Draft draft=pendingFamilyLogPhoto;
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject result=ApiClient.uploadFamilyLogPhoto(id,draft.jpeg,csrf);
+                if(result.isNull("media")) throw new IllegalStateException("写真が見つかりません");
+                runOnUiThread(() -> { if(epoch==sessionEpoch && pendingFamilyLogPhoto==draft) {
+                    familyPhotoSending=false; pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; loadFamilyLog();
+                } });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) { familyPhotoSending=false;
+                    Toast.makeText(this,"写真を保存できませんでした。再試行できます",Toast.LENGTH_LONG).show();
+                    if(tab.equals("familylog")) render();
+                } });
+            }
+        });
     }
     private void startFamilyLogTimer() {
         if(snapshot==null || familyLog==null) return;
@@ -990,9 +1080,46 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("記録対象を選択")
             .setItems(names.toArray(new String[0]),(dialog,which) -> familyLogSubjectActions(rows.get(which))).show();
     }
+    private void showFamilyLogSettings() {
+        if(snapshot==null || familyLog==null || !familyLog.optBoolean("canManageSettings")) return;
+        CheckBox adults=new CheckBox(this); adults.setText("大人の記録を表示"); adults.setChecked(familyLog.optBoolean("showAdultLogs",true));
+        EditText presets=new EditText(this); presets.setHint("ミルク量の候補（例: 160, 240）");
+        JSONArray current=familyLog.optJSONArray("milkPresets");
+        ArrayList<String> values=new ArrayList<>();
+        if(current!=null) for(int i=0;i<current.length();i++) values.add(String.valueOf(current.optInt(i)));
+        presets.setText(android.text.TextUtils.join(", ",values));
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(adults); form.addView(presets);
+        new AlertDialog.Builder(this).setTitle("育児記録の表示設定").setView(form)
+            .setPositiveButton("保存",(dialog,which) -> {
+                String raw=presets.getText().toString().trim();
+                String[] parts=raw.split(","); JSONArray amounts=new JSONArray();
+                if(parts.length<1||parts.length>6) { Toast.makeText(this,"候補は1〜6件です",Toast.LENGTH_SHORT).show(); return; }
+                try {
+                    Set<Integer> seen=new HashSet<>();
+                    for(String part:parts) {
+                        int amount=Integer.parseInt(part.trim());
+                        if(amount<=0||amount>2000||!seen.add(amount)) throw new NumberFormatException();
+                        amounts.put(amount);
+                    }
+                } catch(NumberFormatException error) { Toast.makeText(this,"ミルク量を確認してください",Toast.LENGTH_SHORT).show(); return; }
+                int epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/family-log",new JSONObject().put("action","settings_update")
+                            .put("csrf",csrf).put("show_adult_logs",adults.isChecked())
+                            .put("milk_amount_presets",amounts));
+                        if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"表示設定を保存できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
+    }
     private void familyLogSubjectActions(JSONObject subject) {
         boolean linked=subject.optInt("member_id")>0;
-        String[] actions=linked?new String[]{"名前を変更"}:new String[]{"名前を変更","対象を非表示"};
+        String[] actions=linked?new String[]{"対象を編集"}:new String[]{"対象を編集","対象を非表示"};
         new AlertDialog.Builder(this).setTitle(subject.optString("name"))
             .setItems(actions,(dialog,which) -> {
                 if(which==0) renameFamilyLogSubject(subject); else disableFamilyLogSubject(subject);
@@ -1001,32 +1128,65 @@ public final class MainActivity extends Activity {
     private void renameFamilyLogSubject(JSONObject subject) {
         if(snapshot==null) return;
         EditText input=new EditText(this); input.setText(subject.optString("name")); input.setSingleLine(true);
-        new AlertDialog.Builder(this).setTitle("記録対象の名前を変更").setView(input)
+        String[] kindCodes={"BABY","CHILD","ADULT","PET","OTHER"},kindNames={"赤ちゃん","子ども","大人","ペット","その他"};
+        Spinner kind=new Spinner(this); kind.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,kindNames));
+        int kindIndex=java.util.Arrays.asList(kindCodes).indexOf(subject.optString("subject_kind"));
+        kind.setSelection(Math.max(0,kindIndex));
+        final String[] birth={subject.optString("birth_date","")};
+        final Button[] birthRef=new Button[1];
+        Button birthButton=button("生年月日: "+(birth[0].isEmpty()?"指定なし":birth[0]),() -> {
+            LocalDate date;
+            try { date=birth[0].isEmpty()?selectedDay:LocalDate.parse(birth[0]); }
+            catch(Exception error) { date=selectedDay; }
+            new DatePickerDialog(this,(picker,y,m,d) -> {
+                birth[0]=LocalDate.of(y,m+1,d).toString(); birthRef[0].setText("生年月日: "+birth[0]);
+            },date.getYear(),date.getMonthValue()-1,date.getDayOfMonth()).show();
+        }); birthRef[0]=birthButton;
+        CheckBox auto=new CheckBox(this); auto.setText("記録で関連タスクを完了する");
+        auto.setChecked(subject.optInt("auto_complete_linked_task")==1);
+        CheckBox overview=new CheckBox(this); overview.setText("家族全体の一覧に表示");
+        overview.setChecked(subject.optInt("show_on_family_overview")==1);
+        Set<String> selectedTypes=new HashSet<>(allowedLogTypes(subject));
+        Set<String> selectedOverview=new HashSet<>();
+        try {
+            JSONArray saved=new JSONArray(subject.optString("overview_quick_types_json","[]"));
+            for(int i=0;i<saved.length();i++) selectedOverview.add(saved.optString(i));
+        } catch(Exception ignored) { }
+        String[] allTypes={"MILK","BREASTFEED","MEAL","DIAPER","SLEEP","BATH","TEMPERATURE","MEDICINE","VACCINE","CONDITION","WEIGHT","HEIGHT","BLOOD_PRESSURE","EXERCISE","WATER","TOILET","WALK","MEMO"};
+        ArrayList<CheckBox> enabledChecks=new ArrayList<>(),overviewChecks=new ArrayList<>();
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(32,8,32,8);
+        form.addView(label("名前")); form.addView(input); form.addView(label("対象タイプ")); form.addView(kind);
+        form.addView(birthButton); form.addView(button("生年月日を解除",() -> { birth[0]=""; birthRef[0].setText("生年月日: 指定なし"); }));
+        form.addView(auto); form.addView(overview); form.addView(label("利用する記録項目 / 家族全体に表示する項目"));
+        for(String type:allTypes) {
+            CheckBox enabled=new CheckBox(this); enabled.setText(logTypeName(type)); enabled.setChecked(selectedTypes.contains(type));
+            CheckBox quick=new CheckBox(this); quick.setText("全体に表示"); quick.setChecked(selectedOverview.contains(type));
+            form.addView(enabled); form.addView(quick); enabledChecks.add(enabled); overviewChecks.add(quick);
+        }
+        ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle("記録対象を編集").setView(scroll)
             .setPositiveButton("保存",(dialog,which) -> {
                 String name=input.getText().toString().trim();
                 if(name.isEmpty()||name.length()>80) { Toast.makeText(this,"名前を80文字以内で入力してください",Toast.LENGTH_SHORT).show(); return; }
-                JSONArray enabled=new JSONArray();
-                for(String type:allowedLogTypes(subject)) enabled.put(type);
-                JSONArray overview=new JSONArray();
-                try {
-                    String raw=subject.optString("overview_quick_types_json");
-                    if(!raw.isEmpty()) overview=new JSONArray(raw);
-                } catch(Exception ignored) { }
-                JSONArray overviewTypes=overview;
+                JSONArray enabled=new JSONArray(),overviewTypes=new JSONArray();
+                for(int i=0;i<allTypes.length;i++) if(enabledChecks.get(i).isChecked()) {
+                    enabled.put(allTypes[i]); if(overviewChecks.get(i).isChecked()) overviewTypes.put(allTypes[i]);
+                }
+                if(enabled.length()==0) { Toast.makeText(this,"記録項目を1つ以上選んでください",Toast.LENGTH_SHORT).show(); return; }
                 int epoch=sessionEpoch; String csrf=snapshot.optString("csrf");
+                String subjectKind=kindCodes[kind.getSelectedItemPosition()],birthDate=birth[0];
                 network.execute(() -> {
                     try {
                         if(epoch!=sessionEpoch) return;
                         ApiClient.request("/api/family-log",new JSONObject().put("action","subject_update")
                             .put("csrf",csrf).put("id",subject.optInt("id")).put("name",name)
-                            .put("subject_kind",subject.optString("subject_kind"))
-                            .put("birth_date",subject.optString("birth_date",""))
-                            .put("enabled_types",enabled).put("auto_complete_linked_task",subject.optInt("auto_complete_linked_task")==1)
-                            .put("show_on_family_overview",subject.optInt("show_on_family_overview")==1)
+                            .put("subject_kind",subjectKind).put("birth_date",birthDate)
+                            .put("enabled_types",enabled).put("auto_complete_linked_task",auto.isChecked())
+                            .put("show_on_family_overview",overview.isChecked())
                             .put("overview_quick_types",overviewTypes));
                         if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
                     } catch(Exception error) {
-                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"名前を変更できませんでした",Toast.LENGTH_SHORT).show(); });
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"記録対象を更新できませんでした",Toast.LENGTH_SHORT).show(); });
                     }
                 });
             }).setNegativeButton("閉じる",null).show();
@@ -1116,7 +1276,7 @@ public final class MainActivity extends Activity {
                     } catch(NumberFormatException error) { Toast.makeText(this,"ミルク量を確認してください",Toast.LENGTH_SHORT).show(); }
                 }).setNegativeButton("閉じる",null).show();
         } else {
-            new AlertDialog.Builder(this).setTitle(subject.optString("name")+" の"+("WET".equals(detail)?"おしっこ":"うんち"))
+            new AlertDialog.Builder(this).setTitle(subject.optString("name")+" の"+("BABY_FOOD".equals(detail)?"離乳食":"WET".equals(detail)?"おしっこ":"うんち"))
                 .setMessage(selectedDay.toString()+" に記録します。")
                 .setPositiveButton("記録",(dialog,which) -> saveFamilyLog(subject.optInt("id"),type,detail,null,"",""))
                 .setNegativeButton("閉じる",null).show();
@@ -1329,14 +1489,35 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode!=41 || resultCode!=RESULT_OK || data==null || data.getData()==null) return;
-        android.net.Uri uri=data.getData(); int epoch=sessionEpoch;
+        if((requestCode!=41 && requestCode!=42 && requestCode!=43) || resultCode!=RESULT_OK || data==null || data.getData()==null) return;
+        android.net.Uri uri=data.getData(); int epoch=sessionEpoch,pickedLogId=pendingFamilyLogPhotoId;
+        if(requestCode==43) {
+            String name=pendingStampName,csrf=snapshot==null?"":snapshot.optString("csrf");
+            if(name.isEmpty()||csrf.isEmpty()) return;
+            Toast.makeText(this,"スタンプ画像を準備しています",Toast.LENGTH_SHORT).show();
+            network.execute(() -> {
+                try {
+                    MessagePhotoUpload.PngDraft png=MessagePhotoUpload.prepareStamp(this,uri);
+                    if(epoch!=sessionEpoch) return;
+                    ApiClient.uploadStaticStamp(png,name,csrf);
+                    runOnUiThread(() -> { if(epoch==sessionEpoch) { pendingStampName=""; load();
+                        Toast.makeText(this,"スタンプを登録しました",Toast.LENGTH_SHORT).show(); } });
+                } catch(Exception error) {
+                    runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを登録できませんでした",Toast.LENGTH_LONG).show(); });
+                }
+            });
+            return;
+        }
         Toast.makeText(this,"写真を準備しています",Toast.LENGTH_SHORT).show();
         network.execute(() -> {
             try {
                 MessagePhotoUpload.Draft draft=MessagePhotoUpload.prepare(this,uri);
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
+                    if(requestCode==42) {
+                        if(pickedLogId!=pendingFamilyLogPhotoId) return;
+                        pendingFamilyLogPhoto=draft; sendFamilyLogPhoto(); return;
+                    }
                     pendingPhoto=draft; pendingPhotoCaption=""; pendingPhotoReminder="";
                     showPhotoComposer();
                 });
@@ -1451,6 +1632,8 @@ public final class MainActivity extends Activity {
                 network.execute(() -> SnapshotCache.clear(this));
                 monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
+                pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
+                pendingStampName="";
                 stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
                 android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
                 android.webkit.CookieManager.getInstance().flush();
@@ -1460,6 +1643,8 @@ public final class MainActivity extends Activity {
         if (login != null) return;
         monthCache.clear(); snapshot=null; familyLog=null; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
+        pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
+        pendingStampName="";
         stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);

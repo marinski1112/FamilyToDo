@@ -15,13 +15,14 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     Number.isNaN(Date.parse(`${date}T00:00:00Z`))||new Date(`${date}T00:00:00Z`).toISOString().slice(0,10)!==date)
     return json({ok:false,code:'INVALID_DATE'},400,headers);
   const familyId=Number(member.family_id);
-  const [subjects,logs,settings,timers]=await Promise.all([
+  const [subjects,logs,settings,timers,displaySettings]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json,s.birth_date,
       s.auto_complete_linked_task,s.show_on_family_overview,s.overview_quick_types_json,s.member_id FROM family_log_subjects s
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
       WHERE s.family_id=? AND s.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
       ORDER BY CASE WHEN s.member_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(fm.id,s.id),s.id LIMIT 100`).bind(familyId).all<Row>(),
-    ctx.env.DB.prepare(`SELECT l.id,l.subject_id,l.log_type,l.occurred_at,l.detail_code,l.amount,l.unit,l.duration_minutes,l.value_text,l.note,l.linked_task_id,l.linked_occurrence_id,s.name subject_name
+    ctx.env.DB.prepare(`SELECT l.id,l.subject_id,l.log_type,l.occurred_at,l.detail_code,l.amount,l.unit,l.duration_minutes,l.value_text,l.note,l.linked_task_id,l.linked_occurrence_id,s.name subject_name,s.subject_kind,
+      (SELECT media.id FROM family_log_media media WHERE media.family_id=l.family_id AND media.log_id=l.id LIMIT 1) media_id
       FROM family_logs l LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
       WHERE l.family_id=? AND l.deleted_at IS NULL AND NOT ${IMPORTED_FAMILY_DIARY_SQL}
         AND l.occurred_at>=? AND l.occurred_at<=?
@@ -35,6 +36,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
         AND (COALESCE((SELECT show_adult_logs FROM family_log_settings WHERE family_id=?),1)=1
           OR COALESCE(s.subject_kind,'')<>'ADULT')
       ORDER BY x.started_at_ms LIMIT 101`).bind(familyId,familyId).all<Row>(),
+    ctx.env.DB.prepare('SELECT show_adult_logs FROM family_log_settings WHERE family_id=? LIMIT 1').bind(familyId).first<Row>(),
   ]);
   let presets=[160,240];
   try{
@@ -43,5 +45,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
   }catch{/* defaults */}
   return json({ok:true,schemaVersion:1,date,familyId,memberId:Number(member.id),
     subjects:subjects.results,logs:logs.results.slice(0,200),truncated:logs.results.length>200,
-    timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets},200,headers);
+    timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets,
+    showAdultLogs:displaySettings?.show_adult_logs===undefined||Number(displaySettings.show_adult_logs)===1,
+    canManageSettings:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase())},200,headers);
 }

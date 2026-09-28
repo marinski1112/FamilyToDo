@@ -51,6 +51,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
     tasks:[...taskResult.results.slice(0,LIMIT),...visibleRecurrent.slice(0,LIMIT)].slice(0,LIMIT),
     shopping:shoppingResult.results.slice(0,LIMIT),items:itemResult.results.slice(0,LIMIT),
     members:memberResult.results,
+    canManageStamps:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase()),
     truncated:taskResult.results.length>LIMIT||visibleRecurrent.length>LIMIT||
       taskResult.results.length+visibleRecurrent.length>LIMIT||shoppingResult.results.length>LIMIT||itemResult.results.length>LIMIT,
   },200,headers);

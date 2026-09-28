@@ -1,6 +1,7 @@
 import type {AppContext} from './app-context';
 import {calendarStampManagedUploadObjectKey,normalizeCalendarStampStorageKey} from './calendar-stamp-storage';
 import {json} from './response';
+import {registerCalendarStampAsset} from './calendar-stamp-actions';
 
 const MAX_PNG_BYTES=4*1024*1024;
 const PNG_SIGNATURE=[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a] as const;
@@ -103,6 +104,17 @@ export async function calendarStampMediaUploadApi(request:Request,context:AppCon
   if(!csrf||!expected||csrf!==expected)return json({ok:false,error:'CSRF_FAILED'},403);
   const contentType=String(request.headers.get('content-type')||'').split(';',1)[0]!.trim().toLowerCase();
   if(contentType!=='image/png')return json({ok:false,error:'PNG_REQUIRED'},415);
+  const nameHeader=request.headers.get('x-stamp-name-b64');
+  let stampName:string|null=null,stampWidth:number|null=null,stampHeight:number|null=null;
+  if(nameHeader!==null){
+    try{
+      if(nameHeader.length>512||!/^[A-Za-z0-9+/]+=*$/.test(nameHeader))throw new Error();
+      stampName=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(nameHeader),c=>c.charCodeAt(0))).trim();
+      stampWidth=Number(request.headers.get('x-stamp-width'));stampHeight=Number(request.headers.get('x-stamp-height'));
+      if(!stampName||Array.from(stampName).length>80||!Number.isSafeInteger(stampWidth)||stampWidth<1||stampWidth>4096||
+        !Number.isSafeInteger(stampHeight)||stampHeight<1||stampHeight>4096)throw new Error();
+    }catch{return json({ok:false,error:'INVALID_STAMP_METADATA'},400);}
+  }
   const declared=Number(request.headers.get('content-length')||0);
   if(Number.isFinite(declared)&&declared>MAX_PNG_BYTES)return json({ok:false,error:'FILE_TOO_LARGE'},413);
   try{
@@ -113,6 +125,18 @@ export async function calendarStampMediaUploadApi(request:Request,context:AppCon
     const storageKey=`uploads/${crypto.randomUUID()}.png`;
     const objectKey=calendarStampManagedUploadObjectKey(s.familyId,storageKey);
     await context.env.MEDIA.put(objectKey,buffer,{httpMetadata:{contentType:'image/png'}});
+    if(stampName!==null){
+      try{
+        const assetId=await registerCalendarStampAsset(context.env,s.familyId,s.memberId,{
+          name:stampName,assetKind:'STATIC',mimeType:'image/png',storageProvider:'UPLOAD',
+          storageKey,thumbnailStorageKey:storageKey,width:stampWidth,height:stampHeight,
+        });
+        return json({ok:true,storageKey,assetId,bytes:buffer.byteLength},201);
+      }catch{
+        await context.env.MEDIA.delete(objectKey).catch(()=>{});
+        return json({ok:false,error:'STAMP_REGISTER_FAILED'},500);
+      }
+    }
     return json({ok:true,storageKey,bytes:buffer.byteLength},201);
   }catch{
     return json({ok:false,error:'MEDIA_UPLOAD_FAILED'},500);
