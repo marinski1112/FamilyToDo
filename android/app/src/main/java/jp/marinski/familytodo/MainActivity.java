@@ -252,6 +252,7 @@ public final class MainActivity extends Activity {
     private void renderGoods() {
         boolean shopping=tab.equals("shopping");
         content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
+        content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
@@ -274,8 +275,39 @@ public final class MainActivity extends Activity {
                 box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
                 group.addView(box); count++;
             }
-            if(count>0) { content.addView(label(category)); content.addView(group); }
+            if(count>0 || !"未分類".equals(category)) {
+                content.addView(label(category));
+                if(count>0) content.addView(group); else content.addView(label("項目なし"));
+            }
         }
+    }
+    private void addCategory(boolean shopping) {
+        if(snapshot==null) return;
+        EditText input=new EditText(this); input.setHint("カテゴリ名"); input.setSingleLine(true);
+        new AlertDialog.Builder(this).setTitle(shopping?"買い物カテゴリを追加":"持ち物カテゴリを追加")
+            .setView(input).setPositiveButton("追加",(dialog,which) -> {
+                String name=input.getText().toString().trim();
+                if(name.isEmpty() || name.length()>255 || "未分類".equals(name)) {
+                    Toast.makeText(this,"カテゴリ名を確認してください",Toast.LENGTH_SHORT).show(); return;
+                }
+                String csrf=snapshot.optString("csrf"), path=shopping?"/api/shopping-categories":"/api/item";
+                int epoch=sessionEpoch;
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request(path,new JSONObject().put("action",shopping?"add":"category_add")
+                            .put("name",name).put("csrf",csrf));
+                        JSONObject updated=ApiClient.request(path,null);
+                        runOnUiThread(() -> {
+                            if(epoch!=sessionEpoch) return;
+                            if(shopping) shoppingCategories=updated; else itemCategories=updated;
+                            if(tab.equals(shopping?"shopping":"item")) render();
+                        });
+                    } catch(Exception error) {
+                        runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"カテゴリを追加できませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
+                });
+            }).setNegativeButton("閉じる",null).show();
     }
     private String category(JSONObject row) {
         String value=row.optString("category","").trim(); return value.isEmpty()?"未分類":value;
