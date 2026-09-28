@@ -286,11 +286,76 @@ public final class MainActivity extends Activity {
         if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
     }
     private void stampActions(JSONObject stamp) {
+        boolean animated=stamp.optJSONArray("frames")!=null && stamp.optJSONArray("frames").length()>1 ||
+            "ANIMATED".equals(stamp.optString("kind")) &&
+            ("image/gif".equals(stamp.optString("mimeType"))||"image/webp".equals(stamp.optString("mimeType")));
         new AlertDialog.Builder(this).setTitle("スタンプの操作")
-            .setItems(new String[]{"先頭へ移動","末尾へ移動","別の日に移動","削除"},(dialog,which) -> {
-                if(which<2) reorderStamp(stamp,which==0);
-                else if(which==2) moveStamp(stamp); else deleteStamp(stamp);
+            .setItems(animated?new String[]{"アニメーションを表示","先頭へ移動","末尾へ移動","別の日に移動","削除"}:
+                new String[]{"先頭へ移動","末尾へ移動","別の日に移動","削除"},(dialog,which) -> {
+                int action=animated?which-1:which;
+                if(animated && which==0) showStampAnimation(stamp);
+                else if(action<2) reorderStamp(stamp,action==0);
+                else if(action==2) moveStamp(stamp); else deleteStamp(stamp);
             }).show();
+    }
+    private void showStampAnimation(JSONObject stamp) {
+        JSONArray frames=stamp.optJSONArray("frames");
+        if(frames==null || frames.length()==0) { showAnimatedStampFile(stamp); return; }
+        if(frames==null || frames.length()<2 || frames.length()>48) return;
+        int epoch=sessionEpoch;
+        Toast.makeText(this,"アニメーションを読み込みます",Toast.LENGTH_SHORT).show();
+        network.execute(() -> {
+            try {
+                android.graphics.drawable.AnimationDrawable animation=new android.graphics.drawable.AnimationDrawable();
+                animation.setOneShot(false);
+                long decodedBytes=0;
+                for(int i=0;i<frames.length();i++) {
+                    if(epoch!=sessionEpoch) return;
+                    JSONObject frame=frames.optJSONObject(i);
+                    if(frame==null) throw new IllegalArgumentException("Invalid frame");
+                    String path=frame.optString("url");
+                    if(!path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&frame=[0-9]+") &&
+                        !(path.startsWith("/") && !path.contains("?") && path.endsWith(".png")))
+                        throw new IllegalArgumentException("Invalid frame URL");
+                    Bitmap bitmap=ApiClient.thumbnail(path);
+                    decodedBytes+=bitmap.getByteCount();
+                    if(decodedBytes>24*1024*1024) throw new IllegalStateException("Animation too large");
+                    animation.addFrame(new android.graphics.drawable.BitmapDrawable(getResources(),bitmap),
+                        Math.max(40,Math.min(2000,frame.optInt("durationMs",120))));
+                }
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !tab.equals("calendar")) return;
+                    ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
+                    view.setContentDescription("アニメーションスタンプ");
+                    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("アニメーションスタンプ")
+                        .setView(view).setPositiveButton("閉じる",null).create();
+                    dialog.setOnDismissListener(ignored -> animation.stop());dialog.show();animation.start();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"アニメーションを表示できませんでした",Toast.LENGTH_LONG).show(); });
+            }
+        });
+    }
+    private void showAnimatedStampFile(JSONObject stamp) {
+        if(Build.VERSION.SDK_INT<28) { Toast.makeText(this,"この端末ではアニメーションを再生できません",Toast.LENGTH_SHORT).show(); return; }
+        String path=stamp.optString("fullUrl");int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                android.graphics.drawable.Drawable animation=ApiClient.animatedStamp(path);
+                if(!(animation instanceof android.graphics.drawable.AnimatedImageDrawable)) throw new IllegalStateException("Not animated");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch || !tab.equals("calendar")) return;
+                    ImageView view=new ImageView(this);view.setImageDrawable(animation);view.setAdjustViewBounds(true);
+                    view.setContentDescription("アニメーションスタンプ");
+                    android.graphics.drawable.AnimatedImageDrawable animated=(android.graphics.drawable.AnimatedImageDrawable)animation;
+                    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("アニメーションスタンプ")
+                        .setView(view).setPositiveButton("閉じる",null).create();
+                    dialog.setOnDismissListener(ignored -> animated.stop());dialog.show();animated.start();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"アニメーションを表示できませんでした",Toast.LENGTH_LONG).show(); });
+            }
+        });
     }
     private void reorderStamp(JSONObject stamp,boolean first) {
         if(snapshot==null || stamp.optInt("placementId")<=0) return;

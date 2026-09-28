@@ -54,6 +54,32 @@ final class ApiClient {
             }
         } finally { connection.disconnect(); }
     }
+    static android.graphics.drawable.Drawable animatedStamp(String path) throws Exception {
+        if(android.os.Build.VERSION.SDK_INT<28) throw new IllegalStateException("Animation unsupported");
+        if(!(path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&variant=full") ||
+            path.startsWith("/") && !path.startsWith("//") && !path.contains("?") &&
+            !path.contains("..") && !path.contains("\\") && !path.contains(":") &&
+            (path.endsWith(".gif")||path.endsWith(".webp")))) throw new IllegalArgumentException("Invalid animation path");
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
+        try {
+            connection.setConnectTimeout(10000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            int status=connection.getResponseCode();String mime=connection.getContentType();
+            if(status!=200 || mime==null || !(mime.startsWith("image/gif")||mime.startsWith("image/webp")))
+                throw new IllegalStateException("Animation unavailable");
+            try(var stream=connection.getInputStream()) {
+                ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1) { bytes.write(buffer,0,n);if(bytes.size()>4*1024*1024) throw new IllegalStateException("Animation too large"); }
+                android.graphics.ImageDecoder.Source source=android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes.toByteArray()));
+                return android.graphics.ImageDecoder.decodeDrawable(source,(decoder,info,src) -> {
+                    int width=info.getSize().getWidth(),height=info.getSize().getHeight();
+                    if(width<=0||height<=0||width>4096||height>4096) throw new IllegalArgumentException("Invalid dimensions");
+                    int sample=Math.max(1,(int)Math.ceil(Math.max(width,height)/512.0));
+                    decoder.setTargetSampleSize(sample);
+                });
+            }
+        } finally { connection.disconnect(); }
+    }
     static JSONObject request(String path, JSONObject body) throws Exception {
         return request(path,body,body==null?"GET":"POST");
     }
