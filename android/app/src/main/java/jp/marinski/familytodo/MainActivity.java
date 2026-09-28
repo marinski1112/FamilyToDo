@@ -42,6 +42,7 @@ import java.util.concurrent.Executors;
 /** Native Calendar and Goods screens; a WebView is used only for the existing sign-in flow. */
 public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
     private LinearLayout root, content;
     private WebView login;
     private JSONObject snapshot;
@@ -61,7 +62,8 @@ public final class MainActivity extends Activity {
     };
     private final Set<String> pendingStampImages=new HashSet<>();
     private boolean hasOlderMessages;
-    private int sessionEpoch;
+    private volatile int sessionEpoch;
+    private volatile int stampGeneration;
     private boolean showingCached;
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
@@ -74,9 +76,10 @@ public final class MainActivity extends Activity {
     private TextView label(String value) { TextView t = new TextView(this); t.setText(value); t.setTextSize(17); t.setPadding(12, 12, 12, 12); return t; }
     private void showNative() {
         if (login != null) {
+            stampGeneration++;
             login.destroy(); login = null;
             monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null;
-            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
+            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear();
         }
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         LinearLayout tabs = new LinearLayout(this);
@@ -105,6 +108,12 @@ public final class MainActivity extends Activity {
         showingCached=snapshot!=null;
         render();
         network.execute(() -> {
+            JSONArray savedStamps=SnapshotCache.readPlacements(this,requested);
+            if(savedStamps!=null) runOnUiThread(() -> {
+                if(epoch!=sessionEpoch||stampMonths.containsKey(requested)) return;
+                stampMonths.put(requested,savedStamps);
+                if(tab.equals("calendar")&&requested.equals(month.toString())) render();
+            });
             if(snapshot==null) {
                 JSONObject cached=SnapshotCache.read(this,requested);
                 if(cached!=null) runOnUiThread(() -> {
@@ -119,7 +128,11 @@ public final class MainActivity extends Activity {
                 Map<String,JSONObject> fetched=new HashMap<>(); fetched.put(requested,data);
                 JSONObject previous=monthCache.get(requested);
                 boolean accountChanged=previous!=null && (previous.optInt("familyId")!=data.optInt("familyId") || previous.optInt("memberId")!=data.optInt("memberId"));
-                if(accountChanged) SnapshotCache.clear(this);
+                if(accountChanged) {
+                    stampGeneration++;
+                    stampMedia.execute(() -> SnapshotCache.clear(this));
+                    SnapshotCache.clear(this);
+                }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
                     if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); }
@@ -140,11 +153,15 @@ public final class MainActivity extends Activity {
                     YearMonth target=YearMonth.parse(requested);
                     JSONObject response=ApiClient.request("/api/calendar-stamps?from="+target.atDay(1)+"&to="+target.atEndOfMonth(),null);
                     JSONArray stamps=response.optJSONArray("stamps");
-                    if(stamps!=null) runOnUiThread(() -> {
+                    if(stamps!=null) {
+                        SnapshotCache.writePlacements(this,requested,stamps);
+                        runOnUiThread(() -> {
                         if(epoch!=sessionEpoch) return;
                         stampMonths.put(requested,stamps);
                         if(tab.equals("calendar")&&requested.equals(month.toString())) render();
-                    });
+                        prefetchStampThumbnails(stamps,epoch);
+                        });
+                    }
                 } catch(Exception ignored) { /* Calendar tasks remain usable. */ }
                 for (String nearby : new String[]{YearMonth.parse(requested).minusMonths(1).toString(), YearMonth.parse(requested).plusMonths(1).toString()}) {
                     if (epoch!=sessionEpoch) return;
@@ -268,14 +285,21 @@ public final class MainActivity extends Activity {
             Bitmap cached=stampImages.get(path);
             if(cached!=null) { view.setImageBitmap(cached); continue; }
             if(!pendingStampImages.add(path)) continue;
-            int epoch=sessionEpoch;
-            network.execute(() -> {
+            int epoch=sessionEpoch,generation=stampGeneration;
+            stampMedia.execute(() -> {
                 Bitmap image=null;
-                try { image=ApiClient.thumbnail(path); } catch(Exception ignored) { }
+                try {
+                    if(epoch!=sessionEpoch||generation!=stampGeneration) return;
+                    image=SnapshotCache.readStamp(this,path);
+                    if(image==null) {
+                        image=ApiClient.thumbnail(path);
+                        if(epoch==sessionEpoch&&generation==stampGeneration) SnapshotCache.writeStamp(this,path,image);
+                    }
+                } catch(Exception ignored) { }
                 Bitmap result=image;
                 runOnUiThread(() -> {
                     pendingStampImages.remove(path);
-                    if(epoch!=sessionEpoch || result==null) return;
+                    if(epoch!=sessionEpoch || generation!=stampGeneration || result==null) return;
                     stampImages.put(path,result);
                     if(tab.equals("calendar")) render();
                 });
@@ -284,6 +308,33 @@ public final class MainActivity extends Activity {
         HorizontalScrollView horizontal=new HorizontalScrollView(this); horizontal.addView(row);
         content.addView(horizontal);
         if(stamps.length()>12) content.addView(label("ほか "+(stamps.length()-12)+" 件"));
+    }
+    private void prefetchStampThumbnails(JSONArray stamps,int epoch) {
+        int generation=stampGeneration;
+        LinkedHashSet<String> paths=new LinkedHashSet<>();
+        for(int i=0;i<stamps.length()&&paths.size()<24;i++) {
+            JSONObject stamp=stamps.optJSONObject(i);
+            if(stamp==null) continue;
+            String path=stamp.optString("thumbnailUrl");
+            if(!path.isEmpty() && stampImages.get(path)==null && !pendingStampImages.contains(path)) paths.add(path);
+        }
+        if(paths.isEmpty()) return;
+        prefetchStampStep(new ArrayList<>(paths),0,epoch,generation);
+    }
+    private void prefetchStampStep(ArrayList<String> paths,int index,int epoch,int generation) {
+        if(stampMedia.isShutdown()) return;
+        stampMedia.execute(() -> {
+            if(epoch!=sessionEpoch||generation!=stampGeneration) return;
+            String path=paths.get(index);
+            try {
+                if(SnapshotCache.readStamp(this,path)==null) {
+                    Bitmap image=ApiClient.thumbnail(path);
+                    if(epoch==sessionEpoch&&generation==stampGeneration) SnapshotCache.writeStamp(this,path,image);
+                }
+            } catch(Exception ignored) { /* A missing stamp must not block the calendar. */ }
+            if(index+1<paths.size()&&epoch==sessionEpoch&&generation==stampGeneration&&!stampMedia.isShutdown())
+                prefetchStampStep(paths,index+1,epoch,generation);
+        });
     }
     private void stampActions(JSONObject stamp) {
         boolean animated=stamp.optJSONArray("frames")!=null && stamp.optJSONArray("frames").length()>1 ||
@@ -2076,8 +2127,10 @@ public final class MainActivity extends Activity {
             .setMessage("端末内のカレンダーとチェックリストを削除し、位置共有を停止します。")
             .setPositiveButton("ログアウト",(dialog,which)->{
                 sessionEpoch++;
+                stampGeneration++;
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
-                network.execute(() -> SnapshotCache.clear(this));
+                SnapshotCache.clear(this);
+                stampMedia.execute(() -> SnapshotCache.clear(this));
                 monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
@@ -2089,6 +2142,8 @@ public final class MainActivity extends Activity {
     }
     private void showLogin() {
         if (login != null) return;
+        stampGeneration++;
+        stampMedia.execute(() -> SnapshotCache.clear(this));
         monthCache.clear(); snapshot=null; familyLog=null; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
@@ -2144,5 +2199,5 @@ public final class MainActivity extends Activity {
         else Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }
-    @Override protected void onDestroy() { network.shutdownNow(); if (login!=null) login.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
 }

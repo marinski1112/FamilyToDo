@@ -6,12 +6,16 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 import android.webkit.CookieManager;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.KeyStore;
 import java.time.YearMonth;
+import java.io.ByteArrayOutputStream;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -21,6 +25,7 @@ import javax.crypto.spec.GCMParameterSpec;
 final class SnapshotCache {
     private static final String ALIAS="familytodo_snapshot_v1";
     private static final long MAX_AGE_MS=7L*24*60*60*1000;
+    private static final int MAX_STAMP_FILES=40;
     private SnapshotCache() {}
     private static SecretKey key() throws Exception {
         KeyStore store=KeyStore.getInstance("AndroidKeyStore"); store.load(null);
@@ -34,6 +39,10 @@ final class SnapshotCache {
         YearMonth.parse(month); // Only ISO YYYY-MM may be used as a filename.
         return new File(context.getFilesDir(),"month-"+month+".enc");
     }
+    private static File placementsFile(Context context,String month) {
+        YearMonth.parse(month);
+        return new File(context.getFilesDir(),"placements-"+month+".enc");
+    }
     private static String sessionBinding() throws Exception {
         String cookie=CookieManager.getInstance().getCookie(ApiClient.ORIGIN);
         if(cookie==null || cookie.isEmpty()) return null;
@@ -44,6 +53,61 @@ final class SnapshotCache {
             return Base64.encodeToString(digest,Base64.NO_WRAP);
         }
         return null;
+    }
+    private static File stampFile(Context context,String path) throws Exception {
+        if(!path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*(?:&variant=thumbnail|&frame=[0-9]+)?") &&
+           !(path.startsWith("/")&&!path.contains("?")&&!path.contains("..")&&
+             (path.endsWith(".png")||path.endsWith(".webp")||path.endsWith(".gif"))))
+            throw new IllegalArgumentException("Invalid stamp path");
+        byte[] hash=MessageDigest.getInstance("SHA-256").digest(path.getBytes(StandardCharsets.UTF_8));
+        StringBuilder name=new StringBuilder("stamp-");
+        for(byte b:hash) name.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
+        return new File(context.getFilesDir(),name+".enc");
+    }
+    static void writeStamp(Context context,String path,Bitmap image) {
+        try {
+            String binding=sessionBinding(); if(binding==null) return;
+            ByteArrayOutputStream png=new ByteArrayOutputStream();
+            if(!image.compress(Bitmap.CompressFormat.PNG,100,png)||png.size()>1_000_000) return;
+            JSONObject payload=new JSONObject().put("savedAt",System.currentTimeMillis())
+                .put("sessionBinding",binding).put("path",path)
+                .put("png",Base64.encodeToString(png.toByteArray(),Base64.NO_WRAP));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key());
+            byte[] encrypted=cipher.doFinal(payload.toString().getBytes(StandardCharsets.UTF_8));
+            JSONObject record=new JSONObject().put("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
+                .put("value",Base64.encodeToString(encrypted,Base64.NO_WRAP));
+            File target=stampFile(context,path),temporary=new File(target.getAbsolutePath()+".tmp");
+            Files.write(temporary.toPath(),record.toString().getBytes(StandardCharsets.UTF_8));
+            if(!temporary.renameTo(target)) temporary.delete();
+            pruneStamps(context);
+        } catch(Exception ignored) { /* Best-effort cache only. */ }
+    }
+    static Bitmap readStamp(Context context,String path) {
+        try {
+            File target=stampFile(context,path);
+            if(!target.isFile()||target.length()>1_500_000) return null;
+            JSONObject record=new JSONObject(new String(Files.readAllBytes(target.toPath()),StandardCharsets.UTF_8));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(record.getString("iv"),Base64.DEFAULT)));
+            JSONObject payload=new JSONObject(new String(cipher.doFinal(Base64.decode(record.getString("value"),Base64.DEFAULT)),StandardCharsets.UTF_8));
+            String binding=sessionBinding();long age=System.currentTimeMillis()-payload.getLong("savedAt");
+            if(binding==null||!MessageDigest.isEqual(binding.getBytes(StandardCharsets.UTF_8),
+                payload.optString("sessionBinding").getBytes(StandardCharsets.UTF_8))||
+                age<0||age>MAX_AGE_MS||!path.equals(payload.optString("path"))) return null;
+            byte[] bytes=Base64.decode(payload.getString("png"),Base64.DEFAULT);
+            if(bytes.length>1_000_000) return null;
+            BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;
+            BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+            if(options.outWidth<=0||options.outHeight<=0||options.outWidth>1024||options.outHeight>1024) return null;
+            return BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+        } catch(Exception ignored) { return null; }
+    }
+    private static void pruneStamps(Context context) {
+        File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("stamp-")&&name.endsWith(".enc"));
+        if(files==null) return;
+        java.util.Arrays.sort(files,(a,b)->Long.compare(b.lastModified(),a.lastModified()));
+        for(int i=0;i<files.length;i++)
+            if(i>=MAX_STAMP_FILES||System.currentTimeMillis()-files[i].lastModified()>MAX_AGE_MS) files[i].delete();
     }
     static void write(Context context,String month,JSONObject data) {
         try {
@@ -81,20 +145,54 @@ final class SnapshotCache {
             return month.equals(data.optString("month"))&&data.optBoolean("ok")&&data.optInt("schemaVersion")==1?data:null;
         } catch(Exception ignored) { return null; }
     }
+    static void writePlacements(Context context,String month,JSONArray stamps) {
+        try {
+            String binding=sessionBinding();if(binding==null||stamps.length()>500) return;
+            JSONObject payload=new JSONObject().put("month",month).put("savedAt",System.currentTimeMillis())
+                .put("sessionBinding",binding).put("stamps",stamps);
+            byte[] source=payload.toString().getBytes(StandardCharsets.UTF_8);
+            if(source.length>1_000_000) return;
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key());
+            JSONObject record=new JSONObject().put("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP))
+                .put("value",Base64.encodeToString(cipher.doFinal(source),Base64.NO_WRAP));
+            File target=placementsFile(context,month),temporary=new File(target.getAbsolutePath()+".tmp");
+            Files.write(temporary.toPath(),record.toString().getBytes(StandardCharsets.UTF_8));
+            if(!temporary.renameTo(target)) temporary.delete();
+            prune(context,month);
+        } catch(Exception ignored) { }
+    }
+    static JSONArray readPlacements(Context context,String month) {
+        try {
+            File target=placementsFile(context,month);
+            if(!target.isFile()||target.length()>1_500_000) return null;
+            JSONObject record=new JSONObject(new String(Files.readAllBytes(target.toPath()),StandardCharsets.UTF_8));
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(record.getString("iv"),Base64.DEFAULT)));
+            JSONObject payload=new JSONObject(new String(cipher.doFinal(Base64.decode(record.getString("value"),Base64.DEFAULT)),StandardCharsets.UTF_8));
+            String binding=sessionBinding();long age=System.currentTimeMillis()-payload.getLong("savedAt");
+            if(binding==null||!MessageDigest.isEqual(binding.getBytes(StandardCharsets.UTF_8),
+                payload.optString("sessionBinding").getBytes(StandardCharsets.UTF_8))||
+                age<0||age>MAX_AGE_MS||!month.equals(payload.optString("month"))) return null;
+            JSONArray stamps=payload.getJSONArray("stamps");return stamps.length()<=500?stamps:null;
+        } catch(Exception ignored) { return null; }
+    }
     private static void prune(Context context,String current) {
         YearMonth center=YearMonth.parse(current);
-        File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("month-")&&name.endsWith(".enc"));
+        File[] files=context.getFilesDir().listFiles((dir,name)->
+            (name.startsWith("month-")||name.startsWith("placements-"))&&name.endsWith(".enc"));
         if(files==null) return;
         for(File f:files) {
             try {
-                String month=f.getName().substring(6,13);
+                String month=f.getName().startsWith("month-")?f.getName().substring(6,13):f.getName().substring(11,18);
                 long distance=Math.abs(java.time.temporal.ChronoUnit.MONTHS.between(center,YearMonth.parse(month)));
                 if(distance>2) f.delete();
             } catch(Exception ignored) { f.delete(); }
         }
     }
     static void clear(Context context) {
-        File[] files=context.getFilesDir().listFiles((dir,name)->name.startsWith("month-")&&name.endsWith(".enc"));
+        File[] files=context.getFilesDir().listFiles((dir,name)->
+            (name.startsWith("month-")||name.startsWith("stamp-")||name.startsWith("placements-"))&&
+            (name.endsWith(".enc")||name.endsWith(".enc.tmp")));
         if(files!=null) for(File f:files) f.delete();
     }
 }
