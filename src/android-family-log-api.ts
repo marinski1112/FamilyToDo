@@ -15,7 +15,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     Number.isNaN(Date.parse(`${date}T00:00:00Z`))||new Date(`${date}T00:00:00Z`).toISOString().slice(0,10)!==date)
     return json({ok:false,code:'INVALID_DATE'},400,headers);
   const familyId=Number(member.family_id);
-  const [subjects,logs,settings,timers,displaySettings]=await Promise.all([
+  const [subjects,logs,settings,timers,displaySettings,quickActions,chores]=await Promise.all([
     ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json,s.birth_date,
       s.auto_complete_linked_task,s.show_on_family_overview,s.overview_quick_types_json,s.member_id FROM family_log_subjects s
       LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
@@ -37,6 +37,12 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
           OR COALESCE(s.subject_kind,'')<>'ADULT')
       ORDER BY x.started_at_ms LIMIT 101`).bind(familyId,familyId).all<Row>(),
     ctx.env.DB.prepare('SELECT show_adult_logs FROM family_log_settings WHERE family_id=? LIMIT 1').bind(familyId).first<Row>(),
+    ctx.env.DB.prepare(`SELECT q.id,q.subject_id,q.name,q.icon,q.mode,q.log_type,q.detail_code,q.amount,q.unit,q.value_text
+      FROM family_log_quick_actions q JOIN family_log_subjects s ON s.id=q.subject_id AND s.family_id=q.family_id AND s.active=1
+      LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
+      WHERE q.family_id=? AND q.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
+      ORDER BY q.subject_id,q.sort_order,q.id LIMIT 201`).bind(familyId).all<Row>(),
+    ctx.env.DB.prepare('SELECT id,name,icon,weekday_mask FROM family_quick_chores WHERE family_id=? AND active=1 ORDER BY sort_order,id LIMIT 101').bind(familyId).all<Row>(),
   ]);
   let presets=[160,240];
   try{
@@ -47,5 +53,7 @@ export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promis
     subjects:subjects.results,logs:logs.results.slice(0,200),truncated:logs.results.length>200,
     timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets,
     showAdultLogs:displaySettings?.show_adult_logs===undefined||Number(displaySettings.show_adult_logs)===1,
-    canManageSettings:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase())},200,headers);
+    canManageSettings:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase()),
+    quickActions:quickActions.results.slice(0,200),quickActionsTruncated:quickActions.results.length>200,
+    chores:chores.results.slice(0,100),choresTruncated:chores.results.length>100},200,headers);
 }

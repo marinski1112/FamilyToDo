@@ -975,12 +975,33 @@ public final class MainActivity extends Activity {
             }
         }
         if(familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
+        boolean today=selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
+        JSONArray quickActions=today?familyLog.optJSONArray("quickActions"):null;
+        if(today) {
+            JSONArray chores=familyLog.optJSONArray("chores");
+            if(chores!=null && chores.length()>0) {
+                content.addView(label("ちょこっと家事"));
+                int weekday=selectedDay.getDayOfWeek().getValue()%7;
+                for(int i=0;i<chores.length();i++) {
+                    JSONObject chore=chores.optJSONObject(i);if(chore==null || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
+                    content.addView(button(chore.optString("icon","✨")+" "+chore.optString("name"),() -> recordQuickChore(chore)));
+                }
+            }
+        }
         for(int i=0;i<subjects.length();i++) {
             JSONObject subject=subjects.optJSONObject(i);
             if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
             content.addView(label(subject.optString("name")));
             LinearLayout actions=new LinearLayout(this);
             ArrayList<String> enabled=allowedLogTypes(subject);
+            boolean hasQuick=false;
+            if(quickActions!=null) for(int n=0;n<quickActions.length();n++) {
+                JSONObject quick=quickActions.optJSONObject(n);
+                if(quick==null || quick.optInt("subject_id")!=subject.optInt("id")) continue;
+                hasQuick=true;
+                actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
+            }
+            if(hasQuick) { content.addView(actions); continue; }
             if(enabled.contains("SLEEP")) {
                 boolean sleeping=false;
                 if(timers!=null) for(int n=0;n<timers.length();n++) {
@@ -1036,6 +1057,46 @@ public final class MainActivity extends Activity {
                 ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
                 content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
         }
+    }
+    private void runFamilyLogQuickAction(JSONObject quick) {
+        String mode=quick.optString("mode");
+        if("FORM".equals(mode)) { showFamilyLogEditor(null,quick); return; }
+        if("SLEEP_TOGGLE".equals(mode)) {
+            JSONArray timers=familyLog==null?null:familyLog.optJSONArray("timers");
+            if(timers!=null) for(int i=0;i<timers.length();i++) {
+                JSONObject timer=timers.optJSONObject(i);
+                if(timer!=null && timer.optInt("subject_id")==quick.optInt("subject_id") && "SLEEP".equals(timer.optString("log_type"))) {
+                    finishFamilyLogTimer(timer,false); return;
+                }
+            }
+            changeFamilyLogTimer("sleep_start",quick.optInt("subject_id"),0,""); return;
+        }
+        if(snapshot==null || quick.optInt("id")<=0) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/family-log",new JSONObject().put("action","execute_quick_action")
+                    .put("csrf",csrf).put("quick_action_id",quick.optInt("id")));
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"クイック記録ができませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private void recordQuickChore(JSONObject chore) {
+        if(snapshot==null || chore.optInt("id")<=0) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                ApiClient.request("/api/family-log",new JSONObject().put("action","quick_chore_record")
+                    .put("csrf",csrf).put("id",chore.optInt("id")));
+                if(epoch==sessionEpoch) runOnUiThread(this::loadFamilyLog);
+            } catch(Exception error) {
+                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"家事を記録できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
     }
     private void showFamilyLogPhoto(int mediaId) {
         int epoch=sessionEpoch;
@@ -1404,7 +1465,8 @@ public final class MainActivity extends Activity {
         });
     }
     private void addFamilyLog() { showFamilyLogEditor(null); }
-    private void showFamilyLogEditor(JSONObject existing) {
+    private void showFamilyLogEditor(JSONObject existing) { showFamilyLogEditor(existing,null); }
+    private void showFamilyLogEditor(JSONObject existing,JSONObject quick) {
         if(snapshot==null) { Toast.makeText(this,"ログイン情報を読み込み中です",Toast.LENGTH_SHORT).show(); load(); return; }
         JSONArray subjects=familyLog==null?null:familyLog.optJSONArray("subjects");
         if(subjects==null || subjects.length()==0) return;
@@ -1417,7 +1479,8 @@ public final class MainActivity extends Activity {
         if(ids.isEmpty()) return;
         Spinner subjectChoice=new Spinner(this),typeChoice=new Spinner(this);
         subjectChoice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
-        int initialSubject=existing==null?0:ids.indexOf(existing.optInt("subject_id"));
+        int initialSubject=ids.indexOf(existing!=null?existing.optInt("subject_id"):quick!=null?quick.optInt("subject_id"):ids.get(0));
+        if(initialSubject<0 && existing==null) initialSubject=0;
         if(existing!=null && initialSubject<0) {
             Toast.makeText(this,"記録対象が現在利用できません",Toast.LENGTH_SHORT).show(); return;
         }
@@ -1444,8 +1507,9 @@ public final class MainActivity extends Activity {
                 typeAdapter.clear();
                 for(String code:typeCodes) typeAdapter.add(logTypeName(code));
                 typeAdapter.notifyDataSetChanged();
-                if(existing!=null && ids.get(position)==existing.optInt("subject_id")) {
-                    int selected=typeCodes.indexOf(existing.optString("log_type"));
+                JSONObject preset=existing!=null?existing:quick;
+                if(preset!=null && ids.get(position)==preset.optInt("subject_id")) {
+                    int selected=typeCodes.indexOf(preset.optString("log_type"));
                     if(selected>=0) typeChoice.setSelection(selected);
                 }
             }
@@ -1463,6 +1527,10 @@ public final class MainActivity extends Activity {
             unit.setText(existing.optString("unit","")); detail.setText(existing.optString("detail_code",""));
             if(!existing.isNull("duration_minutes")) duration.setText(existing.optString("duration_minutes"));
             valueText.setText(existing.optString("value_text","")); note.setText(existing.optString("note",""));
+        } else if(quick!=null) {
+            if(!quick.isNull("amount")) amount.setText(quick.optString("amount"));
+            unit.setText(quick.optString("unit",""));detail.setText(quick.optString("detail_code",""));
+            valueText.setText(quick.optString("value_text",""));
         }
         String defaultOccurred=selectedDay+" "+java.time.LocalTime.now(java.time.ZoneId.of("Asia/Tokyo"))
             .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
