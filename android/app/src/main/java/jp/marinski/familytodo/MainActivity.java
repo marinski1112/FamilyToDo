@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -555,14 +556,34 @@ public final class MainActivity extends Activity {
     private void addMessage() {
         if(snapshot==null) { load(); return; }
         EditText text=new EditText(this); text.setHint("家族全員への伝言"); text.setMinLines(3);
-        new AlertDialog.Builder(this).setTitle("伝言する").setView(text)
+        final String[] reminder={""};
+        final Button[] reminderRef=new Button[1];
+        Button when=button("通知予約: 指定なし",() -> {
+            java.time.LocalDateTime base=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Tokyo")).plusHours(1);
+            new DatePickerDialog(this,(picker,y,m,d) ->
+                new TimePickerDialog(this,(clock,h,minute) -> {
+                    reminder[0]=String.format(java.util.Locale.ROOT,"%04d-%02d-%02dT%02d:%02d",y,m+1,d,h,minute);
+                    reminderRef[0].setText("通知予約: "+reminder[0]);
+                },base.getHour(),base.getMinute(),true).show(),
+                base.getYear(),base.getMonthValue()-1,base.getDayOfMonth()).show();
+        });
+        reminderRef[0]=when;
+        Button clear=button("通知予約を解除",() -> { reminder[0]=""; reminderRef[0].setText("通知予約: 指定なし"); });
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(32,8,32,8); form.addView(text); form.addView(when); form.addView(clear);
+        new AlertDialog.Builder(this).setTitle("伝言する").setView(form)
             .setPositiveButton("送る",(dialog,which)->{
                 String body=text.getText().toString().trim(); if(body.isEmpty()) return;
-                String csrf=snapshot.optString("csrf");
+                String csrf=snapshot.optString("csrf"), notifyAt=reminder[0]; int epoch=sessionEpoch;
                 network.execute(() -> {
-                    try { ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body).put("target_member_id",0));
-                        runOnUiThread(()->loadMessages(0));
-                    } catch(Exception e) { runOnUiThread(()->Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show()); }
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body)
+                            .put("target_member_id",0).put("reminder_at",notifyAt));
+                        if(epoch==sessionEpoch) runOnUiThread(()->loadMessages(0));
+                    } catch(Exception e) {
+                        runOnUiThread(()->{ if(epoch==sessionEpoch) Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show(); });
+                    }
                 });
             }).setNegativeButton("閉じる",null).show();
     }
