@@ -3942,16 +3942,21 @@ public final class MainActivity extends Activity {
             Toast.makeText(this,"位置共有を開始できませんでした",Toast.LENGTH_LONG).show();
         }
     }
+    private boolean hasLocationPermission() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+    }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants) {
         super.onRequestPermissionsResult(code,permissions,grants);
-        if(code==11 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
-        else if(code==12 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
-            Toast.makeText(this,"再起動後の自動再開を設定しました",Toast.LENGTH_LONG).show();
-        else if(code==14 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
-            Toast.makeText(this,"位置情報を許可しました。登録をもう一度選んでください",Toast.LENGTH_LONG).show();
-        else if(code==15 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
-            resumeLocationSharing();
-        else Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
+        if(code==11 && hasLocationPermission()) { startSharing(); return; }
+        if(code==12 && checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)==PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,"再起動後の自動再開を設定しました",Toast.LENGTH_LONG).show(); return;
+        }
+        if(code==14 && hasLocationPermission()) {
+            Toast.makeText(this,"位置情報を許可しました。登録をもう一度選んでください",Toast.LENGTH_LONG).show(); return;
+        }
+        if(code==15 && hasLocationPermission()) { resumeLocationSharing(); return; }
+        Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }
     @Override protected void onDestroy() { network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
