@@ -50,6 +50,10 @@ public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
     private LinearLayout root, content;
+    private boolean goodsCompleted=false;
+    private final Set<String> expandedGoodsCategories=new HashSet<>();
+    private final Map<String,String[]> goodsComposerDrafts=new HashMap<>();
+
     private WebView login;
     private JSONObject snapshot;
     private JSONArray messages = new JSONArray();
@@ -1120,6 +1124,13 @@ public final class MainActivity extends Activity {
             addPanel(actions);
         }
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
+        LinearLayout status=new LinearLayout(this);
+        for(boolean completed:new boolean[]{false,true}) {
+            Button state=button(completed?"完了済み":"未完了",()->{goodsCompleted=completed;render();});
+            styleButton(state,goodsCompleted==completed);
+            status.addView(state,new LinearLayout.LayoutParams(0,dp(44),1));
+        }
+        addPanel(status);
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
         if(catalog!=null) {
@@ -1130,13 +1141,14 @@ public final class MainActivity extends Activity {
         for(int i=0;i<rows.length();i++) {
             JSONObject row=rows.optJSONObject(i); if(row!=null) names.add(category(row));
         }
+        names.add("未分類");
         for(String category:names) {
             LinearLayout group=new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
             int count=0;
             for(int n=0;n<rows.length();n++) {
-                JSONObject row=rows.optJSONObject(n); if(row==null || !category.equals(category(row))) continue;
+                JSONObject row=rows.optJSONObject(n); if(row==null || !category.equals(category(row)) || goodsCompleted!="completed".equals(row.optString("status"))) continue;
                 CheckBox box=new CheckBox(this);
-                box.setText(row.optString("name")+(shopping?" ×"+row.optString("quantity","1"):""));
+                box.setContentDescription(row.optString("name")+"の完了状態");
                 box.setChecked("completed".equals(row.optString("status")));
                 box.setEnabled(ApiClient.canMutate());
                 if(ApiClient.canMutate()) {
@@ -1145,9 +1157,11 @@ public final class MainActivity extends Activity {
                 }
                 styleCheckBox(box);
                 LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
-                line.addView(box,new LinearLayout.LayoutParams(0,dp(52),1));
+                line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
+                line.addView(inlineTitle(shopping?"shopping":"item",row.optInt("id"),row,"name"),
+                    new LinearLayout.LayoutParams(0,dp(52),1));
                 if(ApiClient.canMutate()) {
-                    Button info=button("ⓘ",() -> goodsActions(shopping,row));
+                    Button info=button("ⓘ",() -> editGoods(shopping,row));
                     info.setTextColor(accentColor());info.setMinWidth(dp(44));
                     line.addView(info,new LinearLayout.LayoutParams(dp(48),dp(44)));
                 }
@@ -1177,11 +1191,154 @@ public final class MainActivity extends Activity {
                     });
                 }
                 LinearLayout section=panel();heading.setTypeface(null,android.graphics.Typeface.BOLD);
-                section.addView(heading);
-                if(count>0) section.addView(group); else section.addView(label("項目なし"));
+                String groupKey=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
+                boolean open=expandedGoodsCategories.contains(groupKey);
+                heading.setText((shopping?"🛒  ":"🎒  ")+category+"   "+count+"   "+(open?"⌄":"›"));
+                heading.setContentDescription(category+" "+count+"件。タップで開閉、長押しで並べ替え");
+                heading.setOnClickListener(v -> {
+                    if(expandedGoodsCategories.contains(groupKey))expandedGoodsCategories.remove(groupKey);
+                    else expandedGoodsCategories.add(groupKey);
+                    render();
+                });
+                LinearLayout categoryHead=new LinearLayout(this);
+                categoryHead.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+                if(ApiClient.canMutate())categoryHead.addView(button("⋯",()->categoryActions(shopping,category)),
+                    new LinearLayout.LayoutParams(dp(44),dp(44)));
+                section.addView(categoryHead);
+                if(open) {
+                    section.addView(group);
+                    if(!goodsCompleted&&ApiClient.canMutate())section.addView(goodsComposer(shopping,category,group,rows,heading));
+                }
                 addPanel(section);
             }
         }
+    }
+    private EditText inlineTitle(String type,int id,JSONObject row,String field) {
+        EditText title=new EditText(this);title.setText(row.optString(field));
+        title.setTextSize(16);title.setTextColor(textColor());title.setSingleLine(true);
+        title.setBackgroundColor(Color.TRANSPARENT);title.setPadding(dp(4),0,dp(4),0);
+        title.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        title.setFocusable(false);title.setFocusableInTouchMode(false);
+        title.setContentDescription(row.optString(field)+"。タップして編集");
+        final String[] original={row.optString(field)};
+        title.setOnClickListener(v -> {
+            if(!ApiClient.canMutate()||id<=0)return;
+            title.setFocusableInTouchMode(true);title.requestFocus();title.setSelection(title.length());
+            ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE))
+                .showSoftInput(title,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
+        title.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                title.clearFocus();
+                ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE))
+                    .hideSoftInputFromWindow(title.getWindowToken(),0);return true;
+            }
+            return false;
+        });
+        title.setOnFocusChangeListener((v,focused)->{
+            if(focused)return;
+            title.setFocusable(false);
+            String next=title.getText().toString().replaceAll("\\s+"," ").trim();
+            if(next.isEmpty()||next.equals(original[0])){title.setText(original[0]);return;}
+            if(next.length()>200){title.setText(original[0]);Toast.makeText(this,"200文字以内で入力してください",Toast.LENGTH_SHORT).show();return;}
+            if(snapshot==null||!ApiClient.canMutate()){title.setText(original[0]);return;}
+            int epoch=sessionEpoch;String csrf=snapshot.optString("csrf"),prior=original[0];
+            title.setEnabled(false);
+            network.execute(()->{
+                try {
+                    if(epoch!=sessionEpoch)return;
+                    JSONObject result=ApiClient.request("/api/checklist/inline-title",new JSONObject()
+                        .put("csrf",csrf).put("type",type).put("id",id).put("title",next));
+                    if(!result.optBoolean("ok"))throw new Exception("save");
+                    String saved=result.optString("title",next);
+                    runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                        try{row.put(field,saved);}catch(Exception ignored){}
+                        original[0]=saved;title.setText(saved);title.setEnabled(true);
+                    });
+                }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                    title.setText(prior);title.setEnabled(true);
+                    Toast.makeText(this,"保存できませんでした。元の名前に戻しました",Toast.LENGTH_LONG).show();
+                });}
+            });
+        });
+        return title;
+    }
+    private LinearLayout goodsComposer(boolean shopping,String category,LinearLayout group,JSONArray rows,TextView categoryTitle) {
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);
+        String key=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
+        String[] draft=goodsComposerDrafts.get(key);
+        if(draft==null){draft=new String[]{"","","",java.util.UUID.randomUUID().toString()};goodsComposerDrafts.put(key,draft);}
+        final String[] values=draft;
+        EditText name=new EditText(this),memo=new EditText(this),url=new EditText(this);
+        name.setHint(shopping?"新しい買い物":"新しい持ち物");memo.setHint("メモを追加…");url.setHint("URLを追加…");
+        name.setSingleLine(true);url.setSingleLine(true);
+        name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        for(int i=0;i<3;i++){
+            EditText input=new EditText[]{name,memo,url}[i];final int index=i;
+            input.setText(values[i]);input.setTextColor(textColor());input.setHintTextColor(mutedColor());
+            input.setTextSize(15);
+            input.addTextChangedListener(new android.text.TextWatcher(){
+                public void beforeTextChanged(CharSequence x,int start,int count,int after){}
+                public void onTextChanged(CharSequence x,int start,int before,int count){values[index]=x.toString();}
+                public void afterTextChanged(android.text.Editable x){}
+            });
+        }
+        LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);
+        details.addView(memo);details.addView(url);
+        details.setVisibility(values[1].isEmpty()&&values[2].isEmpty()?android.view.View.GONE:android.view.View.VISIBLE);
+        LinearLayout main=new LinearLayout(this);main.setGravity(Gravity.CENTER_VERTICAL);
+        main.addView(name,new LinearLayout.LayoutParams(0,dp(48),1));
+        main.addView(button("ⓘ",()->details.setVisibility(details.getVisibility()==android.view.View.GONE?
+            android.view.View.VISIBLE:android.view.View.GONE)),new LinearLayout.LayoutParams(dp(44),dp(44)));
+        TextView status=label("");status.setTextSize(12);status.setTextColor(mutedColor());
+        final boolean[] saving={false};
+        Runnable save=()->{
+            String value=name.getText().toString().trim(),note=memo.getText().toString().trim(),link=url.getText().toString().trim();
+            if(value.isEmpty()||saving[0]||snapshot==null||!ApiClient.canMutate())return;
+            if(value.length()>200){status.setText("200文字以内で入力してください");return;}
+            if(!link.isEmpty()) {
+                android.net.Uri uri=android.net.Uri.parse(link);
+                if(!("https".equals(uri.getScheme())||"http".equals(uri.getScheme()))||uri.getHost()==null||uri.getUserInfo()!=null) {
+                    status.setText("URLは http:// または https:// で入力してください");details.setVisibility(android.view.View.VISIBLE);return;
+                }
+            }
+            int epoch=sessionEpoch;String csrf=snapshot.optString("csrf"),requestId=values[3],day=selectedDay.toString();
+            saving[0]=true;name.setEnabled(false);memo.setEnabled(false);url.setEnabled(false);status.setText("保存中…");
+            network.execute(()->{
+                try{
+                    if(epoch!=sessionEpoch)return;
+                    JSONObject body=new JSONObject().put("csrf",csrf).put("action","add").put("name",value)
+                        .put("quantity","1").put("category","未分類".equals(category)?"":category)
+                        .put("memo",note).put("url",link).put("client_request_id",requestId);
+                    if(!shopping)body.put("date",day);
+                    JSONObject result=ApiClient.request(shopping?"/api/shopping":"/api/item",body);
+                    int id=result.optInt("id");if(!result.optBoolean("ok")||id<=0)throw new Exception("save");
+                    JSONObject row=new JSONObject().put("id",id).put("name",value).put("status","pending")
+                        .put("quantity","1").put("category","未分類".equals(category)?"":category).put("memo",note).put("url",link);
+                    runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                        rows.put(row);
+                        LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
+                        CheckBox box=new CheckBox(this);styleCheckBox(box);
+                        box.setContentDescription(value+"の完了状態");box.setOnClickListener(v->toggle(shopping?"shopping":"item",id,box));
+                        line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
+                        line.addView(inlineTitle(shopping?"shopping":"item",id,row,"name"),new LinearLayout.LayoutParams(0,dp(52),1));
+                        line.addView(button("ⓘ",()->editGoods(shopping,row)),new LinearLayout.LayoutParams(dp(44),dp(44)));
+                        group.addView(line);categoryTitle.setText((shopping?"🛒  ":"🎒  ")+category+"   "+group.getChildCount()+"   ⌄");
+                        name.setText("");memo.setText("");url.setText("");
+                        values[3]=java.util.UUID.randomUUID().toString();details.setVisibility(android.view.View.GONE);
+                        saving[0]=false;name.setEnabled(true);memo.setEnabled(true);url.setEnabled(true);status.setText("");name.requestFocus();
+                    });
+                }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                    saving[0]=false;name.setEnabled(true);memo.setEnabled(true);url.setEnabled(true);
+                    status.setText("保存できませんでした。入力内容を保持しています");name.requestFocus();
+                });}
+            });
+        };
+        name.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_NEXT){save.run();return true;}return false;
+        });
+        details.addView(button("追加",save));form.addView(main);form.addView(details);form.addView(status);
+        return form;
     }
     private String reusableSetPath(boolean shopping) {return shopping?"/api/shopping":"/api/item";}
     private void loadReusableSets(boolean shopping) {
