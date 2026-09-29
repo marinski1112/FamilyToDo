@@ -3545,7 +3545,10 @@ public final class MainActivity extends Activity {
     private void showLogin() {
         ApiClient.setMutationsEnabled(false);
         if (login != null) return;
+        sessionEpoch++;
         stampGeneration++;
+        memorySessionBinding=null;
+        SnapshotCache.clear(this);
         stampMedia.execute(() -> SnapshotCache.clear(this));
         monthCache.clear(); snapshot=null; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
