@@ -1,0 +1,64 @@
+import type {AppContext} from './app-context';
+import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';
+import {json} from './response';
+
+type Row=Record<string,unknown>;
+const headers={'cache-control':'private, no-store'};
+
+/** Small, family-scoped native timeline; mutations continue through /api/family-log. */
+export async function androidFamilyLogApi(request:Request,ctx:AppContext):Promise<Response>{
+  if(request.method!=='GET')return json({ok:false,code:'METHOD_NOT_ALLOWED'},405,{allow:'GET'});
+  const member=ctx.member;
+  if(!member)return json({ok:false,code:'AUTH_REQUIRED'},401,headers);
+  const date=new URL(request.url).searchParams.get('date')||'';
+  if(!/^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date)||
+    Number.isNaN(Date.parse(`${date}T00:00:00Z`))||new Date(`${date}T00:00:00Z`).toISOString().slice(0,10)!==date)
+    return json({ok:false,code:'INVALID_DATE'},400,headers);
+  const familyId=Number(member.family_id);
+  const role=String(member.role||'').toUpperCase();
+  const isAdmin=role==='OWNER'||role==='ADMIN';
+  const [subjects,logs,settings,timers,displaySettings,quickActions,chores]=await Promise.all([
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.subject_kind,s.enabled_types_json,s.birth_date,
+      s.auto_complete_linked_task,s.show_on_family_overview,s.overview_quick_types_json,s.member_id FROM family_log_subjects s
+      LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
+      WHERE s.family_id=? AND s.active=1 AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
+      ORDER BY CASE WHEN s.member_id IS NOT NULL THEN 0 ELSE 1 END,COALESCE(fm.id,s.id),s.id LIMIT 100`).bind(familyId).all<Row>(),
+    ctx.env.DB.prepare(`SELECT l.id,l.subject_id,l.log_type,l.occurred_at,l.detail_code,l.amount,l.unit,l.duration_minutes,l.value_text,l.note,l.linked_task_id,l.linked_occurrence_id,s.name subject_name,s.subject_kind,
+      (SELECT media.id FROM family_log_media media WHERE media.family_id=l.family_id AND media.log_id=l.id LIMIT 1) media_id
+      FROM family_logs l LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
+      WHERE l.family_id=? AND l.deleted_at IS NULL AND NOT ${IMPORTED_FAMILY_DIARY_SQL}
+        AND l.occurred_at>=? AND l.occurred_at<=?
+        AND (COALESCE((SELECT show_adult_logs FROM family_log_settings WHERE family_id=?),1)=1
+          OR NOT EXISTS (SELECT 1 FROM family_log_subjects a WHERE a.id=l.subject_id AND a.family_id=l.family_id AND a.subject_kind='ADULT'))
+      ORDER BY l.occurred_at DESC,l.id DESC LIMIT 201`).bind(familyId,`${date} 00:00:00`,`${date} 23:59:59`,familyId).all<Row>(),
+    ctx.env.DB.prepare("SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key='family_log_milk_amount_presets' LIMIT 1").bind(familyId).first<Row>(),
+    ctx.env.DB.prepare(`SELECT x.id,x.subject_id,x.log_type,x.timer_label,x.started_at,x.started_at_ms,s.name subject_name
+      FROM family_log_timers x LEFT JOIN family_log_subjects s ON s.id=x.subject_id AND s.family_id=x.family_id
+      WHERE x.family_id=? AND x.status='running'
+        AND (COALESCE((SELECT show_adult_logs FROM family_log_settings WHERE family_id=?),1)=1
+          OR COALESCE(s.subject_kind,'')<>'ADULT')
+      ORDER BY x.started_at_ms LIMIT 101`).bind(familyId,familyId).all<Row>(),
+    ctx.env.DB.prepare('SELECT show_adult_logs FROM family_log_settings WHERE family_id=? LIMIT 1').bind(familyId).first<Row>(),
+    ctx.env.DB.prepare(`SELECT q.id,q.subject_id,q.name,q.icon,q.mode,q.log_type,q.detail_code,q.amount,q.unit,q.value_text,q.active
+      FROM family_log_quick_actions q JOIN family_log_subjects s ON s.id=q.subject_id AND s.family_id=q.family_id AND s.active=1
+      LEFT JOIN members fm ON fm.id=s.member_id AND fm.family_id=s.family_id
+      WHERE q.family_id=? AND (q.active=1 OR ?=1) AND (s.member_id IS NULL OR COALESCE(fm.active,0)=1)
+      ORDER BY q.active DESC,q.subject_id,q.sort_order,q.id LIMIT 201`).bind(familyId,isAdmin?1:0).all<Row>(),
+    ctx.env.DB.prepare('SELECT id,name,icon,weekday_mask,active FROM family_quick_chores WHERE family_id=? ORDER BY active DESC,sort_order,id LIMIT 101').bind(familyId).all<Row>(),
+  ]);
+  const delegated=isAdmin?null:await ctx.env.DB.prepare("SELECT 1 ok FROM member_permissions WHERE family_id=? AND member_id=? AND permission_key='MANAGE_QUICK_CHORES' LIMIT 1").bind(familyId,member.id).first<Row>();
+  let presets=[160,240];
+  try{
+    const values=JSON.parse(String(settings?.setting_value||''));
+    if(Array.isArray(values))presets=values.map(Number).filter(v=>Number.isInteger(v)&&v>0&&v<=2000).slice(0,6);
+  }catch{/* defaults */}
+  return json({ok:true,schemaVersion:1,date,familyId,memberId:Number(member.id),
+    subjects:subjects.results,logs:logs.results.slice(0,200),truncated:logs.results.length>200,
+    timers:timers.results.slice(0,100),timersTruncated:timers.results.length>100,milkPresets:presets,
+    showAdultLogs:displaySettings?.show_adult_logs===undefined||Number(displaySettings.show_adult_logs)===1,
+    canManageSettings:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase()),
+    canManageQuickActions:isAdmin,
+    canManageChores:role==='OWNER'||role==='ADMIN'||Boolean(delegated),
+    quickActions:quickActions.results.slice(0,200),quickActionsTruncated:quickActions.results.length>200,
+    chores:chores.results.slice(0,100),choresTruncated:chores.results.length>100},200,headers);
+}
