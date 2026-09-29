@@ -133,7 +133,9 @@ public final class UiParityInstrumentation extends Instrumentation {
         String destination="/sdcard/Download/familytodo-ui-fixture/"+theme+"-"+name+".png";
         android.os.ParcelFileDescriptor result=getUiAutomation().executeShellCommand("mkdir -p /sdcard/Download/familytodo-ui-fixture && screencap -p "+destination+" && echo captured");
         try(java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(result)){
-            String output=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] chunk=new byte[1024];int count;
+            while((count=input.read(chunk))!=-1)bytes.write(chunk,0,count);
+            String output=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
             if(!output.contains("captured"))throw new AssertionError("screenshot failed: "+output);
         }
     }
