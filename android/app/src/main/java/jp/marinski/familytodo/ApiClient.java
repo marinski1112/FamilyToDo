@@ -13,7 +13,13 @@ import java.nio.charset.StandardCharsets;
 /** Reuses the signed HttpOnly web session without exposing it to page JavaScript. */
 final class ApiClient {
     static final String ORIGIN = BuildConfig.API_ORIGIN;
+    private static volatile boolean mutationsEnabled;
     private ApiClient() {}
+    static void setMutationsEnabled(boolean enabled) { mutationsEnabled=enabled; }
+    static boolean canMutate() { return mutationsEnabled; }
+    static void requireMutationReady() {
+        if(!mutationsEnabled) throw new IllegalStateException("保存済みデータの表示中は編集できません");
+    }
     /** Fetch a bounded same-origin thumbnail, including private upload media. */
     static Bitmap thumbnail(String path) throws Exception {
         boolean messagePhoto=path.matches("/api/messages\\?photo=[1-9][0-9]*");
@@ -108,6 +114,7 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject uploadFamilyLogPhoto(int logId,byte[] jpeg,String csrf) throws Exception {
+        requireMutationReady();
         if(logId<=0||jpeg.length==0||jpeg.length>4*1024*1024) throw new IllegalArgumentException("Invalid photo");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media").openConnection();
         try {
@@ -133,6 +140,7 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject deleteFamilyLogPhoto(int mediaId,String csrf) throws Exception {
+        requireMutationReady();
         if(mediaId<=0) throw new IllegalArgumentException("Invalid photo");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media?media="+mediaId).openConnection();
         try {
@@ -159,6 +167,7 @@ final class ApiClient {
         return uploadStampPng(png,null,0,0,csrf);
     }
     private static JSONObject uploadStampPng(byte[] png,String name,int width,int height,String csrf) throws Exception {
+        requireMutationReady();
         if(png==null||png.length==0||png.length>4*1024*1024) throw new IllegalArgumentException("Invalid stamp");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/calendar-stamp-admin/upload").openConnection();
         try {
@@ -187,6 +196,7 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject deleteTask(int id,String csrf) throws Exception {
+        requireMutationReady();
         if(id<=0) throw new IllegalArgumentException("Invalid task");
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/task?id="+id).openConnection();
         try {
@@ -209,6 +219,9 @@ final class ApiClient {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
         if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"PUT".equals(method)||"DELETE".equals(method))&&body!=null))
             throw new IllegalArgumentException("Invalid API method");
+        if (body != null && !(path.equals("/api/location/devices") &&
+            "sharing".equals(body.optString("action")) && !body.optBoolean("enabled")))
+            requireMutationReady();
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
