@@ -102,6 +102,7 @@ public final class MainActivity extends Activity {
         controls.addView(button("更新", this::load));
         controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
+        controls.addView(button("アプリ設定", this::loadAppSettings));
         controls.addView(button("ホーム画面アイコン", this::pinFamilyShortcut));
         controls.addView(button("ログアウト", this::logout));
         HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
@@ -3496,6 +3497,75 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class));
             })
             .setNegativeButton("閉じる",null).show();
+    }
+    private void loadAppSettings() {
+        if(snapshot==null) {Toast.makeText(this,"オンラインでログインしてください",Toast.LENGTH_SHORT).show();return;}
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject settings=ApiClient.request("/api/android/v1/settings",null);
+                runOnUiThread(() -> {if(epoch==sessionEpoch) showAppSettings(settings);});
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"設定を読み込めませんでした",Toast.LENGTH_SHORT).show();});
+            }
+        });
+    }
+    private void showAppSettings(JSONObject settings) {
+        boolean admin="OWNER".equalsIgnoreCase(settings.optString("role"))||"ADMIN".equalsIgnoreCase(settings.optString("role"));
+        String[] actions=admin?new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),
+            "家族のタイムゾーン","ホーム画面の表示名"}:new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効")};
+        new AlertDialog.Builder(this).setTitle("アプリ設定").setItems(actions,(dialog,which) -> {
+            if(which==0) {
+                EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("name"));
+                new AlertDialog.Builder(this).setTitle("プロフィール名").setView(input)
+                    .setPositiveButton("保存",(d,w) -> {
+                        String name=input.getText().toString().trim();
+                        if(name.isEmpty()||name.length()>100) {Toast.makeText(this,"名前を確認してください",Toast.LENGTH_SHORT).show();return;}
+                        try {saveAppSetting("/api/settings",new JSONObject().put("action","profile").put("name",name));}
+                        catch(Exception ignored) { }
+                    }).setNegativeButton("戻る",null).show();
+            } else if(which==1) {
+                boolean enabled=!settings.optBoolean("notification_enabled");
+                try {saveAppSetting("/api/settings",new JSONObject().put("action","notification").put("enabled",enabled));}
+                catch(Exception ignored) { }
+            } else if(which==2) {
+                String[] zones={"Asia/Tokyo","UTC","America/Los_Angeles","America/New_York","Europe/London","Australia/Sydney"};
+                new AlertDialog.Builder(this).setTitle("家族のタイムゾーン")
+                    .setSingleChoiceItems(zones,Math.max(0,java.util.Arrays.asList(zones).indexOf(settings.optString("timezone"))),
+                        (choice,index) -> {
+                            choice.dismiss();
+                            new AlertDialog.Builder(this).setTitle("タイムゾーンを変更")
+                                .setMessage("既存の記録日時は自動変換されません。")
+                                .setPositiveButton("変更",(d,w) -> {
+                                    try {saveAppSetting("/api/settings",new JSONObject().put("action","family_timezone").put("timezone",zones[index]));}
+                                    catch(Exception ignored) { }
+                                }).setNegativeButton("戻る",null).show();
+                        }).setNegativeButton("戻る",null).show();
+            } else if(which==3) {
+                EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("display_name"));
+                input.setHint("空欄で標準名に戻す");
+                new AlertDialog.Builder(this).setTitle("ホーム画面の表示名").setView(input)
+                    .setPositiveButton("保存",(d,w) -> {
+                        String name=input.getText().toString().trim();
+                        if(name.codePointCount(0,name.length())>24) {Toast.makeText(this,"24文字以内で入力してください",Toast.LENGTH_SHORT).show();return;}
+                        try {saveAppSetting("/api/pwa-branding",new JSONObject().put("display_name",name));}
+                        catch(Exception ignored) { }
+                    }).setNegativeButton("戻る",null).show();
+            }
+        }).setNegativeButton("閉じる",null).show();
+    }
+    private void saveAppSetting(String path,JSONObject body) {
+        if(snapshot==null) return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                body.put("csrf",csrf);ApiClient.request(path,body);
+                runOnUiThread(() -> {if(epoch==sessionEpoch) {Toast.makeText(this,"設定を保存しました",Toast.LENGTH_SHORT).show();loadAppSettings();}});
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"設定を保存できませんでした",Toast.LENGTH_SHORT).show();});
+            }
+        });
     }
     private void pinFamilyShortcut() {
         ShortcutManager manager=getSystemService(ShortcutManager.class);

@@ -73,6 +73,17 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
   if(url.pathname==='/api/android/v1/family-log-summary') return await androidFamilyLogSummaryApi(request,context);
   if(url.pathname==='/api/android/v1/recurring') return await androidRecurringApi(request,context);
+  if(url.pathname==='/api/android/v1/settings') {
+    if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
+    const member=context.member;
+    if(!member)return json({ok:false,error:'AUTH_REQUIRED'},401);
+    const family=await context.env.DB.prepare('SELECT timezone,pwa_display_name FROM families WHERE id=? LIMIT 1')
+      .bind(member.family_id).first() as {timezone:string|null;pwa_display_name:string|null}|null;
+    return json({ok:true,name:String(member.name||''),role:String(member.role||''),
+      notification_enabled:Number(member.notification_enabled||0)===1,
+      timezone:String(family?.timezone||'Asia/Tokyo'),display_name:String(family?.pwa_display_name||'')},
+      200,{'cache-control':'private, no-store'});
+  }
   if(url.pathname==='/api/android/v1/occurrence-convert') return await convertOccurrence(request,context);
   if(url.pathname==='/api/android/v1/goods-history') return await androidGoodsHistoryApi(request,context);
   if(url.pathname==='/api/android/v1/task-edit') {
