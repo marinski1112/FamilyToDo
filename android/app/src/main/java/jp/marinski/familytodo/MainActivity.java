@@ -3487,17 +3487,108 @@ public final class MainActivity extends Activity {
         EditText id=new EditText(this); id.setHint("端末ID（loc_...）"); id.setSingleLine(true);
         EditText secret=new EditText(this); secret.setHint("Secret（64文字）"); secret.setSingleLine(true);
         box.addView(id); box.addView(secret);
+        box.addView(button("このAndroidを新規登録して共有開始",this::provisionThisAndroid));
+        box.addView(button("保存済み端末の共有を再開",this::resumeLocationSharing));
         box.addView(button("再起動後の位置共有を設定",this::configureBackgroundLocation));
         new AlertDialog.Builder(this).setTitle("位置情報を設定")
             .setMessage("Webの位置情報設定でAndroid端末を発行し、共有をONにしてください。共有中は通知を表示します。")
             .setView(box).setPositiveButton("保存して開始",(d,w)->{
                 try { Credentials.save(this,id.getText().toString().trim(),secret.getText().toString().trim()); startSharing(); }
                 catch(Exception e) { Toast.makeText(this,"端末IDとSecretを確認してください",Toast.LENGTH_LONG).show(); }
-            }).setNeutralButton("共有を停止",(d,w)->{
-                Credentials.setSharingEnabled(this,false);
-                stopService(new Intent(this,LocationService.class));
-            })
+            }).setNeutralButton("共有を停止",(d,w)->stopLocationSharing())
             .setNegativeButton("閉じる",null).show();
+    }
+    private void stopLocationSharing() {
+        String saved=Credentials.read(this);
+        Credentials.setSharingEnabled(this,false);
+        stopService(new Intent(this,LocationService.class));
+        if(saved==null||snapshot==null) return;
+        String publicId=saved.split(":",2)[0],csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject list=ApiClient.request("/api/location/devices",null);
+                JSONArray devices=list.optJSONArray("devices");
+                if(devices==null) throw new IllegalStateException("Device list unavailable");
+                for(int i=0;i<devices.length();i++) {
+                    JSONObject device=devices.optJSONObject(i);
+                    if(device!=null&&publicId.equals(device.optString("publicId"))&&device.optInt("id")>0) {
+                        ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
+                            .put("action","sharing").put("device_id",device.optInt("id")).put("enabled",false));
+                        return;
+                    }
+                }
+                throw new IllegalStateException("Device not found");
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"端末の共有は停止しました。Web側の共有状態も確認してください",Toast.LENGTH_LONG).show();});
+            }
+        });
+    }
+    private void resumeLocationSharing() {
+        String saved=Credentials.read(this);
+        if(saved==null||snapshot==null) {Toast.makeText(this,"先にこのAndroidを登録してください",Toast.LENGTH_LONG).show();return;}
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},15);return;
+        }
+        String publicId=saved.split(":",2)[0],csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONArray devices=ApiClient.request("/api/location/devices",null).getJSONArray("devices");
+                for(int i=0;i<devices.length();i++) {
+                    JSONObject device=devices.optJSONObject(i);
+                    if(device!=null&&publicId.equals(device.optString("publicId"))&&device.optInt("id")>0&&
+                        device.optBoolean("enabled")&&device.isNull("revokedAt")) {
+                        ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
+                            .put("action","sharing").put("device_id",device.optInt("id")).put("enabled",true));
+                        runOnUiThread(() -> {if(epoch==sessionEpoch) startSharing();});return;
+                    }
+                }
+                throw new IllegalStateException("Device unavailable");
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"この端末を再開できませんでした。Webの位置設定を確認してください",Toast.LENGTH_LONG).show();});
+            }
+        });
+    }
+    private void provisionThisAndroid() {
+        if(snapshot==null) {Toast.makeText(this,"先にログインしてください",Toast.LENGTH_LONG).show();return;}
+        if(Credentials.read(this)!=null) {
+            Toast.makeText(this,"この端末には登録済みの端末IDがあります。新しい登録は作成しません",Toast.LENGTH_LONG).show();return;
+        }
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,"位置情報を許可してから、もう一度登録してください",Toast.LENGTH_LONG).show();
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},14);return;
+        }
+        new AlertDialog.Builder(this).setTitle("このAndroidを登録")
+            .setMessage("自分の位置情報端末を1台発行し、共有をONにします。共有中は通知を表示し、位置設定から停止できます。")
+            .setPositiveButton("登録して開始",(dialog,which) -> {
+                int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    int deviceId=0;
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject result=ApiClient.request("/api/location/devices",new JSONObject()
+                            .put("csrf",csrf).put("action","provision").put("provider","FAMILYTODO_ANDROID"));
+                        JSONObject device=result.getJSONObject("device");
+                        deviceId=device.getInt("id");
+                        if(epoch!=sessionEpoch) throw new IllegalStateException("Session changed");
+                        Credentials.save(this,device.getString("publicId"),device.getString("secret"));
+                        ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
+                            .put("action","sharing").put("device_id",deviceId).put("enabled",true));
+                        if(epoch!=sessionEpoch) throw new IllegalStateException("Session changed");
+                        runOnUiThread(() -> {
+                            if(epoch!=sessionEpoch) return;
+                            startSharing();
+                            Toast.makeText(this,Credentials.sharingEnabled(this)?"位置共有を開始しました":"位置共有を開始できませんでした",Toast.LENGTH_LONG).show();
+                        });
+                    } catch(Exception error) {
+                        if(deviceId>0) try {ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
+                            .put("action","revoke").put("device_id",deviceId));} catch(Exception ignored) { }
+                        if(epoch==sessionEpoch) Credentials.clear(this);
+                        runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"端末登録に失敗しました。位置設定を確認してください",Toast.LENGTH_LONG).show();});
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
     }
     private void configureBackgroundLocation() {
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
@@ -3689,6 +3780,10 @@ public final class MainActivity extends Activity {
         if(code==11 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
         else if(code==12 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
             Toast.makeText(this,"再起動後の自動再開を設定しました",Toast.LENGTH_LONG).show();
+        else if(code==14 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
+            Toast.makeText(this,"位置情報を許可しました。登録をもう一度選んでください",Toast.LENGTH_LONG).show();
+        else if(code==15 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
+            resumeLocationSharing();
         else Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }
