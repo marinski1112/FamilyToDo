@@ -2078,7 +2078,8 @@ public final class MainActivity extends Activity {
                         "食事（回）","トイレ（回）","入浴（回）","薬（回）","家事（回）"};
                     String[] metricKeys={"milkMl","sleepMinutes","entries","wet","dirty",
                         "meals","toilet","baths","medicine","chores"};
-                    Button metric=button("グラフ: "+metricNames[0],() ->
+                    Button metric=new Button(this);metric.setText("グラフ: "+metricNames[0]);
+                    metric.setOnClickListener(view ->
                         new AlertDialog.Builder(this).setTitle("グラフの項目")
                             .setItems(metricNames,(dialog,which) -> {
                                 chart.setTag(metricKeys[which]);
