@@ -3,6 +3,8 @@ import { createFamily } from './family-create-api';
 import { joinFamily } from './family-join-api';
 import { inviteCreate } from './family-invite-api';
 import { apiMe } from './api-me';
+import { androidOverviewApi } from './android-overview-api';
+import { androidIntegrationStatusApi } from './android-integration-status-api';
 import { taskApi } from './task-api';
 import { taskChildrenApi } from './task-children-api';
 import { taskParentCompletionApi } from './task-parent-completion-api';
@@ -46,6 +48,14 @@ import { familyLogMediaCleanupAdmin } from './family-log-media-cleanup-admin';
 import { shopping } from './shopping-root';
 import { shoppingCategoryApi } from './shopping-category-api';
 import { shoppingCategoryMutationApi } from './shopping-category-mutation-api';
+import { androidFamilyLogApi } from './android-family-log-api';
+import { androidFamilyLogSummaryApi } from './android-family-log-summary-api';
+import { androidRecurringApi } from './android-recurring-api';
+import { convertOccurrence } from './recurring-occurrence';
+import { androidGoodsHistoryApi } from './android-goods-history-api';
+import {taskEdit} from './task-edit-page';
+import {validateTaskEditRequestHierarchy} from './task-edit-hierarchy-guard';
+import {json} from './response';
 import { locationDeviceApi } from './location-device-api';
 import { locationLatestApi } from './location-latest-api';
 import { locationHistoryApi,locationHistorySearchApi,locationStayAddressApi } from './location-history-api';
@@ -60,6 +70,42 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family/join') return await joinFamily(request,context);
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
   if(url.pathname==='/api/me') return await apiMe(context);
+  if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
+  if(url.pathname==='/api/android/v1/integration-status') return await androidIntegrationStatusApi(request,context);
+  if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
+  if(url.pathname==='/api/android/v1/family-log-summary') return await androidFamilyLogSummaryApi(request,context);
+  if(url.pathname==='/api/android/v1/recurring') return await androidRecurringApi(request,context);
+  if(url.pathname==='/api/android/v1/settings') {
+    if(request.method!=='GET')return json({ok:false,error:'GET only'},405);
+    const member=context.member;
+    if(!member)return json({ok:false,error:'AUTH_REQUIRED'},401);
+    const family=await context.env.DB.prepare('SELECT timezone,pwa_display_name FROM families WHERE id=? LIMIT 1')
+      .bind(member.family_id).first() as {timezone:string|null;pwa_display_name:string|null}|null;
+    const members=await context.env.DB.prepare(`SELECT m.id,m.name,m.role,m.active,
+      EXISTS(SELECT 1 FROM member_permissions p WHERE p.family_id=m.family_id
+        AND p.member_id=m.id AND p.permission_key='MANAGE_QUICK_CHORES') AS manage_quick_chores
+      FROM members m WHERE m.family_id=? AND m.deleted_at IS NULL ORDER BY m.id LIMIT 100`)
+      .bind(member.family_id).all();
+    return json({ok:true,name:String(member.name||''),role:String(member.role||''),
+      member_id:Number(member.id),members:members.results,
+      notification_enabled:Number(member.notification_enabled||0)===1,
+      timezone:String(family?.timezone||'Asia/Tokyo'),display_name:String(family?.pwa_display_name||'')},
+      200,{'cache-control':'private, no-store'});
+  }
+  if(url.pathname==='/api/android/v1/occurrence-convert') return await convertOccurrence(request,context);
+  if(url.pathname==='/api/android/v1/goods-history') return await androidGoodsHistoryApi(request,context);
+  if(url.pathname==='/api/android/v1/task-edit') {
+    if(request.method!=='POST')return json({ok:false,error:'POST only'},405);
+    if(!context.member)return json({ok:false,error:'ログインが必要です。'},401);
+    const id=Number(url.searchParams.get('id')||0);
+    if(!Number.isSafeInteger(id)||id<=0)return json({ok:false,error:'タスクが不正です。'},400);
+    const hierarchy=await validateTaskEditRequestHierarchy(request,context,id);
+    if(!hierarchy.ok)return json({ok:false,error:hierarchy.message},hierarchy.status);
+    const result=await taskEdit(request,context,id);
+    if(result.status>=300&&result.status<400&&result.headers.get('location')===`/task/view.php?id=${id}`)return json({ok:true,id});
+    if(result.headers.get('content-type')?.includes('application/json'))return result;
+    return json({ok:false,error:result.status===404?'タスクが見つかりません。':'編集権限がありません。'},result.status);
+  }
   if(url.pathname==='/api/toggle') return await toggle(request,context);
   if(url.pathname==='/api/task') return await taskApi(request,context);
   if(url.pathname==='/api/task-children') return await taskChildrenApi(request,context);
