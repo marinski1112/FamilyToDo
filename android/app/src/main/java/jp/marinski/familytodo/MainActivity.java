@@ -2074,12 +2074,18 @@ public final class MainActivity extends Activity {
                     ScrollView scroll=new ScrollView(this);
                     LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
                     LinearLayout chart=new LinearLayout(this);chart.setOrientation(LinearLayout.VERTICAL);
-                    Button metric=button("グラフを切替（ミルク／睡眠）",() -> {
-                        boolean sleep=chart.getTag()!=null&&chart.getTag().equals("milkMl");
-                        chart.setTag(sleep?"sleepMinutes":"milkMl");
-                        renderFamilyLogChart(chart,resultDays,start,end);
-                    });
-                    chart.setTag("milkMl");renderFamilyLogChart(chart,resultDays,start,end);
+                    String[] metricNames={"ミルク量（ml）","睡眠時間（分）","記録件数","おしっこ（回）","うんち（回）",
+                        "食事（回）","トイレ（回）","入浴（回）","薬（回）","家事（回）"};
+                    String[] metricKeys={"milkMl","sleepMinutes","entries","wet","dirty",
+                        "meals","toilet","baths","medicine","chores"};
+                    Button metric=button("グラフ: "+metricNames[0],() ->
+                        new AlertDialog.Builder(this).setTitle("グラフの項目")
+                            .setItems(metricNames,(dialog,which) -> {
+                                chart.setTag(metricKeys[which]);
+                                metric.setText("グラフ: "+metricNames[which]);
+                                renderFamilyLogChart(chart,resultDays,start,end);
+                            }).show());
+                    chart.setTag(metricKeys[0]);renderFamilyLogChart(chart,resultDays,start,end);
                     panel.addView(metric);panel.addView(chart);
                     panel.addView(label(result.toString()));scroll.addView(panel);
                     new AlertDialog.Builder(this).setTitle(name+" の集計").setView(scroll)
@@ -2093,8 +2099,12 @@ public final class MainActivity extends Activity {
     private void renderFamilyLogChart(LinearLayout chart,JSONArray daily,LocalDate start,LocalDate end) {
         chart.removeAllViews();
         String key=String.valueOf(chart.getTag());
-        chart.addView(label(("sleepMinutes".equals(key)?"睡眠時間（分）":"ミルク（ml）")+
-            " ・ 期間末尾の最大30日（記録がない日は0）"));
+        Map<String,String> titles=new HashMap<>();
+        titles.put("milkMl","ミルク量（ml）");titles.put("sleepMinutes","睡眠時間（分）");
+        titles.put("entries","記録件数");titles.put("wet","おしっこ（回）");titles.put("dirty","うんち（回）");
+        titles.put("meals","食事（回）");titles.put("toilet","トイレ（回）");titles.put("baths","入浴（回）");
+        titles.put("medicine","薬（回）");titles.put("chores","家事（回）");
+        chart.addView(label(titles.getOrDefault(key,"記録")+" ・ 期間末尾の最大30日（記録がない日は0）"));
         Map<String,Double> values=new HashMap<>();
         for(int i=0;i<daily.length();i++) {
             JSONObject row=daily.optJSONObject(i);
