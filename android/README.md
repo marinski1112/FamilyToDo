@@ -12,7 +12,7 @@ Android Studioで `android/` を開き、Gradle Sync後にデバッグAPKを端�
 gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://YOUR-WORKER.marinski1112.workers.dev
 ```
 
-指定できるのは `marinski1112.workers.dev` 内のHTTPSオリジンだけです（パス・末尾のスラッシュ不可）。このビルドは `jp.marinski.familytodo.preview` として別アプリになり、表示名は「FamilyToDo Preview」です。APIとログインWebViewは指定した同一オリジンへ向かいます。**プレビューAPKは書き込み禁止**で、位置情報送信も開始しません。LINEログインのコールバックとLIFF許可ドメイン、D1や位置情報の保存先がそのプレビューに対応していなければログイン・共有は動きません。接続先の指定だけで実機テスト可能とは判断しないでください。通常のCI artifactは従来どおり本番URL向けです。
+指定できるのは `marinski1112.workers.dev` 内のHTTPSオリジンだけです（パス・末尾のスラッシュ不可）。このビルドは `jp.marinski.familytodo.preview` として別アプリになり、表示名は「FamilyToDo Preview」です。APIとログインWebViewは指定した同一オリジンへ向かいます。**プレビューAPKは書き込み禁止**で、位置情報送信も開始しません。LINEログインのコールバックとLIFF許可ドメイン、D1や位置情報の保存先がそのプレビューに対応していなければログイン・共有は動きません。接続先の指定だけで実機テスト可能とは判断しないでください。通常のCI artifactは従来どおり本番URL向けです。専用D1・R2と別のLINE認証設定を揃えた書き込みE2E用Worker/APKの手順は [E2E_ENVIRONMENT.md](E2E_ENVIRONMENT.md) を参照してください。CIの `familytodo-android-e2e-unverified` は環境が公開・検証されるまで利用準備完了とは扱いません。
 
 端末のライト／ダーク設定に応じてネイティブ画面のテーマを切り替えます。実機で文字と入力欄のコントラストを確認してください。
 
