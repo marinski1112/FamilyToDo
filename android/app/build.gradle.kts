@@ -6,6 +6,10 @@ require(Regex("^https://[a-z0-9-]+\\.marinski1112\\.workers\\.dev$").matches(deb
     "familytodoDebugOrigin must be an HTTPS Worker in the marinski1112 account (without a path)"
 }
 val previewBuild = debugOrigin != productionOrigin
+val isolatedE2E = providers.gradleProperty("familytodoIsolatedE2E").orNull == "true"
+require(!isolatedE2E || debugOrigin == "https://familytodo-android-e2e.marinski1112.workers.dev") {
+    "Writable E2E builds require the dedicated familytodo-android-e2e origin"
+}
 val internalVersionCode = providers.gradleProperty("familytodoVersionCode").orNull?.let {
     it.toIntOrNull() ?: error("familytodoVersionCode must be an integer")
 } ?: 1
@@ -29,7 +33,7 @@ android {
         getByName("debug") {
             buildConfigField("String", "API_ORIGIN", "\"$debugOrigin\"")
             if (previewBuild) {
-                buildConfigField("boolean", "ALLOW_MUTATIONS", "false")
+                buildConfigField("boolean", "ALLOW_MUTATIONS", if (isolatedE2E) "true" else "false")
                 applicationIdSuffix = ".preview"
                 manifestPlaceholders["appLabel"] = "FamilyToDo Preview"
             }
