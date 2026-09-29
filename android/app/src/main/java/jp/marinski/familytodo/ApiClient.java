@@ -14,7 +14,12 @@ import java.nio.charset.StandardCharsets;
 final class ApiClient {
     static final String ORIGIN = BuildConfig.API_ORIGIN;
     private static volatile boolean mutationsEnabled;
+    interface FixtureTransport { JSONObject request(String path,JSONObject body,String method) throws Exception; }
+    static volatile FixtureTransport fixtureTransport;
     private ApiClient() {}
+    private static void forbidFixtureNetwork() {
+        if(BuildConfig.UI_TEST_MODE)throw new IllegalStateException("UI fixture network is disabled");
+    }
     static void setMutationsEnabled(boolean enabled) { mutationsEnabled=enabled && BuildConfig.ALLOW_MUTATIONS; }
     static boolean canMutate() { return mutationsEnabled; }
     static void requireMutationReady() {
@@ -22,6 +27,9 @@ final class ApiClient {
     }
     /** Fetch a bounded same-origin thumbnail, including private upload media. */
     static Bitmap thumbnail(String path) throws Exception {
+        if(BuildConfig.UI_TEST_MODE) {
+            Bitmap fixture=Bitmap.createBitmap(100,100,Bitmap.Config.ARGB_8888);fixture.eraseColor(android.graphics.Color.parseColor("#6366F1"));return fixture;
+        }
         boolean messagePhoto=path.matches("/api/messages\\?photo=[1-9][0-9]*");
         boolean familyLogPhoto=path.matches("/api/family-log-media\\?media=[1-9][0-9]*");
         if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
@@ -29,6 +37,7 @@ final class ApiClient {
             !(messagePhoto || familyLogPhoto || path.startsWith("/api/calendar-stamp-media?") ||
               (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
             throw new IllegalArgumentException("Invalid image path");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
         try {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
@@ -61,11 +70,13 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static byte[] animatedStampBytes(String path) throws Exception {
+        forbidFixtureNetwork();
         if(android.os.Build.VERSION.SDK_INT<28) throw new IllegalStateException("Animation unsupported");
         if(!(path.matches("/api/calendar-stamp-media\\?asset=[1-9][0-9]*&variant=full") ||
             path.startsWith("/") && !path.startsWith("//") && !path.contains("?") &&
             !path.contains("..") && !path.contains("\\") && !path.contains(":") &&
             (path.endsWith(".gif")||path.endsWith(".webp")))) throw new IllegalArgumentException("Invalid animation path");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
         try {
             connection.setConnectTimeout(10000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);
@@ -79,6 +90,29 @@ final class ApiClient {
                 return bytes.toByteArray();
             }
         } finally { connection.disconnect(); }
+    }
+    static Bitmap avatar(String raw) throws Exception {
+        if(BuildConfig.UI_TEST_MODE)return thumbnail("/fixture.png");
+        android.net.Uri uri=android.net.Uri.parse(raw);String host=uri.getHost();
+        if(!"https".equals(uri.getScheme())||host==null||
+            !(host.equals("profile.line-scdn.net")||host.equals("obs.line-scdn.net"))||
+            uri.getPort()!=-1||uri.getUserInfo()!=null)throw new IllegalArgumentException("Invalid LINE avatar");
+        forbidFixtureNetwork();
+        HttpURLConnection connection=(HttpURLConnection)new URL(raw).openConnection();
+        try {
+            connection.setConnectTimeout(10000);connection.setReadTimeout(10000);connection.setInstanceFollowRedirects(false);
+            if(connection.getResponseCode()!=200||connection.getContentType()==null||!connection.getContentType().startsWith("image/"))throw new IllegalStateException("Avatar unavailable");
+            try(var stream=connection.getInputStream()) {
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1){data.write(buffer,0,n);if(data.size()>1000000)throw new IllegalStateException("Avatar too large");}
+                byte[] bytes=data.toByteArray();BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;
+                BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
+                if(options.outWidth<=0||options.outHeight<=0||options.outWidth>4096||options.outHeight>4096)throw new IllegalStateException("Avatar dimensions");
+                options.inJustDecodeBounds=false;options.inSampleSize=1;
+                while(options.outWidth/options.inSampleSize>128||options.outHeight/options.inSampleSize>128)options.inSampleSize*=2;
+                Bitmap avatar=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);if(avatar==null)throw new IllegalStateException("Avatar decode");return avatar;
+            }
+        }finally{connection.disconnect();}
     }
     static android.graphics.drawable.Drawable decodeAnimatedStamp(byte[] bytes) throws Exception {
         if(android.os.Build.VERSION.SDK_INT<28||bytes.length==0||bytes.length>4*1024*1024)
@@ -96,6 +130,7 @@ final class ApiClient {
     }
     /** The authenticated PWA manifest supplies this family's home screen label. */
     static JSONObject pwaManifest() throws Exception {
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/manifest.webmanifest").openConnection();
         try {
             connection.setConnectTimeout(10_000);connection.setReadTimeout(15_000);
@@ -116,6 +151,7 @@ final class ApiClient {
     static JSONObject uploadFamilyLogPhoto(int logId,byte[] jpeg,String csrf) throws Exception {
         requireMutationReady();
         if(logId<=0||jpeg.length==0||jpeg.length>4*1024*1024) throw new IllegalArgumentException("Invalid photo");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media").openConnection();
         try {
             connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
@@ -142,6 +178,7 @@ final class ApiClient {
     static JSONObject deleteFamilyLogPhoto(int mediaId,String csrf) throws Exception {
         requireMutationReady();
         if(mediaId<=0) throw new IllegalArgumentException("Invalid photo");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/family-log-media?media="+mediaId).openConnection();
         try {
             connection.setConnectTimeout(10000); connection.setReadTimeout(15000);
@@ -169,6 +206,7 @@ final class ApiClient {
     private static JSONObject uploadStampPng(byte[] png,String name,int width,int height,String csrf) throws Exception {
         requireMutationReady();
         if(png==null||png.length==0||png.length>4*1024*1024) throw new IllegalArgumentException("Invalid stamp");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/calendar-stamp-admin/upload").openConnection();
         try {
             connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
@@ -198,6 +236,7 @@ final class ApiClient {
     static JSONObject deleteTask(int id,String csrf) throws Exception {
         requireMutationReady();
         if(id<=0) throw new IllegalArgumentException("Invalid task");
+        forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/api/task?id="+id).openConnection();
         try {
             connection.setConnectTimeout(10000);connection.setReadTimeout(15000);
@@ -216,12 +255,18 @@ final class ApiClient {
         } finally { connection.disconnect(); }
     }
     static JSONObject request(String path, JSONObject body, String method) throws Exception {
+        if(BuildConfig.UI_TEST_MODE) {
+            if(fixtureTransport==null)throw new IllegalStateException("No UI fixture transport");
+            if(body!=null)requireMutationReady();
+            return fixtureTransport.request(path,body,method);
+        }
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
         if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"PUT".equals(method)||"DELETE".equals(method))&&body!=null))
             throw new IllegalArgumentException("Invalid API method");
         if (body != null && !(BuildConfig.ALLOW_MUTATIONS && path.equals("/api/location/devices") &&
             "sharing".equals(body.optString("action")) && !body.optBoolean("enabled")))
             requireMutationReady();
+        forbidFixtureNetwork();
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);

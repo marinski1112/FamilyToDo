@@ -10,6 +10,9 @@ val isolatedE2E = providers.gradleProperty("familytodoIsolatedE2E").orNull == "t
 require(!isolatedE2E || debugOrigin == "https://familytodo-android-e2e.marinski1112.workers.dev") {
     "Writable E2E builds require the dedicated familytodo-android-e2e origin"
 }
+val uiTestMode = providers.gradleProperty("familytodoUiTest").orNull == "true"
+require(!uiTestMode || isolatedE2E) { "UI fixtures require the isolated E2E variant" }
+
 val internalVersionCode = providers.gradleProperty("familytodoVersionCode").orNull?.let {
     it.toIntOrNull() ?: error("familytodoVersionCode must be an integer")
 } ?: 1
@@ -27,11 +30,14 @@ android {
         versionName = "0.1.$internalVersionCode"
         buildConfigField("String", "API_ORIGIN", "\"$productionOrigin\"")
         buildConfigField("boolean", "ALLOW_MUTATIONS", "true")
+        buildConfigField("boolean", "UI_TEST_MODE", "false")
+        testInstrumentationRunner = "jp.marinski.familytodo.UiParityInstrumentation"
         manifestPlaceholders["appLabel"] = "FamilyToDo"
     }
     buildTypes {
         getByName("debug") {
             buildConfigField("String", "API_ORIGIN", "\"$debugOrigin\"")
+            buildConfigField("boolean", "UI_TEST_MODE", if (uiTestMode) "true" else "false")
             if (previewBuild) {
                 buildConfigField("boolean", "ALLOW_MUTATIONS", if (isolatedE2E) "true" else "false")
                 applicationIdSuffix = ".preview"

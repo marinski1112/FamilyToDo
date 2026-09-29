@@ -49,7 +49,13 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
-    private LinearLayout root, content;
+    private LinearLayout root, content, pageDock;
+    private boolean checklistEvents=false, checklistCompleted=false;
+    private int familyLogSubjectId=0;
+    private String messageDraft="";
+    private int messageDraftEpoch=-1;
+    private boolean inlineMessageSending;
+    private final Map<Integer,JSONObject> messageStamps=new HashMap<>();
     private boolean goodsCompleted=false;
     private final Set<String> expandedGoodsCategories=new HashSet<>();
     private final Map<String,String[]> goodsComposerDrafts=new HashMap<>();
@@ -89,9 +95,10 @@ public final class MainActivity extends Activity {
     private JSONObject locationLatest;
     private String locationError="";
     private WebView pageWeb;
-    @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); load(); }
+    @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); if(!BuildConfig.UI_TEST_MODE)load(); }
     @Override protected void onResume() {
         super.onResume();
+        if(BuildConfig.UI_TEST_MODE)return;
         if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
     private boolean darkMode() {
@@ -182,6 +189,8 @@ public final class MainActivity extends Activity {
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(14),dp(4),dp(14),dp(24));
         scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        pageDock=new LinearLayout(this);pageDock.setOrientation(LinearLayout.VERTICAL);
+        pageDock.setBackground(shape(surfaceColor(),lineColor(),0));root.addView(pageDock);
         root.addView(bottomNavigation());
         applySystemBarInsets(root);setContentView(root);
         render();
@@ -210,19 +219,22 @@ public final class MainActivity extends Activity {
         return nav;
     }
     private void navigate(String destination) {
-        if(destination.equals(tab))return;
+        if(destination.equals(tab)){if(pageWeb!=null){showNative();if(!BuildConfig.UI_TEST_MODE)load();}return;}
         tab=destination;
         if(destination.equals("home")) {
             selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
             month=YearMonth.from(selectedDay);
         }
+        if(destination.equals("location")&&!BuildConfig.UI_TEST_MODE){showWebPage("/app/location.php");return;}
         showNative();
+        if(BuildConfig.UI_TEST_MODE)return;
         if(destination.equals("messages"))loadMessages(0);
         else if(destination.equals("familylog"))loadFamilyLog();
         else if(destination.equals("location"))loadLocation();
         else if(snapshot==null||!month.toString().equals(snapshot.optString("month")))load();
     }
     private void load() {
+        if(BuildConfig.UI_TEST_MODE){render();return;}
         ApiClient.setMutationsEnabled(false);
         String binding=SnapshotCache.currentSessionBinding();
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
@@ -326,12 +338,13 @@ public final class MainActivity extends Activity {
     private void render() {
         if (content == null) return;
         content.removeAllViews();
-        if (tab.equals("messages")) { renderMessages(); return; }
-        if (tab.equals("familylog")) { renderFamilyLog(); return; }
+        if (tab.equals("messages")) { if(pageDock!=null&&pageDock.getChildCount()==0)pageDock.addView(messageComposer());updateMessageComposerReadiness();renderMessages(); return; }
+        if (tab.equals("familylog")) { renderFamilyLog();renderFamilyLogDock(); return; }
         if (tab.equals("location")) { renderLocation(); return; }
         if (tab.equals("home")) { renderHome(); return; }
         if (tab.equals("goods")) {
-            content.addView(heading("チェックリスト"));
+            content.addView(heading("✅ チェックリスト  "+selectedDay.getMonthValue()+"月"+selectedDay.getDayOfMonth()+"日"));
+            if(snapshot!=null)renderChecklistTasks();
             LinearLayout kinds=new LinearLayout(this);
             Button shopping=button("🛒 買い物",() -> {goodsKind="shopping";render();});
             Button items=button("🎒 持ち物",() -> {goodsKind="item";render();});
@@ -391,6 +404,28 @@ public final class MainActivity extends Activity {
         content.addView(button("家族の位置情報を開く",() -> navigate("location")));
         content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
         content.addView(button("アプリ設定",this::showSettingsActions));
+        content.addView(heading("ショートカット"));
+        LinearLayout shortcuts=new LinearLayout(this);
+        shortcuts.addView(button("🐣 家族ログ",()->navigate("familylog")),new LinearLayout.LayoutParams(0,dp(48),1));
+        shortcuts.addView(button("💬 伝言",()->navigate("messages")),new LinearLayout.LayoutParams(0,dp(48),1));
+        content.addView(shortcuts);
+        content.addView(button("📖 家族日誌",()->showWebPage("/app/family_journal.php")));
+        if(ApiClient.canMutate()) {
+            content.addView(heading("クイック追加"));
+            content.addView(button("＋ タスク・イベント",this::addTask));
+            LinearLayout quick=new LinearLayout(this);
+            quick.addView(button("＋ 買い物",()->addGoods(true)),new LinearLayout.LayoutParams(0,dp(48),1));
+            quick.addView(button("＋ 持ち物",()->addGoods(false)),new LinearLayout.LayoutParams(0,dp(48),1));content.addView(quick);
+        }
+        content.addView(heading("今日の予定"));
+        int shown=0;
+        if(tasks!=null)for(int i=0;i<tasks.length()&&shown<8;i++) {
+            JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,today))continue;
+            LinearLayout entry=card("EVENT".equalsIgnoreCase(task.optString("task_kind"))?"📅 "+task.optString("title"):"✅ "+task.optString("title"),
+                "completed".equals(task.optString("status"))?"完了済み":"未完了");
+            entry.setOnClickListener(v->navigate("goods"));addPanelCard(entry);shown++;
+        }
+        if(shown==0)content.addView(label("今日の予定はありません"));
     }
     private void loadLocation() {
         int epoch=sessionEpoch;
@@ -430,9 +465,20 @@ public final class MainActivity extends Activity {
             addPanelCard(card(member.optString("name","メンバー"),detail));
         }
     }
+    private String nativeRoute(String path) {
+        if("/app/index.php".equals(path))return "home";
+        if("/app/tasks.php".equals(path))return "goods";
+        if("/app/calendar.php".equals(path))return "calendar";
+        if("/app/location.php".equals(path))return "location";
+        if("/app/family_log.php".equals(path))return "familylog";
+        if("/app/messages.php".equals(path))return "messages";
+        return null;
+    }
     private void returnFromWebPage() { showNative();load(); }
     private void showWebPage(String path) {
         if(!path.startsWith("/app/")||login!=null)return;
+        if(BuildConfig.UI_TEST_MODE)return;
+        if(pageWeb!=null){pageWeb.destroy();pageWeb=null;}
         pageWeb=new WebView(this);
         pageWeb.getSettings().setJavaScriptEnabled(true);
         pageWeb.getSettings().setDomStorageEnabled(true);
@@ -440,16 +486,25 @@ public final class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request) {
                 android.net.Uri destination=request.getUrl(),origin=android.net.Uri.parse(ApiClient.ORIGIN);
                 if("https".equals(destination.getScheme())&&origin.getHost().equals(destination.getHost())&&
-                    origin.getPort()==destination.getPort())return false;
+                    origin.getPort()==destination.getPort()) {
+                    String route=nativeRoute(destination.getPath());
+                    if(route!=null&&!destination.getPath().equals(path)){navigate(route);return true;}
+                    return false;
+                }
                 startActivity(new Intent(Intent.ACTION_VIEW,destination));return true;
             }
         });
         LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);
         frame.setBackgroundColor(pageColor());
-        frame.addView(button("← ネイティブ画面に戻る",this::returnFromWebPage));
+        frame.addView(button("← アプリに戻る",this::returnFromWebPage));
+        if(path.startsWith("/app/location.php"))frame.addView(button("この端末の位置共有を設定",this::showSettings));
         frame.addView(pageWeb,new LinearLayout.LayoutParams(-1,0,1));
         applySystemBarInsets(frame);setContentView(frame);
         pageWeb.loadUrl(ApiClient.ORIGIN+path);
+    }
+    private int calendarTaskColor(JSONObject task) {
+        String color=task.optString("calendar_color");
+        return color.matches("#[0-9a-fA-F]{6}")?Color.parseColor(color):Color.parseColor("#EC4899");
     }
     private void showCalendarActions() {
         ArrayList<String> actions=new ArrayList<>();
@@ -471,7 +526,7 @@ public final class MainActivity extends Activity {
             }).show();
     }
     private void showSettingsActions() {
-        String[] actions={"位置設定","アプリ設定","Google連携の状態","ホーム画面アイコン","ログアウト"};
+        String[] actions={"位置設定","アプリ設定","Google連携の状態","ホーム画面アイコン","ログアウト","Web版の管理画面"};
         new AlertDialog.Builder(this).setTitle("設定")
             .setItems(actions,(dialog,which) -> {
                 switch(which) {
@@ -480,6 +535,7 @@ public final class MainActivity extends Activity {
                     case 2:loadIntegrationStatus();break;
                     case 3:pinFamilyShortcut();break;
                     case 4:logout();break;
+                    case 5:showWebPage("/app/settings.php");break;
                 }
             }).show();
     }
@@ -536,11 +592,12 @@ public final class MainActivity extends Activity {
                         eventCount++;
                         if(eventCount<=1) {
                             TextView chip=new TextView(this);
-                            chip.setText(task.optString("title"));
+                            String at=dateValue(task,"start_at","due_at");
+                            chip.setText((task.optInt("all_day")==1||at.length()<16?"":at.substring(11,16)+" ")+task.optString("title"));
                             chip.setSingleLine(true);chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
                             chip.setTextSize(9);chip.setTextColor(Color.WHITE);
                             chip.setPadding(dp(2),0,dp(2),0);
-                            chip.setBackground(shape(Color.parseColor("#EC4899"),Color.TRANSPARENT,4));
+                            chip.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
                             cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(18)));
                         }
                     }
@@ -556,7 +613,7 @@ public final class MainActivity extends Activity {
                     mark.setTextColor(accentColor());cell.addView(mark);
                 }
                 cell.setContentDescription(day.toString()+" 予定"+count+"件");
-                cell.setOnClickListener(v -> {selectedDay=day;render();});
+                cell.setOnClickListener(v -> {selectedDay=day;navigate("goods");});
             }
             calendarPanel.addView(week);
         }
@@ -1111,6 +1168,72 @@ public final class MainActivity extends Activity {
                     }
                 });
             }).setNegativeButton("閉じる",null).show();
+    }
+    private void renderChecklistTasks() {
+        LinearLayout section=panel(),kinds=new LinearLayout(this);
+        for(boolean events:new boolean[]{false,true}) {
+            Button kind=button(events?"📅 イベント":"☑ タスク",()->{checklistEvents=events;render();});
+            styleButton(kind,checklistEvents==events);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(44),1));
+        }
+        section.addView(kinds);
+        LinearLayout status=new LinearLayout(this);
+        for(boolean done:new boolean[]{false,true}) {
+            Button state=button(done?"完了済み":"未完了",()->{checklistCompleted=done;render();});
+            styleButton(state,checklistCompleted==done);status.addView(state,new LinearLayout.LayoutParams(0,dp(44),1));
+        }
+        if(!checklistEvents)section.addView(status);
+        JSONArray tasks=snapshot.optJSONArray("tasks");int count=0;
+        if(tasks!=null)for(int i=0;i<tasks.length();i++) {
+            JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,selectedDay.toString()))continue;
+            boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
+            if(event!=checklistEvents||!event&&checklistCompleted!="completed".equals(task.optString("status")))continue;
+            section.addView(checklistTaskRow(task));count++;
+        }
+        if(count==0)section.addView(label(checklistEvents?"この日のイベントはありません":"この日のタスクはありません"));
+        LinearLayout actions=new LinearLayout(this);
+        if(ApiClient.canMutate())actions.addView(button(checklistEvents?"＋ イベント":"＋ タスク",this::addTask),new LinearLayout.LayoutParams(0,dp(44),1));
+        actions.addView(button("期限なし・全件",()->showWebPage("/app/tasks.php?date="+selectedDay)),new LinearLayout.LayoutParams(0,dp(44),1));
+        section.addView(actions);addPanel(section);
+    }
+    private LinearLayout checklistTaskRow(JSONObject task) {
+        LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
+        boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
+        int occurrence=task.optInt("recurrence_occurrence_id"),id=occurrence>0?occurrence:task.optInt("id");
+        if(!event) {
+            CheckBox box=new CheckBox(this);styleCheckBox(box);
+            box.setChecked("completed".equals(task.optString("status")));
+            box.setContentDescription(task.optString("title")+"の完了状態");
+            box.setEnabled(id>0&&ApiClient.canMutate());
+            box.setOnClickListener(v->toggle(occurrence>0?"recurrence":"task",id,box));
+            line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
+        }
+        line.addView(inlineTitle(occurrence>0?"recurrence":"task",occurrence>0?task.optInt("recurrence_rule_id"):id,task,"title"),
+            new LinearLayout.LayoutParams(0,dp(52),1));
+        if(!event&&occurrence==0&&id>0)line.addView(button("⤷",()->showTaskChildren(id)),new LinearLayout.LayoutParams(dp(40),dp(44)));
+        if(ApiClient.canMutate())line.addView(button("ⓘ",()->{if(occurrence>0)recurringOccurrenceActions(task);else taskActions(task);}),
+            new LinearLayout.LayoutParams(dp(40),dp(44)));
+        return line;
+    }
+    private void showTaskChildren(int parentId) {
+        int epoch=sessionEpoch;
+        network.execute(()->{
+            try {
+                JSONObject result=ApiClient.request("/api/task-children?parent_id="+parentId,null);
+                JSONArray children=result.optJSONArray("children");
+                runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                    LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
+                    if(children!=null)for(int i=0;i<children.length();i++){
+                        JSONObject child=children.optJSONObject(i);if(child!=null)list.addView(checklistTaskRow(child));
+                    }
+                    if(children==null||children.length()==0)list.addView(label("子タスクはありません"));
+                    ScrollView scroll=new ScrollView(this);scroll.addView(list);
+                    AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("子タスク").setView(scroll).setNegativeButton("閉じる",null);
+                    if(result.optBoolean("canAddChildren")&&ApiClient.canMutate())
+                        dialog.setPositiveButton("＋ 子タスク",(d,w)->showWebPage("/app/tasks.php?date="+selectedDay));
+                    dialog.show();
+                });
+            }catch(Exception error){runOnUiThread(()->{if(epoch==sessionEpoch)Toast.makeText(this,"子タスクを取得できませんでした",Toast.LENGTH_SHORT).show();});}
+        });
     }
     private void renderGoods() {
         boolean shopping=goodsKind.equals("shopping");
@@ -1848,13 +1971,40 @@ public final class MainActivity extends Activity {
         for(int i=0;i<values.length();i++) if(target.equals(values.optString(i))) return true;
         return false;
     }
-    private void toggle(String type, int id, CheckBox box) {
-        box.setEnabled(false); boolean completed=box.isChecked();
-        network.execute(() -> {
-            try { ApiClient.request("/api/toggle", new JSONObject().put("type", type).put("id", id)
-                .put("completed", completed).put("csrf", snapshot.getString("csrf")));
-                runOnUiThread(this::load);
-            } catch (Exception e) { runOnUiThread(() -> { box.setChecked(!completed); box.setEnabled(true); Toast.makeText(this, "更新できませんでした", Toast.LENGTH_SHORT).show(); }); }
+    private void toggle(String type,int id,CheckBox box) {
+        if(snapshot==null||!ApiClient.canMutate()||id<=0)return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");boolean completed=box.isChecked();
+        box.setEnabled(false);
+        network.execute(()->{
+            try {
+                if(epoch!=sessionEpoch)return;
+                if("task".equals(type)&&completed) {
+                    JSONObject inspect=ApiClient.request("/api/task-parent-completion",new JSONObject().put("csrf",csrf).put("id",id).put("action","inspect"));
+                    int children=inspect.optInt("incomplete_children");
+                    if(children>0) {
+                        runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                            box.setChecked(false);box.setEnabled(true);
+                            new AlertDialog.Builder(this).setTitle("未完了の子タスクが"+children+"件あります")
+                                .setItems(new String[]{"子タスクもすべて完了する","子タスクを親タスクとして残す"},(dialog,which)->
+                                    completeParentTask(id,which==0?"complete":"promote",epoch,csrf))
+                                .setNegativeButton("キャンセル",null).show();
+                        });return;
+                    }
+                }
+                ApiClient.request("/api/toggle",new JSONObject().put("type",type).put("id",id).put("completed",completed).put("csrf",csrf));
+                runOnUiThread(()->{if(epoch==sessionEpoch)load();});
+            }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                box.setChecked(!completed);box.setEnabled(true);Toast.makeText(this,"更新できませんでした",Toast.LENGTH_SHORT).show();
+            });}
+        });
+    }
+    private void completeParentTask(int id,String policy,int epoch,String csrf) {
+        network.execute(()->{
+            try {
+                if(epoch!=sessionEpoch)return;
+                ApiClient.request("/api/task-parent-completion",new JSONObject().put("csrf",csrf).put("id",id).put("action","complete").put("child_policy",policy));
+                runOnUiThread(()->{if(epoch==sessionEpoch)load();});
+            }catch(Exception error){runOnUiThread(()->{if(epoch==sessionEpoch)Toast.makeText(this,"親タスクを完了できませんでした",Toast.LENGTH_LONG).show();});}
         });
     }
     private void addGoods(boolean shopping) {
@@ -1920,7 +2070,7 @@ public final class MainActivity extends Activity {
             },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
         });
         dateRef[0]=date;
-        CheckBox event=new CheckBox(this); event.setText("イベントとして登録");
+        CheckBox event=new CheckBox(this); event.setText("イベントとして登録");event.setChecked(tab.equals("goods")&&checklistEvents);
         CheckBox allDay=new CheckBox(this); allDay.setText("終日"); allDay.setChecked(true);
         final String[] startTime={"09:00"}, endTime={"10:00"};
         final Button[] startTimeButton=new Button[1], endTimeButton=new Button[1];
@@ -2382,10 +2532,12 @@ public final class MainActivity extends Activity {
         content.addView(heading("家族ログ"));
         boolean readOnly=familyLogCached||!ApiClient.canMutate();
         LinearLayout days=new LinearLayout(this);
-        days.addView(button("◀",() -> { selectedDay=selectedDay.minusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
-        days.addView(label(selectedDay.toString()));
-        days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
-        days.addView(button("更新",this::loadFamilyLog));
+        days.addView(button("‹",()->{selectedDay=selectedDay.minusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(44),dp(44)));
+        days.addView(button(selectedDay.getYear()%100+"."+selectedDay.getMonthValue()+"."+selectedDay.getDayOfMonth(),()->
+            new DatePickerDialog(this,(picker,y,m,d)->{selectedDay=LocalDate.of(y,m+1,d);month=YearMonth.from(selectedDay);loadFamilyLog();},
+                selectedDay.getYear(),selectedDay.getMonthValue()-1,selectedDay.getDayOfMonth()).show()),new LinearLayout.LayoutParams(0,dp(44),1));
+        days.addView(button("›",()->{selectedDay=selectedDay.plusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(44),dp(44)));
+        days.addView(button("↻",this::loadFamilyLog),new LinearLayout.LayoutParams(dp(44),dp(44)));
         addPanel(days);
         if(pendingFamilyLogPhoto!=null && !readOnly) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
@@ -2393,20 +2545,29 @@ public final class MainActivity extends Activity {
         }
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
         if(readOnly) content.addView(label("読み取り専用で表示中（接続と認証を確認しています）"));
-        if(!readOnly) {
-            content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
-            if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
-            if(familyLog.optBoolean("canManageQuickActions")) content.addView(button("クイック記録を管理",this::manageQuickActions));
-            if(familyLog.optBoolean("canManageChores")) content.addView(button("ちょこっと家事の項目管理",this::manageQuickChores));
+        if(subjects!=null&&subjects.length()>0) {
+            ArrayList<String> names=new ArrayList<>();ArrayList<Integer> ids=new ArrayList<>();
+            names.add("すべての記録対象");ids.add(0);
+            for(int i=0;i<subjects.length();i++){JSONObject subject=subjects.optJSONObject(i);if(subject!=null){names.add(subject.optString("name"));ids.add(subject.optInt("id"));}}
+            Spinner selected=new Spinner(this);selected.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
+            int current=ids.indexOf(familyLogSubjectId);if(current<0){familyLogSubjectId=0;current=0;}selected.setSelection(current);
+            selected.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+                public void onNothingSelected(android.widget.AdapterView<?> parent){}
+                public void onItemSelected(android.widget.AdapterView<?> parent,android.view.View view,int position,long id){
+                    if(familyLogSubjectId!=ids.get(position)){familyLogSubjectId=ids.get(position);render();}
+                }
+            });
+            content.addView(selected);
         }
+        if(!readOnly)content.addView(button("⚙ 家族ログ管理",this::familyLogManageActions));
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
         if(!readOnly) {
-            content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
-            content.addView(button("📊 期間の集計",this::chooseFamilyLogSummary));
-            content.addView(button("＋ 記録を追加",this::addFamilyLog));
-            content.addView(button("＋ タイマー",this::startFamilyLogTimer));
+            LinearLayout add=new LinearLayout(this);
+            add.addView(button("＋ 記録",this::addFamilyLog),new LinearLayout.LayoutParams(0,dp(44),1));
+            add.addView(button("＋ タイマー",this::startFamilyLogTimer),new LinearLayout.LayoutParams(0,dp(44),1));
+            content.addView(add);
         }
         JSONArray timers=readOnly?null:familyLog.optJSONArray("timers");
         if(timers!=null && timers.length()>0) {
@@ -2422,50 +2583,6 @@ public final class MainActivity extends Activity {
             }
         }
         if(!readOnly&&familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
-        boolean today=!readOnly&&selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
-        JSONArray quickActions=today?familyLog.optJSONArray("quickActions"):null;
-        if(today) {
-            JSONArray chores=familyLog.optJSONArray("chores");
-            if(chores!=null && chores.length()>0) {
-                content.addView(label("ちょこっと家事"));
-                int weekday=selectedDay.getDayOfWeek().getValue()%7;
-                for(int i=0;i<chores.length();i++) {
-                    JSONObject chore=chores.optJSONObject(i);if(chore==null || chore.optInt("active",1)!=1 || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
-                    content.addView(button(chore.optString("icon","✨")+" "+chore.optString("name"),() -> recordQuickChore(chore)));
-                }
-            }
-        }
-        for(int i=0;!readOnly&&i<subjects.length();i++) {
-            JSONObject subject=subjects.optJSONObject(i);
-            if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
-            content.addView(label(subject.optString("name")));
-            LinearLayout actions=new LinearLayout(this);
-            ArrayList<String> enabled=allowedLogTypes(subject);
-            boolean hasQuick=false;
-            if(quickActions!=null) for(int n=0;n<quickActions.length();n++) {
-                JSONObject quick=quickActions.optJSONObject(n);
-                if(quick==null || quick.optInt("active",1)!=1 || quick.optInt("subject_id")!=subject.optInt("id")) continue;
-                hasQuick=true;
-                actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
-            }
-            if(hasQuick) { content.addView(horizontalActions(actions)); continue; }
-            if(enabled.contains("SLEEP")) {
-                boolean sleeping=false;
-                if(timers!=null) for(int n=0;n<timers.length();n++) {
-                    JSONObject running=timers.optJSONObject(n);
-                    if(running!=null && running.optInt("subject_id")==subject.optInt("id") &&
-                        "SLEEP".equals(running.optString("log_type"))) sleeping=true;
-                }
-                if(!sleeping) actions.addView(button("😴 睡眠開始",() -> changeFamilyLogTimer("sleep_start",subject.optInt("id"),0,"")));
-            }
-            if(enabled.contains("MILK")) actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
-            if(enabled.contains("MEAL")) actions.addView(button("🍚 離乳食",() -> recordBaby(subject,"MEAL","BABY_FOOD")));
-            if(enabled.contains("DIAPER")) {
-                actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
-                actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
-            }
-            if(actions.getChildCount()>0) content.addView(horizontalActions(actions));
-        }
         if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
         if(logs!=null && !familyLog.optBoolean("truncated")) {
             double milk=0; int diaper=0,sleep=0;
@@ -2484,19 +2601,19 @@ public final class MainActivity extends Activity {
         content.addView(heading("当日の記録"));
         if(logs==null || logs.length()==0) { content.addView(label("記録はありません")); return; }
         for(int i=0;i<logs.length();i++) {
-            JSONObject row=logs.optJSONObject(i); if(row==null) continue;
+            JSONObject row=logs.optJSONObject(i); if(row==null||familyLogSubjectId>0&&row.optInt("subject_id")!=familyLogSubjectId) continue;
             String time=row.optString("occurred_at");
             if(time.length()>=16) time=time.substring(11,16);
             String detail=row.optString("detail_code");
             String amount=row.isNull("amount")?"":row.optString("amount")+row.optString("unit");
             LinearLayout record=panel();
-            TextView entry=label(time+"   "+logTypeIcon(row.optString("log_type"))+"  "+
+            TextView entry=label(time+"   "+
                 logTypeName(row.optString("log_type"))+
                 (amount.isEmpty()?"":"  "+amount));
             entry.setTextSize(17);entry.setTypeface(null,android.graphics.Typeface.BOLD);
             record.addView(entry);
             TextView details=label(row.optString("subject_name")+
-                (detail.isEmpty()?"":" ・ "+detail)+
+                (detail.isEmpty()?"":" ・ "+familyLogDetailLabel(detail))+
                 (row.optString("value_text").isEmpty()?"":" ・ "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
             details.setTextSize(13);details.setTextColor(mutedColor());record.addView(details);
@@ -2515,6 +2632,89 @@ public final class MainActivity extends Activity {
     private HorizontalScrollView horizontalActions(LinearLayout actions) {
         HorizontalScrollView scroll=new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);scroll.addView(actions);return scroll;
+    }
+    private String familyLogDetailLabel(String detail) {
+        switch(detail) {
+            case "WET":return "おしっこ";case "DIRTY":return "うんち";case "BOTH":return "両方";
+            case "BABY_FOOD":return "離乳食";case "BREAKFAST":return "朝食";case "LUNCH":return "昼食";
+            case "DINNER":return "夕食";case "SNACK":return "おやつ";case "OTHER":return "その他";
+            default:return detail;
+        }
+    }
+    private void familyLogManageActions() {
+        ArrayList<String> names=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        names.add("＋ 記録対象");actions.add(this::addFamilyLogSubject);
+        names.add("記録対象の名前・表示");actions.add(this::manageFamilyLogSubjects);
+        if(familyLog!=null&&familyLog.optBoolean("canManageSettings")){names.add("表示設定");actions.add(this::showFamilyLogSettings);}
+        if(familyLog!=null&&familyLog.optBoolean("canManageQuickActions")){names.add("クイック記録");actions.add(this::manageQuickActions);}
+        if(familyLog!=null&&familyLog.optBoolean("canManageChores")){names.add("日常家事");actions.add(this::manageQuickChores);}
+        names.add("Web版の家族ログ管理");actions.add(()->showWebPage("/app/settings_family_log.php"));
+        new AlertDialog.Builder(this).setTitle("家族ログ管理").setItems(names.toArray(new String[0]),(d,w)->actions.get(w).run()).show();
+    }
+    private void renderFamilyLogDock() {
+        if(pageDock==null)return;pageDock.removeAllViews();
+        LinearLayout dock=new LinearLayout(this);dock.setOrientation(LinearLayout.VERTICAL);
+        if(familyLog!=null&&selectedDay.toString().equals(familyLog.optString("date"))) {
+            boolean readOnly=familyLogCached||!ApiClient.canMutate();
+            JSONArray subjects=familyLog.optJSONArray("subjects"),timers=readOnly?null:familyLog.optJSONArray("timers");
+            if(subjects!=null)populateFamilyLogQuickDock(dock,subjects,timers,readOnly);
+        }
+        LinearLayout links=new LinearLayout(this);
+        String[] names={"📓 成長日記","📖 家族日誌","🥕 食材","📊 まとめ"};
+        Runnable[] actions={()->showWebPage("/app/child_journal.php"),()->showWebPage("/app/family_journal.php"),
+            ()->showWebPage("/app/child_foods.php"),this::chooseFamilyLogSummary};
+        for(int i=0;i<names.length;i++){Button link=button(names[i],actions[i]);link.setTextSize(11);link.setPadding(0,0,0,0);
+            links.addView(link,new LinearLayout.LayoutParams(0,dp(42),1));}
+        if(dock.getChildCount()>0){ScrollView quickScroll=new ScrollView(this);quickScroll.addView(dock);
+            pageDock.addView(quickScroll,new LinearLayout.LayoutParams(-1,dp(132)));}
+        pageDock.addView(links);
+    }
+    private void populateFamilyLogQuickDock(LinearLayout dock,JSONArray subjects,JSONArray timers,boolean readOnly) {
+        boolean today=!readOnly&&selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
+        JSONArray quickActions=today?familyLog.optJSONArray("quickActions"):null;
+        if(today) {
+            JSONArray chores=familyLog.optJSONArray("chores");
+            if(chores!=null && chores.length()>0) {
+                dock.addView(label("日常家事"));
+                int weekday=selectedDay.getDayOfWeek().getValue()%7;
+                for(int i=0;i<chores.length();i++) {
+                    JSONObject chore=chores.optJSONObject(i);if(chore==null || chore.optInt("active",1)!=1 || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
+                    dock.addView(button(chore.optString("icon","✨")+" "+chore.optString("name"),() -> recordQuickChore(chore)));
+                }
+            }
+        }
+        for(int i=0;!readOnly&&i<subjects.length();i++) {
+            JSONObject subject=subjects.optJSONObject(i);
+            if(subject==null||familyLogSubjectId>0&&subject.optInt("id")!=familyLogSubjectId)continue;
+            dock.addView(label(subject.optString("name")));
+            LinearLayout actions=new LinearLayout(this);
+            ArrayList<String> enabled=allowedLogTypes(subject);
+            boolean hasQuick=false;
+            if(quickActions!=null) for(int n=0;n<quickActions.length();n++) {
+                JSONObject quick=quickActions.optJSONObject(n);
+                if(quick==null || quick.optInt("active",1)!=1 || quick.optInt("subject_id")!=subject.optInt("id")) continue;
+                hasQuick=true;
+                actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
+            }
+            if(hasQuick) { dock.addView(horizontalActions(actions)); continue; }
+            if(!"BABY".equals(subject.optString("subject_kind")))continue;
+            if(enabled.contains("SLEEP")) {
+                boolean sleeping=false;
+                if(timers!=null) for(int n=0;n<timers.length();n++) {
+                    JSONObject running=timers.optJSONObject(n);
+                    if(running!=null && running.optInt("subject_id")==subject.optInt("id") &&
+                        "SLEEP".equals(running.optString("log_type"))) sleeping=true;
+                }
+                if(!sleeping) actions.addView(button("😴 睡眠開始",() -> changeFamilyLogTimer("sleep_start",subject.optInt("id"),0,"")));
+            }
+            if(enabled.contains("MILK")) actions.addView(button("🍼 ミルク",() -> recordBaby(subject,"MILK","")));
+            if(enabled.contains("MEAL")) actions.addView(button("🍚 離乳食",() -> recordBaby(subject,"MEAL","BABY_FOOD")));
+            if(enabled.contains("DIAPER")) {
+                actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
+                actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
+            }
+            if(actions.getChildCount()>0) dock.addView(horizontalActions(actions));
+        }
     }
     private String logTypeIcon(String type) {
         switch(type) {
@@ -3423,15 +3623,23 @@ public final class MainActivity extends Activity {
                 JSONObject result=ApiClient.request("/api/message-chat-sync?before="+(before>0?before:9007199254740991L),null);
                 if(epoch!=sessionEpoch) return;
                 JSONArray page=result.optJSONArray("messages");
+                Map<Integer,JSONObject> stampPage=new HashMap<>();StringBuilder idsForStamps=new StringBuilder();
+                if(page!=null)for(int i=0;i<page.length();i++){JSONObject row=page.optJSONObject(i);if(row!=null&&row.optBoolean("hasStamp")){if(idsForStamps.length()>0)idsForStamps.append(",");idsForStamps.append(row.optInt("id"));}}
+                if(idsForStamps.length()>0)try{
+                    JSONArray stamps=ApiClient.request("/api/message-stamps?ids="+idsForStamps,null).optJSONArray("stamps");
+                    if(stamps!=null)for(int i=0;i<stamps.length();i++){JSONObject stamp=stamps.optJSONObject(i);if(stamp!=null)stampPage.put(stamp.optInt("messageId"),stamp);}
+                }catch(Exception ignored){/* Text remains available if stamp metadata fails. */}
+
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch||!tab.equals("messages")) return;
-                    if(before==0) messages=page==null?new JSONArray():page;
+                    if(before==0){messageStamps.clear();messages=page==null?new JSONArray():page;}
                     else if(page!=null) {
                         JSONArray combined=new JSONArray();
                         for(int i=0;i<page.length();i++) combined.put(page.optJSONObject(i));
                         for(int i=0;i<messages.length();i++) combined.put(messages.optJSONObject(i));
                         messages=combined;
                     }
+                    messageStamps.putAll(stampPage);
                     hasOlderMessages=result.optBoolean("hasOlder"); render();
                 });
                 if(page!=null&&page.length()>0&&snapshot!=null) {
@@ -3452,51 +3660,126 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderMessages() {
-        content.addView(heading("伝言"));
-        LinearLayout actions=new LinearLayout(this);
-        if(ApiClient.canMutate()) {
-            Button send=button("＋ 伝言する",this::addMessage);styleButton(send,true);
-            actions.addView(send,new LinearLayout.LayoutParams(0,dp(48),1));
-            actions.addView(button("スタンプ",this::chooseMessageStamp),new LinearLayout.LayoutParams(0,dp(48),1));
-            actions.addView(button("写真",this::chooseMessagePhoto),new LinearLayout.LayoutParams(0,dp(48),1));
-        }
-        addPanel(actions);
-        if(snapshot!=null&&snapshot.optBoolean("canManageStamps")&&ApiClient.canMutate())
-            content.addView(button("リアクション設定",this::editMessageReactions));
-        if(pendingPhoto!=null&&ApiClient.canMutate())content.addView(button("写真送信を再試行",this::retryMessagePhoto));
-        content.addView(button("更新",()->loadMessages(0)));
-        if(hasOlderMessages&&messages.length()>0)
-            content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
+        content.addView(heading("家族"));
+        TextView subtitle=label("家族グループ");subtitle.setTextSize(12);subtitle.setTextColor(mutedColor());content.addView(subtitle);
+        content.addView(button("↻ 更新",()->loadMessages(0)));
+        if(hasOlderMessages&&messages.length()>0)content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
+        String previousDay="";
         for(int n=0;n<messages.length();n++) {
             JSONObject row=messages.optJSONObject(n);if(row==null)continue;
+            String created=row.optString("createdAt"),day=created.length()>=10?created.substring(0,10):"";
+            if(!day.equals(previousDay)){TextView date=label(day);date.setTextSize(12);date.setGravity(Gravity.CENTER);date.setTextColor(mutedColor());content.addView(date);previousDay=day;}
             boolean mine=snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId");
-            LinearLayout wrapper=new LinearLayout(this);wrapper.setOrientation(LinearLayout.VERTICAL);
-            wrapper.setGravity(mine?Gravity.END:Gravity.START);
-            TextView sender=label(row.optString("senderName")+" ・ "+row.optString("createdAt"));
-            sender.setTextSize(11);sender.setTextColor(mutedColor());sender.setPadding(dp(8),dp(4),dp(8),0);
-            wrapper.addView(sender);
-            LinearLayout bubble=new LinearLayout(this);bubble.setOrientation(LinearLayout.VERTICAL);
-            bubble.setPadding(dp(12),dp(4),dp(12),dp(4));
-            bubble.setBackground(shape(mine?Color.parseColor(darkMode()?"#3F6D46":"#8DE055"):surfaceColor(),
-                mine?Color.TRANSPARENT:lineColor(),14));
-            TextView body=label(row.optString("text")+
-                (row.optBoolean("hasImage")?"\n📷 写真あり":"")+
-                (row.optBoolean("hasStamp")?"\nスタンプあり":""));
-            body.setTextSize(15);body.setPadding(0,dp(6),0,dp(6));bubble.addView(body);
-            if(ApiClient.canMutate())bubble.setOnLongClickListener(view -> {messageActions(row);return true;});
-            wrapper.addView(bubble);
-            if(mine) {
-                TextView read=label("既読 "+row.optInt("readCount"));
-                read.setTextSize(10);read.setTextColor(mutedColor());read.setPadding(dp(8),0,dp(8),0);
-                wrapper.addView(read);
+            LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.TOP);
+            LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);stack.setGravity(mine?Gravity.END:Gravity.START);
+            ImageView avatar=new ImageView(this);avatar.setContentDescription(row.optString("senderName"));
+            avatar.setBackground(shape(softColor(),lineColor(),100));
+            String avatarUrl=row.optString("avatarUrl");
+            if(!avatarUrl.isEmpty())loadInlineAvatar(avatar,avatarUrl);
+            else {android.graphics.drawable.GradientDrawable circle=shape(softColor(),lineColor(),100);avatar.setImageDrawable(circle);}
+            if(!mine)line.addView(avatar,new LinearLayout.LayoutParams(dp(34),dp(34)));
+            TextView sender=label(row.optString("senderName"));sender.setTextSize(11);sender.setTextColor(mutedColor());sender.setPadding(dp(8),0,dp(8),dp(3));stack.addView(sender);
+            LinearLayout bubble=new LinearLayout(this);bubble.setOrientation(LinearLayout.VERTICAL);bubble.setPadding(dp(12),dp(6),dp(12),dp(6));
+            boolean stamp=row.optBoolean("hasStamp");
+            bubble.setBackground(shape(stamp?Color.TRANSPARENT:mine?Color.parseColor(darkMode()?"#3F6D46":"#8DE055"):surfaceColor(),
+                stamp||mine?Color.TRANSPARENT:lineColor(),14));
+            if(!row.optString("text").isEmpty()){TextView body=label(row.optString("text"));body.setTextSize(15);body.setPadding(0,0,0,0);bubble.addView(body);}
+            int id=row.optInt("id");
+            if(row.optBoolean("hasImage")&&id>0) {
+                ImageView photo=new ImageView(this);photo.setScaleType(ImageView.ScaleType.FIT_CENTER);photo.setAdjustViewBounds(true);
+                photo.setContentDescription("伝言の写真。タップで拡大");bubble.addView(photo,new LinearLayout.LayoutParams(dp(190),dp(150)));
+                loadInlineMedia(photo,"/api/messages?photo="+id);photo.setOnClickListener(v->showMessagePhoto(id));
+                if(ApiClient.canMutate())photo.setOnLongClickListener(v->{messageActions(row);return true;});
             }
-            if(row.optBoolean("hasImage")&&row.optInt("id")>0)
-                wrapper.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
-            if(row.optBoolean("hasStamp")&&row.optInt("id")>0)
-                wrapper.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
-            lp.setMargins(0,0,0,dp(10));content.addView(wrapper,lp);
+            if(stamp&&id>0) {
+                ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setContentDescription("スタンプ。タップで表示・再生");
+                bubble.addView(image,new LinearLayout.LayoutParams(dp(160),dp(160)));
+                JSONObject meta=messageStamps.get(id);
+                if(meta!=null)loadInlineMedia(image,meta.optString("thumbnailUrl",meta.optString("fullUrl")));
+                image.setOnClickListener(v->showMessageStamp(id));
+                if(ApiClient.canMutate())image.setOnLongClickListener(v->{messageActions(row);return true;});
+            }
+            if(ApiClient.canMutate())bubble.setOnLongClickListener(v->{messageActions(row);return true;});
+            stack.addView(bubble);
+            String when=created.length()>=16?created.substring(11,16):created;
+            TextView info=label(when+(mine?" ・ "+(row.optInt("readCount")>0?"既読"+row.optInt("readCount"):"未読"):""));
+            info.setTextSize(10);info.setTextColor(mutedColor());info.setPadding(dp(4),dp(3),dp(4),0);stack.addView(info);
+            line.addView(stack,new LinearLayout.LayoutParams(0,-2,1));
+            if(mine)line.addView(avatar,new LinearLayout.LayoutParams(dp(34),dp(34)));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,0,0,dp(14));content.addView(line,lp);
         }
+        if(messages.length()==0)content.addView(label("まだメッセージはありません"));
+    }
+    private void loadInlineMedia(ImageView view,String path) {
+        if(path.isEmpty())return;
+        int epoch=sessionEpoch,generation=stampGeneration;
+        Bitmap cached=stampImages.get(path);if(cached!=null){view.setImageBitmap(cached);return;}
+        stampMedia.execute(()->{
+            try {
+                if(epoch!=sessionEpoch||generation!=stampGeneration)return;
+                Bitmap image=ApiClient.thumbnail(path);
+                runOnUiThread(()->{if(epoch!=sessionEpoch||generation!=stampGeneration)return;
+                    stampImages.put(path,image);if(view.isAttachedToWindow())view.setImageBitmap(image);
+                });
+            }catch(Exception ignored){runOnUiThread(()->{if(epoch==sessionEpoch)view.setContentDescription(view.getContentDescription()+"。画像を取得できませんでした");});}
+        });
+    }
+    private void loadInlineAvatar(ImageView view,String url) {
+        int epoch=sessionEpoch;Bitmap cached=stampImages.get(url);if(cached!=null){view.setImageBitmap(cached);return;}
+        stampMedia.execute(()->{
+            try{Bitmap avatar=ApiClient.avatar(url);runOnUiThread(()->{if(epoch==sessionEpoch){stampImages.put(url,avatar);if(view.isAttachedToWindow())view.setImageBitmap(avatar);}});}
+            catch(Exception ignored){/* Keep the neutral avatar when LINE media is unavailable. */}
+        });
+    }
+    private LinearLayout messageComposer() {
+        LinearLayout composer=new LinearLayout(this);composer.setGravity(Gravity.CENTER_VERTICAL);composer.setPadding(dp(6),dp(4),dp(6),dp(4));
+        if(messageDraftEpoch!=sessionEpoch){messageDraftEpoch=sessionEpoch;messageDraft="";inlineMessageSending=false;}
+        composer.addView(button("＋",this::messageComposerActions),new LinearLayout.LayoutParams(dp(44),dp(48)));
+        EditText input=new EditText(this);input.setText(messageDraft);input.setHint("メッセージ");input.setTextColor(textColor());input.setHintTextColor(mutedColor());
+        input.setMaxLines(3);input.setTextSize(15);input.setBackground(shape(pageColor(),lineColor(),22));input.setPadding(dp(12),dp(8),dp(12),dp(8));
+        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(5000)});
+        input.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence x,int start,int count,int after){}
+            public void onTextChanged(CharSequence x,int start,int before,int count){messageDraft=x.toString();}
+            public void afterTextChanged(android.text.Editable x){}
+        });
+        composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
+        Button send=button("➤",()->sendInlineMessage(input));send.setContentDescription("メッセージを送信");styleButton(send,true);
+        composer.addView(send,new LinearLayout.LayoutParams(dp(44),dp(48)));
+        input.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);send.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
+        return composer;
+    }
+    private void updateMessageComposerReadiness() {
+        if(pageDock==null||pageDock.getChildCount()==0)return;
+        LinearLayout composer=(LinearLayout)pageDock.getChildAt(0);
+        for(int i=0;i<composer.getChildCount();i++)composer.getChildAt(i).setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
+    }
+    private void messageComposerActions() {
+        ArrayList<String> names=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        if(ApiClient.canMutate()){
+            names.add("スタンプ");actions.add(this::chooseMessageStamp);
+            names.add("写真");actions.add(this::chooseMessagePhoto);
+            names.add("宛先・送信予約");actions.add(this::addMessage);
+            if(snapshot!=null&&snapshot.optBoolean("canManageStamps")){names.add("リアクション設定");actions.add(this::editMessageReactions);}
+            if(pendingPhoto!=null){names.add("写真送信を再試行");actions.add(this::retryMessagePhoto);}
+        }
+        names.add("Web版の伝言");actions.add(()->showWebPage("/app/messages.php"));
+        new AlertDialog.Builder(this).setTitle("伝言").setItems(names.toArray(new String[0]),(d,w)->actions.get(w).run()).show();
+    }
+    private void sendInlineMessage(EditText input) {
+        String text=input.getText().toString().trim();
+        if(text.isEmpty()||inlineMessageSending||snapshot==null||!ApiClient.canMutate())return;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");inlineMessageSending=true;updateMessageComposerReadiness();
+        network.execute(()->{
+            try {
+                if(epoch!=sessionEpoch)return;
+                JSONObject saved=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",text).put("target_member_id",0).put("reminder_at",""));
+                notifyMessageImmediately(saved.optInt("id"),csrf);
+                runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;messageDraft="";input.setText("");updateMessageComposerReadiness();loadMessages(0);});
+            }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;updateMessageComposerReadiness();
+                Toast.makeText(this,"送信を確認できませんでした。更新して確認してください。入力内容は保持しています",Toast.LENGTH_LONG).show();
+            });}
+        });
     }
     private void messageActions(JSONObject row) {
         int id=row.optInt("id");if(id<=0||snapshot==null) return;

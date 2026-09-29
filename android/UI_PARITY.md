@@ -1,0 +1,29 @@
+# Android UI parity and verification
+
+## Source basis
+
+Read the canonical Web home/dashboard, checklist controller and reminder interaction assets, goods-category-controller, message-chat page/sync/client/composer, family-log compact/simple/page, location client and recurrence projection. Native code calls the existing authenticated Web APIs and keeps the signed session; it does not create a second D1/R2 store.
+
+## Page coverage in this update
+
+| Page | Native changes | Web-backed parts / remaining differences |
+| --- | --- | --- |
+| Home | Today list, summary cards, quick task/goods creation, links to all tabs and family journal | Full dashboard alerts, yesterday journal and fortune remain on Web home |
+| Checklist | Task/event section, separate title editing and completion, status tabs, goods categories, continuous entry, details, child-task viewer | Undated/all-history tasks via explicit Web link; full child creation, inline category rename/lifecycle and row dragging still differ |
+| Calendar | Task color/time/title chips, task counts, day tap opens checklist | Full multi-event packing, holiday labels and arbitrary stamp layout still differ |
+| Location | Location tab opens the authenticated in-app Web map/history; native device location settings remain accessible | Map is Web-backed; native sharing service remains native |
+| Family Log | Subject filter, compact date controls, record cards, management menu, quick-record dock and journal/food/summary links | Growth journal, family journal, food list and full administration are Web-backed |
+| Messages | Inline photos/stamp thumbnails, LINE avatar with neutral fallback, day/time/read labels, bottom composer, long-press actions | Animated stamp playback opens the existing viewer; advanced recipient/scheduling uses existing composer |
+| Settings | Native existing settings plus link to complete Web administration | Web administration remains Web-backed |
+
+## Automated native UI verification
+
+The Android CI UI matrix runs API 30 (Android 11) and API 35 at 360 dp width in light/dark modes. The instrumentation launches the real MainActivity and native renderers with synthetic family data. It checks navigation, independent title/checkbox taps, successful inline title saving, failed-save rollback, continuous goods entry and page content. It captures page screenshots.
+
+Fixture mode is only available when both the dedicated isolated E2E origin and isolatedE2E build property are selected. The normal production APK and release have UI_TEST_MODE=false. Fixture API calls use an in-memory transport. Real API requests and media network connections are blocked in fixture mode. No credentials or production data are used by these UI checks.
+
+Screenshots and test results are uploaded as native-ui-api-30 / native-ui-api-35. The CI run result is the authoritative verification status.
+
+## Device-only checks remaining
+
+LINE login/browser handoff, real photo/document picker, OS location/notification permissions, foreground/background location behavior, real server synchronization, unstable mobile connectivity and Galaxy-specific IME/keyboard behavior still require device testing. Emulator UI checks do not establish those results.
