@@ -79,7 +79,10 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
     if(!member)return json({ok:false,error:'AUTH_REQUIRED'},401);
     const family=await context.env.DB.prepare('SELECT timezone,pwa_display_name FROM families WHERE id=? LIMIT 1')
       .bind(member.family_id).first() as {timezone:string|null;pwa_display_name:string|null}|null;
+    const members=await context.env.DB.prepare('SELECT id,name,role,active FROM members WHERE family_id=? AND deleted_at IS NULL ORDER BY id LIMIT 100')
+      .bind(member.family_id).all();
     return json({ok:true,name:String(member.name||''),role:String(member.role||''),
+      member_id:Number(member.id),members:members.results,
       notification_enabled:Number(member.notification_enabled||0)===1,
       timezone:String(family?.timezone||'Asia/Tokyo'),display_name:String(family?.pwa_display_name||'')},
       200,{'cache-control':'private, no-store'});

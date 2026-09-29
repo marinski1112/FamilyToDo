@@ -3513,7 +3513,8 @@ public final class MainActivity extends Activity {
     private void showAppSettings(JSONObject settings) {
         boolean admin="OWNER".equalsIgnoreCase(settings.optString("role"))||"ADMIN".equalsIgnoreCase(settings.optString("role"));
         String[] actions=admin?new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),
-            "家族のタイムゾーン","ホーム画面の表示名"}:new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効")};
+            "家族のタイムゾーン","ホーム画面の表示名","家族メンバー","家族を招待"}:
+            new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),"家族メンバー"};
         new AlertDialog.Builder(this).setTitle("アプリ設定").setItems(actions,(dialog,which) -> {
             if(which==0) {
                 EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("name"));
@@ -3528,7 +3529,7 @@ public final class MainActivity extends Activity {
                 boolean enabled=!settings.optBoolean("notification_enabled");
                 try {saveAppSetting("/api/settings",new JSONObject().put("action","notification").put("enabled",enabled));}
                 catch(Exception ignored) { }
-            } else if(which==2) {
+            } else if(which==2&&admin) {
                 String[] zones={"Asia/Tokyo","UTC","America/Los_Angeles","America/New_York","Europe/London","Australia/Sydney"};
                 new AlertDialog.Builder(this).setTitle("家族のタイムゾーン")
                     .setSingleChoiceItems(zones,Math.max(0,java.util.Arrays.asList(zones).indexOf(settings.optString("timezone"))),
@@ -3541,7 +3542,7 @@ public final class MainActivity extends Activity {
                                     catch(Exception ignored) { }
                                 }).setNegativeButton("戻る",null).show();
                         }).setNegativeButton("戻る",null).show();
-            } else if(which==3) {
+            } else if(which==3&&admin) {
                 EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("display_name"));
                 input.setHint("空欄で標準名に戻す");
                 new AlertDialog.Builder(this).setTitle("ホーム画面の表示名").setView(input)
@@ -3551,8 +3552,61 @@ public final class MainActivity extends Activity {
                         try {saveAppSetting("/api/pwa-branding",new JSONObject().put("display_name",name));}
                         catch(Exception ignored) { }
                     }).setNegativeButton("戻る",null).show();
+            } else if(which==4||which==2&&!admin) {
+                showAppMembers(settings,admin);
+            } else if(which==5&&admin) {
+                createFamilyInvite();
             }
         }).setNegativeButton("閉じる",null).show();
+    }
+    private void showAppMembers(JSONObject settings,boolean admin) {
+        JSONArray members=settings.optJSONArray("members");if(members==null) return;
+        String[] names=new String[members.length()];
+        for(int i=0;i<members.length();i++) {
+            JSONObject member=members.optJSONObject(i);
+            names[i]=member==null?"家族":member.optString("name")+" ・ "+member.optString("role")+
+                (member.optInt("active",1)==1?"":"（停止中）");
+        }
+        new AlertDialog.Builder(this).setTitle("家族メンバー").setItems(names,(dialog,which) -> {
+            JSONObject member=members.optJSONObject(which);
+            if(member==null||!admin||member.optInt("id")==settings.optInt("member_id")||
+                "OWNER".equalsIgnoreCase(member.optString("role"))) return;
+            boolean active=member.optInt("active",1)==1;
+            new AlertDialog.Builder(this).setTitle(member.optString("name"))
+                .setMessage(active?"このメンバーの利用を停止しますか。通知も停止します。":"このメンバーを再開しますか。")
+                .setPositiveButton(active?"停止":"再開",(d,w) -> {
+                    try {saveAppSetting("/api/settings",new JSONObject().put("action","member_toggle").put("member_id",member.optInt("id")));}
+                    catch(Exception ignored) { }
+                }).setNegativeButton("戻る",null).show();
+        }).setNegativeButton("閉じる",null).show();
+    }
+    private void createFamilyInvite() {
+        if(snapshot==null) return;
+        new AlertDialog.Builder(this).setTitle("家族を招待")
+            .setMessage("7日間有効な招待リンクを発行します。リンクを知っている人だけに共有してください。")
+            .setPositiveButton("発行して共有",(dialog,which) -> {
+                int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+                network.execute(() -> {
+                    try {
+                        if(epoch!=sessionEpoch) return;
+                        JSONObject response=ApiClient.request("/api/family/invite",new JSONObject()
+                            .put("csrf",csrf).put("expires_days",7));
+                        String url=response.optString("url");
+                        if(!url.startsWith(ApiClient.ORIGIN+"/family/join.php?token=")) throw new IllegalStateException("Invalid invite URL");
+                        JSONObject official=response.optJSONObject("official_account");
+                        String add=official==null?"":official.optString("add_friend_url");
+                        String text="FamilyToDoへの招待です。\n"+
+                            (add.startsWith("https://")?"先に公式アカウントを追加してください: "+add+"\n":"")+url;
+                        runOnUiThread(() -> {
+                            if(epoch!=sessionEpoch) return;
+                            Intent share=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text);
+                            startActivity(Intent.createChooser(share,"招待リンクを共有"));
+                        });
+                    } catch(Exception error) {
+                        runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"招待リンクを発行できませんでした",Toast.LENGTH_SHORT).show();});
+                    }
+                });
+            }).setNegativeButton("戻る",null).show();
     }
     private void saveAppSetting(String path,JSONObject body) {
         if(snapshot==null) return;
