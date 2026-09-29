@@ -110,7 +110,7 @@ jobs:
             gradle -p android :app:connectedDebugAndroidTest -PfamilytodoVersionCode=1001 -PfamilytodoUiTest=true -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --no-daemon
             adb shell cmd uimode night yes
             gradle -p android :app:connectedDebugAndroidTest -PfamilytodoVersionCode=1001 -PfamilytodoUiTest=true -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --rerun-tasks --no-daemon
-            adb pull /sdcard/Android/data/jp.marinski.familytodo.preview/files/ui-fixture-screenshots android-ui-screenshots
+            adb pull /sdcard/Download/familytodo-ui-fixture android-ui-screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:

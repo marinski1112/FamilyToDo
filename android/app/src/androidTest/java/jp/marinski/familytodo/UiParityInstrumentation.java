@@ -128,10 +128,13 @@ public final class UiParityInstrumentation extends Instrumentation {
     private void field(String name,Object value)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);f.set(activity,value);}
     private void invoke(String name)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(activity);}
     private void screenshot(String name)throws Exception{
-        settle();android.graphics.Bitmap bitmap=getUiAutomation().takeScreenshot();
-        if(bitmap==null)throw new AssertionError("screenshot unavailable");
-        java.io.File folder=new java.io.File(getTargetContext().getExternalFilesDir(null),"ui-fixture-screenshots");folder.mkdirs();
+        settle();
         String theme=(getTargetContext().getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES?"dark":"light";
-        try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(folder,theme+"-"+name+".png"))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}bitmap.recycle();
+        String destination="/sdcard/Download/familytodo-ui-fixture/"+theme+"-"+name+".png";
+        android.os.ParcelFileDescriptor result=getUiAutomation().executeShellCommand("mkdir -p /sdcard/Download/familytodo-ui-fixture && screencap -p "+destination+" && echo captured");
+        try(java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(result)){
+            String output=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+            if(!output.contains("captured"))throw new AssertionError("screenshot failed: "+output);
+        }
     }
 }
