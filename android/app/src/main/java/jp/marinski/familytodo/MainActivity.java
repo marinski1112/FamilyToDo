@@ -3607,7 +3607,11 @@ public final class MainActivity extends Activity {
         String saved=Credentials.read(this);
         Credentials.setSharingEnabled(this,false);
         stopService(new Intent(this,LocationService.class));
-        if(saved==null||snapshot==null) return;
+        if(saved==null) return;
+        if(snapshot==null) {
+            Toast.makeText(this,"端末の共有は停止しました。Web側の共有状態も確認してください",Toast.LENGTH_LONG).show();
+            return;
+        }
         String publicId=saved.split(":",2)[0],csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
         network.execute(() -> {
             try {
