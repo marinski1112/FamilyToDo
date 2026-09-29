@@ -4,6 +4,9 @@ import {bodyJson} from './request-body';
 type SyncRow={
   id:number;
   sender_id:number;
+  target_member_id:number|null;
+  converted_to_shopping_id:number|null;
+  converted_to_task_id:number|null;
   text:string;
   reminder_at:string|null;
   created_at:string;
@@ -47,7 +50,7 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
   if(releasedAfter&&!validJst(releasedAfter))return reply({ok:false,error:'INVALID_CURSOR'},400);
   if(!Number.isSafeInteger(releasedAfterId)||releasedAfterId<0||(!releasedAfter&&releasedAfterId!==0))return reply({ok:false,error:'INVALID_CURSOR'},400);
   const now=nowJst();
-  const projection=`SELECT msg.id,msg.sender_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name,s.line_picture_url,
+  const projection=`SELECT msg.id,msg.sender_id,msg.target_member_id,msg.converted_to_shopping_id,msg.converted_to_task_id,msg.text,msg.reminder_at,msg.created_at,msg.updated_at,msg.image_upload_id,s.name sender_name,s.line_picture_url,
     EXISTS(SELECT 1 FROM message_stamp_attachments a JOIN calendar_stamp_assets asset ON asset.id=a.asset_id AND asset.family_id=a.family_id AND asset.active=1 WHERE a.family_id=msg.family_id AND a.message_id=msg.id) has_stamp,
     (SELECT COUNT(*) FROM message_reads r JOIN members reader ON reader.id=r.member_id AND reader.family_id=r.family_id AND reader.active=1 AND reader.deleted_at IS NULL WHERE r.family_id=msg.family_id AND r.message_id=msg.id) read_count`;
   if(before){
@@ -111,6 +114,9 @@ export async function messageChatSyncApi(request:Request,ctx:AppContext):Promise
 function mapRow(row:SyncRow){return {
       id:Number(row.id),
       senderId:Number(row.sender_id),
+      targetMemberId:Number(row.target_member_id||0),
+      convertedShoppingId:Number(row.converted_to_shopping_id||0),
+      convertedTaskId:Number(row.converted_to_task_id||0),
       senderName:String(row.sender_name||''),
       avatarUrl:String(row.line_picture_url||''),
       readCount:Number(row.read_count||0),

@@ -1,5 +1,6 @@
 import { calendarStampAssetUrl } from './calendar-stamp-asset-url';
 import { calendarStampAssetsForAdmin } from './calendar-stamp-admin-inventory';
+import { CALENDAR_STAMP_ACTION_LIMITS } from './calendar-stamp-actions';
 import { setCalendarStampAssetActive } from './calendar-stamp-actions';
 import { registerCalendarStampPngSequence } from './calendar-stamp-png-sequence-actions';
 import {
@@ -69,9 +70,21 @@ export async function calendarStampAdminAssetsApi(request:Request,context:any):P
   const s=scope(context);if(!s)return json({ok:false,error:'AUTH_REQUIRED'},401);
   if(request.method==='GET'){
     try{
-      const assets=await calendarStampAssetsForAdmin(context.env,s.familyId,s.memberId);
+      const cursorRaw=new URL(request.url).searchParams.get('cursor');
+      let cursor:null|{active:0|1;id:number}=null;
+      if(cursorRaw!==null){
+        const match=/^([01]):([1-9]\d*)$/.exec(cursorRaw);
+        const id=match?Number(match[2]):0;
+        if(!match||!Number.isSafeInteger(id))return json({ok:false,error:'INVALID_CURSOR'},400);
+        cursor={active:Number(match[1]) as 0|1,id};
+      }
+      const assets=await calendarStampAssetsForAdmin(context.env,s.familyId,s.memberId,
+        CALENDAR_STAMP_ACTION_LIMITS.maxAssetOptions,cursor);
+      const last=assets.at(-1);
+      const nextCursor=assets.length===CALENDAR_STAMP_ACTION_LIMITS.maxAssetOptions&&last
+        ?`${last.active}:${last.id}`:null;
       const shared=await sharedPublishProjection(context,s.familyId,assets.map(asset=>Number(asset.id)));
-      return json({ok:true,sharedPublishingReady:shared.ready,assets:assets.map(asset=>{
+      return json({ok:true,nextCursor,sharedPublishingReady:shared.ready,assets:assets.map(asset=>{
         const sharedPublished=shared.published.has(Number(asset.id));
         const sharedPublishCandidate=asset.active===1
           &&asset.asset_kind==='ANIMATED'

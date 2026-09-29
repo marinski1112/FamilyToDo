@@ -5,6 +5,7 @@ const csrf=String(payload.csrf||'');
 const isAdmin=Boolean(payload.isAdmin);
 const list=document.getElementById('locationDeviceList');
 const provision=document.getElementById('provisionOwnTracks');
+const provisionAndroid=document.getElementById('provisionAndroid');
 const memberSelect=document.getElementById('locationMember');
 const secretCard=document.getElementById('ownTracksSecret');
 const homeSourceMember=document.getElementById('homeSourceMember');
@@ -67,7 +68,7 @@ function renderDevices(devices){
     const sharing=Boolean(device.sharingEnabled)&&!revoked;
     const status=revoked?'失効済み':sharing?'共有ON':'共有OFF';
     const statusClass=revoked?'revoked':sharing?'on':'';
-    return `<div class="device-card" data-device-id="${Number(device.id)}"><div class="device-head"><div class="device-title"><strong>${esc(device.memberName||'メンバー')} ・ iPhone位置連携</strong><div class="meta">ID: ${esc(device.publicId)}</div><div class="meta">最終受信: ${esc(formatTime(device.lastSeenAt))}</div></div><span class="device-status ${statusClass}">${status}</span></div>${revoked?'':`<div class="device-actions"><button type="button" class="btn ${sharing?'gray':''} small device-share" data-id="${Number(device.id)}" data-enabled="${sharing?'0':'1'}">位置共有を${sharing?'OFF':'ON'}</button><button type="button" class="btn danger small device-revoke" data-id="${Number(device.id)}">端末を失効</button></div>`}</div>`;
+    return `<div class="device-card" data-device-id="${Number(device.id)}"><div class="device-head"><div class="device-title"><strong>${esc(device.memberName||'メンバー')} ・ ${device.provider==='FAMILYTODO_ANDROID'?'Android':'iPhone'}位置連携</strong><div class="meta">ID: ${esc(device.publicId)}</div><div class="meta">最終受信: ${esc(formatTime(device.lastSeenAt))}</div></div><span class="device-status ${statusClass}">${status}</span></div>${revoked?'':`<div class="device-actions"><button type="button" class="btn ${sharing?'gray':''} small device-share" data-id="${Number(device.id)}" data-enabled="${sharing?'0':'1'}">位置共有を${sharing?'OFF':'ON'}</button><button type="button" class="btn danger small device-revoke" data-id="${Number(device.id)}">端末を失効</button></div>`}</div>`;
   }).join('');
   list.querySelectorAll('.device-share').forEach(button=>button.addEventListener('click',async()=>{
     button.disabled=true;try{await api({action:'sharing',device_id:Number(button.dataset.id),enabled:button.dataset.enabled==='1'});await loadDevices();}catch(error){alert(error instanceof Error?error.message:'共有設定を変更できませんでした。');button.disabled=false;}
@@ -92,21 +93,29 @@ deleteHome?.addEventListener('click',async()=>{
   if(!confirm('家族の自宅地点を解除しますか？'))return;deleteHome.disabled=true;try{renderHome(await homeApi({action:'delete'}));}catch(error){alert(error instanceof Error?error.message:'自宅地点を解除できませんでした。');}finally{deleteHome.disabled=false;}
 });
 
-provision?.addEventListener('click',async()=>{
+async function provisionDevice(provider){
   const memberId=Number(memberSelect?.value||0);if(!memberId)return;
-  if(!confirm('iPhone位置連携用の接続情報を発行しますか？ Secretは一度だけ表示されます。'))return;
-  provision.disabled=true;
+  if(!confirm(`${provider==='FAMILYTODO_ANDROID'?'Android':'iPhone'}位置連携用の接続情報を発行しますか？ Secretは一度だけ表示されます。`))return;
+  provision.disabled=true;if(provisionAndroid)provisionAndroid.disabled=true;
   try{
-    const data=await api({action:'provision',provider:'OWNTRACKS',member_id:memberId});
+    const data=provider==='OWNTRACKS'
+      ?await api({action:'provision',provider:'OWNTRACKS',member_id:memberId})
+      :await api({action:'provision',provider:'FAMILYTODO_ANDROID',member_id:memberId});
     const publicId=String(data.device.publicId||'');const secret=String(data.device.secret||'');
+    document.getElementById('iphoneCredentials').hidden=provider==='FAMILYTODO_ANDROID';
+    document.getElementById('androidCredentials').hidden=provider!=='FAMILYTODO_ANDROID';
+    document.getElementById('androidPublicId').textContent=provider==='FAMILYTODO_ANDROID'?publicId:'';
+    document.getElementById('androidSecret').textContent=provider==='FAMILYTODO_ANDROID'?secret:'';
     document.getElementById('ownTracksUrl').textContent=endpoint;
-    document.getElementById('ownTracksUsername').textContent=publicId;
-    document.getElementById('ownTracksPassword').textContent=secret;
+    document.getElementById('ownTracksUsername').textContent=provider==='OWNTRACKS'?publicId:'';
+    document.getElementById('ownTracksPassword').textContent=provider==='OWNTRACKS'?secret:'';
     document.getElementById('overlandUrl').textContent=overlandEndpoint;
-    document.getElementById('overlandToken').textContent=`${publicId}:${secret}`;
+    document.getElementById('overlandToken').textContent=provider==='OWNTRACKS'?`${publicId}:${secret}`:'';
     secretCard.hidden=false;secretCard.scrollIntoView({behavior:'smooth',block:'start'});await loadDevices();
-  }catch(error){alert(error instanceof Error?error.message:'端末を発行できませんでした。');}finally{provision.disabled=false;}
-});
+  }catch(error){alert(error instanceof Error?error.message:'端末を発行できませんでした。');}finally{provision.disabled=false;if(provisionAndroid)provisionAndroid.disabled=false;}
+}
+provision?.addEventListener('click',()=>provisionDevice('OWNTRACKS'));
+provisionAndroid?.addEventListener('click',()=>provisionDevice('FAMILYTODO_ANDROID'));
 
 document.querySelectorAll('.credential-copy').forEach(button=>button.addEventListener('click',async()=>{
   const target=document.getElementById(String(button.dataset.copy||''));if(!target)return;await copyText(target.textContent||'');const before=button.textContent;button.textContent='コピー済み';setTimeout(()=>button.textContent=before,1200);

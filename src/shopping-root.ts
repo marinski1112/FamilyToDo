@@ -3,6 +3,8 @@ import { bodyJson, RequestBodyParseError } from './request-body';
 import { json } from './response';
 import { commitSession } from './session';
 import { taskChildVisibilitySql } from './task-visibility';
+import { goodsVisibilitySql } from './goods-visibility';
+import { archiveShoppingCompletionStatements } from './lifecycle';
 import { handleShoppingReusableSetAction, readShoppingReusableSets } from './shopping-reusable-set-api';
 
 type Row=Record<string,unknown>;
@@ -41,6 +43,35 @@ export async function shopping(request:Request,ctx:AppContext):Promise<Response>
   if(reusableSetResponse)return reusableSetResponse;
 
   if(action==='to_task')return json({ok:false,error:'買い物とタスクの紐づけは廃止されました。',code:'RETIRED_ACTION'},410);
+  if(action==='update_details'){
+    const id=Number(b.id||0);
+    if(!Number.isSafeInteger(id)||id<=0)return bad('買い物項目が不正です。');
+    const current=await ctx.env.DB.prepare(`SELECT s.created_by FROM shopping_items s WHERE s.id=? AND s.family_id=? AND ${goodsVisibilitySql('s')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+    if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())&&Number(current.created_by)!==m.id)
+      return json({ok:false,error:'編集権限がありません。'},403);
+    const name=String(b.name||'').trim(),quantity=String(b.quantity||'1').trim()||'1',category=String(b.category||'').trim();
+    const memo=String(b.memo||'').trim(),url=String(b.url||'').trim(),due=String(b.due_date||'').trim();
+    if(!name||name.length>200||quantity.length>80||category.length>255||memo.length>2000)return bad('入力内容を確認してください。');
+    if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('期限の日付が不正です。');
+    if(url){try{const u=new URL(url);if(url.length>2048||!['http:','https:'].includes(u.protocol)||u.username||u.password)throw new Error();}catch{return bad('URLが不正です。');}}
+    await ctx.env.DB.prepare('UPDATE shopping_items SET name=?,quantity=?,category=?,memo=?,url=?,due_date=?,updated_at=? WHERE id=? AND family_id=?')
+      .bind(name,quantity,category||null,memo||null,url||null,due||null,nowJst(),id,m.family_id).run();
+    return commitSession(json({ok:true,id}),ctx.session,ctx.env.APP_SECRET);
+  }
+  if(action==='delete'){
+    const id=Number(b.id||0);
+    if(!Number.isSafeInteger(id)||id<=0)return bad('買い物項目が不正です。');
+    const current=await ctx.env.DB.prepare(`SELECT s.created_by FROM shopping_items s WHERE s.id=? AND s.family_id=? AND ${goodsVisibilitySql('s')} LIMIT 1`).bind(id,m.family_id,m.id).first<Row>();
+    if(!current)return json({ok:false,error:'買い物が見つかりません。'},404);
+    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())&&Number(current.created_by)!==m.id)
+      return json({ok:false,error:'削除権限がありません。'},403);
+    await ctx.env.DB.batch([
+      ...archiveShoppingCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
+      ctx.env.DB.prepare('DELETE FROM shopping_items WHERE id=? AND family_id=?').bind(id,m.family_id),
+    ]);
+    return commitSession(json({ok:true,id}),ctx.session,ctx.env.APP_SECRET);
+  }
   if((action==='add'||action==='add_batch')&&((b.task_id!=null&&b.task_id!==''&&b.task_id!==0)||(Array.isArray(b.assignees)&&b.assignees.length)))return bad('担当者・タスク紐づけは廃止されました。画面を再読み込みしてください。');
 
   if(action==='toggle'){
