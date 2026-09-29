@@ -269,7 +269,7 @@ public final class MainActivity extends Activity {
             int id=recurrenceId>0?recurrenceId:task.optInt("id");
             box.setEnabled(!event&&id>0);
             box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
-            if(recurrenceId>0) box.setOnLongClickListener(v -> { loadRecurringRule(task.optInt("recurrence_rule_id")); return true; });
+            if(recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
             else if(id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
             content.addView(box);count++;
         }
@@ -1449,6 +1449,39 @@ public final class MainActivity extends Activity {
                         catch(Exception ignored) { }
                     }).setNegativeButton("戻る",null).show();
             }).show();
+    }
+    private void recurringOccurrenceActions(JSONObject task) {
+        new AlertDialog.Builder(this).setTitle(task.optString("title"))
+            .setItems(new String[]{"この回だけ編集","シリーズを編集"},(dialog,which) -> {
+                if(which==1) { loadRecurringRule(task.optInt("recurrence_rule_id")); return; }
+                new AlertDialog.Builder(this).setTitle("この回だけ編集")
+                    .setMessage("この発生日を通常のタスクに切り出します。繰り返しのシリーズは変更されません。")
+                    .setPositiveButton("続ける",(confirm,index) -> convertRecurringOccurrence(task))
+                    .setNegativeButton("戻る",null).show();
+            }).show();
+    }
+    private void convertRecurringOccurrence(JSONObject occurrence) {
+        if(snapshot==null||occurrence.optInt("recurrence_occurrence_id")<=0) return;
+        int epoch=sessionEpoch,id=occurrence.optInt("recurrence_occurrence_id");
+        String csrf=snapshot.optString("csrf");
+        network.execute(() -> {
+            try {
+                if(epoch!=sessionEpoch) return;
+                JSONObject result=ApiClient.request("/api/android/v1/occurrence-convert",
+                    new JSONObject().put("csrf",csrf).put("occurrence_id",id));
+                int taskId=result.optInt("task_id");
+                if(taskId<=0) throw new IllegalStateException("タスクを取得できませんでした");
+                JSONObject task=new JSONObject(occurrence.toString());
+                task.put("id",taskId).put("task_kind","OCCURRENCE")
+                    .remove("recurrence_occurrence_id");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||!tab.equals("calendar")) return;
+                    load();editTask(task);
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"この回だけの編集を開始できませんでした",Toast.LENGTH_LONG).show();});
+            }
+        });
     }
     private void postRecurring(JSONObject body) {
         if(snapshot==null) return;
