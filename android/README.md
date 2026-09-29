@@ -4,6 +4,14 @@ Android Studioで `android/` を開き、Gradle Sync後にデバッグAPKを端�
 
 通常のアプリアイコンにはWebアプリ標準の `public/assets/pwa-512.png` を組み込んでいます。家族ごとにWebの「ホーム画面」で設定した画像と表示名を使う場合は、ログイン後の「ホーム画面アイコン」からAndroidのショートカット追加画面を開いてください。既存のランチャーアイコン自体はインストール後に任意の家族画像へ変更できないため、家族アイコンのショートカットをホーム画面に追加します。Web側で画像を変えた後はショートカットを作り直してください。
 
+## テスト版の番号と更新
+
+Android CIの実行番号をAPKの版番号に使います。画面上部の「テスト版 v0.1.<番号>」、ZIP内の `FamilyToDo-test-v0.1.<番号>.apk`、GitHub Actions成果物の名前を同じ番号にして取り違えを防ぎます。GitHubで新しい版をダウンロードする際は、画面に出る番号より大きいことを確認してください。
+
+現時点のCIデバッグAPKはビルドごとに署名鍵が変わる可能性があります。番号が増えても署名が違うAPKは上書きできず、端末側でアンインストールと再インストールが必要です。位置共有中は先にWebの位置設定で共有をOFFにしてください。端末内キャッシュと保存した位置連携Secretは消えますが、Webと共用するD1/R2の家族データは消えません。安定した署名鍵で上書きできる内部配布版の準備は [INTERNAL_RELEASE.md](INTERNAL_RELEASE.md) を参照してください。
+
+アプリが自分自身を無確認で入れ替えることはできません。将来、同じ署名の配布版と取得先を用意すれば、アプリ内の「更新を確認」から新しいAPKのダウンロードを始め、Androidのインストール確認へつなぐことは可能です。
+
 ## デバッグAPKの接続先
 
 通常のデバッグビルドは本番URLに接続します。Android用APIをプレビュー環境へデプロイし、専用の認証設定・D1・位置情報送信先を確認した場合だけ、次の形式で接続先を指定できます。
@@ -12,7 +20,7 @@ Android Studioで `android/` を開き、Gradle Sync後にデバッグAPKを端�
 gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://YOUR-WORKER.marinski1112.workers.dev
 ```
 
-指定できるのは `marinski1112.workers.dev` 内のHTTPSオリジンだけです（パス・末尾のスラッシュ不可）。このビルドは `jp.marinski.familytodo.preview` として別アプリになり、表示名は「FamilyToDo Preview」です。APIとログインWebViewは指定した同一オリジンへ向かいます。**プレビューAPKは書き込み禁止**で、位置情報送信も開始しません。LINEログインのコールバックとLIFF許可ドメイン、D1や位置情報の保存先がそのプレビューに対応していなければログイン・共有は動きません。接続先の指定だけで実機テスト可能とは判断しないでください。通常のCI artifactは従来どおり本番URL向けです。専用D1・R2と別のLINE認証設定を揃えた書き込みE2E用Worker/APKの手順は [E2E_ENVIRONMENT.md](E2E_ENVIRONMENT.md) を参照してください。CIの `familytodo-android-e2e-unverified` は環境が公開・検証されるまで利用準備完了とは扱いません。
+指定できるのは `marinski1112.workers.dev` 内のHTTPSオリジンだけです（パス・末尾のスラッシュ不可）。このビルドは `jp.marinski.familytodo.preview` として別アプリになり、表示名は「FamilyToDo Preview」です。APIとログインWebViewは指定した同一オリジンへ向かいます。**プレビューAPKは書き込み禁止**で、位置情報送信も開始しません。LINEログインのコールバックとLIFF許可ドメイン、D1や位置情報の保存先がそのプレビューに対応していなければログイン・共有は動きません。接続先の指定だけで実機テスト可能とは判断しないでください。通常のCI成果物 `FamilyToDo-test-v0.1.<実行番号>` は本番URL向けです。専用D1・R2と別のLINE認証設定を揃えた書き込みE2E用Worker/APKの手順は [E2E_ENVIRONMENT.md](E2E_ENVIRONMENT.md) を参照してください。CIの `familytodo-android-e2e-unverified` は環境が公開・検証されるまで利用準備完了とは扱いません。
 
 端末のライト／ダーク設定に応じてネイティブ画面のテーマを切り替えます。実機で文字と入力欄のコントラストを確認してください。
 
