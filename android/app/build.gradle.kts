@@ -6,7 +6,9 @@ require(Regex("^https://[a-z0-9-]+\\.marinski1112\\.workers\\.dev$").matches(deb
     "familytodoDebugOrigin must be an HTTPS Worker in the marinski1112 account (without a path)"
 }
 val previewBuild = debugOrigin != productionOrigin
-val internalVersionCode = providers.gradleProperty("familytodoVersionCode").orNull?.toIntOrNull() ?: 1
+val internalVersionCode = providers.gradleProperty("familytodoVersionCode").orNull?.let {
+    it.toIntOrNull() ?: error("familytodoVersionCode must be an integer")
+} ?: 1
 require(internalVersionCode in 1..2_100_000_000) { "familytodoVersionCode must be a positive Android version code" }
 
 android {
