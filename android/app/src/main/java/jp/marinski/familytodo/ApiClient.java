@@ -219,7 +219,7 @@ final class ApiClient {
         if (!path.startsWith("/api/") || path.startsWith("//")) throw new IllegalArgumentException("Invalid API path");
         if (!("GET".equals(method)&&body==null || ("POST".equals(method)||"PUT".equals(method)||"DELETE".equals(method))&&body!=null))
             throw new IllegalArgumentException("Invalid API method");
-        if (body != null && !(path.equals("/api/location/devices") &&
+        if (body != null && !(BuildConfig.ALLOW_MUTATIONS && path.equals("/api/location/devices") &&
             "sharing".equals(body.optString("action")) && !body.optBoolean("enabled")))
             requireMutationReady();
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
