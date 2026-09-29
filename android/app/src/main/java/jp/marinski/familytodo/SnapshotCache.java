@@ -49,6 +49,9 @@ final class SnapshotCache {
             !java.time.LocalDate.parse(day).toString().equals(day)) throw new IllegalArgumentException("Invalid day");
         return new File(context.getFilesDir(),"family-log-"+day+".enc");
     }
+    static String currentSessionBinding() {
+        try { return sessionBinding(); } catch(Exception ignored) { return null; }
+    }
     private static String sessionBinding() throws Exception {
         String cookie=CookieManager.getInstance().getCookie(ApiClient.ORIGIN);
         if(cookie==null || cookie.isEmpty()) return null;
