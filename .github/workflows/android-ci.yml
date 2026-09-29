@@ -37,6 +37,12 @@ jobs:
           if ANDROID_E2E_DB_ID=9d9d6de8-ff45-4dd6-9fec-0de70ee1d093 node scripts/android-e2e-config.mjs; then exit 1; fi
       - name: Check writable isolated E2E build
         run: gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: familytodo-android-e2e-unverified
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: Check unsigned internal release build
         run: |
           gradle -p android :app:assembleRelease -PfamilytodoVersionCode=1001 --no-daemon
