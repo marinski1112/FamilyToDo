@@ -77,13 +77,14 @@ public final class MainActivity extends Activity {
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
     private LocalDate selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "calendar";
-    @Override public void onCreate(Bundle state) { super.onCreate(state); showNative(); load(); }
+    @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); load(); }
     private Button button(String label, Runnable action) {
         Button b = new Button(this); b.setText(label); b.setOnClickListener(v -> action.run()); return b;
     }
     private TextView label(String value) { TextView t = new TextView(this); t.setText(value); t.setTextSize(17); t.setPadding(12, 12, 12, 12); return t; }
     private void showNative() {
         if (login != null) {
+            ApiClient.setMutationsEnabled(false);
             stampGeneration++;
             login.destroy(); login = null;
             monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false;
@@ -112,6 +113,7 @@ public final class MainActivity extends Activity {
         render();
     }
     private void load() {
+        ApiClient.setMutationsEnabled(false);
         String requested = month.toString();
         int epoch=sessionEpoch;
         snapshot = monthCache.get(requested);
@@ -134,6 +136,9 @@ public final class MainActivity extends Activity {
             }
             try {
                 JSONObject data = ApiClient.request("/api/android/v1/overview?month=" + requested, null);
+                if(data.optInt("schemaVersion")!=1 || !requested.equals(data.optString("month")) ||
+                    data.optInt("familyId")<=0 || data.optInt("memberId")<=0)
+                    throw new IllegalStateException("Android APIの契約が一致しません");
                 if(epoch!=sessionEpoch) return;
                 Map<String,JSONObject> fetched=new HashMap<>(); fetched.put(requested,data);
                 JSONObject previous=monthCache.get(requested);
@@ -147,7 +152,9 @@ public final class MainActivity extends Activity {
                     if(epoch!=sessionEpoch) return;
                     if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
-                    if (requested.equals(month.toString())) { snapshot=data; showingCached=false; render(); }
+                    if (requested.equals(month.toString())) {
+                        snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();
+                    }
                 });
                 for (boolean shopping : new boolean[]{true,false}) {
                     try {
@@ -3481,6 +3488,7 @@ public final class MainActivity extends Activity {
                 String csrf=snapshot==null?null:snapshot.optString("csrf");
                 sessionEpoch++;
                 stampGeneration++;
+                ApiClient.setMutationsEnabled(false);
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 SnapshotCache.clear(this);
                 stampMedia.execute(() -> SnapshotCache.clear(this));
@@ -3509,6 +3517,7 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("閉じる",null).show();
     }
     private void showLogin() {
+        ApiClient.setMutationsEnabled(false);
         if (login != null) return;
         stampGeneration++;
         stampMedia.execute(() -> SnapshotCache.clear(this));
