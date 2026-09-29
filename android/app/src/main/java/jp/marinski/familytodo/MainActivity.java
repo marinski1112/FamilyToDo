@@ -141,6 +141,9 @@ public final class MainActivity extends Activity {
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(pageColor());
+        TextView version=label("FamilyToDo  ・  テスト版 v"+BuildConfig.VERSION_NAME);
+        version.setTextSize(13);version.setTextColor(mutedColor());
+        version.setPadding(dp(18),dp(8),dp(18),0);root.addView(version);
         LinearLayout tabs=new LinearLayout(this);tabs.setPadding(dp(12),dp(8),dp(12),dp(8));
         String[] names={"カレンダー","買い物","持ち物","伝言","育児"};
         String[] keys={"calendar","shopping","item","messages","familylog"};
