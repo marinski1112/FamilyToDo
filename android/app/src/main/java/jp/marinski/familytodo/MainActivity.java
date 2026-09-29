@@ -87,6 +87,15 @@ public final class MainActivity extends Activity {
         Button b = new Button(this); b.setText(label); b.setOnClickListener(v -> action.run()); return b;
     }
     private TextView label(String value) { TextView t = new TextView(this); t.setText(value); t.setTextSize(17); t.setPadding(12, 12, 12, 12); return t; }
+    private void applySystemBarInsets(android.view.View view) {
+        if(Build.VERSION.SDK_INT<35) return;
+        view.setOnApplyWindowInsetsListener((target,insets) -> {
+            android.graphics.Insets bars=insets.getInsets(
+                android.view.WindowInsets.Type.systemBars()|android.view.WindowInsets.Type.displayCutout());
+            target.setPadding(bars.left,bars.top,bars.right,bars.bottom);
+            return insets;
+        });
+    }
     private void showNative() {
         if (login != null) {
             ApiClient.setMutationsEnabled(false);
@@ -115,7 +124,8 @@ public final class MainActivity extends Activity {
         HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
         root.addView(controlScroll);
         ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); setContentView(root);
+        scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        applySystemBarInsets(root); setContentView(root);
         render();
     }
     private void load() {
@@ -3559,7 +3569,8 @@ public final class MainActivity extends Activity {
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
         frame.addView(button("ログイン後、ネイティブ画面に戻る", () -> { showNative(); load(); }));
-        frame.addView(login,new LinearLayout.LayoutParams(-1,0,1)); setContentView(frame);
+        frame.addView(login,new LinearLayout.LayoutParams(-1,0,1));
+        applySystemBarInsets(frame); setContentView(frame);
         login.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 android.net.Uri destination=request.getUrl(),origin=android.net.Uri.parse(ApiClient.ORIGIN);
