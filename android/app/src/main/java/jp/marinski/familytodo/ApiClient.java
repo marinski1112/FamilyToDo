@@ -15,7 +15,7 @@ final class ApiClient {
     static final String ORIGIN = BuildConfig.API_ORIGIN;
     private static volatile boolean mutationsEnabled;
     private ApiClient() {}
-    static void setMutationsEnabled(boolean enabled) { mutationsEnabled=enabled; }
+    static void setMutationsEnabled(boolean enabled) { mutationsEnabled=enabled && BuildConfig.ALLOW_MUTATIONS; }
     static boolean canMutate() { return mutationsEnabled; }
     static void requireMutationReady() {
         if(!mutationsEnabled) throw new IllegalStateException("保存済みデータの表示中は編集できません");
