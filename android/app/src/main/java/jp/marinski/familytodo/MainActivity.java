@@ -104,6 +104,7 @@ public final class MainActivity extends Activity {
         controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
         controls.addView(button("アプリ設定", this::loadAppSettings));
+        controls.addView(button("Google連携の状態", this::loadIntegrationStatus));
         controls.addView(button("ホーム画面アイコン", this::pinFamilyShortcut));
         controls.addView(button("ログアウト", this::logout));
         HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
@@ -3699,6 +3700,41 @@ public final class MainActivity extends Activity {
                 else startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     android.net.Uri.parse("package:"+getPackageName())));
             }).setNegativeButton("戻る",null).show();
+    }
+    private void loadIntegrationStatus() {
+        if(snapshot==null) {Toast.makeText(this,"ログイン後に確認してください",Toast.LENGTH_SHORT).show();return;}
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject response=ApiClient.request("/api/android/v1/integration-status",null);
+                JSONObject calendar=response.getJSONObject("calendar"),tasks=response.getJSONObject("tasks");
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch) return;
+                    String calendarState=calendar.optString("status");
+                    String calendarLabel="ACTIVE".equals(calendarState)?"連携中":
+                        "REVOKED".equals(calendarState)?"再連携が必要":
+                        "DISCONNECTED".equals(calendarState)?"未連携":"状態: "+calendarState;
+                    String taskState=tasks.optString("status");
+                    String taskLabel="ACTIVE".equals(taskState)?"受信中":
+                        "SYNCING".equals(taskState)?"同期処理中":
+                        "NEEDS_LIST".equals(taskState)?"受信リスト未選択":
+                        "ERROR".equals(taskState)?"同期エラー":
+                        "REVOKED".equals(taskState)?"再連携が必要":
+                        "DISCONNECTED".equals(taskState)?"未連携":"状態: "+taskState;
+                    new AlertDialog.Builder(this).setTitle("Google連携の状態")
+                        .setMessage("Google Calendar: "+calendarLabel+
+                            "\\n最終送信: "+calendar.optString("lastOutboundAt","—")+
+                            "\\n\\nGoogle Tasks（本人）: "+taskLabel+
+                            "\\n最終受信: "+tasks.optString("lastSyncAt","—")+
+                            "\\n競合の累計: "+tasks.optInt("conflictCount")+"件")
+                        .setPositiveButton("閉じる",null).show();
+                });
+            } catch(SecurityException error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) showLogin();});
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"連携状態を取得できませんでした",Toast.LENGTH_SHORT).show();});
+            }
+        });
     }
     private void loadAppSettings() {
         if(snapshot==null) {Toast.makeText(this,"オンラインでログインしてください",Toast.LENGTH_SHORT).show();return;}
