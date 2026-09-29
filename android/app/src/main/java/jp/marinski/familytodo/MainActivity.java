@@ -3928,9 +3928,14 @@ public final class MainActivity extends Activity {
         });
     }
     private void startSharing() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
-            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+        if (!hasLocationPermission()) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},11); return;
+        }
+        if(Build.VERSION.SDK_INT>=33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED &&
+            !getPreferences(MODE_PRIVATE).getBoolean("notificationPrompted",false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("notificationPrompted",true).apply();
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},16); return;
         }
         if(Credentials.read(this)==null) {
             Toast.makeText(this,"端末IDとSecretを保存してください",Toast.LENGTH_LONG).show(); return;
@@ -3956,6 +3961,11 @@ public final class MainActivity extends Activity {
             Toast.makeText(this,"位置情報を許可しました。登録をもう一度選んでください",Toast.LENGTH_LONG).show(); return;
         }
         if(code==15 && hasLocationPermission()) { resumeLocationSharing(); return; }
+        if(code==16) {
+            if(checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                Toast.makeText(this,"共有中の通知は通知欄に表示されません。通知設定から許可できます",Toast.LENGTH_LONG).show();
+            startSharing(); return;
+        }
         Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }
