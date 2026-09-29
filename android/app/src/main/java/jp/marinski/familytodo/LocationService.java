@@ -28,7 +28,7 @@ public final class LocationService extends Service implements LocationListener {
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private LocationManager manager;
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (!Credentials.sharingEnabled(this) || Credentials.read(this) == null) { stopSelf(); return START_NOT_STICKY; }
+        if (!BuildConfig.ALLOW_MUTATIONS || !Credentials.sharingEnabled(this) || Credentials.read(this) == null) { stopSelf(); return START_NOT_STICKY; }
         NotificationManager notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("location", "位置共有", NotificationManager.IMPORTANCE_LOW));
         Notification notification = new Notification.Builder(this, "location").setSmallIcon(android.R.drawable.ic_menu_mylocation)
@@ -59,7 +59,7 @@ public final class LocationService extends Service implements LocationListener {
     }
     private void send(Location location) {
         String credential = Credentials.read(this);
-        if (credential == null || !Credentials.sharingEnabled(this)) return;
+        if (!BuildConfig.ALLOW_MUTATIONS || credential == null || !Credentials.sharingEnabled(this)) return;
         HttpURLConnection connection = null;
         try {
             JSONObject point = new JSONObject().put("latitude", location.getLatitude()).put("longitude", location.getLongitude())
