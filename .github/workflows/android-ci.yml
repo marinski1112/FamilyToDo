@@ -28,3 +28,5 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+      - name: Check isolated preview build
+        run: gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://preview-familytodo.marinski1112.workers.dev --no-daemon
