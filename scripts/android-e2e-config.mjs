@@ -6,6 +6,9 @@ const workerName='familytodo-android-e2e';
 const origin='https://'+workerName+'.marinski1112.workers.dev';
 const production=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
 const productionId=production.d1_databases?.[0]?.database_id;
+if(production.name!=='familytodo'||productionId!=='9d9d6de8-ff45-4dd6-9fec-0de70ee1d093'||
+   production.r2_buckets?.[0]?.bucket_name!=='familytodo')
+  throw new Error('Production bindings changed; review isolation before generating config');
 if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(databaseId||'')||
    databaseId.toLowerCase()===productionId?.toLowerCase())
   throw new Error('ANDROID_E2E_DB_ID must be a separate D1 database UUID');
