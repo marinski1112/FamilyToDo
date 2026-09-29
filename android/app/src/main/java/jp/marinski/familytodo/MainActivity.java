@@ -3655,6 +3655,9 @@ public final class MainActivity extends Activity {
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},15);return;
         }
+        if(!locationServicesReady()) {
+            Toast.makeText(this,"端末の位置情報をONにしてから再開してください",Toast.LENGTH_LONG).show();return;
+        }
         String publicId=saved.split(":",2)[0],csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
         network.execute(() -> {
             try {
@@ -3684,6 +3687,9 @@ public final class MainActivity extends Activity {
             Toast.makeText(this,"位置情報を許可してから、もう一度登録してください",Toast.LENGTH_LONG).show();
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},14);return;
         }
+        if(!locationServicesReady()) {
+            Toast.makeText(this,"端末の位置情報をONにしてから登録してください",Toast.LENGTH_LONG).show();return;
+        }
         new AlertDialog.Builder(this).setTitle("このAndroidを登録")
             .setMessage("自分の位置情報端末を1台発行し、共有をONにします。共有中は通知を表示し、位置設定から停止できます。")
             .setPositiveButton("登録して開始",(dialog,which) -> {
@@ -3704,7 +3710,6 @@ public final class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if(epoch!=sessionEpoch) return;
                             startSharing();
-                            Toast.makeText(this,Credentials.sharingEnabled(this)?"位置共有を開始しました":"位置共有を開始できませんでした",Toast.LENGTH_LONG).show();
                         });
                     } catch(Exception error) {
                         if(deviceId>0) try {ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
@@ -3938,6 +3943,16 @@ public final class MainActivity extends Activity {
             }
         });
     }
+    private boolean locationServicesReady() {
+        android.location.LocationManager location=getSystemService(android.location.LocationManager.class);
+        if(location==null) return false;
+        try {
+            return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED &&
+                    location.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED &&
+                    location.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER);
+        } catch(RuntimeException error) { return false; }
+    }
     private void startSharing() {
         if (!hasLocationPermission()) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},11); return;
@@ -3948,14 +3963,19 @@ public final class MainActivity extends Activity {
             getPreferences(MODE_PRIVATE).edit().putBoolean("notificationPrompted",true).apply();
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},16); return;
         }
+        if(!locationServicesReady()) {
+            Toast.makeText(this,"端末の位置情報をONにしてから共有を開始してください",Toast.LENGTH_LONG).show();return;
+        }
         if(Credentials.read(this)==null) {
             Toast.makeText(this,"端末IDとSecretを保存してください",Toast.LENGTH_LONG).show(); return;
         }
         Credentials.setSharingEnabled(this,true);
-        try { startForegroundService(new Intent(this,LocationService.class)); }
-        catch(RuntimeException error) {
+        try {
+            startForegroundService(new Intent(this,LocationService.class));
+            Toast.makeText(this,"位置共有を開始しています",Toast.LENGTH_SHORT).show();
+        } catch(RuntimeException error) {
             Credentials.setSharingEnabled(this,false);
-            Toast.makeText(this,"位置共有を開始できませんでした",Toast.LENGTH_LONG).show();
+            Toast.makeText(this,"位置共有を開始できませんでした。Web側の共有状態も確認してください",Toast.LENGTH_LONG).show();
         }
     }
     private boolean hasLocationPermission() {
