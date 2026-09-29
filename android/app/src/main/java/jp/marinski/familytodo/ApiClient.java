@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 
 /** Reuses the signed HttpOnly web session without exposing it to page JavaScript. */
 final class ApiClient {
-    static final String ORIGIN = "https://familytodo.marinski1112.workers.dev";
+    static final String ORIGIN = BuildConfig.API_ORIGIN;
     private ApiClient() {}
     /** Fetch a bounded same-origin thumbnail, including private upload media. */
     static Bitmap thumbnail(String path) throws Exception {
