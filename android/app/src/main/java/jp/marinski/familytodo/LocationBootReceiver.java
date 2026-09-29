@@ -12,7 +12,7 @@ public final class LocationBootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context,Intent intent) {
         String action=intent==null?"":intent.getAction();
         if(!Intent.ACTION_BOOT_COMPLETED.equals(action)&&!Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) return;
-        if(!Credentials.sharingEnabled(context)||Credentials.read(context)==null) return;
+        if(!BuildConfig.ALLOW_MUTATIONS||!Credentials.sharingEnabled(context)||Credentials.read(context)==null) return;
         if(Build.VERSION.SDK_INT>=29 && context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)!=PackageManager.PERMISSION_GRANTED) return;
         if(context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
             context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) return;
