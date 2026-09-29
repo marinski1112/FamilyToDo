@@ -209,13 +209,13 @@ public final class MainActivity extends Activity {
         if (tab.equals("messages")) { renderMessages(); return; }
         if (tab.equals("familylog")) { renderFamilyLog(); return; }
         content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
-        if (tab.equals("calendar")) {
+        if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
+        if (showingCached) content.addView(label("保存済みデータを読み取り専用で表示中・更新を確認しています"));
+        if (tab.equals("calendar") && ApiClient.canMutate()) {
             content.addView(button("＋ タスク・イベント", this::addTask));
             content.addView(button("🔁 定期タスク",this::loadRecurringRules));
             content.addView(button("🖼 スタンプ管理",this::loadStampAssets));
         }
-        if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
-        if (showingCached) content.addView(label("保存済みデータを表示中・更新を確認しています"));
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
     }
@@ -233,9 +233,11 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
-        content.addView(button("＋ スタンプ",this::addStamp));
-        if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 新しいスタンプ画像",this::chooseStaticStamp));
-        if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 動くPNGスタンプ",this::chooseAnimatedStamp));
+        if(ApiClient.canMutate()) {
+            content.addView(button("＋ スタンプ",this::addStamp));
+            if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 新しいスタンプ画像",this::chooseStaticStamp));
+            if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 動くPNGスタンプ",this::chooseAnimatedStamp));
+        }
         LinearLayout weekdays=new LinearLayout(this);
         for(String weekday:new String[]{"日","月","火","水","木","金","土"})
             weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
@@ -289,16 +291,16 @@ public final class MainActivity extends Activity {
             if(event) {
                 TextView entry=label(time+"📌 "+task.optString("title"));
                 entry.setContentDescription("イベント "+task.optString("title")+"。長押しで操作");
-                if(recurrenceId>0) entry.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
-                else if(id>0) entry.setOnLongClickListener(v -> { taskActions(task); return true; });
+                if(ApiClient.canMutate()&&recurrenceId>0) entry.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
+                else if(ApiClient.canMutate()&&id>0) entry.setOnLongClickListener(v -> { taskActions(task); return true; });
                 content.addView(entry);
             } else {
                 CheckBox box=new CheckBox(this);box.setText(time+task.optString("title"));
                 box.setChecked("completed".equals(task.optString("status")));
-                box.setEnabled(id>0);
+                box.setEnabled(id>0&&ApiClient.canMutate());
                 box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
-                if(recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
-                else if(id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
+                if(ApiClient.canMutate()&&recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
+                else if(ApiClient.canMutate()&&id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
                 content.addView(box);
             }
         }
