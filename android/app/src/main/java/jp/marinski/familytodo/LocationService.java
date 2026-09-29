@@ -37,13 +37,19 @@ public final class LocationService extends Service implements LocationListener {
         try { startForeground(1, notification); }
         catch (RuntimeException denied) { stopSelf(); return START_NOT_STICKY; }
         manager = getSystemService(LocationManager.class);
+        boolean listening = false;
         try {
             manager.removeUpdates(this);
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60_000, 50, this);
-            if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER))
+                listening = true;
+            }
+            if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED && manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 manager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 60_000, 50, this);
+                listening = true;
+            }
         } catch (SecurityException ignored) { stopSelf(); return START_NOT_STICKY; }
+        if (!listening) { stopSelf(); return START_NOT_STICKY; }
         return START_STICKY;
     }
     @Override public void onLocationChanged(Location location) {
@@ -65,7 +71,10 @@ public final class LocationService extends Service implements LocationListener {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(10_000); connection.setDoOutput(true);
             try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
             int code = connection.getResponseCode();
-            if (code == 401) { Credentials.setSharingEnabled(this,false); stopSelf(); }
+            if (code == 401 || code == 403 || code == 410) {
+                Credentials.setSharingEnabled(this,false);
+                stopSelf();
+            }
         } catch (Exception ignored) { /* A later sensor update retries; never log coordinates or credentials. */ }
         finally { if (connection != null) connection.disconnect(); }
     }
