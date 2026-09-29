@@ -4,6 +4,7 @@ import { joinFamily } from './family-join-api';
 import { inviteCreate } from './family-invite-api';
 import { apiMe } from './api-me';
 import { androidOverviewApi } from './android-overview-api';
+import { androidIntegrationStatusApi } from './android-integration-status-api';
 import { taskApi } from './task-api';
 import { taskChildrenApi } from './task-children-api';
 import { taskParentCompletionApi } from './task-parent-completion-api';
@@ -70,6 +71,7 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);
   if(url.pathname==='/api/me') return await apiMe(context);
   if(url.pathname==='/api/android/v1/overview'||url.pathname==='/api/android/overview') return await androidOverviewApi(request,context);
+  if(url.pathname==='/api/android/v1/integration-status') return await androidIntegrationStatusApi(request,context);
   if(url.pathname==='/api/android/v1/family-log') return await androidFamilyLogApi(request,context);
   if(url.pathname==='/api/android/v1/family-log-summary') return await androidFamilyLogSummaryApi(request,context);
   if(url.pathname==='/api/android/v1/recurring') return await androidRecurringApi(request,context);
