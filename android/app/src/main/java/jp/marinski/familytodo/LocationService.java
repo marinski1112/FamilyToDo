@@ -24,7 +24,7 @@ import java.util.concurrent.Executors;
 
 /** Explicitly started foreground sharing; the system may restore the active service after process death. */
 public final class LocationService extends Service implements LocationListener {
-    private static final String ENDPOINT = "https://familytodo.marinski1112.workers.dev/api/location/android";
+    private static final String ENDPOINT = ApiClient.ORIGIN + "/api/location/android";
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private LocationManager manager;
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
