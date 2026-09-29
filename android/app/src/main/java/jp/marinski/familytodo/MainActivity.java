@@ -28,6 +28,9 @@ import android.graphics.Bitmap;
 import android.util.LruCache;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.time.YearMonth;
@@ -83,10 +86,42 @@ public final class MainActivity extends Activity {
         super.onResume();
         if(content!=null && login==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
-    private Button button(String label, Runnable action) {
-        Button b = new Button(this); b.setText(label); b.setOnClickListener(v -> action.run()); return b;
+    private boolean darkMode() {
+        return (getResources().getConfiguration().uiMode &
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
-    private TextView label(String value) { TextView t = new TextView(this); t.setText(value); t.setTextSize(17); t.setPadding(12, 12, 12, 12); return t; }
+    private int dp(float value) { return (int)(value*getResources().getDisplayMetrics().density+0.5f); }
+    private int pageColor() { return Color.parseColor(darkMode()?"#111B20":"#F5F8F7"); }
+    private int surfaceColor() { return Color.parseColor(darkMode()?"#223139":"#FFFFFF"); }
+    private int textColor() { return Color.parseColor(darkMode()?"#F2F7F6":"#183038"); }
+    private int mutedColor() { return Color.parseColor(darkMode()?"#A9C0C3":"#587078"); }
+    private int accentColor() { return Color.parseColor(darkMode()?"#69D4C7":"#117C78"); }
+    private GradientDrawable shape(int fill, int stroke, int radius) {
+        GradientDrawable background=new GradientDrawable();
+        background.setColor(fill); background.setCornerRadius(dp(radius));
+        if(stroke!=Color.TRANSPARENT) background.setStroke(dp(1),stroke);
+        return background;
+    }
+    private void styleButton(Button b, boolean selected) {
+        b.setAllCaps(false); b.setTextSize(14); b.setMinHeight(dp(44));
+        b.setPadding(dp(12),dp(7),dp(12),dp(7));
+        b.setTextColor(selected?pageColor():textColor());
+        b.setBackground(shape(selected?accentColor():surfaceColor(),
+            selected?Color.TRANSPARENT:Color.parseColor(darkMode()?"#3B5158":"#D8E7E4"),12));
+        b.setStateListAnimator(null);
+    }
+    private Button button(String label, Runnable action) {
+        Button b=new Button(this);b.setText(label);styleButton(b,false);
+        b.setOnClickListener(v -> action.run());return b;
+    }
+    private TextView label(String value) {
+        TextView t=new TextView(this);t.setText(value);t.setTextSize(16);
+        t.setTextColor(textColor());t.setPadding(dp(8),dp(12),dp(8),dp(12));return t;
+    }
+    private TextView heading(String value) {
+        TextView t=label(value);t.setTextSize(22);t.setTypeface(null,android.graphics.Typeface.BOLD);
+        return t;
+    }
     private void applySystemBarInsets(android.view.View view) {
         if(Build.VERSION.SDK_INT<35) return;
         view.setOnApplyWindowInsetsListener((target,insets) -> {
@@ -104,28 +139,43 @@ public final class MainActivity extends Activity {
             monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false;
             shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout tabs = new LinearLayout(this);
-        tabs.addView(button("カレンダー", () -> { tab="calendar"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("買い物", () -> { tab="shopping"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("持ち物", () -> { tab="item"; if(snapshot==null || !month.toString().equals(snapshot.optString("month"))) load(); else render(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("伝言", () -> { tab="messages"; loadMessages(0); }), new LinearLayout.LayoutParams(0, -2, 1));
-        tabs.addView(button("育児", () -> { tab="familylog"; loadFamilyLog(); }), new LinearLayout.LayoutParams(0, -2, 1));
-        root.addView(tabs);
-        LinearLayout controls = new LinearLayout(this);
-        controls.addView(button("◀", () -> { month=month.minusMonths(1); selectedDay=month.atDay(1); load(); }));
-        controls.addView(button("更新", this::load));
-        controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
-        controls.addView(button("位置設定", this::showSettings));
-        controls.addView(button("アプリ設定", this::loadAppSettings));
-        controls.addView(button("Google連携の状態", this::loadIntegrationStatus));
-        controls.addView(button("ホーム画面アイコン", this::pinFamilyShortcut));
-        controls.addView(button("ログアウト", this::logout));
-        HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
-        root.addView(controlScroll);
-        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        applySystemBarInsets(root); setContentView(root);
+        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(pageColor());
+        LinearLayout tabs=new LinearLayout(this);tabs.setPadding(dp(12),dp(8),dp(12),dp(8));
+        String[] names={"カレンダー","買い物","持ち物","伝言","育児"};
+        String[] keys={"calendar","shopping","item","messages","familylog"};
+        for(int i=0;i<keys.length;i++) {
+            final String next=keys[i];
+            Button choice=button(names[i],() -> {
+                tab=next;
+                if(next.equals("messages")) loadMessages(0);
+                else if(next.equals("familylog")) loadFamilyLog();
+                else if(snapshot==null||!month.toString().equals(snapshot.optString("month"))) load();
+                else render();
+                showNative();
+            });
+            styleButton(choice,next.equals(tab));
+            LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(-2,dp(44));
+            item.setMargins(0,0,dp(8),0);tabs.addView(choice,item);
+        }
+        HorizontalScrollView tabScroll=new HorizontalScrollView(this);
+        tabScroll.setHorizontalScrollBarEnabled(false);tabScroll.addView(tabs);root.addView(tabScroll);
+        LinearLayout controls=new LinearLayout(this);
+        controls.setPadding(dp(12),dp(4),dp(12),dp(4));
+        Button previous=button("◀",() -> {month=month.minusMonths(1);selectedDay=month.atDay(1);load();});
+        Button next=button("▶",() -> {month=month.plusMonths(1);selectedDay=month.atDay(1);load();});
+        Button refresh=button("更新",this::load);
+        Button settings=button("設定 ⋮",this::showSettingsActions);
+        for(Button control:new Button[]{previous,next,refresh,settings}) {
+            LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(0,dp(44),1);
+            item.setMargins(0,0,dp(6),0);controls.addView(control,item);
+        }
+        root.addView(controls);
+        ScrollView scroll=new ScrollView(this);
+        content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14),dp(4),dp(14),dp(24));
+        scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        applySystemBarInsets(root);setContentView(root);
         render();
     }
     private void load() {
@@ -234,16 +284,47 @@ public final class MainActivity extends Activity {
         content.removeAllViews();
         if (tab.equals("messages")) { renderMessages(); return; }
         if (tab.equals("familylog")) { renderFamilyLog(); return; }
-        content.addView(label(month.getYear() + "年" + month.getMonthValue() + "月"));
+        content.addView(heading(month.getYear() + "年" + month.getMonthValue() + "月"));
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを読み取り専用で表示中・更新を確認しています"));
-        if (tab.equals("calendar") && ApiClient.canMutate()) {
-            content.addView(button("＋ タスク・イベント", this::addTask));
-            content.addView(button("🔁 定期タスク",this::loadRecurringRules));
-            content.addView(button("🖼 スタンプ管理",this::loadStampAssets));
+        if(tab.equals("calendar")&&ApiClient.canMutate()) {
+            Button add=button("＋ 追加・管理",this::showCalendarActions);
+            styleButton(add,true);content.addView(add);
         }
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
+    }
+    private void showCalendarActions() {
+        ArrayList<String> actions=new ArrayList<>();
+        actions.add("タスク・イベントを追加");actions.add("定期タスク");
+        actions.add("スタンプを配置");actions.add("スタンプ管理");
+        if(snapshot!=null&&snapshot.optBoolean("canManageStamps")) {
+            actions.add("新しいスタンプ画像");actions.add("動くPNGスタンプ");
+        }
+        new AlertDialog.Builder(this).setTitle("追加・管理")
+            .setItems(actions.toArray(new String[0]),(dialog,which) -> {
+                switch(actions.get(which)) {
+                    case "タスク・イベントを追加":addTask();break;
+                    case "定期タスク":loadRecurringRules();break;
+                    case "スタンプを配置":addStamp();break;
+                    case "スタンプ管理":loadStampAssets();break;
+                    case "新しいスタンプ画像":chooseStaticStamp();break;
+                    case "動くPNGスタンプ":chooseAnimatedStamp();break;
+                }
+            }).show();
+    }
+    private void showSettingsActions() {
+        String[] actions={"位置設定","アプリ設定","Google連携の状態","ホーム画面アイコン","ログアウト"};
+        new AlertDialog.Builder(this).setTitle("設定")
+            .setItems(actions,(dialog,which) -> {
+                switch(which) {
+                    case 0:showSettings();break;
+                    case 1:loadAppSettings();break;
+                    case 2:loadIntegrationStatus();break;
+                    case 3:pinFamilyShortcut();break;
+                    case 4:logout();break;
+                }
+            }).show();
     }
     private String dateValue(JSONObject row, String primary, String fallback) {
         String first = row.isNull(primary) ? "" : row.optString(primary, "");
@@ -259,14 +340,12 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
-        if(ApiClient.canMutate()) {
-            content.addView(button("＋ スタンプ",this::addStamp));
-            if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 新しいスタンプ画像",this::chooseStaticStamp));
-            if(snapshot.optBoolean("canManageStamps")) content.addView(button("＋ 動くPNGスタンプ",this::chooseAnimatedStamp));
-        }
         LinearLayout weekdays=new LinearLayout(this);
-        for(String weekday:new String[]{"日","月","火","水","木","金","土"})
-            weekdays.addView(label(weekday),new LinearLayout.LayoutParams(0,-2,1));
+        for(String weekday:new String[]{"日","月","火","水","木","金","土"}) {
+            TextView day=label(weekday);day.setGravity(Gravity.CENTER);day.setTextSize(13);
+            day.setTextColor(mutedColor());day.setPadding(0,dp(6),0,dp(6));
+            weekdays.addView(day,new LinearLayout.LayoutParams(0,-2,1));
+        }
         content.addView(weekdays);
         int offset=month.atDay(1).getDayOfWeek().getValue()%7;
         for(int row=0;row<6;row++) {
@@ -274,7 +353,7 @@ public final class MainActivity extends Activity {
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset;
                 if(date<1||date>month.lengthOfMonth()) {
-                    week.addView(new TextView(this),new LinearLayout.LayoutParams(0,-2,1)); continue;
+                    week.addView(new TextView(this),new LinearLayout.LayoutParams(0,dp(48),1)); continue;
                 }
                 LocalDate day=month.atDay(date); int count=0;
                 for(int n=0;n<tasks.length();n++) {
@@ -284,13 +363,17 @@ public final class MainActivity extends Activity {
                 int stampCount=stampsOnDay(day.toString()).length();
                 Button cell=button(Integer.toString(date)+(count>0?" •":"")+(stampCount>0?" ✦":""),()->{selectedDay=day; render();});
                 cell.setContentDescription(day.toString()+" 予定"+count+"件");
-                cell.setAllCaps(false); cell.setTextSize(12);
-                cell.setAlpha(day.equals(selectedDay)?1f:0.78f);
-                week.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
+                boolean selected=day.equals(selectedDay);
+                cell.setTextSize(12);cell.setMinWidth(0);cell.setPadding(0,0,0,0);
+                cell.setTextColor(selected?pageColor():textColor());
+                cell.setBackground(shape(selected?accentColor():surfaceColor(),
+                    selected?Color.TRANSPARENT:Color.parseColor(darkMode()?"#344851":"#E4ECEA"),8));
+                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(46),1);
+                slot.setMargins(dp(2),dp(2),dp(2),dp(2));week.addView(cell,slot);
             }
             content.addView(week);
         }
-        content.addView(label(selectedDay.toString()+" の予定"));
+        content.addView(heading(selectedDay.toString()+" の予定"));
         renderSelectedStamps();
         ArrayList<JSONObject> dayTasks=new ArrayList<>();
         for(int n=0;n<tasks.length();n++) {
