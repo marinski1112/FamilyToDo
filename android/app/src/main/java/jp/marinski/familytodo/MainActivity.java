@@ -257,24 +257,45 @@ public final class MainActivity extends Activity {
         }
         content.addView(label(selectedDay.toString()+" の予定"));
         renderSelectedStamps();
-        int count=0;
+        ArrayList<JSONObject> dayTasks=new ArrayList<>();
         for(int n=0;n<tasks.length();n++) {
             JSONObject task=tasks.optJSONObject(n);
-            if(task==null||!taskOnDay(task,selectedDay.toString())) continue;
+            if(task!=null&&taskOnDay(task,selectedDay.toString())) dayTasks.add(task);
+        }
+        dayTasks.sort((a,b) -> {
+            boolean aEvent="EVENT".equalsIgnoreCase(a.optString("task_kind"));
+            boolean bEvent="EVENT".equalsIgnoreCase(b.optString("task_kind"));
+            if(aEvent!=bEvent) return aEvent?-1:1;
+            boolean aAllDay=a.optInt("all_day")==1,bAllDay=b.optInt("all_day")==1;
+            if(aAllDay!=bAllDay) return aAllDay?-1:1;
+            return dateValue(a,"start_at","due_at").compareTo(dateValue(b,"start_at","due_at"));
+        });
+        Boolean previousEvent=null;
+        for(JSONObject task:dayTasks) {
             boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
+            if(previousEvent==null||previousEvent!=event) content.addView(label(event?"イベント":"タスク"));
+            previousEvent=event;
             String start=dateValue(task,"start_at","due_at");
             String time=task.optInt("all_day")!=1 && start.length()>=16?start.substring(11,16)+"  ":"";
-            CheckBox box=new CheckBox(this); box.setText(time+(event?"📌 ":"")+task.optString("title"));
-            box.setChecked("completed".equals(task.optString("status")));
             int recurrenceId=task.optInt("recurrence_occurrence_id");
             int id=recurrenceId>0?recurrenceId:task.optInt("id");
-            box.setEnabled(!event&&id>0);
-            box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
-            if(recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
-            else if(id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
-            content.addView(box);count++;
+            if(event) {
+                TextView entry=label(time+"📌 "+task.optString("title"));
+                entry.setContentDescription("イベント "+task.optString("title")+"。長押しで操作");
+                if(recurrenceId>0) entry.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
+                else if(id>0) entry.setOnLongClickListener(v -> { taskActions(task); return true; });
+                content.addView(entry);
+            } else {
+                CheckBox box=new CheckBox(this);box.setText(time+task.optString("title"));
+                box.setChecked("completed".equals(task.optString("status")));
+                box.setEnabled(id>0);
+                box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
+                if(recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
+                else if(id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
+                content.addView(box);
+            }
         }
-        if(count==0) content.addView(label("予定はありません"));
+        if(dayTasks.isEmpty()) content.addView(label("予定はありません"));
     }
     private JSONArray stampsOnDay(String day) {
         JSONArray result=new JSONArray();
