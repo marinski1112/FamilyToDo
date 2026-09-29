@@ -95,11 +95,23 @@ public final class MainActivity extends Activity {
             android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
     private int dp(float value) { return (int)(value*getResources().getDisplayMetrics().density+0.5f); }
-    private int pageColor() { return Color.parseColor(darkMode()?"#111B20":"#F5F8F7"); }
-    private int surfaceColor() { return Color.parseColor(darkMode()?"#223139":"#FFFFFF"); }
-    private int textColor() { return Color.parseColor(darkMode()?"#F2F7F6":"#183038"); }
-    private int mutedColor() { return Color.parseColor(darkMode()?"#A9C0C3":"#587078"); }
-    private int accentColor() { return Color.parseColor(darkMode()?"#69D4C7":"#117C78"); }
+    private int pageColor() { return Color.parseColor(darkMode()?"#101827":"#F4F6FA"); }
+    private int surfaceColor() { return Color.parseColor(darkMode()?"#1B2637":"#FFFFFF"); }
+    private int textColor() { return Color.parseColor(darkMode()?"#EEF3FA":"#18212F"); }
+    private int mutedColor() { return Color.parseColor(darkMode()?"#A6B3C6":"#6B7280"); }
+    private int accentColor() { return Color.parseColor(darkMode()?"#6366F1":"#4F46E5"); }
+    private int lineColor() { return Color.parseColor(darkMode()?"#35465C":"#E5E7EB"); }
+    private int softColor() { return Color.parseColor(darkMode()?"#293452":"#EEF2FF"); }
+    private LinearLayout panel() {
+        LinearLayout panel=new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(12),dp(10),dp(12),dp(10));
+        panel.setBackground(shape(surfaceColor(),lineColor(),18));
+        return panel;
+    }
+    private void addPanel(LinearLayout panel) {
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+        lp.setMargins(0,0,0,dp(12));content.addView(panel,lp);
+    }
     private GradientDrawable shape(int fill, int stroke, int radius) {
         GradientDrawable background=new GradientDrawable();
         background.setColor(fill); background.setCornerRadius(dp(radius));
@@ -109,9 +121,9 @@ public final class MainActivity extends Activity {
     private void styleButton(Button b, boolean selected) {
         b.setAllCaps(false); b.setTextSize(14); b.setMinHeight(dp(44));
         b.setPadding(dp(12),dp(7),dp(12),dp(7));
-        b.setTextColor(selected?pageColor():textColor());
+        b.setTextColor(selected?Color.WHITE:textColor());
         b.setBackground(shape(selected?accentColor():surfaceColor(),
-            selected?Color.TRANSPARENT:Color.parseColor(darkMode()?"#3B5158":"#D8E7E4"),12));
+            selected?Color.TRANSPARENT:lineColor(),11));
         b.setStateListAnimator(null);
     }
     private Button button(String label, Runnable action) {
@@ -172,18 +184,24 @@ public final class MainActivity extends Activity {
     }
     private LinearLayout bottomNavigation() {
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(2),dp(6),dp(2),dp(6));
-        nav.setBackgroundColor(surfaceColor());
-        String[] names={"🏠\nホーム","✅\nチェック","📅\nカレンダー","📍\n位置情報","🐣\n家族ログ","💬\n伝言"};
+        nav.setBackground(shape(surfaceColor(),lineColor(),0));
+        String[] icons={"🏠","✅","📅","📍","🐣","💬"};
+        String[] names={"ホーム","チェックリスト","カレンダー","位置情報","家族ログ","伝言"};
         String[] keys={"home","goods","calendar","location","familylog","messages"};
         for(int i=0;i<keys.length;i++) {
-            final String destination=keys[i];
-            TextView item=new TextView(this);item.setText(names[i]);item.setGravity(Gravity.CENTER);
-            item.setTextSize(11);item.setTextColor(destination.equals(tab)?accentColor():mutedColor());
-            item.setContentDescription(names[i].replace("\n","")+"を開く");
-            item.setBackground(shape(destination.equals(tab)?
-                Color.parseColor(darkMode()?"#294B4A":"#E0F3EF"):surfaceColor(),Color.TRANSPARENT,10));
+            final String destination=keys[i]; boolean active=destination.equals(tab);
+            LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER);
+            item.setBackground(shape(active?softColor():surfaceColor(),Color.TRANSPARENT,12));
+            TextView icon=new TextView(this);icon.setText(icons[i]);icon.setTextSize(19);
+            icon.setGravity(Gravity.CENTER);item.addView(icon);
+            TextView name=new TextView(this);name.setText(names[i]);name.setTextSize(10);
+            name.setSingleLine(true);name.setGravity(Gravity.CENTER);
+            name.setTextColor(active?accentColor():mutedColor());item.addView(name);
+            item.setContentDescription(names[i]+"を開く");
             item.setOnClickListener(v -> navigate(destination));
-            nav.addView(item,new LinearLayout.LayoutParams(0,dp(56),1));
+            LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(62),1);
+            slot.setMargins(dp(1),0,dp(1),0);nav.addView(item,slot);
         }
         return nav;
     }
@@ -330,10 +348,14 @@ public final class MainActivity extends Activity {
     private LinearLayout card(String title,String details) {
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14),dp(10),dp(14),dp(10));
-        card.setBackground(shape(surfaceColor(),Color.parseColor(darkMode()?"#344851":"#E4ECEA"),14));
+        card.setBackground(shape(surfaceColor(),lineColor(),18));
         TextView heading=label(title);heading.setTypeface(null,android.graphics.Typeface.BOLD);
         card.addView(heading);card.addView(label(details));
         return card;
+    }
+    private void addPanelCard(LinearLayout view) {
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+        lp.setMargins(0,0,0,dp(12));content.addView(view,lp);
     }
     private void renderHome() {
         content.addView(heading("ホーム"));
@@ -359,9 +381,9 @@ public final class MainActivity extends Activity {
             if(row!=null&&!"completed".equals(row.optString("status")))itemCount++;
         }
         LinearLayout schedule=card("今日の予定",eventCount+"件のイベント ・ "+taskCount+"件の未完了タスク");
-        schedule.setOnClickListener(v -> navigate("calendar"));content.addView(schedule);
+        schedule.setOnClickListener(v -> navigate("calendar"));addPanelCard(schedule);
         LinearLayout goods=card("チェックリスト",shoppingCount+"件の買い物 ・ "+itemCount+"件の持ち物");
-        goods.setOnClickListener(v -> navigate("goods"));content.addView(goods);
+        goods.setOnClickListener(v -> navigate("goods"));addPanelCard(goods);
         content.addView(button("家族の位置情報を開く",() -> navigate("location")));
         content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
         content.addView(button("アプリ設定",this::showSettingsActions));
@@ -401,7 +423,7 @@ public final class MainActivity extends Activity {
             JSONObject latest=member.optJSONObject("latest");
             String time=latest==null?"位置情報なし":latest.optString("recordedAt");
             String detail=state+(place.isEmpty()||place.equals("null")?"":" ・ "+place)+"\n"+time;
-            content.addView(card(member.optString("name","メンバー"),detail));
+            addPanelCard(card(member.optString("name","メンバー"),detail));
         }
     }
     private void returnFromWebPage() { showNative();load(); }
@@ -477,7 +499,7 @@ public final class MainActivity extends Activity {
             day.setTextColor(mutedColor());day.setPadding(0,dp(6),0,dp(6));
             weekdays.addView(day,new LinearLayout.LayoutParams(0,-2,1));
         }
-        content.addView(weekdays);
+        LinearLayout calendarPanel=panel();calendarPanel.addView(weekdays);
         int offset=month.atDay(1).getDayOfWeek().getValue()%7;
         for(int row=0;row<6;row++) {
             LinearLayout week=new LinearLayout(this);
@@ -502,8 +524,9 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(46),1);
                 slot.setMargins(dp(2),dp(2),dp(2),dp(2));week.addView(cell,slot);
             }
-            content.addView(week);
+            calendarPanel.addView(week);
         }
+        addPanel(calendarPanel);
         content.addView(heading(selectedDay.toString()+" の予定"));
         renderSelectedStamps();
         ArrayList<JSONObject> dayTasks=new ArrayList<>();
@@ -533,7 +556,8 @@ public final class MainActivity extends Activity {
                 entry.setContentDescription("イベント "+task.optString("title")+"。長押しで操作");
                 if(ApiClient.canMutate()&&recurrenceId>0) entry.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
                 else if(ApiClient.canMutate()&&id>0) entry.setOnLongClickListener(v -> { taskActions(task); return true; });
-                content.addView(entry);
+                entry.setBackground(shape(surfaceColor(),lineColor(),12));
+                addPanelCard(wrapView(entry));
             } else {
                 CheckBox box=new CheckBox(this);box.setText(time+task.optString("title"));
                 box.setChecked("completed".equals(task.optString("status")));
@@ -541,10 +565,17 @@ public final class MainActivity extends Activity {
                 box.setOnClickListener(v->toggle(recurrenceId>0?"recurrence":"task",id,box));
                 if(ApiClient.canMutate()&&recurrenceId>0) box.setOnLongClickListener(v -> { recurringOccurrenceActions(task); return true; });
                 else if(ApiClient.canMutate()&&id>0) box.setOnLongClickListener(v -> { taskActions(task); return true; });
-                content.addView(box);
+                styleCheckBox(box);addPanelCard(wrapView(box));
             }
         }
         if(dayTasks.isEmpty()) content.addView(label("予定はありません"));
+    }
+    private LinearLayout wrapView(android.view.View child) {
+        LinearLayout holder=panel();holder.addView(child);return holder;
+    }
+    private void styleCheckBox(CheckBox box) {
+        box.setTextSize(15);box.setTextColor(textColor());box.setMinHeight(dp(48));
+        if(Build.VERSION.SDK_INT>=21) box.setButtonTintList(android.content.res.ColorStateList.valueOf(accentColor()));
     }
     private JSONArray stampsOnDay(String day) {
         JSONArray result=new JSONArray();
@@ -1078,7 +1109,7 @@ public final class MainActivity extends Activity {
                     box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
                     box.setOnLongClickListener(v -> { goodsActions(shopping,row); return true; });
                 }
-                group.addView(box); count++;
+                styleCheckBox(box);group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
                 TextView heading=label(category+("未分類".equals(category)?"":"  ⋮"));
@@ -1102,8 +1133,10 @@ public final class MainActivity extends Activity {
                         return true;
                     });
                 }
-                content.addView(heading);
-                if(count>0) content.addView(group); else content.addView(label("項目なし"));
+                LinearLayout section=panel();heading.setTypeface(null,android.graphics.Typeface.BOLD);
+                section.addView(heading);
+                if(count>0) section.addView(group); else section.addView(label("項目なし"));
+                addPanel(section);
             }
         }
     }
@@ -2153,7 +2186,7 @@ public final class MainActivity extends Activity {
         days.addView(label(selectedDay.toString()));
         days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
         days.addView(button("更新",this::loadFamilyLog));
-        content.addView(days);
+        addPanel(days);
         if(pendingFamilyLogPhoto!=null && !readOnly) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
             content.addView(label("読み込み中…")); return;
@@ -3199,28 +3232,49 @@ public final class MainActivity extends Activity {
     }
     private void renderMessages() {
         content.addView(heading("伝言"));
+        LinearLayout actions=new LinearLayout(this);
         if(ApiClient.canMutate()) {
-            content.addView(button("＋ 伝言する",this::addMessage));
-            content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
-            content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
-            if(snapshot!=null&&snapshot.optBoolean("canManageStamps"))
-                content.addView(button("リアクション設定",this::editMessageReactions));
-            if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
+            Button send=button("＋ 伝言する",this::addMessage);styleButton(send,true);
+            actions.addView(send,new LinearLayout.LayoutParams(0,dp(48),1));
+            actions.addView(button("スタンプ",this::chooseMessageStamp),new LinearLayout.LayoutParams(0,dp(48),1));
+            actions.addView(button("写真",this::chooseMessagePhoto),new LinearLayout.LayoutParams(0,dp(48),1));
         }
+        addPanel(actions);
+        if(snapshot!=null&&snapshot.optBoolean("canManageStamps")&&ApiClient.canMutate())
+            content.addView(button("リアクション設定",this::editMessageReactions));
+        if(pendingPhoto!=null&&ApiClient.canMutate())content.addView(button("写真送信を再試行",this::retryMessagePhoto));
         content.addView(button("更新",()->loadMessages(0)));
-        if(hasOlderMessages && messages.length()>0) content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
+        if(hasOlderMessages&&messages.length()>0)
+            content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         for(int n=0;n<messages.length();n++) {
-            JSONObject row=messages.optJSONObject(n); if(row==null) continue;
-            TextView message=label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
-                +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")+"\n長押しでリアクション");
-            if(ApiClient.canMutate()) message.setOnLongClickListener(view -> {messageActions(row);return true;});
-            content.addView(message);
-            if(snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId"))
-                content.addView(label("既読 "+row.optInt("readCount")));
-            if(row.optBoolean("hasImage") && row.optInt("id")>0)
-                content.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
-            if(row.optBoolean("hasStamp") && row.optInt("id")>0)
-                content.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
+            JSONObject row=messages.optJSONObject(n);if(row==null)continue;
+            boolean mine=snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId");
+            LinearLayout wrapper=new LinearLayout(this);wrapper.setOrientation(LinearLayout.VERTICAL);
+            wrapper.setGravity(mine?Gravity.END:Gravity.START);
+            TextView sender=label(row.optString("senderName")+" ・ "+row.optString("createdAt"));
+            sender.setTextSize(11);sender.setTextColor(mutedColor());sender.setPadding(dp(8),dp(4),dp(8),0);
+            wrapper.addView(sender);
+            LinearLayout bubble=new LinearLayout(this);bubble.setOrientation(LinearLayout.VERTICAL);
+            bubble.setPadding(dp(12),dp(4),dp(12),dp(4));
+            bubble.setBackground(shape(mine?Color.parseColor(darkMode()?"#3F6D46":"#8DE055"):surfaceColor(),
+                mine?Color.TRANSPARENT:lineColor(),14));
+            TextView body=label(row.optString("text")+
+                (row.optBoolean("hasImage")?"\n📷 写真あり":"")+
+                (row.optBoolean("hasStamp")?"\nスタンプあり":""));
+            body.setTextSize(15);body.setPadding(0,dp(6),0,dp(6));bubble.addView(body);
+            if(ApiClient.canMutate())bubble.setOnLongClickListener(view -> {messageActions(row);return true;});
+            wrapper.addView(bubble);
+            if(mine) {
+                TextView read=label("既読 "+row.optInt("readCount"));
+                read.setTextSize(10);read.setTextColor(mutedColor());read.setPadding(dp(8),0,dp(8),0);
+                wrapper.addView(read);
+            }
+            if(row.optBoolean("hasImage")&&row.optInt("id")>0)
+                wrapper.addView(button("写真を開く",() -> showMessagePhoto(row.optInt("id"))));
+            if(row.optBoolean("hasStamp")&&row.optInt("id")>0)
+                wrapper.addView(button("スタンプを開く",() -> showMessageStamp(row.optInt("id"))));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+            lp.setMargins(0,0,0,dp(10));content.addView(wrapper,lp);
         }
     }
     private void messageActions(JSONObject row) {
