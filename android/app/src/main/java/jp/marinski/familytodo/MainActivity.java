@@ -3444,6 +3444,9 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("ログアウト")
             .setMessage("端末内のカレンダーとチェックリストを削除し、位置共有を停止します。")
             .setPositiveButton("ログアウト",(dialog,which)->{
+                String saved=Credentials.read(this);
+                String publicId=saved==null?null:saved.split(":",2)[0];
+                String csrf=snapshot==null?null:snapshot.optString("csrf");
                 sessionEpoch++;
                 stampGeneration++;
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
@@ -3455,8 +3458,22 @@ public final class MainActivity extends Activity {
                 pendingStampName="";
                 pendingAnimatedStampName="";
                 stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
-                android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(this::showLogin));
-                android.webkit.CookieManager.getInstance().flush();
+                TextView progress=new TextView(this); progress.setText("ログアウト中…"); progress.setPadding(36,36,36,36);
+                setContentView(progress);
+                network.execute(() -> {
+                    boolean serverStopped=true;
+                    if(publicId!=null&&csrf!=null) {
+                        try {disableServerLocationSharing(publicId,csrf);} catch(Exception error) {serverStopped=false;}
+                    }
+                    boolean synced=serverStopped;
+                    runOnUiThread(() -> {
+                        android.webkit.CookieManager.getInstance().removeAllCookies(value -> runOnUiThread(() -> {
+                            android.webkit.CookieManager.getInstance().flush();
+                            showLogin();
+                            if(!synced) Toast.makeText(this,"この端末の送信は停止しました。Web側の位置共有状態を確認してください",Toast.LENGTH_LONG).show();
+                        }));
+                    });
+                });
             }).setNegativeButton("閉じる",null).show();
     }
     private void showLogin() {
@@ -3506,22 +3523,24 @@ public final class MainActivity extends Activity {
         String publicId=saved.split(":",2)[0],csrf=snapshot.optString("csrf");int epoch=sessionEpoch;
         network.execute(() -> {
             try {
-                JSONObject list=ApiClient.request("/api/location/devices",null);
-                JSONArray devices=list.optJSONArray("devices");
-                if(devices==null) throw new IllegalStateException("Device list unavailable");
-                for(int i=0;i<devices.length();i++) {
-                    JSONObject device=devices.optJSONObject(i);
-                    if(device!=null&&publicId.equals(device.optString("publicId"))&&device.optInt("id")>0) {
-                        ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
-                            .put("action","sharing").put("device_id",device.optInt("id")).put("enabled",false));
-                        return;
-                    }
-                }
-                throw new IllegalStateException("Device not found");
+                if(epoch!=sessionEpoch) return;
+                disableServerLocationSharing(publicId,csrf);
             } catch(Exception error) {
                 runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"端末の共有は停止しました。Web側の共有状態も確認してください",Toast.LENGTH_LONG).show();});
             }
         });
+    }
+    private void disableServerLocationSharing(String publicId,String csrf) throws Exception {
+        JSONArray devices=ApiClient.request("/api/location/devices",null).getJSONArray("devices");
+        for(int i=0;i<devices.length();i++) {
+            JSONObject device=devices.optJSONObject(i);
+            if(device!=null&&publicId.equals(device.optString("publicId"))&&device.optInt("id")>0) {
+                ApiClient.request("/api/location/devices",new JSONObject().put("csrf",csrf)
+                    .put("action","sharing").put("device_id",device.optInt("id")).put("enabled",false));
+                return;
+            }
+        }
+        throw new IllegalStateException("Device not found");
     }
     private void resumeLocationSharing() {
         String saved=Credentials.read(this);
