@@ -1,5 +1,9 @@
 <resources>
     <style name="FamilyToDoTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#69D4C7</item>
+        <item name="android:statusBarColor">#111B20</item>
+        <item name="android:navigationBarColor">#111B20</item>
+        <item name="android:windowBackground">#111B20</item>
     </style>
 </resources>
