@@ -404,6 +404,7 @@ public final class MainActivity extends Activity {
             content.addView(card(member.optString("name","メンバー"),detail));
         }
     }
+    private void returnFromWebPage() { showNative();load(); }
     private void showWebPage(String path) {
         if(!path.startsWith("/app/")||login!=null)return;
         pageWeb=new WebView(this);
@@ -419,7 +420,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);
         frame.setBackgroundColor(pageColor());
-        frame.addView(button("← ネイティブ画面に戻る",this::showNative));
+        frame.addView(button("← ネイティブ画面に戻る",this::returnFromWebPage));
         frame.addView(pageWeb,new LinearLayout.LayoutParams(-1,0,1));
         applySystemBarInsets(frame);setContentView(frame);
         pageWeb.loadUrl(ApiClient.ORIGIN+path);
@@ -4217,7 +4218,7 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if(pageWeb!=null) {
             if(pageWeb.canGoBack())pageWeb.goBack();
-            else showNative();
+            else returnFromWebPage();
         } else if(login!=null&&login.canGoBack()) login.goBack();
         else super.onBackPressed();
     }
