@@ -1918,7 +1918,7 @@ public final class MainActivity extends Activity {
             content.addView(label("読み込み中…")); return;
         }
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
-        if(readOnly) content.addView(label("保存済みの記録を表示中（読み取り専用）"));
+        if(readOnly) content.addView(label("読み取り専用で表示中（接続と認証を確認しています）"));
         if(!readOnly) {
             content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
             if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
@@ -3565,6 +3565,13 @@ public final class MainActivity extends Activity {
         login.loadUrl(ApiClient.ORIGIN+"/login.php");
     }
     private void showSettings() {
+        if(!ApiClient.canMutate()) {
+            new AlertDialog.Builder(this).setTitle("位置共有")
+                .setMessage("保存済みデータの表示中です。共有の開始・登録はオンラインで再読み込みした後に行ってください。共有の停止は今すぐできます。")
+                .setPositiveButton("共有を停止",(d,w) -> stopLocationSharing())
+                .setNegativeButton("閉じる",null).show();
+            return;
+        }
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(36,16,36,0);
         EditText id=new EditText(this); id.setHint("端末ID（loc_...）"); id.setSingleLine(true);
         EditText secret=new EditText(this); secret.setHint("Secret（64文字）"); secret.setSingleLine(true);
