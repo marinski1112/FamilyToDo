@@ -806,7 +806,26 @@ public final class MainActivity extends Activity {
             }
             if(count>0 || !"未分類".equals(category)) {
                 TextView heading=label(category+("未分類".equals(category)?"":"  ⋮"));
-                if(!"未分類".equals(category)) heading.setOnClickListener(v -> categoryActions(shopping,category));
+                if(!"未分類".equals(category)) {
+                    heading.setOnClickListener(v -> categoryActions(shopping,category));
+                    heading.setContentDescription(category+"。タップで操作、長押しして別のカテゴリへドラッグ");
+                    heading.setOnLongClickListener(v -> {
+                        if(!categoryOrder(shopping).contains(category)) return false;
+                        return v.startDragAndDrop(android.content.ClipData.newPlainText("category",""),
+                            new android.view.View.DragShadowBuilder(v),new String[]{shopping?"shopping":"item",category},0);
+                    });
+                    heading.setOnDragListener((v,event) -> {
+                        Object source=event.getLocalState();
+                        if(!(source instanceof String[])) return false;
+                        String[] drag=(String[])source;
+                        if(drag.length!=2||!drag[0].equals(shopping?"shopping":"item")||
+                            !categoryOrder(shopping).contains(category)) return false;
+                        if(event.getAction()==android.view.DragEvent.ACTION_DROP) {
+                            repositionCategory(shopping,drag[1],category);return true;
+                        }
+                        return true;
+                    });
+                }
                 content.addView(heading);
                 if(count>0) content.addView(group); else content.addView(label("項目なし"));
             }
@@ -1144,13 +1163,14 @@ public final class MainActivity extends Activity {
     }
     private void categoryActions(boolean shopping,String name) {
         ArrayList<String> actions=new ArrayList<>();
-        actions.add("名前を変更"); actions.add("上へ移動"); actions.add("下へ移動");
+        actions.add("名前を変更"); actions.add("好きな位置へ移動"); actions.add("上へ移動"); actions.add("下へ移動");
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         if(catalog!=null && catalog.optBoolean("canManageCategories")) actions.add("カテゴリを削除（項目は未分類へ）");
         new AlertDialog.Builder(this).setTitle(name).setItems(actions.toArray(new String[0]),(dialog,which) -> {
             if(which==0) renameCategory(shopping,name);
-            else if(which==1 || which==2) moveCategory(shopping,name,which==1?-1:1);
-            else if(which==3) deleteCategory(shopping,name);
+            else if(which==1) chooseCategoryPosition(shopping,name);
+            else if(which==2 || which==3) moveCategory(shopping,name,which==2?-1:1);
+            else if(which==4) deleteCategory(shopping,name);
         }).show();
     }
     private ArrayList<String> categoryOrder(boolean shopping) {
@@ -1171,6 +1191,34 @@ public final class MainActivity extends Activity {
         int from=names.indexOf(name), to=from+direction;
         if(from<0 || to<0 || to>=names.size()) return;
         java.util.Collections.swap(names,from,to);
+        saveCategoryOrder(shopping,names);
+    }
+    private void chooseCategoryPosition(boolean shopping,String name) {
+        ArrayList<String> names=categoryOrder(shopping);
+        if(!names.contains(name)||names.size()<2) return;
+        names.remove(name);
+        String[] positions=new String[names.size()+1];
+        for(int i=0;i<names.size();i++) positions[i]=names.get(i)+" の前";
+        positions[names.size()]="末尾";
+        new AlertDialog.Builder(this).setTitle(name+" の移動先")
+            .setItems(positions,(dialog,which) -> {
+                ArrayList<String> latest=categoryOrder(shopping);
+                if(!latest.remove(name)) return;
+                String target=which==names.size()?null:names.get(which);
+                int at=target==null?latest.size():latest.indexOf(target);
+                if(at<0) return;
+                latest.add(at,name);saveCategoryOrder(shopping,latest);
+            }).show();
+    }
+    private void repositionCategory(boolean shopping,String source,String before) {
+        ArrayList<String> names=categoryOrder(shopping);
+        if(!names.remove(source)||!names.contains(before)||source.equals(before)) return;
+        names.add(names.indexOf(before),source);
+        saveCategoryOrder(shopping,names);
+    }
+    private void saveCategoryOrder(boolean shopping,ArrayList<String> names) {
+        if(snapshot==null) return;
+        if(names.equals(categoryOrder(shopping))) return;
         String csrf=snapshot.optString("csrf"), path=shopping?"/api/shopping-categories":"/api/item";
         int epoch=sessionEpoch;
         network.execute(() -> {
