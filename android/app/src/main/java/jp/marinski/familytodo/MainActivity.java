@@ -493,36 +493,66 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
+        LinearLayout calendarPanel=panel();
+        calendarPanel.setPadding(dp(2),dp(4),dp(2),dp(4));
         LinearLayout weekdays=new LinearLayout(this);
         for(String weekday:new String[]{"日","月","火","水","木","金","土"}) {
-            TextView day=label(weekday);day.setGravity(Gravity.CENTER);day.setTextSize(13);
-            day.setTextColor(mutedColor());day.setPadding(0,dp(6),0,dp(6));
+            TextView day=label(weekday);day.setGravity(Gravity.CENTER);day.setTextSize(11);
+            day.setTypeface(null,android.graphics.Typeface.BOLD);
+            day.setTextColor(mutedColor());day.setPadding(0,dp(7),0,dp(7));
             weekdays.addView(day,new LinearLayout.LayoutParams(0,-2,1));
         }
-        LinearLayout calendarPanel=panel();calendarPanel.addView(weekdays);
+        calendarPanel.addView(weekdays);
         int offset=month.atDay(1).getDayOfWeek().getValue()%7;
-        for(int row=0;row<6;row++) {
+        int weeks=(offset+month.lengthOfMonth()+6)/7;
+        for(int row=0;row<weeks;row++) {
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset;
-                if(date<1||date>month.lengthOfMonth()) {
-                    week.addView(new TextView(this),new LinearLayout.LayoutParams(0,dp(48),1)); continue;
-                }
-                LocalDate day=month.atDay(date); int count=0;
+                LinearLayout cell=new LinearLayout(this);cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setPadding(dp(2),dp(4),dp(2),dp(2));
+                cell.setBackground(shape(surfaceColor(),lineColor(),0));
+                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(80),1);
+                week.addView(cell,slot);
+                if(date<1||date>month.lengthOfMonth())continue;
+                LocalDate day=month.atDay(date);
+                boolean selected=day.equals(selectedDay);
+                TextView number=new TextView(this);number.setText(Integer.toString(date));
+                number.setTextSize(15);number.setTypeface(null,android.graphics.Typeface.BOLD);
+                number.setGravity(Gravity.CENTER);
+                number.setTextColor(selected?Color.WHITE:column==0?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
+                if(selected)number.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
+                cell.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
+                int count=0,eventCount=0;
                 for(int n=0;n<tasks.length();n++) {
                     JSONObject task=tasks.optJSONObject(n);
-                    if(task!=null&&taskOnDay(task,day.toString())) count++;
+                    if(task==null||!taskOnDay(task,day.toString()))continue;
+                    count++;
+                    if("EVENT".equalsIgnoreCase(task.optString("task_kind"))) {
+                        eventCount++;
+                        if(eventCount<=1) {
+                            TextView chip=new TextView(this);
+                            chip.setText(task.optString("title"));
+                            chip.setSingleLine(true);chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                            chip.setTextSize(9);chip.setTextColor(Color.WHITE);
+                            chip.setPadding(dp(2),0,dp(2),0);
+                            chip.setBackground(shape(Color.parseColor("#EC4899"),Color.TRANSPARENT,4));
+                            cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(18)));
+                        }
+                    }
                 }
-                int stampCount=stampsOnDay(day.toString()).length();
-                Button cell=button(Integer.toString(date)+(count>0?" •":"")+(stampCount>0?" ✦":""),()->{selectedDay=day; render();});
+                if(count>eventCount) {
+                    TextView taskCount=new TextView(this);
+                    taskCount.setText("✅ "+(count-eventCount)+"件");taskCount.setSingleLine(true);
+                    taskCount.setTextSize(9);taskCount.setTextColor(Color.parseColor("#86EFAC"));
+                    cell.addView(taskCount);
+                }
+                if(stampsOnDay(day.toString()).length()>0) {
+                    TextView mark=new TextView(this);mark.setText("✦");mark.setTextSize(10);
+                    mark.setTextColor(accentColor());cell.addView(mark);
+                }
                 cell.setContentDescription(day.toString()+" 予定"+count+"件");
-                boolean selected=day.equals(selectedDay);
-                cell.setTextSize(12);cell.setMinWidth(0);cell.setPadding(0,0,0,0);
-                cell.setTextColor(selected?pageColor():textColor());
-                cell.setBackground(shape(selected?accentColor():surfaceColor(),
-                    selected?Color.TRANSPARENT:Color.parseColor(darkMode()?"#344851":"#E4ECEA"),8));
-                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(46),1);
-                slot.setMargins(dp(2),dp(2),dp(2),dp(2));week.addView(cell,slot);
+                cell.setOnClickListener(v -> {selectedDay=day;render();});
             }
             calendarPanel.addView(week);
         }
@@ -1081,9 +1111,13 @@ public final class MainActivity extends Activity {
     private void renderGoods() {
         boolean shopping=goodsKind.equals("shopping");
         if(ApiClient.canMutate()) {
-            content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
-            content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
-            content.addView(button(shopping?"買い物セット":"持ち物セット",() -> loadReusableSets(shopping)));
+            LinearLayout actions=new LinearLayout(this);
+            Button add=button(shopping?"＋ 買い物":"＋ 持ち物",() -> addGoods(shopping));
+            styleButton(add,true);
+            actions.addView(add,new LinearLayout.LayoutParams(0,dp(48),1));
+            actions.addView(button("＋ カテゴリ",() -> addCategory(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
+            actions.addView(button("≡ セット",() -> loadReusableSets(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
+            addPanel(actions);
         }
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
@@ -1109,10 +1143,19 @@ public final class MainActivity extends Activity {
                     box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
                     box.setOnLongClickListener(v -> { goodsActions(shopping,row); return true; });
                 }
-                styleCheckBox(box);group.addView(box); count++;
+                styleCheckBox(box);
+                LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
+                line.addView(box,new LinearLayout.LayoutParams(0,dp(52),1));
+                if(ApiClient.canMutate()) {
+                    Button info=button("ⓘ",() -> goodsActions(shopping,row));
+                    info.setTextColor(accentColor());info.setMinWidth(dp(44));
+                    line.addView(info,new LinearLayout.LayoutParams(dp(48),dp(44)));
+                }
+                group.addView(line);count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                TextView heading=label(category+("未分類".equals(category)?"":"  ⋮"));
+                TextView heading=label((shopping?"🛒  ":"🎒  ")+category+"   "+count+
+                    ("未分類".equals(category)?"":"   ›"));
                 if(!"未分類".equals(category) && ApiClient.canMutate()) {
                     heading.setOnClickListener(v -> categoryActions(shopping,category));
                     heading.setContentDescription(category+"。タップで操作、長押しして別のカテゴリへドラッグ");
@@ -2248,7 +2291,7 @@ public final class MainActivity extends Activity {
                 hasQuick=true;
                 actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
             }
-            if(hasQuick) { content.addView(actions); continue; }
+            if(hasQuick) { content.addView(horizontalActions(actions)); continue; }
             if(enabled.contains("SLEEP")) {
                 boolean sleeping=false;
                 if(timers!=null) for(int n=0;n<timers.length();n++) {
@@ -2264,7 +2307,7 @@ public final class MainActivity extends Activity {
                 actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
                 actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
             }
-            if(actions.getChildCount()>0) content.addView(actions);
+            if(actions.getChildCount()>0) content.addView(horizontalActions(actions));
         }
         if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
         if(logs!=null && !familyLog.optBoolean("truncated")) {
@@ -2281,7 +2324,7 @@ public final class MainActivity extends Activity {
             content.addView(label("当日の集計（表示中の全対象）  ミルク "+java.text.NumberFormat.getNumberInstance().format(milk)+
                 "ml ・ おむつ "+diaper+"回 ・ 睡眠 "+sleep+"分"));
         }
-        content.addView(label("当日の記録"));
+        content.addView(heading("当日の記録"));
         if(logs==null || logs.length()==0) { content.addView(label("記録はありません")); return; }
         for(int i=0;i<logs.length();i++) {
             JSONObject row=logs.optJSONObject(i); if(row==null) continue;
@@ -2289,12 +2332,19 @@ public final class MainActivity extends Activity {
             if(time.length()>=16) time=time.substring(11,16);
             String detail=row.optString("detail_code");
             String amount=row.isNull("amount")?"":row.optString("amount")+row.optString("unit");
-            TextView entry=label(time+"  "+row.optString("subject_name")+"  "+logTypeName(row.optString("log_type"))+
-                (detail.isEmpty()?"":" "+detail)+(amount.isEmpty()?"":" "+amount)+
-                (row.optString("value_text").isEmpty()?"":" "+row.optString("value_text"))+
+            LinearLayout record=panel();
+            TextView entry=label(time+"   "+logTypeIcon(row.optString("log_type"))+"  "+
+                logTypeName(row.optString("log_type"))+
+                (amount.isEmpty()?"":"  "+amount));
+            entry.setTextSize(17);entry.setTypeface(null,android.graphics.Typeface.BOLD);
+            record.addView(entry);
+            TextView details=label(row.optString("subject_name")+
+                (detail.isEmpty()?"":" ・ "+detail)+
+                (row.optString("value_text").isEmpty()?"":" ・ "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            if(!readOnly) entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
-            content.addView(entry);
+            details.setTextSize(13);details.setTextColor(mutedColor());record.addView(details);
+            if(!readOnly) record.setOnLongClickListener(v -> { familyLogActions(row); return true; });
+            addPanel(record);
             int mediaId=row.optInt("media_id");
             if(!readOnly&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
                 .setItems(new String[]{"表示","削除"},(dialog,which) -> {
@@ -2303,6 +2353,20 @@ public final class MainActivity extends Activity {
             else if(!readOnly&&"MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
                 ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
                 content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
+        }
+    }
+    private HorizontalScrollView horizontalActions(LinearLayout actions) {
+        HorizontalScrollView scroll=new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);scroll.addView(actions);return scroll;
+    }
+    private String logTypeIcon(String type) {
+        switch(type) {
+            case "MILK":return "🍼";
+            case "DIAPER":return "🧷";
+            case "SLEEP":return "😴";
+            case "BATH":return "🛁";
+            case "MEAL":return "🍚";
+            default:return "✨";
         }
     }
     private void chooseFamilyLogSummary() {
