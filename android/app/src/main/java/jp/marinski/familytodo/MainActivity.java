@@ -3504,7 +3504,7 @@ public final class MainActivity extends Activity {
         login.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String host=request.getUrl().getHost();
-                if ("familytodo.marinski1112.workers.dev".equals(host) || "access.line.me".equals(host)) return false;
+                if (android.net.Uri.parse(ApiClient.ORIGIN).getHost().equals(host) || "access.line.me".equals(host)) return false;
                 startActivity(new Intent(Intent.ACTION_VIEW,request.getUrl())); return true;
             }
         });
