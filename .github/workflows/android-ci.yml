@@ -30,6 +30,8 @@ jobs:
           retention-days: 7
       - name: Check isolated preview build
         run: gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://preview-familytodo.marinski1112.workers.dev --no-daemon
+      - name: Check writable isolated E2E build
+        run: gradle -p android :app:assembleDebug -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --no-daemon
       - name: Check unsigned internal release build
         run: |
           gradle -p android :app:assembleRelease -PfamilytodoVersionCode=1001 --no-daemon
