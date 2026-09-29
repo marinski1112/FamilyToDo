@@ -3706,18 +3706,36 @@ public final class MainActivity extends Activity {
         for(int i=0;i<members.length();i++) {
             JSONObject member=members.optJSONObject(i);
             names[i]=member==null?"家族":member.optString("name")+" ・ "+member.optString("role")+
-                (member.optInt("active",1)==1?"":"（停止中）");
+                (member.optInt("active",1)==1?"":"（停止中）")+
+                (member.optInt("manage_quick_chores")==1?" ・ 家事管理可":"");
         }
         new AlertDialog.Builder(this).setTitle("家族メンバー").setItems(names,(dialog,which) -> {
             JSONObject member=members.optJSONObject(which);
             if(member==null||!admin||member.optInt("id")==settings.optInt("member_id")||
                 "OWNER".equalsIgnoreCase(member.optString("role"))) return;
             boolean active=member.optInt("active",1)==1;
+            boolean canManageChores=member.optInt("manage_quick_chores")==1;
+            String[] actions=active?new String[]{canManageChores?"家事の管理権限を解除":"家事の管理権限を付与","メンバーを停止"}:
+                new String[]{"メンバーを再開"};
             new AlertDialog.Builder(this).setTitle(member.optString("name"))
-                .setMessage(active?"このメンバーの利用を停止しますか。通知も停止します。":"このメンバーを再開しますか。")
-                .setPositiveButton(active?"停止":"再開",(d,w) -> {
-                    try {saveAppSetting("/api/settings",new JSONObject().put("action","member_toggle").put("member_id",member.optInt("id")));}
-                    catch(Exception ignored) { }
+                .setItems(actions,(actionDialog,index) -> {
+                    if(active&&index==0) {
+                        new AlertDialog.Builder(this).setTitle(actions[0])
+                            .setMessage("このメンバーのちょこっと家事の項目を管理する権限を変更します。")
+                            .setPositiveButton("変更",(d,w) -> {
+                                try {saveAppSetting("/api/settings",new JSONObject().put("action","member_permission")
+                                    .put("member_id",member.optInt("id")).put("granted",!canManageChores));}
+                                catch(Exception ignored) { }
+                            }).setNegativeButton("戻る",null).show();
+                    } else {
+                        new AlertDialog.Builder(this).setTitle(member.optString("name"))
+                            .setMessage(active?"このメンバーの利用を停止しますか。通知も停止します。":"このメンバーを再開しますか。")
+                            .setPositiveButton(active?"停止":"再開",(d,w) -> {
+                                try {saveAppSetting("/api/settings",new JSONObject().put("action","member_toggle")
+                                    .put("member_id",member.optInt("id")));}
+                                catch(Exception ignored) { }
+                            }).setNegativeButton("戻る",null).show();
+                    }
                 }).setNegativeButton("戻る",null).show();
         }).setNegativeButton("閉じる",null).show();
     }
