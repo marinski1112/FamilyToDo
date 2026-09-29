@@ -407,13 +407,41 @@ public final class MainActivity extends Activity {
             "ANIMATED".equals(stamp.optString("kind")) &&
             ("image/gif".equals(stamp.optString("mimeType"))||"image/webp".equals(stamp.optString("mimeType")));
         new AlertDialog.Builder(this).setTitle("スタンプの操作")
-            .setItems(animated?new String[]{"アニメーションを表示","先頭へ移動","末尾へ移動","別の日に移動","削除"}:
-                new String[]{"先頭へ移動","末尾へ移動","別の日に移動","削除"},(dialog,which) -> {
+            .setItems(animated?new String[]{"アニメーションを表示","好きな位置へ移動","先頭へ移動","末尾へ移動","別の日に移動","削除"}:
+                new String[]{"好きな位置へ移動","先頭へ移動","末尾へ移動","別の日に移動","削除"},(dialog,which) -> {
                 int action=animated?which-1:which;
                 if(animated && which==0) showStampAnimation(stamp);
-                else if(action<2) reorderStamp(stamp,action==0);
-                else if(action==2) moveStamp(stamp); else deleteStamp(stamp);
+                else if(action==0) chooseStampPosition(stamp);
+                else if(action<3) reorderStamp(stamp,action==1);
+                else if(action==3) moveStamp(stamp); else deleteStamp(stamp);
             }).show();
+    }
+    private void chooseStampPosition(JSONObject stamp) {
+        if(snapshot==null||stamp.optInt("placementId")<=0) return;
+        JSONArray stamps=stampsOnDay(stamp.optString("date"));
+        ArrayList<JSONObject> other=new ArrayList<>();
+        for(int i=0;i<stamps.length();i++) {
+            JSONObject row=stamps.optJSONObject(i);
+            if(row!=null&&row.optInt("placementId")!=stamp.optInt("placementId")) other.add(row);
+        }
+        if(other.isEmpty()) return;
+        String[] positions=new String[other.size()+1];
+        for(int i=0;i<positions.length;i++) positions[i]=(i+1)+"番目"+(i==positions.length-1?"（末尾）":"");
+        new AlertDialog.Builder(this).setTitle("移動先の位置").setItems(positions,(dialog,which) -> {
+            int before=which==other.size()?0:other.get(which).optInt("placementId");
+            int epoch=sessionEpoch,id=stamp.optInt("placementId");
+            String day=stamp.optString("date"),csrf=snapshot.optString("csrf");
+            network.execute(() -> {
+                try {
+                    if(epoch!=sessionEpoch) return;
+                    ApiClient.request("/api/calendar-stamp-placement",new JSONObject().put("action","reorder")
+                        .put("csrf",csrf).put("placementId",id).put("beforePlacementId",before).put("stampDate",day));
+                    if(epoch==sessionEpoch) runOnUiThread(this::load);
+                } catch(Exception error) {
+                    runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを並べ替えられませんでした",Toast.LENGTH_SHORT).show();});
+                }
+            });
+        }).show();
     }
     private void loadStampAssets() { loadStampAssets(""); }
     private void loadStampAssets(String cursor) {
@@ -1994,7 +2022,17 @@ public final class MainActivity extends Activity {
                             .append("件、ミルク ").append(day.optString("milkMl","0")).append("ml、睡眠 ")
                             .append(day.optString("sleepMinutes","0")).append("分");
                     }
-                    ScrollView scroll=new ScrollView(this);TextView text=label(result.toString());scroll.addView(text);
+                    ScrollView scroll=new ScrollView(this);
+                    LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+                    LinearLayout chart=new LinearLayout(this);chart.setOrientation(LinearLayout.VERTICAL);
+                    Button metric=button("グラフを切替（ミルク／睡眠）",() -> {
+                        boolean sleep=chart.getTag()!=null&&chart.getTag().equals("milkMl");
+                        chart.setTag(sleep?"sleepMinutes":"milkMl");
+                        renderFamilyLogChart(chart,resultDays,start,end);
+                    });
+                    chart.setTag("milkMl");renderFamilyLogChart(chart,resultDays,start,end);
+                    panel.addView(metric);panel.addView(chart);
+                    panel.addView(label(result.toString()));scroll.addView(panel);
                     new AlertDialog.Builder(this).setTitle(name+" の集計").setView(scroll)
                         .setPositiveButton("閉じる",null).show();
                 });
@@ -2002,6 +2040,38 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"集計を取得できませんでした",Toast.LENGTH_SHORT).show(); });
             }
         });
+    }
+    private void renderFamilyLogChart(LinearLayout chart,JSONArray daily,LocalDate start,LocalDate end) {
+        chart.removeAllViews();
+        String key=String.valueOf(chart.getTag());
+        chart.addView(label(("sleepMinutes".equals(key)?"睡眠時間（分）":"ミルク（ml）")+
+            " ・ 期間末尾の最大30日（記録がない日は0）"));
+        Map<String,Double> values=new HashMap<>();
+        for(int i=0;i<daily.length();i++) {
+            JSONObject row=daily.optJSONObject(i);
+            if(row!=null) values.put(row.optString("day"),row.optDouble(key));
+        }
+        LocalDate first=end.minusDays(29).isAfter(start)?end.minusDays(29):start;
+        double maximum=1;
+        for(LocalDate day=first;!day.isAfter(end);day=day.plusDays(1))
+            maximum=Math.max(maximum,values.getOrDefault(day.toString(),0.0));
+        int density=Math.max(1,Math.round(getResources().getDisplayMetrics().density));
+        LinearLayout bars=new LinearLayout(this);bars.setOrientation(LinearLayout.HORIZONTAL);
+        for(LocalDate day=first;!day.isAfter(end);day=day.plusDays(1)) {
+            double amount=values.getOrDefault(day.toString(),0.0);
+            LinearLayout column=new LinearLayout(this);column.setOrientation(LinearLayout.VERTICAL);
+            column.setGravity(android.view.Gravity.BOTTOM|android.view.Gravity.CENTER_HORIZONTAL);
+            TextView value=label(amount==0?"":String.valueOf((int)Math.round(amount)));
+            value.setTextSize(11);value.setPadding(0,0,0,0);
+            column.addView(value);
+            android.view.View bar=new android.view.View(this);
+            bar.setBackgroundColor("sleepMinutes".equals(key)?0xff6366f1:0xff0d9488);
+            column.addView(bar,new LinearLayout.LayoutParams(22*density,Math.max(2*density,(int)(90*density*amount/maximum))));
+            TextView date=label(day.getMonthValue()+"/"+day.getDayOfMonth());date.setTextSize(10);date.setPadding(0,4*density,0,0);
+            column.addView(date);bars.addView(column,new LinearLayout.LayoutParams(54*density,150*density));
+        }
+        HorizontalScrollView horizontal=new HorizontalScrollView(this);horizontal.addView(bars);
+        chart.addView(horizontal);horizontal.post(() -> horizontal.fullScroll(android.view.View.FOCUS_RIGHT));
     }
     private void runFamilyLogQuickAction(JSONObject quick) {
         String mode=quick.optString("mode");

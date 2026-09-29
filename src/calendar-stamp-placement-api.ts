@@ -48,6 +48,38 @@ export async function calendarStampPlacementApi(request:Request,context:any):Pro
       return json({ok:false,error:'STAMP_DELETE_FAILED'},500);
     }
   }
+  if(request.method==='POST'&&body.action==='reorder'){
+    const placementId=Number(body.placementId||0),beforeId=Number(body.beforePlacementId||0);
+    const stampDate=String(body.stampDate||'');
+    if(!Number.isSafeInteger(placementId)||placementId<=0||!Number.isSafeInteger(beforeId)||beforeId<0||
+      !/^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(stampDate)||
+      new Date(`${stampDate}T00:00:00Z`).toISOString().slice(0,10)!==stampDate)
+      return json({ok:false,error:'INVALID_PLACEMENT'},400);
+    const read=await context.env.DB.prepare(`SELECT p.id,p.sort_order,p.created_by FROM calendar_stamp_placements p
+      JOIN calendar_stamp_assets a ON a.id=p.asset_id AND a.family_id=p.family_id AND a.active=1
+      WHERE p.family_id=? AND p.stamp_date=? AND
+        (p.visibility_scope='FAMILY' OR (p.visibility_scope='PRIVATE' AND p.private_owner_id=?))
+      ORDER BY p.sort_order,p.id LIMIT 257`).bind(s.familyId,stampDate,s.memberId).all();
+    const rows=read.results as {id:number;sort_order:number;created_by:number}[];
+    if(rows.length>256)return json({ok:false,error:'TOO_MANY_PLACEMENTS'},409);
+    const source=rows.find(row=>Number(row.id)===placementId);
+    if(!source||Number(source.created_by)!==s.memberId)return json({ok:false,error:'PLACEMENT_NOT_FOUND'},404);
+    const ordered=rows.filter(row=>Number(row.id)!==placementId);
+    const index=beforeId===0?ordered.length:ordered.findIndex(row=>Number(row.id)===beforeId);
+    if(index<0)return json({ok:false,error:'TARGET_NOT_FOUND'},404);
+    ordered.splice(index,0,source);
+    if(ordered.every((row,position)=>row.id===rows[position]?.id))return json({ok:true,placementId,stampDate});
+    const now=new Date().toISOString().replace('T',' ').slice(0,19);
+    const changes=ordered.flatMap((row,position)=>{
+      const next=position-ordered.length;
+      return Number(row.sort_order)===next?[]:[context.env.DB.prepare(`UPDATE calendar_stamp_placements
+        SET sort_order=?,updated_at=? WHERE id=? AND family_id=? AND stamp_date=? AND sort_order=?
+          AND (visibility_scope='FAMILY' OR (visibility_scope='PRIVATE' AND private_owner_id=?))`)
+        .bind(next,now,row.id,s.familyId,stampDate,row.sort_order,s.memberId)];
+    });
+    if(changes.length)await context.env.DB.batch(changes);
+    return json({ok:true,placementId,stampDate});
+  }
   if(request.method==='PATCH'||(request.method==='POST'&&body.action==='move')){
     if(body.visibilityScope==null||body.sortOrder==null)return json({ok:false,error:'INVALID_PLACEMENT'},400);
     const placementId=Number(body.placementId||0),stampDate=String(body.stampDate||''),visibilityScope=String(body.visibilityScope),sortOrder=Number(body.sortOrder);
