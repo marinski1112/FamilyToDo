@@ -1906,19 +1906,20 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderFamilyLog() {
+        boolean readOnly=familyLogCached||!ApiClient.canMutate();
         LinearLayout days=new LinearLayout(this);
         days.addView(button("◀",() -> { selectedDay=selectedDay.minusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
         days.addView(label(selectedDay.toString()));
         days.addView(button("▶",() -> { selectedDay=selectedDay.plusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
         days.addView(button("更新",this::loadFamilyLog));
         content.addView(days);
-        if(pendingFamilyLogPhoto!=null && !familyLogCached) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
+        if(pendingFamilyLogPhoto!=null && !readOnly) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
             content.addView(label("読み込み中…")); return;
         }
         JSONArray subjects=familyLog.optJSONArray("subjects"), logs=familyLog.optJSONArray("logs");
-        if(familyLogCached) content.addView(label("保存済みの記録を表示中（読み取り専用）"));
-        if(!familyLogCached) {
+        if(readOnly) content.addView(label("保存済みの記録を表示中（読み取り専用）"));
+        if(!readOnly) {
             content.addView(button("＋ 記録対象",this::addFamilyLogSubject));
             if(familyLog.optBoolean("canManageSettings")) content.addView(button("表示設定",this::showFamilyLogSettings));
             if(familyLog.optBoolean("canManageQuickActions")) content.addView(button("クイック記録を管理",this::manageQuickActions));
@@ -1927,13 +1928,13 @@ public final class MainActivity extends Activity {
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
         }
-        if(!familyLogCached) {
+        if(!readOnly) {
             content.addView(button("記録対象の名前・表示を管理",this::manageFamilyLogSubjects));
             content.addView(button("📊 期間の集計",this::chooseFamilyLogSummary));
             content.addView(button("＋ 記録を追加",this::addFamilyLog));
             content.addView(button("＋ タイマー",this::startFamilyLogTimer));
         }
-        JSONArray timers=familyLogCached?null:familyLog.optJSONArray("timers");
+        JSONArray timers=readOnly?null:familyLog.optJSONArray("timers");
         if(timers!=null && timers.length()>0) {
             content.addView(label("実行中のタイマー"));
             for(int i=0;i<timers.length();i++) {
@@ -1946,8 +1947,8 @@ public final class MainActivity extends Activity {
                     content.addView(button(name+"を記録せず中止",() -> finishFamilyLogTimer(timer,true)));
             }
         }
-        if(!familyLogCached&&familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
-        boolean today=!familyLogCached&&selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
+        if(!readOnly&&familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
+        boolean today=!readOnly&&selectedDay.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
         JSONArray quickActions=today?familyLog.optJSONArray("quickActions"):null;
         if(today) {
             JSONArray chores=familyLog.optJSONArray("chores");
@@ -1960,7 +1961,7 @@ public final class MainActivity extends Activity {
                 }
             }
         }
-        for(int i=0;!familyLogCached&&i<subjects.length();i++) {
+        for(int i=0;!readOnly&&i<subjects.length();i++) {
             JSONObject subject=subjects.optJSONObject(i);
             if(subject==null || !"BABY".equals(subject.optString("subject_kind"))) continue;
             content.addView(label(subject.optString("name")));
@@ -2018,14 +2019,14 @@ public final class MainActivity extends Activity {
                 (detail.isEmpty()?"":" "+detail)+(amount.isEmpty()?"":" "+amount)+
                 (row.optString("value_text").isEmpty()?"":" "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            if(!familyLogCached) entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
+            if(!readOnly) entry.setOnLongClickListener(v -> { familyLogActions(row); return true; });
             content.addView(entry);
             int mediaId=row.optInt("media_id");
-            if(!familyLogCached&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
+            if(!readOnly&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
                 .setItems(new String[]{"表示","削除"},(dialog,which) -> {
                     if(which==0) showFamilyLogPhoto(mediaId); else deleteFamilyLogPhoto(mediaId);
                 }).show()));
-            else if(!familyLogCached&&"MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
+            else if(!readOnly&&"MEAL".equals(row.optString("log_type")) && "BABY_FOOD".equals(detail) &&
                 ("BABY".equals(row.optString("subject_kind"))||"CHILD".equals(row.optString("subject_kind"))))
                 content.addView(button("＋ 離乳食の写真",() -> chooseFamilyLogPhoto(row.optInt("id"))));
         }
