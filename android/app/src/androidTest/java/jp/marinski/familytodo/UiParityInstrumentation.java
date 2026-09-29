@@ -117,12 +117,12 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){TextView found=findContaining(((ViewGroup)view).getChildAt(i),text);if(found!=null)return found;}return null;
     }
     private EditText findHint(View view,String hint){
-        if(view instanceof EditText&&hint.contentEquals(((EditText)view).getHint()))return (EditText)view;
+        if(view instanceof EditText&&hint.equals(String.valueOf(((EditText)view).getHint())))return (EditText)view;
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){EditText found=findHint(((ViewGroup)view).getChildAt(i),hint);if(found!=null)return found;}return null;
     }
     private CheckBox findBox(ViewGroup view){for(int i=0;i<view.getChildCount();i++)if(view.getChildAt(i) instanceof CheckBox)return (CheckBox)view.getChildAt(i);throw new AssertionError("checkbox missing");}
     private void check(boolean value,String name){if(!value)throw new AssertionError(name);checks++;}
-    private void waitText(String text)throws Exception{for(int i=0;i<100;i++){if(hasText(text))return;Thread.sleep(30);waitForIdleSync();}throw new AssertionError("timeout: "+text);}
+    private void waitText(String text)throws Exception{for(int i=0;i<100;i++){AtomicReference<Boolean> ready=new AtomicReference<>(false);onUi(()->{TextView node=findText(root(),text);ready.set(node!=null&&node.isEnabled());});if(ready.get())return;Thread.sleep(30);waitForIdleSync();}throw new AssertionError("timeout: "+text);}
     private void settle()throws Exception{waitForIdleSync();Thread.sleep(250);waitForIdleSync();}
     private Object value(String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
     private void field(String name,Object value)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);f.set(activity,value);}
