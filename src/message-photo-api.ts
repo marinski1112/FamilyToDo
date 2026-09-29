@@ -25,8 +25,9 @@ export async function messagePhotoApi(request:Request,ctx:AppContext):Promise<Re
       const row=await ctx.env.DB.prepare(`SELECT p.object_key,p.mime_type FROM message_photos p
         JOIN messages msg ON msg.image_upload_id=p.upload_id AND msg.family_id=p.family_id
         WHERE msg.id=? AND msg.family_id=? AND p.state='ready'
+          AND (msg.target_member_id IS NULL OR msg.target_member_id IN (?,msg.sender_id))
           AND (msg.reminder_at IS NULL OR msg.reminder_at<=? OR msg.sender_id=?)`)
-        .bind(Number(value),m.family_id,now,m.id).first<{object_key:string;mime_type:string}>();
+        .bind(Number(value),m.family_id,m.id,now,m.id).first<{object_key:string;mime_type:string}>();
       if(!row)return reply({ok:false,error:'PHOTO_NOT_FOUND'},404);
       const object=await ctx.env.MEDIA.get(row.object_key);if(!object)return reply({ok:false,error:'PHOTO_NOT_FOUND'},404);
       const headers=new Headers({'content-type':row.mime_type,'cache-control':'private, no-store','x-content-type-options':'nosniff'});
