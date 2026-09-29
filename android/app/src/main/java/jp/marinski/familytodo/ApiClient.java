@@ -45,7 +45,7 @@ final class ApiClient {
                 BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
                 if(options.outWidth<=0 || options.outHeight<=0 || options.outWidth>16000 || options.outHeight>16000)
                     throw new IllegalStateException("Invalid image dimensions");
-                options.inJustDecodeBounds=false; options.inSampleSize=messagePhoto||familyLogPhoto?1:2;
+                options.inJustDecodeBounds=false; options.inSampleSize=messagePhoto||familyLogPhoto||"/app-icon-192.png".equals(path)?1:2;
                 while(options.outWidth/options.inSampleSize>1024 || options.outHeight/options.inSampleSize>1024)
                     options.inSampleSize*=2;
                 Bitmap image=BitmapFactory.decodeByteArray(bytes,0,bytes.length,options);
@@ -87,6 +87,25 @@ final class ApiClient {
     }
     static JSONObject request(String path, JSONObject body) throws Exception {
         return request(path,body,body==null?"GET":"POST");
+    }
+    /** The authenticated PWA manifest supplies this family's home screen label. */
+    static JSONObject pwaManifest() throws Exception {
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/manifest.webmanifest").openConnection();
+        try {
+            connection.setConnectTimeout(10_000);connection.setReadTimeout(15_000);
+            connection.setInstanceFollowRedirects(false);
+            String cookies=CookieManager.getInstance().getCookie(ORIGIN);
+            if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
+            if(connection.getResponseCode()!=200) throw new IllegalStateException("Manifest unavailable");
+            try(var stream=connection.getInputStream()) {
+                ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int count;
+                while((count=stream.read(buffer))!=-1) {
+                    data.write(buffer,0,count);
+                    if(data.size()>65536) throw new IllegalStateException("Manifest too large");
+                }
+                return new JSONObject(data.toString("UTF-8"));
+            }
+        } finally { connection.disconnect(); }
     }
     static JSONObject uploadFamilyLogPhoto(int logId,byte[] jpeg,String csrf) throws Exception {
         if(logId<=0||jpeg.length==0||jpeg.length>4*1024*1024) throw new IllegalArgumentException("Invalid photo");

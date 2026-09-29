@@ -7,6 +7,9 @@ import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebResourceRequest;
@@ -99,6 +102,7 @@ public final class MainActivity extends Activity {
         controls.addView(button("更新", this::load));
         controls.addView(button("▶", () -> { month=month.plusMonths(1); selectedDay=month.atDay(1); load(); }));
         controls.addView(button("位置設定", this::showSettings));
+        controls.addView(button("ホーム画面アイコン", this::pinFamilyShortcut));
         controls.addView(button("ログアウト", this::logout));
         HorizontalScrollView controlScroll=new HorizontalScrollView(this); controlScroll.addView(controls);
         root.addView(controlScroll);
@@ -3341,6 +3345,34 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class));
             })
             .setNegativeButton("閉じる",null).show();
+    }
+    private void pinFamilyShortcut() {
+        ShortcutManager manager=getSystemService(ShortcutManager.class);
+        if(manager==null||!manager.isRequestPinShortcutSupported()) {
+            Toast.makeText(this,"このホーム画面ではショートカットを追加できません",Toast.LENGTH_LONG).show();return;
+        }
+        int epoch=sessionEpoch;
+        network.execute(() -> {
+            try {
+                JSONObject manifest=ApiClient.pwaManifest();
+                Bitmap icon=ApiClient.thumbnail("/app-icon-192.png");
+                String name=manifest.optString("short_name","Family TODO");
+                if(name.trim().isEmpty()) name="Family TODO";
+                final String title=name;
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||snapshot==null) return;
+                    Intent launch=new Intent(this,MainActivity.class).setAction(Intent.ACTION_MAIN)
+                        .addCategory(Intent.CATEGORY_LAUNCHER)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    ShortcutInfo shortcut=new ShortcutInfo.Builder(this,"familytodo-home")
+                        .setShortLabel(title).setIcon(Icon.createWithBitmap(icon)).setIntent(launch).build();
+                    if(!manager.requestPinShortcut(shortcut,null))
+                        Toast.makeText(this,"ショートカットを追加できませんでした",Toast.LENGTH_LONG).show();
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"アイコンを取得できませんでした",Toast.LENGTH_LONG).show();});
+            }
+        });
     }
     private void startSharing() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
