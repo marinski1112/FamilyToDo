@@ -80,11 +80,15 @@ public final class MainActivity extends Activity {
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
     private YearMonth month = YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"));
     private LocalDate selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
-    private String tab = "calendar";
+    private String tab = "home";
+    private String goodsKind = "shopping";
+    private JSONObject locationLatest;
+    private String locationError="";
+    private WebView pageWeb;
     @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); load(); }
     @Override protected void onResume() {
         super.onResume();
-        if(content!=null && login==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
+        if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
     private boolean darkMode() {
         return (getResources().getConfiguration().uiMode &
@@ -136,50 +140,73 @@ public final class MainActivity extends Activity {
             ApiClient.setMutationsEnabled(false);
             stampGeneration++;
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false;
+            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(pageColor());
+        if(pageWeb!=null) {pageWeb.destroy();pageWeb=null;}
         TextView version=label("FamilyToDo  ・  テスト版 v"+BuildConfig.VERSION_NAME);
         version.setTextSize(13);version.setTextColor(mutedColor());
         version.setPadding(dp(18),dp(8),dp(18),0);root.addView(version);
-        LinearLayout tabs=new LinearLayout(this);tabs.setPadding(dp(12),dp(8),dp(12),dp(8));
-        String[] names={"カレンダー","買い物","持ち物","伝言","育児"};
-        String[] keys={"calendar","shopping","item","messages","familylog"};
-        for(int i=0;i<keys.length;i++) {
-            final String next=keys[i];
-            Button choice=button(names[i],() -> {
-                tab=next;
-                if(next.equals("messages")) loadMessages(0);
-                else if(next.equals("familylog")) loadFamilyLog();
-                else if(snapshot==null||!month.toString().equals(snapshot.optString("month"))) load();
-                else render();
-                showNative();
-            });
-            styleButton(choice,next.equals(tab));
-            LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(-2,dp(44));
-            item.setMargins(0,0,dp(8),0);tabs.addView(choice,item);
+        if(tab.equals("calendar")) {
+            LinearLayout controls=new LinearLayout(this);
+            controls.setPadding(dp(12),dp(6),dp(12),dp(6));
+            Button previous=button("前月",() -> {month=month.minusMonths(1);selectedDay=month.atDay(1);load();});
+            Button next=button("翌月",() -> {month=month.plusMonths(1);selectedDay=month.atDay(1);load();});
+            Button refresh=button("更新",this::load);
+            Button settings=button("設定 ⋮",this::showSettingsActions);
+            for(Button control:new Button[]{previous,next,refresh,settings}) {
+                LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(0,dp(44),1);
+                item.setMargins(0,0,dp(6),0);controls.addView(control,item);
+            }
+            root.addView(controls);
         }
-        HorizontalScrollView tabScroll=new HorizontalScrollView(this);
-        tabScroll.setHorizontalScrollBarEnabled(false);tabScroll.addView(tabs);root.addView(tabScroll);
-        LinearLayout controls=new LinearLayout(this);
-        controls.setPadding(dp(12),dp(4),dp(12),dp(4));
-        Button previous=button("◀",() -> {month=month.minusMonths(1);selectedDay=month.atDay(1);load();});
-        Button next=button("▶",() -> {month=month.plusMonths(1);selectedDay=month.atDay(1);load();});
-        Button refresh=button("更新",this::load);
-        Button settings=button("設定 ⋮",this::showSettingsActions);
-        for(Button control:new Button[]{previous,next,refresh,settings}) {
-            LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(0,dp(44),1);
-            item.setMargins(0,0,dp(6),0);controls.addView(control,item);
-        }
-        root.addView(controls);
         ScrollView scroll=new ScrollView(this);
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(14),dp(4),dp(14),dp(24));
         scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        root.addView(bottomNavigation());
         applySystemBarInsets(root);setContentView(root);
         render();
+    }
+    private LinearLayout bottomNavigation() {
+        LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(2),dp(6),dp(2),dp(6));
+        nav.setBackgroundColor(surfaceColor());
+        String[] names={"🏠\nホーム","✅\nチェック","📅\nカレンダー","📍\n位置情報","🐣\n家族ログ","💬\n伝言"};
+        String[] keys={"home","goods","calendar","location","familylog","messages"};
+        for(int i=0;i<keys.length;i++) {
+            final String destination=keys[i];
+            TextView item=new TextView(this);item.setText(names[i]);item.setGravity(Gravity.CENTER);
+            item.setTextSize(11);item.setTextColor(destination.equals(tab)?accentColor():mutedColor());
+            item.setContentDescription(names[i].replace("\n","")+"を開く");
+            item.setBackground(shape(destination.equals(tab)?
+                Color.parseColor(darkMode()?"#294B4A":"#E0F3EF"):surfaceColor(),Color.TRANSPARENT,10));
+            item.setOnClickListener(v -> navigate(destination));
+            nav.addView(item,new LinearLayout.LayoutParams(0,dp(56),1));
+        }
+        return nav;
+    }
+    private void navigate(String destination) {
+        if(destination.equals(tab))return;
+        tab=destination;
+        if(destination.equals("home")) {
+            selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
+            month=YearMonth.from(selectedDay);
+        }
+        showNative();
+        if(destination.equals("messages"))loadMessages(0);
+        else if(destination.equals("familylog"))loadFamilyLog();
+        else if(destination.equals("location"))loadLocation();
+        else if(snapshot==null||!month.toString().equals(snapshot.optString("month")))load();
+    }
+    @Override public void onBackPressed() {
+        if(pageWeb!=null) {
+            if(pageWeb.canGoBack())pageWeb.goBack();
+            else showNative();
+            return;
+        }
+        super.onBackPressed();
     }
     private void load() {
         ApiClient.setMutationsEnabled(false);
@@ -187,7 +214,7 @@ public final class MainActivity extends Activity {
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
             sessionEpoch++;
             stampGeneration++;
-            monthCache.clear(); snapshot=null; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false;
+            monthCache.clear(); snapshot=null; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
             pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
             pendingPhoto=null; pendingFamilyLogPhoto=null;
@@ -287,7 +314,18 @@ public final class MainActivity extends Activity {
         content.removeAllViews();
         if (tab.equals("messages")) { renderMessages(); return; }
         if (tab.equals("familylog")) { renderFamilyLog(); return; }
-        content.addView(heading(month.getYear() + "年" + month.getMonthValue() + "月"));
+        if (tab.equals("location")) { renderLocation(); return; }
+        if (tab.equals("home")) { renderHome(); return; }
+        if (tab.equals("goods")) {
+            content.addView(heading("チェックリスト"));
+            LinearLayout kinds=new LinearLayout(this);
+            Button shopping=button("🛒 買い物",() -> {goodsKind="shopping";render();});
+            Button items=button("🎒 持ち物",() -> {goodsKind="item";render();});
+            styleButton(shopping,goodsKind.equals("shopping"));styleButton(items,goodsKind.equals("item"));
+            kinds.addView(shopping,new LinearLayout.LayoutParams(0,dp(46),1));
+            kinds.addView(items,new LinearLayout.LayoutParams(0,dp(46),1));
+            content.addView(kinds);
+        } else content.addView(heading(month.getYear() + "年" + month.getMonthValue() + "月"));
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを読み取り専用で表示中・更新を確認しています"));
         if(tab.equals("calendar")&&ApiClient.canMutate()) {
@@ -296,6 +334,103 @@ public final class MainActivity extends Activity {
         }
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
+    }
+    private LinearLayout card(String title,String details) {
+        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14),dp(10),dp(14),dp(10));
+        card.setBackground(shape(surfaceColor(),Color.parseColor(darkMode()?"#344851":"#E4ECEA"),14));
+        TextView heading=label(title);heading.setTypeface(null,android.graphics.Typeface.BOLD);
+        card.addView(heading);card.addView(label(details));
+        return card;
+    }
+    private void renderHome() {
+        content.addView(heading("ホーム"));
+        content.addView(label(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString()));
+        if(snapshot==null||!month.toString().equals(snapshot.optString("month"))) {
+            content.addView(label("読み込み中…"));return;
+        }
+        if(showingCached)content.addView(label("保存済みデータを表示中。通信の確認を待っています。"));
+        String today=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString();
+        JSONArray tasks=snapshot.optJSONArray("tasks"),shopping=snapshot.optJSONArray("shopping"),items=snapshot.optJSONArray("items");
+        int eventCount=0,taskCount=0,shoppingCount=0,itemCount=0;
+        if(tasks!=null)for(int i=0;i<tasks.length();i++) {
+            JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,today))continue;
+            if("EVENT".equalsIgnoreCase(task.optString("task_kind")))eventCount++;
+            else if(!"completed".equals(task.optString("status")))taskCount++;
+        }
+        if(shopping!=null)for(int i=0;i<shopping.length();i++) {
+            JSONObject row=shopping.optJSONObject(i);
+            if(row!=null&&!"completed".equals(row.optString("status")))shoppingCount++;
+        }
+        if(items!=null)for(int i=0;i<items.length();i++) {
+            JSONObject row=items.optJSONObject(i);
+            if(row!=null&&!"completed".equals(row.optString("status")))itemCount++;
+        }
+        LinearLayout schedule=card("今日の予定",eventCount+"件のイベント ・ "+taskCount+"件の未完了タスク");
+        schedule.setOnClickListener(v -> navigate("calendar"));content.addView(schedule);
+        LinearLayout goods=card("チェックリスト",shoppingCount+"件の買い物 ・ "+itemCount+"件の持ち物");
+        goods.setOnClickListener(v -> navigate("goods"));content.addView(goods);
+        content.addView(button("家族の位置情報を開く",() -> navigate("location")));
+        content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
+        content.addView(button("アプリ設定",this::showSettingsActions));
+    }
+    private void loadLocation() {
+        int epoch=sessionEpoch;
+        locationLatest=null;locationError="";render();
+        network.execute(() -> {
+            try {
+                JSONObject response=ApiClient.request("/api/location/latest",null);
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||!tab.equals("location"))return;
+                    locationLatest=response;render();
+                });
+            }catch(Exception error) {
+                runOnUiThread(() -> {
+                    if(epoch!=sessionEpoch||!tab.equals("location"))return;
+                    locationError="位置情報を読み込めませんでした。通信とログインを確認してください。";render();
+                });
+            }
+        });
+    }
+    private void renderLocation() {
+        content.addView(heading("位置情報"));
+        content.addView(button("更新",this::loadLocation));
+        content.addView(button("家族の地図・履歴を開く",() -> showWebPage("/app/location.php")));
+        content.addView(button("この端末の位置共有を設定",this::showSettings));
+        if(!locationError.isEmpty()) {content.addView(label(locationError));return;}
+        if(locationLatest==null) {content.addView(label("共有状態を読み込み中…"));return;}
+        JSONArray members=locationLatest.optJSONArray("members");
+        if(members==null||members.length()==0) {content.addView(label("表示できるメンバーがいません"));return;}
+        for(int i=0;i<members.length();i++) {
+            JSONObject member=members.optJSONObject(i);if(member==null)continue;
+            String state=member.optBoolean("sharingEnabled")?"共有ON":"共有OFF";
+            String place=member.optString("registeredPlaceLabel");
+            if(place.isEmpty()||place.equals("null"))place=member.optString("displayNearbyPlaceLabel");
+            JSONObject latest=member.optJSONObject("latest");
+            String time=latest==null?"位置情報なし":latest.optString("recordedAt");
+            String detail=state+(place.isEmpty()||place.equals("null")?"":" ・ "+place)+"\n"+time;
+            content.addView(card(member.optString("name","メンバー"),detail));
+        }
+    }
+    private void showWebPage(String path) {
+        if(!path.startsWith("/app/")||login!=null)return;
+        pageWeb=new WebView(this);
+        pageWeb.getSettings().setJavaScriptEnabled(true);
+        pageWeb.getSettings().setDomStorageEnabled(true);
+        pageWeb.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request) {
+                android.net.Uri destination=request.getUrl(),origin=android.net.Uri.parse(ApiClient.ORIGIN);
+                if("https".equals(destination.getScheme())&&origin.getHost().equals(destination.getHost())&&
+                    origin.getPort()==destination.getPort())return false;
+                startActivity(new Intent(Intent.ACTION_VIEW,destination));return true;
+            }
+        });
+        LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);
+        frame.setBackgroundColor(pageColor());
+        frame.addView(button("← ネイティブ画面に戻る",this::showNative));
+        frame.addView(pageWeb,new LinearLayout.LayoutParams(-1,0,1));
+        applySystemBarInsets(frame);setContentView(frame);
+        pageWeb.loadUrl(ApiClient.ORIGIN+path);
     }
     private void showCalendarActions() {
         ArrayList<String> actions=new ArrayList<>();
@@ -920,7 +1055,7 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("閉じる",null).show();
     }
     private void renderGoods() {
-        boolean shopping=tab.equals("shopping");
+        boolean shopping=goodsKind.equals("shopping");
         if(ApiClient.canMutate()) {
             content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
             content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
@@ -2018,6 +2153,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderFamilyLog() {
+        content.addView(heading("家族ログ"));
         boolean readOnly=familyLogCached||!ApiClient.canMutate();
         LinearLayout days=new LinearLayout(this);
         days.addView(button("◀",() -> { selectedDay=selectedDay.minusDays(1); month=YearMonth.from(selectedDay); loadFamilyLog(); }));
@@ -3069,6 +3205,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderMessages() {
+        content.addView(heading("伝言"));
         if(ApiClient.canMutate()) {
             content.addView(button("＋ 伝言する",this::addMessage));
             content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
