@@ -46,5 +46,5 @@ final class Credentials {
     static void setSharingEnabled(Context context, boolean enabled) {
         context.getSharedPreferences("device", 0).edit().putBoolean("sharing_enabled", enabled).commit();
     }
-    static void clear(Context context) { context.getSharedPreferences("device", 0).edit().clear().apply(); }
+    static void clear(Context context) { context.getSharedPreferences("device", 0).edit().clear().commit(); }
 }
