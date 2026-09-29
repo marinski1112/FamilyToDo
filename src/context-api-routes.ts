@@ -79,7 +79,10 @@ export async function dispatchContextApiRoute(request:Request,context:any,url:UR
     if(!member)return json({ok:false,error:'AUTH_REQUIRED'},401);
     const family=await context.env.DB.prepare('SELECT timezone,pwa_display_name FROM families WHERE id=? LIMIT 1')
       .bind(member.family_id).first() as {timezone:string|null;pwa_display_name:string|null}|null;
-    const members=await context.env.DB.prepare('SELECT id,name,role,active FROM members WHERE family_id=? AND deleted_at IS NULL ORDER BY id LIMIT 100')
+    const members=await context.env.DB.prepare(`SELECT m.id,m.name,m.role,m.active,
+      EXISTS(SELECT 1 FROM member_permissions p WHERE p.family_id=m.family_id
+        AND p.member_id=m.id AND p.permission_key='MANAGE_QUICK_CHORES') AS manage_quick_chores
+      FROM members m WHERE m.family_id=? AND m.deleted_at IS NULL ORDER BY m.id LIMIT 100`)
       .bind(member.family_id).all();
     return json({ok:true,name:String(member.name||''),role:String(member.role||''),
       member_id:Number(member.id),members:members.results,
