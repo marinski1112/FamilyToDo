@@ -4,6 +4,8 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android-ci.yml'
+      - 'scripts/android-e2e-config.mjs'
+      - 'wrangler.jsonc'
   workflow_dispatch:
 jobs:
   build:
