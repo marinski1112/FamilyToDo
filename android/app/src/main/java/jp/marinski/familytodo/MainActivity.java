@@ -809,9 +809,11 @@ public final class MainActivity extends Activity {
     }
     private void renderGoods() {
         boolean shopping=tab.equals("shopping");
-        content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
-        content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
-        content.addView(button(shopping?"買い物セット":"持ち物セット",() -> loadReusableSets(shopping)));
+        if(ApiClient.canMutate()) {
+            content.addView(button(shopping?"＋買い物を追加":"＋持ち物を追加", () -> addGoods(shopping)));
+            content.addView(button("＋カテゴリ", () -> addCategory(shopping)));
+            content.addView(button(shopping?"買い物セット":"持ち物セット",() -> loadReusableSets(shopping)));
+        }
         JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
@@ -831,13 +833,16 @@ public final class MainActivity extends Activity {
                 CheckBox box=new CheckBox(this);
                 box.setText(row.optString("name")+(shopping?" ×"+row.optString("quantity","1"):""));
                 box.setChecked("completed".equals(row.optString("status")));
-                box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
-                box.setOnLongClickListener(v -> { goodsActions(shopping,row); return true; });
+                box.setEnabled(ApiClient.canMutate());
+                if(ApiClient.canMutate()) {
+                    box.setOnClickListener(v -> toggle(shopping?"shopping":"item",row.optInt("id"),box));
+                    box.setOnLongClickListener(v -> { goodsActions(shopping,row); return true; });
+                }
                 group.addView(box); count++;
             }
             if(count>0 || !"未分類".equals(category)) {
                 TextView heading=label(category+("未分類".equals(category)?"":"  ⋮"));
-                if(!"未分類".equals(category)) {
+                if(!"未分類".equals(category) && ApiClient.canMutate()) {
                     heading.setOnClickListener(v -> categoryActions(shopping,category));
                     heading.setContentDescription(category+"。タップで操作、長押しして別のカテゴリへドラッグ");
                     heading.setOnLongClickListener(v -> {
@@ -2951,19 +2956,21 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderMessages() {
-        content.addView(button("＋ 伝言する",this::addMessage));
-        content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
-        content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
-        if(snapshot!=null&&snapshot.optBoolean("canManageStamps"))
-            content.addView(button("リアクション設定",this::editMessageReactions));
-        if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
+        if(ApiClient.canMutate()) {
+            content.addView(button("＋ 伝言する",this::addMessage));
+            content.addView(button("＋ スタンプを送る",this::chooseMessageStamp));
+            content.addView(button("＋ 写真付き伝言",this::chooseMessagePhoto));
+            if(snapshot!=null&&snapshot.optBoolean("canManageStamps"))
+                content.addView(button("リアクション設定",this::editMessageReactions));
+            if(pendingPhoto!=null) content.addView(button("写真送信を再試行",this::retryMessagePhoto));
+        }
         content.addView(button("更新",()->loadMessages(0)));
         if(hasOlderMessages && messages.length()>0) content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         for(int n=0;n<messages.length();n++) {
             JSONObject row=messages.optJSONObject(n); if(row==null) continue;
             TextView message=label(row.optString("senderName")+" ・ "+row.optString("createdAt")+"\n"+row.optString("text")
                 +(row.optBoolean("hasImage")?"\n📷 写真あり":"")+(row.optBoolean("hasStamp")?"\nスタンプあり":"")+"\n長押しでリアクション");
-            message.setOnLongClickListener(view -> {messageActions(row);return true;});
+            if(ApiClient.canMutate()) message.setOnLongClickListener(view -> {messageActions(row);return true;});
             content.addView(message);
             if(snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId"))
                 content.addView(label("既読 "+row.optInt("readCount")));
