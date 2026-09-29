@@ -212,6 +212,7 @@ final class ApiClient {
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept", "application/json");
             String cookies = CookieManager.getInstance().getCookie(ORIGIN);
             if (cookies != null) connection.setRequestProperty("Cookie", cookies);
@@ -228,6 +229,7 @@ final class ApiClient {
                 CookieManager.getInstance().flush();
             }
             if (status == 401) throw new SecurityException("ログインしてください");
+            if (status >= 300 && status < 400) throw new IllegalStateException("予期しないAPIリダイレクト");
             try (var stream = status < 400 ? connection.getInputStream() : connection.getErrorStream()) {
                 if (stream == null) throw new IllegalStateException("応答がありません");
                 ByteArrayOutputStream data = new ByteArrayOutputStream();
