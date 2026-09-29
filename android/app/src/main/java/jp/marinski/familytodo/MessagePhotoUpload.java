@@ -129,6 +129,7 @@ final class MessagePhotoUpload {
             .getBytes(StandardCharsets.UTF_8));
     }
     static JSONObject send(Draft draft,String csrf,String caption,String reminder) throws Exception {
+        ApiClient.requireMutationReady();
         String boundary="FamilyToDo"+draft.uploadId.replace("-","");
         HttpURLConnection connection=(HttpURLConnection)new URL(ApiClient.ORIGIN+"/api/messages?photo=upload").openConnection();
         try {
