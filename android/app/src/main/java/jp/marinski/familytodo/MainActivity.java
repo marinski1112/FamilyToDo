@@ -200,14 +200,6 @@ public final class MainActivity extends Activity {
         else if(destination.equals("location"))loadLocation();
         else if(snapshot==null||!month.toString().equals(snapshot.optString("month")))load();
     }
-    @Override public void onBackPressed() {
-        if(pageWeb!=null) {
-            if(pageWeb.canGoBack())pageWeb.goBack();
-            else showNative();
-            return;
-        }
-        super.onBackPressed();
-    }
     private void load() {
         ApiClient.setMutationsEnabled(false);
         String binding=SnapshotCache.currentSessionBinding();
@@ -4222,6 +4214,12 @@ public final class MainActivity extends Activity {
         }
         Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
-    @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }
+    @Override public void onBackPressed() {
+        if(pageWeb!=null) {
+            if(pageWeb.canGoBack())pageWeb.goBack();
+            else showNative();
+        } else if(login!=null&&login.canGoBack()) login.goBack();
+        else super.onBackPressed();
+    }
     @Override protected void onDestroy() { network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
 }
