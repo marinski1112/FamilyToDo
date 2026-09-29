@@ -22,12 +22,14 @@ android {
         versionCode = internalVersionCode
         versionName = "0.1.$internalVersionCode"
         buildConfigField("String", "API_ORIGIN", "\"$productionOrigin\"")
+        buildConfigField("boolean", "ALLOW_MUTATIONS", "true")
         manifestPlaceholders["appLabel"] = "FamilyToDo"
     }
     buildTypes {
         getByName("debug") {
             buildConfigField("String", "API_ORIGIN", "\"$debugOrigin\"")
             if (previewBuild) {
+                buildConfigField("boolean", "ALLOW_MUTATIONS", "false")
                 applicationIdSuffix = ".preview"
                 manifestPlaceholders["appLabel"] = "FamilyToDo Preview"
             }
