@@ -1,5 +1,6 @@
 import { checklistCompletionSql } from './checklist-completion';
 import { goodsVisibilitySql } from './goods-visibility';
+import { archiveItemCompletionStatements } from './lifecycle';
 import { json } from './response';
 import { handleItemReusableSetAction, readItemReusableSets } from './item-reusable-set-api';
 
@@ -90,6 +91,37 @@ export async function itemApi(request:Request,ctx:any):Promise<Response>{
   const action=String(b.action??'add');
   const reusableSetResponse=await handleItemReusableSetAction(ctx,m,b);
   if(reusableSetResponse)return reusableSetResponse;
+
+  if(action==='update_details'){
+    const id=Number(b.id||0);
+    if(!Number.isSafeInteger(id)||id<=0)return bad('持ち物が不正です。');
+    const current=await ctx.env.DB.prepare(`SELECT i.created_by FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first() as Row|null;
+    if(!current)return bad('持ち物が見つかりません。',404);
+    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())&&Number(current.created_by)!==m.id)
+      return bad('編集権限がありません。',403,'FORBIDDEN');
+    const name=String(b.name||'').trim(),category=normalizeCategory(b.category),memo=String(b.memo||'').trim();
+    const url=String(b.url||'').trim(),due=String(b.due_date||'').trim();
+    if(!name||name.length>200||category.length>255||memo.length>2000)return bad('入力内容を確認してください。');
+    if(!validUrl(url))return bad('URLは http:// または https:// で入力してください。');
+    if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due))return bad('日付が不正です。');
+    await ctx.env.DB.prepare('UPDATE items SET name=?,category=?,memo=?,url=?,due_at=?,updated_at=? WHERE id=? AND family_id=?')
+      .bind(name,category||null,memo||null,url||null,due||null,nowJst(),id,m.family_id).run();
+    if(category)await upsertCatalogCategory(ctx,m.family_id,m.id,category);
+    return json({ok:true,id});
+  }
+  if(action==='delete'){
+    const id=Number(b.id||0);
+    if(!Number.isSafeInteger(id)||id<=0)return bad('持ち物が不正です。');
+    const current=await ctx.env.DB.prepare(`SELECT i.created_by FROM items i WHERE i.id=? AND i.family_id=? AND ${goodsVisibilitySql('i')} LIMIT 1`).bind(id,m.family_id,m.id).first() as Row|null;
+    if(!current)return bad('持ち物が見つかりません。',404);
+    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())&&Number(current.created_by)!==m.id)
+      return bad('削除権限がありません。',403,'FORBIDDEN');
+    await ctx.env.DB.batch([
+      ...archiveItemCompletionStatements(ctx.env.DB,m.family_id,id,nowJst()),
+      ctx.env.DB.prepare('DELETE FROM items WHERE id=? AND family_id=?').bind(id,m.family_id),
+    ]);
+    return json({ok:true,id});
+  }
 
   if(action==='update_category'){
     const id=Number(b.id||0);if(!Number.isInteger(id)||id<=0)return bad('持ち物が不正です。');
