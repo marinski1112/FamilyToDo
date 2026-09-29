@@ -71,7 +71,7 @@ public final class LocationService extends Service implements LocationListener {
             connection.setConnectTimeout(10_000); connection.setReadTimeout(10_000); connection.setDoOutput(true);
             try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
             int code = connection.getResponseCode();
-            if (code == 401 || code == 403 || code == 410) {
+            if ((code == 401 || code == 403 || code == 410) && credential.equals(Credentials.read(this))) {
                 Credentials.setSharingEnabled(this,false);
                 stopSelf();
             }
