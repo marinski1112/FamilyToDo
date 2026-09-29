@@ -3503,15 +3503,18 @@ public final class MainActivity extends Activity {
         frame.addView(login,new LinearLayout.LayoutParams(-1,0,1)); setContentView(frame);
         login.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String host=request.getUrl().getHost();
-                if (android.net.Uri.parse(ApiClient.ORIGIN).getHost().equals(host) || "access.line.me".equals(host)) return false;
+                android.net.Uri destination=request.getUrl(),origin=android.net.Uri.parse(ApiClient.ORIGIN);
+                String host=destination.getHost();
+                if ("https".equals(destination.getScheme()) &&
+                    (origin.getHost().equals(host) && origin.getPort()==destination.getPort() ||
+                        "access.line.me".equals(host))) return false;
                 startActivity(new Intent(Intent.ACTION_VIEW,request.getUrl())); return true;
             }
             @Override public void onPageFinished(WebView view,String url) {
                 android.net.Uri page=android.net.Uri.parse(url);
                 android.net.Uri origin=android.net.Uri.parse(ApiClient.ORIGIN);
                 if(!"https".equals(page.getScheme()) || !origin.getHost().equals(page.getHost()) ||
-                    page.getPath()==null || !page.getPath().startsWith("/app/")) return;
+                    origin.getPort()!=page.getPort() || page.getPath()==null || !page.getPath().startsWith("/app/")) return;
                 view.post(() -> {
                     if(login!=view) return;
                     android.webkit.CookieManager.getInstance().flush();
