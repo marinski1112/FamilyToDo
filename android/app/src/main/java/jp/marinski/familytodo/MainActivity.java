@@ -3487,6 +3487,7 @@ public final class MainActivity extends Activity {
         EditText id=new EditText(this); id.setHint("端末ID（loc_...）"); id.setSingleLine(true);
         EditText secret=new EditText(this); secret.setHint("Secret（64文字）"); secret.setSingleLine(true);
         box.addView(id); box.addView(secret);
+        box.addView(button("再起動後の位置共有を設定",this::configureBackgroundLocation));
         new AlertDialog.Builder(this).setTitle("位置情報を設定")
             .setMessage("Webの位置情報設定でAndroid端末を発行し、共有をONにしてください。共有中は通知を表示します。")
             .setView(box).setPositiveButton("保存して開始",(d,w)->{
@@ -3497,6 +3498,25 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class));
             })
             .setNegativeButton("閉じる",null).show();
+    }
+    private void configureBackgroundLocation() {
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,"先に位置共有を開始し、位置情報を許可してください",Toast.LENGTH_LONG).show();return;
+        }
+        if(Build.VERSION.SDK_INT<29) {
+            Toast.makeText(this,"共有ONなら再起動後に自動再開します",Toast.LENGTH_LONG).show();return;
+        }
+        if(checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)==PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,"再起動後の自動再開に必要な位置情報権限があります",Toast.LENGTH_LONG).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("再起動後も位置共有")
+            .setMessage("共有ONの間、端末の再起動後にも位置共有を再開するには、位置情報を「常に許可」にしてください。共有OFFやログアウトでは再開しません。")
+            .setPositiveButton("権限を設定",(dialog,which) -> {
+                if(Build.VERSION.SDK_INT==29) requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},12);
+                else startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:"+getPackageName())));
+            }).setNegativeButton("戻る",null).show();
     }
     private void loadAppSettings() {
         if(snapshot==null) {Toast.makeText(this,"オンラインでログインしてください",Toast.LENGTH_SHORT).show();return;}
@@ -3666,7 +3686,9 @@ public final class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants) {
         super.onRequestPermissionsResult(code,permissions,grants);
-        if (code==11 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
+        if(code==11 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED) startSharing();
+        else if(code==12 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
+            Toast.makeText(this,"再起動後の自動再開を設定しました",Toast.LENGTH_LONG).show();
         else Toast.makeText(this,"位置共有には権限が必要です",Toast.LENGTH_LONG).show();
     }
     @Override public void onBackPressed() { if (login!=null && login.canGoBack()) login.goBack(); else super.onBackPressed(); }

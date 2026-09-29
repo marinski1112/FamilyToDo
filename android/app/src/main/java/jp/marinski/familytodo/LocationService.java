@@ -35,7 +35,7 @@ public final class LocationService extends Service implements LocationListener {
             .setContentTitle("FamilyToDo 位置共有中").setContentText("アプリの位置設定から停止できます")
             .setOngoing(true).build();
         try { startForeground(1, notification); }
-        catch (SecurityException denied) { stopSelf(); return START_NOT_STICKY; }
+        catch (RuntimeException denied) { stopSelf(); return START_NOT_STICKY; }
         manager = getSystemService(LocationManager.class);
         try {
             manager.removeUpdates(this);
