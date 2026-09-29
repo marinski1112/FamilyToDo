@@ -71,6 +71,7 @@ public final class MainActivity extends Activity {
     private final Set<String> scheduledAnimationPaths=new HashSet<>();
     private boolean hasOlderMessages;
     private volatile int sessionEpoch;
+    private String memorySessionBinding;
     private volatile int stampGeneration;
     private boolean showingCached;
     private final Map<String,JSONObject> monthCache = new ConcurrentHashMap<>();
@@ -78,6 +79,10 @@ public final class MainActivity extends Activity {
     private LocalDate selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "calendar";
     @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); load(); }
+    @Override protected void onResume() {
+        super.onResume();
+        if(content!=null && login==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
+    }
     private Button button(String label, Runnable action) {
         Button b = new Button(this); b.setText(label); b.setOnClickListener(v -> action.run()); return b;
     }
@@ -115,6 +120,16 @@ public final class MainActivity extends Activity {
     }
     private void load() {
         ApiClient.setMutationsEnabled(false);
+        String binding=SnapshotCache.currentSessionBinding();
+        if(!java.util.Objects.equals(memorySessionBinding,binding)) {
+            sessionEpoch++;
+            stampGeneration++;
+            monthCache.clear(); snapshot=null; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false;
+            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
+            pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+            pendingPhoto=null; pendingFamilyLogPhoto=null;
+            memorySessionBinding=binding;
+        }
         String requested = month.toString();
         int epoch=sessionEpoch;
         snapshot = monthCache.get(requested);
