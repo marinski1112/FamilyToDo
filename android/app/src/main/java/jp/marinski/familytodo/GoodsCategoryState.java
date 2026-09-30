@@ -8,7 +8,7 @@ final class GoodsCategoryState {
     static long archiveAt(String activatedAt) {
         try {
             java.time.ZonedDateTime at=OffsetDateTime.parse(activatedAt).atZoneSameInstant(ZoneId.of("Asia/Tokyo"));
-            return at.toLocalDate().plusDays(1).atTime(at.getHour()>=23?1:0)
+            return at.toLocalDate().plusDays(1).atTime(at.getHour()>=23?1:0,0)
                 .atZone(ZoneId.of("Asia/Tokyo")).toInstant().toEpochMilli();
         } catch (RuntimeException invalid) { return 0; }
     }
