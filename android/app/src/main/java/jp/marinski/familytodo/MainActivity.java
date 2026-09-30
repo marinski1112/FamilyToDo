@@ -488,7 +488,7 @@ public final class MainActivity extends Activity {
                 if("https".equals(destination.getScheme())&&origin.getHost().equals(destination.getHost())&&
                     origin.getPort()==destination.getPort()) {
                     String route=nativeRoute(destination.getPath());
-                    if(route!=null&&!destination.getPath().equals(path)){navigate(route);return true;}
+                    if(route!=null&&!destination.getPath().equals(android.net.Uri.parse(path).getPath())){navigate(route);return true;}
                     return false;
                 }
                 startActivity(new Intent(Intent.ACTION_VIEW,destination));return true;
