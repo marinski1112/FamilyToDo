@@ -1418,8 +1418,8 @@ public final class MainActivity extends Activity {
         input.setOnFocusChangeListener((v,focused)->{
             if(focused)return;input.setFocusable(false);input.setFocusableInTouchMode(false);
             String name=input.getText().toString().trim();
-            if(name.isEmpty()||name.equals(original)||"未分類".equals(name)||snapshot==null||!ApiClient.canMutate()){input.setText(original);return;}
-            int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");input.setEnabled(false);
+            if(name.isEmpty()||name.equalsIgnoreCase(original)||"未分類".equals(name)||snapshot==null||!ApiClient.canMutate()){input.setText(original);return;}
+            int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");input.setError(null);input.setEnabled(false);
             network.execute(()->{
                 try{
                     if(epoch!=sessionEpoch)return;
@@ -1427,8 +1427,8 @@ public final class MainActivity extends Activity {
                         new JSONObject().put("csrf",csrf).put("kind",shopping?"shopping":"item").put("action",shopping?"rename":"category_rename").put("name",original).put("new_name",name));
                     if(!response.optBoolean("ok"))throw new Exception("rename");
                     runOnUiThread(()->{if(epoch!=sessionEpoch)return;applyCategoryRename(shopping,original,response.optString("name",name));load();});
-                }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;input.setText(original);input.setEnabled(true);
-                    Toast.makeText(this,"カテゴリ名を保存できませんでした。元の名前に戻しました",Toast.LENGTH_SHORT).show();});}
+                }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;input.setEnabled(true);input.setFocusableInTouchMode(true);input.requestFocus();
+                    input.setError("保存できませんでした。入力内容を保持しています。カテゴリ名は未変更です");});}
             });
         });
         return input;
@@ -1447,7 +1447,8 @@ public final class MainActivity extends Activity {
             String prefix=sessionEpoch+":"+(shopping?"shopping":"item")+":";
             if(expandedGoodsCategories.remove(prefix+oldName))expandedGoodsCategories.add(prefix+newName);
             String[] draft=goodsComposerDrafts.remove(prefix+oldName);
-            if(draft!=null&&!goodsComposerDrafts.containsKey(prefix+newName))goodsComposerDrafts.put(prefix+newName,draft);
+            if(draft!=null){if(!goodsComposerDrafts.containsKey(prefix+newName))goodsComposerDrafts.put(prefix+newName,draft);
+                else goodsComposerDrafts.put(prefix+oldName,draft);}
         }catch(Exception ignored){}
     }
     private EditText inlineTitle(String type,int id,JSONObject row,String field) {

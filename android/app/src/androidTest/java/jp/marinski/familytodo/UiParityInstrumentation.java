@@ -84,7 +84,9 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{EditText category=(EditText)findText(root(),"スーパー");category.performClick();category.setText("食品");category.clearFocus();});
             waitText("食品");check(hasText("食品"),"category name saved inline");check(hasText("連続追加二件目"),"renamed category remains expanded");
             onUi(()->{EditText category=(EditText)findText(root(),"食品");category.performClick();category.setText("失敗カテゴリ");category.clearFocus();});
-            waitText("食品");check(hasText("食品"),"category rename failure restores original");
+            waitText("失敗カテゴリ");check(hasText("失敗カテゴリ"),"category rename failure retains draft");
+            check("食品".equals(snapshot.optJSONArray("shopping").optJSONObject(1).optString("category")),"failed rename leaves saved category unchanged");
+            onUi(()->{EditText category=(EditText)findText(root(),"失敗カテゴリ");category.setText("食品");category.setError(null);category.clearFocus();});
             onUi(()->{try{Method move=MainActivity.class.getDeclaredMethod("moveGoodsCategory",boolean.class,int.class,String.class);move.setAccessible(true);move.invoke(activity,true,1,"子供");}catch(Exception e){throw new RuntimeException(e);}});
             waitCategory(1,"子供");check(hasText("名前を直接編集"),"moved row remains visible in expanded target");
             onUi(()->{try{Method move=MainActivity.class.getDeclaredMethod("moveGoodsCategory",boolean.class,int.class,String.class);move.setAccessible(true);move.invoke(activity,true,1,"失敗移動");}catch(Exception e){throw new RuntimeException(e);}});

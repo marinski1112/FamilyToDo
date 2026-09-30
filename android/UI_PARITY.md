@@ -18,7 +18,7 @@ Read the canonical Web home/dashboard, checklist controller and reminder interac
 
 ## Automated native UI verification
 
-The Android CI UI matrix runs API 30 (Android 11) and API 35 at 360 dp width in light/dark modes. The instrumentation launches the real MainActivity and native renderers with synthetic family data. It checks navigation, independent title/checkbox taps, successful inline title saving, failed-save rollback, continuous goods entry, successful/failed category rename, successful/failed goods category move, date/weekday alignment, navigation text width, event overflow and page content. It captures page screenshots.
+The Android CI UI matrix runs API 30 (Android 11) and API 35 at 360 dp width in light/dark modes. The instrumentation launches the real MainActivity and native renderers with synthetic family data. It checks navigation, independent title/checkbox taps, successful inline title saving, failed-save rollback, continuous goods entry, category rename success and failed-name draft retention, successful/failed goods category move, date/weekday alignment, navigation text width, event overflow and page content. It captures page screenshots.
 
 Fixture mode is only available when both the dedicated isolated E2E origin and isolatedE2E build property are selected. The normal production APK and release have UI_TEST_MODE=false. Fixture API calls use an in-memory transport. Real API requests and media network connections are blocked in fixture mode. No credentials or production data are used by these UI checks.
 
