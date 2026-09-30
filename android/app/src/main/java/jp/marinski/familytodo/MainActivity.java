@@ -80,6 +80,7 @@ public final class MainActivity extends Activity {
     private String pendingStampName="";
     private String pendingAnimatedStampName="";
     private int pendingAnimatedFrameMs=120;
+    private final Map<String,ArrayList<ImageView>> decorationImageTargets=new HashMap<>();
     private final Map<String,JSONObject> stickerMonths=new ConcurrentHashMap<>();
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
@@ -170,7 +171,7 @@ public final class MainActivity extends Activity {
             stampGeneration++;
             login.destroy(); login = null;
             monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
-            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(pageColor());
@@ -249,7 +250,7 @@ public final class MainActivity extends Activity {
             sessionEpoch++;
             stampGeneration++;
             monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
-            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll();
+            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll();
             pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
             pendingPhoto=null; pendingFamilyLogPhoto=null;
             memorySessionBinding=binding;
@@ -290,7 +291,7 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) {
                         snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
@@ -866,8 +867,18 @@ public final class MainActivity extends Activity {
     }
     private void bindDecorationImage(ImageView view,String path) {
         if(path.isEmpty())return;Bitmap cached=stampImages.get(path);if(cached!=null){view.setImageBitmap(cached);return;}
+        ArrayList<ImageView> targets=decorationImageTargets.get(path);
+        if(targets!=null){targets.add(view);return;}
+        targets=new ArrayList<>();targets.add(view);decorationImageTargets.put(path,targets);
         int epoch=sessionEpoch,generation=stampGeneration;
-        stampMedia.execute(()->{try{Bitmap image=ApiClient.thumbnail(path);runOnUiThread(()->{if(epoch!=sessionEpoch||generation!=stampGeneration)return;stampImages.put(path,image);view.setImageBitmap(image);});}catch(Exception ignored){}});
+        stampMedia.execute(()->{
+            Bitmap image=null;try{if(epoch==sessionEpoch&&generation==stampGeneration)image=ApiClient.thumbnail(path);}catch(Exception ignored){}
+            Bitmap result=image;runOnUiThread(()->{
+                if(epoch!=sessionEpoch||generation!=stampGeneration)return;
+                ArrayList<ImageView> waiting=decorationImageTargets.remove(path);if(result==null)return;stampImages.put(path,result);
+                if(waiting!=null)for(ImageView target:waiting)target.setImageBitmap(result);
+            });
+        });
     }
     private void viewCalendarStamp(JSONObject stamp) {
         if("ANIMATED".equals(stamp.optString("kind"))||stamp.optJSONArray("frames")!=null&&stamp.optJSONArray("frames").length()>1){showStampAnimation(stamp);return;}
@@ -1114,7 +1125,7 @@ public final class MainActivity extends Activity {
                 ApiClient.request("/api/calendar-stamp-admin/assets",new JSONObject()
                     .put("assetId",assetId).put("active",active).put("csrf",csrf));
                 if(epoch==sessionEpoch) runOnUiThread(() -> {
-                    stampMonths.clear();stickerMonths.clear();stampGeneration++;
+                    stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear();stampGeneration++;
                     load();
                 });
             } catch(Exception error) {
@@ -4674,7 +4685,7 @@ public final class MainActivity extends Activity {
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
                 pendingAnimatedStampName="";
-                stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+                stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
                 TextView progress=new TextView(this); progress.setText("ログアウト中…"); progress.setPadding(36,36,36,36);
                 setContentView(progress);
                 network.execute(() -> {
@@ -4706,7 +4717,7 @@ public final class MainActivity extends Activity {
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";
         pendingAnimatedStampName="";
-        stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+        stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
         frame.addView(button("ログイン後、ネイティブ画面に戻る", () -> { showNative(); load(); }));
