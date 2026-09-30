@@ -569,7 +569,7 @@ public final class MainActivity extends Activity {
         for(int row=0;row<weeks;row++) {
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
-                int date=row*7+column-offset;
+                int date=row*7+column-offset+1;
                 LinearLayout cell=new LinearLayout(this);cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setPadding(dp(2),dp(4),dp(2),dp(2));
                 cell.setBackground(shape(surfaceColor(),lineColor(),0));

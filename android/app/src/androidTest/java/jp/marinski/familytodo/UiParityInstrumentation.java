@@ -77,7 +77,10 @@ public final class UiParityInstrumentation extends Instrumentation {
             waitText("連続追加二件目");check(hasText("連続追加二件目"),"second continuous entry added");
             screenshot("checklist");
             clickText("🎒 持ち物");clickTextContaining("保育園");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
-            navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");screenshot("calendar");
+            navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");
+            onUi(()->{View cell=findDescription(root(),day+" 予定2件");check(cell!=null,"today's calendar cell exists");
+                check(((ViewGroup)cell.getParent()).indexOfChild(cell)==LocalDate.parse(day).getDayOfWeek().getValue()%7,"calendar date matches weekday");});
+            screenshot("calendar");
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
             navigate("伝言");check(hasText("伝言のテスト"),"message renders");check(findHintOnUi("メッセージ")!=null,"bottom composer exists");screenshot("messages");
@@ -119,6 +122,10 @@ public final class UiParityInstrumentation extends Instrumentation {
     private EditText findHint(View view,String hint){
         if(view instanceof EditText&&hint.equals(String.valueOf(((EditText)view).getHint())))return (EditText)view;
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){EditText found=findHint(((ViewGroup)view).getChildAt(i),hint);if(found!=null)return found;}return null;
+    }
+    private View findDescription(View view,String description){
+        if(description.equals(String.valueOf(view.getContentDescription())))return view;
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){View found=findDescription(((ViewGroup)view).getChildAt(i),description);if(found!=null)return found;}return null;
     }
     private CheckBox findBox(ViewGroup view){for(int i=0;i<view.getChildCount();i++)if(view.getChildAt(i) instanceof CheckBox)return (CheckBox)view.getChildAt(i);throw new AssertionError("checkbox missing");}
     private void check(boolean value,String name){if(!value)throw new AssertionError(name);checks++;}
