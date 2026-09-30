@@ -131,12 +131,16 @@ public final class UiParityInstrumentation extends Instrumentation {
         settle();
         String theme=(getTargetContext().getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES?"dark":"light";
         String destination="/sdcard/Download/familytodo-ui-fixture/"+theme+"-"+name+".png";
-        android.os.ParcelFileDescriptor result=getUiAutomation().executeShellCommand("mkdir -p /sdcard/Download/familytodo-ui-fixture && screencap -p "+destination+" && echo captured");
+        shellOutput("mkdir -p /sdcard/Download/familytodo-ui-fixture");
+        shellOutput("screencap -p "+destination);
+        if(!shellOutput("ls "+destination).contains(name+".png"))throw new AssertionError("screenshot missing: "+destination);
+    }
+    private String shellOutput(String command)throws Exception{
+        android.os.ParcelFileDescriptor result=getUiAutomation().executeShellCommand(command);
         try(java.io.InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(result)){
             java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] chunk=new byte[1024];int count;
             while((count=input.read(chunk))!=-1)bytes.write(chunk,0,count);
-            String output=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
-            if(!output.contains("captured"))throw new AssertionError("screenshot failed: "+output);
+            return new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 }
