@@ -41,3 +41,11 @@ Calendar holiday calculations are a direct port of the existing Web recurrence p
 Multi-day event ranges now retain one lane across the displayed month, use separate lanes for overlaps, span the native week width and show continuation arrows at week boundaries. Bands route to the event checklist. The fixture includes overlapping ranges and checks that the bands measure and occupy separate lanes.
 
 Message styling now uses the Web theme raised surface and exact own-message green, centered date pills and header, 128dp stamp previews, own-message sender/avatar suppression and the green send control. Family-log record cards open the existing editor on tap and retain long-press actions; custom quick controls use compact icon/label tiles.
+
+## Batched home and calendar decoration parity
+
+Home now reads the existing authenticated `/app/index.php` display values without executing HTML/scripts or adding a server endpoint. Alerts, four live counters (including today's family-log count), yesterday's journal and expandable fortune render as native controls. The bounded parser rejects missing/changed count contracts and same-origin action links are restricted. Values stay in memory and are cleared across account/session changes. A changed Web HTML contract shows a retry error rather than invented values.
+
+Calendar cells display up to three overlapping 24dp stamp thumbnails and an overflow badge; tapping previews and long-press opens existing placement actions. Date long-press opens decoration and event-preview choices. Background stickers use existing `/api/calendar-stickers` GET/POST/DELETE, 22% image opacity, and family/private scope; private rows overlay shared rows. Failed saves keep the chooser and selection for retry. Administration/upload remains available through existing Web tools. Decoration lists include the overview's full visible grid dates. Fixture checks cover dashboard parsing, unsafe links, changed markup, private-over-shared precedence, thumbnail and overflow rendering.
+
+Distribution is batched to avoid repeated device installs. CI debug signing keys change between runners; preserving installed login through future updates requires the existing private signing workflow and its GitHub Secrets (see INTERNAL_RELEASE.md). No signing key is stored in source or artifacts.

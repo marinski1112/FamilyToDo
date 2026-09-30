@@ -63,6 +63,10 @@ public final class MainActivity extends Activity {
 
     private WebView login;
     private JSONObject snapshot;
+    private JSONObject homeDashboard;
+    private boolean homeLoading,fortuneExpanded;
+    private String homeError="";
+    private int homeRequestSerial;
     private JSONArray messages = new JSONArray();
     private JSONObject familyLog;
     private boolean familyLogCached;
@@ -76,6 +80,7 @@ public final class MainActivity extends Activity {
     private String pendingStampName="";
     private String pendingAnimatedStampName="";
     private int pendingAnimatedFrameMs=120;
+    private final Map<String,JSONObject> stickerMonths=new ConcurrentHashMap<>();
     private final Map<String,JSONArray> stampMonths=new ConcurrentHashMap<>();
     private final LruCache<String,Bitmap> stampImages=new LruCache<String,Bitmap>(8*1024) {
         @Override protected int sizeOf(String key,Bitmap value) { return Math.max(1,value.getByteCount()/1024); }
@@ -164,8 +169,8 @@ public final class MainActivity extends Activity {
             ApiClient.setMutationsEnabled(false);
             stampGeneration++;
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
-            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(pageColor());
@@ -233,6 +238,7 @@ public final class MainActivity extends Activity {
         if(destination.equals("messages"))loadMessages(0);
         else if(destination.equals("familylog"))loadFamilyLog();
         else if(destination.equals("location"))loadLocation();
+        else if(destination.equals("home")&&snapshot!=null&&month.toString().equals(snapshot.optString("month")))loadHomeDashboard();
         else if(snapshot==null||!month.toString().equals(snapshot.optString("month")))load();
     }
     private void load() {
@@ -242,8 +248,8 @@ public final class MainActivity extends Activity {
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
             sessionEpoch++;
             stampGeneration++;
-            monthCache.clear(); snapshot=null; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
-            shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll();
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll();
             pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
             pendingPhoto=null; pendingFamilyLogPhoto=null;
             memorySessionBinding=binding;
@@ -284,10 +290,10 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) {
-                        snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();
+                        snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
                     }
                 });
                 for (boolean shopping : new boolean[]{true,false}) {
@@ -301,8 +307,12 @@ public final class MainActivity extends Activity {
                     } catch(Exception ignored) { /* The checklist remains available. */ }
                 }
                 try {
+                    JSONObject decorations=ApiClient.request("/api/calendar-stickers?from="+data.optString("from",YearMonth.parse(requested).atDay(1).toString())+"&to="+data.optString("to",YearMonth.parse(requested).atEndOfMonth().toString()),null);
+                    runOnUiThread(()->{if(epoch!=sessionEpoch)return;stickerMonths.put(requested,decorations);if(tab.equals("calendar")&&month.toString().equals(requested))render();});
+                }catch(Exception ignored){ /* Keep overview usable if decorations are unavailable. */ }
+                try {
                     YearMonth target=YearMonth.parse(requested);
-                    JSONObject response=ApiClient.request("/api/calendar-stamps?from="+target.atDay(1)+"&to="+target.atEndOfMonth(),null);
+                    JSONObject response=ApiClient.request("/api/calendar-stamps?from="+data.optString("from",target.atDay(1).toString())+"&to="+data.optString("to",target.atEndOfMonth().toString()),null);
                     JSONArray stamps=response.optJSONArray("stamps");
                     if(stamps!=null) {
                         SnapshotCache.writePlacements(this,requested,stamps);
@@ -333,7 +343,7 @@ public final class MainActivity extends Activity {
                     for(Map.Entry<String,JSONObject> entry:fetched.entrySet())
                         SnapshotCache.write(this,entry.getKey(),entry.getValue());
                 }
-            } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null; SnapshotCache.clear(this); showLogin(); }); }
+            } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; SnapshotCache.clear(this); showLogin(); }); }
             catch (Exception e) { runOnUiThread(() -> { if (snapshot == null) { content.removeAllViews(); content.addView(label("読み込めませんでした。更新を押してください。")); } }); }
         });
     }
@@ -377,8 +387,8 @@ public final class MainActivity extends Activity {
         lp.setMargins(0,0,0,dp(12));content.addView(view,lp);
     }
     private void renderHome() {
-        content.addView(heading("ホーム"));
-        content.addView(label(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString()));
+        content.addView(heading(homeDashboard==null?"ホーム":homeDashboard.optString("title","ホーム")));
+        content.addView(label(homeDashboard==null?LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString():homeDashboard.optString("greeting")));
         if(snapshot==null||!month.toString().equals(snapshot.optString("month"))) {
             content.addView(label("読み込み中…"));return;
         }
@@ -399,23 +409,43 @@ public final class MainActivity extends Activity {
             JSONObject row=items.optJSONObject(i);
             if(row!=null&&!"completed".equals(row.optString("status")))itemCount++;
         }
+        addHomeHeading("要対応");
+        if(homeDashboard!=null) {
+            JSONArray alerts=homeDashboard.optJSONArray("alerts");
+            if(alerts!=null)for(int i=0;i<alerts.length();i++) {
+                JSONObject alert=alerts.optJSONObject(i);if(alert==null)continue;
+                LinearLayout row=card(alert.optString("title"),alert.optString("hint"));
+                boolean danger=alert.optString("style").contains("danger");
+                row.setBackground(shape(Color.parseColor(darkMode()?(danger?"#442B35":"#3B3427"):(danger?"#FFF1F2":"#FFF7ED")),lineColor(),14));
+                row.setOnClickListener(v->showWebPage(alert.optString("href")));addPanelCard(row);
+            }
+            if(homeDashboard.optBoolean("allClear"))addPanelCard(card("✓ いま要対応の項目はありません","期限切れや今日の未完了タスクが出るとここに表示します。"));
+        }else {
+            content.addView(label(homeError.isEmpty()?"家族の状況を読み込み中…":homeError));
+        }
         addHomeHeading("今日");
-        String[] titles={"✅ 未完了タスク","📅 イベント","🛒 買い物残り","🎒 持ち物残り"};
-        int[] counts={taskCount,eventCount,shoppingCount,itemCount};
-        Runnable[] destinations={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->openTodayChecklist("shopping"),()->openTodayChecklist("item")};
+        String[] titles={"✅ 未完了タスク","📅 イベント","🛒 買い物残り","🐣 今日の家族ログ"};
+        JSONArray dashboardCounts=homeDashboard==null?null:homeDashboard.optJSONArray("counts");
+        int[] counts=dashboardCounts==null?new int[]{taskCount,eventCount,shoppingCount,0}:new int[]{dashboardCounts.optInt(0),dashboardCounts.optInt(1),dashboardCounts.optInt(2),dashboardCounts.optInt(3)};
+        Runnable[] destinations={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->openTodayChecklist("shopping"),()->navigate("familylog")};
         for(int row=0;row<2;row++) {
             LinearLayout grid=new LinearLayout(this);
             for(int col=0;col<2;col++) {
                 int index=row*2+col;LinearLayout stat=panel();stat.setPadding(dp(13),dp(10),dp(13),dp(10));
-                TextView value=label(Integer.toString(counts[index]));value.setTextSize(23);value.setPadding(0,0,0,dp(3));value.setTypeface(null,android.graphics.Typeface.BOLD);
+                TextView value=label(index==3&&dashboardCounts==null?"—":Integer.toString(counts[index]));value.setTextSize(23);value.setPadding(0,0,0,dp(3));value.setTypeface(null,android.graphics.Typeface.BOLD);
                 stat.addView(value);TextView title=label(titles[index]);title.setTextSize(13);title.setPadding(0,0,0,0);title.setTextColor(mutedColor());stat.addView(title);
                 stat.setContentDescription(titles[index]+" "+counts[index]+"件");stat.setOnClickListener(v->destinations[index].run());
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);cell.setMargins(col==0?0:dp(5),0,col==0?dp(5):0,0);grid.addView(stat,cell);
             }
             addPanelCard(grid);
         }
-        LinearLayout journal=card("📖 昨日の家族日誌","家族の記録を振り返る ›");
-        journal.setOnClickListener(v->showWebPage("/app/family_journal.php"));addPanelCard(journal);
+        LinearLayout journal=card(homeDashboard==null?"📖 昨日の家族日誌":homeDashboard.optString("journalTitle"),homeDashboard==null?"家族の記録を振り返る ›":homeDashboard.optString("journalText"));
+        if(homeDashboard!=null) {
+            JSONArray stats=homeDashboard.optJSONArray("journalStats");StringBuilder values=new StringBuilder();
+            if(stats!=null)for(int i=0;i<stats.length();i++){if(i>0)values.append(" ・ ");values.append(stats.optString(i));}
+            if(values.length()>0){TextView chips=label(values.toString());chips.setTextSize(12);chips.setTextColor(mutedColor());journal.addView(chips);}
+        }
+        journal.setOnClickListener(v->showWebPage(homeDashboard==null?"/app/family_journal.php":homeDashboard.optString("journalHref","/app/family_journal.php")));addPanelCard(journal);
         addHomeHeading("ショートカット");
         String[] shortcutNames={"✅ チェックリスト","📅 カレンダー","📖 家族日誌","📍 位置情報","🐣 家族ログ","💬 伝言"};
         Runnable[] shortcutActions={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->showWebPage("/app/family_journal.php"),()->navigate("location"),()->navigate("familylog"),()->navigate("messages")};
@@ -438,6 +468,12 @@ public final class MainActivity extends Activity {
             quick.addView(button("＋ 持ち物",()->addGoods(false)),new LinearLayout.LayoutParams(0,dp(48),1));
             quick.addView(button("＋ 買い物",()->addGoods(true)),new LinearLayout.LayoutParams(0,dp(48),1));quickPanel.addView(quick);addPanel(quickPanel);
         }
+        if(homeDashboard!=null) {
+            LinearLayout fortune=panel();
+            fortune.addView(button(homeDashboard.optString("fortuneTitle","🔮 今日の占い")+(fortuneExpanded?" ⌄":" ›"),()->{fortuneExpanded=!fortuneExpanded;render();}));
+            if(fortuneExpanded){JSONArray paragraphs=homeDashboard.optJSONArray("fortune");if(paragraphs!=null)for(int i=0;i<paragraphs.length();i++){TextView paragraph=label(paragraphs.optString(i));paragraph.setTextSize(i<2?15:12);fortune.addView(paragraph);}}
+            addPanel(fortune);
+        }
         content.addView(button("⚙️ 管理",this::showSettingsActions));
         content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
         content.addView(heading("今日の予定"));
@@ -449,6 +485,23 @@ public final class MainActivity extends Activity {
             entry.setOnClickListener(v->openTodayChecklist("shopping"));addPanelCard(entry);shown++;
         }
         if(shown==0)content.addView(label("今日の予定はありません"));
+    }
+    private void loadHomeDashboard() {
+        if(homeLoading||snapshot==null||showingCached)return;
+        int epoch=sessionEpoch,serial=++homeRequestSerial,family=snapshot.optInt("familyId"),member=snapshot.optInt("memberId");
+        homeLoading=true;homeError="";
+        network.execute(()->{
+            try{
+                JSONObject result=ApiClient.homeDashboard();
+                runOnUiThread(()->{
+                    if(epoch!=sessionEpoch||serial!=homeRequestSerial||snapshot==null||snapshot.optInt("familyId")!=family||snapshot.optInt("memberId")!=member)return;
+                    homeLoading=false;homeDashboard=result;if(tab.equals("home"))render();
+                });
+            }catch(Exception error){runOnUiThread(()->{
+                if(epoch!=sessionEpoch||serial!=homeRequestSerial)return;homeLoading=false;homeDashboard=null;
+                homeError="家族の状況を読み込めませんでした。更新して確認してください。";if(tab.equals("home"))render();
+            });}
+        });
     }
     private void addHomeHeading(String title) {
         TextView heading=heading(title);heading.setTextSize(18);heading.setPadding(dp(2),dp(8),0,dp(8));content.addView(heading);
@@ -647,9 +700,11 @@ public final class MainActivity extends Activity {
                 int date=row*7+column-offset+1;
                 LinearLayout cell=new LinearLayout(this);cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setPadding(dp(2),dp(4),dp(2),dp(2));
-                cell.setBackground(shape(surfaceColor(),lineColor(),0));
+                android.widget.FrameLayout cellTouch=new android.widget.FrameLayout(this);
+                cellTouch.setBackground(shape(surfaceColor(),lineColor(),0));
                 LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(weekHeight),1);
-                week.addView(cell,slot);
+                week.addView(cellTouch,slot);
+                cellTouch.addView(cell,new android.widget.FrameLayout.LayoutParams(-1,-1));
                 LocalDate day=month.atDay(1).plusDays(date-1);
                 boolean inMonth=YearMonth.from(day).equals(month);
                 String holiday=CalendarHolidays.name(day);
@@ -699,13 +754,24 @@ public final class MainActivity extends Activity {
                     cell.addView(taskLabel,new LinearLayout.LayoutParams(-1,dp(13)));
                 }
                 int count=dayRows.size();
-                cell.setOnLongClickListener(v->{showCalendarDayPreview(day,dayRows);return true;});
-                if(stampsOnDay(day.toString()).length()>0) {
-                    TextView mark=new TextView(this);mark.setText("✦");mark.setTextSize(10);
-                    mark.setTextColor(accentColor());cell.addView(mark);
+                JSONObject background=stickerOnDay(day.toString());
+                if(background!=null){ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setAlpha(.22f);bindDecorationImage(image,background.optString("url"));cellTouch.addView(image,0,new android.widget.FrameLayout.LayoutParams(-1,-1));}
+                JSONArray dayStamps=stampsOnDay(day.toString());
+                if(dayStamps.length()>0){
+                    android.widget.FrameLayout stack=new android.widget.FrameLayout(this);
+                    int visible=Math.min(3,dayStamps.length());
+                    for(int n=0;n<visible;n++){
+                        JSONObject stamp=dayStamps.optJSONObject(n);if(stamp==null)continue;
+                        ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setContentDescription("スタンプ "+stamp.optString("name"));bindDecorationImage(image,stamp.optString("thumbnailUrl"));
+                        android.widget.FrameLayout.LayoutParams icon=new android.widget.FrameLayout.LayoutParams(dp(24),dp(24));icon.leftMargin=dp(13*n);stack.addView(image,icon);
+                        image.setOnClickListener(v->viewCalendarStamp(stamp));image.setOnLongClickListener(v->{if(ApiClient.canMutate())stampActions(stamp);return true;});
+                    }
+                    if(dayStamps.length()>3){TextView more=new TextView(this);more.setText("+"+(dayStamps.length()-3));more.setTextSize(8);more.setGravity(Gravity.CENTER);more.setBackground(shape(surfaceColor(),lineColor(),100));android.widget.FrameLayout.LayoutParams badge=new android.widget.FrameLayout.LayoutParams(dp(18),dp(18));badge.leftMargin=dp(34);badge.topMargin=dp(6);stack.addView(more,badge);}
+                    android.widget.FrameLayout.LayoutParams position=new android.widget.FrameLayout.LayoutParams(dp(52),dp(24),Gravity.BOTTOM|Gravity.END);position.rightMargin=dp(3);position.bottomMargin=dp(3);cellTouch.addView(stack,position);
                 }
-                cell.setContentDescription(day.toString()+" 予定"+count+"件");
-                cell.setOnClickListener(v -> {selectedDay=day;month=YearMonth.from(day);navigate("goods");});
+                cellTouch.setOnLongClickListener(v->{showCalendarDecoration(day,dayRows);return true;});
+                cellTouch.setContentDescription(day.toString()+" 予定"+count+"件");
+                cellTouch.setOnClickListener(v -> {selectedDay=day;month=YearMonth.from(day);navigate("goods");});
             }
             android.widget.FrameLayout frame=new android.widget.FrameLayout(this);
             frame.addView(week,new android.widget.FrameLayout.LayoutParams(-1,dp(weekHeight)));
@@ -792,6 +858,44 @@ public final class MainActivity extends Activity {
     private void styleCheckBox(CheckBox box) {
         box.setTextSize(15);box.setTextColor(textColor());box.setMinHeight(dp(48));
         if(Build.VERSION.SDK_INT>=21) box.setButtonTintList(android.content.res.ColorStateList.valueOf(accentColor()));
+    }
+    private JSONObject stickerOnDay(String day) {
+        JSONObject data=stickerMonths.get(month.toString()),result=null;JSONArray days=data==null?null:data.optJSONArray("days");
+        if(days!=null)for(int i=0;i<days.length();i++){JSONObject row=days.optJSONObject(i);if(row!=null&&day.equals(row.optString("date")))result=row;}
+        return result;
+    }
+    private void bindDecorationImage(ImageView view,String path) {
+        if(path.isEmpty())return;Bitmap cached=stampImages.get(path);if(cached!=null){view.setImageBitmap(cached);return;}
+        int epoch=sessionEpoch,generation=stampGeneration;
+        stampMedia.execute(()->{try{Bitmap image=ApiClient.thumbnail(path);runOnUiThread(()->{if(epoch!=sessionEpoch||generation!=stampGeneration)return;stampImages.put(path,image);view.setImageBitmap(image);});}catch(Exception ignored){}});
+    }
+    private void viewCalendarStamp(JSONObject stamp) {
+        if("ANIMATED".equals(stamp.optString("kind"))||stamp.optJSONArray("frames")!=null&&stamp.optJSONArray("frames").length()>1){showStampAnimation(stamp);return;}
+        ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);bindDecorationImage(image,stamp.optString("fullUrl",stamp.optString("thumbnailUrl")));
+        new AlertDialog.Builder(this).setTitle(stamp.optString("name","スタンプ")).setView(image).setPositiveButton("閉じる",null).show();image.setMinimumHeight(dp(240));
+    }
+    private void showCalendarDecoration(LocalDate day,ArrayList<JSONObject> rows) {
+        if(!ApiClient.canMutate()){showCalendarDayPreview(day,rows);return;}
+        new AlertDialog.Builder(this).setTitle(day+" 日付を飾る").setItems(new String[]{"スタンプを置く","背景ステッカー","予定を見る"},(d,w)->{selectedDay=day;if(w==0)addStamp();else if(w==1)chooseCalendarBackground(day);else showCalendarDayPreview(day,rows);}).setNegativeButton("閉じる",null).show();
+    }
+    private void chooseCalendarBackground(LocalDate day) {
+        JSONObject data=stickerMonths.get(month.toString());JSONArray options=data==null?null:data.optJSONArray("options");
+        if(options==null){Toast.makeText(this,"背景ステッカーを取得できませんでした。更新してください。",Toast.LENGTH_LONG).show();return;}
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(8),dp(16),dp(8));
+        Spinner scope=new Spinner(this);scope.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"家族に公開","自分だけ"}));box.addView(scope);
+        TextView error=label("");box.addView(error);ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);scroll.addView(list);box.addView(scroll,new LinearLayout.LayoutParams(-1,dp(260)));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(day+" 背景ステッカー").setView(box).setNegativeButton("閉じる",null).create();boolean[] saving={false};
+        for(int i=0;i<options.length();i++){JSONObject option=options.optJSONObject(i);if(option==null)continue;LinearLayout row=new LinearLayout(this);ImageView image=new ImageView(this);bindDecorationImage(image,option.optString("url"));row.addView(image,new LinearLayout.LayoutParams(dp(48),dp(48)));row.addView(button(option.optString("name"),()->saveCalendarBackground(day,scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY",option.optInt("id"),dialog,error,saving)));list.addView(row);}
+        if(options.length()==0)list.addView(label("背景ステッカーがありません。管理画面で登録できます。"));
+        box.addView(button("選択した公開範囲の背景を外す",()->{
+            String visibility=scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY";JSONArray days=data.optJSONArray("days");boolean removable=false;
+            if(days!=null)for(int i=0;i<days.length();i++){JSONObject row=days.optJSONObject(i);if(row!=null&&day.toString().equals(row.optString("date"))&&visibility.equals(row.optString("scope"))&&row.optBoolean("canRemove"))removable=true;}
+            if(!removable){error.setText("この公開範囲には削除できる背景がありません。");return;}saveCalendarBackground(day,visibility,0,dialog,error,saving);
+        }));dialog.show();
+    }
+    private void saveCalendarBackground(LocalDate day,String scope,int asset,AlertDialog dialog,TextView error,boolean[] saving) {
+        if(saving[0]||snapshot==null||!ApiClient.canMutate())return;saving[0]=true;error.setText("保存中…");int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(()->{try{JSONObject body=new JSONObject().put("csrf",csrf).put("date",day.toString()).put("visibilityScope",scope);if(asset>0)body.put("assetId",asset);ApiClient.request("/api/calendar-stickers",body,asset>0?"POST":"DELETE");runOnUiThread(()->{if(epoch!=sessionEpoch)return;dialog.dismiss();stickerMonths.remove(month.toString());load();});}catch(Exception failure){runOnUiThread(()->{if(epoch!=sessionEpoch)return;saving[0]=false;error.setText("保存できませんでした。選択を確認して再試行してください。");});}});
     }
     private JSONArray stampsOnDay(String day) {
         JSONArray result=new JSONArray();
@@ -1010,7 +1114,7 @@ public final class MainActivity extends Activity {
                 ApiClient.request("/api/calendar-stamp-admin/assets",new JSONObject()
                     .put("assetId",assetId).put("active",active).put("csrf",csrf));
                 if(epoch==sessionEpoch) runOnUiThread(() -> {
-                    stampMonths.clear();stampGeneration++;
+                    stampMonths.clear();stickerMonths.clear();stampGeneration++;
                     load();
                 });
             } catch(Exception error) {
@@ -3911,7 +4015,7 @@ public final class MainActivity extends Activity {
                             .put("csrf",snapshot.optString("csrf")).put("ids",ids));
                     } catch(Exception ignored) { /* Retry on a later read. */ }
                 }
-            } catch(SecurityException e) { runOnUiThread(() -> {if(epoch==sessionEpoch) {monthCache.clear(); snapshot=null; showLogin();}}); }
+            } catch(SecurityException e) { runOnUiThread(() -> {if(epoch==sessionEpoch) {monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showLogin();}}); }
             catch(Exception e) { runOnUiThread(() -> {if(epoch==sessionEpoch&&tab.equals("messages")) {
                 content.removeAllViews(); content.addView(label("伝言を取得できませんでした"));
             }}); }
@@ -4565,12 +4669,12 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 SnapshotCache.clear(this);
                 stampMedia.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
+                monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
                 pendingAnimatedStampName="";
-                stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+                stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
                 TextView progress=new TextView(this); progress.setText("ログアウト中…"); progress.setPadding(36,36,36,36);
                 setContentView(progress);
                 network.execute(() -> {
@@ -4597,12 +4701,12 @@ public final class MainActivity extends Activity {
         memorySessionBinding=null;
         SnapshotCache.clear(this);
         stampMedia.execute(() -> SnapshotCache.clear(this));
-        monthCache.clear(); snapshot=null; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
+        monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";
         pendingAnimatedStampName="";
-        stampMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
+        stampMonths.clear();stickerMonths.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         login = new WebView(this); login.getSettings().setJavaScriptEnabled(true); login.getSettings().setDomStorageEnabled(true);
         LinearLayout frame=new LinearLayout(this); frame.setOrientation(LinearLayout.VERTICAL);
         frame.addView(button("ログイン後、ネイティブ画面に戻る", () -> { showNative(); load(); }));

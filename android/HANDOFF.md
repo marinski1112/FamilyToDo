@@ -20,3 +20,11 @@
 - PR はドラフトのまま。main への直接コミット、無断の本番 deploy、D1 本番操作はしない。Cloudflare Observability は使わない。サブエージェントも使わない。
 - Web 側の機能更新後は Android 側への影響を必ず確認する。家族アイコンは標準 PWA アイコンをアプリに組み込み、家族固有のものはホーム画面ショートカットへ反映する設計。
 - Android 位置共有は `src/location-device-api.ts` の `provision` / `sharing` / `revoke` と `src/location-device-provisioning.ts` の契約に依存する。端末 Secret は Android Keystore へ保存する。手入力の旧導線も残るため、Web 側の共有状態と差異が出た時の復旧を実機で確認する。
+
+## Batched home and calendar decoration parity
+
+Home now reads the existing authenticated `/app/index.php` display values without executing HTML/scripts or adding a server endpoint. Alerts, four live counters (including today's family-log count), yesterday's journal and expandable fortune render as native controls. The bounded parser rejects missing/changed count contracts and same-origin action links are restricted. Values stay in memory and are cleared across account/session changes. A changed Web HTML contract shows a retry error rather than invented values.
+
+Calendar cells display up to three overlapping 24dp stamp thumbnails and an overflow badge; tapping previews and long-press opens existing placement actions. Date long-press opens decoration and event-preview choices. Background stickers use existing `/api/calendar-stickers` GET/POST/DELETE, 22% image opacity, and family/private scope; private rows overlay shared rows. Failed saves keep the chooser and selection for retry. Administration/upload remains available through existing Web tools. Decoration lists include the overview's full visible grid dates. Fixture checks cover dashboard parsing, unsafe links, changed markup, private-over-shared precedence, thumbnail and overflow rendering.
+
+Distribution is batched to avoid repeated device installs. CI debug signing keys change between runners; preserving installed login through future updates requires the existing private signing workflow and its GitHub Secrets (see INTERNAL_RELEASE.md). No signing key is stored in source or artifacts.

@@ -34,7 +34,7 @@ final class ApiClient {
         boolean familyLogPhoto=path.matches("/api/family-log-media\\?media=[1-9][0-9]*");
         if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
             path.contains("..") || path.contains("#") || path.contains(":") ||
-            !(messagePhoto || familyLogPhoto || path.startsWith("/api/calendar-stamp-media?") ||
+            !(messagePhoto || familyLogPhoto || path.matches("/api/calendar-sticker-media\\?asset=[1-9][0-9]*") || path.startsWith("/api/calendar-stamp-media?") ||
               (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
             throw new IllegalArgumentException("Invalid image path");
         forbidFixtureNetwork();
@@ -124,6 +124,30 @@ final class ApiClient {
             int sample=Math.max(1,(int)Math.ceil(Math.max(width,height)/512.0));
             decoder.setTargetSampleSize(sample);
         });
+    }
+    /** Fetch only the existing home page, with bounded HTML and no redirect/script execution. */
+    static JSONObject homeDashboard() throws Exception {
+        if(BuildConfig.UI_TEST_MODE) {
+            if(fixtureTransport==null)throw new IllegalStateException("No fixture transport");
+            return HomeDashboardParser.parse(fixtureTransport.request("/app/index.php",null,"GET").optString("html"));
+        }
+        forbidFixtureNetwork();
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/app/index.php").openConnection();
+        try {
+            connection.setConnectTimeout(10000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("Accept","text/html");connection.setRequestProperty("Cache-Control","no-cache");
+            String cookie=CookieManager.getInstance().getCookie(ORIGIN);if(cookie!=null)connection.setRequestProperty("Cookie",cookie);
+            int status=connection.getResponseCode();
+            if(status==401||status==302||status==303)throw new SecurityException("ログインしてください");
+            String type=connection.getContentType();
+            if(status!=200||type==null||!type.startsWith("text/html"))throw new IllegalStateException("Home unavailable");
+            String setCookie=connection.getHeaderField("Set-Cookie");if(setCookie!=null){CookieManager.getInstance().setCookie(ORIGIN,setCookie);CookieManager.getInstance().flush();}
+            try(var stream=connection.getInputStream()) {
+                ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1){bytes.write(buffer,0,n);if(bytes.size()>512000)throw new IllegalStateException("Home too large");}
+                return HomeDashboardParser.parse(new String(bytes.toByteArray(),StandardCharsets.UTF_8));
+            }
+        }finally{connection.disconnect();}
     }
     static JSONObject request(String path, JSONObject body) throws Exception {
         return request(path,body,body==null?"GET":"POST");

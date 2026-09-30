@@ -46,6 +46,12 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("振替休日".equals(CalendarHolidays.name(LocalDate.parse("2026-05-06"))),"Web substitute holiday");
             check("成人の日".equals(CalendarHolidays.name(LocalDate.parse("2026-01-12"))),"Web Monday holiday");
             check(CalendarHolidays.name(LocalDate.parse("2026-09-30"))==null,"ordinary weekday");
+            JSONObject dashboard=HomeDashboardParser.parse(homeHtml());
+            check(dashboard.getJSONArray("counts").getInt(3)==7,"home server family-log count");
+            check(dashboard.getJSONArray("alerts").length()==1,"home rejects external action link");
+            check(dashboard.optString("journalText").equals("昨日 & 今日"),"home decodes escaped journal text");
+            boolean rejected=false;try{HomeDashboardParser.parse("<html>login</html>");}catch(Exception expected){rejected=true;}check(rejected,"login page cannot become dashboard");
+            rejected=false;try{HomeDashboardParser.parse(homeHtml().replace("<strong>7</strong>","<strong>unknown</strong>"));}catch(Exception expected){rejected=true;}check(rejected,"changed count contract fails closed");
             ApiClient.fixtureTransport=this::response;
             activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             String day=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString();
@@ -75,7 +81,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{
                 try{
                     field("snapshot",snapshot);field("month",YearMonth.parse(day.substring(0,7)));field("selectedDay",LocalDate.parse(day));
-                    field("tab","home");field("familyLog",family);field("messages",messages);
+                    field("homeDashboard",dashboard);field("tab","home");field("familyLog",family);field("messages",messages);
                     field("shoppingCategories",new JSONObject("{\"categories\":[\"スーパー\",\"子供\"],\"order\":[\"スーパー\",\"子供\"]}"));
                     field("itemCategories",new JSONObject("{\"categories\":[\"保育園\"],\"order\":[\"保育園\"]}"));
                     field("locationLatest",new JSONObject("{\"members\":[{\"id\":1,\"name\":\"テスト家族\",\"sharingEnabled\":true,\"registeredPlaceLabel\":\"登録地点\",\"latest\":{\"recordedAt\":\"09:00\"}}]}"));
@@ -84,8 +90,13 @@ public final class UiParityInstrumentation extends Instrumentation {
                     ApiClient.setMutationsEnabled(true);invoke("showNative");
                 }catch(Exception e){throw new RuntimeException(e);}
             });
+            onUi(()->{try{
+                @SuppressWarnings("unchecked") java.util.Map<String,JSONArray> stamps=(java.util.Map<String,JSONArray>)value("stampMonths");JSONArray placements=new JSONArray();for(int i=0;i<4;i++)placements.put(new JSONObject().put("placementId",i+1).put("date",day).put("name","カレンダーテスト").put("thumbnailUrl","/fixture.png"));stamps.put(day.substring(0,7),placements);
+                @SuppressWarnings("unchecked") java.util.Map<String,JSONObject> stickers=(java.util.Map<String,JSONObject>)value("stickerMonths");stickers.put(day.substring(0,7),new JSONObject().put("options",new JSONArray().put(new JSONObject().put("id",1).put("name","背景テスト").put("url","/fixture.png"))).put("days",new JSONArray().put(new JSONObject().put("date",day).put("scope","FAMILY").put("url","/fixture.png").put("canRemove",true)).put(new JSONObject().put("date",day).put("scope","PRIVATE").put("url","/fixture.png").put("name","個人背景"))));
+                Method lookup=MainActivity.class.getDeclaredMethod("stickerOnDay",String.class);lookup.setAccessible(true);JSONObject selected=(JSONObject)lookup.invoke(activity,day);check(selected.optString("name").equals("個人背景"),"private sticker overlays shared background");
+            }catch(Exception e){throw new RuntimeException(e);}});
             settle();check(hasContaining("今日のタスク"),"home contains today's task");
-            check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");screenshot("home");
+            check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
             clickDescription("スーパーを開閉");check(hasText("買い物のテスト"),"category expands");
@@ -136,6 +147,8 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(first.getWidth()>0,"cross-day band measured");
                 check(((android.widget.FrameLayout.LayoutParams)first.getLayoutParams()).topMargin!=((android.widget.FrameLayout.LayoutParams)second.getLayoutParams()).topMargin,"overlapping ranges get distinct lanes");
             });
+            check(hasText("+1"),"overlapping stamp overflow");
+            onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
             screenshot("calendar");
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
@@ -151,6 +164,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             Bundle results=new Bundle();results.putString("stream","FAILURES!!!\n"+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,results);
         }
     }
+    private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
         if(path.equals("/api/checklist/inline-title")){
             if(body.optString("title").equals("失敗ケース"))throw new IllegalStateException("synthetic failure");
