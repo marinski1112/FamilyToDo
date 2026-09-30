@@ -10,7 +10,7 @@ Read the canonical Web home/dashboard, checklist controller and reminder interac
 | --- | --- | --- |
 | Home | Today list, Web-style two-column count cards and three-column shortcuts, quick task/goods creation, links to all tabs and family journal | Full dashboard alerts, yesterday journal and fortune remain on Web home |
 | Checklist | Task/event section, separate title editing and completion, status tabs, goods categories, continuous entry, details, child-task viewer | Undated/all-history tasks via explicit Web link; Full child creation still differs; inline category rename, category/content drag and JST fresh/archived empty-category cluster are implemented. Missing catalog metadata keeps legacy categories visible until metadata arrives |
-| Calendar | Four sorted event chips matching the current Web cap, remaining-event count, long-press full-day preview, Web holiday labels, adjacent-month days, task/goods counts, day tap opens checklist | Cross-day band packing and arbitrary stamp layout still differ |
+| Calendar | Cross-day event bands and four sorted single-day event chips matching the current Web cap, remaining-event count, long-press full-day preview, Web holiday labels, adjacent-month days, task/goods counts, day tap opens checklist | Arbitrary stamp layout still differs; cross-day events now use up to four separate lanes, clipped per week with overflow counts |
 | Location | Location tab opens the authenticated in-app Web map/history; native device location settings remain accessible | Map is Web-backed; native sharing service remains native |
 | Family Log | Subject filter, compact date controls, record cards, management menu, quick-record dock and journal/food/summary links | Growth journal, family journal, food list and full administration are Web-backed |
 | Messages | Inline photos/stamp thumbnails, LINE avatar with neutral fallback, day/time/read labels, bottom composer, long-press actions | Animated stamp playback opens the existing viewer; advanced recipient/scheduling uses existing composer |
@@ -37,3 +37,5 @@ Empty category state uses the active kind's `categoryMeta`, total content count 
 This update's build and API 30/35 instrumentation are pending until the exact-head Android CI succeeds. Device-only checks above remain outstanding.
 
 Calendar holiday calculations are a direct port of the existing Web recurrence projection, including Monday holidays, citizen holidays and substitute holidays. This preserves the Web rules rather than introducing another holiday data source. Week height grows with event/overflow/accessory rows instead of clipping them.
+
+Multi-day event ranges now retain one lane across the displayed month, use separate lanes for overlaps, span the native week width and show continuation arrows at week boundaries. Bands route to the event checklist. The fixture includes overlapping ranges and checks that the bands measure and occupy separate lanes.

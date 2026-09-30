@@ -57,7 +57,9 @@ public final class UiParityInstrumentation extends Instrumentation {
                     .put(new JSONObject().put("id",12).put("title","二つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 10:00:00").put("calendar_color","#EC4899"))
                     .put(new JSONObject().put("id",13).put("title","三つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 11:00:00").put("calendar_color","#38BDF8"))
                     .put(new JSONObject().put("id",14).put("title","四つ目の予定").put("task_kind","EVENT").put("start_at",day+" 12:00:00"))
-                    .put(new JSONObject().put("id",15).put("title","五つ目の予定").put("task_kind","EVENT").put("start_at",day+" 13:00:00")))
+                    .put(new JSONObject().put("id",15).put("title","五つ目の予定").put("task_kind","EVENT").put("start_at",day+" 13:00:00"))
+                    .put(new JSONObject().put("id",16).put("title","日跨ぎ予定").put("task_kind","EVENT").put("all_day",1).put("start_at",LocalDate.parse(day).minusDays(1).toString()).put("end_at",LocalDate.parse(day).plusDays(1).toString()))
+                    .put(new JSONObject().put("id",17).put("title","重なる日跨ぎ予定").put("task_kind","EVENT").put("all_day",1).put("start_at",LocalDate.parse(day).minusDays(1).toString()).put("end_at",LocalDate.parse(day).plusDays(1).toString())))
                 .put("shopping",new JSONArray("[{\"id\":1,\"name\":\"買い物のテスト\",\"category\":\"スーパー\",\"status\":\"pending\",\"quantity\":\"1\"}]"))
                 .put("items",new JSONArray("[{\"id\":2,\"name\":\"持ち物のテスト\",\"category\":\"保育園\",\"status\":\"pending\"}]"));
             JSONObject family=new JSONObject().put("date",day).put("familyId",1).put("memberId",1)
@@ -124,9 +126,16 @@ public final class UiParityInstrumentation extends Instrumentation {
             screenshot("checklist");
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");
-            onUi(()->{View cell=findDescription(root(),day+" 予定6件");check(cell!=null,"today's calendar cell exists");
+            onUi(()->{View cell=findDescription(root(),day+" 予定8件");check(cell!=null,"today's calendar cell exists");
                 check(((ViewGroup)cell.getParent()).indexOfChild(cell)==LocalDate.parse(day).getDayOfWeek().getValue()%7,"calendar date matches weekday");});
             check(hasContaining("二つ目の予定"),"second calendar event visible");check(hasText("＋1件"),"calendar overflow count visible");check(hasContaining("四つ目の予定"),"Web four-event cap");
+            onUi(()->{
+                String span=LocalDate.parse(day).minusDays(1)+"〜"+LocalDate.parse(day).plusDays(1);
+                View first=findDescription(root(),"日跨ぎ予定 "+span),second=findDescription(root(),"重なる日跨ぎ予定 "+span);
+                check(first!=null&&second!=null,"cross-day bands render");
+                check(first.getWidth()>0,"cross-day band measured");
+                check(((android.widget.FrameLayout.LayoutParams)first.getLayoutParams()).topMargin!=((android.widget.FrameLayout.LayoutParams)second.getLayoutParams()).topMargin,"overlapping ranges get distinct lanes");
+            });
             screenshot("calendar");
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
