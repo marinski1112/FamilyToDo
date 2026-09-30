@@ -3963,10 +3963,10 @@ public final class MainActivity extends Activity {
                 if(ApiClient.canMutate())image.setOnLongClickListener(v->{messageActions(row);return true;});
             }
             if(ApiClient.canMutate())bubble.setOnLongClickListener(v->{messageActions(row);return true;});
-            stack.addView(bubble);
+            stack.addView(bubble,new LinearLayout.LayoutParams(-2,-2));
             String when=created.length()>=16?created.substring(11,16):created;
             TextView info=label(when+(mine?" ・ "+(row.optInt("readCount")>0?"既読"+row.optInt("readCount"):"未読"):""));
-            info.setTextSize(10);info.setTextColor(mutedColor());info.setPadding(dp(4),dp(3),dp(4),0);stack.addView(info);
+            info.setGravity(mine?Gravity.END:Gravity.START);info.setTextSize(10);info.setTextColor(mutedColor());info.setPadding(dp(4),dp(3),dp(4),0);stack.addView(info);
             line.addView(stack,new LinearLayout.LayoutParams(0,-2,1));
 
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,0,0,dp(14));content.addView(line,lp);
