@@ -32,6 +32,16 @@ public final class UiParityInstrumentation extends Instrumentation {
         sendStatus(1,status);
         try{
             if(!BuildConfig.UI_TEST_MODE)throw new AssertionError("UI fixture variant required");
+            long midnight=java.time.Instant.parse("2026-09-30T15:00:00Z").toEpochMilli();
+            long one=java.time.Instant.parse("2026-09-30T16:00:00Z").toEpochMilli();
+            check(GoodsCategoryState.archiveAt("2026-09-30T13:59:00Z")==midnight,"22:59 JST archives at midnight");
+            check(GoodsCategoryState.archiveAt("2026-09-30T14:00:00Z")==one,"23:00 JST archives at 01:00");
+            check(GoodsCategoryState.archiveAt("2026-09-30T23:59:00+09:00")==one,"23:59 JST archives at 01:00");
+            check("FRESH_EMPTY".equals(GoodsCategoryState.state(1,0,"2026-09-30T13:59:00Z",midnight-1)),"fresh before boundary");
+            check("ARCHIVED_EMPTY".equals(GoodsCategoryState.state(1,0,"2026-09-30T13:59:00Z",midnight)),"archive at exact boundary");
+            check("ACTIVE".equals(GoodsCategoryState.state(1,1,"invalid",midnight)),"content keeps category active");
+            check("DISABLED".equals(GoodsCategoryState.state(0,1,"invalid",midnight)),"disabled takes precedence");
+            check(GoodsCategoryState.archiveAt("2026-09-30 22:59:00")==0,"timezone required");
             ApiClient.fixtureTransport=this::response;
             activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             String day=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString();
@@ -66,7 +76,8 @@ public final class UiParityInstrumentation extends Instrumentation {
                     ApiClient.setMutationsEnabled(true);invoke("showNative");
                 }catch(Exception e){throw new RuntimeException(e);}
             });
-            settle();check(hasContaining("今日のタスク"),"home contains today's task");screenshot("home");
+            settle();check(hasContaining("今日のタスク"),"home contains today's task");
+            check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
             clickDescription("スーパーを開閉");check(hasText("買い物のテスト"),"category expands");
@@ -92,6 +103,18 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{try{Method move=MainActivity.class.getDeclaredMethod("moveGoodsCategory",boolean.class,int.class,String.class);move.setAccessible(true);move.invoke(activity,true,1,"失敗移動");}catch(Exception e){throw new RuntimeException(e);}});
             for(int i=0;i<100&&failedMoves==0;i++)Thread.sleep(30);check(failedMoves==1,"move failure exercised");settle();
             waitCategory(1,"子供");check("保育園".equals(snapshot.optJSONArray("items").optJSONObject(0).optString("category")),"shopping move does not modify item catalog");
+            onUi(()->{try{
+                JSONObject catalog=(JSONObject)value("shoppingCategories");
+                catalog.put("categories",new JSONArray().put("食品").put("子供").put("新しい空").put("古い空"));
+                catalog.put("categoryMeta",new JSONArray()
+                    .put(new JSONObject().put("name","新しい空").put("enabled",1).put("activated_at",java.time.Instant.now().toString()))
+                    .put(new JSONObject().put("name","古い空").put("enabled",1).put("activated_at","2020-01-01T00:00:00Z")));
+                invoke("render");
+            }catch(Exception e){throw new RuntimeException(e);}});
+            check(hasText("新しい空"),"fresh empty category at normal position");
+            check(!hasText("古い空"),"archived empty hidden behind cluster");
+            clickDescription("空のカテゴリを開閉");check(hasText("古い空"),"archived category inside cluster");
+            clickDescription("古い空に追加");check(findHintOnUi("新しい買い物")!=null,"archived category can reopen for entry");
             screenshot("checklist");
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");

@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
     private boolean inlineMessageSending;
     private final Map<Integer,JSONObject> messageStamps=new HashMap<>();
     private boolean goodsCompleted=false;
+    private boolean emptyCategoriesExpanded=false;
     private final Set<String> expandedGoodsCategories=new HashSet<>();
     private final Map<String,String[]> goodsComposerDrafts=new HashMap<>();
 
@@ -295,7 +296,7 @@ public final class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if(epoch!=sessionEpoch) return;
                             if(shopping) shoppingCategories=categories; else itemCategories=categories;
-                            if(tab.equals(shopping?"shopping":"item")) render();
+                            if(tab.equals("goods")&&goodsKind.equals(shopping?"shopping":"item")) render();
                         });
                     } catch(Exception ignored) { /* The checklist remains available. */ }
                 }
@@ -398,35 +399,59 @@ public final class MainActivity extends Activity {
             JSONObject row=items.optJSONObject(i);
             if(row!=null&&!"completed".equals(row.optString("status")))itemCount++;
         }
-        LinearLayout schedule=card("今日の予定",eventCount+"件のイベント ・ "+taskCount+"件の未完了タスク");
-        schedule.setOnClickListener(v -> navigate("calendar"));addPanelCard(schedule);
-        LinearLayout goods=card("チェックリスト",shoppingCount+"件の買い物 ・ "+itemCount+"件の持ち物");
-        goods.setOnClickListener(v -> navigate("goods"));addPanelCard(goods);
-        content.addView(button("家族の位置情報を開く",() -> navigate("location")));
-        content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
-        content.addView(button("アプリ設定",this::showSettingsActions));
-        content.addView(heading("ショートカット"));
-        LinearLayout shortcuts=new LinearLayout(this);
-        shortcuts.addView(button("🐣 家族ログ",()->navigate("familylog")),new LinearLayout.LayoutParams(0,dp(48),1));
-        shortcuts.addView(button("💬 伝言",()->navigate("messages")),new LinearLayout.LayoutParams(0,dp(48),1));
-        content.addView(shortcuts);
-        content.addView(button("📖 家族日誌",()->showWebPage("/app/family_journal.php")));
-        if(ApiClient.canMutate()) {
-            content.addView(heading("クイック追加"));
-            content.addView(button("＋ タスク・イベント",this::addTask));
-            LinearLayout quick=new LinearLayout(this);
-            quick.addView(button("＋ 買い物",()->addGoods(true)),new LinearLayout.LayoutParams(0,dp(48),1));
-            quick.addView(button("＋ 持ち物",()->addGoods(false)),new LinearLayout.LayoutParams(0,dp(48),1));content.addView(quick);
+        content.addView(heading("今日"));
+        String[] titles={"✅ 未完了タスク","📅 イベント","🛒 買い物残り","🎒 持ち物残り"};
+        int[] counts={taskCount,eventCount,shoppingCount,itemCount};
+        Runnable[] destinations={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->openTodayChecklist("shopping"),()->openTodayChecklist("item")};
+        for(int row=0;row<2;row++) {
+            LinearLayout grid=new LinearLayout(this);
+            for(int col=0;col<2;col++) {
+                int index=row*2+col;LinearLayout stat=panel();stat.setPadding(dp(13),dp(10),dp(13),dp(10));
+                TextView value=label(Integer.toString(counts[index]));value.setTextSize(23);value.setTypeface(null,android.graphics.Typeface.BOLD);
+                stat.addView(value);TextView title=label(titles[index]);title.setTextSize(13);title.setTextColor(mutedColor());stat.addView(title);
+                stat.setContentDescription(titles[index]+" "+counts[index]+"件");stat.setOnClickListener(v->destinations[index].run());
+                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);cell.setMargins(col==0?0:dp(5),0,col==0?dp(5):0,0);grid.addView(stat,cell);
+            }
+            addPanelCard(grid);
         }
+        LinearLayout journal=card("📖 昨日の家族日誌","家族の記録を振り返る ›");
+        journal.setOnClickListener(v->showWebPage("/app/family_journal.php"));addPanelCard(journal);
+        content.addView(heading("ショートカット"));
+        String[] shortcutNames={"✅ チェックリスト","📅 カレンダー","📖 家族日誌","📍 位置情報","🐣 家族ログ","💬 伝言"};
+        Runnable[] shortcutActions={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->showWebPage("/app/family_journal.php"),()->navigate("location"),()->navigate("familylog"),()->navigate("messages")};
+        for(int row=0;row<2;row++) {
+            LinearLayout grid=new LinearLayout(this);
+            for(int col=0;col<3;col++) {
+                int index=row*3+col;LinearLayout shortcut=panel();shortcut.setGravity(Gravity.CENTER);shortcut.setPadding(dp(3),dp(9),dp(3),dp(9));
+                String title=shortcutNames[index];int split=title.indexOf(' ');
+                TextView icon=label(title.substring(0,split));icon.setTextSize(21);icon.setGravity(Gravity.CENTER);shortcut.addView(icon);
+                TextView caption=label(title.substring(split+1));caption.setTextSize(11);caption.setPadding(0,dp(3),0,0);caption.setGravity(Gravity.CENTER);caption.setSingleLine(true);shortcut.addView(caption);
+                shortcut.setContentDescription(title);shortcut.setOnClickListener(v->shortcutActions[index].run());
+                LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);cell.setMargins(col==0?0:dp(4),0,col==2?0:dp(4),0);grid.addView(shortcut,cell);
+            }
+            addPanelCard(grid);
+        }
+        if(ApiClient.canMutate()) {
+            LinearLayout quickPanel=panel();quickPanel.addView(heading("クイック追加"));
+            quickPanel.addView(button("＋ タスク・イベント",()->{selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));addTask();}));
+            LinearLayout quick=new LinearLayout(this);
+            quick.addView(button("＋ 持ち物",()->addGoods(false)),new LinearLayout.LayoutParams(0,dp(48),1));
+            quick.addView(button("＋ 買い物",()->addGoods(true)),new LinearLayout.LayoutParams(0,dp(48),1));quickPanel.addView(quick);addPanel(quickPanel);
+        }
+        content.addView(button("⚙️ 管理",this::showSettingsActions));
+        content.addView(button("Web版のホームを開く",() -> showWebPage("/app/index.php")));
         content.addView(heading("今日の予定"));
         int shown=0;
         if(tasks!=null)for(int i=0;i<tasks.length()&&shown<8;i++) {
             JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,today))continue;
             LinearLayout entry=card("EVENT".equalsIgnoreCase(task.optString("task_kind"))?"📅 "+task.optString("title"):"✅ "+task.optString("title"),
                 "completed".equals(task.optString("status"))?"完了済み":"未完了");
-            entry.setOnClickListener(v->navigate("goods"));addPanelCard(entry);shown++;
+            entry.setOnClickListener(v->openTodayChecklist("shopping"));addPanelCard(entry);shown++;
         }
         if(shown==0)content.addView(label("今日の予定はありません"));
+    }
+    private void openTodayChecklist(String kind) {
+        selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));goodsKind=kind;navigate("goods");
     }
     private void loadLocation() {
         int epoch=sessionEpoch;
@@ -1286,7 +1311,17 @@ public final class MainActivity extends Activity {
             JSONObject row=rows.optJSONObject(i); if(row!=null) names.add(category(row));
         }
         names.add("未分類");
+        ArrayList<String> archived=new ArrayList<>();
         for(String category:names) {
+            JSONObject meta=categoryMetadata(catalog,category);
+            int total=0;
+            for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&category.equals(category(row)))total++;}
+            String state=meta==null?"ACTIVE":GoodsCategoryState.state(meta.optInt("enabled",1),total,meta.optString("activated_at"),System.currentTimeMillis());
+            if("DISABLED".equals(state))continue;
+            String categoryKey=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
+            if(!goodsCompleted&&"ARCHIVED_EMPTY".equals(state)&&!"未分類".equals(category)&&!expandedGoodsCategories.contains(categoryKey)) {
+                archived.add(category);continue;
+            }
             LinearLayout group=new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
             int count=0;
             for(int n=0;n<rows.length();n++) {
@@ -1343,6 +1378,27 @@ public final class MainActivity extends Activity {
                 addPanel(section);
             }
         }
+        if(!archived.isEmpty()) {
+            LinearLayout cluster=panel();
+            Button summary=button((emptyCategoriesExpanded?"⌄":"›")+" 空のカテゴリ  "+archived.size(),()->{emptyCategoriesExpanded=!emptyCategoriesExpanded;render();});
+            summary.setContentDescription("空のカテゴリを開閉");cluster.addView(summary);
+            if(emptyCategoriesExpanded)for(String name:archived) {
+                LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+                row.addView(inlineCategoryTitle(shopping,name),new LinearLayout.LayoutParams(0,dp(48),1));
+                Button add=button("＋ 追加",()->{expandedGoodsCategories.add(sessionEpoch+":"+(shopping?"shopping":"item")+":"+name);render();});
+                add.setContentDescription(name+"に追加");row.addView(add,new LinearLayout.LayoutParams(dp(80),dp(48)));
+                if(ApiClient.canMutate())row.addView(button("⋯",()->categoryActions(shopping,name)),new LinearLayout.LayoutParams(dp(44),dp(48)));
+                cluster.addView(row);
+            }
+            addPanel(cluster);
+        }
+    }
+    private JSONObject categoryMetadata(JSONObject catalog,String name) {
+        JSONArray metadata=catalog==null?null:catalog.optJSONArray("categoryMeta");
+        if(metadata!=null)for(int i=0;i<metadata.length();i++) {
+            JSONObject meta=metadata.optJSONObject(i);if(meta!=null&&meta.optString("name").equalsIgnoreCase(name))return meta;
+        }
+        return null;
     }
     private void installCategoryGrip(TextView grip,boolean shopping,String category) {
         if(!ApiClient.canMutate()||"未分類".equals(category))return;
@@ -1445,7 +1501,8 @@ public final class MainActivity extends Activity {
                 catalog.put(key,after);
             }
             String prefix=sessionEpoch+":"+(shopping?"shopping":"item")+":";
-            if(expandedGoodsCategories.remove(prefix+oldName))expandedGoodsCategories.add(prefix+newName);
+            expandedGoodsCategories.remove(prefix+oldName);
+            expandedGoodsCategories.add(prefix+newName);
             String[] draft=goodsComposerDrafts.remove(prefix+oldName);
             if(draft!=null){if(!goodsComposerDrafts.containsKey(prefix+newName))goodsComposerDrafts.put(prefix+newName,draft);
                 else goodsComposerDrafts.put(prefix+oldName,draft);}
