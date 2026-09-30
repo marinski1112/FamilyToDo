@@ -63,6 +63,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             });
             settle();check(hasContaining("今日のタスク"),"home contains today's task");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
+            onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
             clickTextContaining("スーパー");check(hasText("買い物のテスト"),"category expands");
             AtomicReference<EditText> editor=new AtomicReference<>();
             onUi(()->{EditText input=(EditText)findText(root(),"買い物のテスト");editor.set(input);input.performClick();
