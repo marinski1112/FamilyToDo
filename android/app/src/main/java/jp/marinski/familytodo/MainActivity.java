@@ -2865,7 +2865,11 @@ public final class MainActivity extends Activity {
                 (row.optString("value_text").isEmpty()?"":" ・ "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
             details.setTextSize(13);details.setTextColor(mutedColor());record.addView(details);
-            if(!readOnly) record.setOnLongClickListener(v -> { familyLogActions(row); return true; });
+            if(!readOnly) {
+                record.setOnClickListener(v->{if(row.optInt("subject_id")>0)showFamilyLogEditor(row);});
+                record.setOnLongClickListener(v -> { familyLogActions(row); return true; });
+                record.setContentDescription(time+" "+logTypeName(row.optString("log_type"))+"。タップして編集、長押しで操作");
+            }
             addPanel(record);
             int mediaId=row.optInt("media_id");
             if(!readOnly&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
@@ -2942,7 +2946,10 @@ public final class MainActivity extends Activity {
                 JSONObject quick=quickActions.optJSONObject(n);
                 if(quick==null || quick.optInt("active",1)!=1 || quick.optInt("subject_id")!=subject.optInt("id")) continue;
                 hasQuick=true;
-                actions.addView(button(quick.optString("icon","＋")+" "+quick.optString("name"),() -> runFamilyLogQuickAction(quick)));
+                Button quickButton=button(quick.optString("icon","＋")+"\n"+quick.optString("name"),() -> runFamilyLogQuickAction(quick));
+                quickButton.setTextSize(12);quickButton.setPadding(dp(3),dp(3),dp(3),dp(3));quickButton.setGravity(Gravity.CENTER);
+                quickButton.setContentDescription(quick.optString("name")+"を記録");
+                actions.addView(quickButton,new LinearLayout.LayoutParams(dp(74),dp(58)));
             }
             if(hasQuick) { dock.addView(horizontalActions(actions)); continue; }
             if(!"BABY".equals(subject.optString("subject_kind")))continue;
@@ -3908,15 +3915,20 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderMessages() {
-        content.addView(heading("家族"));
-        TextView subtitle=label("家族グループ");subtitle.setTextSize(12);subtitle.setTextColor(mutedColor());content.addView(subtitle);
+        TextView title=heading("家族");title.setGravity(Gravity.CENTER);title.setTextSize(18);content.addView(title);
+        TextView subtitle=label("家族グループ");subtitle.setGravity(Gravity.CENTER);subtitle.setTextSize(10);subtitle.setTextColor(mutedColor());content.addView(subtitle);
         content.addView(button("↻ 更新",()->loadMessages(0)));
         if(hasOlderMessages&&messages.length()>0)content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         String previousDay="";
         for(int n=0;n<messages.length();n++) {
             JSONObject row=messages.optJSONObject(n);if(row==null)continue;
             String created=row.optString("createdAt"),day=created.length()>=10?created.substring(0,10):"";
-            if(!day.equals(previousDay)){TextView date=label(day);date.setTextSize(12);date.setGravity(Gravity.CENTER);date.setTextColor(mutedColor());content.addView(date);previousDay=day;}
+            if(!day.equals(previousDay)){
+                LinearLayout dateRow=new LinearLayout(this);dateRow.setGravity(Gravity.CENTER);dateRow.setPadding(0,dp(10),0,dp(6));
+                TextView date=label(day);date.setTextSize(11);date.setGravity(Gravity.CENTER);date.setPadding(dp(9),dp(3),dp(9),dp(3));
+                date.setTextColor(darkMode()?textColor():Color.WHITE);date.setBackground(shape(Color.parseColor(darkMode()?"#263449":"#9AA4B2"),Color.TRANSPARENT,100));
+                dateRow.addView(date);content.addView(dateRow);previousDay=day;
+            }
             boolean mine=snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId");
             LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.TOP);
             LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);stack.setGravity(mine?Gravity.END:Gravity.START);
@@ -3926,12 +3938,12 @@ public final class MainActivity extends Activity {
             if(!avatarUrl.isEmpty())loadInlineAvatar(avatar,avatarUrl);
             else {android.graphics.drawable.GradientDrawable circle=shape(softColor(),lineColor(),100);avatar.setImageDrawable(circle);}
             if(!mine)line.addView(avatar,new LinearLayout.LayoutParams(dp(34),dp(34)));
-            TextView sender=label(row.optString("senderName"));sender.setTextSize(11);sender.setTextColor(mutedColor());sender.setPadding(dp(8),0,dp(8),dp(3));stack.addView(sender);
+            TextView sender=label(row.optString("senderName"));sender.setTextSize(11);sender.setTextColor(mutedColor());sender.setPadding(dp(8),0,dp(8),dp(3));if(!mine)stack.addView(sender);
             LinearLayout bubble=new LinearLayout(this);bubble.setOrientation(LinearLayout.VERTICAL);bubble.setPadding(dp(12),dp(6),dp(12),dp(6));
             boolean stamp=row.optBoolean("hasStamp");
-            bubble.setBackground(shape(stamp?Color.TRANSPARENT:mine?Color.parseColor(darkMode()?"#3F6D46":"#8DE055"):surfaceColor(),
+            bubble.setBackground(shape(stamp?Color.TRANSPARENT:mine?Color.parseColor(darkMode()?"#284D3E":"#8DE055"):darkMode()?Color.parseColor("#263449"):surfaceColor(),
                 stamp||mine?Color.TRANSPARENT:lineColor(),14));
-            if(!row.optString("text").isEmpty()){TextView body=label(row.optString("text"));body.setTextSize(15);body.setPadding(0,0,0,0);bubble.addView(body);}
+            if(!row.optString("text").isEmpty()){TextView body=label(row.optString("text"));body.setTextSize(15);body.setMaxWidth((int)(getResources().getDisplayMetrics().widthPixels*0.70)-dp(24));body.setPadding(0,0,0,0);bubble.addView(body);}
             int id=row.optInt("id");
             if(row.optBoolean("hasImage")&&id>0) {
                 ImageView photo=new ImageView(this);photo.setScaleType(ImageView.ScaleType.FIT_CENTER);photo.setAdjustViewBounds(true);
@@ -3941,7 +3953,7 @@ public final class MainActivity extends Activity {
             }
             if(stamp&&id>0) {
                 ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setContentDescription("スタンプ。タップで表示・再生");
-                bubble.addView(image,new LinearLayout.LayoutParams(dp(160),dp(160)));
+                bubble.addView(image,new LinearLayout.LayoutParams(dp(128),dp(128)));
                 JSONObject meta=messageStamps.get(id);
                 if(meta!=null)loadInlineMedia(image,meta.optString("thumbnailUrl",meta.optString("fullUrl")));
                 image.setOnClickListener(v->showMessageStamp(id));
@@ -3953,7 +3965,7 @@ public final class MainActivity extends Activity {
             TextView info=label(when+(mine?" ・ "+(row.optInt("readCount")>0?"既読"+row.optInt("readCount"):"未読"):""));
             info.setTextSize(10);info.setTextColor(mutedColor());info.setPadding(dp(4),dp(3),dp(4),0);stack.addView(info);
             line.addView(stack,new LinearLayout.LayoutParams(0,-2,1));
-            if(mine)line.addView(avatar,new LinearLayout.LayoutParams(dp(34),dp(34)));
+
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,0,0,dp(14));content.addView(line,lp);
         }
         if(messages.length()==0)content.addView(label("まだメッセージはありません"));
@@ -3992,7 +4004,7 @@ public final class MainActivity extends Activity {
             public void afterTextChanged(android.text.Editable x){}
         });
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
-        Button send=button("➤",()->sendInlineMessage(input));send.setContentDescription("メッセージを送信");styleButton(send,true);
+        Button send=button("➤",()->sendInlineMessage(input));send.setContentDescription("メッセージを送信");styleButton(send,true);send.setBackground(shape(Color.parseColor("#06C755"),Color.TRANSPARENT,100));
         composer.addView(send,new LinearLayout.LayoutParams(dp(44),dp(48)));
         input.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);send.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
         return composer;

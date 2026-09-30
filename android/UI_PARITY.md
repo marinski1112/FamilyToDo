@@ -39,3 +39,5 @@ This update's build and API 30/35 instrumentation are pending until the exact-he
 Calendar holiday calculations are a direct port of the existing Web recurrence projection, including Monday holidays, citizen holidays and substitute holidays. This preserves the Web rules rather than introducing another holiday data source. Week height grows with event/overflow/accessory rows instead of clipping them.
 
 Multi-day event ranges now retain one lane across the displayed month, use separate lanes for overlaps, span the native week width and show continuation arrows at week boundaries. Bands route to the event checklist. The fixture includes overlapping ranges and checks that the bands measure and occupy separate lanes.
+
+Message styling now uses the Web theme raised surface and exact own-message green, centered date pills and header, 128dp stamp previews, own-message sender/avatar suppression and the green send control. Family-log record cards open the existing editor on tap and retain long-press actions; custom quick controls use compact icon/label tiles.
