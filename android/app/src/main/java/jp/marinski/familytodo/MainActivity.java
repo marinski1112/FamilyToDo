@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Native Calendar and Goods screens; a WebView is used only for the existing sign-in flow. */
+/** Native family screens with authenticated Web views for sign-in and full Web-only tools. */
 public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
@@ -210,7 +210,8 @@ public final class MainActivity extends Activity {
             icon.setGravity(Gravity.CENTER);item.addView(icon);
             TextView name=new TextView(this);name.setText(names[i]);name.setTextSize(10);
             name.setSingleLine(true);name.setGravity(Gravity.CENTER);
-            name.setTextColor(active?accentColor():mutedColor());item.addView(name);
+            name.setAutoSizeTextTypeUniformWithConfiguration(8,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+            name.setTextColor(active?accentColor():mutedColor());item.addView(name,new LinearLayout.LayoutParams(-1,-2));
             item.setContentDescription(names[i]+"を開く");
             item.setOnClickListener(v -> navigate(destination));
             LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(62),1);
