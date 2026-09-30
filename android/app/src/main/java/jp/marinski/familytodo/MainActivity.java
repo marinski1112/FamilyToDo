@@ -210,7 +210,7 @@ public final class MainActivity extends Activity {
             icon.setGravity(Gravity.CENTER);item.addView(icon);
             TextView name=new TextView(this);name.setText(names[i]);name.setTextSize(10);
             name.setSingleLine(true);name.setGravity(Gravity.CENTER);
-            name.setAutoSizeTextTypeUniformWithConfiguration(8,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+            name.setAutoSizeTextTypeUniformWithConfiguration(7,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);
             name.setTextColor(active?accentColor():mutedColor());item.addView(name,new LinearLayout.LayoutParams(-1,-2));
             item.setContentDescription(names[i]+"を開く");
             item.setOnClickListener(v -> navigate(destination));
