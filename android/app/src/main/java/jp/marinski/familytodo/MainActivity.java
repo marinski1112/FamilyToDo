@@ -368,8 +368,8 @@ public final class MainActivity extends Activity {
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14),dp(10),dp(14),dp(10));
         card.setBackground(shape(surfaceColor(),lineColor(),18));
-        TextView heading=label(title);heading.setTypeface(null,android.graphics.Typeface.BOLD);
-        card.addView(heading);card.addView(label(details));
+        TextView heading=label(title);heading.setTypeface(null,android.graphics.Typeface.BOLD);heading.setPadding(0,dp(3),0,dp(5));
+        card.addView(heading);TextView detail=label(details);detail.setPadding(0,dp(3),0,dp(5));detail.setTextSize(14);card.addView(detail);
         return card;
     }
     private void addPanelCard(LinearLayout view) {
@@ -399,7 +399,7 @@ public final class MainActivity extends Activity {
             JSONObject row=items.optJSONObject(i);
             if(row!=null&&!"completed".equals(row.optString("status")))itemCount++;
         }
-        content.addView(heading("今日"));
+        addHomeHeading("今日");
         String[] titles={"✅ 未完了タスク","📅 イベント","🛒 買い物残り","🎒 持ち物残り"};
         int[] counts={taskCount,eventCount,shoppingCount,itemCount};
         Runnable[] destinations={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->openTodayChecklist("shopping"),()->openTodayChecklist("item")};
@@ -407,8 +407,8 @@ public final class MainActivity extends Activity {
             LinearLayout grid=new LinearLayout(this);
             for(int col=0;col<2;col++) {
                 int index=row*2+col;LinearLayout stat=panel();stat.setPadding(dp(13),dp(10),dp(13),dp(10));
-                TextView value=label(Integer.toString(counts[index]));value.setTextSize(23);value.setTypeface(null,android.graphics.Typeface.BOLD);
-                stat.addView(value);TextView title=label(titles[index]);title.setTextSize(13);title.setTextColor(mutedColor());stat.addView(title);
+                TextView value=label(Integer.toString(counts[index]));value.setTextSize(23);value.setPadding(0,0,0,dp(3));value.setTypeface(null,android.graphics.Typeface.BOLD);
+                stat.addView(value);TextView title=label(titles[index]);title.setTextSize(13);title.setPadding(0,0,0,0);title.setTextColor(mutedColor());stat.addView(title);
                 stat.setContentDescription(titles[index]+" "+counts[index]+"件");stat.setOnClickListener(v->destinations[index].run());
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);cell.setMargins(col==0?0:dp(5),0,col==0?dp(5):0,0);grid.addView(stat,cell);
             }
@@ -416,7 +416,7 @@ public final class MainActivity extends Activity {
         }
         LinearLayout journal=card("📖 昨日の家族日誌","家族の記録を振り返る ›");
         journal.setOnClickListener(v->showWebPage("/app/family_journal.php"));addPanelCard(journal);
-        content.addView(heading("ショートカット"));
+        addHomeHeading("ショートカット");
         String[] shortcutNames={"✅ チェックリスト","📅 カレンダー","📖 家族日誌","📍 位置情報","🐣 家族ログ","💬 伝言"};
         Runnable[] shortcutActions={()->openTodayChecklist("shopping"),()->navigate("calendar"),()->showWebPage("/app/family_journal.php"),()->navigate("location"),()->navigate("familylog"),()->navigate("messages")};
         for(int row=0;row<2;row++) {
@@ -424,7 +424,7 @@ public final class MainActivity extends Activity {
             for(int col=0;col<3;col++) {
                 int index=row*3+col;LinearLayout shortcut=panel();shortcut.setGravity(Gravity.CENTER);shortcut.setPadding(dp(3),dp(9),dp(3),dp(9));
                 String title=shortcutNames[index];int split=title.indexOf(' ');
-                TextView icon=label(title.substring(0,split));icon.setTextSize(21);icon.setGravity(Gravity.CENTER);shortcut.addView(icon);
+                TextView icon=label(title.substring(0,split));icon.setTextSize(21);icon.setPadding(0,0,0,0);icon.setGravity(Gravity.CENTER);shortcut.addView(icon);
                 TextView caption=label(title.substring(split+1));caption.setTextSize(11);caption.setPadding(0,dp(3),0,0);caption.setGravity(Gravity.CENTER);caption.setSingleLine(true);shortcut.addView(caption);
                 shortcut.setContentDescription(title);shortcut.setOnClickListener(v->shortcutActions[index].run());
                 LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);cell.setMargins(col==0?0:dp(4),0,col==2?0:dp(4),0);grid.addView(shortcut,cell);
@@ -449,6 +449,9 @@ public final class MainActivity extends Activity {
             entry.setOnClickListener(v->openTodayChecklist("shopping"));addPanelCard(entry);shown++;
         }
         if(shown==0)content.addView(label("今日の予定はありません"));
+    }
+    private void addHomeHeading(String title) {
+        TextView heading=heading(title);heading.setTextSize(18);heading.setPadding(dp(2),dp(8),0,dp(8));content.addView(heading);
     }
     private void openTodayChecklist(String kind) {
         selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));goodsKind=kind;navigate("goods");
@@ -2858,13 +2861,13 @@ public final class MainActivity extends Activity {
             TextView entry=label(time+"   "+
                 logTypeName(row.optString("log_type"))+
                 (amount.isEmpty()?"":"  "+amount));
-            entry.setTextSize(17);entry.setTypeface(null,android.graphics.Typeface.BOLD);
+            entry.setTextSize(15);entry.setPadding(0,dp(2),0,dp(3));entry.setTypeface(null,android.graphics.Typeface.BOLD);
             record.addView(entry);
             TextView details=label(row.optString("subject_name")+
                 (detail.isEmpty()?"":" ・ "+familyLogDetailLabel(detail))+
                 (row.optString("value_text").isEmpty()?"":" ・ "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            details.setTextSize(13);details.setTextColor(mutedColor());record.addView(details);
+            details.setTextSize(12);details.setPadding(0,dp(2),0,dp(2));details.setTextColor(mutedColor());record.addView(details);
             if(!readOnly) {
                 record.setOnClickListener(v->{if(row.optInt("subject_id")>0)showFamilyLogEditor(row);});
                 record.setOnLongClickListener(v -> { familyLogActions(row); return true; });
