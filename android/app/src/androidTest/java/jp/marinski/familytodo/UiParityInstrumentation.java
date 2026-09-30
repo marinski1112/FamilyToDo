@@ -23,6 +23,7 @@ public final class UiParityInstrumentation extends Instrumentation {
     private JSONObject snapshot;
     private int nextId=100;
     private int checks;
+    private volatile int failedMoves;
     @Override public void onCreate(Bundle arguments){super.onCreate(arguments);start();}
     @Override public void onStart(){
         Bundle status=new Bundle();status.putString("id","InstrumentationTestRunner");
@@ -38,7 +39,9 @@ public final class UiParityInstrumentation extends Instrumentation {
                 .put("familyId",1).put("memberId",1).put("canManageStamps",true)
                 .put("members",new JSONArray("[{\"id\":1,\"name\":\"テスト家族\"}]"))
                 .put("tasks",new JSONArray().put(new JSONObject().put("id",10).put("title","今日のタスク").put("task_kind","TASK").put("status","pending").put("due_at",day))
-                    .put(new JSONObject().put("id",11).put("title","予定のテスト").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 09:00:00").put("end_at",day+" 10:00:00").put("calendar_color","#22C55E")))
+                    .put(new JSONObject().put("id",11).put("title","予定のテスト").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 09:00:00").put("calendar_color","#22C55E"))
+                    .put(new JSONObject().put("id",12).put("title","二つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 10:00:00").put("calendar_color","#EC4899"))
+                    .put(new JSONObject().put("id",13).put("title","三つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 11:00:00").put("calendar_color","#38BDF8")))
                 .put("shopping",new JSONArray("[{\"id\":1,\"name\":\"買い物のテスト\",\"category\":\"スーパー\",\"status\":\"pending\",\"quantity\":\"1\"}]"))
                 .put("items",new JSONArray("[{\"id\":2,\"name\":\"持ち物のテスト\",\"category\":\"保育園\",\"status\":\"pending\"}]"));
             JSONObject family=new JSONObject().put("date",day).put("familyId",1).put("memberId",1)
@@ -55,6 +58,8 @@ public final class UiParityInstrumentation extends Instrumentation {
                 try{
                     field("snapshot",snapshot);field("month",YearMonth.parse(day.substring(0,7)));field("selectedDay",LocalDate.parse(day));
                     field("tab","home");field("familyLog",family);field("messages",messages);
+                    field("shoppingCategories",new JSONObject("{\"categories\":[\"スーパー\",\"子供\"],\"order\":[\"スーパー\",\"子供\"]}"));
+                    field("itemCategories",new JSONObject("{\"categories\":[\"保育園\"],\"order\":[\"保育園\"]}"));
                     field("locationLatest",new JSONObject("{\"members\":[{\"id\":1,\"name\":\"テスト家族\",\"sharingEnabled\":true,\"registeredPlaceLabel\":\"登録地点\",\"latest\":{\"recordedAt\":\"09:00\"}}]}"));
                     @SuppressWarnings("unchecked") java.util.Map<Integer,JSONObject> stamps=(java.util.Map<Integer,JSONObject>)value("messageStamps");
                     stamps.put(2,new JSONObject().put("thumbnailUrl","/fixture.png"));
@@ -64,7 +69,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             settle();check(hasContaining("今日のタスク"),"home contains today's task");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
-            clickTextContaining("スーパー");check(hasText("買い物のテスト"),"category expands");
+            clickDescription("スーパーを開閉");check(hasText("買い物のテスト"),"category expands");
             AtomicReference<EditText> editor=new AtomicReference<>();
             onUi(()->{EditText input=(EditText)findText(root(),"買い物のテスト");editor.set(input);input.performClick();
                 CheckBox box=findBox((ViewGroup)input.getParent());check(!box.isChecked(),"title tap must not complete");
@@ -76,11 +81,21 @@ public final class UiParityInstrumentation extends Instrumentation {
             waitText("連続追加一件目");check(hasText("連続追加一件目"),"first continuous entry added");
             onUi(()->{EditText input=findHint(root(),"新しい買い物");check(input.getText().length()==0,"composer clears after success");input.setText("連続追加二件目");input.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);});
             waitText("連続追加二件目");check(hasText("連続追加二件目"),"second continuous entry added");
+            onUi(()->{EditText category=(EditText)findText(root(),"スーパー");category.performClick();category.setText("食品");category.clearFocus();});
+            waitText("食品");check(hasText("食品"),"category name saved inline");check(hasText("連続追加二件目"),"renamed category remains expanded");
+            onUi(()->{EditText category=(EditText)findText(root(),"食品");category.performClick();category.setText("失敗カテゴリ");category.clearFocus();});
+            waitText("食品");check(hasText("食品"),"category rename failure restores original");
+            onUi(()->{try{Method move=MainActivity.class.getDeclaredMethod("moveGoodsCategory",boolean.class,int.class,String.class);move.setAccessible(true);move.invoke(activity,true,1,"子供");}catch(Exception e){throw new RuntimeException(e);}});
+            waitCategory(1,"子供");check(hasText("名前を直接編集"),"moved row remains visible in expanded target");
+            onUi(()->{try{Method move=MainActivity.class.getDeclaredMethod("moveGoodsCategory",boolean.class,int.class,String.class);move.setAccessible(true);move.invoke(activity,true,1,"失敗移動");}catch(Exception e){throw new RuntimeException(e);}});
+            for(int i=0;i<100&&failedMoves==0;i++)Thread.sleep(30);check(failedMoves==1,"move failure exercised");settle();
+            waitCategory(1,"子供");check("保育園".equals(snapshot.optJSONArray("items").optJSONObject(0).optString("category")),"shopping move does not modify item catalog");
             screenshot("checklist");
-            clickText("🎒 持ち物");clickTextContaining("保育園");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
+            clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");
-            onUi(()->{View cell=findDescription(root(),day+" 予定2件");check(cell!=null,"today's calendar cell exists");
+            onUi(()->{View cell=findDescription(root(),day+" 予定4件");check(cell!=null,"today's calendar cell exists");
                 check(((ViewGroup)cell.getParent()).indexOfChild(cell)==LocalDate.parse(day).getDayOfWeek().getValue()%7,"calendar date matches weekday");});
+            check(hasContaining("二つ目の予定"),"second calendar event visible");check(hasText("＋1件"),"calendar overflow count visible");
             screenshot("calendar");
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
@@ -97,6 +112,14 @@ public final class UiParityInstrumentation extends Instrumentation {
             if(body.optString("title").equals("失敗ケース"))throw new IllegalStateException("synthetic failure");
             return new JSONObject().put("ok",true).put("title",body.optString("title"));
         }
+        if(path.equals("/api/shopping-category-mutation")||path.equals("/api/item")&&body!=null&&body.optString("action").equals("category_rename")){
+            if(body.optString("new_name").equals("失敗カテゴリ"))throw new IllegalStateException("synthetic category failure");
+            return new JSONObject().put("ok",true).put("name",body.optString("new_name"));
+        }
+        if((path.equals("/api/shopping")||path.equals("/api/item"))&&body!=null&&body.optString("action").equals("update_category")){
+            if(body.optString("category").equals("失敗移動")){failedMoves++;throw new IllegalStateException("synthetic move failure");}
+            return new JSONObject().put("ok",true);
+        }
         if(path.equals("/api/shopping")||path.equals("/api/item"))return new JSONObject().put("ok",true).put("id",++nextId);
         if(path.equals("/api/task-parent-completion"))return new JSONObject().put("ok",true).put("incomplete_children",0);
         if(path.equals("/api/toggle"))return new JSONObject().put("ok",true);
@@ -107,6 +130,10 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private void clickText(String text)throws Exception{onUi(()->{TextView node=findText(root(),text);check(node!=null,"click "+text);node.performClick();});settle();}
     private void clickTextContaining(String text)throws Exception{onUi(()->{TextView node=findContaining(root(),text);check(node!=null,"click category "+text);node.performClick();});settle();}
+    private void clickDescription(String description)throws Exception{onUi(()->{View node=findDescription(root(),description);check(node!=null,"click "+description);node.performClick();});settle();}
+    private void waitCategory(int id,String category)throws Exception{for(int i=0;i<100;i++){
+        AtomicReference<Boolean> found=new AtomicReference<>(false);onUi(()->{JSONArray rows=snapshot.optJSONArray("shopping");for(int n=0;n<rows.length();n++){JSONObject row=rows.optJSONObject(n);if(row.optInt("id")==id&&category.equals(row.optString("category")))found.set(true);}});
+        if(found.get())return;Thread.sleep(30);waitForIdleSync();}throw new AssertionError("category timeout: "+category);}
     private void onUi(Runnable action){AtomicReference<Throwable> failure=new AtomicReference<>();runOnMainSync(()->{try{action.run();}catch(Throwable error){failure.set(error);}});if(failure.get()!=null)throw new AssertionError(failure.get());}
     private View root(){return activity.getWindow().getDecorView();}
     private boolean hasContaining(String text){AtomicReference<Boolean> result=new AtomicReference<>();onUi(()->result.set(findContaining(root(),text)!=null));return result.get();}

@@ -552,6 +552,18 @@ public final class MainActivity extends Activity {
         return start.length()>=10 && day.compareTo(start.substring(0,10))>=0 &&
             (end.length()<10 || day.compareTo(end.substring(0,10))<=0);
     }
+    private void showCalendarDayPreview(LocalDate day,ArrayList<JSONObject> rows) {
+        if(rows.isEmpty()){Toast.makeText(this,day+" の予定はありません",Toast.LENGTH_SHORT).show();return;}
+        ArrayList<String> names=new ArrayList<>();
+        for(JSONObject row:rows) {
+            String at=dateValue(row,"start_at","due_at");
+            names.add(("EVENT".equalsIgnoreCase(row.optString("task_kind"))?"📅 ":"☑ ")+
+                (row.optInt("all_day")==1||at.length()<16?"":at.substring(11,16)+" ")+row.optString("title"));
+        }
+        new AlertDialog.Builder(this).setTitle(day+" の予定").setItems(names.toArray(new String[0]),(dialog,which)->{
+            selectedDay=day;checklistEvents="EVENT".equalsIgnoreCase(rows.get(which).optString("task_kind"));navigate("goods");
+        }).setNegativeButton("閉じる",null).show();
+    }
     private void renderCalendar() {
         JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
         LinearLayout calendarPanel=panel();
@@ -573,7 +585,7 @@ public final class MainActivity extends Activity {
                 LinearLayout cell=new LinearLayout(this);cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setPadding(dp(2),dp(4),dp(2),dp(2));
                 cell.setBackground(shape(surfaceColor(),lineColor(),0));
-                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(80),1);
+                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(96),1);
                 week.addView(cell,slot);
                 if(date<1||date>month.lengthOfMonth())continue;
                 LocalDate day=month.atDay(date);
@@ -584,31 +596,39 @@ public final class MainActivity extends Activity {
                 number.setTextColor(selected?Color.WHITE:column==0?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
                 if(selected)number.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
                 cell.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
-                int count=0,eventCount=0;
+                ArrayList<JSONObject> dayRows=new ArrayList<>(),events=new ArrayList<>();
+                int taskCount=0;
                 for(int n=0;n<tasks.length();n++) {
-                    JSONObject task=tasks.optJSONObject(n);
-                    if(task==null||!taskOnDay(task,day.toString()))continue;
-                    count++;
+                    JSONObject task=tasks.optJSONObject(n);if(task==null||!taskOnDay(task,day.toString()))continue;
                     if("EVENT".equalsIgnoreCase(task.optString("task_kind"))) {
-                        eventCount++;
-                        if(eventCount<=1) {
-                            TextView chip=new TextView(this);
-                            String at=dateValue(task,"start_at","due_at");
-                            chip.setText((task.optInt("all_day")==1||at.length()<16?"":at.substring(11,16)+" ")+task.optString("title"));
-                            chip.setSingleLine(true);chip.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                            chip.setTextSize(9);chip.setTextColor(Color.WHITE);
-                            chip.setPadding(dp(2),0,dp(2),0);
-                            chip.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
-                            cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(18)));
-                        }
-                    }
+                        if(task.optInt("calendar_visible",1)!=1)continue;events.add(task);
+                    }else taskCount++;
+                    dayRows.add(task);
                 }
-                if(count>eventCount) {
-                    TextView taskCount=new TextView(this);
-                    taskCount.setText("✅ "+(count-eventCount)+"件");taskCount.setSingleLine(true);
-                    taskCount.setTextSize(9);taskCount.setTextColor(Color.parseColor("#86EFAC"));
-                    cell.addView(taskCount);
+                events.sort((left,right)->{
+                    int allDay=Integer.compare(right.optInt("all_day"),left.optInt("all_day"));
+                    return allDay!=0?allDay:dateValue(left,"start_at","due_at").compareTo(dateValue(right,"start_at","due_at"));
+                });
+                for(int n=0;n<Math.min(2,events.size());n++) {
+                    JSONObject task=events.get(n);TextView chip=new TextView(this);
+                    String at=dateValue(task,"start_at","due_at"),first=at.length()>=10?at.substring(0,10):"";
+                    chip.setText((task.optInt("all_day")==1||at.length()<16||!first.equals(day.toString())?"":at.substring(11,16)+" ")+task.optString("title"));
+                    chip.setSingleLine(true);chip.setEllipsize(android.text.TextUtils.TruncateAt.END);chip.setTextSize(9);chip.setTextColor(Color.WHITE);
+                    chip.setContentDescription(task.optString("title"));chip.setPadding(dp(2),0,dp(2),0);
+                    chip.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
+                    cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(17)));
                 }
+                if(events.size()>2) {
+                    TextView more=new TextView(this);more.setText("＋"+(events.size()-2)+"件");more.setTextSize(8);more.setTextColor(mutedColor());
+                    cell.addView(more,new LinearLayout.LayoutParams(-1,dp(13)));
+                }
+                if(taskCount>0) {
+                    TextView taskLabel=new TextView(this);taskLabel.setText("✅ "+taskCount+"件");taskLabel.setSingleLine(true);
+                    taskLabel.setTextSize(9);taskLabel.setTextColor(Color.parseColor("#86EFAC"));
+                    cell.addView(taskLabel,new LinearLayout.LayoutParams(-1,dp(13)));
+                }
+                int count=dayRows.size();
+                cell.setOnLongClickListener(v->{showCalendarDayPreview(day,dayRows);return true;});
                 if(stampsOnDay(day.toString()).length()>0) {
                     TextView mark=new TextView(this);mark.setText("✦");mark.setTextSize(10);
                     mark.setTextColor(accentColor());cell.addView(mark);
@@ -1289,46 +1309,33 @@ public final class MainActivity extends Activity {
                     info.setTextColor(accentColor());info.setMinWidth(dp(44));
                     line.addView(info,new LinearLayout.LayoutParams(dp(48),dp(44)));
                 }
-                group.addView(line);count++;
+                addGoodsRowGrip(line,shopping,row.optInt("id"));group.addView(line);count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                TextView heading=label((shopping?"🛒  ":"🎒  ")+category+"   "+count+
-                    ("未分類".equals(category)?"":"   ›"));
-                if(!"未分類".equals(category) && ApiClient.canMutate()) {
-                    heading.setOnClickListener(v -> categoryActions(shopping,category));
-                    heading.setContentDescription(category+"。タップで操作、長押しして別のカテゴリへドラッグ");
-                    heading.setOnLongClickListener(v -> {
-                        if(!categoryOrder(shopping).contains(category)) return false;
-                        return v.startDragAndDrop(android.content.ClipData.newPlainText("category",""),
-                            new android.view.View.DragShadowBuilder(v),new String[]{shopping?"shopping":"item",category},0);
-                    });
-                    heading.setOnDragListener((v,event) -> {
-                        Object source=event.getLocalState();
-                        if(!(source instanceof String[])) return false;
-                        String[] drag=(String[])source;
-                        if(drag.length!=2||!drag[0].equals(shopping?"shopping":"item")||
-                            !categoryOrder(shopping).contains(category)) return false;
-                        if(event.getAction()==android.view.DragEvent.ACTION_DROP) {
-                            repositionCategory(shopping,drag[1],category);return true;
-                        }
-                        return true;
-                    });
-                }
-                LinearLayout section=panel();heading.setTypeface(null,android.graphics.Typeface.BOLD);
+                LinearLayout section=panel();
                 String groupKey=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
                 boolean open=expandedGoodsCategories.contains(groupKey);
-                heading.setText((shopping?"🛒  ":"🎒  ")+category+"   "+count+"   "+(open?"⌄":"›"));
-                heading.setContentDescription(category+" "+count+"件。タップで開閉、長押しで並べ替え");
-                heading.setOnClickListener(v -> {
+                LinearLayout categoryHead=new LinearLayout(this);categoryHead.setGravity(Gravity.CENTER_VERTICAL);
+                TextView grip=label("≡");grip.setPadding(0,0,0,0);grip.setGravity(Gravity.CENTER);
+                grip.setContentDescription(category+"の並べ替え");installCategoryGrip(grip,shopping,category);
+                categoryHead.addView(grip,new LinearLayout.LayoutParams(dp(26),dp(44)));
+                TextView icon=label(shopping?"🛒":"🎒");icon.setPadding(0,0,0,0);
+                categoryHead.addView(icon,new LinearLayout.LayoutParams(dp(24),dp(44)));
+                EditText categoryName=inlineCategoryTitle(shopping,category);
+                categoryHead.addView(categoryName,new LinearLayout.LayoutParams(0,dp(48),1));
+                TextView heading=label(Integer.toString(count));heading.setPadding(0,0,0,0);heading.setGravity(Gravity.CENTER);heading.setTextColor(mutedColor());
+                categoryHead.addView(heading,new LinearLayout.LayoutParams(dp(24),dp(44)));
+                Button expand=button(open?"⌄":"›",()->{
                     if(expandedGoodsCategories.contains(groupKey))expandedGoodsCategories.remove(groupKey);
                     else expandedGoodsCategories.add(groupKey);
                     render();
-                });
-                LinearLayout categoryHead=new LinearLayout(this);
-                categoryHead.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
-                if(ApiClient.canMutate())categoryHead.addView(button("⋯",()->categoryActions(shopping,category)),
-                    new LinearLayout.LayoutParams(dp(44),dp(44)));
-                section.addView(categoryHead);
+                });expand.setContentDescription(category+"を開閉");expand.setPadding(0,0,0,0);
+                categoryHead.addView(expand,new LinearLayout.LayoutParams(dp(36),dp(44)));
+                if(ApiClient.canMutate()&&!"未分類".equals(category)) {
+                    Button more=button("⋯",()->categoryActions(shopping,category));more.setPadding(0,0,0,0);
+                    categoryHead.addView(more,new LinearLayout.LayoutParams(dp(32),dp(44)));
+                }
+                section.addView(categoryHead);installGoodsDropTarget(section,shopping,category);
                 if(open) {
                     section.addView(group);
                     if(!goodsCompleted&&ApiClient.canMutate())section.addView(goodsComposer(shopping,category,group,rows,heading));
@@ -1336,6 +1343,112 @@ public final class MainActivity extends Activity {
                 addPanel(section);
             }
         }
+    }
+    private void installCategoryGrip(TextView grip,boolean shopping,String category) {
+        if(!ApiClient.canMutate()||"未分類".equals(category))return;
+        grip.setOnLongClickListener(v->{
+            if(!ApiClient.canMutate()||!categoryOrder(shopping).contains(category))return false;
+            return v.startDragAndDrop(android.content.ClipData.newPlainText("category",""),
+                new android.view.View.DragShadowBuilder(v),new String[]{shopping?"shopping":"item",category},0);
+        });
+    }
+    private void addGoodsRowGrip(LinearLayout line,boolean shopping,int id) {
+        if(!ApiClient.canMutate()||id<=0)return;
+        TextView grip=label("≡");grip.setPadding(0,0,0,0);grip.setGravity(Gravity.CENTER);
+        grip.setContentDescription("項目"+id+"のカテゴリ移動");
+        grip.setOnLongClickListener(v->{
+            if(!ApiClient.canMutate())return false;
+            return v.startDragAndDrop(android.content.ClipData.newPlainText("goods",""),
+                new android.view.View.DragShadowBuilder(line),new String[]{shopping?"shopping":"item","row",Integer.toString(id)},0);
+        });
+        line.addView(grip,0,new LinearLayout.LayoutParams(dp(24),dp(44)));
+    }
+    private void installGoodsDropTarget(LinearLayout section,boolean shopping,String category) {
+        section.setOnDragListener((v,event)->{
+            if(!ApiClient.canMutate()||!(event.getLocalState() instanceof String[]))return false;
+            String[] drag=(String[])event.getLocalState();
+            if(drag.length<2||!drag[0].equals(shopping?"shopping":"item"))return false;
+            if(drag.length==2&&("未分類".equals(category)||drag[1].equals(category)))return false;
+            if(event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED) {
+                v.setBackground(shape(softColor(),accentColor(),16));return true;
+            }
+            if(event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||event.getAction()==android.view.DragEvent.ACTION_DRAG_ENDED)
+                v.setBackground(shape(surfaceColor(),lineColor(),16));
+            if(event.getAction()==android.view.DragEvent.ACTION_DROP) {
+                v.setBackground(shape(surfaceColor(),lineColor(),16));
+                if(drag.length==2)repositionCategory(shopping,drag[1],category);
+                else if(drag.length==3&&"row".equals(drag[1])) {
+                    try{moveGoodsCategory(shopping,Integer.parseInt(drag[2]),category);}catch(NumberFormatException ignored){}
+                }
+            }
+            return true;
+        });
+    }
+    private void moveGoodsCategory(boolean shopping,int id,String target) {
+        if(snapshot==null||!ApiClient.canMutate()||id<=0)return;
+        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items");JSONObject selected=null;
+        if(rows!=null)for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&row.optInt("id")==id){selected=row;break;}}
+        if(selected==null||category(selected).equals(target))return;
+        final JSONObject row=selected;int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        network.execute(()->{
+            try{
+                if(epoch!=sessionEpoch)return;
+                JSONObject response=ApiClient.request(shopping?"/api/shopping":"/api/item",
+                    new JSONObject().put("csrf",csrf).put("action","update_category").put("id",id).put("category","未分類".equals(target)?"":target));
+                if(!response.optBoolean("ok"))throw new Exception("move");
+                runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                    try{row.put("category","未分類".equals(target)?"":target);}catch(Exception ignored){}
+                    expandedGoodsCategories.add(epoch+":"+(shopping?"shopping":"item")+":"+target);load();
+                });
+            }catch(Exception error){runOnUiThread(()->{if(epoch==sessionEpoch)Toast.makeText(this,"移動できませんでした。元のカテゴリを維持しています",Toast.LENGTH_SHORT).show();});}
+        });
+    }
+    private EditText inlineCategoryTitle(boolean shopping,String original) {
+        EditText input=new EditText(this);input.setText(original);input.setTextSize(17);input.setTextColor(textColor());
+        input.setTypeface(null,android.graphics.Typeface.BOLD);input.setSingleLine(true);input.setPadding(dp(2),0,dp(2),0);
+        input.setBackgroundColor(Color.TRANSPARENT);input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(255)});
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);input.setFocusable(false);input.setFocusableInTouchMode(false);
+        input.setContentDescription(original+"のカテゴリ名。タップして編集");
+        input.setOnClickListener(v->{if(!ApiClient.canMutate()||"未分類".equals(original))return;
+            input.setFocusableInTouchMode(true);input.requestFocus();input.setSelection(input.length());
+            ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(input,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
+        input.setOnEditorActionListener((v,action,event)->{if(action!=android.view.inputmethod.EditorInfo.IME_ACTION_DONE)return false;input.clearFocus();
+            ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);return true;});
+        input.setOnFocusChangeListener((v,focused)->{
+            if(focused)return;input.setFocusable(false);input.setFocusableInTouchMode(false);
+            String name=input.getText().toString().trim();
+            if(name.isEmpty()||name.equals(original)||"未分類".equals(name)||snapshot==null||!ApiClient.canMutate()){input.setText(original);return;}
+            int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");input.setEnabled(false);
+            network.execute(()->{
+                try{
+                    if(epoch!=sessionEpoch)return;
+                    JSONObject response=ApiClient.request(shopping?"/api/shopping-category-mutation":"/api/item",
+                        new JSONObject().put("csrf",csrf).put("kind",shopping?"shopping":"item").put("action",shopping?"rename":"category_rename").put("name",original).put("new_name",name));
+                    if(!response.optBoolean("ok"))throw new Exception("rename");
+                    runOnUiThread(()->{if(epoch!=sessionEpoch)return;applyCategoryRename(shopping,original,response.optString("name",name));load();});
+                }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;input.setText(original);input.setEnabled(true);
+                    Toast.makeText(this,"カテゴリ名を保存できませんでした。元の名前に戻しました",Toast.LENGTH_SHORT).show();});}
+            });
+        });
+        return input;
+    }
+    private void applyCategoryRename(boolean shopping,String oldName,String newName) {
+        try{
+            JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items");
+            if(rows!=null)for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&category(row).equalsIgnoreCase(oldName))row.put("category",newName);}
+            JSONObject catalog=shopping?shoppingCategories:itemCategories;
+            if(catalog!=null)for(String key:new String[]{"categories","order"}){
+                JSONArray before=catalog.optJSONArray(key),after=new JSONArray();java.util.HashSet<String> seen=new java.util.HashSet<>();
+                if(before!=null)for(int i=0;i<before.length();i++){String value=before.optString(i);if(value.equalsIgnoreCase(oldName))value=newName;
+                    if(seen.add(value.toLowerCase(java.util.Locale.ROOT)))after.put(value);}
+                catalog.put(key,after);
+            }
+            String prefix=sessionEpoch+":"+(shopping?"shopping":"item")+":";
+            if(expandedGoodsCategories.remove(prefix+oldName))expandedGoodsCategories.add(prefix+newName);
+            String[] draft=goodsComposerDrafts.remove(prefix+oldName);
+            if(draft!=null&&!goodsComposerDrafts.containsKey(prefix+newName))goodsComposerDrafts.put(prefix+newName,draft);
+        }catch(Exception ignored){}
     }
     private EditText inlineTitle(String type,int id,JSONObject row,String field) {
         EditText title=new EditText(this);title.setText(row.optString(field));
@@ -1447,7 +1560,7 @@ public final class MainActivity extends Activity {
                         line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
                         line.addView(inlineTitle(shopping?"shopping":"item",id,row,"name"),new LinearLayout.LayoutParams(0,dp(52),1));
                         line.addView(button("ⓘ",()->editGoods(shopping,row)),new LinearLayout.LayoutParams(dp(44),dp(44)));
-                        group.addView(line);categoryTitle.setText((shopping?"🛒  ":"🎒  ")+category+"   "+group.getChildCount()+"   ⌄");
+                        addGoodsRowGrip(line,shopping,id);group.addView(line);categoryTitle.setText(Integer.toString(group.getChildCount()));
                         name.setText("");memo.setText("");url.setText("");
                         values[3]=java.util.UUID.randomUUID().toString();details.setVisibility(android.view.View.GONE);
                         saving[0]=false;name.setEnabled(true);memo.setEnabled(true);url.setEnabled(true);status.setText("");name.requestFocus();
