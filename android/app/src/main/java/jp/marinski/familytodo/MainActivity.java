@@ -604,23 +604,40 @@ public final class MainActivity extends Activity {
         int offset=month.atDay(1).getDayOfWeek().getValue()%7;
         int weeks=(offset+month.lengthOfMonth()+6)/7;
         for(int row=0;row<weeks;row++) {
+            int eventRows=1;boolean hasOverflow=false,hasAccessory=false,hasStamps=false;
+            for(int col=0;col<7;col++) {
+                LocalDate day=month.atDay(1).plusDays(row*7+col-offset);int events=0;
+                for(int n=0;n<tasks.length();n++) {
+                    JSONObject task=tasks.optJSONObject(n);if(task==null||!taskOnDay(task,day.toString()))continue;
+                    if("EVENT".equalsIgnoreCase(task.optString("task_kind"))&&task.optInt("calendar_visible",1)==1)events++;
+                    else if(!"EVENT".equalsIgnoreCase(task.optString("task_kind")))hasAccessory=true;
+                }
+                eventRows=Math.max(eventRows,Math.min(4,events));hasOverflow|=events>4;
+                hasAccessory|=calendarGoodsCount(snapshot.optJSONArray("shopping"),day,"due_date")+calendarGoodsCount(snapshot.optJSONArray("items"),day,"due_at")>0;
+                hasStamps|=stampsOnDay(day.toString()).length()>0;
+            }
+            int weekHeight=Math.max(76,48+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?18:0));
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset+1;
                 LinearLayout cell=new LinearLayout(this);cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setPadding(dp(2),dp(4),dp(2),dp(2));
                 cell.setBackground(shape(surfaceColor(),lineColor(),0));
-                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(96),1);
+                LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(weekHeight),1);
                 week.addView(cell,slot);
-                if(date<1||date>month.lengthOfMonth())continue;
-                LocalDate day=month.atDay(date);
-                boolean selected=day.equals(selectedDay);
-                TextView number=new TextView(this);number.setText(Integer.toString(date));
+                LocalDate day=month.atDay(1).plusDays(date-1);
+                boolean inMonth=YearMonth.from(day).equals(month);
+                String holiday=CalendarHolidays.name(day);
+                boolean selected=day.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
+                TextView number=new TextView(this);number.setText(Integer.toString(day.getDayOfMonth()));
                 number.setTextSize(15);number.setTypeface(null,android.graphics.Typeface.BOLD);
                 number.setGravity(Gravity.CENTER);
-                number.setTextColor(selected?Color.WHITE:column==0?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
+                number.setTextColor(selected?Color.WHITE:!inMonth?mutedColor():column==0||holiday!=null?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
                 if(selected)number.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
                 cell.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
+                TextView holidayLabel=new TextView(this);holidayLabel.setText(holiday==null?"":holiday);holidayLabel.setTextSize(8);
+                holidayLabel.setTextColor(Color.parseColor("#FB7185"));holidayLabel.setSingleLine(true);holidayLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                cell.addView(holidayLabel,new LinearLayout.LayoutParams(-1,dp(13)));
                 ArrayList<JSONObject> dayRows=new ArrayList<>(),events=new ArrayList<>();
                 int taskCount=0;
                 for(int n=0;n<tasks.length();n++) {
@@ -634,7 +651,7 @@ public final class MainActivity extends Activity {
                     int allDay=Integer.compare(right.optInt("all_day"),left.optInt("all_day"));
                     return allDay!=0?allDay:dateValue(left,"start_at","due_at").compareTo(dateValue(right,"start_at","due_at"));
                 });
-                for(int n=0;n<Math.min(2,events.size());n++) {
+                for(int n=0;n<Math.min(4,events.size());n++) {
                     JSONObject task=events.get(n);TextView chip=new TextView(this);
                     String at=dateValue(task,"start_at","due_at"),first=at.length()>=10?at.substring(0,10):"";
                     chip.setText((task.optInt("all_day")==1||at.length()<16||!first.equals(day.toString())?"":at.substring(11,16)+" ")+task.optString("title"));
@@ -643,12 +660,14 @@ public final class MainActivity extends Activity {
                     chip.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
                     cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(17)));
                 }
-                if(events.size()>2) {
-                    TextView more=new TextView(this);more.setText("＋"+(events.size()-2)+"件");more.setTextSize(8);more.setTextColor(mutedColor());
+                if(events.size()>4) {
+                    TextView more=new TextView(this);more.setText("＋"+(events.size()-4)+"件");more.setTextSize(8);more.setTextColor(mutedColor());
                     cell.addView(more,new LinearLayout.LayoutParams(-1,dp(13)));
                 }
-                if(taskCount>0) {
-                    TextView taskLabel=new TextView(this);taskLabel.setText("✅ "+taskCount+"件");taskLabel.setSingleLine(true);
+                int shoppingCount=calendarGoodsCount(snapshot.optJSONArray("shopping"),day,"due_date");
+                int itemCount=calendarGoodsCount(snapshot.optJSONArray("items"),day,"due_at");
+                if(taskCount+shoppingCount+itemCount>0) {
+                    TextView taskLabel=new TextView(this);taskLabel.setText((taskCount>0?"✅":"")+(shoppingCount>0?"🛒":"")+(itemCount>0?"🎒":"")+" "+(taskCount+shoppingCount+itemCount)+"件");taskLabel.setSingleLine(true);
                     taskLabel.setTextSize(9);taskLabel.setTextColor(Color.parseColor("#86EFAC"));
                     cell.addView(taskLabel,new LinearLayout.LayoutParams(-1,dp(13)));
                 }
@@ -659,7 +678,7 @@ public final class MainActivity extends Activity {
                     mark.setTextColor(accentColor());cell.addView(mark);
                 }
                 cell.setContentDescription(day.toString()+" 予定"+count+"件");
-                cell.setOnClickListener(v -> {selectedDay=day;navigate("goods");});
+                cell.setOnClickListener(v -> {selectedDay=day;month=YearMonth.from(day);navigate("goods");});
             }
             calendarPanel.addView(week);
         }
@@ -706,6 +725,13 @@ public final class MainActivity extends Activity {
             }
         }
         if(dayTasks.isEmpty()) content.addView(label("予定はありません"));
+    }
+    private int calendarGoodsCount(JSONArray rows,LocalDate day,String dateField) {
+        int count=0;if(rows!=null)for(int i=0;i<rows.length();i++) {
+            JSONObject row=rows.optJSONObject(i);if(row==null)continue;
+            String date=row.optString(dateField,"");if(date.length()>=10&&date.substring(0,10).equals(day.toString()))count++;
+        }
+        return count;
     }
     private LinearLayout wrapView(android.view.View child) {
         LinearLayout holder=panel();holder.addView(child);return holder;

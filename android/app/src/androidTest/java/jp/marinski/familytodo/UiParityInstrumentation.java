@@ -42,6 +42,10 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("ACTIVE".equals(GoodsCategoryState.state(1,1,"invalid",midnight)),"content keeps category active");
             check("DISABLED".equals(GoodsCategoryState.state(0,1,"invalid",midnight)),"disabled takes precedence");
             check(GoodsCategoryState.archiveAt("2026-09-30 22:59:00")==0,"timezone required");
+            check("国民の休日".equals(CalendarHolidays.name(LocalDate.parse("2026-09-22"))),"Web citizen holiday");
+            check("振替休日".equals(CalendarHolidays.name(LocalDate.parse("2026-05-06"))),"Web substitute holiday");
+            check("成人の日".equals(CalendarHolidays.name(LocalDate.parse("2026-01-12"))),"Web Monday holiday");
+            check(CalendarHolidays.name(LocalDate.parse("2026-09-30"))==null,"ordinary weekday");
             ApiClient.fixtureTransport=this::response;
             activity=(MainActivity)startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             String day=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString();
@@ -51,7 +55,9 @@ public final class UiParityInstrumentation extends Instrumentation {
                 .put("tasks",new JSONArray().put(new JSONObject().put("id",10).put("title","今日のタスク").put("task_kind","TASK").put("status","pending").put("due_at",day))
                     .put(new JSONObject().put("id",11).put("title","予定のテスト").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 09:00:00").put("calendar_color","#22C55E"))
                     .put(new JSONObject().put("id",12).put("title","二つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 10:00:00").put("calendar_color","#EC4899"))
-                    .put(new JSONObject().put("id",13).put("title","三つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 11:00:00").put("calendar_color","#38BDF8")))
+                    .put(new JSONObject().put("id",13).put("title","三つ目の予定").put("task_kind","EVENT").put("status","pending").put("start_at",day+" 11:00:00").put("calendar_color","#38BDF8"))
+                    .put(new JSONObject().put("id",14).put("title","四つ目の予定").put("task_kind","EVENT").put("start_at",day+" 12:00:00"))
+                    .put(new JSONObject().put("id",15).put("title","五つ目の予定").put("task_kind","EVENT").put("start_at",day+" 13:00:00")))
                 .put("shopping",new JSONArray("[{\"id\":1,\"name\":\"買い物のテスト\",\"category\":\"スーパー\",\"status\":\"pending\",\"quantity\":\"1\"}]"))
                 .put("items",new JSONArray("[{\"id\":2,\"name\":\"持ち物のテスト\",\"category\":\"保育園\",\"status\":\"pending\"}]"));
             JSONObject family=new JSONObject().put("date",day).put("familyId",1).put("memberId",1)
@@ -118,9 +124,9 @@ public final class UiParityInstrumentation extends Instrumentation {
             screenshot("checklist");
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");
-            onUi(()->{View cell=findDescription(root(),day+" 予定4件");check(cell!=null,"today's calendar cell exists");
+            onUi(()->{View cell=findDescription(root(),day+" 予定6件");check(cell!=null,"today's calendar cell exists");
                 check(((ViewGroup)cell.getParent()).indexOfChild(cell)==LocalDate.parse(day).getDayOfWeek().getValue()%7,"calendar date matches weekday");});
-            check(hasContaining("二つ目の予定"),"second calendar event visible");check(hasText("＋1件"),"calendar overflow count visible");
+            check(hasContaining("二つ目の予定"),"second calendar event visible");check(hasText("＋1件"),"calendar overflow count visible");check(hasContaining("四つ目の予定"),"Web four-event cap");
             screenshot("calendar");
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
