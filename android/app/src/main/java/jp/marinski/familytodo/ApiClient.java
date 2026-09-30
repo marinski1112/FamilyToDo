@@ -31,10 +31,11 @@ final class ApiClient {
             Bitmap fixture=Bitmap.createBitmap(100,100,Bitmap.Config.ARGB_8888);fixture.eraseColor(android.graphics.Color.parseColor("#6366F1"));return fixture;
         }
         boolean messagePhoto=path.matches("/api/messages\\?photo=[1-9][0-9]*");
+        boolean stickerPhoto=path.matches("/api/calendar-sticker-media\\?asset=[1-9][0-9]*");
         boolean familyLogPhoto=path.matches("/api/family-log-media\\?media=[1-9][0-9]*");
         if (!path.startsWith("/") || path.startsWith("//") || path.contains("\\") ||
             path.contains("..") || path.contains("#") || path.contains(":") ||
-            !(messagePhoto || familyLogPhoto || path.matches("/api/calendar-sticker-media\\?asset=[1-9][0-9]*") || path.startsWith("/api/calendar-stamp-media?") ||
+            !(messagePhoto || familyLogPhoto || stickerPhoto || path.startsWith("/api/calendar-stamp-media?") ||
               (!path.contains("?") && (path.endsWith(".png") || path.endsWith(".webp") || path.endsWith(".gif")))))
             throw new IllegalArgumentException("Invalid image path");
         forbidFixtureNetwork();
@@ -52,7 +53,7 @@ final class ApiClient {
                 byte[] buffer=new byte[4096]; int count;
                 while((count=stream.read(buffer))!=-1) {
                     data.write(buffer,0,count);
-                    if(data.size()>(messagePhoto||familyLogPhoto?4*1024*1024:1_000_000)) throw new IllegalStateException("Image too large");
+                    if(data.size()>(messagePhoto||familyLogPhoto||stickerPhoto?4*1024*1024:1_000_000)) throw new IllegalStateException("Image too large");
                 }
                 BitmapFactory.Options options=new BitmapFactory.Options();
                 options.inJustDecodeBounds=true;

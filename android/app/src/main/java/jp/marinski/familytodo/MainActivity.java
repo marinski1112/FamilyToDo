@@ -879,16 +879,16 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(day+" 日付を飾る").setItems(new String[]{"スタンプを置く","背景ステッカー","予定を見る"},(d,w)->{selectedDay=day;if(w==0)addStamp();else if(w==1)chooseCalendarBackground(day);else showCalendarDayPreview(day,rows);}).setNegativeButton("閉じる",null).show();
     }
     private void chooseCalendarBackground(LocalDate day) {
-        JSONObject data=stickerMonths.get(month.toString());JSONArray options=data==null?null:data.optJSONArray("options");
+        int chooserEpoch=sessionEpoch;JSONObject data=stickerMonths.get(month.toString());JSONArray options=data==null?null:data.optJSONArray("options");
         if(options==null){Toast.makeText(this,"背景ステッカーを取得できませんでした。更新してください。",Toast.LENGTH_LONG).show();return;}
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(8),dp(16),dp(8));
         Spinner scope=new Spinner(this);scope.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"家族に公開","自分だけ"}));box.addView(scope);
         TextView error=label("");box.addView(error);ScrollView scroll=new ScrollView(this);LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);scroll.addView(list);box.addView(scroll,new LinearLayout.LayoutParams(-1,dp(260)));
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(day+" 背景ステッカー").setView(box).setNegativeButton("閉じる",null).create();boolean[] saving={false};
-        for(int i=0;i<options.length();i++){JSONObject option=options.optJSONObject(i);if(option==null)continue;LinearLayout row=new LinearLayout(this);ImageView image=new ImageView(this);bindDecorationImage(image,option.optString("url"));row.addView(image,new LinearLayout.LayoutParams(dp(48),dp(48)));row.addView(button(option.optString("name"),()->saveCalendarBackground(day,scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY",option.optInt("id"),dialog,error,saving)));list.addView(row);}
+        for(int i=0;i<options.length();i++){JSONObject option=options.optJSONObject(i);if(option==null)continue;LinearLayout row=new LinearLayout(this);ImageView image=new ImageView(this);bindDecorationImage(image,option.optString("url"));row.addView(image,new LinearLayout.LayoutParams(dp(48),dp(48)));row.addView(button(option.optString("name"),()->{if(chooserEpoch!=sessionEpoch){dialog.dismiss();return;}saveCalendarBackground(day,scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY",option.optInt("id"),dialog,error,saving);}));list.addView(row);}
         if(options.length()==0)list.addView(label("背景ステッカーがありません。管理画面で登録できます。"));
         box.addView(button("選択した公開範囲の背景を外す",()->{
-            String visibility=scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY";JSONArray days=data.optJSONArray("days");boolean removable=false;
+            if(chooserEpoch!=sessionEpoch){dialog.dismiss();return;}String visibility=scope.getSelectedItemPosition()==1?"PRIVATE":"FAMILY";JSONArray days=data.optJSONArray("days");boolean removable=false;
             if(days!=null)for(int i=0;i<days.length();i++){JSONObject row=days.optJSONObject(i);if(row!=null&&day.toString().equals(row.optString("date"))&&visibility.equals(row.optString("scope"))&&row.optBoolean("canRemove"))removable=true;}
             if(!removable){error.setText("この公開範囲には削除できる背景がありません。");return;}saveCalendarBackground(day,visibility,0,dialog,error,saving);
         }));dialog.show();

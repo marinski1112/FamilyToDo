@@ -23,6 +23,8 @@ public final class UiParityInstrumentation extends Instrumentation {
     private JSONObject snapshot;
     private int nextId=100;
     private int checks;
+    private volatile int backgroundWrites;
+    private volatile String lastBackgroundScope,lastBackgroundMethod;
     private volatile int failedMoves;
     @Override public void onCreate(Bundle arguments){super.onCreate(arguments);start();}
     @Override public void onStart(){
@@ -150,6 +152,13 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(hasText("+1"),"overlapping stamp overflow");
             onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
             screenshot("calendar");
+            testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
+            check("PRIVATE".equals(lastBackgroundScope),"background retains scope on failed save");
+            testBackgroundSave(LocalDate.parse(day),"FAMILY",1,true);
+            check("POST".equals(lastBackgroundMethod)&&"FAMILY".equals(lastBackgroundScope),"background family placement request");
+            testBackgroundSave(LocalDate.parse(day),"PRIVATE",0,true);
+            check("DELETE".equals(lastBackgroundMethod)&&"PRIVATE".equals(lastBackgroundScope),"background private removal request");
+            ApiClient.setMutationsEnabled(false);int previousWrites=backgroundWrites;testBackgroundSave(LocalDate.parse(day),"FAMILY",1,false);check(backgroundWrites==previousWrites,"read-only background cannot write");ApiClient.setMutationsEnabled(true);
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
             navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
             navigate("伝言");check(hasText("伝言のテスト"),"message renders");check(findHintOnUi("メッセージ")!=null,"bottom composer exists");
@@ -164,8 +173,15 @@ public final class UiParityInstrumentation extends Instrumentation {
             Bundle results=new Bundle();results.putString("stream","FAILURES!!!\n"+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,results);
         }
     }
+    private void testBackgroundSave(LocalDate day,String scope,int asset,boolean success)throws Exception{
+        AtomicReference<android.app.AlertDialog> dialog=new AtomicReference<>();AtomicReference<TextView> error=new AtomicReference<>();boolean[] saving={false};int previous=backgroundWrites;
+        onUi(()->{try{android.app.AlertDialog popup=new android.app.AlertDialog.Builder(activity).setTitle("背景保存テスト").create();popup.show();dialog.set(popup);TextView message=new TextView(activity);error.set(message);Method save=MainActivity.class.getDeclaredMethod("saveCalendarBackground",LocalDate.class,String.class,int.class,android.app.AlertDialog.class,TextView.class,boolean[].class);save.setAccessible(true);save.invoke(activity,day,scope,asset,popup,message,saving);}catch(Exception e){throw new RuntimeException(e);}});
+        if(ApiClient.canMutate()){for(int i=0;i<100&&backgroundWrites==previous;i++)Thread.sleep(20);settle();onUi(()->{if(success)check(!dialog.get().isShowing(),"successful background save closes chooser");else{check(dialog.get().isShowing(),"failed background save retains chooser");check(!saving[0]&&error.get().getText().toString().contains("保存できません"),"failed background save enables retry");}});}
+        onUi(()->dialog.get().dismiss());
+    }
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.equals("/api/calendar-stickers")){backgroundWrites++;lastBackgroundScope=body.optString("visibilityScope");lastBackgroundMethod=method;if(body.optInt("assetId")==99)throw new IllegalStateException("synthetic background save failure");return new JSONObject().put("ok",true);}
         if(path.equals("/api/checklist/inline-title")){
             if(body.optString("title").equals("失敗ケース"))throw new IllegalStateException("synthetic failure");
             return new JSONObject().put("ok",true).put("title",body.optString("title"));
