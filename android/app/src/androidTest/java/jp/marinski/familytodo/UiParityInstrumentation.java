@@ -102,6 +102,10 @@ public final class UiParityInstrumentation extends Instrumentation {
             settle();check(hasContaining("今日のタスク"),"home contains today's task");
             check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
+            testMonthSwipes("goods");
+            clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"items visible while shopping selected");
+            clickText("🎒 持ち物");check(hasText("スーパー"),"shopping remains visible while item selected");
+            clickText("🛒 買い物");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
             clickDescription("タスクを検索");
             onUi(()->{EditText search=findHint(root(),"タスクを検索");search.setText("一致しない検索");View title=findText(root(),"今日のタスク");check(((View)title.getParent()).getVisibility()==View.GONE,"task search hides nonmatching row");search.setText(" 今日のタスク ");check(((View)title.getParent()).getVisibility()==View.VISIBLE,"task search trims query and restores match");});
@@ -157,6 +161,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             });
             check(hasText("+1"),"overlapping stamp overflow");
             onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
+            testMonthSwipes("calendar");
             screenshot("calendar");
             testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
             check("PRIVATE".equals(lastBackgroundScope),"background retains scope on failed save");
@@ -172,6 +177,7 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(bubble.getWidth()<stack.getWidth(),"own bubble fits short text");
                 check(bubble.getRight()==stack.getWidth(),"own bubble aligned right");
             });screenshot("messages");
+            testMessageScroll(messages);
             testChildComposer();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);
             Bundle results=new Bundle();results.putString("stream","\nOK (1 test)\n");finish(Activity.RESULT_OK,results);
@@ -232,6 +238,41 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(path.equals("/api/task-parent-completion"))return new JSONObject().put("ok",true).put("incomplete_children",0);
         if(path.equals("/api/toggle"))return new JSONObject().put("ok",true);
         throw new IllegalStateException("Unconfigured fixture request: "+path);
+    }
+    private void testMonthSwipes(String screen)throws Exception {
+        AtomicReference<YearMonth> initial=new AtomicReference<>();
+        onUi(()->{try{initial.set((YearMonth)value("month"));field("selectedDay",initial.get().atEndOfMonth());}catch(Exception e){throw new RuntimeException(e);}});
+        swipePage(0.80f,0.20f,12,12);
+        onUi(()->{try{check(value("month").equals(initial.get().plusMonths(1)),screen+" left swipe advances month");
+            LocalDate day=(LocalDate)value("selectedDay");check(day.getDayOfMonth()==(screen.equals("calendar")?1:Math.min(initial.get().lengthOfMonth(),initial.get().plusMonths(1).lengthOfMonth())),screen+" month boundary date valid");}catch(Exception e){throw new RuntimeException(e);}});
+        swipePage(0.20f,0.80f,12,12);
+        onUi(()->{try{check(value("month").equals(initial.get()),screen+" right swipe returns month");}catch(Exception e){throw new RuntimeException(e);}});
+        swipePage(0.50f,0.54f,12,12);
+        swipePage(0.50f,0.50f,12,100);
+        onUi(()->{try{check(value("month").equals(initial.get()),screen+" short and vertical gestures keep month");field("selectedDay",LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));invoke("render");((android.widget.ScrollView)value("pageScroll")).scrollTo(0,0);}catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void swipePage(float from,float to,int fromY,int toY)throws Exception {
+        onUi(()->{try{
+            android.widget.ScrollView scroll=(android.widget.ScrollView)value("pageScroll");
+            float density=activity.getResources().getDisplayMetrics().density;
+            long time=android.os.SystemClock.uptimeMillis();
+            for(int i=0;i<=8;i++){
+                float ratio=i/8f;int action=i==0?android.view.MotionEvent.ACTION_DOWN:i==8?android.view.MotionEvent.ACTION_UP:android.view.MotionEvent.ACTION_MOVE;
+                android.view.MotionEvent event=android.view.MotionEvent.obtain(time,time+i*25,action,scroll.getWidth()*(from+(to-from)*ratio),(fromY+(toY-fromY)*ratio)*density,0);
+                scroll.dispatchTouchEvent(event);event.recycle();
+            }
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testMessageScroll(JSONArray original)throws Exception {
+        onUi(()->{try{JSONArray rows=new JSONArray();for(int i=1;i<=35;i++)rows.put(new JSONObject().put("id",i).put("senderId",1).put("text","伝言スクロール "+i).put("createdAt","2026-10-01 10:00:00"));field("messages",rows);field("messageScrollLatest",true);invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+        onUi(()->{try{android.widget.ScrollView scroll=(android.widget.ScrollView)value("pageScroll");check(scroll.getScrollY()>=scroll.getChildAt(0).getHeight()-scroll.getHeight()-2,"messages initially at latest bottom");scroll.scrollTo(0,300);}catch(Exception e){throw new RuntimeException(e);}});
+        AtomicReference<Integer> y=new AtomicReference<>();
+        onUi(()->{try{y.set(((android.widget.ScrollView)value("pageScroll")).getScrollY());invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+        onUi(()->{try{check(((android.widget.ScrollView)value("pageScroll")).getScrollY()==y.get(),"message refresh keeps history reading position");
+            JSONArray rows=(JSONArray)value("messages"),combined=new JSONArray().put(new JSONObject().put("id",99).put("senderId",1).put("text","以前の伝言テスト").put("createdAt","2026-09-30 10:00:00"));
+            for(int i=0;i<rows.length();i++)combined.put(rows.optJSONObject(i));field("messages",combined);invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+        onUi(()->{try{check(((android.widget.ScrollView)value("pageScroll")).getScrollY()>y.get(),"older prepend preserves visible message anchor");field("messages",original);field("messageScrollLatest",true);invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
     }
     private void navigate(String name)throws Exception{
         onUi(()->{TextView label=findText(root(),name);check(label!=null,"navigation label "+name);((View)label.getParent()).performClick();});settle();

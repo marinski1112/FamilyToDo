@@ -50,6 +50,9 @@ public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
     private LinearLayout root, content, pageDock;
+    private ScrollView pageScroll;
+    private boolean messageScrollLatest=true;
+    private int messageRenderSerial;
     private boolean checklistEvents=false, checklistCompleted=false;
     private int familyLogSubjectId=0;
     private String messageDraft="";
@@ -182,8 +185,8 @@ public final class MainActivity extends Activity {
         if(tab.equals("calendar")) {
             LinearLayout controls=new LinearLayout(this);
             controls.setPadding(dp(12),dp(6),dp(12),dp(6));
-            Button previous=button("前月",() -> {month=month.minusMonths(1);selectedDay=month.atDay(1);load();});
-            Button next=button("翌月",() -> {month=month.plusMonths(1);selectedDay=month.atDay(1);load();});
+            Button previous=button("前月",() -> {changeMonth(-1);});
+            Button next=button("翌月",() -> {changeMonth(1);});
             Button refresh=button("更新",this::load);
             Button settings=button("設定 ⋮",this::showSettingsActions);
             for(Button control:new Button[]{previous,next,refresh,settings}) {
@@ -192,7 +195,7 @@ public final class MainActivity extends Activity {
             }
             root.addView(controls);
         }
-        ScrollView scroll=new ScrollView(this);
+        ScrollView scroll=new MonthSwipeScroll();pageScroll=scroll;
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(14),dp(4),dp(14),dp(24));
         scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -201,6 +204,56 @@ public final class MainActivity extends Activity {
         root.addView(bottomNavigation());
         applySystemBarInsets(root);setContentView(root);
         render();
+    }
+    private void changeMonth(int delta) {
+        if(!tab.equals("calendar")&&!tab.equals("goods"))return;
+        month=month.plusMonths(delta);
+        selectedDay=month.atDay(tab.equals("calendar")?1:Math.min(selectedDay.getDayOfMonth(),month.lengthOfMonth()));
+        load();
+    }
+    private final class MonthSwipeScroll extends ScrollView {
+        private float startX,startY;
+        private boolean horizontal,blocked;
+        MonthSwipeScroll(){super(MainActivity.this);}
+        @Override public boolean onInterceptTouchEvent(android.view.MotionEvent event) {
+            int action=event.getActionMasked();
+            if(action==android.view.MotionEvent.ACTION_DOWN){
+                startX=event.getX();startY=event.getY();horizontal=false;
+                blocked=(!tab.equals("calendar")&&!tab.equals("goods"))||sensitiveTarget(this,event.getX(),event.getY());
+            } else if(event.getPointerCount()>1)blocked=true;
+            if(!blocked&&action==android.view.MotionEvent.ACTION_MOVE){
+                float dx=Math.abs(event.getX()-startX),dy=Math.abs(event.getY()-startY);
+                int slop=android.view.ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+                if(dy>slop&&dy>=dx)blocked=true;
+                else if(dx>slop&&dx>dy*1.5f){horizontal=true;return true;}
+            }
+            if(horizontal)return true;
+            return super.onInterceptTouchEvent(event);
+        }
+        @Override public boolean onTouchEvent(android.view.MotionEvent event) {
+            if(event.getPointerCount()>1)blocked=true;
+            if(horizontal){
+                if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){
+                    float dx=event.getX()-startX,dy=event.getY()-startY;
+                    horizontal=false;
+                    if(!blocked&&Math.abs(dx)>dp(60)&&Math.abs(dx)>Math.abs(dy)*1.5f)changeMonth(dx<0?1:-1);
+                } else if(event.getActionMasked()==android.view.MotionEvent.ACTION_CANCEL)horizontal=false;
+                return true;
+            }
+            return super.onTouchEvent(event);
+        }
+        private boolean sensitiveTarget(android.view.View view,float x,float y){
+            if(view instanceof EditText||view instanceof Spinner||view instanceof HorizontalScrollView||view instanceof android.widget.SeekBar)return true;
+            if(view instanceof android.view.ViewGroup){
+                android.view.ViewGroup group=(android.view.ViewGroup)view;
+                for(int i=group.getChildCount()-1;i>=0;i--){
+                    android.view.View child=group.getChildAt(i);
+                    float cx=x+view.getScrollX()-child.getLeft(),cy=y+view.getScrollY()-child.getTop();
+                    if(child.getVisibility()==android.view.View.VISIBLE&&cx>=0&&cy>=0&&cx<child.getWidth()&&cy<child.getHeight())return sensitiveTarget(child,cx,cy);
+                }
+            }
+            return false;
+        }
     }
     private LinearLayout bottomNavigation() {
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(2),dp(6),dp(2),dp(6));
@@ -229,6 +282,7 @@ public final class MainActivity extends Activity {
     private void navigate(String destination) {
         if(destination.equals(tab)){if(pageWeb!=null){showNative();if(!BuildConfig.UI_TEST_MODE)load();}return;}
         tab=destination;
+        if(destination.equals("messages"))messageScrollLatest=true;
         if(destination.equals("home")) {
             selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
             month=YearMonth.from(selectedDay);
@@ -303,7 +357,7 @@ public final class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if(epoch!=sessionEpoch) return;
                             if(shopping) shoppingCategories=categories; else itemCategories=categories;
-                            if(tab.equals("goods")&&goodsKind.equals(shopping?"shopping":"item")) render();
+                            if(tab.equals("goods")) render();
                         });
                     } catch(Exception ignored) { /* The checklist remains available. */ }
                 }
@@ -350,8 +404,8 @@ public final class MainActivity extends Activity {
     }
     private void render() {
         if (content == null) return;
+        if (tab.equals("messages")) {renderMessagesPreservingPosition();return;}
         content.removeAllViews();
-        if (tab.equals("messages")) { if(pageDock!=null&&pageDock.getChildCount()==0)pageDock.addView(messageComposer());updateMessageComposerReadiness();renderMessages(); return; }
         if (tab.equals("familylog")) { renderFamilyLog();renderFamilyLogDock(); return; }
         if (tab.equals("location")) { renderLocation(); return; }
         if (tab.equals("home")) { renderHome(); return; }
@@ -1499,7 +1553,6 @@ public final class MainActivity extends Activity {
             actions.addView(button("≡ セット",() -> loadReusableSets(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
             addPanel(actions);
         }
-        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if (rows==null) return;
         LinearLayout status=new LinearLayout(this);
         for(boolean completed:new boolean[]{false,true}) {
             Button state=button(completed?"完了済み":"未完了",()->{goodsCompleted=completed;render();});
@@ -1507,6 +1560,11 @@ public final class MainActivity extends Activity {
             status.addView(state,new LinearLayout.LayoutParams(0,dp(44),1));
         }
         addPanel(status);
+        renderGoodsKind(true);
+        renderGoodsKind(false);
+    }
+    private void renderGoodsKind(boolean shopping) {
+        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if(rows==null)return;
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
         if(catalog!=null) {
@@ -4015,7 +4073,7 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("閉じる",null).show();
     }
     private void loadMessages(int before) {
-        content.removeAllViews(); content.addView(label("伝言を読み込み中…"));
+        if(messages.length()==0){content.removeAllViews();content.addView(label("伝言を読み込み中…"));}
         int epoch=sessionEpoch;
         network.execute(() -> {
             try {
@@ -4058,6 +4116,31 @@ public final class MainActivity extends Activity {
             }}); }
         });
     }
+    private void renderMessagesPreservingPosition() {
+        final ScrollView scroll=pageScroll;
+        if(scroll==null)return;
+        final int oldY=scroll.getScrollY();
+        final boolean latest=messageScrollLatest||content.getHeight()-scroll.getHeight()-oldY<=dp(90);
+        String anchor=null;int offset=0;
+        for(int i=0;i<content.getChildCount();i++) {
+            android.view.View child=content.getChildAt(i);
+            if(child.getTag() instanceof String&&child.getBottom()>oldY){anchor=(String)child.getTag();offset=child.getTop()-oldY;break;}
+        }
+        final String anchorTag=anchor;final int anchorOffset=offset;
+        content.removeAllViews();
+        if(pageDock!=null&&pageDock.getChildCount()==0)pageDock.addView(messageComposer());
+        updateMessageComposerReadiness();renderMessages();
+        messageScrollLatest=false;
+        final int serial=++messageRenderSerial;
+        scroll.post(()->{
+            if(serial!=messageRenderSerial||scroll!=pageScroll||!tab.equals("messages"))return;
+            if(latest)scroll.fullScroll(android.view.View.FOCUS_DOWN);
+            else {
+                android.view.View view=anchorTag==null?null:content.findViewWithTag(anchorTag);
+                scroll.scrollTo(0,view==null?oldY:view.getTop()-anchorOffset);
+            }
+        });
+    }
     private void renderMessages() {
         TextView title=heading("家族");title.setGravity(Gravity.CENTER);title.setTextSize(18);content.addView(title);
         TextView subtitle=label("家族グループ");subtitle.setGravity(Gravity.CENTER);subtitle.setTextSize(10);subtitle.setTextColor(mutedColor());content.addView(subtitle);
@@ -4074,7 +4157,7 @@ public final class MainActivity extends Activity {
                 dateRow.addView(date);content.addView(dateRow);previousDay=day;
             }
             boolean mine=snapshot!=null&&row.optInt("senderId")==snapshot.optInt("memberId");
-            LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.TOP);
+            LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.TOP);line.setTag("message:"+row.optInt("id"));
             LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);stack.setGravity(mine?Gravity.END:Gravity.START);
             ImageView avatar=new ImageView(this);avatar.setContentDescription(row.optString("senderName"));
             avatar.setBackground(shape(softColor(),lineColor(),100));
@@ -4179,7 +4262,7 @@ public final class MainActivity extends Activity {
                 if(epoch!=sessionEpoch)return;
                 JSONObject saved=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",text).put("target_member_id",0).put("reminder_at",""));
                 notifyMessageImmediately(saved.optInt("id"),csrf);
-                runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;messageDraft="";input.setText("");updateMessageComposerReadiness();loadMessages(0);});
+                runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;messageDraft="";messageScrollLatest=true;input.setText("");updateMessageComposerReadiness();loadMessages(0);});
             }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;updateMessageComposerReadiness();
                 Toast.makeText(this,"送信を確認できませんでした。更新して確認してください。入力内容は保持しています",Toast.LENGTH_LONG).show();
             });}
