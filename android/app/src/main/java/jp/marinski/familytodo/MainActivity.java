@@ -2455,7 +2455,7 @@ public final class MainActivity extends Activity {
         });
         dateRef[0]=date;
         CheckBox event=new CheckBox(this); event.setText("イベントとして登録");event.setChecked(parent==null&&tab.equals("goods")&&checklistEvents);event.setEnabled(parent==null);
-        CheckBox noDate=new CheckBox(this);noDate.setText("期限なし");noDate.setEnabled(!event.isChecked());
+        CheckBox noDate=new CheckBox(this);noDate.setText("期限なし");noDate.setChecked(parent!=null);date.setEnabled(parent==null);noDate.setEnabled(!event.isChecked());
         noDate.setOnCheckedChangeListener((view,checked)->date.setEnabled(!checked));
         event.setOnCheckedChangeListener((view,checked)->{noDate.setEnabled(!checked);if(checked)noDate.setChecked(false);});
         CheckBox allDay=new CheckBox(this); allDay.setText("終日"); allDay.setChecked(true);
@@ -2497,7 +2497,7 @@ public final class MainActivity extends Activity {
                     .put("endDateOnly",undated?"":selectedDate[0]).put("noDate",undated).put("allDay",isAllDay)
                     .put("startTime",undated||isAllDay?"":startTime[0]).put("endTime",undated||isAllDay?"":endTime[0])
                     .put("description",description.getText().toString().trim()).put("location",location.getText().toString().trim()).put("is_event",event.isChecked());
-                if(parent!=null)body.put("parent_task_id",parent.optInt("id")).put("visibility_scope",parent.optString("visibilityScope","FAMILY"));
+                if(parent!=null)body.put("parent_task_id",parent.optInt("id")).put("visibility_scope",parent.optString("visibilityScope","FAMILY")).put("calendar_visible",false);
                 String payload=body.toString();if(!attemptPayload[0].isEmpty()&&!attemptPayload[0].equals(payload))requestKey[0]=java.util.UUID.randomUUID().toString();attemptPayload[0]=payload;
                 body.put("idempotency_key",requestKey[0]);saving[0]=true;error.setText("保存中…");dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);dialog.setCancelable(false);
                 network.execute(()->{try{

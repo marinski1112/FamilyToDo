@@ -189,7 +189,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(findContaining(form,"自分だけ（親タスクと同じ）")!=null,"child inherits private scope label");
             CheckBox event=(CheckBox)findText(form,"イベントとして登録");check(!event.isChecked()&&!event.isEnabled(),"child cannot become event");
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();check(taskCreates==0&&dialog.isShowing(),"empty title remains open without write");
-            title.get().setText("子タスクのテスト");((CheckBox)findText(form,"期限なし")).setChecked(true);
+            title.get().setText("子タスクのテスト");check(((CheckBox)findText(form,"期限なし")).isChecked(),"child defaults to undated as Web inline composer");
         }catch(Exception e){throw new RuntimeException(e);}});
         screenshot("child-composer");
         onUi(()->{popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();});
@@ -198,7 +198,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->{check(taskCreates==1,"child creation double submit blocked");check(popup.get().isShowing()&&title.get().getText().toString().equals("子タスクのテスト"),"failed child save retains title");check(popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled(),"child save failure permits retry");check(findContaining(popup.get().getWindow().getDecorView(),"保存できませんでした")!=null,"child save error visible");popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();});
         for(int i=0;i<100&&taskCreates<2;i++)Thread.sleep(20);settle();
         check(lastTaskCreate.optInt("parent_task_id")==10&&"PRIVATE".equals(lastTaskCreate.optString("visibility_scope")),"child request carries parent and matching scope");
-        check(lastTaskCreate.optBoolean("noDate")&&lastTaskCreate.optString("dateOnly").isEmpty()&&!lastTaskCreate.optBoolean("is_event"),"undated child task request");
+        check(lastTaskCreate.optBoolean("noDate")&&lastTaskCreate.optString("dateOnly").isEmpty()&&!lastTaskCreate.optBoolean("is_event")&&!lastTaskCreate.optBoolean("calendar_visible"),"undated child task request");
         check(firstKey.equals(lastTaskCreate.optString("idempotency_key")),"unchanged child retry reuses idempotency key");
         onUi(()->{check(!popup.get().isShowing(),"successful child save closes composer");try{Method add=MainActivity.class.getDeclaredMethod("addTask",JSONObject.class);add.setAccessible(true);
             check(add.invoke(activity,new JSONObject().put("id",10).put("isChild",true))==null,"nested child creation rejected");
