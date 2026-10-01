@@ -103,6 +103,10 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
+            clickDescription("タスクを検索");
+            onUi(()->{EditText search=findHint(root(),"タスクを検索");search.setText("一致しない検索");View title=findText(root(),"今日のタスク");check(((View)title.getParent()).getVisibility()==View.GONE,"task search hides nonmatching row");search.setText(" 今日のタスク ");check(((View)title.getParent()).getVisibility()==View.VISIBLE,"task search trims query and restores match");});
+            clickDescription("タスクを検索");
+            onUi(()->check(((View)findText(root(),"今日のタスク").getParent()).getVisibility()==View.VISIBLE,"closing search restores rows"));
             clickDescription("スーパーを開閉");check(hasText("買い物のテスト"),"category expands");
             AtomicReference<EditText> editor=new AtomicReference<>();
             onUi(()->{EditText input=(EditText)findText(root(),"買い物のテスト");editor.set(input);input.performClick();

@@ -1409,6 +1409,17 @@ public final class MainActivity extends Activity {
                 });
             }).setNegativeButton("閉じる",null).show();
     }
+    private String checklistSearchText(android.view.View view) {
+        StringBuilder value=new StringBuilder();if(view instanceof TextView)value.append(((TextView)view).getText()).append(' ');
+        if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++)value.append(checklistSearchText(group.getChildAt(i)));}
+        return value.toString();
+    }
+    private void addChecklistSearch(LinearLayout section,String name,ArrayList<android.view.View> rows) {
+        LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER_VERTICAL);
+        EditText query=new EditText(this);query.setHint(name+"を検索");query.setSingleLine(true);query.setTextColor(textColor());query.setTextSize(14);query.setVisibility(android.view.View.GONE);
+        Button toggle=button("🔍",()->{boolean open=query.getVisibility()!=android.view.View.VISIBLE;query.setVisibility(open?android.view.View.VISIBLE:android.view.View.GONE);if(open){query.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(query,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}else{query.setText("");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(),0);}});toggle.setContentDescription(name+"を検索");controls.addView(toggle,new LinearLayout.LayoutParams(dp(48),dp(44)));controls.addView(query,new LinearLayout.LayoutParams(0,dp(44),1));section.addView(controls);
+        query.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence value,int start,int count,int after){}public void onTextChanged(CharSequence value,int start,int before,int count){String term=value.toString().trim().toLowerCase(java.util.Locale.JAPAN);for(android.view.View row:rows)row.setVisibility(term.isEmpty()||checklistSearchText(row).toLowerCase(java.util.Locale.JAPAN).contains(term)?android.view.View.VISIBLE:android.view.View.GONE);}public void afterTextChanged(android.text.Editable value){}});
+    }
     private void renderChecklistTasks() {
         LinearLayout section=panel(),kinds=new LinearLayout(this);
         for(boolean events:new boolean[]{false,true}) {
@@ -1416,6 +1427,7 @@ public final class MainActivity extends Activity {
             styleButton(kind,checklistEvents==events);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(44),1));
         }
         section.addView(kinds);
+        ArrayList<android.view.View> searchRows=new ArrayList<>();addChecklistSearch(section,checklistEvents?"イベント":"タスク",searchRows);
         LinearLayout status=new LinearLayout(this);
         for(boolean done:new boolean[]{false,true}) {
             Button state=button(done?"完了済み":"未完了",()->{checklistCompleted=done;render();});
@@ -1427,7 +1439,7 @@ public final class MainActivity extends Activity {
             JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,selectedDay.toString()))continue;
             boolean event="EVENT".equalsIgnoreCase(task.optString("task_kind"));
             if(event!=checklistEvents||!event&&checklistCompleted!="completed".equals(task.optString("status")))continue;
-            section.addView(checklistTaskRow(task));count++;
+            LinearLayout taskRow=checklistTaskRow(task);section.addView(taskRow);searchRows.add(taskRow);count++;
         }
         if(count==0)section.addView(label(checklistEvents?"この日のイベントはありません":"この日のタスクはありません"));
         LinearLayout actions=new LinearLayout(this);
@@ -1506,6 +1518,7 @@ public final class MainActivity extends Activity {
             JSONObject row=rows.optJSONObject(i); if(row!=null) names.add(category(row));
         }
         names.add("未分類");
+        ArrayList<android.view.View> searchRows=new ArrayList<>();addChecklistSearch(content,shopping?"買い物":"持ち物",searchRows);int searchStart=content.getChildCount();
         ArrayList<String> archived=new ArrayList<>();
         for(String category:names) {
             JSONObject meta=categoryMetadata(catalog,category);
@@ -1587,6 +1600,7 @@ public final class MainActivity extends Activity {
             }
             addPanel(cluster);
         }
+        for(int index=searchStart;index<content.getChildCount();index++)searchRows.add(content.getChildAt(index));
     }
     private JSONObject categoryMetadata(JSONObject catalog,String name) {
         JSONArray metadata=catalog==null?null:catalog.optJSONArray("categoryMeta");
@@ -2441,7 +2455,7 @@ public final class MainActivity extends Activity {
         });
         dateRef[0]=date;
         CheckBox event=new CheckBox(this); event.setText("イベントとして登録");event.setChecked(parent==null&&tab.equals("goods")&&checklistEvents);event.setEnabled(parent==null);
-        CheckBox noDate=new CheckBox(this);noDate.setText("期限なし");
+        CheckBox noDate=new CheckBox(this);noDate.setText("期限なし");noDate.setEnabled(!event.isChecked());
         noDate.setOnCheckedChangeListener((view,checked)->date.setEnabled(!checked));
         event.setOnCheckedChangeListener((view,checked)->{noDate.setEnabled(!checked);if(checked)noDate.setChecked(false);});
         CheckBox allDay=new CheckBox(this); allDay.setText("終日"); allDay.setChecked(true);
@@ -2491,7 +2505,7 @@ public final class MainActivity extends Activity {
                     runOnUiThread(()->{if(epoch!=sessionEpoch)return;dialog.dismiss();load();});
                 }catch(Exception failure){runOnUiThread(()->{if(epoch!=sessionEpoch)return;saving[0]=false;error.setText("保存できませんでした。入力を確認して再試行してください。");dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.setCancelable(true);});}});
             }catch(Exception invalid){error.setText("入力を確認してください。");}
-        }));dialog.show();
+        }));dialog.show();return dialog;
     }
 
     private void loadRecurringRules() { loadRecurringRule(0); }

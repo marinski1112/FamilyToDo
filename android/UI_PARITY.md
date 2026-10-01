@@ -51,3 +51,5 @@ Calendar cells display up to three overlapping 24dp stamp thumbnails and an over
 Distribution is batched to avoid repeated device installs. CI debug signing keys change between runners; preserving installed login through future updates requires the existing private signing workflow and its GitHub Secrets (see INTERNAL_RELEASE.md). No signing key is stored in source or artifacts.
 
 Child creation now opens a native form from the selected parent. Parent id and visibility are sent to the existing task API. Failed validation/save keeps the form and input, repeated unchanged saves reuse a request key, and changed payloads receive a new key. Native task/event creation also keeps failed input instead of dismissing it. Child rows respect API editing permissions and do not offer deeper nesting. Fixture tests cover empty titles, double submit, transient failure/retry, scope, undated creation, event/nesting and read-only guards.
+
+Native checklist search now opens an inline field for task/event and active goods sections. It trims and lowercases queries as the Web controller does, filters rendered rows/categories without a network request, and restores rows when closed.
