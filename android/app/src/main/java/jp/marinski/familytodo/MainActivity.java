@@ -232,6 +232,16 @@ public final class MainActivity extends Activity {
         }
         @Override public boolean onTouchEvent(android.view.MotionEvent event) {
             if(event.getPointerCount()>1)blocked=true;
+            if(!blocked&&!horizontal&&event.getActionMasked()==android.view.MotionEvent.ACTION_MOVE){
+                float dx=Math.abs(event.getX()-startX),dy=Math.abs(event.getY()-startY);
+                int slop=android.view.ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+                if(dy>slop&&dy>=dx)blocked=true;
+                else if(dx>slop&&dx>dy*1.5f){
+                    horizontal=true;
+                    android.view.MotionEvent cancel=android.view.MotionEvent.obtain(event);
+                    cancel.setAction(android.view.MotionEvent.ACTION_CANCEL);super.onTouchEvent(cancel);cancel.recycle();
+                }
+            }
             if(horizontal){
                 if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){
                     float dx=event.getX()-startX,dy=event.getY()-startY;
