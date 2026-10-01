@@ -103,7 +103,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             testMonthSwipes("goods");
-            clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"items visible while shopping selected");
+            clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"items visible while shopping selected");clickDescription("保育園を開閉");
             clickText("🎒 持ち物");check(hasText("スーパー"),"shopping remains visible while item selected");
             clickText("🛒 買い物");
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
