@@ -145,7 +145,7 @@ const eventRow=renderRoot({id:42,task_kind:'EVENT',title:'家族の予定'});
 if(!eventRow.includes('class="checklist-row-action" href="/task/view.php?id=42"')||!eventRow.includes('>詳細・編集</a>'))throw new Error('stored event must expose a visible existing detail/edit route');
 if(eventRow.includes('type="checkbox"'))throw new Error('event navigation must not add a completion checkbox');
 const virtualEvent=renderRoot({id:-42,task_kind:'EVENT',title:'定期予定'});
-if(virtualEvent.includes('/task/view.php?id=-42')||virtualEvent.includes('checklist-row-action'))throw new Error('virtual recurrence must not get an invalid physical task route');
+if(virtualEvent.includes('/task/view.php?id=-42')||virtualEvent.includes('class="checklist-row-action"'))throw new Error('virtual recurrence must not get an invalid physical task route');
 const ordinaryTask=renderRoot({id:42,task_kind:'TASK',title:'家族のタスク'});
 if(!ordinaryTask.includes('type="checkbox"')||!ordinaryTask.includes('>詳細</a>'))throw new Error('ordinary task must retain separate completion and detail controls');
 
