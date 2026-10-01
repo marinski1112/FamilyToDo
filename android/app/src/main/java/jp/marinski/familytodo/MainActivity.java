@@ -4149,14 +4149,19 @@ public final class MainActivity extends Activity {
         updateMessageComposerReadiness();renderMessages();
         messageScrollLatest=false;
         final int serial=++messageRenderSerial;
-        scroll.post(()->{
-            if(serial!=messageRenderSerial||scroll!=pageScroll||!tab.equals("messages"))return;
-            if(latest)scroll.fullScroll(android.view.View.FOCUS_DOWN);
-            else {
-                android.view.View view=anchorTag==null?null:content.findViewWithTag(anchorTag);
-                scroll.scrollTo(0,view==null?oldY:view.getTop()-anchorOffset);
+        final LinearLayout renderedContent=content;
+        renderedContent.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener(){
+            @Override public void onGlobalLayout(){
+                if(renderedContent.getViewTreeObserver().isAlive())renderedContent.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                if(serial!=messageRenderSerial||scroll!=pageScroll||renderedContent!=content||!tab.equals("messages"))return;
+                if(latest)scroll.fullScroll(android.view.View.FOCUS_DOWN);
+                else {
+                    android.view.View view=anchorTag==null?null:renderedContent.findViewWithTag(anchorTag);
+                    scroll.scrollTo(0,view==null?oldY:view.getTop()-anchorOffset);
+                }
             }
         });
+        renderedContent.requestLayout();
     }
     private void renderMessages() {
         TextView title=heading("家族");title.setGravity(Gravity.CENTER);title.setTextSize(18);content.addView(title);
