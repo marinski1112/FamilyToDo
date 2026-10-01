@@ -9,7 +9,7 @@ Read the canonical Web home/dashboard, checklist controller and reminder interac
 | Page | Native changes | Web-backed parts / remaining differences |
 | --- | --- | --- |
 | Home | Native alerts, four live counters, yesterday journal preview, expandable fortune, today list, two-column cards and three-column shortcuts, quick creation | Journal details remain on the original Web page; canonical HTML contract changes show a retry error |
-| Checklist | Task/event section, separate title editing and completion, status tabs, goods categories, continuous entry, details, child-task viewer | Undated/all-history tasks via explicit Web link; Full child creation still differs; inline category rename, category/content drag and JST fresh/archived empty-category cluster are implemented. Missing catalog metadata keeps legacy categories visible until metadata arrives |
+| Checklist | Task/event section, separate title editing and completion, status tabs, goods categories, continuous entry, details, child-task viewer | Undated/all-history tasks via explicit Web link; Native child creation inherits parent scope, prohibits deeper nesting/events, supports undated tasks and retains failed drafts with stable retry keys; inline category rename, category/content drag and JST fresh/archived empty-category cluster are implemented. Missing catalog metadata keeps legacy categories visible until metadata arrives |
 | Calendar | Cross-day event bands and four sorted single-day event chips matching the current Web cap, remaining-event count, long-press full-day preview, Web holiday labels, adjacent-month days, task/goods counts, day tap opens checklist | Up to three overlapping stamp thumbnails, overflow badges, static/animated preview and scoped background stickers are native; upload/asset administration remains Web-backed |
 | Location | Location tab opens the authenticated in-app Web map/history; native device location settings remain accessible | Map is Web-backed; native sharing service remains native |
 | Family Log | Subject filter, compact date controls, record cards, management menu, quick-record dock and journal/food/summary links | Growth journal, family journal, food list and full administration are Web-backed |
@@ -30,11 +30,11 @@ LINE login/browser handoff, real photo/document picker, OS location/notification
 
 ## Latest source parity changes
 
-The home stat grid uses the overview snapshot. Its fourth card shows belongings remaining instead of the Web dashboard's family-log count, which is not in this API. Yesterday's journal opens the authenticated Web journal; its summary, full alert totals and fortune are still Web-backed. These values are not inferred from partial monthly data.
+Home alerts, counters, journal preview and fortune use the authenticated canonical dashboard values; the fourth card shows the real family-log count. Journal details remain Web-backed.
 
 Empty category state uses the active kind's `categoryMeta`, total content count across both status views and persisted `activated_at`. Disabled categories stay hidden. Before 23:00 JST, archive is eligible at the next midnight; at/after 23:00 it is eligible at the next 01:00. Archived categories remain directly renameable in the cluster and can reopen for entry. Successful rename opens the target; subsequent catalog loads use the server's persisted activation time. Catalog fetch now rerenders the actual `goods` tab.
 
-This update's build and API 30/35 instrumentation are pending until the exact-head Android CI succeeds. Device-only checks above remain outstanding.
+The preceding v0.1.171 build and API 30/35 instrumentation succeeded. The child composer addition requires its own exact-head CI before distribution. Device-only checks above remain outstanding.
 
 Calendar holiday calculations are a direct port of the existing Web recurrence projection, including Monday holidays, citizen holidays and substitute holidays. This preserves the Web rules rather than introducing another holiday data source. Week height grows with event/overflow/accessory rows instead of clipping them.
 
@@ -49,3 +49,5 @@ Home now reads the existing authenticated `/app/index.php` display values withou
 Calendar cells display up to three overlapping 24dp stamp thumbnails and an overflow badge; tapping previews and long-press opens existing placement actions. Date long-press opens decoration and event-preview choices. Background stickers use existing `/api/calendar-stickers` GET/POST/DELETE, 22% image opacity, and family/private scope; private rows overlay shared rows. Failed saves keep the chooser and selection for retry. Administration/upload remains available through existing Web tools. Decoration lists include the overview's full visible grid dates. Fixture checks cover dashboard parsing, unsafe links, changed markup, private-over-shared precedence, thumbnail and overflow rendering.
 
 Distribution is batched to avoid repeated device installs. CI debug signing keys change between runners; preserving installed login through future updates requires the existing private signing workflow and its GitHub Secrets (see INTERNAL_RELEASE.md). No signing key is stored in source or artifacts.
+
+Child creation now opens a native form from the selected parent. Parent id and visibility are sent to the existing task API. Failed validation/save keeps the form and input, repeated unchanged saves reuse a request key, and changed payloads receive a new key. Native task/event creation also keeps failed input instead of dismissing it. Child rows respect API editing permissions and do not offer deeper nesting. Fixture tests cover empty titles, double submit, transient failure/retry, scope, undated creation, event/nesting and read-only guards.

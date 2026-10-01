@@ -1447,10 +1447,11 @@ public final class MainActivity extends Activity {
             box.setOnClickListener(v->toggle(occurrence>0?"recurrence":"task",id,box));
             line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
         }
-        line.addView(inlineTitle(occurrence>0?"recurrence":"task",occurrence>0?task.optInt("recurrence_rule_id"):id,task,"title"),
+        EditText title=inlineTitle(occurrence>0?"recurrence":"task",occurrence>0?task.optInt("recurrence_rule_id"):id,task,"title");title.setEnabled(task.optBoolean("canEdit",true));
+        line.addView(title,
             new LinearLayout.LayoutParams(0,dp(52),1));
-        if(!event&&occurrence==0&&id>0)line.addView(button("⤷",()->showTaskChildren(id)),new LinearLayout.LayoutParams(dp(40),dp(44)));
-        if(ApiClient.canMutate())line.addView(button("ⓘ",()->{if(occurrence>0)recurringOccurrenceActions(task);else taskActions(task);}),
+        if(!event&&occurrence==0&&id>0&&task.optInt("parent_task_id")==0)line.addView(button("⤷",()->showTaskChildren(id)),new LinearLayout.LayoutParams(dp(40),dp(44)));
+        if(ApiClient.canMutate()&&task.optBoolean("canEdit",true))line.addView(button("ⓘ",()->{if(occurrence>0)recurringOccurrenceActions(task);else taskActions(task);}),
             new LinearLayout.LayoutParams(dp(40),dp(44)));
         return line;
     }
@@ -1463,13 +1464,13 @@ public final class MainActivity extends Activity {
                 runOnUiThread(()->{if(epoch!=sessionEpoch)return;
                     LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
                     if(children!=null)for(int i=0;i<children.length();i++){
-                        JSONObject child=children.optJSONObject(i);if(child!=null)list.addView(checklistTaskRow(child));
+                        JSONObject child=children.optJSONObject(i);if(child!=null){try{child.put("parent_task_id",parentId);child.put("task_kind","TASK");String date=child.optString("dueDate"),time=child.optString("dueTime");child.put("due_at",date);child.put("start_at",time.isEmpty()?date:date+" "+time+":00");list.addView(checklistTaskRow(child));}catch(org.json.JSONException invalid){list.addView(label("子タスクの形式を確認できませんでした"));}}
                     }
                     if(children==null||children.length()==0)list.addView(label("子タスクはありません"));
                     ScrollView scroll=new ScrollView(this);scroll.addView(list);
                     AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("子タスク").setView(scroll).setNegativeButton("閉じる",null);
-                    if(result.optBoolean("canAddChildren")&&ApiClient.canMutate())
-                        dialog.setPositiveButton("＋ 子タスク",(d,w)->showWebPage("/app/tasks.php?date="+selectedDay));
+                    if(result.optBoolean("canAddChildren")&&result.optJSONObject("parent")!=null&&ApiClient.canMutate())
+                        dialog.setPositiveButton("＋ 子タスク",(d,w)->addTask(result.optJSONObject("parent")));
                     dialog.show();
                 });
             }catch(Exception error){runOnUiThread(()->{if(epoch==sessionEpoch)Toast.makeText(this,"子タスクを取得できませんでした",Toast.LENGTH_SHORT).show();});}
@@ -2423,8 +2424,11 @@ public final class MainActivity extends Activity {
                 });
             }).setNegativeButton("閉じる",null).show();
     }
-    private void addTask() {
-        if (snapshot == null) return;
+    private void addTask() {addTask(null);}
+    private AlertDialog addTask(JSONObject parent) {
+        if(snapshot==null||!ApiClient.canMutate())return null;
+        if(parent!=null&&(parent.optInt("id")<=0||parent.optBoolean("isChild")||"EVENT".equals(parent.optString("kind"))))return null;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");String[] requestKey={java.util.UUID.randomUUID().toString()},attemptPayload={""};boolean[] saving={false};
         EditText title=new EditText(this); title.setHint("タイトル"); title.setSingleLine(true);
         final String[] selectedDate={selectedDay.toString()};
         final Button[] dateRef=new Button[1];
@@ -2436,7 +2440,10 @@ public final class MainActivity extends Activity {
             },current.getYear(),current.getMonthValue()-1,current.getDayOfMonth()).show();
         });
         dateRef[0]=date;
-        CheckBox event=new CheckBox(this); event.setText("イベントとして登録");event.setChecked(tab.equals("goods")&&checklistEvents);
+        CheckBox event=new CheckBox(this); event.setText("イベントとして登録");event.setChecked(parent==null&&tab.equals("goods")&&checklistEvents);event.setEnabled(parent==null);
+        CheckBox noDate=new CheckBox(this);noDate.setText("期限なし");
+        noDate.setOnCheckedChangeListener((view,checked)->date.setEnabled(!checked));
+        event.setOnCheckedChangeListener((view,checked)->{noDate.setEnabled(!checked);if(checked)noDate.setChecked(false);});
         CheckBox allDay=new CheckBox(this); allDay.setText("終日"); allDay.setChecked(true);
         final String[] startTime={"09:00"}, endTime={"10:00"};
         final Button[] startTimeButton=new Button[1], endTimeButton=new Button[1];
@@ -2457,31 +2464,36 @@ public final class MainActivity extends Activity {
         EditText description=new EditText(this); description.setHint("説明（任意）");
         EditText location=new EditText(this); location.setHint("場所（任意）");
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(32,8,32,8); form.addView(title); form.addView(date); form.addView(event);
+        form.setPadding(32,8,32,8);
+        if(parent!=null)form.addView(label("公開範囲: "+("PRIVATE".equals(parent.optString("visibilityScope"))?"自分だけ（親タスクと同じ）":"家族全員（親タスクと同じ）")));
+        form.addView(title); form.addView(date);form.addView(noDate); form.addView(event);
         form.addView(allDay); form.addView(startButton); form.addView(endButton);
         form.addView(description); form.addView(location);
         ScrollView formScroll=new ScrollView(this); formScroll.addView(form);
-        new AlertDialog.Builder(this).setTitle("タスク・イベントを作成").setView(formScroll)
-            .setPositiveButton("保存",(dialog,which)->{
-                String value=title.getText().toString().trim(); if(value.isEmpty()) return;
-                String csrf=snapshot.optString("csrf"); String day=selectedDate[0]; boolean isEvent=event.isChecked();
-                boolean isAllDay=allDay.isChecked(); String start=startTime[0], end=endTime[0];
-                String detail=description.getText().toString().trim(), place=location.getText().toString().trim();
-                if(!isAllDay && start.compareTo(end)>=0) {
-                    Toast.makeText(this,"終了時刻は開始時刻より後にしてください",Toast.LENGTH_SHORT).show(); return;
-                }
-                network.execute(() -> {
-                    try {
-                        ApiClient.request("/api/task",new JSONObject().put("csrf",csrf).put("title",value)
-                            .put("dateOnly",day).put("endDateOnly",day).put("allDay",isAllDay)
-                            .put("startTime",isAllDay?"":start).put("endTime",isAllDay?"":end)
-                            .put("description",detail).put("location",place)
-                            .put("is_event",isEvent).put("idempotency_key",java.util.UUID.randomUUID().toString()));
-                        runOnUiThread(this::load);
-                    } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this,"保存できませんでした",Toast.LENGTH_SHORT).show()); }
-                });
-            }).setNegativeButton("閉じる",null).show();
+        TextView error=label("");form.addView(error);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(parent==null?"タスク・イベントを作成":"子タスクを作成").setView(formScroll)
+            .setPositiveButton("保存",null).setNegativeButton("閉じる",null).create();
+        dialog.setOnShowListener(shown->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view->{
+            if(saving[0]||epoch!=sessionEpoch||snapshot==null||!ApiClient.canMutate())return;
+            String value=title.getText().toString().trim();if(value.isEmpty()){error.setText("タイトルを入力してください。");return;}
+            boolean undated=noDate.isChecked(),isAllDay=allDay.isChecked();
+            if(!undated&&!isAllDay&&startTime[0].compareTo(endTime[0])>=0){error.setText("終了時刻は開始時刻より後にしてください。");return;}
+            try{
+                JSONObject body=new JSONObject().put("csrf",csrf).put("title",value).put("dateOnly",undated?"":selectedDate[0])
+                    .put("endDateOnly",undated?"":selectedDate[0]).put("noDate",undated).put("allDay",isAllDay)
+                    .put("startTime",undated||isAllDay?"":startTime[0]).put("endTime",undated||isAllDay?"":endTime[0])
+                    .put("description",description.getText().toString().trim()).put("location",location.getText().toString().trim()).put("is_event",event.isChecked());
+                if(parent!=null)body.put("parent_task_id",parent.optInt("id")).put("visibility_scope",parent.optString("visibilityScope","FAMILY"));
+                String payload=body.toString();if(!attemptPayload[0].isEmpty()&&!attemptPayload[0].equals(payload))requestKey[0]=java.util.UUID.randomUUID().toString();attemptPayload[0]=payload;
+                body.put("idempotency_key",requestKey[0]);saving[0]=true;error.setText("保存中…");dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);dialog.setCancelable(false);
+                network.execute(()->{try{
+                    if(epoch!=sessionEpoch)return;ApiClient.request("/api/task",body);
+                    runOnUiThread(()->{if(epoch!=sessionEpoch)return;dialog.dismiss();load();});
+                }catch(Exception failure){runOnUiThread(()->{if(epoch!=sessionEpoch)return;saving[0]=false;error.setText("保存できませんでした。入力を確認して再試行してください。");dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.setCancelable(true);});}});
+            }catch(Exception invalid){error.setText("入力を確認してください。");}
+        }));dialog.show();
     }
+
     private void loadRecurringRules() { loadRecurringRule(0); }
     private void loadRecurringRule(int id) {
         if(snapshot==null) { load(); return; }

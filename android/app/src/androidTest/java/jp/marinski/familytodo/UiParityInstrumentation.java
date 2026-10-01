@@ -23,6 +23,8 @@ public final class UiParityInstrumentation extends Instrumentation {
     private JSONObject snapshot;
     private int nextId=100;
     private int checks;
+    private volatile int taskCreates;
+    private volatile JSONObject lastTaskCreate;
     private volatile int backgroundWrites;
     private volatile String lastBackgroundScope,lastBackgroundMethod;
     private volatile int failedMoves;
@@ -166,12 +168,39 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(bubble.getWidth()<stack.getWidth(),"own bubble fits short text");
                 check(bubble.getRight()==stack.getWidth(),"own bubble aligned right");
             });screenshot("messages");
+            testChildComposer();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);
             Bundle results=new Bundle();results.putString("stream","\nOK (1 test)\n");finish(Activity.RESULT_OK,results);
         }catch(Throwable error){
             status.putString("stack",android.util.Log.getStackTraceString(error));status.putString("stream",error.toString());sendStatus(-2,status);
             Bundle results=new Bundle();results.putString("stream","FAILURES!!!\n"+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,results);
         }
+    }
+    private void testChildComposer()throws Exception{
+        AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();AtomicReference<EditText> title=new AtomicReference<>();
+        onUi(()->{try{
+            Method add=MainActivity.class.getDeclaredMethod("addTask",JSONObject.class);add.setAccessible(true);
+            JSONObject parent=new JSONObject().put("id",10).put("kind","TASK").put("visibilityScope","PRIVATE");
+            android.app.AlertDialog dialog=(android.app.AlertDialog)add.invoke(activity,parent);popup.set(dialog);View form=dialog.getWindow().getDecorView();title.set(findHint(form,"タイトル"));
+            check(findContaining(form,"自分だけ（親タスクと同じ）")!=null,"child inherits private scope label");
+            CheckBox event=(CheckBox)findText(form,"イベントとして登録");check(!event.isChecked()&&!event.isEnabled(),"child cannot become event");
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();check(taskCreates==0&&dialog.isShowing(),"empty title remains open without write");
+            title.get().setText("子タスクのテスト");((CheckBox)findText(form,"期限なし")).setChecked(true);
+        }catch(Exception e){throw new RuntimeException(e);}});
+        screenshot("child-composer");
+        onUi(()->{popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();});
+        for(int i=0;i<100&&taskCreates<1;i++)Thread.sleep(20);settle();
+        String firstKey=lastTaskCreate.optString("idempotency_key");
+        onUi(()->{check(taskCreates==1,"child creation double submit blocked");check(popup.get().isShowing()&&title.get().getText().toString().equals("子タスクのテスト"),"failed child save retains title");check(popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled(),"child save failure permits retry");check(findContaining(popup.get().getWindow().getDecorView(),"保存できませんでした")!=null,"child save error visible");popup.get().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();});
+        for(int i=0;i<100&&taskCreates<2;i++)Thread.sleep(20);settle();
+        check(lastTaskCreate.optInt("parent_task_id")==10&&"PRIVATE".equals(lastTaskCreate.optString("visibility_scope")),"child request carries parent and matching scope");
+        check(lastTaskCreate.optBoolean("noDate")&&lastTaskCreate.optString("dateOnly").isEmpty()&&!lastTaskCreate.optBoolean("is_event"),"undated child task request");
+        check(firstKey.equals(lastTaskCreate.optString("idempotency_key")),"unchanged child retry reuses idempotency key");
+        onUi(()->{check(!popup.get().isShowing(),"successful child save closes composer");try{Method add=MainActivity.class.getDeclaredMethod("addTask",JSONObject.class);add.setAccessible(true);
+            check(add.invoke(activity,new JSONObject().put("id",10).put("isChild",true))==null,"nested child creation rejected");
+            check(add.invoke(activity,new JSONObject().put("id",10).put("kind","EVENT"))==null,"event parent rejected");
+            ApiClient.setMutationsEnabled(false);check(add.invoke(activity,new JSONObject().put("id",10))==null,"read-only child creation blocked");ApiClient.setMutationsEnabled(true);
+        }catch(Exception e){throw new RuntimeException(e);}});
     }
     private void testBackgroundSave(LocalDate day,String scope,int asset,boolean success)throws Exception{
         AtomicReference<android.app.AlertDialog> dialog=new AtomicReference<>();AtomicReference<TextView> error=new AtomicReference<>();boolean[] saving={false};int previous=backgroundWrites;
@@ -181,6 +210,7 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.equals("/api/task")){lastTaskCreate=new JSONObject(body.toString());taskCreates++;if(taskCreates==1)throw new IllegalStateException("synthetic task creation failure");return new JSONObject().put("ok",true).put("id",++nextId);}
         if(path.equals("/api/calendar-stickers")){backgroundWrites++;lastBackgroundScope=body.optString("visibilityScope");lastBackgroundMethod=method;if(body.optInt("assetId")==99)throw new IllegalStateException("synthetic background save failure");return new JSONObject().put("ok",true);}
         if(path.equals("/api/checklist/inline-title")){
             if(body.optString("title").equals("失敗ケース"))throw new IllegalStateException("synthetic failure");
