@@ -2487,7 +2487,7 @@ public final class MainActivity extends Activity {
         TextView error=label("");form.addView(error);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(parent==null?"タスク・イベントを作成":"子タスクを作成").setView(formScroll)
             .setPositiveButton("保存",null).setNegativeButton("閉じる",null).create();
-        dialog.setOnShowListener(shown->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view->{
+        dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view->{
             if(saving[0]||epoch!=sessionEpoch||snapshot==null||!ApiClient.canMutate())return;
             String value=title.getText().toString().trim();if(value.isEmpty()){error.setText("タイトルを入力してください。");return;}
             boolean undated=noDate.isChecked(),isAllDay=allDay.isChecked();
@@ -2505,7 +2505,7 @@ public final class MainActivity extends Activity {
                     runOnUiThread(()->{if(epoch!=sessionEpoch)return;dialog.dismiss();load();});
                 }catch(Exception failure){runOnUiThread(()->{if(epoch!=sessionEpoch)return;saving[0]=false;error.setText("保存できませんでした。入力を確認して再試行してください。");dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.setCancelable(true);});}});
             }catch(Exception invalid){error.setText("入力を確認してください。");}
-        }));dialog.show();return dialog;
+        });return dialog;
     }
 
     private void loadRecurringRules() { loadRecurringRule(0); }
