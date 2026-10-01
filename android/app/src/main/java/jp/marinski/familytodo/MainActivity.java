@@ -4072,6 +4072,18 @@ public final class MainActivity extends Activity {
                 });
             }).setNegativeButton("閉じる",null).show();
     }
+    static JSONArray mergeMessagePage(JSONArray existing,JSONArray page,int before,boolean hasOlder) {
+        if(page==null)page=new JSONArray();
+        if(before==0&&!hasOlder)return page;
+        java.util.TreeMap<Integer,JSONObject> rows=new java.util.TreeMap<>();
+        int first=page.length()==0?Integer.MAX_VALUE:page.optJSONObject(0).optInt("id");
+        for(int i=0;i<existing.length();i++) {
+            JSONObject row=existing.optJSONObject(i);
+            if(row!=null&&(before>0||row.optInt("id")<first))rows.put(row.optInt("id"),row);
+        }
+        for(int i=0;i<page.length();i++){JSONObject row=page.optJSONObject(i);if(row!=null)rows.put(row.optInt("id"),row);}
+        JSONArray combined=new JSONArray();for(JSONObject row:rows.values())combined.put(row);return combined;
+    }
     private void loadMessages(int before) {
         if(messages.length()==0){content.removeAllViews();content.addView(label("伝言を読み込み中…"));}
         int epoch=sessionEpoch;
@@ -4089,13 +4101,8 @@ public final class MainActivity extends Activity {
 
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch||!tab.equals("messages")) return;
-                    if(before==0){messageStamps.clear();messages=page==null?new JSONArray():page;}
-                    else if(page!=null) {
-                        JSONArray combined=new JSONArray();
-                        for(int i=0;i<page.length();i++) combined.put(page.optJSONObject(i));
-                        for(int i=0;i<messages.length();i++) combined.put(messages.optJSONObject(i));
-                        messages=combined;
-                    }
+                    messages=mergeMessagePage(messages,page,before,result.optBoolean("hasOlder"));
+                    if(before==0&&!result.optBoolean("hasOlder"))messageStamps.clear();
                     messageStamps.putAll(stampPage);
                     hasOlderMessages=result.optBoolean("hasOlder"); render();
                 });

@@ -177,6 +177,13 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(bubble.getWidth()<stack.getWidth(),"own bubble fits short text");
                 check(bubble.getRight()==stack.getWidth(),"own bubble aligned right");
             });screenshot("messages");
+            JSONArray history=new JSONArray().put(new JSONObject().put("id",1)).put(new JSONObject().put("id",2));
+            JSONArray latest=new JSONArray().put(new JSONObject().put("id",2).put("text","updated")).put(new JSONObject().put("id",3));
+            JSONArray merged=MainActivity.mergeMessagePage(history,latest,0,true);
+            check(merged.length()==3&&merged.optJSONObject(0).optInt("id")==1,"latest refresh retains previously loaded history");
+            check(merged.optJSONObject(1).optString("text").equals("updated"),"latest refresh updates existing message");
+            check(MainActivity.mergeMessagePage(merged,history,2,true).length()==3,"repeated older page deduplicates IDs");
+            check(MainActivity.mergeMessagePage(merged,latest,0,false).length()==2,"complete refresh removes stale history");
             testMessageScroll(messages);
             testChildComposer();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);

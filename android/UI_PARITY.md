@@ -53,3 +53,11 @@ Distribution is batched to avoid repeated device installs. CI debug signing keys
 Child creation now opens a native form from the selected parent. Parent id and visibility are sent to the existing task API. Failed validation/save keeps the form and input, repeated unchanged saves reuse a request key, and changed payloads receive a new key. Native task/event creation also keeps failed input instead of dismissing it. Child rows respect API editing permissions and do not offer deeper nesting. Fixture tests cover empty titles, double submit, transient failure/retry, scope, undated creation, event/nesting and read-only guards.
 
 Native checklist search now opens an inline field for task/event and active goods sections. It trims and lowercases queries as the Web controller does, filters rendered rows/categories without a network request, and restores rows when closed.
+
+## Daily interaction parity (2026-10-01)
+
+Calendar and checklist accept horizontal month swipes (left: next, right: previous). Short movement, vertical scrolling, multi-touch and gestures inside text/spinner/horizontal-scroll controls do not navigate months. Calendar selects day 1; checklist retains the day, clamped to the destination month length. Both shopping and belongings render together; the kind selector controls creation/catalog/set actions only. Catalogs, drag targets, expansion keys and mutations stay kind-specific.
+
+Messages initially scroll to the latest bottom with the composer pinned below. A refresh near the bottom follows latest; history readers keep the visible message anchor. Older-page prepends preserve the same anchor. Refresh merges the latest page with already loaded older history, updates matching IDs, deduplicates older pages and removes stale rows when the server returns a complete page. Explicit text sending requests latest again. Fixed-size photo/stamp slots keep delayed image loads from shifting layout. Fixture tests cover these gestures, month-end clamping, combined lists, initial bottom position, refresh/history anchors and message page merging on API 30/35 in both themes.
+
+Web event detail/edit entry is a separate draft PR #1146. Android event editing already exists. The Web change adds a visible detail/edit link using the existing detail page and server edit permissions; it does not deploy or change APIs.
