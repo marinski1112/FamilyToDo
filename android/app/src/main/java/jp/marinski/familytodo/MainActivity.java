@@ -5276,7 +5276,7 @@ public final class MainActivity extends Activity {
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(title).setView(input)
             .setPositiveButton("保存",null).setNegativeButton("戻る",null).create();
         boolean[] saving={false};int epoch=sessionEpoch;
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             if(saving[0]||snapshot==null||epoch!=sessionEpoch) return;
             if(!ApiClient.canMutate()) {input.setError("このビルドは読み取り専用です");return;}
             String name=input.getText().toString().trim();
@@ -5302,7 +5302,7 @@ public final class MainActivity extends Activity {
                     }});
                 }
             });
-        }));dialog.show();return dialog;
+        });return dialog;
 
     }
     private void showAppMembers(JSONObject settings,boolean admin) {
