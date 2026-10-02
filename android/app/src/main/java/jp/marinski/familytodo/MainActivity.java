@@ -1960,7 +1960,8 @@ public final class MainActivity extends Activity {
         main.addView(name,new LinearLayout.LayoutParams(0,dp(48),1));
         main.addView(infoButton(()->details.setVisibility(details.getVisibility()==android.view.View.GONE?
             android.view.View.VISIBLE:android.view.View.GONE)),new LinearLayout.LayoutParams(dp(32),dp(32)));
-        TextView status=label("");status.setTextSize(12);status.setTextColor(mutedColor());
+        TextView status=label("");status.setTextSize(12);status.setTextColor(mutedColor());status.setPadding(0,dp(2),0,dp(2));status.setVisibility(android.view.View.GONE);
+        status.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){status.setVisibility(s.length()==0?android.view.View.GONE:android.view.View.VISIBLE);}public void afterTextChanged(android.text.Editable s){}});
         final boolean[] saving={false};
         Runnable save=()->{
             String value=name.getText().toString().trim(),note=memo.getText().toString().trim(),link=url.getText().toString().trim();
@@ -4295,9 +4296,12 @@ public final class MainActivity extends Activity {
         renderedContent.requestLayout();
     }
     private void renderMessages() {
-        TextView title=heading("家族");title.setGravity(Gravity.CENTER);title.setTextSize(18);content.addView(title);
-        TextView subtitle=label("家族グループ");subtitle.setGravity(Gravity.CENTER);subtitle.setTextSize(10);subtitle.setTextColor(mutedColor());content.addView(subtitle);
-        content.addView(button("↻ 更新",()->loadMessages(0)));
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(8),dp(6),dp(8),dp(6));header.setBackground(shape(surfaceColor(),lineColor(),0));
+        header.addView(new android.view.View(this),new LinearLayout.LayoutParams(dp(36),dp(36)));
+        LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);
+        TextView title=heading("家族");title.setGravity(Gravity.CENTER);title.setTextSize(18);title.setPadding(0,0,0,dp(3));names.addView(title);
+        TextView subtitle=label("家族グループ");subtitle.setGravity(Gravity.CENTER);subtitle.setTextSize(10);subtitle.setTextColor(mutedColor());subtitle.setPadding(0,0,0,0);names.addView(subtitle);
+        header.addView(names,new LinearLayout.LayoutParams(0,-2,1));Button refresh=flatButton("↻",()->loadMessages(0));refresh.setContentDescription("伝言を更新");header.addView(refresh,new LinearLayout.LayoutParams(dp(36),dp(36)));content.addView(header);
         if(hasOlderMessages&&messages.length()>0)content.addView(button("以前の伝言",()->loadMessages(messages.optJSONObject(0).optInt("id"))));
         String previousDay="";
         for(int n=0;n<messages.length();n++) {
