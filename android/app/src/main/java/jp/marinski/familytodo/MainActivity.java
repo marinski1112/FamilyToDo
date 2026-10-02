@@ -726,20 +726,7 @@ public final class MainActivity extends Activity {
                 }
             }).show();
     }
-    private void showSettingsActions() {
-        String[] actions={"位置設定","アプリ設定","Google連携の状態","ホーム画面アイコン","ログアウト","Web版の管理画面"};
-        new AlertDialog.Builder(this).setTitle("設定")
-            .setItems(actions,(dialog,which) -> {
-                switch(which) {
-                    case 0:showSettings();break;
-                    case 1:loadAppSettings();break;
-                    case 2:loadIntegrationStatus();break;
-                    case 3:pinFamilyShortcut();break;
-                    case 4:logout();break;
-                    case 5:showWebPage("/app/settings.php");break;
-                }
-            }).show();
-    }
+    private void showSettingsActions() { loadAppSettings(); }
     private String dateValue(JSONObject row, String primary, String fallback) {
         String first = row.isNull(primary) ? "" : row.optString(primary, "");
         if (!first.isEmpty()) return first;
@@ -3301,38 +3288,58 @@ public final class MainActivity extends Activity {
             range[1]=LocalDate.of(y,m+1,d);startRangeLabel(form,1,"終了日: "+range[1]);
         },range[1].getYear(),range[1].getMonthValue()-1,range[1].getDayOfMonth()).show());
         form.addView(start);form.addView(end);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("集計期間を指定（最大366日）").setView(form)
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("集計期間を指定（最大1096日）").setView(form)
             .setPositiveButton("集計",null).setNegativeButton("キャンセル",null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             long days=java.time.temporal.ChronoUnit.DAYS.between(range[0],range[1])+1;
-            if(days<1||days>366) { Toast.makeText(this,"1〜366日で指定してください",Toast.LENGTH_SHORT).show();return; }
+            if(days<1||days>1096) { Toast.makeText(this,"1〜1096日で指定してください",Toast.LENGTH_SHORT).show();return; }
             dialog.dismiss();loadFamilyLogSummary(range[0],range[1],subjectId,name);
         }));dialog.show();
     }
     private void startRangeLabel(LinearLayout form,int index,String value) { ((Button)form.getChildAt(index)).setText(value); }
     private void loadFamilyLogSummary(LocalDate start,LocalDate end,int subjectId,String name) {
+        if(start.isAfter(end)||java.time.temporal.ChronoUnit.DAYS.between(start,end)>=1096||start.getYear()<2000||end.getYear()>2099) {
+            Toast.makeText(this,"2000〜2099年・1〜1096日で指定してください",Toast.LENGTH_SHORT).show();return;
+        }
         String to=end.toString(),from=start.toString();
         int epoch=sessionEpoch;
+        java.util.concurrent.atomic.AtomicBoolean canceled=new java.util.concurrent.atomic.AtomicBoolean(false);
+        AlertDialog progress=new AlertDialog.Builder(this).setTitle("集計を取得中").setMessage("必要な期間だけ取得しています")
+            .setNegativeButton("中止",(d,w)->canceled.set(true)).create();
+        progress.setOnCancelListener(d->canceled.set(true));progress.show();
         network.execute(() -> {
             try {
-                JSONObject totals=new JSONObject();JSONArray daily=new JSONArray();
+                JSONObject totals=new JSONObject(),latest=new JSONObject();JSONArray daily=new JSONArray();
                 for(LocalDate cursor=start;!cursor.isAfter(end);cursor=cursor.plusDays(30)) {
-                    if(epoch!=sessionEpoch) return;
+                    if(epoch!=sessionEpoch||canceled.get()) return;
                     LocalDate chunkEnd=cursor.plusDays(29).isBefore(end)?cursor.plusDays(29):end;
                     JSONObject response=ApiClient.request("/api/android/v1/family-log-summary?from="+cursor+"&to="+chunkEnd+
                         "&subject="+(subjectId==0?"":subjectId),null);
                     JSONObject part=response.getJSONObject("totals");JSONArray rows=response.getJSONArray("daily");
-                    for(String key:new String[]{"entries","milkMl","wet","dirty","sleepMinutes","meals","toilet","baths","medicine","chores"})
+                    for(String key:new String[]{"entries","milkMl","wet","dirty","sleepMinutes","meals","toilet","baths","medicine","chores","waterMl","exerciseMinutes","walkMinutes"})
                         totals.put(key,totals.optDouble(key)+part.optDouble(key));
+                    FamilyLogMeasurements.mergeLatest(latest,response.optJSONArray("latestMeasurements"));
+                    final String received=from+" 〜 "+chunkEnd;
+                    runOnUiThread(()->{if(epoch==sessionEpoch&&!canceled.get()&&progress.isShowing())progress.setMessage(received+" 取得済み");});
                     JSONArray combined=new JSONArray();
                     for(int i=0;i<rows.length();i++) combined.put(rows.getJSONObject(i));
                     for(int i=0;i<daily.length();i++) combined.put(daily.getJSONObject(i));
                     daily=combined;
                 }
+                totals.put("latestMeasurements",latest);
                 final JSONArray resultDays=daily;
                 runOnUiThread(() -> {
-                    if(epoch!=sessionEpoch || !tab.equals("familylog")) return;
-                    StringBuilder result=new StringBuilder(from+" 〜 "+to+"\n");
+                    progress.dismiss();
+                    if(epoch!=sessionEpoch || canceled.get() || !tab.equals("familylog")) return;
+                    showFamilyLogSummary(resultDays,totals,start,end,name);
+                });
+            } catch(Exception error) {
+                runOnUiThread(() -> { progress.dismiss();if(epoch==sessionEpoch&&!canceled.get()) Toast.makeText(this,"集計を取得できませんでした",Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+    private AlertDialog showFamilyLogSummary(JSONArray resultDays,JSONObject totals,LocalDate start,LocalDate end,String name) {
+                    StringBuilder result=new StringBuilder(start+" 〜 "+end+"\n");
                     result.append("記録 ").append(totals.optInt("entries")).append("件 ・ ミルク ")
                         .append((int)Math.round(totals.optDouble("milkMl"))).append("ml\n")
                         .append("おしっこ ").append(totals.optInt("wet")).append("回 ・ うんち ")
@@ -3353,37 +3360,45 @@ public final class MainActivity extends Activity {
                     LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
                     LinearLayout chart=new LinearLayout(this);chart.setOrientation(LinearLayout.VERTICAL);
                     String[] metricNames={"ミルク量（ml）","睡眠時間（分）","記録件数","おしっこ（回）","うんち（回）",
-                        "食事（回）","トイレ（回）","入浴（回）","薬（回）","家事（回）"};
+                        "食事（回）","トイレ（回）","入浴（回）","薬（回）","家事（回）","水分量（ml）","運動（分）","散歩（分）","体温（℃・日別最大）","体重（kg・日別最大）","身長（cm・日別最大）"};
                     String[] metricKeys={"milkMl","sleepMinutes","entries","wet","dirty",
-                        "meals","toilet","baths","medicine","chores"};
+                        "meals","toilet","baths","medicine","chores","waterMl","exerciseMinutes","walkMinutes","temperatureMax","weightMax","heightMax"};
+                    LocalDate[] window={end.minusDays(29).isAfter(start)?end.minusDays(29):start,end};
                     Button metric=new Button(this);metric.setText("グラフ: "+metricNames[0]);
                     metric.setOnClickListener(view ->
                         new AlertDialog.Builder(this).setTitle("グラフの項目")
                             .setItems(metricNames,(dialog,which) -> {
                                 chart.setTag(metricKeys[which]);
                                 metric.setText("グラフ: "+metricNames[which]);
-                                renderFamilyLogChart(chart,resultDays,start,end);
+                                renderFamilyLogChart(chart,resultDays,window[0],window[1]);
                             }).show());
-                    chart.setTag(metricKeys[0]);renderFamilyLogChart(chart,resultDays,start,end);
-                    panel.addView(metric);panel.addView(chart);
+                    chart.setTag(metricKeys[0]);renderFamilyLogChart(chart,resultDays,window[0],window[1]);
+                    LinearLayout navigation=new LinearLayout(this);navigation.setOrientation(LinearLayout.HORIZONTAL);
+                    Button previous=button("‹ 前の30日",()->{}),next=button("次の30日 ›",()->{});
+                    Runnable refresh=()->{previous.setEnabled(window[0].isAfter(start));next.setEnabled(window[1].isBefore(end));renderFamilyLogChart(chart,resultDays,window[0],window[1]);};
+                    previous.setOnClickListener(v->{window[1]=window[0].minusDays(1);window[0]=window[1].minusDays(29).isAfter(start)?window[1].minusDays(29):start;refresh.run();});
+                    next.setOnClickListener(v->{window[0]=window[1].plusDays(1);window[1]=window[0].plusDays(29).isBefore(end)?window[0].plusDays(29):end;refresh.run();});
+                    navigation.addView(previous,new LinearLayout.LayoutParams(0,-2,1));navigation.addView(next,new LinearLayout.LayoutParams(0,-2,1));refresh.run();
+                    panel.addView(metric);panel.addView(navigation);panel.addView(chart);
+                    panel.addView(label(FamilyLogMeasurements.describeLatest(totals.optJSONObject("latestMeasurements"))));
+                    panel.addView(label("水分 "+Math.round(totals.optDouble("waterMl"))+"ml ・ 運動 "+Math.round(totals.optDouble("exerciseMinutes"))+"分 ・ 散歩 "+Math.round(totals.optDouble("walkMinutes"))+"分"));
                     panel.addView(label(result.toString()));scroll.addView(panel);
-                    new AlertDialog.Builder(this).setTitle(name+" の集計").setView(scroll)
+                    return new AlertDialog.Builder(this).setTitle(name+" の集計").setView(scroll)
                         .setPositiveButton("閉じる",null).show();
-                });
-            } catch(Exception error) {
-                runOnUiThread(() -> { if(epoch==sessionEpoch) Toast.makeText(this,"集計を取得できませんでした",Toast.LENGTH_SHORT).show(); });
-            }
-        });
     }
     private void renderFamilyLogChart(LinearLayout chart,JSONArray daily,LocalDate start,LocalDate end) {
         chart.removeAllViews();
         String key=String.valueOf(chart.getTag());
+        if(key.endsWith("Max")) {
+            chart.addView(label(start+" 〜 "+end+" ・ 日別最大値（記録のない日は欠測）"));
+            chart.addView(new FamilyLogMeasurements.Chart(this,daily,key,start,end),new LinearLayout.LayoutParams(-1,dp(220)));return;
+        }
         Map<String,String> titles=new HashMap<>();
         titles.put("milkMl","ミルク量（ml）");titles.put("sleepMinutes","睡眠時間（分）");
         titles.put("entries","記録件数");titles.put("wet","おしっこ（回）");titles.put("dirty","うんち（回）");
         titles.put("meals","食事（回）");titles.put("toilet","トイレ（回）");titles.put("baths","入浴（回）");
-        titles.put("medicine","薬（回）");titles.put("chores","家事（回）");
-        chart.addView(label(titles.getOrDefault(key,"記録")+" ・ 期間末尾の最大30日（記録がない日は0）"));
+        titles.put("medicine","薬（回）");titles.put("chores","家事（回）");titles.put("waterMl","水分量（ml）");titles.put("exerciseMinutes","運動（分）");titles.put("walkMinutes","散歩（分）");
+        chart.addView(label(titles.getOrDefault(key,"記録")+" ・ "+start+" 〜 "+end+"（記録がない日は0）"));
         Map<String,Double> values=new HashMap<>();
         for(int i=0;i<daily.length();i++) {
             JSONObject row=daily.optJSONObject(i);
@@ -5157,10 +5172,10 @@ public final class MainActivity extends Activity {
                         "DISCONNECTED".equals(taskState)?"未連携":"状態: "+taskState;
                     new AlertDialog.Builder(this).setTitle("Google連携の状態")
                         .setMessage("Google Calendar: "+calendarLabel+
-                            "\\n最終送信: "+calendar.optString("lastOutboundAt","—")+
-                            "\\n\\nGoogle Tasks（本人）: "+taskLabel+
-                            "\\n最終受信: "+tasks.optString("lastSyncAt","—")+
-                            "\\n競合の累計: "+tasks.optInt("conflictCount")+"件")
+                            "\n最終送信: "+calendar.optString("lastOutboundAt","—")+
+                            "\n\nGoogle Tasks（本人）: "+taskLabel+
+                            "\n最終受信: "+tasks.optString("lastSyncAt","—")+
+                            "\n競合の累計: "+tasks.optInt("conflictCount")+"件")
                         .setPositiveButton("閉じる",null).show();
                 });
             } catch(SecurityException error) {
@@ -5182,21 +5197,51 @@ public final class MainActivity extends Activity {
             }
         });
     }
-    private void showAppSettings(JSONObject settings) {
+    private AlertDialog showAppSettings(JSONObject settings) {
         boolean admin="OWNER".equalsIgnoreCase(settings.optString("role"))||"ADMIN".equalsIgnoreCase(settings.optString("role"));
-        String[] actions=admin?new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),
-            "家族のタイムゾーン","ホーム画面の表示名","家族メンバー","家族を招待"}:
-            new String[]{"プロフィール名","通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),"家族メンバー"};
-        new AlertDialog.Builder(this).setTitle("アプリ設定").setItems(actions,(dialog,which) -> {
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(12),0,dp(12),0);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("設定・管理").setView(scroll)
+            .setNegativeButton("閉じる",null).create();
+        panel.addView(label("自分・端末"));
+        addSettingsEntry(panel,dialog,"プロフィール名",()->showAppSettingsAction(settings,0));
+        addSettingsEntry(panel,dialog,"通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),()->showAppSettingsAction(settings,1));
+        addSettingsEntry(panel,dialog,"通知方法・通知する家族（Web）",()->showWebPage("/app/settings_notifications.php"));
+        addSettingsEntry(panel,dialog,"位置共有・端末の権限",this::showSettings);
+        addSettingsEntry(panel,dialog,"ホーム画面に追加",this::pinFamilyShortcut);
+        panel.addView(label("家族"));
+        addSettingsEntry(panel,dialog,"家族メンバー",()->showAppMembers(settings,admin));
+        if(admin) {
+            addSettingsEntry(panel,dialog,"家族を招待",this::createFamilyInvite);
+            addSettingsEntry(panel,dialog,"家族のタイムゾーン",()->showAppSettingsAction(settings,2));
+            addSettingsEntry(panel,dialog,"ホーム画面の表示名",()->showAppSettingsAction(settings,3));
+            addSettingsEntry(panel,dialog,"メンバーの詳細・招待履歴（Web）",()->showWebPage("/app/settings_members.php"));
+        }
+        panel.addView(label("日常の機能"));
+        addSettingsEntry(panel,dialog,"家族ログ管理",()->navigate("familylog"));
+        addSettingsEntry(panel,dialog,"定期タスク",this::loadRecurringRules);
+        if(snapshot!=null&&snapshot.optBoolean("canManageStamps"))
+            addSettingsEntry(panel,dialog,"スタンプ管理",this::loadStampAssets);
+        if(admin) addSettingsEntry(panel,dialog,"伝言リアクション",this::editMessageReactions);
+        addSettingsEntry(panel,dialog,"投稿管理（Web）",()->showWebPage("/app/settings_content.php"));
+        panel.addView(label("外部連携"));
+        addSettingsEntry(panel,dialog,"Google連携の状態",this::loadIntegrationStatus);
+        addSettingsEntry(panel,dialog,"接続・同期の設定（Web）",()->showWebPage("/app/settings_integrations.php"));
+        addSettingsEntry(panel,dialog,"カレンダーの取り込み（Web）",()->showWebPage("/app/calendar_import.php"));
+        if(admin) addSettingsEntry(panel,dialog,"家族の活動ログ（Web）",()->showWebPage("/app/logs.php"));
+        panel.addView(label("その他"));
+        addSettingsEntry(panel,dialog,"Web版の管理画面",()->showWebPage("/app/settings.php"));
+        addSettingsEntry(panel,dialog,"ログアウト",this::logout);
+        scroll.addView(panel);dialog.show();return dialog;
+    }
+    private void addSettingsEntry(LinearLayout panel,AlertDialog dialog,String title,Runnable action) {
+        Button entry=button(title,()->{dialog.dismiss();action.run();});entry.setGravity(android.view.Gravity.START|android.view.Gravity.CENTER_VERTICAL);
+        panel.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+    }
+    private void showAppSettingsAction(JSONObject settings,int which) {
+        boolean admin="OWNER".equalsIgnoreCase(settings.optString("role"))||"ADMIN".equalsIgnoreCase(settings.optString("role"));
             if(which==0) {
-                EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("name"));
-                new AlertDialog.Builder(this).setTitle("プロフィール名").setView(input)
-                    .setPositiveButton("保存",(d,w) -> {
-                        String name=input.getText().toString().trim();
-                        if(name.isEmpty()||name.length()>100) {Toast.makeText(this,"名前を確認してください",Toast.LENGTH_SHORT).show();return;}
-                        try {saveAppSetting("/api/settings",new JSONObject().put("action","profile").put("name",name));}
-                        catch(Exception ignored) { }
-                    }).setNegativeButton("戻る",null).show();
+                editAppSettingText("プロフィール名",settings.optString("name"),false);
             } else if(which==1) {
                 boolean enabled=!settings.optBoolean("notification_enabled");
                 try {saveAppSetting("/api/settings",new JSONObject().put("action","notification").put("enabled",enabled));}
@@ -5215,21 +5260,47 @@ public final class MainActivity extends Activity {
                                 }).setNegativeButton("戻る",null).show();
                         }).setNegativeButton("戻る",null).show();
             } else if(which==3&&admin) {
-                EditText input=new EditText(this);input.setSingleLine(true);input.setText(settings.optString("display_name"));
-                input.setHint("空欄で標準名に戻す");
-                new AlertDialog.Builder(this).setTitle("ホーム画面の表示名").setView(input)
-                    .setPositiveButton("保存",(d,w) -> {
-                        String name=input.getText().toString().trim();
-                        if(name.codePointCount(0,name.length())>24) {Toast.makeText(this,"24文字以内で入力してください",Toast.LENGTH_SHORT).show();return;}
-                        try {saveAppSetting("/api/pwa-branding",new JSONObject().put("display_name",name));}
-                        catch(Exception ignored) { }
-                    }).setNegativeButton("戻る",null).show();
+                editAppSettingText("ホーム画面の表示名",settings.optString("display_name"),true);
             } else if(which==4||which==2&&!admin) {
                 showAppMembers(settings,admin);
             } else if(which==5&&admin) {
                 createFamilyInvite();
             }
-        }).setNegativeButton("閉じる",null).show();
+    }
+    private AlertDialog editAppSettingText(String title,String initial,boolean branding) {
+        EditText input=new EditText(this);input.setSingleLine(true);input.setText(initial);
+        if(branding) input.setHint("空欄で標準名に戻す");
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(title).setView(input)
+            .setPositiveButton("保存",null).setNegativeButton("戻る",null).create();
+        boolean[] saving={false};int epoch=sessionEpoch;
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if(saving[0]||snapshot==null||epoch!=sessionEpoch) return;
+            if(!ApiClient.canMutate()) {input.setError("このビルドは読み取り専用です");return;}
+            String name=input.getText().toString().trim();
+            if(branding?name.codePointCount(0,name.length())>24:name.isEmpty()||name.length()>100) {
+                input.setError(branding?"24文字以内で入力してください":"名前を1〜100文字で入力してください");return;
+            }
+            saving[0]=true;input.setError(null);input.setEnabled(false);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);dialog.setCancelable(false);
+            String csrf=snapshot.optString("csrf");
+            network.execute(() -> {
+                try {
+                    if(epoch!=sessionEpoch) return;
+                    JSONObject body=new JSONObject().put("csrf",csrf);
+                    if(branding) body.put("display_name",name);else body.put("action","profile").put("name",name);
+                    ApiClient.request(branding?"/api/pwa-branding":"/api/settings",body);
+                    runOnUiThread(() -> {if(epoch==sessionEpoch&&dialog.isShowing()) {dialog.dismiss();loadAppSettings();}});
+                } catch(Exception error) {
+                    runOnUiThread(() -> {if(epoch==sessionEpoch&&dialog.isShowing()) {
+                        saving[0]=false;input.setEnabled(true);input.setError("保存できませんでした。入力を残しています。再度保存してください");
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);dialog.setCancelable(true);
+                    }});
+                }
+            });
+        }));dialog.show();return dialog;
+
     }
     private void showAppMembers(JSONObject settings,boolean admin) {
         JSONArray members=settings.optJSONArray("members");if(members==null) return;

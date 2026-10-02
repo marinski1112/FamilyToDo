@@ -201,12 +201,79 @@ public final class UiParityInstrumentation extends Instrumentation {
             testMessageScroll(messages);
             testReactionChips();
             testChildComposer();
+            testSettingsHub();
+            testSummaryWindow();
+            testMeasurementSummary();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);
             Bundle results=new Bundle();results.putString("stream","\nOK (1 test)\n");finish(Activity.RESULT_OK,results);
         }catch(Throwable error){
             status.putString("stack",android.util.Log.getStackTraceString(error));status.putString("stream",error.toString());sendStatus(-2,status);
             Bundle results=new Bundle();results.putString("stream","FAILURES!!!\n"+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,results);
         }
+    }
+    private JSONObject settingsFixture(String role)throws Exception {
+        return new JSONObject().put("role",role).put("member_id",1).put("name","テスト家族")
+            .put("notification_enabled",true).put("timezone","Asia/Tokyo").put("display_name","家族")
+            .put("members",new JSONArray().put(new JSONObject().put("id",1).put("name","テスト家族").put("role",role)));
+    }
+    private void testSettingsHub()throws Exception {
+        AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();AtomicReference<EditText> input=new AtomicReference<>();
+        onUi(()->{try{
+            Method hub=MainActivity.class.getDeclaredMethod("showAppSettings",JSONObject.class);hub.setAccessible(true);
+            for(String role:new String[]{"MEMBER","ADMIN","OWNER"}) {
+                android.app.AlertDialog d=(android.app.AlertDialog)hub.invoke(activity,settingsFixture(role));View view=d.getWindow().getDecorView();
+                check(findText(view,"自分・端末")!=null&&findText(view,"家族")!=null&&findText(view,"外部連携")!=null,"grouped settings "+role);
+                check((findText(view,"家族を招待")!=null)==!role.equals("MEMBER"),"invite role boundary "+role);
+                check((findText(view,"家族のタイムゾーン")!=null)==!role.equals("MEMBER"),"timezone role boundary "+role);
+                check(findText(view,"位置共有・端末の権限")!=null,"native location still reachable");
+                if(role.equals("ADMIN"))popup.set(d);else d.dismiss();
+                if(role.equals("ADMIN"))d.dismiss();
+            }
+            popup.set((android.app.AlertDialog)hub.invoke(activity,settingsFixture("OWNER")));
+        }catch(Exception e){throw new RuntimeException(e);}});screenshot("settings-hub");onUi(()->popup.get().dismiss());
+        onUi(()->{try{
+            Method edit=MainActivity.class.getDeclaredMethod("editAppSettingText",String.class,String.class,boolean.class);edit.setAccessible(true);
+            popup.set((android.app.AlertDialog)edit.invoke(activity,"プロフィール名","元の名前",false));
+            input.set(findText(popup.get().getWindow().getDecorView(),"元の名前") instanceof EditText?(EditText)findText(popup.get().getWindow().getDecorView(),"元の名前"):null);
+            check(input.get()!=null,"profile editor present");input.get().setText("");popup.get().getButton(-1).performClick();
+            check(popup.get().isShowing()&&input.get().getError()!=null&&settingsWrites==0,"invalid profile keeps editor without request");
+            input.get().setText("失敗プロフィール");popup.get().getButton(-1).performClick();popup.get().getButton(-1).performClick();
+        }catch(Exception e){throw new RuntimeException(e);}});
+        for(int i=0;i<100&&settingsWrites<1;i++)Thread.sleep(20);settle();
+        onUi(()->{check(settingsWrites==1&&popup.get().isShowing(),"failure remains open and no duplicate write");check(input.get().getText().toString().equals("失敗プロフィール")&&input.get().getError()!=null,"failed profile retains draft");
+            ApiClient.setMutationsEnabled(false);input.get().setText("成功プロフィール");popup.get().getButton(-1).performClick();check(settingsWrites==1,"read-only setting cannot write");ApiClient.setMutationsEnabled(true);
+            popup.get().getButton(-1).performClick();});
+        for(int i=0;i<100&&settingsWrites<2;i++)Thread.sleep(20);settle();
+        onUi(()->check(!popup.get().isShowing()&&settingsWrites==2,"retry succeeds once"));
+        // Closing the refreshed hub via Back keeps the fixture activity available.
+        shellOutput("input keyevent 4");settle();
+    }
+    private void testMeasurementSummary()throws Exception {
+        JSONObject latest=new JSONObject();
+        FamilyLogMeasurements.mergeLatest(latest,new JSONArray().put(new JSONObject().put("id",1).put("log_type","WEIGHT").put("amount",99).put("occurred_at","2026-08-01 09:00:00")));
+        FamilyLogMeasurements.mergeLatest(latest,new JSONArray().put(new JSONObject().put("id",2).put("log_type","WEIGHT").put("amount",0).put("occurred_at","2026-09-01 09:00:00")));
+        FamilyLogMeasurements.mergeLatest(latest,new JSONArray().put(new JSONObject().put("id",3).put("log_type","WEIGHT").put("amount",1).put("occurred_at","2026-09-01 09:00:00")));
+        check(latest.getJSONObject("WEIGHT").getDouble("amount")==1,"latest merges by timestamp then id across chunks");
+        JSONArray days=new JSONArray().put(new JSONObject().put("day","2026-09-01").put("temperatureMax",39.1)).put(new JSONObject().put("day","2026-09-02").put("temperatureMax",JSONObject.NULL)).put(new JSONObject().put("day","2026-09-03").put("temperatureMax",0));
+        check(FamilyLogMeasurements.points(days,"temperatureMax",LocalDate.parse("2026-09-01"),LocalDate.parse("2026-09-03")).size()==2,"chart keeps zero and excludes missing measurement");
+        AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();
+        onUi(()->{FamilyLogMeasurements.Chart chart=new FamilyLogMeasurements.Chart(activity,days,"temperatureMax",LocalDate.parse("2026-09-01"),LocalDate.parse("2026-09-03"));
+            android.widget.LinearLayout panel=new android.widget.LinearLayout(activity);panel.addView(chart,new android.widget.LinearLayout.LayoutParams(-1,440));
+            popup.set(new android.app.AlertDialog.Builder(activity).setTitle("体温の推移").setView(panel).setPositiveButton("閉じる",null).show());
+            check(chart.getContentDescription().toString().contains("39.1"),"chart exposes measurements for accessibility");});screenshot("measurement-chart");onUi(()->popup.get().dismiss());
+    }
+    private void testSummaryWindow()throws Exception {
+        AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();LocalDate first=LocalDate.of(2026,7,1),last=LocalDate.of(2026,9,30);
+        onUi(()->{try{
+            Method show=MainActivity.class.getDeclaredMethod("showFamilyLogSummary",JSONArray.class,JSONObject.class,LocalDate.class,LocalDate.class,String.class);show.setAccessible(true);
+            JSONArray days=new JSONArray().put(new JSONObject().put("day","2026-07-01").put("milkMl",120)).put(new JSONObject().put("day","2026-09-30").put("milkMl",160));
+            popup.set((android.app.AlertDialog)show.invoke(activity,days,new JSONObject().put("milkMl",280),first,last,"テスト"));View view=popup.get().getWindow().getDecorView();
+            check(!findText(view,"次の30日 ›").isEnabled(),"graph starts at latest boundary");
+            findText(view,"‹ 前の30日").performClick();check(findContaining(view,"2026-08-02 〜 2026-08-31")!=null,"graph reaches previous fetched month");
+            findText(view,"‹ 前の30日").performClick();findText(view,"‹ 前の30日").performClick();
+            check(!findText(view,"‹ 前の30日").isEnabled()&&findContaining(view,"2026-07-01 〜 2026-07-02")!=null,"graph reaches exact range start");
+            check(findText(view,"120")!=null,"earliest record visible");findText(view,"次の30日 ›").performClick();check(findContaining(view,"2026-07-03 〜 2026-08-01")!=null,"graph advances without lost dates");
+        }catch(Exception e){throw new RuntimeException(e);}});screenshot("summary-history");onUi(()->popup.get().dismiss());
     }
     private void testChildComposer()throws Exception{
         AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();AtomicReference<EditText> title=new AtomicReference<>();
@@ -241,7 +308,11 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->dialog.get().dismiss());
     }
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
+    private volatile int settingsWrites;
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.equals("/api/android/v1/settings"))return settingsFixture("OWNER");
+        if(path.equals("/api/settings")&&body!=null){settingsWrites++;if(body.optString("name").equals("失敗プロフィール"))throw new IllegalStateException("synthetic settings failure");return new JSONObject().put("ok",true);}
+
         if(path.equals("/api/message-reactions")){reactionWrites++;if(body.optString("emoji").equals("失敗"))throw new IllegalStateException("synthetic reaction failure");reactionSelected=!reactionSelected;return new JSONObject().put("ok",true);}
         if(path.startsWith("/api/message-reactions?ids="))return new JSONObject().put("ok",true).put("emojis",new JSONArray().put("👍")).put("reactions",new JSONArray().put(new JSONObject().put("messageId",1).put("emoji","👍").put("count",reactionSelected?3:2).put("mine",reactionSelected)));
         if(path.equals("/api/task")){lastTaskCreate=new JSONObject(body.toString());taskCreates++;if(taskCreates==1)throw new IllegalStateException("synthetic task creation failure");return new JSONObject().put("ok",true).put("id",++nextId);}

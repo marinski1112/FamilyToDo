@@ -42,3 +42,11 @@ API draft #1147 (`fix/android-overview-completion-parity`) adds recent undated c
 ## API rollout and branch integration (2026-10-02)
 
 PR #1147 is merged to main bae2e185c6949cff298fd083d19c32cccd1cff66 and exact-main Workers Builds succeeded at production version b3e634be-5728-48dc-826b-a32e7b930483. Native v0.1.187 already supports these additive columns and response collections; no replacement APK is required for this server change. Merge that main into #1143, resolving the overview add/add conflict by using the deployed main API. Native Java/Gradle/assets are unchanged. Distribution README and PR description must mark the API as deployed rather than pending. Signed-in production data verification remains the real-device pass. #1146 stays separate.
+
+## 管理画面の整理と集計の期間移動（2026-10-02）
+
+設定入口を自分・端末／家族／日常の機能／外部連携に集約。管理者専用の招待・タイムゾーン・表示名・メンバー詳細・活動ログはsettings APIのroleで表示を分ける。家族ログ管理はネイティブ画面へ、通知方法・接続・インポート等は既存Webへ明示した入口を用意。プロフィール名・表示名の保存では入力エラーと通信失敗後もフォームを保持し、連打・読み取り専用で送信しない。Google状態の改行も修正。集計グラフは取得済み期間を30日ずつ前後に移動できる。今回API変更なし。最新体温・体重・身長の折れ線、水分・運動・散歩、最大3年、固定署名・実機確認は残る。
+
+### 家族ログ詳細集計の追加
+
+最新体温・体重・身長（実際の日時・ID順）と日別最大値の折れ線、水分ml・運動分・散歩分、最大1096日の期間指定を追加。30日ごとに必要時だけ取得し、進捗表示と中止を用意。欠測は0で描かず、値0は測定値として保持。API追加は別PR #1148（検証・反映状態は配布時に更新）。前記のこれらの残件記述を更新する。記録者別集計・予防接種一覧などの詳細比較、他管理設定のネイティブ化、オフライン保存・署名・実機確認は継続。
