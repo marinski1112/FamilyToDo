@@ -5030,6 +5030,7 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("閉じる",null).show();
     }
     private void showLogin() {
+        if(homeSpeaker!=null){homeSpeaker.close();homeSpeaker=null;}
         ApiClient.setMutationsEnabled(false);
         if (login != null) return;
         sessionEpoch++;
