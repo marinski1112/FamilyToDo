@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {database,context,loadTs} from './goods-category-test-support.mjs';
+const {androidFamilyLogSummaryApi}=loadTs('src/android-family-log-summary-api.ts');
+const db=database(),ctx=context(db);
+db.exec("INSERT INTO family_log_subjects(id,family_id,name,subject_kind,active,created_at,updated_at) VALUES(1,1,'Child','BABY',1,'2026-01-01','2026-01-01'),(2,1,'Adult','ADULT',1,'2026-01-01','2026-01-01'),(3,2,'Foreign','BABY',1,'2026-01-01','2026-01-01'); INSERT INTO family_log_settings(family_id,show_adult_logs,created_at,updated_at) VALUES(1,0,'2026-01-01','2026-01-01');");
+const add=(type,amount,at,subject=1,family=1,unit='',duration=null,deleted=null)=>db.prepare('INSERT INTO family_logs(family_id,subject_id,log_type,amount,unit,duration_minutes,occurred_at,created_by,created_at,updated_at,deleted_at) VALUES(?,?,?,?,?,?,?,1,?,?,?)').run(family,subject,type,amount,unit,duration,at,at,at,deleted);
+add('TEMPERATURE',39,'2026-10-01 09:00:00');add('TEMPERATURE',36.5,'2026-10-01 10:00:00');add('TEMPERATURE',36.7,'2026-10-01 10:00:00');
+add('WEIGHT',0,'2026-10-02 08:00:00');add('HEIGHT',80,'2026-10-01 08:00:00');
+add('TEMPERATURE',99,'2026-10-02 09:00:00',2);add('TEMPERATURE',98,'2026-10-02 09:00:00',3,2);add('TEMPERATURE',97,'2026-10-02 09:00:00',1,1,'',null,'2026-10-02');
+add('WATER',200,'2026-10-02 10:00:00',1,1,'ml');add('EXERCISE',null,'2026-10-02 10:00:00',1,1,'',15);add('WALK',null,'2026-10-02 10:00:00',1,1,'',20);
+const get=(query='from=2026-10-01&to=2026-10-02',context=ctx)=>androidFamilyLogSummaryApi(new Request('https://test/api/android/v1/family-log-summary?'+query),context);
+const response=await get();assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'private, no-store');const data=await response.json();
+assert.equal(data.daily.find(r=>r.day==='2026-10-01').temperatureMax,39);assert.equal(data.daily.find(r=>r.day==='2026-10-02').temperatureMax,null);assert.equal(data.daily.find(r=>r.day==='2026-10-02').weightMax,0);
+assert.equal(data.latestMeasurements.find(r=>r.log_type==='TEMPERATURE').amount,36.7,'latest timestamp and id, not maximum');assert.equal(data.latestMeasurements.length,3);
+assert.equal(data.totals.waterMl,200);assert.equal(data.totals.exerciseMinutes,15);assert.equal(data.totals.walkMinutes,20);
+assert.equal((await get('from=2026-10-01&to=2026-10-02&subject=3')).status,404);assert.equal((await get('from=2026-10-01&to=2026-11-01')).status,400);assert.equal((await get('from=2026-02-30&to=2026-03-01')).status,400);assert.equal((await get(undefined,{...ctx,member:null})).status,401);
+assert.equal((await androidFamilyLogSummaryApi(new Request('https://test/api',{method:'POST'}),ctx)).status,405);
+console.log('Android family-log summary: bounded SQL, latest/max/null/zero, family/adult scope and method/auth verified.');db.close();

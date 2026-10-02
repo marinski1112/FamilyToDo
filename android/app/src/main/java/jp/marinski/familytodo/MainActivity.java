@@ -3297,9 +3297,9 @@ public final class MainActivity extends Activity {
         }));dialog.show();
     }
     private void startRangeLabel(LinearLayout form,int index,String value) { ((Button)form.getChildAt(index)).setText(value); }
-    private void loadFamilyLogSummary(LocalDate start,LocalDate end,int subjectId,String name) {
+    private AlertDialog loadFamilyLogSummary(LocalDate start,LocalDate end,int subjectId,String name) {
         if(start.isAfter(end)||java.time.temporal.ChronoUnit.DAYS.between(start,end)>=1096||start.getYear()<2000||end.getYear()>2099) {
-            Toast.makeText(this,"2000〜2099年・1〜1096日で指定してください",Toast.LENGTH_SHORT).show();return;
+            Toast.makeText(this,"2000〜2099年・1〜1096日で指定してください",Toast.LENGTH_SHORT).show();return null;
         }
         String to=end.toString(),from=start.toString();
         int epoch=sessionEpoch;
@@ -3311,7 +3311,7 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject totals=new JSONObject(),latest=new JSONObject();JSONArray daily=new JSONArray();
                 for(LocalDate cursor=start;!cursor.isAfter(end);cursor=cursor.plusDays(30)) {
-                    if(epoch!=sessionEpoch||canceled.get()) return;
+                    if(epoch!=sessionEpoch||canceled.get()) {runOnUiThread(progress::dismiss);return;}
                     LocalDate chunkEnd=cursor.plusDays(29).isBefore(end)?cursor.plusDays(29):end;
                     JSONObject response=ApiClient.request("/api/android/v1/family-log-summary?from="+cursor+"&to="+chunkEnd+
                         "&subject="+(subjectId==0?"":subjectId),null);
@@ -3336,7 +3336,7 @@ public final class MainActivity extends Activity {
             } catch(Exception error) {
                 runOnUiThread(() -> { progress.dismiss();if(epoch==sessionEpoch&&!canceled.get()) Toast.makeText(this,"集計を取得できませんでした",Toast.LENGTH_SHORT).show(); });
             }
-        });
+        });return progress;
     }
     private AlertDialog showFamilyLogSummary(JSONArray resultDays,JSONObject totals,LocalDate start,LocalDate end,String name) {
                     StringBuilder result=new StringBuilder(start+" 〜 "+end+"\n");
@@ -5193,7 +5193,10 @@ public final class MainActivity extends Activity {
                 JSONObject settings=ApiClient.request("/api/android/v1/settings",null);
                 runOnUiThread(() -> {if(epoch==sessionEpoch) showAppSettings(settings);});
             } catch(Exception error) {
-                runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"設定を読み込めませんでした",Toast.LENGTH_SHORT).show();});
+                runOnUiThread(() -> {if(epoch==sessionEpoch) new AlertDialog.Builder(this).setTitle("設定を取得できませんでした")
+                    .setMessage("通信を確認して再度読み込んでください。端末の設定は今も利用できます。")
+                    .setPositiveButton("再読み込み",(d,w)->loadAppSettings())
+                    .setNeutralButton("位置共有・端末の権限",(d,w)->showSettings()).setNegativeButton("閉じる",null).show();});
             }
         });
     }

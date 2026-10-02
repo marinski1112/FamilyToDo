@@ -33,6 +33,8 @@ jobs:
         if: always()
       - run: node scripts/overdue-task-pagination-contract.mjs
         if: always()
+      - run: node scripts/android-family-log-summary-contract.mjs
+        if: always()
       - run: node scripts/android-overview-parity-contract.mjs
         if: always()
       - run: node scripts/overdue-shopping-pagination-contract.mjs

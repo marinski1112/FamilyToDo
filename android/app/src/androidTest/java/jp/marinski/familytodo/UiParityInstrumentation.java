@@ -204,6 +204,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             testSettingsHub();
             testSummaryWindow();
             testMeasurementSummary();
+            testSummaryCancellation();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);
             Bundle results=new Bundle();results.putString("stream","\nOK (1 test)\n");finish(Activity.RESULT_OK,results);
         }catch(Throwable error){
@@ -247,6 +248,19 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->check(!popup.get().isShowing()&&settingsWrites==2,"retry succeeds once"));
         // Closing the refreshed hub via Back keeps the fixture activity available.
         shellOutput("input keyevent 4");settle();
+    }
+    private final java.util.concurrent.CountDownLatch summaryStarted=new java.util.concurrent.CountDownLatch(1),summaryRelease=new java.util.concurrent.CountDownLatch(1);
+    private volatile int summaryRequests;
+    private void testSummaryCancellation()throws Exception {
+        AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();AtomicReference<java.util.concurrent.ExecutorService> executor=new AtomicReference<>();
+        onUi(()->{try {
+            field("tab","familylog");Method load=MainActivity.class.getDeclaredMethod("loadFamilyLogSummary",LocalDate.class,LocalDate.class,int.class,String.class);load.setAccessible(true);
+            check(load.invoke(activity,LocalDate.of(1999,12,31),LocalDate.of(2000,1,1),0,"テスト")==null,"API year bounds validated before request");
+            popup.set((android.app.AlertDialog)load.invoke(activity,LocalDate.of(2024,1,1),LocalDate.of(2026,12,31),0,"テスト"));executor.set((java.util.concurrent.ExecutorService)value("network"));
+        }catch(Exception e){throw new RuntimeException(e);}});
+        check(summaryStarted.await(5,java.util.concurrent.TimeUnit.SECONDS),"summary first chunk started");
+        onUi(()->popup.get().getButton(-2).performClick());summaryRelease.countDown();executor.get().submit(()->{}).get(5,java.util.concurrent.TimeUnit.SECONDS);settle();
+        check(summaryRequests==1,"cancel stops remaining three-year chunk requests");onUi(()->check(!popup.get().isShowing(),"cancel closes progress"));
     }
     private void testMeasurementSummary()throws Exception {
         JSONObject latest=new JSONObject();
@@ -310,6 +324,8 @@ public final class UiParityInstrumentation extends Instrumentation {
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
     private volatile int settingsWrites;
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.startsWith("/api/android/v1/family-log-summary?")){summaryRequests++;summaryStarted.countDown();summaryRelease.await(5,java.util.concurrent.TimeUnit.SECONDS);return new JSONObject().put("totals",new JSONObject()).put("daily",new JSONArray());}
+
         if(path.equals("/api/android/v1/settings"))return settingsFixture("OWNER");
         if(path.equals("/api/settings")&&body!=null){settingsWrites++;if(body.optString("name").equals("失敗プロフィール"))throw new IllegalStateException("synthetic settings failure");return new JSONObject().put("ok",true);}
 
