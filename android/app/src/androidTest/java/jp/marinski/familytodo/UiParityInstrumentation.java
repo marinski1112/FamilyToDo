@@ -28,6 +28,8 @@ public final class UiParityInstrumentation extends Instrumentation {
     private volatile int backgroundWrites;
     private volatile String lastBackgroundScope,lastBackgroundMethod;
     private volatile int failedMoves;
+    private volatile int reactionWrites;
+    private volatile boolean reactionSelected;
     @Override public void onCreate(Bundle arguments){super.onCreate(arguments);start();}
     @Override public void onStart(){
         Bundle status=new Bundle();status.putString("id","InstrumentationTestRunner");
@@ -102,10 +104,12 @@ public final class UiParityInstrumentation extends Instrumentation {
             settle();check(hasContaining("今日のタスク"),"home contains today's task");
             check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
+            testChecklistDates();
             testMonthSwipes("goods");
             clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"items visible while shopping selected");clickDescription("保育園を開閉");
             clickText("🎒 持ち物");check(hasText("スーパー"),"shopping remains visible while item selected");
             clickText("🛒 買い物");
+            testUnifiedGoodsSearch();
             onUi(()->{TextView label=findText(root(),"チェックリスト");check(label.getLayout()!=null&&label.getLayout().getLineWidth(0)<=label.getWidth()-label.getCompoundPaddingLeft()-label.getCompoundPaddingRight(),"navigation label fits slot");});
             clickDescription("タスクを検索");
             onUi(()->{EditText search=findHint(root(),"タスクを検索");search.setText("一致しない検索");View title=findText(root(),"今日のタスク");check(((View)title.getParent()).getVisibility()==View.GONE,"task search hides nonmatching row");search.setText(" 今日のタスク ");check(((View)title.getParent()).getVisibility()==View.VISIBLE,"task search trims query and restores match");});
@@ -140,11 +144,13 @@ public final class UiParityInstrumentation extends Instrumentation {
                 catalog.put("categoryMeta",new JSONArray()
                     .put(new JSONObject().put("name","新しい空").put("enabled",1).put("activated_at",java.time.Instant.now().toString()))
                     .put(new JSONObject().put("name","古い空").put("enabled",1).put("activated_at","2020-01-01T00:00:00Z")));
+                JSONObject itemCatalog=(JSONObject)value("itemCategories");itemCatalog.put("categories",new JSONArray().put("保育園").put("古い持ち物"));itemCatalog.put("categoryMeta",new JSONArray().put(new JSONObject().put("name","古い持ち物").put("enabled",1).put("activated_at","2020-01-01T00:00:00Z")));
                 invoke("render");
             }catch(Exception e){throw new RuntimeException(e);}});
             check(hasText("新しい空"),"fresh empty category at normal position");
             check(!hasText("古い空"),"archived empty hidden behind cluster");
-            clickDescription("空のカテゴリを開閉");check(hasText("古い空"),"archived category inside cluster");
+            onUi(()->check(countDescription(root(),"空のカテゴリを開閉")==1,"both kinds share one empty cluster"));
+            clickDescription("空のカテゴリを開閉");check(hasText("古い空"),"archived category inside cluster");check(hasText("古い持ち物"),"item archive joins shared cluster");
             clickDescription("古い空に追加");check(findHintOnUi("新しい買い物")!=null,"archived category can reopen for entry");
             screenshot("checklist");
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
@@ -161,6 +167,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             });
             check(hasText("+1"),"overlapping stamp overflow");
             onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
+            testCalendarDates();
             testMonthSwipes("calendar");
             screenshot("calendar");
             testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
@@ -185,6 +192,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(MainActivity.mergeMessagePage(merged,history,2,true).length()==3,"repeated older page deduplicates IDs");
             check(MainActivity.mergeMessagePage(merged,latest,0,false).length()==2,"complete refresh removes stale history");
             testMessageScroll(messages);
+            testReactionChips();
             testChildComposer();
             status.putString("stream","\nPassed "+checks+" native UI checks.\n");sendStatus(0,status);
             Bundle results=new Bundle();results.putString("stream","\nOK (1 test)\n");finish(Activity.RESULT_OK,results);
@@ -227,6 +235,8 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.equals("/api/message-reactions")){reactionWrites++;if(body.optString("emoji").equals("失敗"))throw new IllegalStateException("synthetic reaction failure");reactionSelected=!reactionSelected;return new JSONObject().put("ok",true);}
+        if(path.startsWith("/api/message-reactions?ids="))return new JSONObject().put("ok",true).put("emojis",new JSONArray().put("👍")).put("reactions",new JSONArray().put(new JSONObject().put("messageId",1).put("emoji","👍").put("count",reactionSelected?3:2).put("mine",reactionSelected)));
         if(path.equals("/api/task")){lastTaskCreate=new JSONObject(body.toString());taskCreates++;if(taskCreates==1)throw new IllegalStateException("synthetic task creation failure");return new JSONObject().put("ok",true).put("id",++nextId);}
         if(path.equals("/api/calendar-stickers")){backgroundWrites++;lastBackgroundScope=body.optString("visibilityScope");lastBackgroundMethod=method;if(body.optInt("assetId")==99)throw new IllegalStateException("synthetic background save failure");return new JSONObject().put("ok",true);}
         if(path.equals("/api/checklist/inline-title")){
@@ -245,6 +255,36 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(path.equals("/api/task-parent-completion"))return new JSONObject().put("ok",true).put("incomplete_children",0);
         if(path.equals("/api/toggle"))return new JSONObject().put("ok",true);
         throw new IllegalStateException("Unconfigured fixture request: "+path);
+    }
+    private int countDescription(View view,String description){int count=description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription())?1:0;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)count+=countDescription(group.getChildAt(i),description);}return count;}
+    private void testChecklistDates()throws Exception {
+        AtomicReference<LocalDate> initial=new AtomicReference<>();onUi(()->{try{initial.set((LocalDate)value("selectedDay"));}catch(Exception e){throw new RuntimeException(e);}});
+        clickDescription("前日を表示");onUi(()->{try{check(value("selectedDay").equals(initial.get().minusDays(1)),"previous day navigation");}catch(Exception e){throw new RuntimeException(e);}});
+        clickDescription("翌日を表示");onUi(()->{try{check(value("selectedDay").equals(initial.get()),"next day navigation");
+            Method pick=MainActivity.class.getDeclaredMethod("pickChecklistDate");pick.setAccessible(true);android.app.DatePickerDialog dialog=(android.app.DatePickerDialog)pick.invoke(activity);dialog.getDatePicker().updateDate(2028,1,29);dialog.getButton(-1).performClick();
+            check(value("selectedDay").equals(LocalDate.of(2028,2,29)),"date picker accepts leap day");check(value("month").equals(YearMonth.of(2028,2)),"date picker changes overview month");field("selectedDay",initial.get());field("month",YearMonth.from(initial.get()));invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testCalendarDates()throws Exception {
+        onUi(()->{try{Method pick=MainActivity.class.getDeclaredMethod("pickCalendarMonth");pick.setAccessible(true);android.app.AlertDialog dialog=(android.app.AlertDialog)pick.invoke(activity);View form=dialog.getWindow().getDecorView();((android.widget.Spinner)findDescription(form,"移動する年")).setSelection(28);((android.widget.Spinner)findDescription(form,"移動する月")).setSelection(1);dialog.getButton(-1).performClick();check(value("month").equals(YearMonth.of(2028,2)),"calendar month picker confirms year and month");}catch(Exception e){throw new RuntimeException(e);}});settle();
+        clickDescription("今月のカレンダーを表示");onUi(()->{try{check(value("month").equals(YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"))),"calendar returns to current JST month");}catch(Exception e){throw new RuntimeException(e);}});
+        clickDescription("今日のチェックリストを表示");onUi(()->{try{check(value("tab").equals("goods"),"calendar today opens checklist");check(value("selectedDay").equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))),"today checklist selects JST date");}catch(Exception e){throw new RuntimeException(e);}});navigate("カレンダー");
+    }
+    private void testUnifiedGoodsSearch()throws Exception {
+        clickDescription("買い物・持ち物を検索");
+        onUi(()->{EditText query=findHint(root(),"買い物・持ち物を検索");query.setText("持ち物のテスト");check(((View)findText(root(),"スーパー").getParent().getParent()).getVisibility()==View.GONE,"unified search hides nonmatching shopping category");check(((View)findText(root(),"保育園").getParent().getParent()).getVisibility()==View.VISIBLE,"unified search matches names in collapsed item category");});
+        clickText("🎒 持ち物");onUi(()->check(findHint(root(),"買い物・持ち物を検索").getText().toString().equals("持ち物のテスト"),"search query survives creation kind change"));
+        clickDescription("買い物・持ち物を検索");clickText("🛒 買い物");
+        onUi(()->{try{JSONObject catalog=(JSONObject)value("itemCategories");catalog.put("categoryMeta",new JSONArray().put(new JSONObject().put("name","保育園").put("enabled",0)));invoke("render");check(findText(root(),"保育園")==null,"disabled category hidden");check(findText(root(),"未分類")!=null,"disabled category surviving rows remain reachable");catalog.remove("categoryMeta");invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testReactionChips()throws Exception {
+        onUi(()->{try{@SuppressWarnings("unchecked") java.util.Map<Integer,JSONArray> cache=(java.util.Map<Integer,JSONArray>)value("messageReactions");cache.put(1,new JSONArray().put(new JSONObject().put("messageId",1).put("emoji","👍").put("count",2).put("mine",false)));invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+        check(hasText("👍 2"),"message reaction count visible");
+        onUi(()->{try{Method toggle=MainActivity.class.getDeclaredMethod("toggleMessageReaction",int.class,String.class);toggle.setAccessible(true);toggle.invoke(activity,1,"👍");toggle.invoke(activity,1,"👍");}catch(Exception e){throw new RuntimeException(e);}});waitText("👍 3");check(reactionWrites==1,"reaction double submission blocked");
+        onUi(()->check(findDescription(root(),"👍 3件、自分も選択中")!=null,"own reaction is marked"));
+        onUi(()->{try{Method toggle=MainActivity.class.getDeclaredMethod("toggleMessageReaction",int.class,String.class);toggle.setAccessible(true);toggle.invoke(activity,1,"失敗");}catch(Exception e){throw new RuntimeException(e);}});
+        for(int i=0;i<100&&reactionWrites<2;i++)Thread.sleep(20);settle();check(hasText("👍 3"),"failed reaction keeps previous count");
+        onUi(()->{try{ApiClient.setMutationsEnabled(false);invoke("render");check(!findDescription(root(),"👍 3件、自分も選択中").isEnabled(),"read-only reaction chip disabled");Method toggle=MainActivity.class.getDeclaredMethod("toggleMessageReaction",int.class,String.class);toggle.setAccessible(true);toggle.invoke(activity,1,"👍");ApiClient.setMutationsEnabled(true);invoke("render");}catch(Exception e){throw new RuntimeException(e);}});check(reactionWrites==2,"read-only reaction cannot write");screenshot("message-reactions");
     }
     private void testMonthSwipes(String screen)throws Exception {
         AtomicReference<YearMonth> initial=new AtomicReference<>();
