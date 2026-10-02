@@ -1651,8 +1651,6 @@ public final class MainActivity extends Activity {
         }
         if(ApiClient.canMutate()) {
             Button ai=button("＋AI入力",()->openAiInput(shopping?"shopping":"item"));ai.setTextSize(12);ai.setContentDescription(shopping?"買い物のAI入力":"持ち物のAI入力");actions.addView(ai,new LinearLayout.LayoutParams(dp(82),dp(36)));
-            Button add=flatButton("＋",() -> addGoods(shopping));add.setContentDescription(shopping?"買い物を追加":"持ち物を追加");
-            actions.addView(add,new LinearLayout.LayoutParams(dp(32),dp(36)));
             Button category=button("＋カテゴリ",() -> addCategory(shopping));category.setTextSize(12);actions.addView(category,new LinearLayout.LayoutParams(dp(88),dp(36)));
         }
         goodsListContainer.addView(actions);
@@ -1666,6 +1664,7 @@ public final class MainActivity extends Activity {
             status.addView(state,new LinearLayout.LayoutParams(0,dp(36),1));
         }
         if(ApiClient.canMutate()){Button sets=button("≡ セット",() -> loadReusableSets(shopping));sets.setTextSize(12);status.addView(sets,new LinearLayout.LayoutParams(dp(76),dp(36)));}
+        if(ApiClient.canMutate()){Button add=flatButton("＋",() -> addGoods(shopping));add.setContentDescription(shopping?"買い物を追加":"持ち物を追加");status.addView(add,new LinearLayout.LayoutParams(dp(32),dp(36)));}
         goodsListContainer.addView(status);
         ArrayList<android.view.View> searchRows=new ArrayList<>();Button search=addChecklistSearch(goodsListContainer,"買い物・持ち物",searchRows);status.addView(search,new LinearLayout.LayoutParams(dp(36),dp(36)));divider(goodsListContainer);int start=goodsListContainer.getChildCount();
         ArrayList<String[]> archived=new ArrayList<>();renderGoodsKind(true,archived);renderGoodsKind(false,archived);
