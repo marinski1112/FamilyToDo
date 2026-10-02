@@ -24,6 +24,8 @@ Webイベント編集入口[PR #1146](https://github.com/marinski1112/FamilyToDo
 
 ### 検証
 
+本番APIのAndroid開発ブランチへの取り込み後も、[Android CI 188](https://github.com/marinski1112/FamilyToDo/actions/runs/36964343463)と[通常CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36964343470)成功。Android 11/15・ライト／ダークを再確認。Native Java/Gradle/assetsと配布APKは変更していません。テストはv0.1.187のままで行えます。
+
 [Android CI 187](https://github.com/marinski1112/FamilyToDo/actions/runs/36960974783)：通常・Preview・隔離E2E・ReleaseビルドとAndroid 11/API30・15/API35、360dp、ライト／ダークの画面・操作テスト成功。
 [通常 CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36960974772)成功。
 
