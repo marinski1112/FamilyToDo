@@ -5,6 +5,8 @@ const {completionVisible}=loadTs('src/checklist-completion.ts');
 const realNow=Date.now,clock=Date.parse('2026-10-02T00:30:00+09:00');
 Date.now=()=>clock;
 const db=database(),ctx=context(db);
+let childSql;const prepare=ctx.env.DB.prepare.bind(ctx.env.DB);
+ctx.env.DB.prepare=sql=>{if(sql.includes("SELECT c.id,c.parent_task_id"))childSql=sql;return prepare(sql);};
 try {
  for(const table of ['shopping_items','items']) {
   const due=table==='items'?'due_at':'due_date';
@@ -38,6 +40,8 @@ try {
  const withChildren=await (await get()).json();assert.equal(withChildren.undatedChildren.length,2);
  assert(withChildren.undatedChildren.every(c=>c.parent_task_id===root&&!('title' in c)),'minimal authorised child metadata');
  assert(withChildren.tasks.some(t=>t.parent_task_id===root),'dated child carries parent metadata');
+ const plan=db.prepare('EXPLAIN QUERY PLAN '+childSql).all(JSON.stringify([root]),1,1,501).map(r=>r.detail).join(' ');
+ assert.match(plan,/idx_tasks_family_parent.*family_id=\? AND parent_task_id=\?/,'child read seeks each returned parent through existing family/parent index');
  const hiddenRoot=Number(db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,due_at,visibility_scope,private_owner_id,created_at,updated_at) VALUES(1,'hidden-parent','TASK','pending','2026-10-02','PRIVATE',2,'2020-01-01','2020-01-01')").run().lastInsertRowid);
  db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,parent_task_id,created_at,updated_at) VALUES(1,'hidden-root-child','TASK','pending',?,'2020-01-01','2020-01-01')").run(hiddenRoot);
  assert.equal((await (await get()).json()).undatedChildren.length,2,'outside visible roots excluded');

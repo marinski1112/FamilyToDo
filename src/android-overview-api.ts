@@ -47,8 +47,8 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
   const roots=taskResult.results.slice(0,LIMIT).filter(t=>!Number(t.parent_task_id||0)&&String(t.task_kind||'').toUpperCase()!=='EVENT').map(t=>Number(t.id));
   const [recurrent,undatedResult]=await Promise.all([
     recurringForRange(ctx,from,to),
-    ctx.env.DB.prepare(`SELECT c.id,c.parent_task_id FROM tasks c JOIN json_each(?) roots ON c.parent_task_id=roots.value
-      WHERE c.family_id=? AND ${taskVisibilitySql('c')} AND c.start_at IS NULL AND c.due_at IS NULL
+    ctx.env.DB.prepare(`SELECT c.id,c.parent_task_id FROM tasks c
+      WHERE c.parent_task_id IN (SELECT value FROM json_each(?)) AND c.family_id=? AND ${taskVisibilitySql('c')} AND c.start_at IS NULL AND c.due_at IS NULL
         AND upper(coalesce(c.task_kind,'TASK'))<>'EVENT' ORDER BY c.parent_task_id,c.id LIMIT ?`)
       .bind(JSON.stringify(roots),fid,mid,LIMIT+1).all<Row>(),
   ]);
