@@ -106,6 +106,7 @@ public final class MainActivity extends Activity {
     private LocalDate selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));
     private String tab = "home";
     private String goodsKind = "shopping";
+    private String calendarView="all";
     private JSONObject locationLatest;
     private String locationError="";
     private WebView pageWeb;
@@ -177,7 +178,7 @@ public final class MainActivity extends Activity {
             ApiClient.setMutationsEnabled(false);
             stampGeneration++;
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
@@ -348,7 +349,7 @@ public final class MainActivity extends Activity {
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
             sessionEpoch++;
             stampGeneration++;
-            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear(); familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll();
             pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
             pendingPhoto=null; pendingFamilyLogPhoto=null;
@@ -390,7 +391,7 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) {
                         snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
@@ -745,8 +746,21 @@ public final class MainActivity extends Activity {
             selectedDay=day;checklistEvents="EVENT".equalsIgnoreCase(rows.get(which).optString("task_kind"));navigate("goods");
         }).setNegativeButton("閉じる",null).show();
     }
+    private JSONArray calendarVisibleTasks() {
+        JSONArray result=new JSONArray(),tasks=snapshot==null?null:snapshot.optJSONArray("tasks");
+        if(tasks!=null)for(int i=0;i<tasks.length();i++){
+            JSONObject task=tasks.optJSONObject(i);if(task==null)continue;
+            String scope=task.optString("visibility_scope","FAMILY").toUpperCase(java.util.Locale.ROOT);
+            if(calendarView.equals("family")&&!scope.equals("FAMILY")||calendarView.equals("private")&&!scope.equals("PRIVATE"))continue;
+            if("EVENT".equalsIgnoreCase(task.optString("task_kind"))&&task.optInt("calendar_visible",1)!=1)continue;
+            result.put(task);
+        }
+        return result;
+    }
     private void renderCalendar() {
-        JSONArray tasks=snapshot.optJSONArray("tasks"); if(tasks==null) return;
+        LinearLayout filters=new LinearLayout(this);String[] keys={"all","family","private"},labels={"すべて","共通","自分専用"};
+        for(int i=0;i<keys.length;i++){String key=keys[i];Button filter=button(labels[i],()->{calendarView=key;render();});filter.setContentDescription("カレンダー: "+labels[i]);styleButton(filter,calendarView.equals(key));filters.addView(filter,new LinearLayout.LayoutParams(0,dp(44),1));}content.addView(filters);
+        JSONArray tasks=calendarVisibleTasks();
         LinearLayout calendarPanel=panel();
         calendarPanel.setPadding(dp(2),dp(4),dp(2),dp(4));
         LinearLayout weekdays=new LinearLayout(this);
@@ -4893,7 +4907,7 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 SnapshotCache.clear(this);
                 stampMedia.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
+                monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";

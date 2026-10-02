@@ -168,6 +168,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(hasText("+1"),"overlapping stamp overflow");
             onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
             testCalendarDates();
+            testCalendarFilters();
             testMonthSwipes("calendar");
             screenshot("calendar");
             testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
@@ -269,6 +270,13 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->{try{Method pick=MainActivity.class.getDeclaredMethod("pickCalendarMonth");pick.setAccessible(true);android.app.AlertDialog dialog=(android.app.AlertDialog)pick.invoke(activity);View form=dialog.getWindow().getDecorView();((android.widget.Spinner)findDescription(form,"移動する年")).setSelection(28);((android.widget.Spinner)findDescription(form,"移動する月")).setSelection(1);dialog.getButton(-1).performClick();check(value("month").equals(YearMonth.of(2028,2)),"calendar month picker confirms year and month");}catch(Exception e){throw new RuntimeException(e);}});settle();
         clickDescription("今月のカレンダーを表示");onUi(()->{try{check(value("month").equals(YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"))),"calendar returns to current JST month");}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("今日のチェックリストを表示");onUi(()->{try{check(value("tab").equals("goods"),"calendar today opens checklist");check(value("selectedDay").equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))),"today checklist selects JST date");}catch(Exception e){throw new RuntimeException(e);}});navigate("カレンダー");
+    }
+    private void testCalendarFilters()throws Exception {
+        AtomicReference<JSONArray> original=new AtomicReference<>();
+        onUi(()->{try{original.set(snapshot.optJSONArray("tasks"));JSONArray tasks=new JSONArray(original.get().toString());String day=((LocalDate)value("selectedDay")).toString();tasks.put(new JSONObject().put("id",80).put("title","個人予定フィルタ").put("task_kind","EVENT").put("visibility_scope","PRIVATE").put("start_at",day+" 14:00:00"));tasks.put(new JSONObject().put("id",-81).put("title","個人定期フィルタ").put("task_kind","EVENT").put("visibility_scope","PRIVATE").put("start_at",day+" 15:00:00"));snapshot.put("tasks",tasks);invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+        clickDescription("カレンダー: 自分専用");check(hasContaining("個人予定フィルタ")&&hasContaining("個人定期フィルタ"),"private calendar includes stored and recurring personal events");check(!hasContaining("予定のテスト"),"private calendar excludes family events");
+        clickDescription("カレンダー: 共通");check(hasContaining("予定のテスト"),"common calendar includes family events");check(!hasContaining("個人予定フィルタ"),"common calendar excludes private events");
+        onUi(()->{try{check(snapshot.optJSONArray("tasks").length()==original.get().length()+2,"calendar filtering never mutates overview");snapshot.put("tasks",original.get());}catch(Exception e){throw new RuntimeException(e);}});clickDescription("カレンダー: すべて");
     }
     private void testUnifiedGoodsSearch()throws Exception {
         clickDescription("買い物・持ち物を検索");
