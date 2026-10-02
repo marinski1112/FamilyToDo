@@ -259,12 +259,13 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private int countDescription(View view,String description){int count=description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription())?1:0;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)count+=countDescription(group.getChildAt(i),description);}return count;}
     private void testChecklistDates()throws Exception {
-        AtomicReference<LocalDate> initial=new AtomicReference<>();onUi(()->{try{initial.set((LocalDate)value("selectedDay"));}catch(Exception e){throw new RuntimeException(e);}});
+        AtomicReference<LocalDate> initial=new AtomicReference<>();AtomicReference<android.app.DatePickerDialog> picker=new AtomicReference<>();
+        onUi(()->{try{initial.set((LocalDate)value("selectedDay"));}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("前日を表示");onUi(()->{try{check(value("selectedDay").equals(initial.get().minusDays(1)),"previous day navigation");}catch(Exception e){throw new RuntimeException(e);}});
-        clickDescription("翌日を表示");onUi(()->{try{check(value("selectedDay").equals(initial.get()),"next day navigation");
-            Method pick=MainActivity.class.getDeclaredMethod("pickChecklistDate");pick.setAccessible(true);android.app.DatePickerDialog dialog=(android.app.DatePickerDialog)pick.invoke(activity);dialog.getDatePicker().updateDate(2028,1,29);dialog.getButton(-1).performClick();
-            check(value("selectedDay").equals(LocalDate.of(2028,2,29)),"date picker accepts leap day");check(value("month").equals(YearMonth.of(2028,2)),"date picker changes overview month");field("selectedDay",initial.get());field("month",YearMonth.from(initial.get()));invoke("render");
-        }catch(Exception e){throw new RuntimeException(e);}});settle();
+        clickDescription("翌日を表示");onUi(()->{try{check(value("selectedDay").equals(initial.get()),"next day navigation");Method pick=MainActivity.class.getDeclaredMethod("pickChecklistDate");pick.setAccessible(true);picker.set((android.app.DatePickerDialog)pick.invoke(activity));}catch(Exception e){throw new RuntimeException(e);}});settle();
+        onUi(()->picker.get().getDatePicker().updateDate(2028,1,29));settle();
+        onUi(()->{check(picker.get().getButton(-1).isEnabled(),"picked date can confirm");picker.get().getButton(-1).performClick();});settle();
+        onUi(()->{try{check(value("selectedDay").equals(LocalDate.of(2028,2,29)),"date picker accepts leap day: "+value("selectedDay"));check(value("month").equals(YearMonth.of(2028,2)),"date picker changes overview month");field("selectedDay",initial.get());field("month",YearMonth.from(initial.get()));invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
     }
     private void testCalendarDates()throws Exception {
         onUi(()->{try{Method pick=MainActivity.class.getDeclaredMethod("pickCalendarMonth");pick.setAccessible(true);android.app.AlertDialog dialog=(android.app.AlertDialog)pick.invoke(activity);View form=dialog.getWindow().getDecorView();((android.widget.Spinner)findDescription(form,"移動する年")).setSelection(28);((android.widget.Spinner)findDescription(form,"移動する月")).setSelection(1);dialog.getButton(-1).performClick();check(value("month").equals(YearMonth.of(2028,2)),"calendar month picker confirms year and month");}catch(Exception e){throw new RuntimeException(e);}});settle();
