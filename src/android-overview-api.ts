@@ -1,4 +1,5 @@
 import type { AppContext } from './app-context';
+import { checklistCompletionSql } from './checklist-completion';
 import { goodsVisibilitySql } from './goods-visibility';
 import { recurringForRange } from './recurrence-projection';
 import { json } from './response';
@@ -26,18 +27,18 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
 
   const [taskResult,shoppingResult,itemResult,memberResult]=await Promise.all([
     ctx.env.DB.prepare(`SELECT t.id,t.title,t.task_kind,t.status,t.start_at,t.end_at,t.due_at,t.all_day,t.calendar_color,
-      t.description,t.location,t.reminder_at,t.calendar_visible,t.visibility_scope
+      t.description,t.location,t.reminder_at,t.calendar_visible,t.visibility_scope,t.sort_order
       FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')}
       AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
       AND ((t.start_at IS NOT NULL AND date(t.start_at)<=date(?) AND (t.end_at IS NULL OR date(t.end_at)>=date(?)))
         OR (t.start_at IS NULL AND t.due_at IS NOT NULL AND date(t.due_at) BETWEEN date(?) AND date(?)))
       ORDER BY coalesce(t.start_at,t.due_at),t.id LIMIT ?`).bind(fid,mid,to,from,from,to,LIMIT+1).all<Row>(),
-    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,s.memo,s.url FROM shopping_items s
-      WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND (s.status<>'completed' OR s.due_date BETWEEN ? AND ?)
+    ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.status,s.due_date,s.memo,s.url,s.completed_at,s.updated_at,s.created_at FROM shopping_items s
+      WHERE s.family_id=? AND ${goodsVisibilitySql('s')} AND (${checklistCompletionSql('s')} OR s.due_date BETWEEN ? AND ?)
       ORDER BY s.status,s.due_date,s.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
-    ctx.env.DB.prepare(`SELECT i.id,i.name,i.category,i.status,i.due_at,i.memo,i.url FROM items i
-      WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND (i.status<>'completed' OR date(i.due_at) BETWEEN date(?) AND date(?))
+    ctx.env.DB.prepare(`SELECT i.id,i.name,i.category,i.status,i.due_at,i.memo,i.url,i.completed_at,i.updated_at,i.created_at FROM items i
+      WHERE i.family_id=? AND ${goodsVisibilitySql('i')} AND (${checklistCompletionSql('i')} OR date(i.due_at) BETWEEN date(?) AND date(?))
       ORDER BY i.status,i.due_at,i.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT 100').bind(fid).all<Row>(),
   ]);
