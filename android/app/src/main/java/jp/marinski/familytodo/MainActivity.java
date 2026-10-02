@@ -825,7 +825,7 @@ public final class MainActivity extends Activity {
                 hasAccessory|=calendarGoodsCount(snapshot.optJSONArray("shopping"),day,"due_date")+calendarGoodsCount(snapshot.optJSONArray("items"),day,"due_at")>0;
                 hasStamps|=stampsOnDay(day.toString()).length()>0;
             }
-            int weekHeight=Math.max(76,48+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?18:0));
+            int weekHeight=Math.max(76,48+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?30:0));
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset+1;

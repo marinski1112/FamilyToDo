@@ -168,7 +168,9 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(((android.widget.FrameLayout.LayoutParams)first.getLayoutParams()).topMargin!=((android.widget.FrameLayout.LayoutParams)second.getLayoutParams()).topMargin,"overlapping ranges get distinct lanes");
             });
             check(hasText("+1"),"overlapping stamp overflow");
-            onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
+            onUi(()->{View stamp=findDescription(root(),"スタンプ カレンダーテスト");check(stamp!=null,"calendar contains stamp thumbnail");
+                View summary=findText(root(),"✅ 1件");int[] stampAt=new int[2],summaryAt=new int[2];stamp.getLocationOnScreen(stampAt);summary.getLocationOnScreen(summaryAt);
+                check(stampAt[1]>=summaryAt[1]+summary.getHeight(),"calendar stamps do not cover checklist count with four events and bands");});
             testCalendarDates();
             testCalendarFilters();
             testCalendarOrder();
