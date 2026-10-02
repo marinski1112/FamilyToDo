@@ -10,7 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <queries><package android:name="com.google.android.apps.chromecast.app" /></queries>
+    <queries>
+        <package android:name="com.google.android.apps.chromecast.app" />
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+    </queries>
     <application android:label="${appLabel}" android:icon="@drawable/app_icon" android:roundIcon="@drawable/app_icon" android:theme="@style/FamilyToDoTheme" android:usesCleartextTraffic="false" android:allowBackup="false">
         <meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME" android:value="jp.marinski.familytodo.HomeCastOptions" />
         <activity android:name=".MainActivity" android:exported="true">
