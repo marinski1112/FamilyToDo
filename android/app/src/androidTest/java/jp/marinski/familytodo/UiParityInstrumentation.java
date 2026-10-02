@@ -185,7 +185,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("DELETE".equals(lastBackgroundMethod)&&"PRIVATE".equals(lastBackgroundScope),"background private removal request");
             ApiClient.setMutationsEnabled(false);int previousWrites=backgroundWrites;testBackgroundSave(LocalDate.parse(day),"FAMILY",1,false);check(backgroundWrites==previousWrites,"read-only background cannot write");ApiClient.setMutationsEnabled(true);
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
-            navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");onUi(()->{try{
+            onUi(()->{try{field("selectedDay",LocalDate.parse(day));field("month",YearMonth.parse(day.substring(0,7)));field("familyLog",family);}catch(Exception e){throw new RuntimeException(e);}});navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");onUi(()->{try{
                 View clock=findText(root(),"09:00"),entry=findText(root(),"ミルク  160ml");
                 check(clock!=null&&entry!=null,"family log exposes clock and content");
                 check(clock.getParent().getParent()==entry.getParent().getParent(),"family log clock and content share a horizontal record");
