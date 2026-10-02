@@ -27,7 +27,7 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
 
   const [taskResult,shoppingResult,itemResult,memberResult]=await Promise.all([
     ctx.env.DB.prepare(`SELECT t.id,t.title,t.task_kind,t.status,t.start_at,t.end_at,t.due_at,t.all_day,t.calendar_color,
-      t.description,t.location,t.reminder_at,t.calendar_visible,t.visibility_scope,t.sort_order
+      t.description,t.location,t.reminder_at,t.calendar_visible,t.visibility_scope,t.sort_order,t.parent_task_id
       FROM tasks t WHERE t.family_id=? AND ${taskVisibilitySql('t')}
       AND (upper(coalesce(t.task_kind,'TASK'))<>'EVENT' OR t.calendar_visible=1)
       AND (t.task_kind IS NULL OR lower(t.task_kind) NOT IN ('recurring','recurrence_template'))
@@ -42,7 +42,16 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
       ORDER BY i.status,i.due_at,i.id LIMIT ?`).bind(fid,mid,from,to,LIMIT+1).all<Row>(),
     ctx.env.DB.prepare('SELECT id,name FROM members WHERE family_id=? AND active=1 AND deleted_at IS NULL ORDER BY id LIMIT 100').bind(fid).all<Row>(),
   ]);
-  const recurrent=await recurringForRange(ctx,from,to);
+  // IDs come only from this authenticated, bounded task result. JSON avoids a
+  // variable-length bind list and reads no child names/details for Calendar.
+  const roots=taskResult.results.slice(0,LIMIT).filter(t=>!Number(t.parent_task_id||0)&&String(t.task_kind||'').toUpperCase()!=='EVENT').map(t=>Number(t.id));
+  const [recurrent,undatedResult]=await Promise.all([
+    recurringForRange(ctx,from,to),
+    ctx.env.DB.prepare(`SELECT c.id,c.parent_task_id FROM tasks c JOIN json_each(?) roots ON c.parent_task_id=roots.value
+      WHERE c.family_id=? AND ${taskVisibilitySql('c')} AND c.start_at IS NULL AND c.due_at IS NULL
+        AND upper(coalesce(c.task_kind,'TASK'))<>'EVENT' ORDER BY c.parent_task_id,c.id LIMIT ?`)
+      .bind(JSON.stringify(roots),fid,mid,LIMIT+1).all<Row>(),
+  ]);
   const visibleRecurrent=recurrent.filter(t=>{
     if(String(t.task_kind||'').toUpperCase()==='EVENT'&&Number(t.calendar_visible??1)!==1)return false;
     const scope=String(t.visibility_scope||'FAMILY').toUpperCase();
@@ -51,10 +60,11 @@ export async function androidOverviewApi(request:Request,ctx:AppContext):Promise
   if(!ctx.session.csrfToken)ctx.session.csrfToken=crypto.randomUUID();
   const result=json({ok:true,schemaVersion:1,month:raw,from,to,familyId:fid,memberId:mid,csrf:ctx.session.csrfToken,
     tasks:[...taskResult.results.slice(0,LIMIT),...visibleRecurrent.slice(0,LIMIT)].slice(0,LIMIT),
+    undatedChildren:undatedResult.results.slice(0,LIMIT),
     shopping:shoppingResult.results.slice(0,LIMIT),items:itemResult.results.slice(0,LIMIT),
     members:memberResult.results,
     canManageStamps:['OWNER','ADMIN'].includes(String(member.role||'').toUpperCase()),
-    truncated:taskResult.results.length>LIMIT||visibleRecurrent.length>LIMIT||
+    truncated:undatedResult.results.length>LIMIT||taskResult.results.length>LIMIT||visibleRecurrent.length>LIMIT||
       taskResult.results.length+visibleRecurrent.length>LIMIT||shoppingResult.results.length>LIMIT||itemResult.results.length>LIMIT,
   },200,headers);
   return commitSession(result,ctx.session,ctx.env.APP_SECRET);

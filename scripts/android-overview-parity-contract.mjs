@@ -31,6 +31,16 @@ try {
  Date.now=()=>clock+30*60000;
  const after=await (await get()).json();
  for(const key of ['shopping','items'])assert.deepEqual(after[key].map(r=>r.name).sort(),['dated-history','pending'],'undated grace ends exactly at 01:00');
+ // Only children of returned authorised root tasks contribute to Calendar counts.
+ const root=Number(db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,due_at,created_at,updated_at) VALUES(1,'parent','TASK','pending','2026-10-02','2020-01-01','2020-01-01')").run().lastInsertRowid);
+ const child=(family,scope,owner,date=null)=>db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,parent_task_id,due_at,visibility_scope,private_owner_id,created_at,updated_at) VALUES(?,'child','TASK','pending',?,?,?,?, '2020-01-01','2020-01-01')").run(family,root,date,scope,owner);
+ child(1,'FAMILY',null);child(1,'PRIVATE',1);child(1,'PRIVATE',2);child(1,'PRIVATE',null);child(2,'FAMILY',null);child(1,'FAMILY',null,'2026-10-02');
+ const withChildren=await (await get()).json();assert.equal(withChildren.undatedChildren.length,2);
+ assert(withChildren.undatedChildren.every(c=>c.parent_task_id===root&&!('title' in c)),'minimal authorised child metadata');
+ assert(withChildren.tasks.some(t=>t.parent_task_id===root),'dated child carries parent metadata');
+ const hiddenRoot=Number(db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,due_at,visibility_scope,private_owner_id,created_at,updated_at) VALUES(1,'hidden-parent','TASK','pending','2026-10-02','PRIVATE',2,'2020-01-01','2020-01-01')").run().lastInsertRowid);
+ db.prepare("INSERT INTO tasks(family_id,title,task_kind,status,parent_task_id,created_at,updated_at) VALUES(1,'hidden-root-child','TASK','pending',?,'2020-01-01','2020-01-01')").run(hiddenRoot);
+ assert.equal((await (await get()).json()).undatedChildren.length,2,'outside visible roots excluded');
  // Undo overrides the old completion timestamp, and pending rows stay visible.
  db.exec("UPDATE shopping_items SET status='pending' WHERE name='old-undated'");
  assert((await (await get()).json()).shopping.some(r=>r.name==='old-undated'));
@@ -39,5 +49,7 @@ try {
  assert.equal((await androidOverviewApi(new Request('https://familytodo.test/api/android/v1/overview?month=2026-10',{method:'POST'}),ctx)).status,405);
  for(let n=0;n<501;n++)db.prepare("INSERT INTO items(family_id,name,status,created_at,updated_at) VALUES(1,?,'pending','2020-01-01','2020-01-01')").run('bounded-'+n);
  const capped=await (await get()).json();assert.equal(capped.items.length,500);assert.equal(capped.truncated,true);
+ for(let n=0;n<501;n++)child(1,'FAMILY',null);
+ const childCap=await (await get()).json();assert.equal(childCap.undatedChildren.length,500);assert.equal(childCap.truncated,true);
  console.log('Android overview parity: real SQL, retention boundaries, offsets, privacy, undo, calendar history, ordering and limits passed');
 } finally {Date.now=realNow;db.close();}
