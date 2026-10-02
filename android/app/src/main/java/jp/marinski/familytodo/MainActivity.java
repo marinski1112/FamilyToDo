@@ -216,6 +216,9 @@ public final class MainActivity extends Activity {
     }
     private DatePickerDialog pickChecklistDate() {
         DatePickerDialog picker=new DatePickerDialog(this,(view,year,mon,day)->selectChecklistDate(LocalDate.of(year,mon+1,day)),selectedDay.getYear(),selectedDay.getMonthValue()-1,selectedDay.getDayOfMonth());
+        java.time.ZoneId local=java.time.ZoneId.systemDefault();
+        picker.getDatePicker().setMinDate(LocalDate.of(2000,1,1).atStartOfDay(local).toInstant().toEpochMilli());
+        picker.getDatePicker().setMaxDate(LocalDate.of(2100,12,31).atStartOfDay(local).toInstant().toEpochMilli());
         picker.show();return picker;
     }
     private void renderChecklistDateControls() {
