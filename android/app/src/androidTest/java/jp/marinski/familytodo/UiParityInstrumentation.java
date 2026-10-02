@@ -185,7 +185,13 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("DELETE".equals(lastBackgroundMethod)&&"PRIVATE".equals(lastBackgroundScope),"background private removal request");
             ApiClient.setMutationsEnabled(false);int previousWrites=backgroundWrites;testBackgroundSave(LocalDate.parse(day),"FAMILY",1,false);check(backgroundWrites==previousWrites,"read-only background cannot write");ApiClient.setMutationsEnabled(true);
             navigate("位置情報");check(hasText("テスト家族"),"location summary renders");screenshot("location");
-            navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");screenshot("familylog");
+            navigate("家族ログ");check(hasText("📓 成長日記"),"journal navigation exists");check(hasText("📊 まとめ"),"summary navigation exists");onUi(()->{try{
+                View clock=findText(root(),"09:00"),entry=findText(root(),"ミルク  160ml");
+                check(clock!=null&&entry!=null,"family log exposes clock and content");
+                check(clock.getParent().getParent()==entry.getParent().getParent(),"family log clock and content share a horizontal record");
+                ViewGroup dock=(ViewGroup)value("pageDock");check(dock.getHeight()<140*activity.getResources().getDisplayMetrics().density,"quick dock leaves room for timeline");
+                field("familyLogSubjectId",999);invoke("render");check(findText(root(),"記録はありません。")!=null,"selected subject with no records has an empty state");field("familyLogSubjectId",0);invoke("render");
+            }catch(Exception e){throw new RuntimeException(e);}});settle();screenshot("familylog");
             navigate("伝言");check(hasText("伝言のテスト"),"message renders");check(findHintOnUi("メッセージ")!=null,"bottom composer exists");
             onUi(()->{View body=findText(root(),"伝言のテスト"),bubble=(View)body.getParent(),stack=(View)bubble.getParent();
                 check(bubble.getWidth()<stack.getWidth(),"own bubble fits short text");
@@ -367,7 +373,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->picker.get().getButton(-1).performClick());settle();
         onUi(()->{try{check(value("month").equals(YearMonth.of(2028,2)),"calendar month picker confirms year and month: "+value("month"));}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("今月のカレンダーを表示");onUi(()->{try{check(value("month").equals(YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"))),"calendar returns to current JST month");}catch(Exception e){throw new RuntimeException(e);}});
-        clickDescription("今日のチェックリストを表示");onUi(()->{try{check(value("tab").equals("goods"),"calendar today opens checklist");check(value("selectedDay").equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))),"today checklist selects JST date");}catch(Exception e){throw new RuntimeException(e);}});navigate("カレンダー");
+        clickDescription("カレンダーの表示設定");clickDescription("今日のチェックリストを表示");onUi(()->{try{check(value("tab").equals("goods"),"calendar today opens checklist");check(value("selectedDay").equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))),"today checklist selects JST date");field("calendarFiltersExpanded",false);}catch(Exception e){throw new RuntimeException(e);}});navigate("カレンダー");
     }
     private void testGoodsCompletionDisplay()throws Exception {
         onUi(()->{try{JSONArray original=snapshot.optJSONArray("shopping");boolean initial=(boolean)value("goodsCompleted");
@@ -445,11 +451,12 @@ public final class UiParityInstrumentation extends Instrumentation {
         }catch(Exception e){throw new RuntimeException(e);}});settle();
     }
     private void testCalendarFilters()throws Exception {
+        clickDescription("カレンダーの表示設定");
         AtomicReference<JSONArray> original=new AtomicReference<>();
         onUi(()->{try{original.set(snapshot.optJSONArray("tasks"));JSONArray tasks=new JSONArray(original.get().toString());String day=((LocalDate)value("selectedDay")).toString();tasks.put(new JSONObject().put("id",80).put("title","個人予定フィルタ").put("task_kind","EVENT").put("visibility_scope","PRIVATE").put("start_at",day+" 14:00:00"));tasks.put(new JSONObject().put("id",-81).put("title","個人定期フィルタ").put("task_kind","EVENT").put("visibility_scope","PRIVATE").put("start_at",day+" 15:00:00"));snapshot.put("tasks",tasks);invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
         clickDescription("カレンダー: 自分専用");check(hasContaining("個人予定フィルタ")&&hasContaining("個人定期フィルタ"),"private calendar includes stored and recurring personal events");check(!hasContaining("予定のテスト"),"private calendar excludes family events");
         clickDescription("カレンダー: 共通");check(hasContaining("予定のテスト"),"common calendar includes family events");check(!hasContaining("個人予定フィルタ"),"common calendar excludes private events");
-        onUi(()->{try{check(snapshot.optJSONArray("tasks").length()==original.get().length()+2,"calendar filtering never mutates overview");snapshot.put("tasks",original.get());}catch(Exception e){throw new RuntimeException(e);}});clickDescription("カレンダー: すべて");
+        onUi(()->{try{check(snapshot.optJSONArray("tasks").length()==original.get().length()+2,"calendar filtering never mutates overview");snapshot.put("tasks",original.get());}catch(Exception e){throw new RuntimeException(e);}});clickDescription("カレンダー: すべて");clickDescription("カレンダーの表示設定");
     }
     private void testUnifiedGoodsSearch()throws Exception {
         clickDescription("買い物・持ち物を検索");

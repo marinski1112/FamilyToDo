@@ -1,4 +1,12 @@
 <resources>
+    <style name="FamilyToDoLightTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#087BFF</item>
+        <item name="android:windowBackground">#F4F6FA</item>
+    </style>
+    <style name="FamilyToDoDarkTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#6366F1</item>
+        <item name="android:windowBackground">#101827</item>
+    </style>
     <style name="FamilyToDoTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:colorAccent">#4F46E5</item>

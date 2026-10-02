@@ -49,8 +49,10 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
-    private LinearLayout root, content, pageDock;
+    private LinearLayout root, content, pageDock, goodsListContainer;
+    private boolean calendarFiltersExpanded=false;
     private ScrollView pageScroll;
+    private Button calendarFab;
     private boolean messageScrollLatest=true;
     private int messageRenderSerial;
     private boolean checklistEvents=false, checklistCompleted=false;
@@ -113,7 +115,17 @@ public final class MainActivity extends Activity {
     private String locationError="";
     private WebView pageWeb;
     private final Runnable completionBoundary=()->{if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null)render();};
-    @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); if(!BuildConfig.UI_TEST_MODE)load(); }
+    @Override public void onCreate(Bundle state) {
+        String appearance=getSharedPreferences("appearance",MODE_PRIVATE).getString("theme","SYSTEM");
+        if(!"SYSTEM".equals(appearance)) {
+            android.content.res.Configuration config=new android.content.res.Configuration();
+            config.uiMode=(getApplicationContext().getResources().getConfiguration().uiMode&~android.content.res.Configuration.UI_MODE_NIGHT_MASK)|
+                ("DARK".equals(appearance)?android.content.res.Configuration.UI_MODE_NIGHT_YES:android.content.res.Configuration.UI_MODE_NIGHT_NO);
+            applyOverrideConfiguration(config);
+        }
+        setTheme(darkMode()?R.style.FamilyToDoDarkTheme:R.style.FamilyToDoLightTheme);
+        super.onCreate(state);ApiClient.setMutationsEnabled(false);showNative();if(!BuildConfig.UI_TEST_MODE)load();
+    }
     @Override protected void onResume() {
         super.onResume();
         if(BuildConfig.UI_TEST_MODE)return;
@@ -139,6 +151,29 @@ public final class MainActivity extends Activity {
     private int accentColor() { return Color.parseColor(darkMode()?"#6366F1":"#4F46E5"); }
     private int lineColor() { return Color.parseColor(darkMode()?"#35465C":"#E5E7EB"); }
     private int softColor() { return Color.parseColor(darkMode()?"#293452":"#EEF2FF"); }
+    private int linkColor() { return Color.parseColor(darkMode()?"#A8C7FF":"#087BFF"); }
+    private int raisedColor() { return Color.parseColor(darkMode()?"#263449":"#F1F3F6"); }
+    private void segment(Button view,boolean active) {
+        styleButton(view,false);view.setTypeface(null,android.graphics.Typeface.BOLD);
+        view.setTextColor(active?(darkMode()?Color.WHITE:textColor()):mutedColor());
+        view.setBackground(shape(active?(darkMode()?Color.parseColor("#3658A0"):Color.WHITE):raisedColor(),Color.TRANSPARENT,9));
+    }
+    private Button flatButton(String text,Runnable action) {
+        Button view=button(text,action);view.setTextColor(linkColor());view.setTypeface(null,android.graphics.Typeface.BOLD);
+        view.setBackgroundColor(Color.TRANSPARENT);view.setPadding(dp(4),0,dp(4),0);return view;
+    }
+    private Button infoButton(Runnable action) {
+        Button view=flatButton("i",action);view.setTextSize(15);view.setBackground(shape(raisedColor(),Color.TRANSPARENT,100));return view;
+    }
+    private void divider(LinearLayout parent) {
+        android.view.View line=new android.view.View(this);line.setBackgroundColor(lineColor());parent.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
+    }
+    private void chooseAppearance() {
+        String[] values={"SYSTEM","LIGHT","DARK"};String current=getSharedPreferences("appearance",MODE_PRIVATE).getString("theme","SYSTEM");
+        new AlertDialog.Builder(this).setTitle("表示モード").setSingleChoiceItems(new String[]{"端末に合わせる","ライト","ダーク"},java.util.Arrays.asList(values).indexOf(current),(d,which)->{
+            getSharedPreferences("appearance",MODE_PRIVATE).edit().putString("theme",values[which]).apply();d.dismiss();recreate();
+        }).setNegativeButton("閉じる",null).show();
+    }
     private LinearLayout panel() {
         LinearLayout panel=new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12),dp(10),dp(12),dp(10));
@@ -156,11 +191,11 @@ public final class MainActivity extends Activity {
         return background;
     }
     private void styleButton(Button b, boolean selected) {
-        b.setAllCaps(false); b.setTextSize(14); b.setMinHeight(dp(44));
-        b.setPadding(dp(12),dp(7),dp(12),dp(7));
+        b.setAllCaps(false); b.setTextSize(14); b.setMinHeight(dp(36));b.setMinimumHeight(0);b.setMinWidth(0);b.setMinimumWidth(0);b.setIncludeFontPadding(false);
+        b.setPadding(dp(8),dp(4),dp(8),dp(4));
         b.setTextColor(selected?Color.WHITE:textColor());
         b.setBackground(shape(selected?accentColor():surfaceColor(),
-            selected?Color.TRANSPARENT:lineColor(),11));
+            selected?Color.TRANSPARENT:lineColor(),9));
         b.setStateListAnimator(null);
     }
     private Button button(String label, Runnable action) {
@@ -195,29 +230,23 @@ public final class MainActivity extends Activity {
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(pageColor());
         if(pageWeb!=null) {pageWeb.destroy();pageWeb=null;}
-        TextView version=label("FamilyToDo  ・  テスト版 v"+BuildConfig.VERSION_NAME);
-        version.setTextSize(13);version.setTextColor(mutedColor());
-        version.setPadding(dp(18),dp(8),dp(18),0);root.addView(version);
-        if(tab.equals("calendar")) {
-            LinearLayout controls=new LinearLayout(this);
-            controls.setPadding(dp(12),dp(6),dp(12),dp(6));
-            Button previous=button("前月",() -> {changeMonth(-1);});
-            Button next=button("翌月",() -> {changeMonth(1);});
-            Button refresh=button("更新",this::load);
-            Button settings=button("設定 ⋮",this::showSettingsActions);
-            for(Button control:new Button[]{previous,next,refresh,settings}) {
-                LinearLayout.LayoutParams item=new LinearLayout.LayoutParams(0,dp(44),1);
-                item.setMargins(0,0,dp(6),0);controls.addView(control,item);
-            }
-            root.addView(controls);
-        }
         ScrollView scroll=new MonthSwipeScroll();pageScroll=scroll;
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(14),dp(4),dp(14),dp(24));
-        scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        content.setPadding(dp(8),dp(8),dp(8),dp(18));
+        scroll.addView(content);
+        android.widget.FrameLayout body=new android.widget.FrameLayout(this);body.addView(scroll,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        calendarFab=null;
+        if(tab.equals("calendar")) {
+            calendarFab=button("＋",this::showCalendarActions);styleButton(calendarFab,true);calendarFab.setTextSize(32);calendarFab.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
+            calendarFab.setContentDescription("予定を追加・管理");
+            android.widget.FrameLayout.LayoutParams position=new android.widget.FrameLayout.LayoutParams(dp(56),dp(56),Gravity.BOTTOM|Gravity.END);position.setMargins(0,0,dp(14),dp(8));body.addView(calendarFab,position);
+        }
+        root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
         pageDock=new LinearLayout(this);pageDock.setOrientation(LinearLayout.VERTICAL);
         pageDock.setBackground(shape(surfaceColor(),lineColor(),0));root.addView(pageDock);
         root.addView(bottomNavigation());
+        getWindow().setStatusBarColor(pageColor());getWindow().setNavigationBarColor(pageColor());
+        getWindow().getDecorView().setSystemUiVisibility(darkMode()?0:android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         applySystemBarInsets(root);setContentView(root);
         render();
     }
@@ -235,12 +264,12 @@ public final class MainActivity extends Activity {
     }
     private void renderChecklistDateControls() {
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-        Button date=button("✅ "+selectedDay.getYear()+"."+selectedDay.getMonthValue()+"."+selectedDay.getDayOfMonth(),()->pickChecklistDate());
-        date.setContentDescription("チェックリストの日付を指定");date.setTextSize(17);row.addView(date,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button date=flatButton("チェックリスト  "+selectedDay.getMonthValue()+"/"+selectedDay.getDayOfMonth(),()->pickChecklistDate());
+        date.setContentDescription("チェックリストの日付を指定");date.setTextSize(18);date.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);row.addView(date,new LinearLayout.LayoutParams(0,dp(40),1));
         Button prev=button("‹",()->selectChecklistDate(selectedDay.minusDays(1))),next=button("›",()->selectChecklistDate(selectedDay.plusDays(1)));
         prev.setContentDescription("前日を表示");next.setContentDescription("翌日を表示");
         prev.setEnabled(selectedDay.isAfter(LocalDate.of(2000,1,1)));next.setEnabled(selectedDay.isBefore(LocalDate.of(2100,12,31)));
-        row.addView(prev,new LinearLayout.LayoutParams(dp(44),dp(48)));row.addView(next,new LinearLayout.LayoutParams(dp(44),dp(48)));content.addView(row);
+        row.addView(prev,new LinearLayout.LayoutParams(dp(36),dp(36)));row.addView(next,new LinearLayout.LayoutParams(dp(36),dp(36)));content.addView(row);
     }
     private AlertDialog pickCalendarMonth() {
         LinearLayout row=new LinearLayout(this);row.setPadding(dp(16),dp(8),dp(16),dp(8));
@@ -253,9 +282,14 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendarDateControls() {
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-        Button date=button(month.getYear()+"年"+month.getMonthValue()+"月 ⌄",()->pickCalendarMonth());date.setContentDescription("カレンダーの年月を指定");date.setTextSize(20);row.addView(date,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button current=button("今月",()->{selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));month=YearMonth.from(selectedDay);load();});current.setContentDescription("今月のカレンダーを表示");row.addView(current,new LinearLayout.LayoutParams(dp(64),dp(48)));
-        Button today=button("今日",()->{selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));month=YearMonth.from(selectedDay);navigate("goods");});today.setContentDescription("今日のチェックリストを表示");row.addView(today,new LinearLayout.LayoutParams(dp(64),dp(48)));content.addView(row);
+        Button filter=button("⚲",()->{calendarFiltersExpanded=!calendarFiltersExpanded;render();});filter.setContentDescription("カレンダーの表示設定");row.addView(filter,new LinearLayout.LayoutParams(dp(40),dp(40)));
+        Button date=button(month.getYear()+"年 "+month.getMonthValue()+"月 ⌄",()->pickCalendarMonth());date.setContentDescription("カレンダーの年月を指定");date.setTextSize(15);
+        date.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("カレンダー").setItems(new String[]{"今日のチェックリスト","更新","設定"},(d,w)->{if(w==0){selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));month=YearMonth.from(selectedDay);navigate("goods");}else if(w==1)load();else showSettingsActions();}).show();return true;});
+        LinearLayout.LayoutParams monthSlot=new LinearLayout.LayoutParams(0,dp(40),1);monthSlot.setMargins(dp(4),0,dp(4),0);row.addView(date,monthSlot);
+        Button current=button("✓",()->{selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));month=YearMonth.from(selectedDay);load();});styleButton(current,true);current.setContentDescription("今月のカレンダーを表示");row.addView(current,new LinearLayout.LayoutParams(dp(36),dp(40)));
+        Button previous=button("‹",()->changeMonth(-1)),next=button("›",()->changeMonth(1));previous.setContentDescription("前月を表示");next.setContentDescription("翌月を表示");
+        for(Button arrow:new Button[]{previous,next}){arrow.setTextSize(24);LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(dp(36),dp(40));slot.leftMargin=dp(4);row.addView(arrow,slot);}
+        LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(-1,-2);layout.bottomMargin=dp(12);content.addView(row,layout);
     }
     private void changeMonth(int delta) {
         if(!tab.equals("calendar")&&!tab.equals("goods"))return;
@@ -338,6 +372,7 @@ public final class MainActivity extends Activity {
             name.setTextColor(active?accentColor():mutedColor());item.addView(name,new LinearLayout.LayoutParams(-1,-2));
             item.setContentDescription(names[i]+"を開く");
             item.setOnClickListener(v -> navigate(destination));
+            item.setOnLongClickListener(v->{showSettingsActions();return true;});
             LinearLayout.LayoutParams slot=new LinearLayout.LayoutParams(0,dp(62),1);
             slot.setMargins(dp(1),0,dp(1),0);nav.addView(item,slot);
         }
@@ -476,20 +511,10 @@ public final class MainActivity extends Activity {
         if (tab.equals("goods")) {
             renderChecklistDateControls();
             if(snapshot!=null)renderChecklistTasks();
-            LinearLayout kinds=new LinearLayout(this);
-            Button shopping=button("🛒 買い物",() -> {goodsKind="shopping";render();});
-            Button items=button("🎒 持ち物",() -> {goodsKind="item";render();});
-            styleButton(shopping,goodsKind.equals("shopping"));styleButton(items,goodsKind.equals("item"));
-            kinds.addView(shopping,new LinearLayout.LayoutParams(0,dp(46),1));
-            kinds.addView(items,new LinearLayout.LayoutParams(0,dp(46),1));
-            content.addView(kinds);
         } else renderCalendarDateControls();
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを読み取り専用で表示中・更新を確認しています"));
-        if(tab.equals("calendar")&&ApiClient.canMutate()) {
-            Button add=button("＋ 追加・管理",this::showCalendarActions);
-            styleButton(add,true);content.addView(add);
-        }
+        if(calendarFab!=null)calendarFab.setVisibility(ApiClient.canMutate()?android.view.View.VISIBLE:android.view.View.GONE);
         if (snapshot.optBoolean("truncated")) content.addView(label("項目が多いため一部のみ表示しています。"));
         if (tab.equals("calendar")) renderCalendar(); else renderGoods();
     }
@@ -763,7 +788,8 @@ public final class MainActivity extends Activity {
     }
     private void renderCalendar() {
         LinearLayout filters=new LinearLayout(this);String[] keys={"all","family","private"},labels={"すべて","共通","自分専用"};
-        for(int i=0;i<keys.length;i++){String key=keys[i];Button filter=button(labels[i],()->{calendarView=key;render();});filter.setContentDescription("カレンダー: "+labels[i]);styleButton(filter,calendarView.equals(key));filters.addView(filter,new LinearLayout.LayoutParams(0,dp(44),1));}content.addView(filters);
+        for(int i=0;i<keys.length;i++){String key=keys[i];Button filter=button(labels[i],()->{calendarView=key;render();});filter.setContentDescription("カレンダー: "+labels[i]);segment(filter,calendarView.equals(key));filters.addView(filter,new LinearLayout.LayoutParams(0,dp(36),1));}if(calendarFiltersExpanded)content.addView(filters);
+        if(calendarFiltersExpanded){Button today=flatButton("今日のチェックリスト ›",()->{selectedDay=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"));month=YearMonth.from(selectedDay);navigate("goods");});today.setContentDescription("今日のチェックリストを表示");content.addView(today);}
         JSONArray tasks=calendarVisibleTasks();
         LinearLayout calendarPanel=panel();
         calendarPanel.setPadding(dp(2),dp(4),dp(2),dp(4));
@@ -812,7 +838,8 @@ public final class MainActivity extends Activity {
                 hasAccessory|=calendarGoodsCount(snapshot.optJSONArray("shopping"),day,"due_date")+calendarGoodsCount(snapshot.optJSONArray("items"),day,"due_at")>0;
                 hasStamps|=stampsOnDay(day.toString()).length()>0;
             }
-            int weekHeight=Math.max(76,48+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?30:0));
+            int available=(int)(getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density)-260;
+            int weekHeight=Math.max(Math.max(82,Math.min(120,available/weeks)),48+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?30:0));
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset+1;
@@ -829,7 +856,7 @@ public final class MainActivity extends Activity {
                 boolean selected=day.equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));
                 TextView number=new TextView(this);number.setText(Integer.toString(day.getDayOfMonth()));
                 number.setTextSize(15);number.setTypeface(null,android.graphics.Typeface.BOLD);
-                number.setGravity(Gravity.CENTER);
+                number.setGravity(selected?Gravity.CENTER:Gravity.START|Gravity.CENTER_VERTICAL);number.setPadding(selected?0:dp(4),0,0,0);
                 number.setTextColor(selected?Color.WHITE:!inMonth?mutedColor():column==0||holiday!=null?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
                 if(selected)number.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
                 cell.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
@@ -972,8 +999,8 @@ public final class MainActivity extends Activity {
         LinearLayout holder=panel();holder.addView(child);return holder;
     }
     private void styleCheckBox(CheckBox box) {
-        box.setTextSize(15);box.setTextColor(textColor());box.setMinHeight(dp(48));
-        if(Build.VERSION.SDK_INT>=21) box.setButtonTintList(android.content.res.ColorStateList.valueOf(accentColor()));
+        box.setTextSize(15);box.setTextColor(textColor());box.setMinHeight(dp(44));box.setMinimumHeight(0);
+        box.setButtonTintList(null);box.setButtonDrawable(new WebCheckDrawable(getResources().getDisplayMetrics().density,darkMode()));
     }
     private JSONObject stickerOnDay(String day) {
         JSONObject data=stickerMonths.get(month.toString()),result=null;JSONArray days=data==null?null:data.optJSONArray("days");
@@ -1529,28 +1556,31 @@ public final class MainActivity extends Activity {
         if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++)value.append(checklistSearchText(group.getChildAt(i)));}
         return value.toString();
     }
-    private void addChecklistSearch(LinearLayout section,String name,ArrayList<android.view.View> rows) {
+    private Button addChecklistSearch(LinearLayout section,String name,ArrayList<android.view.View> rows) {
         LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER_VERTICAL);
         EditText query=new EditText(this);query.setHint(name+"を検索");query.setSingleLine(true);query.setTextColor(textColor());query.setTextSize(14);query.setVisibility(checklistSearchOpen.contains(name)?android.view.View.VISIBLE:android.view.View.GONE);
-        Button toggle=button("🔍",()->{boolean open=query.getVisibility()!=android.view.View.VISIBLE;query.setVisibility(open?android.view.View.VISIBLE:android.view.View.GONE);if(open){checklistSearchOpen.add(name);query.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(query,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}else{checklistSearchOpen.remove(name);query.setText("");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(),0);}});toggle.setContentDescription(name+"を検索");controls.addView(toggle,new LinearLayout.LayoutParams(dp(48),dp(44)));controls.addView(query,new LinearLayout.LayoutParams(0,dp(44),1));section.addView(controls);
+        controls.setVisibility(query.getVisibility());
+        Button toggle=flatButton("🔍",()->{boolean open=query.getVisibility()!=android.view.View.VISIBLE;query.setVisibility(open?android.view.View.VISIBLE:android.view.View.GONE);controls.setVisibility(query.getVisibility());if(open){checklistSearchOpen.add(name);query.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(query,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}else{checklistSearchOpen.remove(name);query.setText("");((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(),0);}});toggle.setContentDescription(name+"を検索");controls.addView(query,new LinearLayout.LayoutParams(0,dp(40),1));section.addView(controls);
         query.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence value,int start,int count,int after){}public void onTextChanged(CharSequence value,int start,int before,int count){checklistQueries.put(name,value.toString());String term=value.toString().trim().toLowerCase(java.util.Locale.JAPAN);for(android.view.View row:rows)row.setVisibility(term.isEmpty()||checklistSearchText(row).toLowerCase(java.util.Locale.JAPAN).contains(term)?android.view.View.VISIBLE:android.view.View.GONE);}public void afterTextChanged(android.text.Editable value){}});
         query.setText(checklistQueries.getOrDefault(name,""));
         query.post(()->{String term=query.getText().toString().trim().toLowerCase(java.util.Locale.JAPAN);for(android.view.View row:rows)row.setVisibility(term.isEmpty()||checklistSearchText(row).toLowerCase(java.util.Locale.JAPAN).contains(term)?android.view.View.VISIBLE:android.view.View.GONE);});
+        return toggle;
     }
     private void renderChecklistTasks() {
         LinearLayout section=panel(),kinds=new LinearLayout(this);
         for(boolean events:new boolean[]{false,true}) {
             Button kind=button(events?"📅 イベント":"☑ タスク",()->{checklistEvents=events;render();});
-            styleButton(kind,checklistEvents==events);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(44),1));
+            segment(kind,checklistEvents==events);kind.setTextSize(13);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(36),1));
         }
+        if(ApiClient.canMutate()){Button add=button(checklistEvents?"＋予定":"＋タスク",this::addTask);add.setContentDescription(checklistEvents?"イベントを追加":"タスクを追加");kinds.addView(add,new LinearLayout.LayoutParams(dp(80),dp(36)));}
         section.addView(kinds);
-        ArrayList<android.view.View> searchRows=new ArrayList<>();addChecklistSearch(section,checklistEvents?"イベント":"タスク",searchRows);
+        ArrayList<android.view.View> searchRows=new ArrayList<>();Button search=addChecklistSearch(section,checklistEvents?"イベント":"タスク",searchRows);
         LinearLayout status=new LinearLayout(this);
         for(boolean done:new boolean[]{false,true}) {
             Button state=button(done?"完了済み":"未完了",()->{checklistCompleted=done;render();});
-            styleButton(state,checklistCompleted==done);status.addView(state,new LinearLayout.LayoutParams(0,dp(44),1));
+            segment(state,checklistCompleted==done);state.setTextSize(13);status.addView(state,new LinearLayout.LayoutParams(0,dp(36),1));
         }
-        if(!checklistEvents)section.addView(status);
+        if(checklistEvents)status.removeAllViews();status.addView(search,new LinearLayout.LayoutParams(dp(36),dp(36)));section.addView(status);divider(section);
         JSONArray tasks=snapshot.optJSONArray("tasks");int count=0;
         if(tasks!=null)for(int i=0;i<tasks.length();i++) {
             JSONObject task=tasks.optJSONObject(i);if(task==null||!taskOnDay(task,selectedDay.toString()))continue;
@@ -1560,8 +1590,7 @@ public final class MainActivity extends Activity {
         }
         if(count==0)section.addView(label(checklistEvents?"この日のイベントはありません":"この日のタスクはありません"));
         LinearLayout actions=new LinearLayout(this);
-        if(ApiClient.canMutate())actions.addView(button(checklistEvents?"＋ イベント":"＋ タスク",this::addTask),new LinearLayout.LayoutParams(0,dp(44),1));
-        actions.addView(button("期限なし・全件",()->showWebPage("/app/tasks.php?date="+selectedDay)),new LinearLayout.LayoutParams(0,dp(44),1));
+        actions.addView(flatButton("期限なし・全件 ›",()->showWebPage("/app/tasks.php?date="+selectedDay)),new LinearLayout.LayoutParams(0,dp(32),1));
         section.addView(actions);addPanel(section);
     }
     private LinearLayout checklistTaskRow(JSONObject task) {
@@ -1574,14 +1603,14 @@ public final class MainActivity extends Activity {
             box.setContentDescription(task.optString("title")+"の完了状態");
             box.setEnabled(id>0&&ApiClient.canMutate());
             box.setOnClickListener(v->toggle(occurrence>0?"recurrence":"task",id,box));
-            line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
+            line.addView(box,new LinearLayout.LayoutParams(dp(32),dp(44)));
         }
         EditText title=inlineTitle(occurrence>0?"recurrence":"task",occurrence>0?task.optInt("recurrence_rule_id"):id,task,"title");title.setEnabled(task.optBoolean("canEdit",true));
         line.addView(title,
-            new LinearLayout.LayoutParams(0,dp(52),1));
-        if(!event&&occurrence==0&&id>0&&task.optInt("parent_task_id")==0)line.addView(button("⤷",()->showTaskChildren(id)),new LinearLayout.LayoutParams(dp(40),dp(44)));
-        if(ApiClient.canMutate()&&task.optBoolean("canEdit",true))line.addView(button("ⓘ",()->{if(occurrence>0)recurringOccurrenceActions(task);else taskActions(task);}),
-            new LinearLayout.LayoutParams(dp(40),dp(44)));
+            new LinearLayout.LayoutParams(0,dp(44),1));
+        if(!event&&occurrence==0&&id>0&&task.optInt("parent_task_id")==0)line.addView(flatButton("⤷",()->showTaskChildren(id)),new LinearLayout.LayoutParams(dp(32),dp(44)));
+        if(ApiClient.canMutate()&&task.optBoolean("canEdit",true))line.addView(infoButton(()->{if(occurrence>0)recurringOccurrenceActions(task);else taskActions(task);}),
+            new LinearLayout.LayoutParams(dp(32),dp(32)));
         return line;
     }
     private void showTaskChildren(int parentId) {
@@ -1607,29 +1636,34 @@ public final class MainActivity extends Activity {
     }
     private void renderGoods() {
         boolean shopping=goodsKind.equals("shopping");
-        if(ApiClient.canMutate()) {
-            LinearLayout actions=new LinearLayout(this);
-            Button add=button(shopping?"＋ 買い物":"＋ 持ち物",() -> addGoods(shopping));
-            styleButton(add,true);
-            actions.addView(add,new LinearLayout.LayoutParams(0,dp(48),1));
-            actions.addView(button("＋ カテゴリ",() -> addCategory(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
-            actions.addView(button("≡ セット",() -> loadReusableSets(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
-            addPanel(actions);
+        goodsListContainer=panel();goodsListContainer.setPadding(dp(8),dp(8),dp(8),dp(8));
+        LinearLayout actions=new LinearLayout(this);
+        for(String kind:new String[]{"shopping","item"}) {
+            Button choice=button(kind.equals("shopping")?"🛒 買い物":"🎒 持ち物",()->{goodsKind=kind;render();});choice.setTextSize(13);segment(choice,goodsKind.equals(kind));
+            actions.addView(choice,new LinearLayout.LayoutParams(0,dp(36),1));
         }
+        if(ApiClient.canMutate()) {
+            Button add=flatButton("＋",() -> addGoods(shopping));add.setContentDescription(shopping?"買い物を追加":"持ち物を追加");
+            actions.addView(add,new LinearLayout.LayoutParams(dp(32),dp(36)));
+            Button category=button("＋カテゴリ",() -> addCategory(shopping));category.setTextSize(12);actions.addView(category,new LinearLayout.LayoutParams(dp(88),dp(36)));
+        }
+        goodsListContainer.addView(actions);
         goodsCompletionThreshold=GoodsCompletion.threshold(System.currentTimeMillis());scheduleGoodsCompletionBoundary();
         int completedCount=0;for(String key:new String[]{"shopping","items"}){JSONArray list=snapshot.optJSONArray(key);if(list!=null)for(int i=0;i<list.length();i++){JSONObject row=list.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,System.currentTimeMillis())&&"completed".equals(row.optString("status")))completedCount++;}}
         final String completedLabel="完了済み"+(completedCount>0?" "+completedCount:"");
         LinearLayout status=new LinearLayout(this);
         for(boolean completed:new boolean[]{false,true}) {
             Button state=button(completed?completedLabel:"未完了",()->{goodsCompleted=completed;render();});
-            styleButton(state,goodsCompleted==completed);
-            status.addView(state,new LinearLayout.LayoutParams(0,dp(44),1));
+            segment(state,goodsCompleted==completed);state.setTextSize(13);
+            status.addView(state,new LinearLayout.LayoutParams(0,dp(36),1));
         }
-        addPanel(status);
-        ArrayList<android.view.View> searchRows=new ArrayList<>();addChecklistSearch(content,"買い物・持ち物",searchRows);int start=content.getChildCount();
+        if(ApiClient.canMutate()){Button sets=button("≡ セット",() -> loadReusableSets(shopping));sets.setTextSize(12);status.addView(sets,new LinearLayout.LayoutParams(dp(76),dp(36)));}
+        goodsListContainer.addView(status);
+        ArrayList<android.view.View> searchRows=new ArrayList<>();Button search=addChecklistSearch(goodsListContainer,"買い物・持ち物",searchRows);status.addView(search,new LinearLayout.LayoutParams(dp(36),dp(36)));divider(goodsListContainer);int start=goodsListContainer.getChildCount();
         ArrayList<String[]> archived=new ArrayList<>();renderGoodsKind(true,archived);renderGoodsKind(false,archived);
         renderEmptyGoodsCategories(archived);
-        for(int i=start;i<content.getChildCount();i++)searchRows.add(content.getChildAt(i));
+        for(int i=start;i<goodsListContainer.getChildCount();i++)searchRows.add(goodsListContainer.getChildAt(i));
+        addPanel(goodsListContainer);
     }
     private String displayedGoodsCategory(JSONObject row,JSONObject catalog) {
         String name=category(row);JSONObject meta=categoryMetadata(catalog,name);
@@ -1674,18 +1708,17 @@ public final class MainActivity extends Activity {
                 }
                 styleCheckBox(box);
                 LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
-                line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
+                line.addView(box,new LinearLayout.LayoutParams(dp(32),dp(44)));
                 line.addView(inlineTitle(shopping?"shopping":"item",row.optInt("id"),row,"name"),
-                    new LinearLayout.LayoutParams(0,dp(52),1));
+                    new LinearLayout.LayoutParams(0,dp(44),1));
                 if(ApiClient.canMutate()) {
-                    Button info=button("ⓘ",() -> editGoods(shopping,row));
-                    info.setTextColor(accentColor());info.setMinWidth(dp(44));
-                    line.addView(info,new LinearLayout.LayoutParams(dp(48),dp(44)));
+                    Button info=infoButton(() -> editGoods(shopping,row));
+                    line.addView(info,new LinearLayout.LayoutParams(dp(32),dp(32)));
                 }
                 addGoodsRowGrip(line,shopping,row.optInt("id"));group.addView(line);count++;
             }
             if(count>0 || !"未分類".equals(category)) {
-                LinearLayout section=panel();
+                LinearLayout section=new LinearLayout(this);section.setOrientation(LinearLayout.VERTICAL);
                 String groupKey=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
                 boolean open=expandedGoodsCategories.contains(groupKey);
                 LinearLayout categoryHead=new LinearLayout(this);categoryHead.setGravity(Gravity.CENTER_VERTICAL);
@@ -1695,19 +1728,17 @@ public final class MainActivity extends Activity {
                 TextView icon=label(shopping?"🛒":"🎒");icon.setPadding(0,0,0,0);
                 categoryHead.addView(icon,new LinearLayout.LayoutParams(dp(24),dp(44)));
                 EditText categoryName=inlineCategoryTitle(shopping,category);
+                categoryName.setTextSize(17);
+                if(ApiClient.canMutate()&&!"未分類".equals(category))categoryName.setOnLongClickListener(v->{categoryActions(shopping,category);return true;});
                 categoryHead.addView(categoryName,new LinearLayout.LayoutParams(0,dp(48),1));
                 TextView heading=label(Integer.toString(count));heading.setPadding(0,0,0,0);heading.setGravity(Gravity.CENTER);heading.setTextColor(mutedColor());
                 categoryHead.addView(heading,new LinearLayout.LayoutParams(dp(24),dp(44)));
-                Button expand=button(open?"⌄":"›",()->{
+                Button expand=flatButton(open?"⌄":"›",()->{
                     if(expandedGoodsCategories.contains(groupKey))expandedGoodsCategories.remove(groupKey);
                     else expandedGoodsCategories.add(groupKey);
                     render();
                 });expand.setContentDescription(category+"を開閉");expand.setPadding(0,0,0,0);
                 categoryHead.addView(expand,new LinearLayout.LayoutParams(dp(36),dp(44)));
-                if(ApiClient.canMutate()&&!"未分類".equals(category)) {
-                    Button more=button("⋯",()->categoryActions(shopping,category));more.setPadding(0,0,0,0);
-                    categoryHead.addView(more,new LinearLayout.LayoutParams(dp(32),dp(44)));
-                }
                 section.addView(categoryHead);installGoodsDropTarget(section,shopping,category);
                 if(open) {
                     section.addView(group);
@@ -1715,14 +1746,14 @@ public final class MainActivity extends Activity {
                 }
                 StringBuilder searchText=new StringBuilder("goods-search:").append(category);
                 for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,now)&&category.equals(displayedGoodsCategory(row,catalog))&&goodsCompleted=="completed".equals(row.optString("status")))searchText.append(' ').append(row.optString("name"));}
-                section.setTag(searchText.toString());addPanel(section);
+                section.setTag(searchText.toString());divider(section);goodsListContainer.addView(section);
             }
         }
     }
     private void renderEmptyGoodsCategories(ArrayList<String[]> archived) {
         if(!archived.isEmpty()) {
-            LinearLayout cluster=panel();
-            Button summary=button((emptyCategoriesExpanded?"⌄":"›")+" 空のカテゴリ  "+archived.size(),()->{emptyCategoriesExpanded=!emptyCategoriesExpanded;render();});
+            LinearLayout cluster=new LinearLayout(this);cluster.setOrientation(LinearLayout.VERTICAL);
+            Button summary=flatButton((emptyCategoriesExpanded?"⌄":"›")+" 空のカテゴリ  "+archived.size(),()->{emptyCategoriesExpanded=!emptyCategoriesExpanded;render();});
             summary.setContentDescription("空のカテゴリを開閉");cluster.addView(summary);
             StringBuilder searchable=new StringBuilder("goods-search:");for(String[] category:archived)searchable.append(' ').append(category[1]);cluster.setTag(searchable.toString());
             if(emptyCategoriesExpanded)for(String[] category:archived) {
@@ -1734,7 +1765,7 @@ public final class MainActivity extends Activity {
                 if(ApiClient.canMutate())row.addView(button("⋯",()->categoryActions(shopping,name)),new LinearLayout.LayoutParams(dp(44),dp(48)));
                 cluster.addView(row);
             }
-            addPanel(cluster);
+            goodsListContainer.addView(cluster);
         }
     }
     private JSONObject categoryMetadata(JSONObject catalog,String name) {
@@ -1773,9 +1804,9 @@ public final class MainActivity extends Activity {
                 v.setBackground(shape(softColor(),accentColor(),16));return true;
             }
             if(event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||event.getAction()==android.view.DragEvent.ACTION_DRAG_ENDED)
-                v.setBackground(shape(surfaceColor(),lineColor(),16));
+                v.setBackgroundColor(surfaceColor());
             if(event.getAction()==android.view.DragEvent.ACTION_DROP) {
-                v.setBackground(shape(surfaceColor(),lineColor(),16));
+                v.setBackgroundColor(surfaceColor());
                 if(drag.length==2)repositionCategory(shopping,drag[1],category);
                 else if(drag.length==3&&"row".equals(drag[1])) {
                     try{moveGoodsCategory(shopping,Integer.parseInt(drag[2]),category);}catch(NumberFormatException ignored){}
@@ -1927,8 +1958,8 @@ public final class MainActivity extends Activity {
         details.setVisibility(values[1].isEmpty()&&values[2].isEmpty()?android.view.View.GONE:android.view.View.VISIBLE);
         LinearLayout main=new LinearLayout(this);main.setGravity(Gravity.CENTER_VERTICAL);
         main.addView(name,new LinearLayout.LayoutParams(0,dp(48),1));
-        main.addView(button("ⓘ",()->details.setVisibility(details.getVisibility()==android.view.View.GONE?
-            android.view.View.VISIBLE:android.view.View.GONE)),new LinearLayout.LayoutParams(dp(44),dp(44)));
+        main.addView(infoButton(()->details.setVisibility(details.getVisibility()==android.view.View.GONE?
+            android.view.View.VISIBLE:android.view.View.GONE)),new LinearLayout.LayoutParams(dp(32),dp(32)));
         TextView status=label("");status.setTextSize(12);status.setTextColor(mutedColor());
         final boolean[] saving={false};
         Runnable save=()->{
@@ -1959,9 +1990,9 @@ public final class MainActivity extends Activity {
                         LinearLayout line=new LinearLayout(this);line.setGravity(Gravity.CENTER_VERTICAL);
                         CheckBox box=new CheckBox(this);styleCheckBox(box);
                         box.setContentDescription(value+"の完了状態");box.setOnClickListener(v->toggle(shopping?"shopping":"item",id,box));
-                        line.addView(box,new LinearLayout.LayoutParams(dp(44),dp(52)));
-                        line.addView(inlineTitle(shopping?"shopping":"item",id,row,"name"),new LinearLayout.LayoutParams(0,dp(52),1));
-                        line.addView(button("ⓘ",()->editGoods(shopping,row)),new LinearLayout.LayoutParams(dp(44),dp(44)));
+                        line.addView(box,new LinearLayout.LayoutParams(dp(32),dp(44)));
+                        line.addView(inlineTitle(shopping?"shopping":"item",id,row,"name"),new LinearLayout.LayoutParams(0,dp(44),1));
+                        line.addView(infoButton(()->editGoods(shopping,row)),new LinearLayout.LayoutParams(dp(32),dp(32)));
                         addGoodsRowGrip(line,shopping,id);group.addView(line);categoryTitle.setText(Integer.toString(group.getChildCount()));
                         name.setText("");memo.setText("");url.setText("");
                         values[3]=java.util.UUID.randomUUID().toString();details.setVisibility(android.view.View.GONE);
@@ -3056,16 +3087,17 @@ public final class MainActivity extends Activity {
         });
     }
     private void renderFamilyLog() {
-        content.addView(heading("家族ログ"));
         boolean readOnly=familyLogCached||!ApiClient.canMutate();
         LinearLayout days=new LinearLayout(this);
-        days.addView(button("‹",()->{selectedDay=selectedDay.minusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(44),dp(44)));
+        days.setGravity(Gravity.CENTER_VERTICAL);
+        days.addView(flatButton("‹",()->{selectedDay=selectedDay.minusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(24),dp(36)));
         days.addView(button(selectedDay.getYear()%100+"."+selectedDay.getMonthValue()+"."+selectedDay.getDayOfMonth(),()->
             new DatePickerDialog(this,(picker,y,m,d)->{selectedDay=LocalDate.of(y,m+1,d);month=YearMonth.from(selectedDay);loadFamilyLog();},
-                selectedDay.getYear(),selectedDay.getMonthValue()-1,selectedDay.getDayOfMonth()).show()),new LinearLayout.LayoutParams(0,dp(44),1));
-        days.addView(button("›",()->{selectedDay=selectedDay.plusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(44),dp(44)));
-        days.addView(button("↻",this::loadFamilyLog),new LinearLayout.LayoutParams(dp(44),dp(44)));
-        addPanel(days);
+                selectedDay.getYear(),selectedDay.getMonthValue()-1,selectedDay.getDayOfMonth()).show()),new LinearLayout.LayoutParams(dp(80),dp(36)));
+        days.addView(flatButton("›",()->{selectedDay=selectedDay.plusDays(1);month=YearMonth.from(selectedDay);loadFamilyLog();}),new LinearLayout.LayoutParams(dp(24),dp(36)));
+        Button manage=button("⚙",()->{if(readOnly)loadFamilyLog();else familyLogManageActions();});manage.setContentDescription("家族ログ管理");days.addView(manage,new LinearLayout.LayoutParams(dp(36),dp(36)));
+        LinearLayout header=panel();header.setPadding(dp(6),dp(8),dp(6),dp(8));header.setOrientation(LinearLayout.HORIZONTAL);header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(days);addPanel(header);
         if(pendingFamilyLogPhoto!=null && !readOnly) content.addView(button("離乳食の写真を再試行",this::sendFamilyLogPhoto));
         if(familyLog==null || !selectedDay.toString().equals(familyLog.optString("date"))) {
             content.addView(label("読み込み中…")); return;
@@ -3084,17 +3116,10 @@ public final class MainActivity extends Activity {
                     if(familyLogSubjectId!=ids.get(position)){familyLogSubjectId=ids.get(position);render();}
                 }
             });
-            content.addView(selected);
+            header.addView(selected,0,new LinearLayout.LayoutParams(0,dp(36),1));
         }
-        if(!readOnly)content.addView(button("⚙ 家族ログ管理",this::familyLogManageActions));
         if(subjects==null || subjects.length()==0) {
             content.addView(label("記録対象がありません。赤ちゃん・家族・ペットなどを追加してください。")); return;
-        }
-        if(!readOnly) {
-            LinearLayout add=new LinearLayout(this);
-            add.addView(button("＋ 記録",this::addFamilyLog),new LinearLayout.LayoutParams(0,dp(44),1));
-            add.addView(button("＋ タイマー",this::startFamilyLogTimer),new LinearLayout.LayoutParams(0,dp(44),1));
-            content.addView(add);
         }
         JSONArray timers=readOnly?null:familyLog.optJSONArray("timers");
         if(timers!=null && timers.length()>0) {
@@ -3111,10 +3136,10 @@ public final class MainActivity extends Activity {
         }
         if(!readOnly&&familyLog.optBoolean("timersTruncated")) content.addView(label("実行中のタイマーは一部のみ表示しています。"));
         if(familyLog.optBoolean("truncated")) content.addView(label("記録が多いため一部のみ表示しています。"));
-        if(logs!=null && !familyLog.optBoolean("truncated")) {
+        if(logs!=null && logs.length()>0 && !familyLog.optBoolean("truncated")) {
             double milk=0; int diaper=0,sleep=0;
             for(int i=0;i<logs.length();i++) {
-                JSONObject log=logs.optJSONObject(i); if(log==null) continue;
+                JSONObject log=logs.optJSONObject(i); if(log==null||familyLogSubjectId>0&&log.optInt("subject_id")!=familyLogSubjectId) continue;
                 switch(log.optString("log_type")) {
                     case "MILK": if("ml".equalsIgnoreCase(log.optString("unit"))) milk+=log.optDouble("amount",0); break;
                     case "DIAPER": diaper++; break;
@@ -3122,34 +3147,37 @@ public final class MainActivity extends Activity {
                     default: break;
                 }
             }
-            content.addView(label("当日の集計（表示中の全対象）  ミルク "+java.text.NumberFormat.getNumberInstance().format(milk)+
-                "ml ・ おむつ "+diaper+"回 ・ 睡眠 "+sleep+"分"));
+            TextView summary=label("ミルク "+java.text.NumberFormat.getNumberInstance().format(milk)+"ml ・ おむつ "+diaper+"回 ・ 睡眠 "+sleep+"分");summary.setTextSize(11);summary.setTextColor(mutedColor());content.addView(summary);
         }
-        content.addView(heading("当日の記録"));
-        if(logs==null || logs.length()==0) { content.addView(label("記録はありません")); return; }
+        int visibleRecords=0;if(logs!=null)for(int n=0;n<logs.length();n++){JSONObject row=logs.optJSONObject(n);if(row!=null&&(familyLogSubjectId==0||row.optInt("subject_id")==familyLogSubjectId))visibleRecords++;}
+        if(visibleRecords==0) { LinearLayout empty=panel();empty.addView(label("記録はありません。"));addPanel(empty);return; }
+        LinearLayout history=panel();history.setPadding(dp(10),0,dp(10),0);addPanel(history);
         for(int i=0;i<logs.length();i++) {
             JSONObject row=logs.optJSONObject(i); if(row==null||familyLogSubjectId>0&&row.optInt("subject_id")!=familyLogSubjectId) continue;
             String time=row.optString("occurred_at");
             if(time.length()>=16) time=time.substring(11,16);
             String detail=row.optString("detail_code");
             String amount=row.isNull("amount")?"":row.optString("amount")+row.optString("unit");
-            LinearLayout record=panel();
-            TextView entry=label(time+"   "+
-                logTypeName(row.optString("log_type"))+
+            LinearLayout record=new LinearLayout(this);record.setOrientation(LinearLayout.HORIZONTAL);record.setGravity(Gravity.TOP);record.setPadding(0,dp(12),0,dp(12));
+            LinearLayout when=new LinearLayout(this);when.setOrientation(LinearLayout.VERTICAL);
+            TextView clock=label(time);clock.setTextSize(16);clock.setTypeface(null,android.graphics.Typeface.BOLD);clock.setPadding(0,0,0,dp(3));when.addView(clock);
+            TextView subject=label(row.optString("subject_name"));subject.setTextSize(11);subject.setPadding(0,0,0,0);when.addView(subject);record.addView(when,new LinearLayout.LayoutParams(dp(62),-2));
+            TextView icon=label(logTypeIcon(row.optString("log_type")));icon.setTextSize(23);icon.setPadding(0,0,0,0);record.addView(icon,new LinearLayout.LayoutParams(dp(36),-2));
+            LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);record.addView(body,new LinearLayout.LayoutParams(0,-2,1));
+            TextView entry=label(logTypeName(row.optString("log_type"))+
                 (amount.isEmpty()?"":"  "+amount));
             entry.setTextSize(15);entry.setPadding(0,dp(2),0,dp(3));entry.setTypeface(null,android.graphics.Typeface.BOLD);
-            record.addView(entry);
-            TextView details=label(row.optString("subject_name")+
-                (detail.isEmpty()?"":" ・ "+familyLogDetailLabel(detail))+
+            body.addView(entry);
+            TextView details=label((detail.isEmpty()?"":familyLogDetailLabel(detail))+
                 (row.optString("value_text").isEmpty()?"":" ・ "+row.optString("value_text"))+
                 (row.optString("note").isEmpty()?"":"\n"+row.optString("note")));
-            details.setTextSize(12);details.setPadding(0,dp(2),0,dp(2));details.setTextColor(mutedColor());record.addView(details);
+            details.setTextSize(12);details.setPadding(0,dp(2),0,dp(2));details.setTextColor(mutedColor());if(!details.getText().toString().isEmpty())body.addView(details);
             if(!readOnly) {
                 record.setOnClickListener(v->{if(row.optInt("subject_id")>0)showFamilyLogEditor(row);});
                 record.setOnLongClickListener(v -> { familyLogActions(row); return true; });
                 record.setContentDescription(time+" "+logTypeName(row.optString("log_type"))+"。タップして編集、長押しで操作");
             }
-            addPanel(record);
+            history.addView(record);divider(history);
             int mediaId=row.optInt("media_id");
             if(!readOnly&&mediaId>0) content.addView(button("離乳食の写真",() -> new AlertDialog.Builder(this)
                 .setItems(new String[]{"表示","削除"},(dialog,which) -> {
@@ -3174,6 +3202,8 @@ public final class MainActivity extends Activity {
     }
     private void familyLogManageActions() {
         ArrayList<String> names=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
+        if(ApiClient.canMutate()&&!familyLogCached){names.add("＋ 記録");actions.add(this::addFamilyLog);names.add("＋ タイマー");actions.add(this::startFamilyLogTimer);}
+        names.add("更新");actions.add(this::loadFamilyLog);
         names.add("＋ 記録対象");actions.add(this::addFamilyLogSubject);
         names.add("記録対象の名前・表示");actions.add(this::manageFamilyLogSubjects);
         if(familyLog!=null&&familyLog.optBoolean("canManageSettings")){names.add("表示設定");actions.add(this::showFamilyLogSettings);}
@@ -3184,9 +3214,10 @@ public final class MainActivity extends Activity {
     }
     private void renderFamilyLogDock() {
         if(pageDock==null)return;pageDock.removeAllViews();
-        LinearLayout dock=new LinearLayout(this);dock.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout dock=new LinearLayout(this);dock.setOrientation(LinearLayout.HORIZONTAL);dock.setGravity(Gravity.CENTER_VERTICAL);dock.setPadding(dp(6),dp(6),dp(6),dp(6));
         if(familyLog!=null&&selectedDay.toString().equals(familyLog.optString("date"))) {
             boolean readOnly=familyLogCached||!ApiClient.canMutate();
+            Button refresh=button("🔄",this::loadFamilyLog);refresh.setContentDescription("家族ログを更新");dock.addView(refresh);
             JSONArray subjects=familyLog.optJSONArray("subjects"),timers=readOnly?null:familyLog.optJSONArray("timers");
             if(subjects!=null)populateFamilyLogQuickDock(dock,subjects,timers,readOnly);
         }
@@ -3194,10 +3225,11 @@ public final class MainActivity extends Activity {
         String[] names={"📓 成長日記","📖 家族日誌","🥕 食材","📊 まとめ"};
         Runnable[] actions={()->showWebPage("/app/child_journal.php"),()->showWebPage("/app/family_journal.php"),
             ()->showWebPage("/app/child_foods.php"),this::chooseFamilyLogSummary};
-        for(int i=0;i<names.length;i++){Button link=button(names[i],actions[i]);link.setTextSize(11);link.setPadding(0,0,0,0);
-            links.addView(link,new LinearLayout.LayoutParams(0,dp(42),1));}
-        if(dock.getChildCount()>0){ScrollView quickScroll=new ScrollView(this);quickScroll.addView(dock);
-            pageDock.addView(quickScroll,new LinearLayout.LayoutParams(-1,dp(132)));}
+        for(int i=0;i<names.length;i++){Button link=flatButton(names[i],actions[i]);link.setTextSize(11);link.setPadding(0,0,0,0);
+            links.addView(link,new LinearLayout.LayoutParams(0,dp(36),1));}
+        if(dock.getChildCount()>0){HorizontalScrollView quickScroll=new HorizontalScrollView(this);quickScroll.setHorizontalScrollBarEnabled(false);quickScroll.addView(dock);
+            for(int i=0;i<dock.getChildCount();i++){android.view.View child=dock.getChildAt(i);if(child instanceof Button){Button button=(Button)child;button.setTextSize(11);button.setPadding(dp(3),0,dp(3),0);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(66),dp(58));lp.setMargins(0,0,dp(6),0);button.setLayoutParams(lp);}}
+            pageDock.addView(quickScroll,new LinearLayout.LayoutParams(-1,dp(74)));}
         pageDock.addView(links);
     }
     private void populateFamilyLogQuickDock(LinearLayout dock,JSONArray subjects,JSONArray timers,boolean readOnly) {
@@ -3206,7 +3238,6 @@ public final class MainActivity extends Activity {
         if(today) {
             JSONArray chores=familyLog.optJSONArray("chores");
             if(chores!=null && chores.length()>0) {
-                dock.addView(label("日常家事"));
                 int weekday=selectedDay.getDayOfWeek().getValue()%7;
                 for(int i=0;i<chores.length();i++) {
                     JSONObject chore=chores.optJSONObject(i);if(chore==null || chore.optInt("active",1)!=1 || (chore.optInt("weekday_mask",127)&(1<<weekday))==0) continue;
@@ -3217,7 +3248,6 @@ public final class MainActivity extends Activity {
         for(int i=0;!readOnly&&i<subjects.length();i++) {
             JSONObject subject=subjects.optJSONObject(i);
             if(subject==null||familyLogSubjectId>0&&subject.optInt("id")!=familyLogSubjectId)continue;
-            dock.addView(label(subject.optString("name")));
             LinearLayout actions=new LinearLayout(this);
             ArrayList<String> enabled=allowedLogTypes(subject);
             boolean hasQuick=false;
@@ -3230,7 +3260,7 @@ public final class MainActivity extends Activity {
                 quickButton.setContentDescription(quick.optString("name")+"を記録");
                 actions.addView(quickButton,new LinearLayout.LayoutParams(dp(74),dp(58)));
             }
-            if(hasQuick) { dock.addView(horizontalActions(actions)); continue; }
+            if(hasQuick) { appendQuickDockActions(dock,actions); continue; }
             if(!"BABY".equals(subject.optString("subject_kind")))continue;
             if(enabled.contains("SLEEP")) {
                 boolean sleeping=false;
@@ -3247,8 +3277,11 @@ public final class MainActivity extends Activity {
                 actions.addView(button("💧 おしっこ",() -> recordBaby(subject,"DIAPER","WET")));
                 actions.addView(button("💩 うんち",() -> recordBaby(subject,"DIAPER","DIRTY")));
             }
-            if(actions.getChildCount()>0) dock.addView(horizontalActions(actions));
+            if(actions.getChildCount()>0) appendQuickDockActions(dock,actions);
         }
+    }
+    private void appendQuickDockActions(LinearLayout dock,LinearLayout actions) {
+        while(actions.getChildCount()>0){android.view.View child=actions.getChildAt(0);actions.removeViewAt(0);dock.addView(child);}
     }
     private String logTypeIcon(String type) {
         switch(type) {
@@ -5207,6 +5240,7 @@ public final class MainActivity extends Activity {
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("設定・管理").setView(scroll)
             .setNegativeButton("閉じる",null).create();
         panel.addView(label("自分・端末"));
+        addSettingsEntry(panel,dialog,"表示モード（ライト・ダーク）",this::chooseAppearance);
         addSettingsEntry(panel,dialog,"プロフィール名",()->showAppSettingsAction(settings,0));
         addSettingsEntry(panel,dialog,"通知: "+(settings.optBoolean("notification_enabled")?"有効":"無効"),()->showAppSettingsAction(settings,1));
         addSettingsEntry(panel,dialog,"通知方法・通知する家族（Web）",()->showWebPage("/app/settings_notifications.php"));
