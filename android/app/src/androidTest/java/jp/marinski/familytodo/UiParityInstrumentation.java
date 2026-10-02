@@ -154,7 +154,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->check(countDescription(root(),"空のカテゴリを開閉")==1,"both kinds share one empty cluster"));
             clickDescription("空のカテゴリを開閉");check(hasText("古い空"),"archived category inside cluster");check(hasText("古い持ち物"),"item archive joins shared cluster");
             clickDescription("古い空に追加");check(findHintOnUi("新しい買い物")!=null,"archived category can reopen for entry");
-            screenshot("checklist");
+            screenshot("checklist");onUi(()->{TextView event=findText(root(),"📅 イベント");check(event!=null&&event.getLineCount()==1,"event tab stays on one line beside AI input");check(event.getLayout()!=null&&event.getLayout().getEllipsisCount(0)==0&&event.getPaint().measureText(event.getText().toString())<=event.getWidth()-event.getPaddingLeft()-event.getPaddingRight(),"event tab text fits available width");});
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
             testGoodsCompletionDisplay();
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");

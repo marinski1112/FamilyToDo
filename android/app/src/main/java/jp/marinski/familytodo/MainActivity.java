@@ -1577,7 +1577,7 @@ public final class MainActivity extends Activity {
         LinearLayout section=panel(),kinds=new LinearLayout(this);
         for(boolean events:new boolean[]{false,true}) {
             Button kind=button(events?"📅 イベント":"☑ タスク",()->{checklistEvents=events;render();});
-            segment(kind,checklistEvents==events);kind.setTextSize(13);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(36),1));
+            segment(kind,checklistEvents==events);kind.setTextSize(12);kind.setSingleLine(true);kind.setPadding(dp(3),dp(4),dp(3),dp(4));kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(36),1));
         }
         if(ApiClient.canMutate()){Button ai=button("＋AI入力",()->openAiInput(checklistEvents?"event":"task"));ai.setTextSize(12);ai.setContentDescription("タスク・イベントのAI入力");kinds.addView(ai,new LinearLayout.LayoutParams(dp(82),dp(36)));Button add=button(checklistEvents?"＋予定":"＋タスク",this::addTask);add.setContentDescription(checklistEvents?"イベントを追加":"タスクを追加");kinds.addView(add,new LinearLayout.LayoutParams(dp(80),dp(36)));}
         section.addView(kinds);
