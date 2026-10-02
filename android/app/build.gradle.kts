@@ -32,7 +32,7 @@ android {
         buildConfigField("boolean", "ALLOW_MUTATIONS", "true")
         buildConfigField("boolean", "UI_TEST_MODE", "false")
         testInstrumentationRunner = "jp.marinski.familytodo.UiParityInstrumentation"
-        manifestPlaceholders["appLabel"] = "つち"
+        manifestPlaceholders["appLabel"] = "つちだけ"
     }
     buildTypes {
         getByName("debug") {
@@ -41,7 +41,7 @@ android {
             if (previewBuild) {
                 buildConfigField("boolean", "ALLOW_MUTATIONS", if (isolatedE2E) "true" else "false")
                 applicationIdSuffix = ".preview"
-                manifestPlaceholders["appLabel"] = "つち Preview"
+                manifestPlaceholders["appLabel"] = "つちだけ Preview"
             }
         }
     }
