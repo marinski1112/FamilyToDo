@@ -3164,7 +3164,7 @@ public final class MainActivity extends Activity {
             TextView subject=label(row.optString("subject_name"));subject.setTextSize(11);subject.setPadding(0,0,0,0);when.addView(subject);record.addView(when,new LinearLayout.LayoutParams(dp(62),-2));
             TextView icon=label(logTypeIcon(row.optString("log_type")));icon.setTextSize(23);icon.setPadding(0,0,0,0);record.addView(icon,new LinearLayout.LayoutParams(dp(36),-2));
             LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);record.addView(body,new LinearLayout.LayoutParams(0,-2,1));
-            TextView entry=label(logTypeName(row.optString("log_type"))+
+            TextView entry=label(logTypeLabel(row.optString("log_type"))+
                 (amount.isEmpty()?"":"  "+amount));
             entry.setTextSize(15);entry.setPadding(0,dp(2),0,dp(3));entry.setTypeface(null,android.graphics.Typeface.BOLD);
             body.addView(entry);
@@ -3283,15 +3283,11 @@ public final class MainActivity extends Activity {
     private void appendQuickDockActions(LinearLayout dock,LinearLayout actions) {
         while(actions.getChildCount()>0){android.view.View child=actions.getChildAt(0);actions.removeViewAt(0);dock.addView(child);}
     }
+    private String logTypeLabel(String type) {
+        String name=logTypeName(type);int split=name.indexOf(' ');return split<0?name:name.substring(split+1);
+    }
     private String logTypeIcon(String type) {
-        switch(type) {
-            case "MILK":return "🍼";
-            case "DIAPER":return "🧷";
-            case "SLEEP":return "😴";
-            case "BATH":return "🛁";
-            case "MEAL":return "🍚";
-            default:return "✨";
-        }
+        String name=logTypeName(type);int split=name.indexOf(' ');return split<0?"✨":name.substring(0,split);
     }
     private void chooseFamilyLogSummary() {
         if(familyLog==null) return;
