@@ -190,7 +190,7 @@ public final class UiParityInstrumentation extends Instrumentation {
                 check(clock!=null&&entry!=null,"family log exposes clock and content");
                 check(clock.getParent().getParent()==entry.getParent().getParent(),"family log clock and content share a horizontal record");
                 ViewGroup dock=(ViewGroup)value("pageDock");check(dock.getHeight()<140*activity.getResources().getDisplayMetrics().density,"quick dock leaves room for timeline");
-                field("familyLogSubjectId",999);invoke("render");check(findText(root(),"記録はありません。")!=null,"selected subject with no records has an empty state");field("familyLogSubjectId",0);invoke("render");
+                JSONArray subjects=family.getJSONArray("subjects");subjects.put(new JSONObject().put("id",999).put("name","記録なしの対象").put("subject_kind","BABY"));field("familyLogSubjectId",999);invoke("render");check(findText(root(),"記録はありません。")!=null,"selected subject with no records has an empty state");subjects.remove(subjects.length()-1);field("familyLogSubjectId",0);invoke("render");
             }catch(Exception e){throw new RuntimeException(e);}});settle();screenshot("familylog");
             navigate("伝言");check(hasText("伝言のテスト"),"message renders");check(findHintOnUi("メッセージ")!=null,"bottom composer exists");
             onUi(()->{View body=findText(root(),"伝言のテスト"),bubble=(View)body.getParent(),stack=(View)bubble.getParent();
