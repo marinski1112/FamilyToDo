@@ -1,47 +1,40 @@
 # Android テスト版
 
-## 最新版 v0.1.187
+## 最新版 v0.1.191
 
-**[APKを直接ダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.187.apk)**
+**[APKを直接ダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.191.apk)**
 
 ### 今回の反映
 
-- カレンダーの時刻付きタイトルで同じ時刻が二重表示されないようにする。全角入力もWebと同じNFKC規則で処理し、終日・複数日帯の元タイトルは保持。
-- 単日予定はWebと同じsort_order、idの順に表示。子タスクがある場合、件数は子を数えて親を重複計上しない。
-- 完了済み買い物・持ち物はWebのJST 0時／1時猶予に合わせて表示。カレンダーの日付付き履歴は保持。画面を開いたままの境界と再開時にも表示期間を確認。
-- 日移動・月スワイプが既存overview APIの2000〜2100年範囲を超えないようにする。
-- 予定が4件・複数日帯がある日のスタンプ用余白を広げ、タスク件数への重なりを解消。
-- 連続追加した項目がカテゴリ名変更後も保持されることを再確認。完了済み絞り込みは元の一覧を切り離さず表示時に判定。
-- v0.1.184までの日付指定・年月指定・カレンダーフィルタ、両goodsリスト表示、一括検索・空カテゴリ、伝言の最新初期位置／履歴位置保持・リアクションと以前のUI変更も含む。
+- 設定の入口を「自分・端末」「家族」「日常の機能」「外部連携」に整理。招待・タイムゾーン・家族の表示名・詳細メンバー管理などは実際の管理者権限に応じて表示。
+- プロフィール名・家族の表示名は入力エラーや通信失敗でもフォームを残して再試行。保存の連打と読み取り専用での送信を防止。設定取得失敗時にも端末の位置共有設定へ移動可能。
+- 家族ログに最新の体温・体重・身長と日別最大値の折れ線を追加。最新と最大は区別し、欠測は0にせず、測定値0は保持。
+- 水分量・運動時間・散歩時間と、最大1096日の期間指定を追加。1回の取得は30日以内。進捗表示・中止があり、中止後の残りの取得を止める。
+- グラフは取得済み期間を30日ずつ前後に移動し、期間の先頭まで確認できる。項目・表示期間の切替で再取得しない。
+- Google連携の状態表示の改行を修正。
+- v187までの月スワイプ、日付・年月指定、両goodsの一括表示、検索・カテゴリ編集・ドラッグ、伝言の最新位置・リアクション、予定順序・子件数・完了表示の猶予、ホーム・背景・スタンプ等も含む。
 
-### APIの反映状況
+### 本番API
 
-必要な取得列（sort_order、parent_task_id、完了日時）・最近の日付なし完了済みgoods・認可された日付なし子の最小メタデータは[PR #1147](https://github.com/marinski1112/FamilyToDo/pull/1147)で2026-10-02に本番反映済みです。**v0.1.187で予定順序・子件数・日付なし完了の取得を確認できます。APKの作り直しは不要です。**
+[PR #1148](https://github.com/marinski1112/FamilyToDo/pull/1148)を本番反映済み。main `82b266e17c3d5f7de4847a90c99ddf7a63b33865`、Workers version `852b803e-f851-4e2c-aac8-bd3f1f805455`。1リクエスト30日以内、家族・対象・大人非表示の条件、認証、private/no-storeを維持。DB変更・定期取得なし。実SQLiteの集計・最新/最大・欠測/0・別家族/対象・大人非表示・削除・範囲・認証・メソッドの検証と型チェック成功。本番未認証summaryは401を確認。
 
-本番main：`bae2e185c6949cff298fd083d19c32cccd1cff66`。[main CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36964071387)とWorkers Builds成功、本番version `b3e634be-5728-48dc-826b-a32e7b930483`。本番health・未認証overviewの401を読み取り専用で確認。ログイン済み実データの表示と端末動作は実機確認が残ります。DBの手動操作・migrationはありません。
-
-Webイベント編集入口[PR #1146](https://github.com/marinski1112/FamilyToDo/pull/1146)は別ドラフトで未反映です。
+前回のoverview API [#1147](https://github.com/marinski1112/FamilyToDo/pull/1147)も反映済み。Webイベント編集入口 [#1146](https://github.com/marinski1112/FamilyToDo/pull/1146)は別ドラフトで未反映。
 
 ### 検証
 
-本番APIのAndroid開発ブランチへの取り込み後も、[Android CI 188](https://github.com/marinski1112/FamilyToDo/actions/runs/36964343463)と[通常CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36964343470)成功。Android 11/15・ライト／ダークを再確認。Native Java/Gradle/assetsと配布APKは変更していません。テストはv0.1.187のままで行えます。
+[Android CI 191](https://github.com/marinski1112/FamilyToDo/actions/runs/36967987700)・通常CI成功。通常/Preview/隔離E2E/ReleaseビルドとAndroid 11/API30・15/API35、360dp、ライト/ダークの隔離fixture操作・表示を確認。一般メンバー/ADMIN/OWNERの設定表示、プロフィールの入力検証・失敗後の保持/再試行・連打・読み取り専用、期間先頭へのグラフ移動、最新測定のチャンク結合、0/欠測、3年取得の中止を追加検証。従来のチェックリスト・カレンダー・伝言・背景等の回帰チェックも通過。本番実データへのテスト書き込みなし。実機のログイン後の表示・GPS・写真・通知は未確認。
 
-[Android CI 187](https://github.com/marinski1112/FamilyToDo/actions/runs/36960974783)：通常・Preview・隔離E2E・ReleaseビルドとAndroid 11/API30・15/API35、360dp、ライト／ダークの画面・操作テスト成功。
-[通常 CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36960974772)成功。
+### APK
 
-架空のfixtureで時刻整形・予定順序・子件数・完了時刻の境界／offset／undo／旧API互換・表示件数・元一覧保持・日付上限・スタンプと件数の非重複を検証。既存の連続追加・カテゴリ編集／失敗復旧・スワイプ・伝言位置なども通過。画面画像の重なりも確認しました。本番データへの書き込みなし。
+- ソース: `7bbad62dd001e3e43af9efbd0ece3e645ac5e69f`
+- サイズ: 273545 bytes
+- SHA-256: `4bd8b3a87abaf03cb3b5b54e18fcb760aff7d89d654d6d4e152ca9dc68eccac9`
+- 署名証明書 SHA-256: `30c894e40b5e588d5685ba06cdffb1f81038d34d666ac2ae70309955f3e6c241`
+- 本番origin: `https://familytodo.marinski1112.workers.dev`
+- UI fixture/PreviewのAPKではありません。
 
-APIは実SQLiteによる認証・家族／PRIVATE境界、0時／1時、履歴保持、親子取得、500件上限、既存複合indexの両列検索を検証。[API CI](https://github.com/marinski1112/FamilyToDo/actions/runs/36961150281)成功。
+CIデバッグAPKの署名鍵は実行ごとに異なります。v187の署名と異なるため、上書き更新とログイン保持はできません。固定署名の内部配布版はまだ準備できていません。今回のUI変更は検証済みの版にまとめており、途中版のインストールは不要です。
 
-AndroidソースSHA：`6d68e007136bd07a4b244ae62f5242b444053be2`。
-APIソースSHA：`aa65e548a74aa1738ae58f231c7875318bba8195`。
-APK SHA256：`720b5a1ff57ad01edb32591f8952858be934a0d2856cae432b486eff5cdb9fa5`（263209 bytes）。
-署名証明書SHA256：`0d514d2024caed4ecabd53c32c3c507e1a1284d7ba95b408ec22d79f7c452bcb`。
+### 到達点と残り
 
-### 到達点とインストール
-
-主要な日常画面はまとめて実機で試す段階です。常用版としての完成判定には実機のLINEログイン・同期・日本語IME・写真・権限・位置共有の確認が残ります。地図・履歴、日誌詳細、食材、一部管理は認証済みアプリ内Web画面。育児集計の最新体温／体重／身長・推移、水分／運動／散歩、Webの最大3年期間と残る設定は未移植です。
-
-v0.1.184などとは署名が異なり上書き更新できません。入れ替える際は未送信下書きを保存し、位置共有を停止して旧アプリを削除・再インストールするため、再ログインと端末設定の復元が必要です。Webに保存済みの家族データは残ります。固定署名の内部配布用GitHub Secretsは未設定。途中版の入れ直しは不要で、今回のv0.1.187でまとめて確認できます。
-
-[Android PR #1143](https://github.com/marinski1112/FamilyToDo/pull/1143)
+主要な日常画面と今回の管理整理・詳細集計は、実機でまとめて試す段階です。記録者別の集計・予防接種履歴などの細部、メンバー削除/他権限・外部連携/インポート等のネイティブ化、オフライン保存キュー、固定署名更新、実機確認は残ります。家族日誌詳細・地図・一部管理は既存Webで利用できます。Android全体 [#1143](https://github.com/marinski1112/FamilyToDo/pull/1143)はドラフトを維持しています。
