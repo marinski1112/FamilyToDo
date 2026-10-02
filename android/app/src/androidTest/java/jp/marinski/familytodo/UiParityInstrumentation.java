@@ -52,6 +52,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("振替休日".equals(CalendarHolidays.name(LocalDate.parse("2026-05-06"))),"Web substitute holiday");
             check("成人の日".equals(CalendarHolidays.name(LocalDate.parse("2026-01-12"))),"Web Monday holiday");
             check(CalendarHolidays.name(LocalDate.parse("2026-09-30"))==null,"ordinary weekday");
+            testPresentationHelpers();
             JSONObject dashboard=HomeDashboardParser.parse(homeHtml());
             check(dashboard.getJSONArray("counts").getInt(3)==7,"home server family-log count");
             check(dashboard.getJSONArray("alerts").length()==1,"home rejects external action link");
@@ -154,6 +155,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             clickDescription("古い空に追加");check(findHintOnUi("新しい買い物")!=null,"archived category can reopen for entry");
             screenshot("checklist");
             clickText("🎒 持ち物");clickDescription("保育園を開閉");check(hasText("持ち物のテスト"),"item catalog stays separate");screenshot("items");
+            testGoodsCompletionDisplay();
             navigate("カレンダー");check(hasContaining("予定のテスト"),"calendar event renders");
             onUi(()->{View cell=findDescription(root(),day+" 予定8件");check(cell!=null,"today's calendar cell exists");
                 check(((ViewGroup)cell.getParent()).indexOfChild(cell)==LocalDate.parse(day).getDayOfWeek().getValue()%7,"calendar date matches weekday");});
@@ -169,6 +171,8 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{check(findDescription(root(),"スタンプ カレンダーテスト")!=null,"calendar contains stamp thumbnail");});
             testCalendarDates();
             testCalendarFilters();
+            testCalendarOrder();
+            testNavigationBounds();
             testMonthSwipes("calendar");
             screenshot("calendar");
             testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
@@ -275,6 +279,65 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->{try{check(value("month").equals(YearMonth.of(2028,2)),"calendar month picker confirms year and month: "+value("month"));}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("今月のカレンダーを表示");onUi(()->{try{check(value("month").equals(YearMonth.now(java.time.ZoneId.of("Asia/Tokyo"))),"calendar returns to current JST month");}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("今日のチェックリストを表示");onUi(()->{try{check(value("tab").equals("goods"),"calendar today opens checklist");check(value("selectedDay").equals(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo"))),"today checklist selects JST date");}catch(Exception e){throw new RuntimeException(e);}});navigate("カレンダー");
+    }
+    private void testGoodsCompletionDisplay()throws Exception {
+        onUi(()->{try{JSONArray original=snapshot.optJSONArray("shopping");boolean initial=(boolean)value("goodsCompleted");
+            JSONArray rows=new JSONArray(original.toString());rows.put(new JSONObject().put("id",901).put("name","古い完了履歴").put("status","completed").put("completed_at","2000-01-01 12:00:00"));
+            rows.put(new JSONObject().put("id",902).put("name","直近の完了").put("status","completed").put("completed_at",java.time.Instant.now().toString()));
+            snapshot.put("shopping",rows);field("goodsCompleted",true);invoke("render");
+            check(findText(root(),"完了済み 1")!=null,"completed count excludes expired rows across kinds");
+            // Rows are constructed even when their category is collapsed.
+            check(rows.length()==original.length()+2&&snapshot.optJSONArray("shopping")==rows,"checklist completion filter does not mutate calendar snapshot");
+            @SuppressWarnings("unchecked") java.util.Set<String> expanded=(java.util.Set<String>)value("expandedGoodsCategories");String key=value("sessionEpoch")+":shopping:未分類";boolean wasOpen=expanded.contains(key);expanded.add(key);invoke("render");
+            check(findText(root(),"直近の完了")!=null&&findText(root(),"古い完了履歴")==null,"only retained completed rows render in category");
+            if(!wasOpen)expanded.remove(key);snapshot.put("shopping",original);field("goodsCompleted",initial);invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testPresentationHelpers()throws Exception {
+        JSONObject task=new JSONObject().put("start_at","2026-10-02 09:00:00").put("title","９：００ ～ 登園");
+        check(CalendarPresentation.label(task,true).equals("09:00 登園"),"NFKC matching time prefix removed");
+        task.put("title","9:00 登園");check(CalendarPresentation.label(task,true).equals("09:00 登園"),"short hour matching prefix removed");
+        task.put("title","10:00 登園");check(CalendarPresentation.label(task,true).equals("09:00 10:00 登園"),"different title time retained");
+        task.put("title","9:00");check(CalendarPresentation.label(task,true).equals("09:00 9:00"),"empty stripped title falls back like Web");
+        task.put("all_day",1);check(CalendarPresentation.label(task,true).equals("9:00"),"all-day title unchanged");
+        task.put("all_day",0);check(CalendarPresentation.label(task,false).equals("9:00"),"band title unchanged");
+        task.put("start_at","invalid");check(CalendarPresentation.label(task,true).equals("9:00"),"invalid start has no time prefix");
+        long midnight=java.time.Instant.parse("2026-10-01T15:00:00Z").toEpochMilli(),one=midnight+3600000;
+        JSONObject goods=new JSONObject().put("status","completed").put("completed_at","2026-10-01 23:00:00");
+        check(GoodsCompletion.visible(goods,midnight),"23:00 completion remains at midnight");
+        check(!GoodsCompletion.visible(goods,one),"previous day completion expires at 01:00 JST");
+        goods.put("completed_at","2026-10-01T14:00:00Z");check(GoodsCompletion.visible(goods,one-1),"UTC completion uses JST grace");
+        goods.put("completed_at","2026-10-01 22:59:59");check(!GoodsCompletion.visible(goods,midnight),"before 23:00 expires at midnight");
+        goods.put("completed_at",JSONObject.NULL).put("updated_at","2026-10-02 00:00:00");check(GoodsCompletion.visible(goods,one),"timestamp fallback keeps today's completion");
+        goods.put("updated_at","bad");check(!GoodsCompletion.visible(goods,one),"malformed timestamp excluded");
+        goods.remove("updated_at");check(GoodsCompletion.visible(goods,one),"legacy overview omission remains compatible");
+        goods.put("status","pending").put("completed_at","bad");check(GoodsCompletion.visible(goods,one),"undo remains visible");
+        check(GoodsCompletion.nextBoundary(midnight)==one&&GoodsCompletion.nextBoundary(one)==midnight+86400000,"completion timer matches midnight and 01:00 boundaries");
+    }
+    private void testCalendarOrder()throws Exception {
+        AtomicReference<JSONArray> original=new AtomicReference<>();
+        onUi(()->{try{original.set(snapshot.optJSONArray("tasks"));String day=((LocalDate)value("selectedDay")).toString();
+            snapshot.put("tasks",new JSONArray()
+                .put(new JSONObject().put("id",91).put("sort_order",2).put("title","順序後").put("task_kind","EVENT").put("all_day",1).put("start_at",day+" 00:00:00"))
+                .put(new JSONObject().put("id",93).put("sort_order",1).put("title","09:00 順序先").put("task_kind","EVENT").put("start_at",day+" 09:00:00"))
+                .put(new JSONObject().put("id",92).put("sort_order",1).put("title","同順序小ID").put("task_kind","EVENT").put("start_at",day+" 15:00:00")));
+            invoke("render");View first=findText(root(),"15:00 同順序小ID"),second=findText(root(),"09:00 順序先"),third=findText(root(),"順序後");
+            check(first!=null&&second!=null&&third!=null,"calendar chips use de-duplicated display labels");
+            ViewGroup group=(ViewGroup)first.getParent();check(group.indexOfChild(first)<group.indexOfChild(second)&&group.indexOfChild(second)<group.indexOfChild(third),"calendar honours sort_order then id regardless of time or all-day");
+            check("09:00 順序先".contentEquals(second.getContentDescription()),"calendar accessibility includes time without duplication");
+            snapshot.put("tasks",original.get());invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testNavigationBounds()throws Exception {
+        onUi(()->{try{YearMonth initial=(YearMonth)value("month");LocalDate initialDay=(LocalDate)value("selectedDay");
+            Method change=MainActivity.class.getDeclaredMethod("changeMonth",int.class);change.setAccessible(true);
+            field("month",YearMonth.of(2000,1));change.invoke(activity,-1);check(value("month").equals(YearMonth.of(2000,1)),"month swipe lower API bound");
+            field("month",YearMonth.of(2100,12));change.invoke(activity,1);check(value("month").equals(YearMonth.of(2100,12)),"month swipe upper API bound");
+            Method select=MainActivity.class.getDeclaredMethod("selectChecklistDate",LocalDate.class);select.setAccessible(true);
+            select.invoke(activity,LocalDate.of(1999,12,31));check(value("selectedDay").equals(initialDay),"invalid previous day cannot trigger request");
+            select.invoke(activity,LocalDate.of(2101,1,1));check(value("selectedDay").equals(initialDay),"invalid next day cannot trigger request");
+            field("month",initial);field("selectedDay",initialDay);invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
     }
     private void testCalendarFilters()throws Exception {
         AtomicReference<JSONArray> original=new AtomicReference<>();

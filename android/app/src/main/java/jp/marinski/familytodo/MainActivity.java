@@ -64,6 +64,8 @@ public final class MainActivity extends Activity {
     private final Map<String,String> checklistQueries=new HashMap<>();
     private final Set<String> checklistSearchOpen=new HashSet<>();
     private boolean goodsCompleted=false;
+    private long goodsCompletionThreshold;
+    private final android.os.Handler completionClock=new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean emptyCategoriesExpanded=false;
     private final Set<String> expandedGoodsCategories=new HashSet<>();
     private final Map<String,String[]> goodsComposerDrafts=new HashMap<>();
@@ -110,11 +112,20 @@ public final class MainActivity extends Activity {
     private JSONObject locationLatest;
     private String locationError="";
     private WebView pageWeb;
+    private final Runnable completionBoundary=()->{if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null)render();};
     @Override public void onCreate(Bundle state) { super.onCreate(state); ApiClient.setMutationsEnabled(false); showNative(); if(!BuildConfig.UI_TEST_MODE)load(); }
     @Override protected void onResume() {
         super.onResume();
         if(BuildConfig.UI_TEST_MODE)return;
+        if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null){
+            if(goodsCompletionThreshold!=GoodsCompletion.threshold(System.currentTimeMillis()))render();else scheduleGoodsCompletionBoundary();
+        }
         if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
+    }
+    @Override protected void onPause(){completionClock.removeCallbacks(completionBoundary);super.onPause();}
+    private void scheduleGoodsCompletionBoundary(){
+        completionClock.removeCallbacks(completionBoundary);
+        completionClock.postDelayed(completionBoundary,Math.max(1,GoodsCompletion.nextBoundary(System.currentTimeMillis())-System.currentTimeMillis()));
     }
     private boolean darkMode() {
         return (getResources().getConfiguration().uiMode &
@@ -211,6 +222,7 @@ public final class MainActivity extends Activity {
         render();
     }
     private void selectChecklistDate(LocalDate date) {
+        if(date.isBefore(LocalDate.of(2000,1,1))||date.isAfter(LocalDate.of(2100,12,31)))return;
         selectedDay=date;month=YearMonth.from(date);
         if(tab.equals("goods")&&snapshot!=null&&month.toString().equals(snapshot.optString("month")))render();else load();
     }
@@ -227,6 +239,7 @@ public final class MainActivity extends Activity {
         date.setContentDescription("チェックリストの日付を指定");date.setTextSize(17);row.addView(date,new LinearLayout.LayoutParams(0,dp(48),1));
         Button prev=button("‹",()->selectChecklistDate(selectedDay.minusDays(1))),next=button("›",()->selectChecklistDate(selectedDay.plusDays(1)));
         prev.setContentDescription("前日を表示");next.setContentDescription("翌日を表示");
+        prev.setEnabled(selectedDay.isAfter(LocalDate.of(2000,1,1)));next.setEnabled(selectedDay.isBefore(LocalDate.of(2100,12,31)));
         row.addView(prev,new LinearLayout.LayoutParams(dp(44),dp(48)));row.addView(next,new LinearLayout.LayoutParams(dp(44),dp(48)));content.addView(row);
     }
     private AlertDialog pickCalendarMonth() {
@@ -246,7 +259,9 @@ public final class MainActivity extends Activity {
     }
     private void changeMonth(int delta) {
         if(!tab.equals("calendar")&&!tab.equals("goods"))return;
-        month=month.plusMonths(delta);
+        YearMonth target=month.plusMonths(delta);
+        if(target.getYear()<2000||target.getYear()>2100)return;
+        month=target;
         selectedDay=month.atDay(tab.equals("calendar")?1:Math.min(selectedDay.getDayOfMonth(),month.lengthOfMonth()));
         load();
     }
@@ -742,8 +757,7 @@ public final class MainActivity extends Activity {
         ArrayList<String> names=new ArrayList<>();
         for(JSONObject row:rows) {
             String at=dateValue(row,"start_at","due_at");
-            names.add(("EVENT".equalsIgnoreCase(row.optString("task_kind"))?"📅 ":"☑ ")+
-                (row.optInt("all_day")==1||at.length()<16?"":at.substring(11,16)+" ")+row.optString("title"));
+            names.add(("EVENT".equalsIgnoreCase(row.optString("task_kind"))?"📅 ":"☑ ")+CalendarPresentation.label(row,true));
         }
         new AlertDialog.Builder(this).setTitle(day+" の予定").setItems(names.toArray(new String[0]),(dialog,which)->{
             selectedDay=day;checklistEvents="EVENT".equalsIgnoreCase(rows.get(which).optString("task_kind"));navigate("goods");
@@ -846,16 +860,13 @@ public final class MainActivity extends Activity {
                     }else taskCount++;
                     dayRows.add(task);
                 }
-                events.sort((left,right)->{
-                    int allDay=Integer.compare(right.optInt("all_day"),left.optInt("all_day"));
-                    return allDay!=0?allDay:dateValue(left,"start_at","due_at").compareTo(dateValue(right,"start_at","due_at"));
-                });
+                events.sort(CalendarPresentation::compare);
                 for(int n=0;n<Math.min(4,events.size());n++) {
                     JSONObject task=events.get(n);TextView chip=new TextView(this);
                     String at=dateValue(task,"start_at","due_at"),first=at.length()>=10?at.substring(0,10):"";
-                    chip.setText((task.optInt("all_day")==1||at.length()<16||!first.equals(day.toString())?"":at.substring(11,16)+" ")+task.optString("title"));
+                    chip.setText(CalendarPresentation.label(task,first.equals(day.toString())));
                     chip.setSingleLine(true);chip.setEllipsize(android.text.TextUtils.TruncateAt.END);chip.setTextSize(9);chip.setTextColor(Color.WHITE);
-                    chip.setContentDescription(task.optString("title"));chip.setPadding(dp(2),0,dp(2),0);
+                    chip.setContentDescription(chip.getText());chip.setPadding(dp(2),0,dp(2),0);
                     chip.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
                     cell.addView(chip,new LinearLayout.LayoutParams(-1,dp(17)));
                 }
@@ -1617,7 +1628,8 @@ public final class MainActivity extends Activity {
             actions.addView(button("≡ セット",() -> loadReusableSets(shopping)),new LinearLayout.LayoutParams(0,dp(48),1));
             addPanel(actions);
         }
-        int completedCount=0;for(String key:new String[]{"shopping","items"}){JSONArray list=snapshot.optJSONArray(key);if(list!=null)for(int i=0;i<list.length();i++){JSONObject row=list.optJSONObject(i);if(row!=null&&"completed".equals(row.optString("status")))completedCount++;}}
+        goodsCompletionThreshold=GoodsCompletion.threshold(System.currentTimeMillis());scheduleGoodsCompletionBoundary();
+        int completedCount=0;for(String key:new String[]{"shopping","items"}){JSONArray list=snapshot.optJSONArray(key);if(list!=null)for(int i=0;i<list.length();i++){JSONObject row=list.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,System.currentTimeMillis())&&"completed".equals(row.optString("status")))completedCount++;}}
         final String completedLabel="完了済み"+(completedCount>0?" "+completedCount:"");
         LinearLayout status=new LinearLayout(this);
         for(boolean completed:new boolean[]{false,true}) {
@@ -1636,7 +1648,9 @@ public final class MainActivity extends Activity {
         return meta!=null&&meta.optInt("enabled",1)==0?"未分類":name;
     }
     private void renderGoodsKind(boolean shopping,ArrayList<String[]> archived) {
-        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if(rows==null)return;
+        JSONArray source=snapshot.optJSONArray(shopping?"shopping":"items"); if(source==null)return;
+        JSONArray rows=new JSONArray();long now=System.currentTimeMillis();
+        for(int i=0;i<source.length();i++){JSONObject row=source.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,now))rows.put(row);}
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
         if(catalog!=null) {
