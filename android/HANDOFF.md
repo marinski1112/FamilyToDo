@@ -32,3 +32,9 @@ Distribution is batched to avoid repeated device installs. CI debug signing keys
 ## 2026-10-01 daily UI batch
 
 User requested calendar/checklist month swipes, messages opening at latest bottom, and shopping + belongings displayed together. Native renderers now implement all four. Fixture tests cover navigation and scroll behavior; record the final Android CI/artifact number in distribution after tests pass. Web event editing exists through task detail; the missing obvious entry is handled separately by draft PR #1146 (not merged/deployed). Do not ask for another intermediate device login.
+
+## Calendar/lifecycle batch (2026-10-02)
+
+Native next batch fixes duplicate time-prefixed titles, Web sort_order/id ordering, child-based checklist counts and 2000–2100 navigation guards. Completed goods use JST midnight/01:00 grace, including foreground boundary refresh and resume refresh. Keep the original snapshot array backing goodsComposer: filtering by copying to a new JSONArray lost newly added rows after category rename; the existing consecutive-add/rename UI test caught this and visibility is now checked only while rendering.
+
+API draft #1147 (`fix/android-overview-completion-parity`) adds recent undated completed goods and timestamps, task sort_order/parent_task_id and bounded authorised undated-child id/parent metadata for returned roots. No production deployment. Tests use migrated in-memory SQLite, including privacy, boundaries, undo, dated calendar history and limits. Native retains compatibility with old servers. Update PR #1143 CI results and distribution README only after final CI succeeds.

@@ -851,15 +851,16 @@ public final class MainActivity extends Activity {
                 cell.addView(holidayLabel,new LinearLayout.LayoutParams(-1,dp(13)));
                 android.view.View bandSpace=new android.view.View(this);cell.addView(bandSpace,new LinearLayout.LayoutParams(-1,dp(19*bandRows)));
                 ArrayList<JSONObject> dayRows=new ArrayList<>(),events=new ArrayList<>();
-                int taskCount=0,bandOverflow=0;
+                int taskCount=0,bandOverflow=0;ArrayList<JSONObject> checklistRows=new ArrayList<>();
                 for(int n=0;n<tasks.length();n++) {
                     JSONObject task=tasks.optJSONObject(n);if(task==null||!taskOnDay(task,day.toString()))continue;
                     if("EVENT".equalsIgnoreCase(task.optString("task_kind"))) {
                         if(task.optInt("calendar_visible",1)!=1)continue;
                         if(multiDayEvent(task)){if(lanes.get(task)>=4)bandOverflow++;}else events.add(task);
-                    }else taskCount++;
+                    }else checklistRows.add(task);
                     dayRows.add(task);
                 }
+                taskCount=CalendarPresentation.checklistCount(checklistRows,snapshot.optJSONArray("undatedChildren"));
                 events.sort(CalendarPresentation::compare);
                 for(int n=0;n<Math.min(4,events.size());n++) {
                     JSONObject task=events.get(n);TextView chip=new TextView(this);
@@ -1648,9 +1649,8 @@ public final class MainActivity extends Activity {
         return meta!=null&&meta.optInt("enabled",1)==0?"未分類":name;
     }
     private void renderGoodsKind(boolean shopping,ArrayList<String[]> archived) {
-        JSONArray source=snapshot.optJSONArray(shopping?"shopping":"items"); if(source==null)return;
-        JSONArray rows=new JSONArray();long now=System.currentTimeMillis();
-        for(int i=0;i<source.length();i++){JSONObject row=source.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,now))rows.put(row);}
+        JSONArray rows=snapshot.optJSONArray(shopping?"shopping":"items"); if(rows==null)return;
+        long now=System.currentTimeMillis();
         JSONObject catalog=shopping?shoppingCategories:itemCategories;
         LinkedHashSet<String> names=new LinkedHashSet<>();
         if(catalog!=null) {
@@ -1659,14 +1659,14 @@ public final class MainActivity extends Activity {
             if(available!=null) for(int i=0;i<available.length();i++) names.add(available.optString(i));
         }
         for(int i=0;i<rows.length();i++) {
-            JSONObject row=rows.optJSONObject(i); if(row!=null) names.add(category(row));
+            JSONObject row=rows.optJSONObject(i); if(row!=null&&GoodsCompletion.visible(row,now)) names.add(category(row));
         }
         names.add("未分類");
 
         for(String category:names) {
             JSONObject meta=categoryMetadata(catalog,category);
             int total=0;
-            for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&category.equals(displayedGoodsCategory(row,catalog)))total++;}
+            for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,now)&&category.equals(displayedGoodsCategory(row,catalog)))total++;}
             String state=meta==null?"ACTIVE":GoodsCategoryState.state(meta.optInt("enabled",1),total,meta.optString("activated_at"),System.currentTimeMillis());
             if("DISABLED".equals(state))continue;
             String categoryKey=sessionEpoch+":"+(shopping?"shopping":"item")+":"+category;
@@ -1676,7 +1676,7 @@ public final class MainActivity extends Activity {
             LinearLayout group=new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
             int count=0;
             for(int n=0;n<rows.length();n++) {
-                JSONObject row=rows.optJSONObject(n); if(row==null || !category.equals(displayedGoodsCategory(row,catalog)) || goodsCompleted!="completed".equals(row.optString("status"))) continue;
+                JSONObject row=rows.optJSONObject(n); if(row==null || !GoodsCompletion.visible(row,now) || !category.equals(displayedGoodsCategory(row,catalog)) || goodsCompleted!="completed".equals(row.optString("status"))) continue;
                 CheckBox box=new CheckBox(this);
                 box.setContentDescription(row.optString("name")+"の完了状態");
                 box.setChecked("completed".equals(row.optString("status")));
@@ -1727,7 +1727,7 @@ public final class MainActivity extends Activity {
                     if(!goodsCompleted&&ApiClient.canMutate())section.addView(goodsComposer(shopping,category,group,rows,heading));
                 }
                 StringBuilder searchText=new StringBuilder("goods-search:").append(category);
-                for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&category.equals(displayedGoodsCategory(row,catalog))&&goodsCompleted=="completed".equals(row.optString("status")))searchText.append(' ').append(row.optString("name"));}
+                for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null&&GoodsCompletion.visible(row,now)&&category.equals(displayedGoodsCategory(row,catalog))&&goodsCompleted=="completed".equals(row.optString("status")))searchText.append(' ').append(row.optString("name"));}
                 section.setTag(searchText.toString());addPanel(section);
             }
         }

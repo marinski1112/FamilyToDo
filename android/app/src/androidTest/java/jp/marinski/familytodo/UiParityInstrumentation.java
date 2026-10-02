@@ -302,6 +302,15 @@ public final class UiParityInstrumentation extends Instrumentation {
         task.put("all_day",1);check(CalendarPresentation.label(task,true).equals("9:00"),"all-day title unchanged");
         task.put("all_day",0);check(CalendarPresentation.label(task,false).equals("9:00"),"band title unchanged");
         task.put("start_at","invalid");check(CalendarPresentation.label(task,true).equals("9:00"),"invalid start has no time prefix");
+        java.util.ArrayList<JSONObject> rows=new java.util.ArrayList<>();JSONObject parent=new JSONObject().put("id",100);rows.add(parent);
+        check(CalendarPresentation.checklistCount(rows,null)==1,"standalone task count");
+        rows.add(new JSONObject().put("id",101).put("parent_task_id",100));rows.add(new JSONObject().put("id",102).put("parent_task_id",100));
+        check(CalendarPresentation.checklistCount(rows,null)==2,"dated children replace parent count");
+        JSONArray undated=new JSONArray().put(new JSONObject().put("id",103).put("parent_task_id",100)).put(new JSONObject().put("id",104).put("parent_task_id",999));
+        check(CalendarPresentation.checklistCount(rows,undated)==3,"dated and undated children combine only for visible parent");
+        rows.remove(0);check(CalendarPresentation.checklistCount(rows,undated)==2,"hidden parent undated children not counted");
+        rows.clear();rows.add(parent);check(CalendarPresentation.checklistCount(rows,undated)==1,"undated child replaces parent count");
+        rows.add(new JSONObject().put("id",-200));check(CalendarPresentation.checklistCount(rows,undated)==2,"recurring task counts independently");
         long midnight=java.time.Instant.parse("2026-10-01T15:00:00Z").toEpochMilli(),one=midnight+3600000;
         JSONObject goods=new JSONObject().put("status","completed").put("completed_at","2026-10-01 23:00:00");
         check(GoodsCompletion.visible(goods,midnight),"23:00 completion remains at midnight");
@@ -325,6 +334,13 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(first!=null&&second!=null&&third!=null,"calendar chips use de-duplicated display labels");
             ViewGroup group=(ViewGroup)first.getParent();check(group.indexOfChild(first)<group.indexOfChild(second)&&group.indexOfChild(second)<group.indexOfChild(third),"calendar honours sort_order then id regardless of time or all-day");
             check("09:00 順序先".contentEquals(second.getContentDescription()),"calendar accessibility includes time without duplication");
+            JSONArray originalChildren=snapshot.optJSONArray("undatedChildren");
+            snapshot.put("tasks",new JSONArray().put(new JSONObject().put("id",100).put("task_kind","TASK").put("due_at",day))
+                .put(new JSONObject().put("id",101).put("parent_task_id",100).put("task_kind","TASK").put("due_at",day))
+                .put(new JSONObject().put("id",102).put("parent_task_id",100).put("task_kind","TASK").put("due_at",day)));
+            snapshot.put("undatedChildren",new JSONArray().put(new JSONObject().put("id",103).put("parent_task_id",100)));invoke("render");
+            check(findText(root(),"✅ 3件")!=null,"calendar rendered badge counts children without additional parent");
+            if(originalChildren==null)snapshot.remove("undatedChildren");else snapshot.put("undatedChildren",originalChildren);
             snapshot.put("tasks",original.get());invoke("render");
         }catch(Exception e){throw new RuntimeException(e);}});settle();
     }
