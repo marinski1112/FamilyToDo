@@ -17,7 +17,7 @@
 ## 注意点
 
 - ユーザーは作業続行を希望しており、定期タスクや通知の作成を求めていない。完成・実機テスト可能になるまで、単なる CI 成功で案内しない。
-- PR はドラフトのまま。main への直接コミット、無断の本番 deploy、D1 本番操作はしない。Cloudflare Observability は使わない。サブエージェントも使わない。
+- Android PR #1143 はドラフトのまま。API #1147はユーザーの続行依頼により2026-10-02にマージ・本番ビルド成功。main への直接コミット、無断の本番 deploy、D1 本番操作はしない。Cloudflare Observability は使わない。サブエージェントも使わない。
 - Web 側の機能更新後は Android 側への影響を必ず確認する。家族アイコンは標準 PWA アイコンをアプリに組み込み、家族固有のものはホーム画面ショートカットへ反映する設計。
 - Android 位置共有は `src/location-device-api.ts` の `provision` / `sharing` / `revoke` と `src/location-device-provisioning.ts` の契約に依存する。端末 Secret は Android Keystore へ保存する。手入力の旧導線も残るため、Web 側の共有状態と差異が出た時の復旧を実機で確認する。
 
@@ -38,3 +38,7 @@ User requested calendar/checklist month swipes, messages opening at latest botto
 Native next batch fixes duplicate time-prefixed titles, Web sort_order/id ordering, child-based checklist counts and 2000–2100 navigation guards. Completed goods use JST midnight/01:00 grace, including foreground boundary refresh and resume refresh. Keep the original snapshot array backing goodsComposer: filtering by copying to a new JSONArray lost newly added rows after category rename; the existing consecutive-add/rename UI test caught this and visibility is now checked only while rendering.
 
 API draft #1147 (`fix/android-overview-completion-parity`) adds recent undated completed goods and timestamps, task sort_order/parent_task_id and bounded authorised undated-child id/parent metadata for returned roots. No production deployment. Tests use migrated in-memory SQLite, including privacy, boundaries, undo, dated calendar history and limits. Native retains compatibility with old servers. Update PR #1143 CI results and distribution README only after final CI succeeds.
+
+## API rollout and branch integration (2026-10-02)
+
+PR #1147 is merged to main bae2e185c6949cff298fd083d19c32cccd1cff66 and exact-main Workers Builds succeeded at production version b3e634be-5728-48dc-826b-a32e7b930483. Native v0.1.187 already supports these additive columns and response collections; no replacement APK is required for this server change. Merge that main into #1143, resolving the overview add/add conflict by using the deployed main API. Native Java/Gradle/assets are unchanged. Distribution README and PR description must mark the API as deployed rather than pending. Signed-in production data verification remains the real-device pass. #1146 stays separate.
