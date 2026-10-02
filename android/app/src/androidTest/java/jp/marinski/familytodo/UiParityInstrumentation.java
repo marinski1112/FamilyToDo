@@ -54,6 +54,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(CalendarHolidays.name(LocalDate.parse("2026-09-30"))==null,"ordinary weekday");
             testPresentationHelpers();
             testSpeechServer();
+            testSpeechRequests();
             JSONObject dashboard=HomeDashboardParser.parse(homeHtml());
             check(dashboard.getJSONArray("counts").getInt(3)==7,"home server family-log count");
             check(dashboard.getJSONArray("alerts").length()==1,"home rejects external action link");
@@ -238,6 +239,20 @@ public final class UiParityInstrumentation extends Instrumentation {
             listener.onTouch(target,down);listener.onTouch(target,cancel);listener.onTouch(target,up);down.recycle();cancel.recycle();up.recycle();check(counts[1]==3,"parent scroll cancellation cannot preview");
         });
     }
+    private void testSpeechRequests(){
+        SpeechRequestGate gate=new SpeechRequestGate();Object speaker=new Object(),other=new Object();
+        String first=gate.begin(speaker);check(first!=null&&gate.busy(),"speech begins busy");
+        check(gate.begin(speaker)==null,"double tap cannot queue duplicate speech");
+        gate.cancel();String retry=gate.begin(other);
+        check(!gate.prepare(first)&&gate.current(retry),"late synthesis from disconnected speaker cannot affect retry");
+        check(gate.prepare(retry)&&!gate.prepare(retry),"duplicate TTS completion cannot send twice");
+        check(!gate.load(retry,speaker),"speech cannot transfer to a different Cast session");
+        check(gate.load(retry,other)&&!gate.load(retry,other),"media request accepted once for original session");
+        check(gate.accepted(retry)&&!gate.busy(),"load acknowledgement permits another deliberate request");
+        String next=gate.begin(other);check(next!=null&&!gate.accepted(retry),"stale load callback cannot release a newer request");
+        gate.cancel();check(!gate.current(next)&&gate.begin(speaker)!=null,"timeout cancellation allows retry");
+        gate.close();check(gate.begin(speaker)==null&&!gate.prepare(next),"closed speech dialog rejects queued work");
+    }
     private void testSpeechServer()throws Exception {
         java.io.File audio=java.io.File.createTempFile("speech-test-",".wav",getTargetContext().getCacheDir());java.nio.file.Files.write(audio.toPath(),new byte[]{1,2,3,4,5});
         try(SpeechAudioServer server=new SpeechAudioServer(java.net.InetAddress.getByName("127.0.0.1"),audio)){
@@ -247,7 +262,21 @@ public final class UiParityInstrumentation extends Instrumentation {
             String head=speechRequest(uri,path,"HEAD","");check(head.endsWith("\r\n\r\n")&&head.contains("Content-Length: 5"),"Cast WAV HEAD omits audio body");
             check(speechRequest(uri,"/unknown","GET","").contains("404"),"other file paths are inaccessible");
             check(speechRequest(uri,path,"GET","Range: bytes=99-\r\n").contains("416"),"invalid Cast range rejected");
+            try(java.net.Socket incomplete=new java.net.Socket(uri.getHost(),uri.getPort())){
+                incomplete.setSoTimeout(2000);incomplete.getOutputStream().write(("GET "+path+" HTTP/1.1\r\nHost: localhost").getBytes(java.nio.charset.StandardCharsets.US_ASCII));incomplete.shutdownOutput();
+                check(incomplete.getInputStream().read()==-1,"incomplete headers cannot fetch speech audio");
+            }
+
         }finally{audio.delete();}
+        java.io.File shortAudio=java.io.File.createTempFile("speech-expiry-",".wav",getTargetContext().getCacheDir());java.nio.file.Files.write(shortAudio.toPath(),new byte[]{1});
+        try(SpeechAudioServer server=new SpeechAudioServer(java.net.InetAddress.getByName("127.0.0.1"),shortAudio,1000)){
+            java.net.URI uri=java.net.URI.create(server.url());
+            try(java.net.Socket stalled=new java.net.Socket(uri.getHost(),uri.getPort())){
+                stalled.setSoTimeout(5000);stalled.getOutputStream().write("GET /".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                boolean ended=false;try{ended=stalled.getInputStream().read()==-1;}catch(java.net.SocketException closed){ended=true;}
+                check(ended,"audio expiry closes an active incomplete request");
+            }
+        }finally{shortAudio.delete();}
     }
     private String speechRequest(java.net.URI uri,String path,String method,String headers)throws Exception {
         try(java.net.Socket socket=new java.net.Socket(uri.getHost(),uri.getPort())){
