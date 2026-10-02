@@ -32,7 +32,7 @@ android {
         buildConfigField("boolean", "ALLOW_MUTATIONS", "true")
         buildConfigField("boolean", "UI_TEST_MODE", "false")
         testInstrumentationRunner = "jp.marinski.familytodo.UiParityInstrumentation"
-        manifestPlaceholders["appLabel"] = "FamilyToDo"
+        manifestPlaceholders["appLabel"] = "つち"
     }
     buildTypes {
         getByName("debug") {
@@ -41,9 +41,11 @@ android {
             if (previewBuild) {
                 buildConfigField("boolean", "ALLOW_MUTATIONS", if (isolatedE2E) "true" else "false")
                 applicationIdSuffix = ".preview"
-                manifestPlaceholders["appLabel"] = "FamilyToDo Preview"
+                manifestPlaceholders["appLabel"] = "つち Preview"
             }
         }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 }
+
+dependencies { implementation("com.google.android.gms:play-services-cast-framework:22.3.1") }

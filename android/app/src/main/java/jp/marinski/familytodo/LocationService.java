@@ -32,7 +32,7 @@ public final class LocationService extends Service implements LocationListener {
         NotificationManager notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("location", "位置共有", NotificationManager.IMPORTANCE_LOW));
         Notification notification = new Notification.Builder(this, "location").setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("FamilyToDo 位置共有中").setContentText("アプリの位置設定から停止できます")
+            .setContentTitle("つち 位置共有中").setContentText("アプリの位置設定から停止できます")
             .setOngoing(true).build();
         try { startForeground(1, notification); }
         catch (RuntimeException denied) { stopSelf(); return START_NOT_STICKY; }

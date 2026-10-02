@@ -53,6 +53,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check("成人の日".equals(CalendarHolidays.name(LocalDate.parse("2026-01-12"))),"Web Monday holiday");
             check(CalendarHolidays.name(LocalDate.parse("2026-09-30"))==null,"ordinary weekday");
             testPresentationHelpers();
+            testSpeechServer();
             JSONObject dashboard=HomeDashboardParser.parse(homeHtml());
             check(dashboard.getJSONArray("counts").getInt(3)==7,"home server family-log count");
             check(dashboard.getJSONArray("alerts").length()==1,"home rejects external action link");
@@ -171,6 +172,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{View stamp=findDescription(root(),"スタンプ カレンダーテスト");check(stamp!=null,"calendar contains stamp thumbnail");
                 View summary=findText(root(),"✅ 1件");int[] stampAt=new int[2],summaryAt=new int[2];stamp.getLocationOnScreen(stampAt);summary.getLocationOnScreen(summaryAt);
                 check(stampAt[1]>=summaryAt[1]+summary.getHeight(),"calendar stamps do not cover checklist count with four events and bands");});
+            testCalendarPresses();
             testCalendarDates();
             testCalendarFilters();
             testCalendarOrder();
@@ -206,6 +208,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(MainActivity.mergeMessagePage(merged,latest,0,false).length()==2,"complete refresh removes stale history");
             testMessageScroll(messages);
             testReactionChips();
+            onUi(()->{try{field("tab","goods");invoke("render");if(ApiClient.canMutate()){check(findDescription(root(),"タスク・イベントのAI入力")!=null,"task AI entry exists");check(findDescription(root(),"買い物のAI入力")!=null,"shopping AI entry exists");field("goodsKind","item");invoke("render");check(findDescription(root(),"持ち物のAI入力")!=null,"item AI entry exists");field("goodsKind","shopping");invoke("render");}}catch(Exception e){throw new RuntimeException(e);}});
             testChildComposer();
             testSettingsHub();
             testSummaryWindow();
@@ -216,6 +219,40 @@ public final class UiParityInstrumentation extends Instrumentation {
         }catch(Throwable error){
             status.putString("stack",android.util.Log.getStackTraceString(error));status.putString("stream",error.toString());sendStatus(-2,status);
             Bundle results=new Bundle();results.putString("stream","FAILURES!!!\n"+android.util.Log.getStackTraceString(error));finish(Activity.RESULT_CANCELED,results);
+        }
+    }
+    private void testCalendarPresses()throws Exception {
+        onUi(()->{
+            int[] counts={0,0,0};View target=new View(activity);target.setOnClickListener(v->counts[0]++);target.setOnLongClickListener(v->{counts[2]++;return true;});
+            CalendarPressListener listener=new CalendarPressListener(target,()->counts[1]++);
+            long base=android.os.SystemClock.uptimeMillis();
+            for(long duration:new long[]{100,299,300,650,899,900,1100}){
+                android.view.MotionEvent down=android.view.MotionEvent.obtain(base,base,0,5,5,0),up=android.view.MotionEvent.obtain(base,base+duration,1,5,5,0);
+                listener.onTouch(target,down);listener.onTouch(target,up);down.recycle();up.recycle();
+            }
+            check(counts[0]==2&&counts[1]==3&&counts[2]==2,"short/preview/menu boundaries dispatch once");
+            android.view.MotionEvent down=android.view.MotionEvent.obtain(base,base,0,5,5,0),move=android.view.MotionEvent.obtain(base,base+400,2,300,5,0),up=android.view.MotionEvent.obtain(base,base+650,1,300,5,0);
+            listener.onTouch(target,down);listener.onTouch(target,move);listener.onTouch(target,up);down.recycle();move.recycle();up.recycle();
+            check(counts[0]==2&&counts[1]==3&&counts[2]==2,"drag cannot open preview or menu");
+            down=android.view.MotionEvent.obtain(base,base,0,5,5,0);android.view.MotionEvent cancel=android.view.MotionEvent.obtain(base,base+400,3,5,5,0);up=android.view.MotionEvent.obtain(base,base+650,1,5,5,0);
+            listener.onTouch(target,down);listener.onTouch(target,cancel);listener.onTouch(target,up);down.recycle();cancel.recycle();up.recycle();check(counts[1]==3,"parent scroll cancellation cannot preview");
+        });
+    }
+    private void testSpeechServer()throws Exception {
+        java.io.File audio=java.io.File.createTempFile("speech-test-",".wav",getTargetContext().getCacheDir());java.nio.file.Files.write(audio.toPath(),new byte[]{1,2,3,4,5});
+        try(SpeechAudioServer server=new SpeechAudioServer(java.net.InetAddress.getByName("127.0.0.1"),audio)){
+            java.net.URI uri=java.net.URI.create(server.url());String path=uri.getPath();
+            String full=speechRequest(uri,path,"GET","");check(full.contains("200 OK")&&full.contains("Content-Length: 5"),"Cast WAV GET provides length");
+            String range=speechRequest(uri,path,"GET","Range: bytes=1-3\r\n");check(range.contains("206 Partial Content")&&range.endsWith(new String(new byte[]{2,3,4},java.nio.charset.StandardCharsets.ISO_8859_1)),"Cast WAV range returns requested bytes");
+            String head=speechRequest(uri,path,"HEAD","");check(head.endsWith("\r\n\r\n")&&head.contains("Content-Length: 5"),"Cast WAV HEAD omits audio body");
+            check(speechRequest(uri,"/unknown","GET","").contains("404"),"other file paths are inaccessible");
+            check(speechRequest(uri,path,"GET","Range: bytes=99-\r\n").contains("416"),"invalid Cast range rejected");
+        }finally{audio.delete();}
+    }
+    private String speechRequest(java.net.URI uri,String path,String method,String headers)throws Exception {
+        try(java.net.Socket socket=new java.net.Socket(uri.getHost(),uri.getPort())){
+            socket.setSoTimeout(4000);socket.getOutputStream().write((method+" "+path+" HTTP/1.1\r\nHost: localhost\r\n"+headers+"\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            java.io.ByteArrayOutputStream response=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int n;while((n=socket.getInputStream().read(buffer))!=-1)response.write(buffer,0,n);return response.toString("ISO-8859-1");
         }
     }
     private JSONObject settingsFixture(String role)throws Exception {

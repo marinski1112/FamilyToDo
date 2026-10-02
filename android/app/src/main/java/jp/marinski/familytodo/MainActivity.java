@@ -702,7 +702,7 @@ public final class MainActivity extends Activity {
     }
     private void returnFromWebPage() { showNative();load(); }
     private void showWebPage(String path) {
-        if(!path.startsWith("/app/")||login!=null)return;
+        if((!path.startsWith("/app/")&&!path.startsWith("/task/new.php?"))||login!=null)return;
         if(BuildConfig.UI_TEST_MODE)return;
         if(pageWeb!=null){pageWeb.destroy();pageWeb=null;}
         pageWeb=new WebView(this);
@@ -786,6 +786,10 @@ public final class MainActivity extends Activity {
         }
         return result;
     }
+    private void calendarPress(android.view.View view,Runnable preview) {
+        view.setOnTouchListener(new CalendarPressListener(view,preview));
+    }
+    private void openAiInput(String type) { showWebPage("/task/new.php?date="+selectedDay+"&type="+type); }
     private void renderCalendar() {
         LinearLayout filters=new LinearLayout(this);String[] keys={"all","family","private"},labels={"すべて","共通","自分専用"};
         for(int i=0;i<keys.length;i++){String key=keys[i];Button filter=button(labels[i],()->{calendarView=key;render();});filter.setContentDescription("カレンダー: "+labels[i]);segment(filter,calendarView.equals(key));filters.addView(filter,new LinearLayout.LayoutParams(0,dp(36),1));}if(calendarFiltersExpanded)content.addView(filters);
@@ -915,6 +919,7 @@ public final class MainActivity extends Activity {
                 cellTouch.setOnLongClickListener(v->{showCalendarDecoration(day,dayRows);return true;});
                 cellTouch.setContentDescription(day.toString()+" 予定"+count+"件");
                 cellTouch.setOnClickListener(v -> {selectedDay=day;month=YearMonth.from(day);navigate("goods");});
+                calendarPress(cellTouch,()->showCalendarDayPreview(day,dayRows));
             }
             android.widget.FrameLayout frame=new android.widget.FrameLayout(this);
             frame.addView(week,new android.widget.FrameLayout.LayoutParams(-1,dp(weekHeight)));
@@ -930,6 +935,8 @@ public final class MainActivity extends Activity {
                 band.setGravity(Gravity.CENTER_VERTICAL);band.setPadding(dp(4),0,dp(4),0);band.setBackground(shape(calendarTaskColor(task),Color.TRANSPARENT,4));
                 band.setContentDescription(task.optString("title")+" "+first+"〜"+last);
                 band.setOnClickListener(v->{selectedDay=segmentStart;month=YearMonth.from(segmentStart);checklistEvents=true;navigate("goods");});
+                ArrayList<JSONObject> bandTasks=new ArrayList<>();for(int n=0;n<tasks.length();n++){JSONObject t=tasks.optJSONObject(n);if(t!=null&&taskOnDay(t,segmentStart.toString()))bandTasks.add(t);}
+                band.setOnLongClickListener(v->{showCalendarDecoration(segmentStart,bandTasks);return true;});calendarPress(band,()->showCalendarDayPreview(segmentStart,bandTasks));
                 android.widget.FrameLayout.LayoutParams position=new android.widget.FrameLayout.LayoutParams(0,dp(17));position.topMargin=dp(45+19*lane);frame.addView(band,position);
                 frame.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
                     int width=right-left;android.widget.FrameLayout.LayoutParams lp=(android.widget.FrameLayout.LayoutParams)band.getLayoutParams();
@@ -1029,7 +1036,7 @@ public final class MainActivity extends Activity {
     }
     private void showCalendarDecoration(LocalDate day,ArrayList<JSONObject> rows) {
         if(!ApiClient.canMutate()){showCalendarDayPreview(day,rows);return;}
-        new AlertDialog.Builder(this).setTitle(day+" 日付を飾る").setItems(new String[]{"スタンプを置く","背景ステッカー","予定を見る"},(d,w)->{selectedDay=day;if(w==0)addStamp();else if(w==1)chooseCalendarBackground(day);else showCalendarDayPreview(day,rows);}).setNegativeButton("閉じる",null).show();
+        new AlertDialog.Builder(this).setTitle(day+" 日付の操作").setItems(new String[]{"スタンプを置く","背景ステッカー","予定を見る"},(d,w)->{selectedDay=day;if(w==0)addStamp();else if(w==1)chooseCalendarBackground(day);else showCalendarDayPreview(day,rows);}).setNegativeButton("閉じる",null).show();
     }
     private void chooseCalendarBackground(LocalDate day) {
         int chooserEpoch=sessionEpoch;JSONObject data=stickerMonths.get(month.toString());JSONArray options=data==null?null:data.optJSONArray("options");
@@ -1572,7 +1579,7 @@ public final class MainActivity extends Activity {
             Button kind=button(events?"📅 イベント":"☑ タスク",()->{checklistEvents=events;render();});
             segment(kind,checklistEvents==events);kind.setTextSize(13);kinds.addView(kind,new LinearLayout.LayoutParams(0,dp(36),1));
         }
-        if(ApiClient.canMutate()){Button add=button(checklistEvents?"＋予定":"＋タスク",this::addTask);add.setContentDescription(checklistEvents?"イベントを追加":"タスクを追加");kinds.addView(add,new LinearLayout.LayoutParams(dp(80),dp(36)));}
+        if(ApiClient.canMutate()){Button ai=button("＋AI入力",()->openAiInput(checklistEvents?"event":"task"));ai.setTextSize(12);ai.setContentDescription("タスク・イベントのAI入力");kinds.addView(ai,new LinearLayout.LayoutParams(dp(82),dp(36)));Button add=button(checklistEvents?"＋予定":"＋タスク",this::addTask);add.setContentDescription(checklistEvents?"イベントを追加":"タスクを追加");kinds.addView(add,new LinearLayout.LayoutParams(dp(80),dp(36)));}
         section.addView(kinds);
         ArrayList<android.view.View> searchRows=new ArrayList<>();Button search=addChecklistSearch(section,checklistEvents?"イベント":"タスク",searchRows);
         LinearLayout status=new LinearLayout(this);
@@ -1643,6 +1650,7 @@ public final class MainActivity extends Activity {
             actions.addView(choice,new LinearLayout.LayoutParams(0,dp(36),1));
         }
         if(ApiClient.canMutate()) {
+            Button ai=button("＋AI入力",()->openAiInput(shopping?"shopping":"item"));ai.setTextSize(12);ai.setContentDescription(shopping?"買い物のAI入力":"持ち物のAI入力");actions.addView(ai,new LinearLayout.LayoutParams(dp(82),dp(36)));
             Button add=flatButton("＋",() -> addGoods(shopping));add.setContentDescription(shopping?"買い物を追加":"持ち物を追加");
             actions.addView(add,new LinearLayout.LayoutParams(dp(32),dp(36)));
             Button category=button("＋カテゴリ",() -> addCategory(shopping));category.setTextSize(12);actions.addView(category,new LinearLayout.LayoutParams(dp(88),dp(36)));
@@ -4403,7 +4411,8 @@ public final class MainActivity extends Activity {
         if(ApiClient.canMutate()){
             names.add("スタンプ");actions.add(this::chooseMessageStamp);
             names.add("写真");actions.add(this::chooseMessagePhoto);
-            names.add("宛先・送信予約");actions.add(this::addMessage);
+            names.add("Google Homeで下書きを読み上げる");actions.add(()->speakMessage(messageDraft));
+            names.add("宛先・通知予約");actions.add(this::addMessage);
             if(snapshot!=null&&snapshot.optBoolean("canManageStamps")){names.add("リアクション設定");actions.add(this::editMessageReactions);}
             if(pendingPhoto!=null){names.add("写真送信を再試行");actions.add(this::retryMessagePhoto);}
         }
@@ -4425,17 +4434,41 @@ public final class MainActivity extends Activity {
             });}
         });
     }
+    private GoogleHomeSpeaker homeSpeaker;
+    private void speakMessage(String text) {
+        if(text==null||text.trim().isEmpty()){Toast.makeText(this,"読み上げる本文・スタンプ名がありません",Toast.LENGTH_SHORT).show();return;}
+        if(homeSpeaker!=null)homeSpeaker.close();
+        homeSpeaker=new GoogleHomeSpeaker(this);homeSpeaker.show(text);
+    }
+    private void speakMessageRow(JSONObject row) {
+        JSONObject stamp=messageStamps.get(row.optInt("id"));
+        if(!row.optBoolean("hasStamp")){speakMessage(row.optString("text"));return;}
+        if(stamp==null){Toast.makeText(this,"スタンプを取得できませんでした。更新してください",Toast.LENGTH_SHORT).show();return;}
+        int epoch=sessionEpoch;
+        network.execute(()->{try{
+            JSONArray options=ApiClient.request("/api/calendar-stamp-options",null).optJSONArray("options");String name="";
+            if(options!=null)for(int i=0;i<options.length();i++){JSONObject option=options.optJSONObject(i);if(option!=null&&option.optString("fullUrl").equals(stamp.optString("fullUrl"))){name=option.optString("name");break;}}
+            String title=name;runOnUiThread(()->{if(epoch!=sessionEpoch)return;
+                ArrayList<String> labels=new ArrayList<>(),values=new ArrayList<>();String body=row.optString("text").trim();
+                if(!body.isEmpty()&&!body.equals("スタンプ")){labels.add("書いたメッセージ");values.add(body);}
+                if(!title.isEmpty()){labels.add("スタンプのタイトル: "+title);values.add(title);}
+                if(values.isEmpty()){Toast.makeText(this,"スタンプ名を取得できませんでした",Toast.LENGTH_SHORT).show();return;}
+                new AlertDialog.Builder(this).setTitle("読み上げる内容").setItems(labels.toArray(new String[0]),(d,w)->speakMessage(values.get(w))).setNegativeButton("閉じる",null).show();
+            });
+        }catch(Exception error){runOnUiThread(()->{if(epoch==sessionEpoch)Toast.makeText(this,"スタンプ名を取得できませんでした",Toast.LENGTH_SHORT).show();});}});
+    }
     private void messageActions(JSONObject row) {
         int id=row.optInt("id");if(id<=0||snapshot==null) return;
         boolean canManage=row.optInt("senderId")==snapshot.optInt("memberId")||snapshot.optBoolean("canManageStamps");
-        ArrayList<String> actions=new ArrayList<>();actions.add("リアクション");
+        ArrayList<String> actions=new ArrayList<>();actions.add("リアクション");actions.add("Google Homeで読み上げる");
         if(row.optInt("convertedShoppingId")==0) actions.add("買い物に追加");
         if(row.optInt("convertedTaskId")==0) actions.add("タスク・イベントに追加");
         if(canManage) {actions.add("編集");actions.add("削除");}
         new AlertDialog.Builder(this).setTitle("伝言の操作")
             .setItems(actions.toArray(new String[0]),(dialog,which) -> {
                 String action=actions.get(which);
-                if(action.equals("リアクション")) showMessageReactions(id);
+                if(action.equals("Google Homeで読み上げる")){speakMessageRow(row);}
+                else if(action.equals("リアクション")) showMessageReactions(id);
                 else if(action.equals("買い物に追加")) convertMessageShopping(row);
                 else if(action.equals("タスク・イベントに追加")) convertMessageTask(row);
                 else if(action.equals("編集")) editMessage(row);
@@ -5510,5 +5543,5 @@ public final class MainActivity extends Activity {
         } else if(login!=null&&login.canGoBack()) login.goBack();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() { network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(homeSpeaker!=null)homeSpeaker.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
 }
