@@ -1,14 +1,16 @@
-# つち Android テスト版
+# つちだけ Android テスト版
 
-## 最新版 v0.1.201
+## 最新版 v0.1.203
 
-**[APKを直接ダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.201.apk)**
+**[① APKを直接ダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.203.apk)**
 
-- アプリ名を「つち」、アイコンを提供された家族画像へ変更しました。
+- アプリ名を「つちだけ」、アイコンを提供された家族画像へ変更しました。
 - チェックリストに「＋AI入力」を追加。タスク・イベント・買い物・持ち物の種類と選択日を引き継ぎ、既存の認証済みAIフォームをアプリ内で開きます。
 - カレンダーの日付セル・日跨ぎ帯: 短押し（300ms未満）でチェックリストへ。300〜899ms押して離すと、見切れた予定を全文の一覧で確認。900ms以上で日付の操作メニュー。スクロール・複数指・押下の取り消しでは動作しません。スタンプ自身は画像表示・スタンプ操作を維持します。
 - 伝言の長押しから「Google Homeで読み上げる」。本文、またはスタンプのタイトルを選んで読み上げます。下書きは入力欄の＋から利用できます。接続先を選んだあと、読み上げボタンを押してください。
 - Android 11以降の日本語TTSエンジン検出を設定し、狭い画面でイベントタブが折り返されないようにしました。
+
+- Google Homeの切断・中止・タイムアウト後に古い処理が再生を始める問題と、処理待ちから戻らない問題を修正。準備が90秒を超えると打ち切り、再試行できます。音声配信は10分で終了します。
 
 ### Google Homeの対応範囲
 
@@ -22,16 +24,16 @@
 
 ### 検証
 
-ソース: `26fb956b7564d659f84871c2b8ddbd621c4b924a`
-[Android CI 201](https://github.com/marinski1112/FamilyToDo/actions/runs/37027814880)
-[通常CI 3169](https://github.com/marinski1112/FamilyToDo/actions/runs/37027815033)
+ソース: `6943b91565d12711286b34db2ff3d7dcdd5a0ad2`
+[Android CI 203](https://github.com/marinski1112/FamilyToDo/actions/runs/37055570902)
+[通常CI 3171](https://github.com/marinski1112/FamilyToDo/actions/runs/37055570955)
 
-通常/Preview/隔離E2E/Releaseビルドと、Android 11/15・360dp・ライト/ダークの架空fixture操作テスト・画面を確認しました。押下時間の境界、ドラッグ/取消し、AI入口、イベントタブの文字幅、音声配信GET/HEAD/Range/不正URL、既存のチェックリスト・カレンダー・伝言・家族ログ・設定・集計の回帰が対象です。実データへのテスト書き込みはしていません。
+通常/Preview/隔離E2E/Releaseビルドと、Android 11/15・360dp・ライト/ダークの架空fixture操作テスト・画面を確認しました。押下時間の境界、ドラッグ/取消し、AI入口、イベントタブの文字幅、音声配信GET/HEAD/Range/不正URL、要求状態・取消し後の遅延結果破棄・接続中の配信期限切れ、既存のチェックリスト・カレンダー・伝言・家族ログ・設定・集計の回帰が対象です。実データへのテスト書き込みはしていません。
 
 Google Home実機の発見・接続・実音声、LINEログイン・GPS・写真・通知、Galaxy固有IME/通信復旧、固定署名、オフライン保存は未確認または未完了です。Webとの完全一致も未確認です。
 
-APK SHA256: `074a96152706d68b72a298e91e1d6ad3cb2f96290066c5a5212f4d601ea6ce8d`
-署名証明書 SHA256: `742f4a80f3c52443bd957b9eb4fa834ef928367c25871f8e2198b8ee0ed7e003`
+APK SHA256: `d4a7acfa828796a4c8ba9a33e020dd84a314d8fb0caa603be8ef32c3e97d0893`
+署名証明書 SHA256: `2c1614f6d4a7317e4e5182dbd79d12b1c877da5d4387574c7896f35a74ba53a7`
 
 [実装範囲・残件](https://github.com/marinski1112/FamilyToDo/blob/feat/android-location-starter/android/UI_PARITY.md)
 [ドラフトPR #1143](https://github.com/marinski1112/FamilyToDo/pull/1143)
