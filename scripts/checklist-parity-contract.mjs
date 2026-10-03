@@ -24,5 +24,5 @@ assert(!flow.includes("querySelector('.reminders-quick-entry')"));
 const ui=read('checklist-hierarchy-followup.js');
 assert(ui.includes('if(liveAdd instanceof HTMLElement)'));
 const sets=read('checklist-shopping-reusable-sets.js');
-for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"action:'reusable_set_invoke'","action:'reusable_set_delete'",'client_request_id:rid','この日に配置'])assert(sets.includes(contract),contract);
+for(const contract of ['selection.querySelectorAll(\'input:checked\')','source_item_ids:source',"window.familytodoChooseSet","action:'reusable_set_delete'",'この日に配置'])assert(sets.includes(contract),contract);
 console.log('Checklist Task/Event payload/date/color/failure and reusable-set contracts passed');

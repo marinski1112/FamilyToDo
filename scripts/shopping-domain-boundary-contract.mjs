@@ -76,19 +76,15 @@ for(const marker of [
   "DELETE FROM shopping_reusable_sets WHERE id=? AND family_id=?",
   "非公開の買い物だけでは共有セットを作成できません。",
 ]) if(!reusableSetApi.includes(marker)) throw new Error(`Shopping reusable-set privacy/atomicity marker missing: ${marker}`);
-for(const marker of [
-  'familytodo.shopping-set-invoke:',
-  'sessionStorage.setItem(key,created)',
-  'client_request_id:rid',
-  'clearRequest(s.id)',
-  '非公開タスクの買い物 ${Number(d.skipped_private)}件はセットから除外しました。',
-]) if(!reusableSetUi.includes(marker)) throw new Error(`Shopping reusable-set retry/privacy marker missing: ${marker}`);
+for(const marker of ['window.familytodoChooseSet',"kind:'shopping'",'非公開タスクの買い物 ${Number(d.skipped_private)}件はセットから除外しました。']) if(!reusableSetUi.includes(marker)) throw new Error(`Shopping reusable-set marker missing: ${marker}`);
+const chooser=fs.readFileSync('public/assets/selected-set-chooser.js','utf8');
+for(const marker of ['client_request_id:rid','sessionStorage.setItem(key,rid)',"action:'reusable_set_invoke_selected'"])if(!chooser.includes(marker))throw new Error(`Selected-set retry marker missing: ${marker}`);
 for(const marker of [
   'ALTER TABLE shopping_items ADD COLUMN client_request_id TEXT;',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_items_family_client_request_id',
   'ON shopping_items(family_id, client_request_id)',
   'WHERE client_request_id IS NOT NULL',
 ]) if(!reusableSetMigration.includes(marker)) throw new Error(`Shopping reusable-set migration marker missing: ${marker}`);
-if(!appShell.includes('checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-select4'))throw new Error('Shopping reusable-set asset revision must rotate after privacy fix');
+if(!appShell.includes('checklist-shopping-reusable-sets.js?v=${APP_VERSION}-set-select5'))throw new Error('Shopping reusable-set asset revision must rotate after privacy fix');
 
 console.log('Shopping API/new/edit domain contract ok; reusable-set invocation is retry-safe and shared snapshots exclude PRIVATE task-linked Shopping rows with failed-create cleanup');
