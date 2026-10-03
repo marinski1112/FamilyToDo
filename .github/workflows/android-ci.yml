@@ -19,6 +19,10 @@ jobs:
       - uses: android-actions/setup-android@v4
         with:
           packages: ''
+      - name: Check remote speech duplicate and restart safety
+        run: |
+          javac -d "$RUNNER_TEMP/remote-gate-test" android/app/src/main/java/jp/marinski/familytodo/RemoteSpeechGate.java android/tests/RemoteSpeechGateTest.java
+          java -cp "$RUNNER_TEMP/remote-gate-test" jp.marinski.familytodo.RemoteSpeechGateTest
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:

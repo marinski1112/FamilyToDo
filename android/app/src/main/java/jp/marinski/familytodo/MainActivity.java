@@ -47,7 +47,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Native family screens with authenticated Web views for sign-in and full Web-only tools. */
-public final class MainActivity extends Activity {
+public final class MainActivity extends androidx.activity.ComponentActivity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final ExecutorService stampMedia = Executors.newSingleThreadExecutor();
     private LinearLayout root, content, pageDock, goodsListContainer;
@@ -61,6 +61,8 @@ public final class MainActivity extends Activity {
     private String messageDraft="";
     private int messageDraftEpoch=-1;
     private boolean inlineMessageSending;
+    private HomeRemote homeRemote;
+    private boolean messageRemoteSpeech;
     private final Map<Integer,JSONObject> messageStamps=new HashMap<>();
     private final Map<Integer,JSONArray> messageReactions=new HashMap<>();
     private final Set<Integer> busyMessageReactions=new HashSet<>();
@@ -125,7 +127,7 @@ public final class MainActivity extends Activity {
             applyOverrideConfiguration(config);
         }
         setTheme(darkMode()?R.style.FamilyToDoDarkTheme:R.style.FamilyToDoLightTheme);
-        super.onCreate(state);ApiClient.setMutationsEnabled(false);showNative();if(!BuildConfig.UI_TEST_MODE)load();
+        super.onCreate(state);homeRemote=HomeRemote.create(this);ApiClient.setMutationsEnabled(false);showNative();if(!BuildConfig.UI_TEST_MODE)load();
     }
     @Override protected void onResume() {
         super.onResume();
@@ -402,6 +404,7 @@ public final class MainActivity extends Activity {
         String binding=SnapshotCache.currentSessionBinding();
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
             sessionEpoch++;
+            messageRemoteSpeech=false;if(homeRemote!=null)homeRemote.resetSession();
             stampGeneration++;
             monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll();
@@ -4441,12 +4444,17 @@ public final class MainActivity extends Activity {
         Button send=button("➤",()->sendInlineMessage(input));send.setContentDescription("メッセージを送信");styleButton(send,true);send.setBackground(shape(Color.parseColor("#06C755"),Color.TRANSPARENT,100));
         composer.addView(send,new LinearLayout.LayoutParams(dp(44),dp(48)));
         input.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);send.setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
-        return composer;
+        LinearLayout wrapper=new LinearLayout(this);wrapper.setOrientation(LinearLayout.VERTICAL);wrapper.addView(composer);
+        CheckBox speech=remoteSpeechOption();speech.setChecked(messageRemoteSpeech&&speech.isEnabled());
+        speech.setOnCheckedChangeListener((v,checked)->messageRemoteSpeech=checked);wrapper.addView(speech);
+        return wrapper;
     }
     private void updateMessageComposerReadiness() {
         if(pageDock==null||pageDock.getChildCount()==0)return;
         LinearLayout composer=(LinearLayout)pageDock.getChildAt(0);
-        for(int i=0;i<composer.getChildCount();i++)composer.getChildAt(i).setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
+        LinearLayout row=(LinearLayout)composer.getChildAt(0);
+        for(int i=0;i<row.getChildCount();i++)row.getChildAt(i).setEnabled(ApiClient.canMutate()&&!inlineMessageSending);
+        composer.getChildAt(1).setEnabled(ApiClient.canMutate()&&!inlineMessageSending&&homeRemote.configured(remoteOwner()));
     }
     private void messageComposerActions() {
         ArrayList<String> names=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
@@ -4454,6 +4462,7 @@ public final class MainActivity extends Activity {
             names.add("スタンプ");actions.add(this::chooseMessageStamp);
             names.add("写真");actions.add(this::chooseMessagePhoto);
             names.add("Google Homeで下書きを読み上げる");actions.add(()->speakMessage(messageDraft));
+            names.add("外出先からの読み上げ設定");actions.add(this::setupRemoteSpeech);
             names.add("宛先・通知予約");actions.add(this::addMessage);
             if(snapshot!=null&&snapshot.optBoolean("canManageStamps")){names.add("リアクション設定");actions.add(this::editMessageReactions);}
             if(pendingPhoto!=null){names.add("写真送信を再試行");actions.add(this::retryMessagePhoto);}
@@ -4464,16 +4473,44 @@ public final class MainActivity extends Activity {
     private void sendInlineMessage(EditText input) {
         String text=input.getText().toString().trim();
         if(text.isEmpty()||inlineMessageSending||snapshot==null||!ApiClient.canMutate())return;
-        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");inlineMessageSending=true;updateMessageComposerReadiness();
+        int epoch=sessionEpoch;String owner=remoteOwner();boolean speech=messageRemoteSpeech;String csrf=snapshot.optString("csrf");inlineMessageSending=true;updateMessageComposerReadiness();
         network.execute(()->{
             try {
                 if(epoch!=sessionEpoch)return;
                 JSONObject saved=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",text).put("target_member_id",0).put("reminder_at",""));
                 notifyMessageImmediately(saved.optInt("id"),csrf);
-                runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;messageDraft="";messageScrollLatest=true;input.setText("");updateMessageComposerReadiness();loadMessages(0);});
+                runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;messageDraft="";messageScrollLatest=true;input.setText("");updateMessageComposerReadiness();loadMessages(0);if(speech)broadcastSavedMessage(owner,epoch,saved.optInt("id"),text);});
             }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;inlineMessageSending=false;updateMessageComposerReadiness();
                 Toast.makeText(this,"送信を確認できませんでした。更新して確認してください。入力内容は保持しています",Toast.LENGTH_LONG).show();
             });}
+        });
+    }
+    private String remoteOwner() {
+        String binding=SnapshotCache.currentSessionBinding();
+        return binding==null||snapshot==null?"":binding+":"+snapshot.optInt("familyId")+":"+snapshot.optInt("memberId");
+    }
+    private boolean remoteSessionCurrent(String owner,int epoch) {
+        return epoch==sessionEpoch&&!isFinishing()&&!isDestroyed()&&owner.equals(remoteOwner());
+    }
+    private void setupRemoteSpeech() {
+        String owner=remoteOwner();int epoch=sessionEpoch;
+        homeRemote.setup(owner,()->remoteSessionCurrent(owner,epoch),()->{if(remoteSessionCurrent(owner,epoch))render();});
+    }
+    private CheckBox remoteSpeechOption() {
+        CheckBox option=new CheckBox(this);String owner=remoteOwner();
+        boolean ready=homeRemote!=null&&homeRemote.configured(owner);
+        option.setText(ready?"送信後すぐGoogle Homeで読み上げる（"+homeRemote.targetLabel(owner)+"）":"外出先読み上げ: ＋メニューで設定");
+        option.setTextSize(12);option.setTextColor(textColor());option.setEnabled(ready&&ApiClient.canMutate());
+        return option;
+    }
+    private void broadcastSavedMessage(String owner,int epoch,int id,String text) {
+        if(!remoteSessionCurrent(owner,epoch))return;
+        homeRemote.broadcast(owner,id,text,()->remoteSessionCurrent(owner,epoch),(state,detail)->{
+            if(!remoteSessionCurrent(owner,epoch))return;
+            if("ACCEPTED".equals(state)){Toast.makeText(this,detail,Toast.LENGTH_LONG).show();return;}
+            AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Google Home読み上げ").setMessage(detail).setNegativeButton("閉じる",null);
+            if("SAFE_FAILED".equals(state))dialog.setPositiveButton("読み上げだけ再試行",(d,w)->broadcastSavedMessage(owner,epoch,id,text));
+            dialog.show();
         });
     }
     private GoogleHomeSpeaker homeSpeaker;
@@ -4842,6 +4879,7 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(32,8,32,8);
         form.addView(label(stamp.optString("name","スタンプ")));form.addView(label("宛先"));form.addView(recipient);
         form.addView(caption);form.addView(when);
+        CheckBox speech=remoteSpeechOption();form.addView(speech);
         form.addView(button("通知予約を解除",() -> {reminder[0]="";whenRef[0].setText("通知予約: 指定なし");}));
         new AlertDialog.Builder(this).setTitle("スタンプを送る").setView(form)
             .setPositiveButton("送る",(dialog,which) -> {
@@ -4852,7 +4890,7 @@ public final class MainActivity extends Activity {
                     Toast.makeText(this,"本文・通知予約を確認してください",Toast.LENGTH_LONG).show();return;
                 }
                 int epoch=sessionEpoch,recipientId=recipientIds.get(recipient.getSelectedItemPosition());
-                String csrf=snapshot.optString("csrf"),notifyAt=reminder[0];
+                String csrf=snapshot.optString("csrf"),notifyAt=reminder[0],owner=remoteOwner();boolean readAloud=speech.isChecked();
                 network.execute(() -> {
                     try {
                         if(epoch!=sessionEpoch) return;
@@ -4860,7 +4898,7 @@ public final class MainActivity extends Activity {
                             .put("csrf",csrf).put("assetId",stamp.optInt("id")).put("target_member_id",recipientId)
                             .put("text",text).put("reminder_at",notifyAt));
                         if(notifyAt.isEmpty()) notifyMessageImmediately(saved.optInt("id"),csrf);
-                        if(epoch==sessionEpoch) runOnUiThread(() -> {load();loadMessages(0);});
+                        if(epoch==sessionEpoch) runOnUiThread(() -> {if(epoch!=sessionEpoch)return;load();loadMessages(0);if(readAloud)broadcastSavedMessage(owner,epoch,saved.optInt("id"),text.isEmpty()?stamp.optString("name","スタンプ"):text+"。"+stamp.optString("name","スタンプ"));});
                     } catch(Exception error) {runOnUiThread(() -> {if(epoch==sessionEpoch) Toast.makeText(this,"スタンプを送れませんでした。伝言一覧を更新して確認してください",Toast.LENGTH_LONG).show();});}
                 });
             }).setNegativeButton("閉じる",null).show();
@@ -5016,10 +5054,11 @@ public final class MainActivity extends Activity {
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(32,8,32,8); form.addView(label("宛先")); form.addView(recipient);
         form.addView(text); form.addView(when); form.addView(clear);
+        CheckBox speech=remoteSpeechOption();form.addView(speech);
         new AlertDialog.Builder(this).setTitle("伝言する").setView(form)
             .setPositiveButton("送る",(dialog,which)->{
                 String body=text.getText().toString().trim(); if(body.isEmpty()) return;
-                String csrf=snapshot.optString("csrf"), notifyAt=reminder[0]; int epoch=sessionEpoch;
+                String csrf=snapshot.optString("csrf"), notifyAt=reminder[0],owner=remoteOwner();boolean readAloud=speech.isChecked(); int epoch=sessionEpoch;
                 int recipientId=recipientIds.get(recipient.getSelectedItemPosition());
                 network.execute(() -> {
                     try {
@@ -5027,7 +5066,7 @@ public final class MainActivity extends Activity {
                         JSONObject saved=ApiClient.request("/api/messages",new JSONObject().put("csrf",csrf).put("text",body)
                             .put("target_member_id",recipientId).put("reminder_at",notifyAt));
                         if(notifyAt.isEmpty()) notifyMessageImmediately(saved.optInt("id"),csrf);
-                        if(epoch==sessionEpoch) runOnUiThread(()->{ load(); loadMessages(0); });
+                        if(epoch==sessionEpoch) runOnUiThread(()->{if(epoch!=sessionEpoch)return;load();loadMessages(0);if(readAloud)broadcastSavedMessage(owner,epoch,saved.optInt("id"),body);});
                     } catch(Exception e) {
                         runOnUiThread(()->{ if(epoch==sessionEpoch) Toast.makeText(this,"伝言を送れませんでした",Toast.LENGTH_SHORT).show(); });
                     }
@@ -5042,6 +5081,7 @@ public final class MainActivity extends Activity {
                 String publicId=saved==null?null:saved.split(":",2)[0];
                 String csrf=snapshot==null?null:snapshot.optString("csrf");
                 sessionEpoch++;
+                messageRemoteSpeech=false;if(homeRemote!=null)homeRemote.resetSession();
                 stampGeneration++;
                 ApiClient.setMutationsEnabled(false);
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
@@ -5076,6 +5116,7 @@ public final class MainActivity extends Activity {
         ApiClient.setMutationsEnabled(false);
         if (login != null) return;
         sessionEpoch++;
+        messageRemoteSpeech=false;if(homeRemote!=null)homeRemote.resetSession();
         stampGeneration++;
         memorySessionBinding=null;
         SnapshotCache.clear(this);
@@ -5586,5 +5627,5 @@ public final class MainActivity extends Activity {
         } else if(login!=null&&login.canGoBack()) login.goBack();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() { if(homeSpeaker!=null)homeSpeaker.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(homeSpeaker!=null)homeSpeaker.close(); if(homeRemote!=null)homeRemote.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
 }

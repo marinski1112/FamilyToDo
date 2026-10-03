@@ -207,6 +207,8 @@ public final class UiParityInstrumentation extends Instrumentation {
             check(merged.optJSONObject(1).optString("text").equals("updated"),"latest refresh updates existing message");
             check(MainActivity.mergeMessagePage(merged,history,2,true).length()==3,"repeated older page deduplicates IDs");
             check(MainActivity.mergeMessagePage(merged,latest,0,false).length()==2,"complete refresh removes stale history");
+            onUi(()->{View speech=findText(root(),"外出先読み上げ: ＋メニューで設定");
+                check(speech instanceof CheckBox&&!speech.isEnabled(),"fixture APK cannot enable unconfigured remote speech");});
             testMessageScroll(messages);
             testReactionChips();
             onUi(()->{try{field("tab","goods");field("goodsKind","shopping");invoke("render");if(ApiClient.canMutate()){check(findDescription(root(),"タスク・イベントのAI入力")!=null,"task AI entry exists");check(findDescription(root(),"買い物のAI入力")!=null,"shopping AI entry exists");field("goodsKind","item");invoke("render");check(findDescription(root(),"持ち物のAI入力")!=null,"item AI entry exists");field("goodsKind","shopping");invoke("render");}}catch(Exception e){throw new RuntimeException(e);}});
