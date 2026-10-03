@@ -4,6 +4,24 @@
 この変更は鍵作成・登録・署名確認の手順を準備するもので、実際の秘密鍵やGitHub Secretsを変更しません。
 秘密鍵は所有者の端末で保管し、パスワードはチャットやGitリポジトリに貼り付けないでください。
 
+## スマホのみの場合
+
+Google Cloudの公式モバイルアプリからCloud Shellを開く方法を使います。
+Googleの公式手順: https://support.google.com/cloud/answer/6143581?hl=ja
+長期保管の注意: https://docs.cloud.google.com/shell/docs/quotas-limits
+
+1. Google CloudアプリでGoogleアカウントと対象プロジェクトを選択します。
+2. 右上のプロフィール写真の横にあるCloud Shellアイコン（>_）をタップします。
+3. 端末上でPython・keytool・GitHub CLIを確認します。必要な準備とGitHubログインを済ませます。
+4. 下記セットアップスクリプトをCloud Shellのホームディレクトリにダウンロードして実行します。
+   スクリプト単体でも実行でき、鍵はGitリポジトリの外に置きます。
+5. 出力された公開SHA-1でGoogleのAndroid OAuthを設定します。
+6. 鍵ファイルはスマホの安全な保管先へダウンロードして別途バックアップします。
+
+Cloud Shellのホームディレクトリは永続ディスクですが、長期間未使用時に削除される条件があります。
+Cloud Shellだけを唯一の鍵の保管先にはしません。公開共有リンクは作りません。
+Google Cloud画面とGitHubログインは所有者側で操作します。チャットへパスワードを送る必要はありません。
+
 ## 所有者の端末で一度だけ行うこと
 
 JDK 17、Python 3.9以上、GitHub CLIを使います。GitHub CLIでは対象リポジトリのSecretsを設定できるアカウントでログインします。

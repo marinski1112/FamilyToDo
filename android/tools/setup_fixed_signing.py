@@ -63,8 +63,7 @@ def ensure_key(path, password, alias=ALIAS):
     if path.is_symlink() or path.exists() and not path.is_file():
         raise RuntimeError('The keystore must be a regular owner-held file.')
     path = path.resolve()
-    repository = Path(__file__).resolve().parents[2]
-    if path.is_relative_to(repository):
+    if any((parent / '.git').exists() for parent in path.parents):
         raise RuntimeError('Keep the signing key outside the Git repository.')
     if not path.exists():
         if len(password) < 12:
