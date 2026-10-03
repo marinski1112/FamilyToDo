@@ -2226,15 +2226,57 @@ public final class MainActivity extends Activity {
         });
     }
     private void invokeReusableSet(boolean shopping,JSONObject set) {
+        if(snapshot==null||!ApiClient.canMutate())return;
         LocalDate day=selectedDay;
-        new DatePickerDialog(this,(picker,y,m,d) -> {
-            String date=LocalDate.of(y,m+1,d).toString();
-            new AlertDialog.Builder(this).setTitle(set.optString("name"))
-                .setMessage(date+" に項目を追加します。")
-                .setPositiveButton("追加",(confirm,which) -> mutateReusableSet(shopping,set.optInt("id"),
-                    "reusable_set_invoke",date))
-                .setNegativeButton("戻る",null).show();
-        },day.getYear(),day.getMonthValue()-1,day.getDayOfMonth()).show();
+        new DatePickerDialog(this,(picker,y,m,d)->chooseReusableSetItems(shopping,set,LocalDate.of(y,m+1,d).toString()),day.getYear(),day.getMonthValue()-1,day.getDayOfMonth()).show();
+    }
+    private AlertDialog chooseReusableSetItems(boolean shopping,JSONObject set,String date) {
+        if(snapshot==null||!ApiClient.canMutate())return null;
+        int epoch=sessionEpoch;String csrf=snapshot.optString("csrf");
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(16),dp(8),dp(16),dp(8));
+        TextView help=label(date+"：必要な項目にチェックし、追加先を選んでください");form.addView(help);
+        LinearLayout picks=new LinearLayout(this);picks.setOrientation(LinearLayout.VERTICAL);
+        java.util.ArrayList<CheckBox> boxes=new java.util.ArrayList<>();
+        JSONArray entries=set.optJSONArray("entries");
+        if(entries!=null)for(int i=0;i<entries.length();i++){
+            JSONObject entry=entries.optJSONObject(i);if(entry==null)continue;
+            CheckBox box=new CheckBox(this);box.setText(entry.optString("name")+(shopping?" × "+entry.optString("quantity","1"):""));
+            box.setTag(entry.optInt("id"));box.setEnabled(entry.optInt("id")>0);styleCheckBox(box);picks.addView(box);boxes.add(box);
+        }
+        LinearLayout selectionActions=new LinearLayout(this);
+        selectionActions.addView(button("全て選択",()->{for(CheckBox box:boxes)if(box.isEnabled())box.setChecked(true);}));
+        selectionActions.addView(button("選択解除",()->{for(CheckBox box:boxes)box.setChecked(false);}));form.addView(selectionActions);form.addView(picks);
+        form.addView(label("追加先カテゴリ"));
+        java.util.ArrayList<String> names=categoryOrder(shopping);names.add(0,"未分類");
+        Spinner category=new Spinner(this);category.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));form.addView(category);
+        TextView status=label("");status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);form.addView(status);
+        android.widget.ScrollView scroll=new android.widget.ScrollView(this);scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(set.optString("name"))
+            .setView(scroll).setPositiveButton("選んだ項目を追加",null).setNegativeButton("戻る",null).create();
+        boolean[] saving={false};String[] retry={"",""};
+        dialog.setOnShowListener(shown->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            if(saving[0]||epoch!=sessionEpoch||!ApiClient.canMutate())return;
+            JSONArray selected=new JSONArray();for(CheckBox box:boxes)if(box.isChecked())selected.put((Integer)box.getTag());
+            if(selected.length()==0){status.setText("追加する項目を選んでください");return;}
+            String target=String.valueOf(category.getSelectedItem());if("未分類".equals(target))target="";
+            try{
+                JSONObject body=new JSONObject().put("csrf",csrf).put("action","reusable_set_invoke_selected").put("set_id",set.optInt("id"))
+                    .put("date",date).put("entry_ids",selected).put("target_category",target);
+                String signature=body.toString();if(!signature.equals(retry[0])){retry[0]=signature;retry[1]=java.util.UUID.randomUUID().toString();}
+                body.put("client_request_id",retry[1]);saving[0]=true;status.setText("追加中…");dialog.setCancelable(false);
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
+                category.setEnabled(false);for(CheckBox box:boxes)box.setEnabled(false);selectionActions.setVisibility(View.GONE);
+                network.execute(()->{
+                    try{if(epoch!=sessionEpoch)return;JSONObject result=ApiClient.request(reusableSetPath(shopping),body);
+                        if(!result.optBoolean("ok"))throw new Exception("save");
+                        runOnUiThread(()->{if(epoch!=sessionEpoch)return;dialog.dismiss();Toast.makeText(this,selected.length()+"件追加しました",Toast.LENGTH_SHORT).show();load();});
+                    }catch(Exception error){runOnUiThread(()->{if(epoch!=sessionEpoch)return;saving[0]=false;dialog.setCancelable(true);
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);
+                        category.setEnabled(true);for(CheckBox box:boxes)box.setEnabled((Integer)box.getTag()>0);selectionActions.setVisibility(View.VISIBLE);
+                        status.setText("追加できませんでした。選択を保持しています。同じ内容で再試行してください。セットやカテゴリを変更した場合は開き直してください。");});}
+                });
+            }catch(Exception error){status.setText("追加内容を確認してください");}
+        }));dialog.show();return dialog;
     }
     private void mutateReusableSet(boolean shopping,int id,String action,String date) {
         if(snapshot==null||id<=0) return;

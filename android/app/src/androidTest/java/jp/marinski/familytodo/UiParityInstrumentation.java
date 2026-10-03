@@ -211,6 +211,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             testReactionChips();
             onUi(()->{try{field("tab","goods");field("goodsKind","shopping");invoke("render");if(ApiClient.canMutate()){check(findDescription(root(),"タスク・イベントのAI入力")!=null,"task AI entry exists");check(findDescription(root(),"買い物のAI入力")!=null,"shopping AI entry exists");field("goodsKind","item");invoke("render");check(findDescription(root(),"持ち物のAI入力")!=null,"item AI entry exists");field("goodsKind","shopping");invoke("render");}}catch(Exception e){throw new RuntimeException(e);}});
             testChildComposer();
+            testSelectedSets();
             testSettingsHub();
             testSummaryWindow();
             testMeasurementSummary();
@@ -394,6 +395,22 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->dialog.get().dismiss());
     }
     private String homeHtml(){return "<div class=\"home-dashboard\"><header class=\"home-dashboard-hero\"><h1>🏠 テスト家族</h1><p>今日と昨日の様子</p></header><section class=\"home-alert-list\"><a class=\"home-alert danger\" href=\"/app/tasks.php?date=2026-09-30\"><strong>期限切れタスク 2件</strong><small>確認する</small></a><a class=\"home-alert\" href=\"https://invalid.example/\"><strong>外部リンク</strong></a></section><section class=\"home-today-grid\"><a class=\"home-stat\" href=\"/app/tasks.php\"><strong>1</strong></a><a class=\"home-stat\"><strong>5</strong></a><a class=\"home-stat\"><strong>1</strong></a><a class=\"home-stat\"><strong>7</strong></a></section><section class=\"card home-journal-card\"><h2>昨日の家族日誌</h2><a href=\"/app/family_journal.php?date=2026-09-29\">詳しく</a><p class=\"home-journal-text\">昨日 &amp; 今日</p><div class=\"home-journal-stats\"><span>完了 3</span></div></section><details class=\"card home-fortune\"><summary>🔮 今日の占い ★★★</summary><p>テスト家族さんの今日</p><p>今日の運勢</p></details></div>";}
+    private volatile int selectedSetWrites;
+    private volatile JSONObject lastSelectedSet;
+    private void testSelectedSets()throws Exception {
+        for(boolean shopping:new boolean[]{true,false}){
+            AtomicReference<android.app.AlertDialog> popup=new AtomicReference<>();
+            JSONObject set=new JSONObject().put("id",1).put("name","選択セット").put("entries",new JSONArray()
+                .put(new JSONObject().put("id",11).put("name","選ぶ項目").put("quantity","2"))
+                .put(new JSONObject().put("id",12).put("name","選ばない項目")));
+            onUi(()->{try{Method method=MainActivity.class.getDeclaredMethod("chooseReusableSetItems",boolean.class,JSONObject.class,String.class);method.setAccessible(true);popup.set((android.app.AlertDialog)method.invoke(activity,shopping,set,"2026-10-03"));}catch(Exception e){throw new RuntimeException(e);}});settle();
+            onUi(()->{View form=popup.get().getWindow().getDecorView();CheckBox chosen=(CheckBox)findText(form,shopping?"選ぶ項目 × 2":"選ぶ項目");CheckBox other=(CheckBox)findText(form,shopping?"選ばない項目 × 1":"選ばない項目");check(!chosen.isChecked()&&!other.isChecked(),"set starts without selections");chosen.setChecked(true);popup.get().getButton(-1).performClick();});settle();
+            String rid=lastSelectedSet.optString("client_request_id");
+            onUi(()->{View form=popup.get().getWindow().getDecorView();check(popup.get().isShowing(),"failed set remains open");check(((CheckBox)findText(form,shopping?"選ぶ項目 × 2":"選ぶ項目")).isChecked(),"failed set retains selection");popup.get().getButton(-1).performClick();popup.get().getButton(-1).performClick();});settle();
+            check(lastSelectedSet.optJSONArray("entry_ids").length()==1&&lastSelectedSet.optJSONArray("entry_ids").optInt(0)==11,"only chosen entry sent");check(lastSelectedSet.optString("target_category").isEmpty(),"unclassified category explicit");check(rid.equals(lastSelectedSet.optString("client_request_id")),"retry retains request id");
+            onUi(()->check(!popup.get().isShowing(),"successful set closes chooser"));
+        }
+    }
     private volatile int settingsWrites;
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
         if(path.startsWith("/api/android/v1/family-log-summary?")){summaryRequests++;summaryStarted.countDown();summaryRelease.await(5,java.util.concurrent.TimeUnit.SECONDS);return new JSONObject().put("totals",new JSONObject()).put("daily",new JSONArray());}
@@ -403,6 +420,9 @@ public final class UiParityInstrumentation extends Instrumentation {
 
         if(path.equals("/api/message-reactions")){reactionWrites++;if(body.optString("emoji").equals("失敗"))throw new IllegalStateException("synthetic reaction failure");reactionSelected=!reactionSelected;return new JSONObject().put("ok",true);}
         if(path.startsWith("/api/message-reactions?ids="))return new JSONObject().put("ok",true).put("emojis",new JSONArray().put("👍")).put("reactions",new JSONArray().put(new JSONObject().put("messageId",1).put("emoji","👍").put("count",reactionSelected?3:2).put("mine",reactionSelected)));
+        if((path.equals("/api/item")||path.equals("/api/shopping"))&&body!=null&&body.optString("action").equals("reusable_set_invoke_selected")){
+            lastSelectedSet=new JSONObject(body.toString());selectedSetWrites++;if(selectedSetWrites%2==1)throw new IllegalStateException("synthetic set failure");return new JSONObject().put("ok",true);
+        }
         if(path.equals("/api/task")){lastTaskCreate=new JSONObject(body.toString());taskCreates++;if(taskCreates==1)throw new IllegalStateException("synthetic task creation failure");return new JSONObject().put("ok",true).put("id",++nextId);}
         if(path.equals("/api/calendar-stickers")){backgroundWrites++;lastBackgroundScope=body.optString("visibilityScope");lastBackgroundMethod=method;if(body.optInt("assetId")==99)throw new IllegalStateException("synthetic background save failure");return new JSONObject().put("ok",true);}
         if(path.equals("/api/checklist/inline-title")){
