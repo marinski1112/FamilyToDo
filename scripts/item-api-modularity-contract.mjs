@@ -136,10 +136,8 @@ for(const sentinel of [
   '現在の持ち物からセット保存',
   "action:'reusable_set_create'",
   'source_item_ids:ids',
-  "action:'reusable_set_invoke'",
+  "window.familytodoChooseSet",
   "action:'reusable_set_delete'",
-  'client_request_id:rid',
-  'sessionStorage.setItem(key,created)',
   "new CustomEvent('belongings-items-added'",
   "document.addEventListener('familytodo:checklist-unified-ready',attach,{once:true})",
 ])if(!reusableSetUi.includes(sentinel))throw new Error(`reusable belongings set UI marker missing: ${sentinel}`);

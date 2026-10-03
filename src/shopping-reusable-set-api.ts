@@ -1,3 +1,4 @@
+import { invokeSelectedSet } from './selected-set-invoke';
 import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 type Row=Record<string,unknown>;
@@ -12,7 +13,8 @@ export async function readShoppingReusableSets(ctx:any,m:any):Promise<Response>{
  return json({ok:true,sets:((s.results||[]) as Row[]).map(x=>({id:Number(x.id),name:String(x.name||''),item_count:(by.get(Number(x.id))||[]).length,entries:by.get(Number(x.id))||[],can_edit:Number(x.created_by_member_id)===Number(m.id)||['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase()),can_delete:Number(x.created_by_member_id)===Number(m.id)||['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase())}))});
 }
 export async function handleShoppingReusableSetAction(ctx:any,m:any,b:Record<string,unknown>):Promise<Response|null>{
- const action=String(b.action||'');if(!action.startsWith('reusable_set_'))return null;
+ const action=String(b.action||'');
+ if(action==='reusable_set_invoke_selected')return invokeSelectedSet(ctx,m,b,'shopping');if(!action.startsWith('reusable_set_'))return null;
  if(action==='reusable_set_create'){
   const name=String(b.name||'').trim(),source=ids(b.source_item_ids);if(!name||!source.length)return bad('セット名と買い物を指定してください。');if(source.length>100)return bad('1つのセットは100件までです。');
   const ph=source.map(()=>'?').join(','),q=await ctx.env.DB.prepare(`SELECT s.id,s.name,s.quantity,s.category,s.memo,s.url,s.visibility_scope FROM shopping_items s WHERE s.family_id=? AND s.id IN (${ph}) AND ${goodsVisibilitySql('s')}`).bind(m.family_id,...source,m.id).all(),rows=(q.results||[]) as Row[];
@@ -34,11 +36,12 @@ export async function handleShoppingReusableSetAction(ctx:any,m:any,b:Record<str
  if(action==='reusable_set_invoke'){
   const date=String(b.date||'').trim(),rid=String(b.client_request_id||'').trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!rid||rid.length>72)return bad('日付またはリクエストIDが不正です。');
   const old=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM shopping_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,rid).first()) as Row|null;
-  if(old){if(Number(old.created_by_member_id)!==Number(m.id)||Number(old.set_id_snapshot)!==setId||String(old.due_date)!==date)return bad('同じリクエストIDが別のセット呼び出しに使用されています。',409);const recorded=parseIds(old.created_item_ids);if(recorded.length)return json({ok:true,set_id:setId,date,item_ids:recorded,deduplicated:true})}
+  if(old){if(!Array.isArray(JSON.parse(String(old.created_item_ids))))return bad('同じリクエストIDが別の内容に使用されています。',409);if(Number(old.created_by_member_id)!==Number(m.id)||Number(old.set_id_snapshot)!==setId||String(old.due_date)!==date)return bad('同じリクエストIDが別のセット呼び出しに使用されています。',409);const recorded=parseIds(old.created_item_ids);if(recorded.length)return json({ok:true,set_id:setId,date,item_ids:recorded,deduplicated:true})}
   const e=await ctx.env.DB.prepare('SELECT * FROM shopping_reusable_set_entries WHERE set_id=? ORDER BY position,id').bind(setId).all(),rows=(e.results||[]) as Row[];if(!rows.length)return bad('このセットには買い物がありません。',409);if(rows.length>100)return bad('セットの件数が上限を超えています。',409);
   const t=now();await ctx.env.DB.prepare("INSERT OR IGNORE INTO shopping_reusable_set_invocations(family_id,set_id_snapshot,due_date,client_request_id,created_by_member_id,created_item_ids,created_at,updated_at) VALUES(?,?,?,?,?,'[]',?,?)").bind(m.family_id,setId,date,rid,m.id,t,t).run();
   const ledger=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM shopping_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,rid).first()) as Row|null;
   if(!ledger||Number(ledger.created_by_member_id)!==Number(m.id)||Number(ledger.set_id_snapshot)!==setId||String(ledger.due_date)!==date)return bad('セット呼び出しの重複を安全に確認できませんでした。',409);
+  if(!Array.isArray(JSON.parse(String(ledger.created_item_ids))))return bad('同じリクエストIDが別の内容に使用されています。',409);
   const recorded=parseIds(ledger.created_item_ids);if(recorded.length)return json({ok:true,set_id:setId,date,item_ids:recorded,deduplicated:true});
   const requestKeys=rows.map(x=>`set:${rid}:${Number(x.id)}`);
   try{await ctx.env.DB.batch(rows.map((x,i)=>ctx.env.DB.prepare("INSERT OR IGNORE INTO shopping_items(family_id,name,quantity,category,memo,due_date,status,created_by,created_at,updated_at,url,client_request_id) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?)").bind(m.family_id,String(x.name||''),String(x.quantity||'1'),String(x.category||'')||null,String(x.memo||'')||null,date,m.id,t,t,String(x.url||'')||null,requestKeys[i])))}catch{return bad('セットから買い物を作成できませんでした。',500)}
