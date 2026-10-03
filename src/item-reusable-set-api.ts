@@ -1,8 +1,9 @@
+import { invokeSelectedSet } from './selected-set-invoke';
 import { goodsVisibilitySql } from './goods-visibility';
 import { json } from './response';
 
 type Row=Record<string,unknown>;
-type EditableSetEntry={name:string;memo:string;url:string;category:string};
+type EditableSetEntry={id?:number;name:string;memo:string;url:string;category:string};
 const UNCLASSIFIED='未分類';
 const CATEGORY_ORDER_KEY='item_category_order';
 const MAX_SET_ITEMS=100;
@@ -69,13 +70,13 @@ export async function readItemReusableSets(ctx:any,m:any):Promise<Response>{
     WHERE s.family_id=?
     GROUP BY s.id,s.name,s.created_by_member_id,s.updated_at
     ORDER BY s.updated_at DESC,s.id DESC`).bind(m.family_id).all();
-  const entryResult=await ctx.env.DB.prepare(`SELECT e.set_id,e.position,e.name,e.memo,e.url,e.category
+  const entryResult=await ctx.env.DB.prepare(`SELECT e.id,e.set_id,e.position,e.name,e.memo,e.url,e.category
     FROM item_reusable_set_entries e JOIN item_reusable_sets s ON s.id=e.set_id
     WHERE s.family_id=? ORDER BY e.set_id,e.position,e.id`).bind(m.family_id).all();
   const entriesBySet=new Map<number,EditableSetEntry[]>();
   for(const row of (entryResult?.results||[]) as Row[]){
     const setId=Number(row.set_id),entries=entriesBySet.get(setId)||[];
-    entries.push({name:String(row.name||''),memo:String(row.memo||''),url:String(row.url||''),category:normalizeCategory(row.category)});
+    entries.push({id:Number(row.id),name:String(row.name||''),memo:String(row.memo||''),url:String(row.url||''),category:normalizeCategory(row.category)});
     entriesBySet.set(setId,entries);
   }
   const sets=((result?.results||[]) as Row[]).map(row=>{
@@ -168,6 +169,7 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
   if(requestId.length>72)return bad('リクエストIDが長すぎます。');
   const existing=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
   if(existing){
+    if(!Array.isArray(JSON.parse(String(existing.created_item_ids))))return bad('同じリクエストIDが別の内容に使用されています。',409);
     if(Number(existing.created_by_member_id)!==Number(m.id)||Number(existing.set_id_snapshot)!==setId||String(existing.due_date)!==date)return bad('同じリクエストIDが別のセット呼び出しに使用されています。',409,'IDEMPOTENCY_CONFLICT');
     const recorded=parseIds(existing.created_item_ids);
     if(recorded.length){const rows=await rowsByIds(ctx,m.family_id,m.id,recorded);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
@@ -183,6 +185,7 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
     VALUES(?,?,?,?,?,'[]',?,?)`).bind(m.family_id,setId,date,requestId,m.id,now,now).run();
   const ledger=(await ctx.env.DB.prepare('SELECT set_id_snapshot,due_date,created_by_member_id,created_item_ids FROM item_reusable_set_invocations WHERE family_id=? AND client_request_id=? LIMIT 1').bind(m.family_id,requestId).first()) as Row|null;
   if(!ledger||Number(ledger.created_by_member_id)!==Number(m.id)||Number(ledger.set_id_snapshot)!==setId||String(ledger.due_date)!==date)return bad('セット呼び出しの重複を安全に確認できませんでした。',409,'IDEMPOTENCY_CONFLICT');
+  if(!Array.isArray(JSON.parse(String(ledger.created_item_ids))))return bad('同じリクエストIDが別の内容に使用されています。',409);
   const already=parseIds(ledger.created_item_ids);
   if(already.length){const rows=await rowsByIds(ctx,m.family_id,m.id,already);return json({ok:true,set_id:setId,date,items:rows.map(row=>({id:Number(row.id),name:String(row.name||''),category:normalizeCategory(row.category)})),deduplicated:true});}
   const requestKeys=entries.map(row=>`set:${requestId}:${Number(row.id)}`);
@@ -204,6 +207,7 @@ async function invokeSet(ctx:any,m:any,b:Record<string,unknown>):Promise<Respons
 
 export async function handleItemReusableSetAction(ctx:any,m:any,b:Record<string,unknown>):Promise<Response|null>{
   const action=String(b.action??'');
+ if(action==='reusable_set_invoke_selected')return invokeSelectedSet(ctx,m,b,'item');
   if(action==='reusable_set_create')return await createSet(ctx,m,b);
   if(action==='reusable_set_update')return await updateSet(ctx,m,b);
   if(action==='reusable_set_delete')return await deleteSet(ctx,m,b);
