@@ -8,3 +8,10 @@ dist/
 *.log
 worker-configuration.d.ts.tmp
 wrangler.android-e2e.generated.jsonc
+
+# Private Android signing keys stay outside the repository.
+*.jks
+*.keystore
+*.p12
+*.pfx
+__pycache__/

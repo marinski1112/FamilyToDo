@@ -19,6 +19,8 @@ jobs:
       - uses: android-actions/setup-android@v4
         with:
           packages: ''
+      - name: Check fixed signing key reuse and certificate pin
+        run: python3 android/tools/test_fixed_signing.py
       - name: Check remote speech duplicate and restart safety
         run: |
           javac -d "$RUNNER_TEMP/remote-gate-test" android/app/src/main/java/jp/marinski/familytodo/RemoteSpeechGate.java android/tests/RemoteSpeechGateTest.java
