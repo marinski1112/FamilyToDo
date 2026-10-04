@@ -1,3 +1,4 @@
+import {mealApi} from './meal-api';
 import { toggle } from './toggle-api';
 import { createFamily } from './family-create-api';
 import { joinFamily } from './family-join-api';
@@ -66,6 +67,7 @@ import { locationHomeApi } from './location-home-api';
 import { familyPwaBrandingApi, familyPwaIconApi } from './family-pwa-branding';
 
 export async function dispatchContextApiRoute(request:Request,context:any,url:URL):Promise<Response|null>{
+  if(url.pathname==='/api/meals/v1') return await mealApi(request,context);
   if(url.pathname==='/api/family/create') return await createFamily(request,context);
   if(url.pathname==='/api/family/join') return await joinFamily(request,context);
   if(url.pathname==='/api/family/invite') return await inviteCreate(request,context);

@@ -1,3 +1,4 @@
+import {withMealsNavigation} from './meal-page';
 import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
 import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
@@ -49,7 +50,7 @@ export default {
       const apiResponse=await dispatchContextApiRoute(request,context,url);
       if(apiResponse) return apiResponse;
       const pageResponse=await dispatchPageRoute(request,context,env,url);
-      if(pageResponse) return pageResponse;
+      if(pageResponse) return await withMealsNavigation(pageResponse,env);
       const fallbackResponse=await dispatchContextFallbackRoute(request,context,env,url);
       if(fallbackResponse) return fallbackResponse;
       return await env.ASSETS.fetch(request);
