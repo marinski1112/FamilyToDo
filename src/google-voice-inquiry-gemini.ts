@@ -37,7 +37,7 @@ export async function classifyMarkedGoogleVoiceInquiryWithGemini(
       generationConfig:{maxOutputTokens:32},
     };
     let response:Response|undefined;
-    for(const model of models){response=await geminiFetch(env,model,requestBody);if(response.ok||response.status!==429&&response.status<500)break;}
+    for(const model of models){response=await geminiFetch(env,model,requestBody,{familyId,feature:'GOOGLE_VOICE_INQUIRY',trigger:'event',attempt:models.indexOf(model)});if(response.ok||response.status===429||response.status<500)break;}
     if(!response)return null;
     if(!response.ok)return null;
     const data=await response.json() as any;

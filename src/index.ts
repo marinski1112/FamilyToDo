@@ -1,3 +1,4 @@
+import {cleanupAiCallCounts} from './ai-call-budget';
 import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
 import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
@@ -103,6 +104,7 @@ export default {
     }
 
     if(plan.dailyNotificationAudit){
+      ctx.waitUntil(cleanupAiCallCounts(env.DB));
       run('notification_audit',auditNotificationLifecycle);
       ctx.waitUntil(cleanupScheduledD1ReadDiagnostics(env.DB));
       ctx.waitUntil(cleanupHttpD1ReadDiagnostics(env.DB));
