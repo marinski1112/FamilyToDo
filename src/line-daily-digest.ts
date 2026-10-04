@@ -132,7 +132,7 @@ async function renderMorningMessage(env:Env,familyId:number,localDate:string,lin
   let reason='UPSTREAM';
   try{
     const prompt=`家族向けのLINE朝日報を、事務的で自然な短い日本語の文章で書いてください。事実は入力の五種類のみ使用してください。残りタスク、残っている買い物、今日の持ち物、今日のイベント、自宅地点の今日の天気を必要に応じて簡潔につなぎ、入力にない事実や推測を足さないでください。固定挨拶、締め、励まし、占い、昨日の振り返り、位置情報、箇条書き、同じ一覧や件数の重複は禁止します。JSONのみ {"message":"..."} と返してください。messageは${MAX_MORNING_DIGEST_CHARS}文字以内。facts=${JSON.stringify(facts)}`;
-    const response=await geminiFetch(env,model,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:1100}});
+    const response=await geminiFetch(env,model,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:1100}},{familyId,feature:'MORNING_DIGEST',trigger:'cron'});
     attempt.httpStatus=response.status;attempt.stage='PROVIDER_RESPONSE';attempt.reason='HTTP_ERROR';
     if(response.status===429){reason='RATE_LIMIT';attempt.reason='RATE_LIMIT';try{await blockMorningDigestAiAfter429(env.DB,localDate);}catch{}}
     if(response.ok){

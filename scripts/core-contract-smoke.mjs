@@ -98,7 +98,7 @@ const deterministicGate=roughInputApi.indexOf("if(!parsed.summarize&&!needsModel
 const modelLoop=roughInputApi.indexOf('for(const model of routedModels)');
 const reserveCall=roughInputApi.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=roughInputApi.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
-const modelCall=roughInputApi.indexOf('const response=await geminiFetch(env,model,bodyForModel);');
+const modelCall=roughInputApi.indexOf('const response=await geminiFetch(env,model,bodyForModel,');
 assert.ok(deterministicGate>=0&&deterministicGate<modelLoop&&modelLoop<reserveCall&&reserveCall<categoryRead&&categoryRead<modelCall,'deterministic resolved drafts must exit before the budgeted loop; each paid call must reserve before category D1 enrichment and Gemini');
 assert.equal((roughInputApi.match(/geminiFetch\(/g)||[]).length,1,'rough-input must keep one bounded Gemini call site inside the two-model loop');
 assert.ok(!roughInputApi.includes('fields.flatMap(field=>field.lines.map('),'rough-input deterministic fallback must not regress to one-line=one-item parsing');

@@ -1,0 +1,11 @@
+# AI呼出し制御
+
+GeminiのgenerateContent直前に共通予約を置き、project×model×UTC日とfamily×feature×UTC日のカウンタを原子的に増加。AI_MODEL_DAILY_BUDGET（既定100）、AI_FEATURE_DAILY_BUDGET（既定20）、AI_JOURNAL_DAILY_BUDGET（既定2）は運用上のsoft capであり、Googleの無料quota値ではない。実際のquota残量を保証しない。Workers AI / model一覧GET / Liveは対象外。
+
+429は全モデルの共通circuitを15分閉じる。週月報、音声、ICSは同じ操作で429後の代替を呼ばない。5xxの既存別model fallbackは最大2回、同一modelへの即時再試行は追加しない。日誌はprovider前にfamily/id/content_versionを比較して原子的にclaimし、成功・失敗・予算skipを含め同じversionを自動再生成しない。Worker異常終了時も再度呼ばず、確定日誌表示を維持する。事実変更でversionが上がれば再対象になる。
+
+ai_call_dailyにfeature/model/triggerごとのcalls・HTTP success・429・障害・fallback・budget skip・dedupe skipを集計。successはprovider HTTP成功でありschema受入は既存feature診断を見る。本文/鍵/プロフィール/生エラーは保存しない。管理のAIモデル画面に当日集計を表示。30日保持、既存daily cleanupで削除、新規cronなし。診断テストはfamilyId=0として保存され家族別画面には出ない。
+
+0115を既存DBへ適用してからWorkerを反映する。migrationがない時は共通guardがfail closedし生成を呼ばず、通常手動操作は継続できる。既存データの変更・モデル一括置換・Google Billing変更なし。
+
+検証はin-memory SQLite、固定synthetic fetch。家族間予算分離、モデルを跨ぐfamily budget、429後の通信ゼロ、保存障害時の通信ゼロ、同一日誌への並行cronと変更なし再実行の1回生成を確認。
