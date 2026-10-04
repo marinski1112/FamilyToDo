@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "npm run migrate:meals && wrangler deploy",
+    "deploy": "npm run migrate:meals && wrangler deploy --var MEALS_ENABLED:true",
     "typecheck": "tsc --noEmit",
     "check:calendar-js": "node --check public/assets/calendar.js",
     "check:recurring-js": "node --check public/assets/recurring.js",
@@ -50,7 +50,7 @@
     "check:ai-call-budget": "esbuild scripts/ai-call-budget.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-ai-call-test.mjs && node --test /tmp/familytodo-ai-call-test.mjs",
     "check:meal-ai-routes": "esbuild scripts/meal-ai-routes.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meal-ai-routes-test.mjs && node --test /tmp/familytodo-meal-ai-routes-test.mjs",
     "migrate:meals": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply MEALS_DB --remote",
-    "deploy:meals": "npm run migrate:meals && wrangler deploy --var MEALS_ENABLED:true"
+    "deploy:meals": "npm run deploy"
   },
   "devDependencies": {
     "happy-dom": "^20.14.5",

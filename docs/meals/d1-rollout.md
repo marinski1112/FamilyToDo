@@ -5,7 +5,7 @@
 
 wrangler.jsoncに `MEALS_DB` と `migrations_dir: ./meals-migrations` を追加。既存 `DB` のIDとmigration先は維持。実際にこのIDが当該Cloudflareアカウントのfamilytodo-mealsを指すことはリモート接続前には未検証です。
 
-このPRは #1155 の上に積みます。取り込み順は #1152 → #1153 → #1156 → #1154 → #1155 → 本PRです。どのPRも本番未反映の段階で作成しています。
+本PRは #1152 / #1153 / #1156 / #1154 / #1155 の変更を統合してmainへ反映します。途中状態のWorkerを何度もデプロイせず、AI呼出し制限・料理ルート・Web献立・LINE受信箱・専用DBを同じ反映に含めます。
 
 ## 反映
 
@@ -15,12 +15,12 @@ Cloudflare認証がある環境で、このブランチの内容を取り込ん�
 npm ci
 npx wrangler whoami
 npx wrangler d1 info MEALS_DB
-npm run deploy:meals
+npm run deploy
 ```
 
-`deploy:meals` は既存DBのmigrations（0115 AI制限・0116 shopping projectionを含む）→MEALS_DBの0001/0002→Worker deployの順で実行し、途中失敗時は次へ進みません。DBを指定してSQLファイルを手動実行する方法ではなく、それぞれのbindingに対応したmigration directoryを使用します。有効化はdeploy時の `MEALS_ENABLED:true` 指定で行います。通常の `npm run deploy` も両DBのmigrationを先に適用しますが、新たな有効化指定はしません。
+`deploy` は既存DBのmigrations（0115 AI制限・0116 shopping projectionを含む）→MEALS_DBの0001/0002→Worker deployの順で実行し、途中失敗時は次へ進みません。DBを指定してSQLファイルを手動実行する方法ではなく、それぞれのbindingに対応したmigration directoryを使用します。有効化はdeploy時の `MEALS_ENABLED:true` 指定で行います。`deploy:meals` は `deploy` の別名です。所有者確認済みのCloudflare Workers Buildsコマンド `npm run deploy` をそのまま使用します。
 
-Cloudflare Workers Builds側が直接 `wrangler deploy` を実行する設定なら、初回は上記コマンドでDBを準備してから反映してください。外部のBuild commandの現在値は未検証です。設定ファイルには未準備DBに対する自動有効化フラグを加えません。
+Cloudflare Workers Buildsはmainへの取り込みで `npm run deploy` を実行します。migration成功後だけWorkerの有効化を行います。設定ファイル単体には未準備DBに対する自動有効化フラグを加えません。
 
 ## 反映後の確認
 
