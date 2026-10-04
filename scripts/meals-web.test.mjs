@@ -8,6 +8,7 @@ import {parseMealLineText,receiveMealLine} from '../src/meal-line-inbox.ts';
 import {webhook} from '../src/line-webhook.ts';
 import {mealApi} from '../src/meal-api.ts';
 import {mealPage,withMealsNavigation} from '../src/meal-page.ts';
+import {rankMealCandidates,validateMealSelection} from '../src/meal-weekly-suggestions.ts';
 import {mealShoppingNeeds} from '../src/meal-domain.ts';
 function db(dir){
  const sql=new DatabaseSync(':memory:');for(const file of fs.readdirSync(dir).filter(x=>x.endsWith('.sql')).sort())sql.exec(fs.readFileSync(dir+'/'+file,'utf8'));
@@ -106,5 +107,66 @@ test('Web inbox escapes LINE content, confirms wishes, and prefills URL for manu
  const doc=window.document;assert.equal(doc.querySelectorAll('[data-inbox-add]').length,2);assert.equal(doc.querySelector('#mealContent img'),null);
  [...doc.querySelectorAll('[data-inbox-add]')].find(b=>b.textContent==='食べたいものに追加').click();await settle();assert.equal(doc.querySelectorAll('[data-inbox-add]').length,1);assert.equal((await call(ctx,null)).value.wishlist.length,1);
  doc.querySelector('[data-inbox-add]').click();assert.equal(doc.querySelector('[name=source_url]').value,'https://example.invalid/recipe');assert(doc.querySelector('#recipeForm'));assert(doc.querySelector('#mealStatus').textContent.includes('出典を見ながら'));
+ }finally{window.happyDOM.abort();window.close();}
+});
+
+const proposalBody=(id='proposal-request-001')=>({action:'suggest_week',request_id:id,week_start:'2026-10-05',servings:4,max_minutes:60});
+async function seedSuggestions(ctx){for(let i=0;i<6;i++)await call(ctx,{action:'save_recipe',recipe:{...recipe('recipe-ai-000'+i),name:'料理'+i,minutes:i===5?120:20+i}});await call(ctx,{action:'wishlist_add',id:'wish-ai-0001',name:'料理3'});}
+const aiResponse=ids=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({recipe_ids:ids})}]}}]}),{headers:{'content-type':'application/json'}});
+test('proposal scores wishes/time/recent cooking in code; strict AI selection cannot invent IDs or quantities',()=>{
+ const candidates=rankMealCandidates([{id:'a',name:'カレー',minutes:30,servings:2},{id:'b',name:'肉じゃが',minutes:20,servings:2},{id:'c',name:'煮込み',minutes:120,servings:2}],['カレー'],new Set(['b']),60);assert.equal(candidates[0].id,'a');assert.equal(candidates.length,2);
+ assert.deepEqual(validateMealSelection({recipe_ids:['a','b','a','b','a']},candidates),['a','b','a','b','a']);assert.equal(validateMealSelection({recipe_ids:['a','a','a','a','a']},candidates),null);assert.equal(validateMealSelection({recipe_ids:['a','b','a','b','other-family']},candidates),null);assert.equal(validateMealSelection({recipe_ids:['a','b','a','b','a'],servings:999},candidates),null);
+});
+test('AI proposal is tenant-scoped/read-only; transport retries reuse the receipt without another call',async()=>{
+ const {ctx,main,meals}=fixture();await seedSuggestions(ctx);ctx.env.GEMINI_API_KEY='synthetic-key';
+ await call({...ctx,member:{id:2,family_id:2}},{action:'save_recipe',recipe:{...recipe('private-other-001'),name:'別家族の料理'}});
+ const original=globalThis.fetch;let calls=0,prompt='';globalThis.fetch=async(url,options)=>{calls++;prompt=options.body;assert(String(url).includes('gemini-3.5-flash'));return aiResponse(['recipe-ai-0003','recipe-ai-0001','recipe-ai-0002','recipe-ai-0000','recipe-ai-0004']);};
+ try{
+ const result=await call(ctx,proposalBody());assert.equal(result.value.suggestion.mode,'AI');assert.equal(result.value.suggestion.items.length,5);assert.equal(result.value.suggestion.items[0].servings,4);assert.equal(result.value.suggestion.items[4].date,'2026-10-09');
+ assert(!prompt.includes('別家族'));assert(!prompt.includes('private-other'));assert(!prompt.includes('source_url'));assert(!prompt.includes('ひき肉'));assert(!prompt.includes('recipe-ai-0005'));assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM weekly_plans').get().c,0);assert.equal(main.sql.prepare('SELECT COUNT(*) c FROM shopping_items').get().c,0);
+ assert.deepEqual((await call(ctx,proposalBody())).value.suggestion,result.value.suggestion);assert.equal(calls,1);assert.equal(main.sql.prepare("SELECT calls FROM ai_call_daily WHERE feature='MEAL_WEEKLY_PLAN'").get().calls,1);assert.equal((await call(ctx,{...proposalBody(),servings:2})).response.status,400);assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+test('parallel proposal requests claim one provider call and zero calls for denied auth/CSRF or storage failure',async()=>{
+ const {ctx}=fixture();await seedSuggestions(ctx);ctx.env.GEMINI_API_KEY='synthetic-key';const original=globalThis.fetch;let calls=0,release;
+ globalThis.fetch=async()=>{calls++;await new Promise(r=>release=r);return aiResponse(['recipe-ai-0000','recipe-ai-0001','recipe-ai-0002','recipe-ai-0003','recipe-ai-0004']);};
+ try{
+ assert.equal((await call({...ctx,member:null},proposalBody())).response.status,401);assert.equal((await call(ctx,{...proposalBody(),csrf:'bad'})).response.status,403);assert.equal(calls,0);
+ const first=call(ctx,proposalBody());while(!release)await new Promise(r=>setImmediate(r));const parallel=await call(ctx,proposalBody());assert.equal(parallel.response.status,400);assert.equal(calls,1);release();assert.equal((await first).response.status,200);assert.equal((await call(ctx,proposalBody())).response.status,200);assert.equal(calls,1);
+ const broken={...ctx,env:{...ctx.env,MEALS_DB:{prepare(){throw new Error('synthetic database unavailable');}}}};await assert.rejects(call(broken,proposalBody('broken-proposal-01')));assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+test('429 has no model fallback or repeat; malformed/cross-family AI output uses deterministic candidates',async()=>{
+ const {ctx}=fixture();await seedSuggestions(ctx);ctx.env.GEMINI_API_KEY='synthetic-key';let calls=0;const original=globalThis.fetch;
+ globalThis.fetch=async()=>{calls++;return new Response('{}',{status:429});};try{
+ const first=(await call(ctx,proposalBody())).value.suggestion;assert.equal(first.mode,'RULES');assert.equal(first.reason,'RATE_LIMIT_OR_BUDGET');await call(ctx,proposalBody());assert.equal(calls,1);await call(ctx,proposalBody('proposal-next-002'));assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+ const other=fixture();await seedSuggestions(other.ctx);other.ctx.env.GEMINI_API_KEY='synthetic-key';globalThis.fetch=async()=>aiResponse(['private-other-001','recipe-ai-0001','recipe-ai-0002','recipe-ai-0003','recipe-ai-0004']);try{const result=(await call(other.ctx,proposalBody())).value.suggestion;assert.equal(result.mode,'RULES');assert.equal(result.reason,'INVALID_OUTPUT');assert.equal(result.items[0].recipe.id,'recipe-ai-0003');assert(!result.items.some(i=>i.recipe.id==='private-other-001'));}finally{globalThis.fetch=original;}
+});
+test('one candidate/missing AI stay usable; fresh requests capped at 20/day and old receipt remains retryable',async()=>{
+ const {ctx,meals}=fixture();await call(ctx,{action:'save_recipe',recipe:recipe()});const original=globalThis.fetch;globalThis.fetch=()=>{throw new Error('unexpected provider');};try{
+ const first=(await call(ctx,proposalBody())).value.suggestion;assert.equal(first.mode,'RULES');assert.equal(first.repeated,true);assert.equal((await call(ctx,{...proposalBody('short-time-proposal'),max_minutes:5})).response.status,400);
+ for(let i=1;i<20;i++)assert.equal((await call(ctx,proposalBody('proposal-cap-'+String(i).padStart(4,'0')))).response.status,200);
+ assert.equal((await call(ctx,proposalBody('proposal-cap-0021'))).response.status,400);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM meal_weekly_suggestions').get().c,20);assert.equal((await call(ctx,proposalBody())).response.status,200);
+ }finally{globalThis.fetch=original;}
+});
+test('5xx fallback is bounded to two distinct models; unsuccessful output does not cause repair calls',async()=>{
+ const {ctx}=fixture();await seedSuggestions(ctx);ctx.env.GEMINI_API_KEY='synthetic-key';let calls=0;const original=globalThis.fetch;globalThis.fetch=async()=>{calls++;return calls===1?new Response('{}',{status:503}):aiResponse(['recipe-ai-0000','recipe-ai-0001','recipe-ai-0002','recipe-ai-0003','recipe-ai-0004']);};try{assert.equal((await call(ctx,proposalBody())).value.suggestion.mode,'AI');assert.equal(calls,2);}finally{globalThis.fetch=original;}
+});
+test('Web proposal requires review and save, preserves weekend/unsaved edits, and reuses ID after failed transport',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture();await seedSuggestions(ctx);
+ await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',status:'CONFIRMED',items:[{date:'2026-10-10',recipe_id:'recipe-ai-0000',servings:2}]}});
+ const window=new Window({url:'https://fixture.invalid/app/meals.php?view=week&week=2026-10-05'});let savedRequests=[],loseResponse=true;
+ try{
+ window.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+ window.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null,response=await mealApi(new Request(new URL(url,window.location.href),options),ctx);if(body?.action==='suggest_week'){savedRequests.push(body.request_id);if(loseResponse){loseResponse=false;throw new Error('synthetic lost response');}}return response;};
+ window.eval(fs.readFileSync('public/assets/meals.js','utf8'));const settle=async()=>{for(let i=0;i<16;i++)await new Promise(resolve=>setImmediate(resolve));};await settle();const doc=window.document;
+ // happy-dom's HTML parser leaves select.value at the first inserted option even
+ // when a later option has selected. Emulate native parsed defaults for this fixture.
+ const nativeSelectDefaults=()=>doc.querySelectorAll('#planForm select').forEach(s=>s.value=s.querySelector('option[selected]')?.value||'');nativeSelectDefaults();
+ assert.equal(doc.querySelector('[name=recipe5]').value,'recipe-ai-0000','initial Saturday');
+ doc.querySelector('[name=servings5]').value='3';doc.querySelector('[name=servings5]').dispatchEvent(new window.Event('input',{bubbles:true}));doc.querySelector('#openSuggestions').click();doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await settle();assert(doc.querySelector('#suggestForm'));doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await settle();assert.equal(savedRequests[0],savedRequests[1]);
+ assert(doc.querySelector('#applySuggestion'));assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,1);doc.querySelector('#applySuggestion').click();nativeSelectDefaults();assert.equal(doc.querySelector('[name=servings5]').value,'3');assert.equal(doc.querySelector('[name=recipe5]').value,'recipe-ai-0000');assert.equal(doc.querySelector('#shoppingPreview'),null);
+ const event=new window.Event('submit',{bubbles:true,cancelable:true});Object.defineProperty(event,'submitter',{value:{value:'DRAFT'}});doc.querySelector('#planForm').dispatchEvent(event);await settle();assert.equal(meals.sql.prepare('SELECT status FROM weekly_plans').get().status,'DRAFT');assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,6);
  }finally{window.happyDOM.abort();window.close();}
 });
