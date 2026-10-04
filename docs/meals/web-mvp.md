@@ -37,6 +37,6 @@ LINE Inbox、URL/動画レシピ抽出、AI献立、在庫lot/レシート照合
 
 ## 検証
 
-7件のSQLite + 実APIテスト: tenant分離、CSRF、feature停止、入力検証、レシピの楽観更新と再送、人数計算と単位分離、確定snapshot、tamper/stale preview拒否、並行shoppingと削除後再送、cooked冪等、6tab/CSRF cookie。型チェック、JS構文、static assets、既存migration smoke、143件のactive regression成功。実データ/AI quotaを使用していない。
+8件のSQLite + 実APIテスト: tenant分離、CSRF、feature停止、入力検証、レシピの楽観更新と再送、人数計算と単位分離、確定snapshot、tamper/stale preview拒否、並行shoppingと削除後再送、cooked冪等、6tab/CSRF cookie、日曜から月曜にまたがる明日の献立。型チェック、JS構文、static assets、既存migration smoke、143件のactive regression成功。実データ/AI quotaを使用していない。
 
 ローカルChromiumでsyntheticデータの画面・操作を確認: レシピ保存失敗時の入力保持と再試行、平日5品の確定、在庫食材の選択除外、wishlist追加、Cooking前後と完了の無効ボタン、320/390/768pxとライト/ダーク、水平overflowなし・6タブ維持。Google/LINE/本番D1への通信はなし。

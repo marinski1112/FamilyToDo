@@ -1,7 +1,8 @@
+import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
 import type {AppContext} from './app-context';
 import {json} from './response';
 import {BadRequest} from './errors';
-import {mealEnabled,mealDate,mealWeek,mealId,mealText,mealShoppingNeeds,mealHash} from './meal-domain';
+import {mealEnabled,mealDate,mealWeek,mealId,mealText,mealShoppingNeeds,mealHash,shiftMealDate} from './meal-domain';
 import {mealRecipeSummaries,mealRecipe,saveMealRecipe,readMealPlan,saveMealPlan} from './meal-repository';
 import {projectMealShopping} from './meal-shopping-service';
 const out=(value:unknown,status=200)=>json(value,status,{'cache-control':'private, no-store'});
@@ -14,7 +15,9 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(view==='recipe'){const recipe=await mealRecipe(db,familyId,mealId(url.searchParams.get('id')));return out({ok:!!recipe,recipe},recipe?200:404);}
   if(view==='shopping_preview'){const plan=await readMealPlan(db,familyId,week);if(!plan||plan.status!=='CONFIRMED')return out({ok:false,error:'献立を確定してください。'},409);const needs=mealShoppingNeeds(plan.items);return out({ok:true,week_start:week,revision:plan.revision,needs,preview_hash:await mealHash({revision:plan.revision,needs})});}
   const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),db.prepare('SELECT id,name FROM meal_wishlist WHERE family_id=? ORDER BY created_at DESC,id LIMIT 200').bind(familyId).all(),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
-  return out({ok:true,recipes,wishlist:wishlist.results,plan,cooked:cooked.results,week_start:week});
+  const today=familyDate(String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),tomorrowDate=shiftMealDate(today,1);let tomorrow_item=null;
+  if(week===mealWeek(today)&&mealWeek(tomorrowDate)!==week){const next=await readMealPlan(db,familyId,mealWeek(tomorrowDate));tomorrow_item=next?.items.find((i:any)=>i.date===tomorrowDate)||null;}
+  return out({ok:true,recipes,wishlist:wishlist.results,plan,cooked:cooked.results,week_start:week,tomorrow_item});
  }
  if(request.method!=='POST')return out({ok:false,error:'POST only'},405);
  const length=Number(request.headers.get('content-length')||0);if(length>200000)return out({ok:false,error:'入力が大きすぎます。'},413);

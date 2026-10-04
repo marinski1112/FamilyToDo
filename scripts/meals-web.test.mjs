@@ -18,6 +18,10 @@ test('unauthenticated/CSRF/disabled calls do not expose meals; family from reque
  const {ctx}=fixture();assert.equal((await call({...ctx,member:null},null)).response.status,401);assert.equal((await call(ctx,{csrf:'wrong',action:'wishlist_add',id:'wishlist-0001',name:'カレー'})).response.status,403);assert.equal((await call({...ctx,env:{...ctx.env,MEALS_ENABLED:'false'}},null)).response.status,503);
  await call(ctx,{action:'wishlist_add',id:'wishlist-0001',name:'カレー',family_id:2});assert.equal((await call(ctx,null)).value.wishlist.length,1);assert.equal((await call({...ctx,member:{...ctx.member,id:2,family_id:2}},null)).value.wishlist.length,0);
 });
+test('overview can show tomorrow across a Sunday/Monday week boundary',async()=>{
+ const {ctx}=fixture();await seed(ctx);const RealDate=globalThis.Date;globalThis.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-10-04T12:00:00Z']));}static now(){return RealDate.parse('2026-10-04T12:00:00Z');}};
+ try{const result=await call(ctx,null,'?week=2026-09-28');assert.equal(result.value.tomorrow_item.date,'2026-10-05');assert.equal(result.value.tomorrow_item.recipe.name,'ハンバーグ');}finally{globalThis.Date=RealDate;}
+});
 test('recipe save retries are idempotent, stale edits fail and another tenant cannot read/archive or plan a recipe',async()=>{
  const {ctx,meals}=fixture();const first=(await call(ctx,{action:'save_recipe',recipe:recipe()})).value.recipe;await call(ctx,{action:'save_recipe',recipe:recipe()});assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM recipes').get().c,1);
  const next=(await call(ctx,{action:'save_recipe',recipe:{...first,name:'変更済み'}})).value.recipe;assert(next.revision!==first.revision);assert.equal((await call(ctx,{action:'save_recipe',recipe:{...first,name:'古い変更'}})).response.status,400);
