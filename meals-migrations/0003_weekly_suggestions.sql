@@ -10,3 +10,6 @@ CREATE TABLE meal_weekly_suggestions (
  PRIMARY KEY(family_id,id)
 );
 CREATE INDEX meal_weekly_suggestions_daily ON meal_weekly_suggestions(family_id,created_at);
+
+-- Cooking-history lookups must not rescan every saved week per cooked event.
+CREATE INDEX weekly_plans_family_revision ON weekly_plans(family_id,revision);
