@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
+import {parseMealLineText,receiveMealLine} from '../src/meal-line-inbox.ts';
+import {webhook} from '../src/line-webhook.ts';
 import {mealApi} from '../src/meal-api.ts';
 import {mealPage,withMealsNavigation} from '../src/meal-page.ts';
 import {mealShoppingNeeds} from '../src/meal-domain.ts';
@@ -53,4 +57,54 @@ test('invalid dates, oversized payloads, unsafe sources and nonfinite/zero quant
 test('feature-enabled nav stays six tabs, disabled nav remains unchanged, page commits CSRF without AI',async()=>{
  const {ctx}=fixture();ctx.session.csrfToken=undefined;const page=await mealPage(ctx);assert(page.headers.has('set-cookie'));const response=await withMealsNavigation(page,ctx.env),html=await response.text();assert(html.includes('ごはん</a>'));assert(html.includes('--nav-count:6'));assert(html.includes('/app/home.php'));assert(!html.includes('gemini-'));
  const old=new Response('<span aria-hidden="true">🏠</span>ホーム</a>',{headers:{'content-type':'text/html'}});assert.equal(await (await withMealsNavigation(old,{...ctx.env,MEALS_ENABLED:'false'})).text(),'<span aria-hidden="true">🏠</span>ホーム</a>');
+});
+
+test('LINE meal parser accepts explicit wishes and safe URLs, rejects arbitrary input',()=>{
+ assert.deepEqual(parseMealLineText('ハンバーグ食べたい！'),{kind:'WISH',content:'ハンバーグ'});
+ assert.deepEqual(parseMealLineText('食べたい: カレー'),{kind:'WISH',content:'カレー'});
+ assert.equal(parseMealLineText('今日'),null);assert.equal(parseMealLineText('javascript:alert(1)'),null);assert.equal(parseMealLineText('https://user:password@example.invalid/'),null);assert.equal(parseMealLineText('x'.repeat(121)+'食べたい'),null);
+ assert.equal(parseMealLineText('レシピ https://example.invalid/recipe').kind,'RECIPE_URL');
+});
+const lineEvent=(id='line-event-1',text='カレー食べたい')=>({webhookEventId:id,type:'message',source:{type:'user',userId:'m1'},message:{id:'message-1',type:'text',text}});
+async function signedWebhook(env,events,valid=true){
+ const body=JSON.stringify({events}),key=await crypto.subtle.importKey('raw',new TextEncoder().encode('line-test-secret'),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signature=Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(body))).toString('base64');
+ return webhook(new Request('https://fixture.invalid/webhook',{method:'POST',body,headers:{'x-line-signature':valid?signature:'bad'}}),{...env,LINE_CHANNEL_SECRET:'line-test-secret'});
+}
+test('signed LINE input persists without reply token; retries do not resurrect confirmed/deleted wishes',async()=>{
+ const {ctx,meals}=fixture(),event=lineEvent();
+ await signedWebhook(ctx.env,[event],false);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM meal_inbox').get().c,0);
+ await signedWebhook(ctx.env,[event,event]);const entries=(await call(ctx,null,'?view=inbox')).value.inbox;assert.equal(entries.length,1);
+ const id=entries[0].id;await Promise.all([call(ctx,{action:'inbox_wish',id}),call(ctx,{action:'inbox_wish',id})]);assert.equal((await call(ctx,null)).value.wishlist.length,1);
+ await call(ctx,{action:'wishlist_delete',id});await signedWebhook(ctx.env,[event]);await call(ctx,{action:'inbox_wish',id});assert.equal((await call(ctx,null)).value.wishlist.length,0);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,0);
+});
+test('LINE inbox refuses group/unlinked/disabled events and isolates review by family',async()=>{
+ const {ctx,meals}=fixture();
+ await signedWebhook(ctx.env,[{...lineEvent(),source:{type:'group',userId:'m1',groupId:'group'}},{...lineEvent(),source:{type:'user',userId:'unknown'}}]);
+ await signedWebhook({...ctx.env,MEALS_ENABLED:'false'},[lineEvent()]);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM meal_inbox').get().c,0);
+ await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);const id=(await call(ctx,null,'?view=inbox')).value.inbox[0].id;
+ const other={...ctx,member:{id:2,family_id:2}};assert.equal((await call(other,null,'?view=inbox')).value.inbox.length,0);await call(other,{action:'inbox_dismiss',id});assert.equal((await call(other,{action:'inbox_wish',id})).response.status,404);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,1);
+ assert.equal((await call(ctx,{action:'inbox_wish',id})).response.status,404);await call(ctx,{action:'inbox_dismiss',id});await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,0);
+});
+test('LINE meal storage failure requests redelivery, with no provider or URL requests',async()=>{
+ const {ctx}=fixture(),originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('unexpected HTTP');};
+ try{await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);assert.equal(calls,0);
+ const broken={...ctx.env,MEALS_DB:{prepare(){throw new Error('synthetic storage unavailable');}}};assert.equal((await signedWebhook(broken,[lineEvent()])).status,503);assert.equal(calls,0);
+ }finally{globalThis.fetch=originalFetch;}
+});
+
+test('Web inbox escapes LINE content, confirms wishes, and prefills URL for manual recipe entry',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture();
+ await receiveMealLine(ctx.env,lineEvent('wish-ui','<img src=x onerror=alert(1)>食べたい'),ctx.member);
+ await receiveMealLine(ctx.env,lineEvent('url-ui','https://example.invalid/recipe'),ctx.member);
+ const window=new Window({url:'https://fixture.invalid/app/meals.php?view=inbox'});
+ try{
+ window.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+ window.fetch=(url,options={})=>mealApi(new Request(new URL(url,window.location.href),options),ctx);
+ window.eval(fs.readFileSync('public/assets/meals.js','utf8'));
+ const settle=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};await settle();
+ const doc=window.document;assert.equal(doc.querySelectorAll('[data-inbox-add]').length,2);assert.equal(doc.querySelector('#mealContent img'),null);
+ [...doc.querySelectorAll('[data-inbox-add]')].find(b=>b.textContent==='食べたいものに追加').click();await settle();assert.equal(doc.querySelectorAll('[data-inbox-add]').length,1);assert.equal((await call(ctx,null)).value.wishlist.length,1);
+ doc.querySelector('[data-inbox-add]').click();assert.equal(doc.querySelector('[name=source_url]').value,'https://example.invalid/recipe');assert(doc.querySelector('#recipeForm'));assert(doc.querySelector('#mealStatus').textContent.includes('出典を見ながら'));
+ }finally{window.happyDOM.abort();window.close();}
 });
