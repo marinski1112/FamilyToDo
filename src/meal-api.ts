@@ -4,6 +4,7 @@ import {json} from './response';
 import {BadRequest} from './errors';
 import {mealEnabled,mealDate,mealWeek,mealId,mealText,mealShoppingNeeds,mealHash,shiftMealDate} from './meal-domain';
 import {mealRecipeSummaries,mealRecipe,saveMealRecipe,readMealPlan,saveMealPlan} from './meal-repository';
+import {suggestMealWeek} from './meal-weekly-suggestions';
 import {projectMealShopping} from './meal-shopping-service';
 const out=(value:unknown,status=200)=>json(value,status,{'cache-control':'private, no-store'});
 export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
@@ -34,6 +35,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    const now=new Date().toISOString();
    await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) SELECT family_id,id,content,?,? FROM meal_inbox WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
   }
+  if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
   if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe)});
   if(b.action==='archive_recipe'){await db.prepare('UPDATE recipes SET archived=1,updated_at=? WHERE family_id=? AND id=?').bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) VALUES(?,?,?,?,?)').bind(familyId,id,name,m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string}>();if(saved?.name!==name)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
