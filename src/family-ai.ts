@@ -1,3 +1,4 @@
+import {reserveAiCall,recordAiCall,blockAiQuota,type AiCallScope} from './ai-call-budget';
 import { json } from './response';
 import type { AppContext } from './app-context';
 import { DEFAULT_FAMILY_TIMEZONE, familyNow } from './timezone';
@@ -51,12 +52,16 @@ export function geminiFailureCategory(status:number,error:SafeGeminiError={reaso
  if(status>=500&&status<=599)return 'UPSTREAM_UNAVAILABLE';
  return 'UNKNOWN';
 }
-export async function geminiFetch(env:Env,model:string,body:unknown):Promise<Response>{
+export async function geminiFetch(env:Env,model:string,body:unknown,scope:AiCallScope={familyId:0,feature:'COMPATIBILITY_TEST',trigger:'diagnostic'}):Promise<Response>{
  const key=String(env.GEMINI_API_KEY||'');
  if(!key)throw new Error('Gemini is not configured');
+ if(!await reserveAiCall(env,scope,model))return new Response(JSON.stringify({error:{status:'RESOURCE_EXHAUSTED'}}),{status:429,headers:{'content-type':'application/json'}});
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10_000);
- try{return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:controller.signal});}
- catch{const error=new Error('Gemini upstream unavailable');if(controller.signal.aborted)error.name='AbortError';throw error;}finally{clearTimeout(timer);}
+ try{const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:controller.signal});
+ if(response.status===429)await blockAiQuota(env.DB).catch(()=>{});
+ await recordAiCall(env.DB,scope,model,response.ok?'success':response.status===429?'rate_limit':'upstream_error').catch(()=>{});
+ return response;}
+ catch{await recordAiCall(env.DB,scope,model,'upstream_error').catch(()=>{});const error=new Error('Gemini upstream unavailable');if(controller.signal.aborted)error.name='AbortError';throw error;}finally{clearTimeout(timer);}
 }
 class InvalidPlanError extends Error{}
 class GeminiUpstreamError extends Error{constructor(public status:number,public safe:SafeGeminiError){super('Gemini upstream failure');}}
@@ -164,10 +169,10 @@ const ALL_FUNCTIONS=[...FAMILY_AI_FUNCTIONS,...FAMILY_AI_WRITE_FUNCTIONS];
 const ALL_NAMES=[...TOOLS,...FAMILY_AI_WRITE_ACTIONS];
 const plannerInstruction=(input:PlannerInput)=>`現在日時: ${input.now} (${input.timezone})。家族local wall clockを使う。質問はread-only function、明示的な登録・記録・完了命令だけはwrite actionを1つ選ぶ。SQL、URL、table、column、code、自然文回答は禁止。削除・member・settings・permission・Google設定・import・bulk操作は絶対に選ばない。名前tokenをrefへ使う。PRIVATEは「自分だけ」等の明示時だけprivate_explicit=true、それ以外はFAMILY。`;
 const asPlan=(name:string,args:Args):FamilyAiPlan=>FAMILY_AI_WRITE_ACTIONS.includes(name as FamilyAiWriteAction)?{mode:'WRITE',action:name as FamilyAiWriteAction,args}:{mode:'READ',name,args};
-class GeminiPlanner implements FamilyAiPlanner{constructor(private env:Env,private model:string){}async plan(input:PlannerInput){const res=await geminiFetch(this.env,this.model,{systemInstruction:{parts:[{text:plannerInstruction(input)}]},contents:[{role:'user',parts:[{text:input.question}]}],tools:[{functionDeclarations:ALL_FUNCTIONS}],toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:ALL_NAMES}},generationConfig:{maxOutputTokens:512}});if(!res.ok)throw new GeminiUpstreamError(res.status,await safeGeminiError(res));const data=await res.json() as any,call=data?.candidates?.[0]?.content?.parts?.find((p:any)=>p.functionCall)?.functionCall;if(!call)throw new InvalidPlanError('no function');return asPlan(String(call.name),call.args||{});}}
+class GeminiPlanner implements FamilyAiPlanner{constructor(private env:Env,private model:string,private familyId:number){}async plan(input:PlannerInput){const res=await geminiFetch(this.env,this.model,{systemInstruction:{parts:[{text:plannerInstruction(input)}]},contents:[{role:'user',parts:[{text:input.question}]}],tools:[{functionDeclarations:ALL_FUNCTIONS}],toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:ALL_NAMES}},generationConfig:{maxOutputTokens:512}},{familyId:this.familyId,feature:'FAMILY_AI',trigger:'user'});if(!res.ok)throw new GeminiUpstreamError(res.status,await safeGeminiError(res));const data=await res.json() as any,call=data?.candidates?.[0]?.content?.parts?.find((p:any)=>p.functionCall)?.functionCall;if(!call)throw new InvalidPlanError('no function');return asPlan(String(call.name),call.args||{});}}
 const workersSchema={type:'object',properties:{name:{type:'string',enum:ALL_NAMES},args:{type:'object'}},required:['name','args']};
 class WorkersAiPlanner implements FamilyAiPlanner{constructor(private env:Env){}async plan(input:PlannerInput){if(!this.env.AI)throw new Error('Workers AI binding unavailable');const result=await this.env.AI.run(workersAiModel(this.env),{messages:[{role:'system',content:plannerInstruction(input)+` Return JSON only matching this schema: ${JSON.stringify(workersSchema)}. Typed functions: ${JSON.stringify(ALL_FUNCTIONS)}.`},{role:'user',content:input.question}],response_format:{type:'json_schema',json_schema:{name:'family_ai_plan',schema:workersSchema}}}) as any;const raw=result?.response??result;let plan:any=raw;if(typeof raw==='string')try{plan=JSON.parse(raw)}catch{throw new InvalidPlanError('invalid json')};if(!plan||typeof plan.name!=='string'||!plan.args||typeof plan.args!=='object')throw new InvalidPlanError('no function');return asPlan(plan.name,plan.args);}}
-async function plannerFor(env:Env,db:D1Database,familyId:number):Promise<FamilyAiPlanner>{return familyAiProvider(env)==='WORKERS_AI'?new WorkersAiPlanner(env):new GeminiPlanner(env,(await resolveFamilyGeminiModel(db,familyId,env)).model);}
+async function plannerFor(env:Env,db:D1Database,familyId:number):Promise<FamilyAiPlanner>{return familyAiProvider(env)==='WORKERS_AI'?new WorkersAiPlanner(env):new GeminiPlanner(env,(await resolveFamilyGeminiModel(db,familyId,env)).model,familyId);}
 function localPlan(question:string,now:string):FamilyAiPlan|undefined{const date=now.slice(0,10),d=new Date(date+'T00:00:00Z');if(question==='今日の予定')return {mode:'READ',name:'schedule_lookup',args:{date_from:date,date_to:date}};if(question==='明日の予定'){d.setUTCDate(d.getUTCDate()+1);const tomorrow=d.toISOString().slice(0,10);return {mode:'READ',name:'schedule_lookup',args:{date_from:tomorrow,date_to:tomorrow}};}return undefined;}
 const authorizedAdmin=(ctx:AppContext)=>['OWNER','ADMIN'].includes(String(ctx.member?.role||'').toUpperCase());
 const forbiddenIntent=(q:string)=>/削除|delete|メンバー.*(変更|追加|停止)|権限|permission|設定.*変更|Google.*(接続|解除)|インポート|一括/i.test(q);

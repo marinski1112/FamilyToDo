@@ -153,11 +153,11 @@ async function chooseNarrative(env:Env,familyId:number,facts:PeriodFacts):Promis
   const choices=configured.source==='FAMILY_SETTING'?configured.models:models(env);
   for(let attempt=0;attempt<choices.length;attempt++){
     lastModel=choices[attempt];
-    let reserved=false;try{reserved=await reservePeriodicDigestAiRequest(env.DB,familyId,facts.period.reportType,facts.period.periodKey,attempt>0);}catch{return finishFallback('STORAGE',lastModel);}
+    let reserved=false;try{reserved=await reservePeriodicDigestAiRequest(env.DB,familyId,facts.period.reportType,facts.period.periodKey,false);}catch{return finishFallback('STORAGE',lastModel);}
     if(!reserved)return finishFallback('BUDGET_OR_CIRCUIT',lastModel);
     try{
-      const response=await geminiFetch(env,choices[attempt],body);
-      if(response.status===429){try{await blockPeriodicDigestAiAfter429(env.DB);}catch{}}
+      const response=await geminiFetch(env,choices[attempt],body,{familyId,feature:'PERIODIC_DIGEST',trigger:'cron',attempt});
+      if(response.status===429){try{await blockPeriodicDigestAiAfter429(env.DB);}catch{}return finishFallback('RATE_LIMIT',lastModel);}
       if(!response.ok){failureReason=response.status===429?'RATE_LIMIT':'UPSTREAM';continue;}
       const data=await response.json() as any,text=String(data?.candidates?.[0]?.content?.parts?.[0]?.text||''),parsed=JSON.parse(text),narrative=clean(parsed?.narrative,MAX_NARRATIVE_CHARS);
       if(!safeGeneratedNarrative(narrative,profiles)){failureReason='INVALID_OUTPUT';continue;}
