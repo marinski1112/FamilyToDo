@@ -1,0 +1,80 @@
+import {BadRequest} from './errors';
+import type {AppContext} from './app-context';
+import {mealHash,mealId} from './meal-domain';
+const MAX_BYTES=2_000_000;
+const unsupported='URL取り込みはクラシル・デリッシュキッチンのレシピページに対応しています。他のリンクは出典を見ながら手入力してください。';
+/** Exact publishers and recipe paths only. Never follow arbitrary redirects or fetch cookies. */
+export function mealImportUrl(raw:unknown):string{
+ if(typeof raw!=='string'||raw.length>2048)throw new BadRequest(unsupported);
+ let u:URL;try{u=new URL(raw);}catch{throw new BadRequest(unsupported);}
+ const allowed=(u.hostname==='www.kurashiru.com'&&/^\/recipes\/[0-9a-f-]{36}\/?$/i.test(u.pathname))||(['delishkitchen.tv','www.delishkitchen.tv'].includes(u.hostname)&&/^\/recipes\/\d{8,25}\/?$/.test(u.pathname));
+ if(u.protocol!=='https:'||u.username||u.password||u.port||!allowed)throw new BadRequest(unsupported);
+ u.search='';u.hash='';return u.href;
+}
+function text(value:unknown,max=2000):string{
+ if(typeof value!=='string')return '';
+ return value.replace(/<[^>]*>/g,' ').replace(/&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[\da-f]+);/gi,s=>{
+  const named:Record<string,string>={'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'",'&nbsp;':' '};
+  if(named[s.toLowerCase()])return named[s.toLowerCase()];
+  const n=s[2].toLowerCase()==='x'?parseInt(s.slice(3,-1),16):parseInt(s.slice(2,-1),10);return n>0&&n<=0x10ffff?String.fromCodePoint(n):'';
+ }).normalize('NFKC').replace(/\s+/g,' ').trim().slice(0,max);
+}
+function duration(raw:unknown):number|null{
+ if(typeof raw!=='string')return null;const m=/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(raw);if(!m)return null;
+ const n=Number(m[1]||0)*60+Number(m[2]||0)+Math.ceil(Number(m[3]||0)/60);return n>=1&&n<=1440?n:null;
+}
+export function parseImportedIngredient(raw:string){
+ const original=text(raw,200),num='(\\d+(?:\\.\\d+)?(?:\\/\\d+)?)',unit='(g|kg|ml|mL|L|個|本|枚|袋|缶|丁|束|片|尾|匹|合|カップ)';
+ const suffix=new RegExp('^(.+?)\\s*'+num+'\\s*'+unit+'$').exec(original),spoon=/^(.+?)\s*(大さじ|小さじ)\s*(\d+(?:\.\d+)?(?:\/\d+)?)$/.exec(original);
+ const m=suffix||spoon;let quantity:number|null=null,name=original,units='';
+ if(m&&!/(?:[\d/+.~〜–≈-]|約|およそ)$/.test(m[1].trim())){const amount=suffix?m[2]:m[3],parts=amount.split('/').map(Number),n=parts.length===2?parts[0]/parts[1]:parts[0];if(Number.isFinite(n)&&n>=0.0001&&n<=100000){quantity=Math.round(n*10000)/10000;name=m[1].trim();units=suffix?m[3]:m[2];}}
+ return {name:name.slice(0,100),quantity,unit:units,original};
+}
+/** Only bounded JSON-LD Recipe data; scripts, links and instruction URLs are never executed. */
+export function extractMealRecipe(html:string,sourceUrl:string){
+ const recipes:any[]=[];let nodes=0;
+ const visit=(v:any,depth=0)=>{if(depth>12||++nodes>2000)return;if(Array.isArray(v)){v.forEach(x=>visit(x,depth+1));return;}if(!v||typeof v!=='object')return;
+  const types=Array.isArray(v['@type'])?v['@type']:[v['@type']];if(types.some((t:any)=>typeof t==='string'&&/^(?:https?:\/\/schema.org\/)?Recipe$/.test(t)))recipes.push(v);
+  else if(v['@graph'])visit(v['@graph'],depth+1);
+ };
+ let scripts=0;for(const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)){
+  if(!/\btype\s*=\s*["']application\/ld\+json["']/i.test(match[1]))continue;if(++scripts>30)break;
+  try{visit(JSON.parse(match[2]));}catch{}
+ }
+ if(recipes.length!==1)throw new BadRequest('このページのレシピを一つに特定できませんでした。出典を見ながら手入力してください。');
+ const r=recipes[0],name=text(r.name,120),raw=r.recipeIngredient;
+ if(!name||!Array.isArray(raw)||!raw.length||raw.length>50||raw.some(x=>typeof x!=='string'||x.length>1000))throw new BadRequest('このページの材料を読み込めませんでした。手入力で登録できます。');
+ const steps:string[]=[];
+ const addSteps=(v:any,depth=0)=>{if(depth>10||steps.length>50)return;if(Array.isArray(v)){v.forEach(x=>addSteps(x,depth+1));return;}if(typeof v==='string'){if(v.length>2000)throw new BadRequest('手順が長いため、出典を見ながら手入力してください。');const s=text(v);if(s)steps.push(s);}else if(v&&typeof v==='object'){if(v.itemListElement)addSteps(v.itemListElement,depth+1);else if(typeof v.text==='string')addSteps(v.text,depth+1);}};
+ addSteps(r.recipeInstructions);if(!steps.length||steps.length>50)throw new BadRequest('このページの手順を読み込めませんでした。手入力で登録できます。');
+ const yieldRaw=Array.isArray(r.recipeYield)?r.recipeYield.length===1?r.recipeYield[0]:null:r.recipeYield;
+ const yieldMatch=/^(\d{1,2})\s*(?:人分|人前|人|servings?)?$/i.exec(String(yieldRaw||''));
+ const servings=yieldMatch&&Number(yieldMatch[1])>=1&&Number(yieldMatch[1])<=30?Number(yieldMatch[1]):null;
+ const minutes=duration(r.totalTime),ingredients=raw.map(parseImportedIngredient);
+ return {name,servings,minutes,source_url:sourceUrl,ingredients,steps};
+}
+async function fetchRecipe(url:string):Promise<{html:string;url:string}>{
+ const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),10000);let current=url;
+ try{
+  for(let hop=0;hop<4;hop++){
+   const response=await fetch(current,{redirect:'manual',signal:abort.signal,headers:{accept:'text/html'}});
+   if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');await response.body?.cancel();if(!location)throw new BadRequest('出典を読み込めませんでした。');current=mealImportUrl(new URL(location,current).href);continue;}
+   if(!response.ok||!/^text\/html\b/i.test(response.headers.get('content-type')||'')||Number(response.headers.get('content-length')||0)>MAX_BYTES){await response.body?.cancel();throw new BadRequest('出典を読み込めませんでした。手入力で登録できます。');}
+   const reader=response.body?.getReader();if(!reader)throw new BadRequest('出典を読み込めませんでした。');
+   const chunks:Uint8Array[]=[];let size=0;
+   try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>MAX_BYTES)throw new BadRequest('ページが大きすぎます。手入力で登録してください。');chunks.push(value);}}finally{await reader.cancel().catch(()=>{});}
+   const bytes=new Uint8Array(size);let pos=0;for(const chunk of chunks){bytes.set(chunk,pos);pos+=chunk.byteLength;}return {html:new TextDecoder().decode(bytes),url:current};
+  }
+  throw new BadRequest('出典の転送が多すぎます。手入力で登録してください。');
+ }catch(e){if(e instanceof BadRequest)throw e;throw new BadRequest('出典を読み込めませんでした。手入力で登録できます。');}finally{clearTimeout(timer);}
+}
+function cached(row:any,hash:string){if(row.payload_hash!==hash)throw new BadRequest('URLが変わっています。新しい取り込みを開始してください。');if(row.status!=='READY')throw new BadRequest('この取り込みは処理中です。少し待って再試行するか、手入力してください。');const result=JSON.parse(row.result_json);if(result.error)throw new BadRequest(result.error);return result.draft;}
+export async function importMealUrl(ctx:AppContext,raw:any){
+ const url=mealImportUrl(raw.url),id=mealId(raw.request_id),db=ctx.env.MEALS_DB!,m=ctx.member!,familyId=Number(m.family_id),hash=await mealHash(url);
+ const read=()=>db.prepare('SELECT payload_hash,status,result_json FROM meal_url_imports WHERE family_id=? AND id=?').bind(familyId,id).first();
+ const previous=await read();if(previous)return cached(previous,hash);
+ const now=new Date().toISOString();const claim=await db.prepare("INSERT OR IGNORE INTO meal_url_imports(family_id,id,payload_hash,status,created_by,created_at) SELECT ?,?,?,'RUNNING',?,? WHERE (SELECT COUNT(*) FROM meal_url_imports WHERE family_id=? AND created_at>=?)<20").bind(familyId,id,hash,m.id,now,familyId,now.slice(0,10)).run();
+ if(!claim.meta.changes){const previous=await read();if(previous)return cached(previous,hash);throw new BadRequest('今日の新しいURL取り込みは20回までです。手入力で登録できます。');}
+ let result:any;try{const page=await fetchRecipe(url);result={draft:extractMealRecipe(page.html,page.url)};}catch(e){if(!(e instanceof BadRequest))throw e;result={error:e.message};}
+ await db.prepare("UPDATE meal_url_imports SET status='READY',result_json=? WHERE family_id=? AND id=? AND status='RUNNING'").bind(JSON.stringify(result),familyId,id).run();return cached({payload_hash:hash,status:'READY',result_json:JSON.stringify(result)},hash);
+}

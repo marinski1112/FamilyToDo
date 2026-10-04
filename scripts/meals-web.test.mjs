@@ -1,3 +1,4 @@
+import {mealImportUrl,extractMealRecipe,parseImportedIngredient} from '../src/meal-url-import.ts';
 import {mealsHealth} from '../src/meal-health.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -166,9 +167,9 @@ test('Web proposal requires review and save, preserves weekend/unsaved edits, an
  // when a later option has selected. Emulate native parsed defaults for this fixture.
  const nativeSelectDefaults=()=>doc.querySelectorAll('#planForm select').forEach(s=>s.value=s.querySelector('option[selected]')?.value||'');nativeSelectDefaults();
  assert.equal(doc.querySelector('[name=recipe5]').value,'recipe-ai-0000','initial Saturday');
- doc.querySelector('[name=servings5]').value='3';doc.querySelector('[name=servings5]').dispatchEvent(new window.Event('input',{bubbles:true}));doc.querySelector('#openSuggestions').click();doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await settle();assert(doc.querySelector('#suggestForm'));doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await settle();assert.equal(savedRequests[0],savedRequests[1]);
+ doc.querySelector('[name=servings5]').value='3';doc.querySelector('[name=servings5]').dispatchEvent(new window.Event('input',{bubbles:true}));doc.querySelector('#openSuggestions').click();doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('synthetic lost response'));assert(doc.querySelector('#suggestForm'));doc.querySelector('#suggestForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#applySuggestion'));assert.equal(savedRequests[0],savedRequests[1]);
  assert(doc.querySelector('#applySuggestion'));assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,1);doc.querySelector('#applySuggestion').click();nativeSelectDefaults();assert.equal(doc.querySelector('[name=servings5]').value,'3');assert.equal(doc.querySelector('[name=recipe5]').value,'recipe-ai-0000');assert.equal(doc.querySelector('#shoppingPreview'),null);
- const event=new window.Event('submit',{bubbles:true,cancelable:true});Object.defineProperty(event,'submitter',{value:{value:'DRAFT'}});doc.querySelector('#planForm').dispatchEvent(event);await settle();assert.equal(meals.sql.prepare('SELECT status FROM weekly_plans').get().status,'DRAFT');assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,6);
+ const event=new window.Event('submit',{bubbles:true,cancelable:true});Object.defineProperty(event,'submitter',{value:{value:'DRAFT'}});doc.querySelector('#planForm').dispatchEvent(event);await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('保存しました'));assert.equal(meals.sql.prepare('SELECT status FROM weekly_plans').get().status,'DRAFT');assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,6);
  }finally{window.happyDOM.abort();window.close();}
 });
 
@@ -177,4 +178,65 @@ test('meal deployment readiness reports only booleans; enabled missing migration
  meals.sql.exec('DROP TABLE meal_weekly_suggestions');const missing=await mealsHealth(ctx.env);assert.equal(missing.status,503);assert.deepEqual(await missing.json(),{ok:false,enabled:true,configured:true,ready:false});
  assert.equal((await mealsHealth({...ctx.env,MEALS_ENABLED:'false'})).status,200);const absent=await mealsHealth({...ctx.env,MEALS_DB:undefined});assert.equal(absent.status,503);
  const broken=await mealsHealth({...ctx.env,MEALS_DB:{prepare(){throw new Error('PRIVATE synthetic SQL or key');}}});assert.equal(broken.status,503);assert(!(await broken.text()).includes('PRIVATE'));
+});
+
+async function waitFor(predicate){for(let i=0;i<400;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}assert.fail('UI did not finish');}
+const importURL='https://delishkitchen.tv/recipes/166742173524427155';
+const importHTML=(overrides={})=>'<script type="application/ld+json">'+JSON.stringify({'@context':'https://schema.org','@graph':[{'@type':'Recipe',name:'テスト料理',recipeYield:'2人分',totalTime:'PT1800S',recipeIngredient:['ひき肉 200g','玉ねぎ 1/2個','塩 少々'],recipeInstructions:[{'@type':'HowToSection',itemListElement:[{'@type':'HowToStep',text:'切る'},{'@type':'HowToStep',text:'焼く'}]}],...overrides}]})+'</script>';
+test('URL import allows exact HTTPS recipe pages only; structured extraction leaves ambiguous fields empty',()=>{
+ assert.equal(mealImportUrl(importURL+'?utm_source=test#x'),importURL);
+ for(const url of ['http://delishkitchen.tv/recipes/166742173524427155','https://user:pass@delishkitchen.tv/recipes/166742173524427155','https://delishkitchen.tv.evil.invalid/recipes/166742173524427155','https://127.0.0.1/recipes/166742173524427155','https://[::1]/recipes/166742173524427155','https://2130706433/recipes/166742173524427155','https://169.254.169.254/latest/meta-data','https://delishkitchen.tv:8443/recipes/166742173524427155','https://delishkitchen.tv/redirect','https://youtu.be/test'])assert.throws(()=>mealImportUrl(url));
+ const draft=extractMealRecipe(importHTML(),importURL);assert.equal(draft.minutes,30);assert.equal(draft.servings,2);assert.deepEqual(draft.steps,['切る','焼く']);assert.equal(draft.ingredients[1].quantity,0.5);assert.equal(draft.ingredients[2].quantity,null);assert.equal(draft.ingredients[2].unit,'');
+ assert.equal(parseImportedIngredient('しょうゆ 大さじ1/2').quantity,0.5);assert.equal(parseImportedIngredient('肉 1/0g').quantity,null);assert.equal(parseImportedIngredient('肉 1〜2g').quantity,null);assert.equal(parseImportedIngredient('肉 1 1/2g').quantity,null);assert.equal(parseImportedIngredient('肉 約200g').quantity,null);
+ assert.equal(extractMealRecipe(importHTML({totalTime:undefined,recipeYield:'10枚分'}),importURL).servings,null);
+ assert.throws(()=>extractMealRecipe(importHTML()+importHTML(),importURL));assert.throws(()=>extractMealRecipe('<script type="application/ld+json">broken</script>',importURL));assert.throws(()=>extractMealRecipe(importHTML({recipeInstructions:['x'.repeat(2001)]}),importURL));
+});
+test('URL import is tenant scoped, claimed once, retryable without another fetch, and never saves recipes or calls AI',async()=>{
+ const {ctx,meals}=fixture(),real=globalThis.fetch;let count=0;
+ globalThis.fetch=async(url,options)=>{count++;assert.equal(url,importURL);assert.equal(options.redirect,'manual');assert.deepEqual(options.headers,{accept:'text/html'});return new Response(importHTML(),{headers:{'content-type':'text/html'}});};
+ try{
+  const body={action:'import_url',request_id:'import-test-0001',url:importURL,family_id:2};
+  assert.equal((await call({...ctx,member:null},body)).response.status,401);assert.equal((await call(ctx,{...body,csrf:'wrong'})).response.status,403);assert.equal(count,0);
+  const results=await Promise.all([call(ctx,body),call(ctx,body)]);assert(results.some(r=>r.response.status===200));assert.equal(count,1);
+  const again=await call(ctx,body);assert.equal(again.value.draft.name,'テスト料理');assert.equal(count,1);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,0);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM weekly_plans').get().n,0);
+  assert.equal((await call(ctx,{...body,url:'https://delishkitchen.tv/recipes/125436472865063179'})).response.status,400);assert.equal(count,1);
+  await call({...ctx,member:{...ctx.member,id:2,family_id:2}},body);assert.equal(count,2);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM meal_url_imports').get().n,2);
+  const broken={...ctx,env:{...ctx.env,MEALS_DB:{prepare(){throw new Error('synthetic storage failure');}}}};await assert.rejects(()=>call(broken,{...body,request_id:'import-broken-01'}));assert.equal(count,2);
+ }finally{globalThis.fetch=real;}
+});
+test('URL fetch revalidates redirects, bounds bytes/type, caches failures, and caps fresh imports',async()=>{
+ const {ctx}=fixture(),real=globalThis.fetch;let count=0;
+ try{
+  globalThis.fetch=async()=>{count++;return new Response('',{status:302,headers:{location:'http://169.254.169.254/latest/meta-data'}});};
+  const body={action:'import_url',request_id:'import-redirect-01',url:importURL};assert.equal((await call(ctx,body)).response.status,400);await call(ctx,body);assert.equal(count,1);
+  for(const [i,response] of [new Response('video',{headers:{'content-type':'video/mp4'}}),new Response('x',{headers:{'content-type':'text/html','content-length':'2000001'}}),new Response('x'.repeat(2000001),{headers:{'content-type':'text/html'}}),new Response('unavailable',{status:429})].entries()){
+   globalThis.fetch=async()=>{count++;return response;};assert.equal((await call(ctx,{...body,request_id:'import-bounded-'+i})).response.status,400);
+  }
+  globalThis.fetch=async()=>{count++;return new Response(importHTML(),{headers:{'content-type':'text/html'}});};
+  for(let i=5;i<20;i++)assert.equal((await call(ctx,{...body,request_id:'import-limit-'+i})).response.status,200);
+  assert.equal(count,20);assert.equal((await call(ctx,{...body,request_id:'import-over-limit'})).response.status,400);assert.equal(count,20);
+ }finally{globalThis.fetch=real;}
+});
+test('Web URL import reuses request after lost response, leaves uncertain quantities blank, and saves only after editing',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture(),real=globalThis.fetch,window=new Window({url:'https://fixture.invalid/app/meals.php?view=recipes'});let count=0,lost=true,ids=[];
+ try{
+  globalThis.fetch=async()=>{count++;return new Response(importHTML({name:'テスト <img src=x onerror=alert(1)>'}),{headers:{'content-type':'text/html'}});};
+  window.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+  window.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null,response=await mealApi(new Request(new URL(url,window.location.href),options),ctx);if(body?.action==='import_url'){ids.push(body.request_id);if(lost){lost=false;throw new Error('synthetic lost response');}}return response;};window.eval(fs.readFileSync('public/assets/meals.js','utf8'));const doc=window.document;
+  await waitFor(()=>doc.querySelector('#importRecipe'));doc.querySelector('#importRecipe').click();doc.querySelector('#importForm [name=url]').value=importURL;
+  doc.querySelector('#importForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('synthetic lost response'));
+  doc.querySelector('#importForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#recipeForm'));assert.equal(ids[0],ids[1]);assert.equal(count,1);assert.equal(doc.querySelector('img'),null);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,0);
+  const rows=doc.querySelectorAll('.meal-ingredient');assert.equal(rows[2].querySelector('[data-field=quantity]').value,'');assert.equal(rows[2].querySelector('[data-field=unit]').value,'');assert(rows[2].textContent.includes('塩 少々'));
+  rows[2].querySelector('[data-field=name]').value='塩';rows[2].querySelector('[data-field=quantity]').value='1';rows[2].querySelector('[data-field=unit]').value='g';
+  doc.querySelector('#recipeForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('保存しました'));assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,1);assert.equal(count,1);
+ }finally{globalThis.fetch=real;window.happyDOM.abort();window.close();}
+});
+
+test('URL import follows only approved recipe redirects and stops after three transfers',async()=>{
+ const real=globalThis.fetch;let urls=[];
+ try{
+  const {ctx}=fixture();globalThis.fetch=async u=>{urls.push(u);return urls.length===1?new Response('',{status:302,headers:{location:'https://www.kurashiru.com/recipes/00000000-0000-0000-0000-000000000001'}}):new Response(importHTML(),{headers:{'content-type':'text/html'}});};
+  const result=await call(ctx,{action:'import_url',request_id:'import-safe-redirect',url:importURL});assert.equal(result.response.status,200);assert.equal(result.value.draft.source_url,urls[1]);assert.equal(urls.length,2);
+  urls=[];globalThis.fetch=async u=>{urls.push(u);return new Response('',{status:302,headers:{location:importURL}});};assert.equal((await call(ctx,{action:'import_url',request_id:'import-loop-redirect',url:importURL})).response.status,400);assert.equal(urls.length,4);
+ }finally{globalThis.fetch=real;}
 });
