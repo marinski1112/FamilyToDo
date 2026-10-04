@@ -1,3 +1,4 @@
+import {mealsHealth} from './meal-health';
 import { json } from './response';
 import { calendarStampDeletionInternal } from './calendar-stamp-global-delete-api';
 import { makeContext } from './app-context';
@@ -20,6 +21,7 @@ export async function dispatchPublicRoute(request:Request,env:Env,ctx:ExecutionC
   if(url.pathname.startsWith('/api/internal/shared-stamp-deletion/')) return calendarStampDeletionInternal(request,env);
   if(url.pathname==='/privacy') return privacyPage();
   if(url.pathname==='/terms') return termsPage();
+  if(url.pathname==='/__cf/meals-health') return await mealsHealth(env);
   if(url.pathname==='/__cf/health') return json({ok:true,service:'familytodo-cloudflare',environment:env.ENVIRONMENT});
   if(url.pathname==='/__cf/secrets-health') return json({ok:true,service:'familytodo-secrets'});
   if(url.pathname==='/__cf/db-health'){const r=await env.DB.prepare('SELECT 1 AS ok').all();return json({ok:true,database:'reachable',result:r.results});}

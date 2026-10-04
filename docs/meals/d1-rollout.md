@@ -31,3 +31,7 @@ Cloudflare Workers Buildsはmainへの取り込みで `npm run deploy` を実行
 - 別家族の内容が見えないこと、未ログイン時に内容が出ないことを確認。
 
 初期反映はWebのみ。AI生成、Cooking Live、Androidの献立UIは後続です。
+
+## 実環境の準備状態
+
+`GET /__cf/meals-health` は有効化・binding・必要テーブルの準備状態だけをbooleanで返します。家族データ、DB ID、鍵やraw errorを返しません。有効な機能のテーブルが欠けている場合は503です。実際のCloudflareコマンドが不明でも、この結果で必要なmigrationが揃ったことを確認できます。

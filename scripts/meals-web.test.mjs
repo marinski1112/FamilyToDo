@@ -1,3 +1,4 @@
+import {mealsHealth} from '../src/meal-health.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -169,4 +170,11 @@ test('Web proposal requires review and save, preserves weekend/unsaved edits, an
  assert(doc.querySelector('#applySuggestion'));assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,1);doc.querySelector('#applySuggestion').click();nativeSelectDefaults();assert.equal(doc.querySelector('[name=servings5]').value,'3');assert.equal(doc.querySelector('[name=recipe5]').value,'recipe-ai-0000');assert.equal(doc.querySelector('#shoppingPreview'),null);
  const event=new window.Event('submit',{bubbles:true,cancelable:true});Object.defineProperty(event,'submitter',{value:{value:'DRAFT'}});doc.querySelector('#planForm').dispatchEvent(event);await settle();assert.equal(meals.sql.prepare('SELECT status FROM weekly_plans').get().status,'DRAFT');assert.equal(meals.sql.prepare('SELECT json_array_length(items_json) n FROM weekly_plans').get().n,6);
  }finally{window.happyDOM.abort();window.close();}
+});
+
+test('meal deployment readiness reports only booleans; enabled missing migrations fail without exposing errors',async()=>{
+ const {ctx,meals}=fixture();const response=await mealsHealth(ctx.env);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.deepEqual(await response.json(),{ok:true,enabled:true,configured:true,ready:true});
+ meals.sql.exec('DROP TABLE meal_weekly_suggestions');const missing=await mealsHealth(ctx.env);assert.equal(missing.status,503);assert.deepEqual(await missing.json(),{ok:false,enabled:true,configured:true,ready:false});
+ assert.equal((await mealsHealth({...ctx.env,MEALS_ENABLED:'false'})).status,200);const absent=await mealsHealth({...ctx.env,MEALS_DB:undefined});assert.equal(absent.status,503);
+ const broken=await mealsHealth({...ctx.env,MEALS_DB:{prepare(){throw new Error('PRIVATE synthetic SQL or key');}}});assert.equal(broken.status,503);assert(!(await broken.text()).includes('PRIVATE'));
 });
