@@ -127,7 +127,7 @@ const deterministicGate=api.indexOf("if(!parsed.summarize&&!needsModel(parsed.fi
 const modelLoop=api.indexOf('for(const model of routedModels)');
 const reserveCall=api.indexOf('try{reserved=await reserveTaskRoughInputAiRequest');
 const categoryRead=api.indexOf("SELECT name,enabled FROM shopping_category_catalog WHERE family_id=?");
-const modelCall=api.indexOf('const response=await geminiFetch(env,model,bodyForModel);');
+const modelCall=api.indexOf('const response=await geminiFetch(env,model,bodyForModel,');
 assert.ok(deterministicGate>=0&&deterministicGate<modelLoop&&modelLoop<reserveCall,'deterministic drafts must exit before the budgeted model loop');
 assert.ok(reserveCall<categoryRead&&categoryRead<modelCall,'paid-call reservation must precede category D1 enrichment and Gemini');
 assert.ok(api.includes("catch{return fallback('STORAGE');}"),'guard failures must fail closed to deterministic output');

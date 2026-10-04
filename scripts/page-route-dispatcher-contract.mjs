@@ -7,7 +7,7 @@ const exceptionRoutes=fs.readFileSync('src/exception-routes.ts','utf8');
 
 if(!index.includes("import { dispatchPageRoute } from './page-routes';")) throw new Error('index.ts must import page dispatcher');
 if(!index.includes('const pageResponse=await dispatchPageRoute(request,context,env,url);')) throw new Error('index.ts must invoke page dispatcher');
-if(!index.includes('if(pageResponse) return pageResponse;')) throw new Error('index.ts must return matched page response');
+if(!index.includes('if(pageResponse) return await withMealsNavigation(pageResponse,env);')) throw new Error('index.ts must return matched page response');
 if(!pages.includes('export async function dispatchPageRoute(request:Request,context:any,env:any,url:URL):Promise<Response|null>{')) throw new Error('page dispatcher export missing');
 if(pages.includes("from './app'")) throw new Error('page-routes.ts must not depend directly on the app.ts monolith');
 const pageBoundaryImports=["from './auth-page-handlers'","from './task-page-handlers'","from './calendar-page-handler'","from './message-page-handlers'","from './shopping-page-handlers'","from './location-page'","from './family-log-page-handler'","from './settings-page-handlers'"];

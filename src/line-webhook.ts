@@ -1,5 +1,7 @@
+import { receiveMealLine } from './meal-line-inbox';
 import { logLineWebhookFailure } from './observability/errors';
 
+const logHandle=(e:unknown)=>logLineWebhookFailure('handle',e);
 const nowJst = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ',' ');
 
 async function verifyLineWebhook(body: string, signature: string, secret: string): Promise<boolean> {
@@ -18,6 +20,7 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
   if(!(await verifyLineWebhook(body,sig,env.LINE_CHANNEL_SECRET))) return new Response('OK',{status:200});
   try {
     const data = JSON.parse(body) as {events?:Array<any>};
+    let mealFailed=false;
     for(const event of data.events||[]) {
       const userId = String(event?.source?.userId||'');
       const now = nowJst();
@@ -25,9 +28,11 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
       if(member) {
         await env.DB.prepare('INSERT INTO activity_logs(family_id,member_id,action,target_type,target_id,metadata,occurred_at) VALUES(?,?,?,?,?,?,?)').bind(member.family_id,member.id,`LINE_${String(event.type||'UNKNOWN').toUpperCase()}`,event.message?.type||event.postback?.data||null,null,JSON.stringify({event_type:event.type,message_type:event.message?.type||null}),now).run();
       }
+      let mealReply:string|null=null;
+      try { mealReply = await receiveMealLine(env,event,member as {id:number;family_id:number}|null); } catch(e) { mealFailed=true; logHandle(e); continue; }
       if(event.type==='message' && event.message?.type==='text' && event.replyToken && env.LINE_ACCESS_TOKEN) {
         const text=String(event.message.text||'').trim();
-        let reply='Family TODO LINEを受信しました。';
+        let reply=mealReply||'Family TODO LINEを受信しました。';
         if(text==='今日') reply='今日の予定はFamily TODO LINEの「今日」から確認できます。';
         else if(text==='明日') reply='明日の予定はFamily TODO LINEの「明日の準備」から確認できます。';
         else if(text==='買い物') reply='買い物リストはFamily TODO LINEの「買い物」から確認できます。';
@@ -35,6 +40,7 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
         try { await replyLineMessage(env.LINE_ACCESS_TOKEN,event.replyToken,reply); } catch(e) { logLineWebhookFailure('reply',e); }
       }
     }
-  } catch(e) { logLineWebhookFailure('handle',e); }
+    if(mealFailed)return new Response('Retry',{status:503});
+  } catch(e) { logHandle(e); }
   return new Response('OK',{status:200});
 }

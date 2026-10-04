@@ -370,7 +370,7 @@ export async function analyzeTaskRoughInput(ctx:any,body:unknown,context:RoughCo
     try{
       const bodyForModel=modelBody(parsed.fields,today,parsed.summarize,context,[...allowedShoppingCategories.values()]);
       failureStage='PROVIDER_FETCH';providerStartedAt=Date.now();
-      const response=await geminiFetch(env,model,bodyForModel);
+      const response=await geminiFetch(env,model,bodyForModel,{familyId:Number(member.family_id),feature:context.modelFeature||'ROUGH_INPUT',trigger:'user',attempt:diagnosticAttempts.length});
       failureStage='PROVIDER_RESPONSE';
       if(!response.ok)diagnosticAttempts.push({model,status:response.status===429?'RATE_LIMIT':'HTTP_ERROR',httpStatus:response.status,reasonCode:'HTTP_STATUS',failureStage:'PROVIDER_RESPONSE'});
       if(response.status===429){try{await blockTaskRoughInputAiAfter429(env.DB);}catch{/* The current request still stops fallback even if circuit persistence fails. */}break;}

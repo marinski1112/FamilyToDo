@@ -2,7 +2,7 @@
 // remain owned by each feature; reading this policy never calls a provider.
 export const ROUGH_INPUT_GEMINI_MODEL_PRIMARY='gemini-3.5-flash-lite';
 export const ROUGH_INPUT_GEMINI_MODEL_FALLBACK='gemini-3.5-flash';
-export const ROUTED_AI_FEATURES=['ROUGH_INPUT','MESSAGE_DRAFT','FAMILY_DAILY_JOURNAL','MORNING_DIGEST','PERIODIC_DIGEST','GOOGLE_VOICE_INQUIRY','CALENDAR_ICS_IMPORT'] as const;
+export const ROUTED_AI_FEATURES=['ROUGH_INPUT','MESSAGE_DRAFT','FAMILY_DAILY_JOURNAL','MORNING_DIGEST','PERIODIC_DIGEST','GOOGLE_VOICE_INQUIRY','CALENDAR_ICS_IMPORT','MEAL_INBOX','MEAL_RECIPE_EXTRACT','MEAL_RECEIPT_PARSE','MEAL_WEEKLY_PLAN','MEAL_BABY_GUIDANCE'] as const;
 export type RoutedAiFeature=typeof ROUTED_AI_FEATURES[number];
 export type AiAudience='OWNER'|'MEMBER';
 export const aiAudience=(role:unknown):AiAudience=>String(role||'').toUpperCase()==='OWNER'?'OWNER':'MEMBER';
@@ -15,11 +15,18 @@ export function parseRouteModels(raw:unknown):string[]|null{
     return [...new Set(value)];
   }catch{return null;}
 }
+export function parseFeatureRouteModels(feature:RoutedAiFeature,raw:unknown):string[]|null{
+ const models=parseRouteModels(raw);
+ if(!models)return null;
+ // Meal generateContent routes cannot consume Live or speech-only IDs.
+ if(feature.startsWith('MEAL_')&&(models.some(x=>/(?:live|tts|native-audio)/i.test(x))||(feature==='MEAL_BABY_GUIDANCE'&&models.length!==1)))return null;
+ return models;
+}
 export async function resolveFeatureModels(db:D1Database,familyId:number,feature:RoutedAiFeature,role:unknown):Promise<{models:string[];source:'FAMILY_SETTING'|'FEATURE_DEFAULT';audience:AiAudience}>{
   if(!Number.isSafeInteger(familyId)||familyId<=0||!ROUTED_AI_FEATURES.includes(feature))throw new Error('Invalid model route scope');
   const audience=aiAudience(role);
   const row=await db.prepare('SELECT setting_value FROM family_settings WHERE family_id=? AND setting_key=?').bind(familyId,routeSettingKey(feature,audience)).first<{setting_value:string}>();
-  const configured=parseRouteModels(row?.setting_value);
-  const defaults:Record<RoutedAiFeature,string[]>={ROUGH_INPUT:[ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK],MESSAGE_DRAFT:[ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK],FAMILY_DAILY_JOURNAL:['gemini-3.6-flash','gemini-3.5-flash'],MORNING_DIGEST:['gemini-3.8-flash','gemini-3.5-flash'],PERIODIC_DIGEST:['gemini-3.8-flash','gemini-3.5-flash'],GOOGLE_VOICE_INQUIRY:['gemini-3.1-flash-lite'],CALENDAR_ICS_IMPORT:['gemini-3.1-flash-lite']};
+  const configured=parseFeatureRouteModels(feature,row?.setting_value);
+  const defaults:Record<RoutedAiFeature,string[]>={ROUGH_INPUT:[ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK],MESSAGE_DRAFT:[ROUGH_INPUT_GEMINI_MODEL_PRIMARY,ROUGH_INPUT_GEMINI_MODEL_FALLBACK],FAMILY_DAILY_JOURNAL:['gemini-3.6-flash','gemini-3.5-flash'],MORNING_DIGEST:['gemini-3.8-flash','gemini-3.5-flash'],PERIODIC_DIGEST:['gemini-3.8-flash','gemini-3.5-flash'],GOOGLE_VOICE_INQUIRY:['gemini-3.1-flash-lite'],CALENDAR_ICS_IMPORT:['gemini-3.1-flash-lite'],MEAL_INBOX:['gemini-3.5-flash-lite','gemini-3.5-flash'],MEAL_RECIPE_EXTRACT:['gemini-3.5-flash-lite','gemini-3.5-flash'],MEAL_RECEIPT_PARSE:['gemini-3.5-flash-lite','gemini-3.5-flash'],MEAL_WEEKLY_PLAN:['gemini-3.5-flash','gemini-3.5-flash-lite'],MEAL_BABY_GUIDANCE:['gemini-3.5-flash']};
   return {models:configured||defaults[feature],source:configured?'FAMILY_SETTING':'FEATURE_DEFAULT',audience};
 }

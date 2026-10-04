@@ -1,3 +1,5 @@
+import {withMealsNavigation} from './meal-page';
+import {cleanupAiCallCounts} from './ai-call-budget';
 import {consumePhotoTransferRequest,redeemPhotoTransfer} from './photo-transfer-api';
 import {cleanupExpiredPhotoTransfers} from './photo-transfer-service';
 import {drainDeletedMessagePhotosGlobal} from './message-photo-service';
@@ -49,7 +51,7 @@ export default {
       const apiResponse=await dispatchContextApiRoute(request,context,url);
       if(apiResponse) return apiResponse;
       const pageResponse=await dispatchPageRoute(request,context,env,url);
-      if(pageResponse) return pageResponse;
+      if(pageResponse) return await withMealsNavigation(pageResponse,env);
       const fallbackResponse=await dispatchContextFallbackRoute(request,context,env,url);
       if(fallbackResponse) return fallbackResponse;
       return await env.ASSETS.fetch(request);
@@ -103,6 +105,7 @@ export default {
     }
 
     if(plan.dailyNotificationAudit){
+      ctx.waitUntil(cleanupAiCallCounts(env.DB));
       run('notification_audit',auditNotificationLifecycle);
       ctx.waitUntil(cleanupScheduledD1ReadDiagnostics(env.DB));
       ctx.waitUntil(cleanupHttpD1ReadDiagnostics(env.DB));

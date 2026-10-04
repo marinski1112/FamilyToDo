@@ -1,3 +1,4 @@
+import {recordAiCall} from './ai-call-budget';
 import { FAMILY_JOURNAL_GEMINI_MODEL } from './ai-model-policy';
 import { geminiFetch, safeGeminiError, geminiFailureCategory } from './family-ai';
 import { resolveFeatureModels } from './ai-model-routing';
@@ -53,8 +54,10 @@ export async function generateFamilyDailyJournalAi(env:Env):Promise<void>{
     if(!Number.isSafeInteger(id)||id<=0||!Number.isSafeInteger(version)||version<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!summary)continue;
     const now=new Date().toISOString(),locationMemberIds=parseLocationMemberIds(row.location_json);
     const usedModel=(await resolveFeatureModels(env.DB,Number(row.family_id),'FAMILY_DAILY_JOURNAL','OWNER')).models[0]||FAMILY_JOURNAL_GEMINI_MODEL;
+    const claim=await env.DB.prepare("UPDATE family_daily_journals SET ai_source_content_version=?,ai_summary_text=NULL,ai_status='AI_CLAIMED',ai_model=?,ai_generated_at=? WHERE id=? AND family_id=? AND storage_tier='HOT' AND content_version=? AND (ai_source_content_version IS NULL OR ai_source_content_version<>content_version) RETURNING id").bind(version,usedModel,now,id,Number(row.family_id),version).first();
+    if(!claim){await recordAiCall(env.DB,{familyId:Number(row.family_id),feature:'FAMILY_DAILY_JOURNAL',trigger:'cron'},usedModel,'skipped_dedupe').catch(()=>{});continue;}
     try{
-      const response=await geminiFetch(env,usedModel,bodyForJournal(date,summary));
+      const response=await geminiFetch(env,usedModel,bodyForJournal(date,summary),{familyId:Number(row.family_id),feature:'FAMILY_DAILY_JOURNAL',trigger:'cron'});
       if(!response.ok){const safe=await safeGeminiError(response);await markFailure(env.DB,id,version,geminiFailureCategory(response.status,safe),now,usedModel);continue;}
       let payload:any;try{payload=await response.json();}catch{await markFailure(env.DB,id,version,'INVALID_RESPONSE',now,usedModel);continue;}
       const narrative=normalizeNarrative(candidateText(payload));

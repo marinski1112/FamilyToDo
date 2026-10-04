@@ -10,7 +10,7 @@ export const RICH_MENU_DESTINATIONS = [
 export const LIFF_PATH_ALIASES: Readonly<Record<string, string>> = {
   tasks: '/app/tasks.php', calendar: '/app/calendar.php', shopping: '/app/tasks.php#shopping-checklist',
   'family-log': '/app/family_log.php', messages: '/app/messages.php', settings: '/app/settings.php',
-  location: '/app/location.php',
+  location: '/app/location.php', meals: '/app/meals.php',
 };
 
 const INTERNAL_PATH = /^\/(?!\/)[^\r\n\\]*$/;

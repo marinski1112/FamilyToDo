@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "npm run migrate:meals && wrangler deploy --var MEALS_ENABLED:true",
     "typecheck": "tsc --noEmit",
     "check:calendar-js": "node --check public/assets/calendar.js",
     "check:recurring-js": "node --check public/assets/recurring.js",
@@ -45,7 +45,12 @@
     "test": "npm run typecheck && npm run check:browser-js && npm run check:calendar-mobile-detail-activation && npm run check:pwa-family-branding && npm run check:location-quality-diagnostics && npm run check:location-long-term-history && npm run check:family-daily-journal && npm run check:family-daily-journal-ai && npm run check:ai-model-usage-visibility && npm run check:family-log-compact-date && npm run check:migrations && npm run check:rough-input-ai-cost-guard && npm run check:rough-input-product-link && npm run check:rough-input-ai-diagnostics && npm run check:rough-input-shared-deadline && npm run check:task-entry-cleanup && npm run check:checklist-hierarchy-followup && npm run check:static-assets && npm run check:location-device-api && npm run check:location-query-service && npm run check:family-log-media && npm run check:regression",
     "test:legacy": "npm run check:legacy-regression",
     "check:calendar-mobile-detail-activation": "node scripts/calendar-mobile-detail-activation-contract.mjs",
-    "check:calendar-stickers": "node scripts/calendar-sticker-contract.mjs"
+    "check:calendar-stickers": "node scripts/calendar-sticker-contract.mjs",
+    "check:meals": "esbuild scripts/meals-web.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meals-test.mjs && node --test /tmp/familytodo-meals-test.mjs && node --check public/assets/meals.js",
+    "check:ai-call-budget": "esbuild scripts/ai-call-budget.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-ai-call-test.mjs && node --test /tmp/familytodo-ai-call-test.mjs",
+    "check:meal-ai-routes": "esbuild scripts/meal-ai-routes.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meal-ai-routes-test.mjs && node --test /tmp/familytodo-meal-ai-routes-test.mjs",
+    "migrate:meals": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply MEALS_DB --remote",
+    "deploy:meals": "npm run deploy"
   },
   "devDependencies": {
     "happy-dom": "^20.14.5",

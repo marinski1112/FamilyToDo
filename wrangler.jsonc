@@ -35,6 +35,12 @@
       "database_name": "familytodo",
       "database_id": "9d9d6de8-ff45-4dd6-9fec-0de70ee1d093",
       "migrations_dir": "./migrations"
+    },
+    {
+      "binding": "MEALS_DB",
+      "database_name": "familytodo-meals",
+      "database_id": "55874b27-fe42-43f1-b0c6-2e0b66ad6da8",
+      "migrations_dir": "./meals-migrations"
     }
   ],
   "r2_buckets": [

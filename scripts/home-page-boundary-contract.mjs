@@ -75,6 +75,6 @@ for(const marker of [
   "export { invitePage } from './family-invite-page';",
   "export { home } from './home-page';",
 ])if(!handlers.includes(marker))throw new Error(`retained auth page boundary missing: ${marker}`);
-if(!routes.includes("if(url.pathname==='/'||url.pathname==='/index.php'||url.pathname==='/app/index.php') return await home(context);"))throw new Error('home route changed');
+if(!routes.includes("return mealEnabled(env)?await mealPage(context):await home(context);")||!routes.includes("if(url.pathname==='/app/home.php') return await home(context);"))throw new Error('home route must preserve the legacy dashboard and guard meal activation');
 
 console.log('home-page-boundary: bounded today/yesterday dashboard, canonical Shopping checklist links, journal privacy gate and admin gear navigation ok');
