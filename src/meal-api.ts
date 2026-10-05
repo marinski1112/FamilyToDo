@@ -1,3 +1,4 @@
+import {readMealBaby,saveMealBaby,previewMealBaby} from './meal-baby';
 import {importMealReceipt,readMealReceipt,confirmMealReceiptItem} from './meal-receipts';
 import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
 import type {AppContext} from './app-context';
@@ -21,6 +22,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const db=ctx.env.MEALS_DB!,familyId=Number(m.family_id),url=new URL(request.url);
  if(request.method==='GET'){
   const view=url.searchParams.get('view')||'overview',week=mealWeek(url.searchParams.get('week')||new Date().toISOString().slice(0,10));
+  if(view==='baby')return out({ok:true,baby:await readMealBaby(ctx)});
   if(view==='receipt')return out({ok:true,receipt:await readMealReceipt(ctx,mealId(url.searchParams.get('id')))});
   if(view==='receipts')return out({ok:true,receipts:(await db.prepare('SELECT id,mode,status,error_code,created_at FROM receipt_imports WHERE family_id=? ORDER BY created_at DESC LIMIT 30').bind(familyId).all()).results});
   if(view==='inventory')return out({ok:true,inventory:await readMealInventory(db,familyId)});
@@ -48,6 +50,8 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    const now=new Date().toISOString();
    await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) SELECT family_id,id,content,?,? FROM meal_inbox WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
   }
+  if(b.action==='baby_save')return out({ok:true,profile:await saveMealBaby(ctx,b)});
+  if(b.action==='baby_preview')return out({ok:true,review:await previewMealBaby(ctx,b)});
   if(b.action==='receipt_import')return out({ok:true,receipt:await importMealReceipt(ctx,b)});
   if(b.action==='receipt_confirm')return out({ok:true,...await confirmMealReceiptItem(ctx,b)});
   if(b.action==='inventory_add')return out({ok:true,...await changeMealInventory(ctx,b,'ADD')});
