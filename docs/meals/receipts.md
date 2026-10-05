@@ -1,6 +1,6 @@
 # レシートの読み取り・照合・在庫確認
 
-「ごはん→レシート」で写真または1行1品の手入力から最大40品を取り込みます。最近30件を一覧表示。写真はブラウザで長辺1600px以下のJPEG・500KB以下へ縮小し、明示操作でGeminiへ送信。JPEG/PNG/WebPを受け付け、原画像・動画・外部URL取得・R2/Files API保存は行いません。LINEのレシート写真受信は後続です。
+「ごはん→レシート」で写真または1行1品の手入力から最大40品を取り込みます。最近30件を一覧表示。写真はブラウザで長辺1600px以下のJPEG・500KB以下へ縮小し、明示操作でGeminiへ送信。JPEG/PNG/WebPを受け付け、原画像・動画・外部URL取得・R2/Files API保存は行いません。LINEからの受信手順は下記を参照してください。
 
 ## 確認の境界
 
@@ -21,3 +21,22 @@ HTTP入力の上限拡張はreceipt_importのみ（JSON750KB、画像500KB、str
 ## 検証
 
 献立41件SQLite/API/DOM、型・JS構文・静的参照、既存143件active regressionを確認。photo MIME/サイズ/権限、budget/circuit/429停止、5xx最大2回、schema拒否、画像・raw response非保存、家族/共有買い物分離、確認前未変更、監査失敗時rollback、並行保存/除外後再送、手入力縮退、日上限、40品/60買い物のstatement budgetを含みます。Chromiumでsynthetic画像の縮小→stub読取り→共有買い物照合→数量補完→在庫保存、両通信の応答喪失からの再試行、320/390/768px overflowなしを確認。実AI呼出し/実レシート/本番家族データは検査に使用していません。
+
+## LINE写真の受信（0010）
+
+個別トークで「レシート」を送信すると、そのメンバーの次の10分以内のLINE写真1枚を受け付けます。
+受付返信で家族共有・Webでの読み取り開始を案内します。署名、active member、個別トーク、LINE contentProvider、イベント時刻を検証し、通常写真・外部URL・グループ写真は取り込みません。
+受信と受付枠消費はMEALS_DBの同一batchです。command/event hashで再配送・古いコマンドによる再受付・写真の二重登録を防ぎ、家族/UTC日20件までです。
+
+画像はWebhookでは取得しません。Web受信箱の「写真を確認」を押すと、ログイン・CSRF・家族所有を検証した固定LINE content endpointから取得します。
+LINE message IDは専用purposeのAPP_SECRET派生AES-GCMで暗号化し、family/item IDをAADに含めます。キー・原message ID・cipherはWebやログに出しません。既存Secretsを使い、変更しません。
+取得は1リクエスト・10秒・4MiB以下、redirect禁止、JPEG/PNG/WebPのMIME/マジックバイトを確認し、stream中でも上限超過で停止します。
+ブラウザで既存の1600px/500KBのJPEGに縮小して確認表示し、Google Geminiへの送信を明示確認してから既存receipt_importへ渡します。
+画像bytesはメモリのみで、D1/R2/Files API/localStorageには保存しません。取得の段階ではAIも在庫変更も行いません。
+
+LINE取得の有効期限は受信後24時間です。読取成功・受信箱からの除外で取得cipherを消去し、期限経過分は次のLINE受信/受信箱参照/取得操作時に消去します。
+定刻での物理消去を保証するCronは追加しません。期限後は取得できず、LINE側の保存期限等で24時間より早く取得不能になる場合もWeb写真選択/手入力が使えます。
+取り込みjob IDは受信item IDを再利用します。応答喪失後に再び写真確認すると、完了済みの品目を表示し、画像再取得・AI再生成をしません。
+確認済み/除外済み/期限切れのイベントhash行は再配送防止のため残します。原写真を保存しないため、後日原画像を参照する機能はありません。
+
+LINE公式仕様: https://developers.line.biz/en/reference/messaging-api/#get-content

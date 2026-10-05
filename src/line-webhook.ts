@@ -30,7 +30,7 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
       }
       let mealReply:string|null=null;
       try { mealReply = await receiveMealLine(env,event,member as {id:number;family_id:number}|null); } catch(e) { mealFailed=true; logHandle(e); continue; }
-      if(event.type==='message' && event.message?.type==='text' && event.replyToken && env.LINE_ACCESS_TOKEN) {
+      if(event.type==='message' && (event.message?.type==='text'||mealReply) && event.replyToken && env.LINE_ACCESS_TOKEN) {
         const text=String(event.message.text||'').trim();
         let reply=mealReply||'Family TODO LINEを受信しました。';
         if(text==='今日') reply='今日の予定はFamily TODO LINEの「今日」から確認できます。';
