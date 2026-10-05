@@ -120,3 +120,66 @@ jobs:
             android/app/build/reports/androidTests/**
             android/app/build/outputs/androidTest-results/**
           retention-days: 7
+
+  publish-test-apk:
+    needs: [build, ui]
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.number == 1143 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/android-location-starter'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    concurrency:
+      group: android-test-downloads
+      cancel-in-progress: false
+    steps:
+      - name: Verify Android draft still points to tested head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(gh api repos/${GITHUB_REPOSITORY}/pulls/1143 --jq '.head.sha')" = "$EXPECTED_HEAD"
+      - uses: actions/checkout@v4
+        with:
+          ref: android-test-downloads
+      - uses: actions/download-artifact@v4
+        with:
+          name: FamilyToDo-test-v0.1.${{ github.run_number }}
+          path: verified-apk
+      - name: Publish tested numbered APK and checksum
+        env:
+          APK_VERSION: ${{ github.run_number }}
+          TESTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api repos/${GITHUB_REPOSITORY}/pulls/1143 --jq '.head.sha')" = "$TESTED_HEAD"
+          python - <<'PY'
+          import os, pathlib, re, shutil, hashlib
+          version = int(os.environ['APK_VERSION'])
+          folder = pathlib.Path('downloads')
+          folder.mkdir(exist_ok=True)
+          prior = [int(m.group(1)) for p in folder.glob('FamilyToDo-test-v0.1.*.apk') if (m := re.fullmatch(r'FamilyToDo-test-v0\.1\.(\d+)\.apk', p.name))]
+          if prior and max(prior) >= version:
+              raise SystemExit('A newer or equal APK is already published')
+          filename = f'FamilyToDo-test-v0.1.{version}.apk'
+          target = folder / filename
+          shutil.copyfile(pathlib.Path('verified-apk') / filename, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          (folder / (filename + '.sha256')).write_text(digest + '  ' + filename + '\n')
+          (folder / 'README.md').write_text(
+              '# つちだけ Android テスト版\n\n'
+              f'最新版: **v0.1.{version}**\n\n'
+              f'[APKをダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/{filename})\n\n'
+              f'検証対象コミット: `{os.environ["TESTED_HEAD"]}`\n\n'
+              'Android CI のビルド・Android 11/15 の明色/暗色ネイティブ画面テストがすべて成功したテスト版です。'
+              'LINEログイン・GPS・権限・Cooking Liveの実機確認は別途必要です。\n\n'
+              'CIのデバッグ署名のため、既存版と署名が異なる場合はアンインストール後にインストールしてください。'
+              'アンインストールすると端末内の設定が消えます。再ログインし、位置共有を再確認してください。\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads
+          git commit -m "Publish verified Android test v0.1.${APK_VERSION}"
+          git push origin HEAD:android-test-downloads

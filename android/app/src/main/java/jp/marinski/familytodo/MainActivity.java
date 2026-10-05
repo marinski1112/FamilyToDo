@@ -129,13 +129,14 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        if(mealScreen!=null)mealScreen.resumeTimer();
         if(BuildConfig.UI_TEST_MODE)return;
         if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null){
             if(goodsCompletionThreshold!=GoodsCompletion.threshold(System.currentTimeMillis()))render();else scheduleGoodsCompletionBoundary();
         }
         if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
-    @Override protected void onPause(){completionClock.removeCallbacks(completionBoundary);super.onPause();}
+    @Override protected void onPause(){if(mealScreen!=null)mealScreen.pauseTimer();completionClock.removeCallbacks(completionBoundary);super.onPause();}
     private void scheduleGoodsCompletionBoundary(){
         completionClock.removeCallbacks(completionBoundary);
         completionClock.postDelayed(completionBoundary,Math.max(1,GoodsCompletion.nextBoundary(System.currentTimeMillis())-System.currentTimeMillis()));
@@ -219,6 +220,20 @@ public final class MainActivity extends Activity {
             target.setPadding(bars.left,bars.top,bars.right,bars.bottom);
             return insets;
         });
+    }
+    private MealScreen mealScreen;
+    private void openMeals() {
+        if (mealScreen != null) mealScreen.close();
+        tab="meals";
+        mealScreen=new MealScreen(this,new MealScreen.Host(){
+            public String csrf(){return snapshot==null||showingCached?"":snapshot.optString("csrf");}
+            public boolean active(){return tab.equals("meals")&&login==null&&!isFinishing()&&pageWeb==null;}
+            public TextView text(String value){return label(value);}
+            public Button button(String value,Runnable action){return MainActivity.this.button(value,action);}
+            public void web(String path){mealScreen.close();mealScreen=null;showWebPage(path);}
+            public void login(){showLogin();}
+        });
+        showNative();
     }
     private void showNative() {
         if (login != null) {
@@ -361,7 +376,7 @@ public final class MainActivity extends Activity {
         String[] names={"ホーム","チェックリスト","カレンダー","位置情報","家族ログ","伝言"};
         String[] keys={"home","goods","calendar","location","familylog","messages"};
         for(int i=0;i<keys.length;i++) {
-            final String destination=keys[i]; boolean active=destination.equals(tab);
+            final String destination=keys[i]; boolean active=destination.equals(tab)||(destination.equals("home")&&tab.equals("meals"));
             LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(Gravity.CENTER);
             item.setBackground(shape(active?softColor():surfaceColor(),Color.TRANSPARENT,12));
@@ -380,6 +395,8 @@ public final class MainActivity extends Activity {
         return nav;
     }
     private void navigate(String destination) {
+        if(destination.equals("meals")){openMeals();return;}
+        if(mealScreen!=null){mealScreen.close();mealScreen=null;}
         if(destination.equals(tab)){if(pageWeb!=null){showNative();if(!BuildConfig.UI_TEST_MODE)load();}return;}
         tab=destination;
         if(destination.equals("messages"))messageScrollLatest=true;
@@ -401,6 +418,7 @@ public final class MainActivity extends Activity {
         ApiClient.setMutationsEnabled(false);
         String binding=SnapshotCache.currentSessionBinding();
         if(!java.util.Objects.equals(memorySessionBinding,binding)) {
+            if(mealScreen!=null){mealScreen.close();mealScreen=null;if(content!=null)content.removeAllViews();}
             sessionEpoch++;
             stampGeneration++;
             monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
@@ -445,7 +463,7 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { if(mealScreen!=null){mealScreen.close();mealScreen=null;if(content!=null)content.removeAllViews();} monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) {
                         snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
@@ -504,6 +522,7 @@ public final class MainActivity extends Activity {
     }
     private void render() {
         if (content == null) return;
+        if(tab.equals("meals")){if(mealScreen==null){openMeals();return;} if(content.getChildCount()==0)mealScreen.attach(content);return;}
         if (tab.equals("messages")) {renderMessagesPreservingPosition();return;}
         content.removeAllViews();
         if (tab.equals("familylog")) { renderFamilyLog();renderFamilyLogDock(); return; }
@@ -532,6 +551,7 @@ public final class MainActivity extends Activity {
         lp.setMargins(0,0,0,dp(12));content.addView(view,lp);
     }
     private void renderHome() {
+        content.addView(button("🍽 ごはん・献立管理",this::openMeals));
         content.addView(heading(homeDashboard==null?"ホーム":homeDashboard.optString("title","ホーム")));
         content.addView(label(homeDashboard==null?LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString():homeDashboard.optString("greeting")));
         if(snapshot==null||!month.toString().equals(snapshot.optString("month"))) {
@@ -693,7 +713,8 @@ public final class MainActivity extends Activity {
         }
     }
     private String nativeRoute(String path) {
-        if("/app/index.php".equals(path))return "home";
+        if("/app/index.php".equals(path)||"/app/meals.php".equals(path))return "meals";
+        if("/app/home.php".equals(path))return "home";
         if("/app/tasks.php".equals(path))return "goods";
         if("/app/calendar.php".equals(path))return "calendar";
         if("/app/location.php".equals(path))return "location";
@@ -701,7 +722,7 @@ public final class MainActivity extends Activity {
         if("/app/messages.php".equals(path))return "messages";
         return null;
     }
-    private void returnFromWebPage() { showNative();load(); }
+    private void returnFromWebPage() { if(tab.equals("meals")){openMeals();return;}showNative();load(); }
     private void showWebPage(String path) {
         if((!path.startsWith("/app/")&&!path.startsWith("/task/new.php?"))||login!=null)return;
         if(BuildConfig.UI_TEST_MODE)return;
@@ -5072,6 +5093,7 @@ public final class MainActivity extends Activity {
             }).setNegativeButton("閉じる",null).show();
     }
     private void showLogin() {
+        if(mealScreen!=null){mealScreen.close();mealScreen=null;}
         if(homeSpeaker!=null){homeSpeaker.close();homeSpeaker=null;}
         ApiClient.setMutationsEnabled(false);
         if (login != null) return;
@@ -5586,5 +5608,5 @@ public final class MainActivity extends Activity {
         } else if(login!=null&&login.canGoBack()) login.goBack();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() { if(homeSpeaker!=null)homeSpeaker.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(mealScreen!=null)mealScreen.close(); if(homeSpeaker!=null)homeSpeaker.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }
 }

@@ -105,7 +105,7 @@ public final class UiParityInstrumentation extends Instrumentation {
                 Method lookup=MainActivity.class.getDeclaredMethod("stickerOnDay",String.class);lookup.setAccessible(true);JSONObject selected=(JSONObject)lookup.invoke(activity,day);check(selected.optString("name").equals("個人背景"),"private sticker overlays shared background");
             }catch(Exception e){throw new RuntimeException(e);}});
             settle();check(hasContaining("今日のタスク"),"home contains today's task");
-            check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");
+            check(hasText("🛒 買い物残り"),"home stat grid");check(hasText("家族日誌"),"home shortcuts");check(hasContaining("期限切れタスク 2件"),"native attention alert");check(hasText("昨日 & 今日"),"native journal body");screenshot("home");testMeals();
             navigate("チェックリスト");check(hasText("☑ タスク"),"task section exists");
             testChecklistDates();
             testMonthSwipes("goods");
@@ -413,6 +413,7 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private volatile int settingsWrites;
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.startsWith("/api/meals/v1"))return mealResponse(path,body);
         if(path.startsWith("/api/android/v1/family-log-summary?")){summaryRequests++;summaryStarted.countDown();summaryRelease.await(5,java.util.concurrent.TimeUnit.SECONDS);return new JSONObject().put("totals",new JSONObject()).put("daily",new JSONArray());}
 
         if(path.equals("/api/android/v1/settings"))return settingsFixture("OWNER");
@@ -441,6 +442,62 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(path.equals("/api/task-parent-completion"))return new JSONObject().put("ok",true).put("incomplete_children",0);
         if(path.equals("/api/toggle"))return new JSONObject().put("ok",true);
         throw new IllegalStateException("Unconfigured fixture request: "+path);
+    }
+    private volatile int mealWrites,wishAttempts,recipeAttempts;
+    private volatile JSONObject lastMealWrite;
+    private JSONObject mealRecipe,mealPlan;
+    private String firstWishId,firstRecipeId;
+    private boolean mealCooked;
+    private JSONObject mealResponse(String path,JSONObject body)throws Exception {
+        if(body!=null){
+            check("synthetic".equals(body.optString("csrf")),"meal mutation uses session CSRF");
+            mealWrites++;lastMealWrite=new JSONObject(body.toString());
+            if("cooked".equals(body.optString("action")))mealCooked=true;
+            if("wishlist_add".equals(body.optString("action"))){
+                wishAttempts++;if(wishAttempts==1){firstWishId=body.optString("id");throw new IllegalStateException("synthetic meal failure");}
+                check(firstWishId.equals(body.optString("id")),"wish retry keeps operation ID");
+            }
+            if("save_recipe".equals(body.optString("action"))){
+                recipeAttempts++;if(recipeAttempts==1){firstRecipeId=body.getJSONObject("recipe").optString("id");throw new IllegalStateException("synthetic recipe failure");}
+                check(firstRecipeId.equals(body.getJSONObject("recipe").optString("id")),"recipe retry keeps recipe ID");
+                mealRecipe=body.getJSONObject("recipe");mealRecipe.put("revision","synthetic-recipe-revision");
+            }
+            return new JSONObject().put("ok",true);
+        }
+        if(path.contains("view=recipe"))return new JSONObject().put("ok",true).put("recipe",mealRecipe);
+        if(path.contains("view=inbox"))return new JSONObject().put("ok",true).put("line_receipts",new JSONArray()).put("inbox",new JSONArray().put(new JSONObject().put("id","00000000-0000-4000-8000-000000000003").put("kind","RECIPE_URL").put("content","https://example.com/recipe")));
+        if(path.contains("view=shopping_preview"))return new JSONObject().put("ok",true).put("week_start",MealScreen.monday(MealScreen.today())).put("revision","synthetic-plan").put("preview_hash","synthetic-preview").put("needs",new JSONArray().put(new JSONObject().put("name","塩").put("quantity",JSONObject.NULL).put("quantity_text","お好みで").put("unit","")));
+        if(path.contains("view=cooking_preview"))return new JSONObject().put("ok",true).put("preview",new JSONObject().put("date",MealScreen.today()).put("revision","synthetic-plan").put("preview_hash","synthetic-cooking").put("needs",mealRecipe.getJSONArray("ingredients")).put("allocations",new JSONArray()));
+        return new JSONObject().put("ok",true).put("recipes",new JSONArray().put(mealRecipe)).put("plan",mealPlan).put("wishlist",new JSONArray()).put("cooked",mealCooked?new JSONArray().put(new JSONObject().put("meal_date",MealScreen.today()).put("plan_revision","synthetic-plan")):new JSONArray());
+    }
+    private void testMeals()throws Exception {
+        String id="00000000-0000-4000-8000-000000000001";
+        mealRecipe=new JSONObject().put("id",id).put("name","架空のテスト料理").put("servings",2).put("minutes",15).put("source_url","").put("revision","synthetic-recipe")
+            .put("ingredients",new JSONArray().put(new JSONObject().put("name","米").put("quantity",100).put("unit","g")).put(new JSONObject().put("name","塩").put("quantity",JSONObject.NULL).put("quantity_text","お好みで").put("unit","")))
+            .put("steps",new JSONArray().put("架空の手順1").put("架空の手順2"));
+        mealPlan=new JSONObject().put("week_start",MealScreen.monday(MealScreen.today())).put("status","CONFIRMED").put("revision","synthetic-plan").put("items",new JSONArray().put(new JSONObject().put("date",MealScreen.today()).put("servings",4).put("recipe",mealRecipe)));
+        check(MealScreen.ingredient("塩","少々","g",false).isNull("quantity"),"literal amount accepted without numeric conversion");
+        JSONObject custom=MealScreen.ingredient("塩","お好みで（1〜2つまみ）","g",true);
+        check(custom.isNull("quantity")&&custom.getString("unit").isEmpty(),"custom amount remains unquantified");
+        check("お好みで(1〜2つまみ)".equals(MealScreen.amount(custom,3)),"custom amount does not scale");
+        check("200g".equals(MealScreen.amount(mealRecipe.getJSONArray("ingredients").getJSONObject(0),2)),"numeric amount scales by servings");
+        boolean rejected=false;try{MealScreen.ingredient("塩","1〜2つまみ","g",false);}catch(Exception expected){rejected=true;}check(rejected,"numeric supplement requires custom mode");
+        rejected=false;try{MealScreen.ingredient("塩","NaN","g",true);}catch(Exception expected){rejected=true;}check(rejected,"NaN is not a custom amount");
+        clickText("🍽 ごはん・献立管理");waitText("料理を始める");check(hasText("架空のテスト料理"),"native meal home shows confirmed plan");screenshot("meals-today");
+        clickText("料理を始める");check(hasText("米：200g"),"native cooking scales numeric ingredients");check(hasText("塩：お好みで"),"native cooking preserves custom amount");
+        clickText("次の手順");check(hasContaining("架空の手順2"),"native cooking steps advance");clickText("タイマー開始");check(hasContaining("タイマー 5:"),"native timer runs");clickText("タイマー停止");check(hasText("タイマー停止中"),"native timer cancels");
+        int before=mealWrites;clickText("作った記録と在庫を確認");waitText("作った記録を保存");check(mealWrites==before,"cooking review does not mutate family data");clickText("作った記録を保存");waitText("✓ 調理済み");check(!lastMealWrite.optBoolean("consume_inventory"),"inventory consumption requires explicit opt-in");clickText("料理を始める");check(hasText("✓ 調理済み・在庫の再差引きは行いません。"),"completed cooking cannot subtract stock again");screenshot("meals-cooking");clickText("戻る");
+        clickText("食べたい");onUi(()->((EditText)findDescription(root(),"食べたい料理")).setText("架空の希望料理"));
+        onUi(()->{findText(root(),"食べたいものに追加").performClick();findText(root(),"食べたいものに追加").performClick();});waitText("synthetic meal failure");check(wishAttempts==1,"meal double submission blocked");check(hasText("架空の希望料理"),"failed wish retains input");clickText("食べたいものに追加");waitText("食べたいものに追加");check(wishAttempts==2,"wish retry completes once");
+        clickText("レシピ");clickText("＋ レシピを登録");
+        onUi(()->{((EditText)findDescription(root(),"料理名")).setText("架空の新レシピ");((EditText)findDescription(root(),"材料名")).setText("塩");((EditText)findDescription(root(),"数量・分量")).setText("お好みで（1〜2つまみ）");findText(root(),"自由入力（例：お好みで（1〜2つまみ））").performClick();((EditText)findDescription(root(),"作り方（1行に1手順）")).setText("混ぜる");});
+        screenshot("meals-custom-editor");clickText("レシピを保存");waitText("synthetic recipe failure");clickText("レシピを保存");waitText("＋ レシピを登録");check(recipeAttempts==2,"recipe failure is retryable");check(lastMealWrite.getJSONObject("recipe").getJSONArray("ingredients").getJSONObject(0).isNull("quantity"),"native editor sends custom amount contract");
+        clickText("LINE受信箱");waitText("希望メニューにする");onUi(()->((EditText)findDescription(root(),"URLの料理名")).setText("架空のURL料理"));clickText("希望メニューにする");waitText("希望メニューにする");check("inbox_wish".equals(lastMealWrite.optString("action")),"LINE URL saved through inbox confirmation API");
+        clickText("献立");clickText("買う食材を確認");waitText("買い物リストに追加");before=mealWrites;clickText("買い物リストに追加");check(mealWrites==before,"shopping without explicit selection cannot write");
+        onUi(()->findText(root(),"塩：お好みで").performClick());clickText("買い物リストに追加");waitText("買い物リストに追加しました。");check(lastMealWrite.getJSONArray("selected").getInt(0)==0,"shopping only sends selected ingredient indices");
+        clickText("レシピ");before=mealWrites;onUi(()->ApiClient.setMutationsEnabled(false));clickText("＋ レシピを登録");check(hasText("通信の確認後に編集できます。ホームを更新してください。"),"offline meal editing is blocked");check(mealWrites==before,"read-only meals cannot mutate");
+        onUi(()->ApiClient.setMutationsEnabled(true));navigate("ホーム");
+        onUi(()->{try{check(value("mealScreen")==null,"leaving meals releases data and timer");}catch(Exception e){throw new RuntimeException(e);}});
     }
     private int countDescription(View view,String description){int count=description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription())?1:0;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)count+=countDescription(group.getChildAt(i),description);}return count;}
     private void testChecklistDates()throws Exception {
