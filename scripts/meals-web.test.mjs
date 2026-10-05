@@ -1,3 +1,4 @@
+import {babyAgeMonths,checkBabyMeal} from '../src/meal-baby.ts';
 import {validateReceiptItems} from '../src/meal-receipts.ts';
 import {mealImportUrl,extractMealRecipe,parseImportedIngredient} from '../src/meal-url-import.ts';
 import {mealsHealth} from '../src/meal-health.ts';
@@ -356,4 +357,37 @@ test('many shopping needs and receipt labels fit the Free D1 statement budget wi
 test('receipt upload rejects oversized chunked input before buffering the entire stream or calling AI',async()=>{
  const {ctx}=fixture();let canceled=false;const stream=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(450000));controller.enqueue(new Uint8Array(450000));},cancel(){canceled=true;}});
  const request=new Request('https://fixture.invalid/api/meals/v1',{method:'POST',body:stream,duplex:'half'});assert.equal((await mealApi(request,ctx)).status,413);assert.equal(canceled,true);
+});
+
+function babySeed(main){main.sql.exec("INSERT INTO family_log_subjects(id,family_id,name,subject_kind,birth_date,active,created_at,updated_at) VALUES(1,1,'赤ちゃん','BABY','2026-02-26',1,'x','x'),(2,2,'別家族','BABY','2026-02-26',1,'x','x'),(3,1,'非表示','BABY','2026-02-26',0,'x','x');");}
+const babyC=()=>({stage:'MIDDLE',readiness_confirmed:true,introduced:['ひき肉','玉ねぎ'],avoid:[]});
+test('baby ages use calendar months and invalid or future birthdays fail closed',()=>{
+ assert.equal(babyAgeMonths('2026-02-26','2026-10-25'),7);assert.equal(babyAgeMonths('2026-02-26','2026-10-26'),8);assert.equal(babyAgeMonths('2025-10-06','2026-10-05'),11);assert.equal(babyAgeMonths('2025-10-05','2026-10-05'),12);assert.equal(babyAgeMonths('2026-02-30','2026-10-05'),null);assert.equal(babyAgeMonths('2027-01-01','2026-10-05'),null);
+});
+test('baby profiles reference active own subjects, share conditions, reject stale concurrent edits and replay identical saves',async()=>{
+ const {ctx,main,meals}=fixture();babySeed(main);const body={action:'baby_save',subject_id:1,conditions:babyC(),family_id:2};const p=(await call(ctx,body)).value.profile;assert(p.revision);assert.equal((await call(ctx,body)).value.profile.revision,p.revision);
+ assert.equal((await call(ctx,{...body,subject_id:2})).response.status,400);assert.equal((await call(ctx,{...body,subject_id:3})).response.status,400);
+ const edits=await Promise.all(['EARLY','LATE'].map(stage=>call(ctx,{...body,revision:p.revision,conditions:{...babyC(),stage}})));assert.equal(edits.filter(x=>x.response.status===200).length,1);assert.equal(edits.filter(x=>x.response.status===400).length,1);
+ assert.equal((await call(ctx,null,'?view=baby')).value.baby.children.length,1);assert.equal((await call({...ctx,member:{id:2,family_id:2}},null,'?view=baby')).value.baby.children[0].profile,null);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM meal_baby_profiles').get().c,1);
+ assert.equal((await call(ctx,{...body,conditions:{...babyC(),avoid:Array(101).fill('卵')}})).response.status,400);assert.equal((await call(ctx,{...body,conditions:{...babyC(),readiness_confirmed:'yes'}})).response.status,400);
+ main.sql.exec('UPDATE family_log_subjects SET active=0 WHERE id=1');assert.equal((await call(ctx,{...body,revision:p.revision})).response.status,400);
+});
+test('baby deterministic checks never approve suitability; honey block cannot be overridden by heat or UI declaration',()=>{
+ const raw={honey:'NO',heating:'HEATED',texture_confirmed:true,allergens_confirmed:true};
+ for(const age of [null,0,11]){const r=checkBabyMeal(age,babyC(),['はちみつ入りソース'],raw);assert.equal(r.status,'BLOCKED');assert(r.notices.some(x=>x.code==='HONEY'));}
+ assert.equal(checkBabyMeal(12,babyC(),['ひき肉','玉ねぎ'],raw).status,'REVIEW_REQUIRED');assert.equal(checkBabyMeal(7,{...babyC(),avoid:['肉']},['ひき肉'],raw).status,'BLOCKED');
+ const missing=checkBabyMeal(null,null,['不明な加工品'],{...raw,honey:'UNKNOWN',heating:'UNKNOWN',texture_confirmed:false,allergens_confirmed:false});for(const code of ['AGE_UNKNOWN','PROFILE_MISSING','READINESS_UNKNOWN','STAGE_UNKNOWN','NOT_INTRODUCED','HEATING_UNKNOWN','TEXTURE_UNKNOWN','ALLERGENS_UNKNOWN','FINAL_REVIEW'])assert(missing.notices.some(n=>n.code===code));
+ assert.throws(()=>checkBabyMeal(7,babyC(),[],{...raw,honey:'SAFE'}));
+});
+test('baby preview uses owned stored recipe/profile revisions and performs no AI or domain writes',async()=>{
+ const {ctx,main,meals}=fixture();babySeed(main);await seed(ctx);const p=(await call(ctx,{action:'baby_save',subject_id:1,conditions:babyC()})).value.profile,r=(await call(ctx,null,'?view=recipe&id=recipe-test-001')).value.recipe;
+ const b={action:'baby_preview',subject_id:1,profile_revision:p.revision,recipe_id:r.id,recipe_revision:r.revision,honey:'UNKNOWN',heating:'UNKNOWN',texture_confirmed:false,allergens_confirmed:false};const before=meals.sql.prepare('SELECT total_changes() n').get().n,real=globalThis.fetch;globalThis.fetch=()=>{throw new Error('AI must not run');};try{assert.equal((await call(ctx,b)).value.review.status,'REVIEW_REQUIRED');assert.equal((await call(ctx,{...b,recipe_revision:'stale'})).response.status,400);assert.equal((await call(ctx,{...b,profile_revision:'stale'})).response.status,400);assert.equal((await call(ctx,{...b,subject_id:2})).response.status,400);assert.equal((await call({...ctx,member:{id:2,family_id:2}},b)).response.status,400);}finally{globalThis.fetch=real;}
+ assert.equal(meals.sql.prepare('SELECT total_changes() n').get().n,before);assert.equal(main.sql.prepare('SELECT COUNT(*) c FROM ai_call_daily').get().c,0);
+});
+test('baby UI saves shared conditions before review, escapes names, defaults unknown and invalidates changed checks',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,main}=fixture();babySeed(main);main.sql.exec("UPDATE family_log_subjects SET name='<img src=x onerror=alert(1)>' WHERE id=1");await seed(ctx);
+ const w=new Window({url:'https://fixture.invalid/app/meals.php?view=baby'});w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';w.fetch=(url,options={})=>mealApi(new Request(new URL(url,w.location.href),options),ctx);w.eval(fs.readFileSync('public/assets/meals.js','utf8'));await waitFor(()=>w.document.getElementById('babyCheckForm'));assert.equal(w.document.querySelector('img'),null);
+ let check=w.document.getElementById('babyCheckForm');assert.equal(check.elements.honey.value,'UNKNOWN');assert.equal(check.elements.heating.value,'UNKNOWN');check.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>w.document.getElementById('babyReview').textContent.includes('確認'));check.elements.honey.value='YES';check.elements.honey.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(w.document.getElementById('babyReview').textContent,'');
+ const form=w.document.getElementById('babyForm');form.elements.introduced.value='ひき肉\n玉ねぎ';form.elements.introduced.dispatchEvent(new w.Event('input',{bubbles:true}));check.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));assert.match(w.document.getElementById('mealStatus').textContent,/先に保存/);
+ form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>w.document.getElementById('mealStatus').textContent.includes('条件を保存'));assert((await call(ctx,null,'?view=baby')).value.baby.children[0].profile);await w.happyDOM.close();
 });
