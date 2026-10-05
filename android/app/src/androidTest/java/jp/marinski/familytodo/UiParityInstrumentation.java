@@ -447,10 +447,12 @@ public final class UiParityInstrumentation extends Instrumentation {
     private volatile JSONObject lastMealWrite;
     private JSONObject mealRecipe,mealPlan;
     private String firstWishId,firstRecipeId;
+    private boolean mealCooked;
     private JSONObject mealResponse(String path,JSONObject body)throws Exception {
         if(body!=null){
             check("synthetic".equals(body.optString("csrf")),"meal mutation uses session CSRF");
             mealWrites++;lastMealWrite=new JSONObject(body.toString());
+            if("cooked".equals(body.optString("action")))mealCooked=true;
             if("wishlist_add".equals(body.optString("action"))){
                 wishAttempts++;if(wishAttempts==1){firstWishId=body.optString("id");throw new IllegalStateException("synthetic meal failure");}
                 check(firstWishId.equals(body.optString("id")),"wish retry keeps operation ID");
@@ -466,7 +468,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(path.contains("view=inbox"))return new JSONObject().put("ok",true).put("line_receipts",new JSONArray()).put("inbox",new JSONArray().put(new JSONObject().put("id","00000000-0000-4000-8000-000000000003").put("kind","RECIPE_URL").put("content","https://example.com/recipe")));
         if(path.contains("view=shopping_preview"))return new JSONObject().put("ok",true).put("week_start",MealScreen.monday(MealScreen.today())).put("revision","synthetic-plan").put("preview_hash","synthetic-preview").put("needs",new JSONArray().put(new JSONObject().put("name","塩").put("quantity",JSONObject.NULL).put("quantity_text","お好みで").put("unit","")));
         if(path.contains("view=cooking_preview"))return new JSONObject().put("ok",true).put("preview",new JSONObject().put("date",MealScreen.today()).put("revision","synthetic-plan").put("preview_hash","synthetic-cooking").put("needs",mealRecipe.getJSONArray("ingredients")).put("allocations",new JSONArray()));
-        return new JSONObject().put("ok",true).put("recipes",new JSONArray().put(mealRecipe)).put("plan",mealPlan).put("wishlist",new JSONArray()).put("cooked",new JSONArray());
+        return new JSONObject().put("ok",true).put("recipes",new JSONArray().put(mealRecipe)).put("plan",mealPlan).put("wishlist",new JSONArray()).put("cooked",mealCooked?new JSONArray().put(new JSONObject().put("meal_date",MealScreen.today()).put("plan_revision","synthetic-plan")):new JSONArray());
     }
     private void testMeals()throws Exception {
         String id="00000000-0000-4000-8000-000000000001";
@@ -484,7 +486,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         clickText("🍽 ごはん・献立管理");waitText("料理を始める");check(hasText("架空のテスト料理"),"native meal home shows confirmed plan");screenshot("meals-today");
         clickText("料理を始める");check(hasText("米：200g"),"native cooking scales numeric ingredients");check(hasText("塩：お好みで"),"native cooking preserves custom amount");
         clickText("次の手順");check(hasContaining("架空の手順2"),"native cooking steps advance");clickText("タイマー開始");check(hasContaining("タイマー 5:"),"native timer runs");clickText("タイマー停止");check(hasText("タイマー停止中"),"native timer cancels");
-        int before=mealWrites;clickText("作った記録と在庫を確認");waitText("作った記録を保存");check(mealWrites==before,"cooking review does not mutate family data");clickText("戻る");screenshot("meals-cooking");
+        int before=mealWrites;clickText("作った記録と在庫を確認");waitText("作った記録を保存");check(mealWrites==before,"cooking review does not mutate family data");clickText("作った記録を保存");waitText("✓ 調理済み");check(!lastMealWrite.optBoolean("consume_inventory"),"inventory consumption requires explicit opt-in");clickText("料理を始める");check(hasText("✓ 調理済み・在庫の再差引きは行いません。"),"completed cooking cannot subtract stock again");screenshot("meals-cooking");clickText("戻る");
         clickText("食べたい");onUi(()->((EditText)findDescription(root(),"食べたい料理")).setText("架空の希望料理"));
         onUi(()->{findText(root(),"食べたいものに追加").performClick();findText(root(),"食べたいものに追加").performClick();});waitText("synthetic meal failure");check(wishAttempts==1,"meal double submission blocked");check(hasText("架空の希望料理"),"failed wish retains input");clickText("食べたいものに追加");waitText("食べたいものに追加");check(wishAttempts==2,"wish retry completes once");
         clickText("レシピ");clickText("＋ レシピを登録");

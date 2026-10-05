@@ -96,6 +96,7 @@ final class MealScreen {
     private void leave(Runnable action){if(busy)return;if(dirty)new AlertDialog.Builder(activity).setMessage("入力した内容を破棄して移動しますか？").setPositiveButton("移動",(d,w)->{dirty=false;action.run();}).setNegativeButton("入力に戻る",null).show();else action.run();}
     private void refresh(){request(()->get("?week="+week),result->{overview=result;dirty=false;draw();});}
     private JSONObject item(String date){for(int i=0;i<array(overview.optJSONObject("plan"),"items").length();i++){JSONObject item=array(overview.optJSONObject("plan"),"items").optJSONObject(i);if(date.equals(item.optString("date")))return item;}return null;}
+    private boolean recorded(String date){JSONObject plan=overview.optJSONObject("plan");if(plan==null)return false;JSONArray cooked=array(overview,"cooked");for(int i=0;i<cooked.length();i++){JSONObject row=cooked.optJSONObject(i);if(date.equals(row.optString("meal_date"))&&plan.optString("revision").equals(row.optString("plan_revision")))return true;}return false;}
     private String mealName(JSONObject item){if(item==null)return "まだ決まっていません";String name=item.optJSONObject("recipe").optString("name");JSONArray sides=array(item,"sides");for(int i=0;i<sides.length();i++)name+=" ＋ "+sides.optJSONObject(i).optString("name");return name;}
     private void draw(){
         if(body==null||closed)return;clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;body.removeAllViews();dirty=false;
@@ -107,7 +108,7 @@ final class MealScreen {
         if(page.equals("week")){weekly();return;}
         if(!week.equals(monday(today()))){week=monday(today());overview=null;refresh();return;}
         text("今日のごはん · "+today());JSONObject item=item(today());text(mealName(item));
-        if(item!=null)button("料理を始める",()->cooking(item));
+        if(item!=null){if(recorded(item.optString("date")))text("✓ 調理済み");button("料理を始める",()->cooking(item));}
         JSONObject tomorrow=item(LocalDate.parse(today()).plusDays(1).toString());if(tomorrow==null&&week.equals(monday(today())))tomorrow=overview.optJSONObject("tomorrow_item");text("明日："+mealName(tomorrow));
         JSONObject plan=overview.optJSONObject("plan");text(plan==null?"今週の献立は未作成です。":"CONFIRMED".equals(plan.optString("status"))?"今週の献立：確定済み":"今週の献立：下書き");
         button("1週間の献立を開く",()->{page="week";draw();});button("更新",this::refresh);
@@ -186,7 +187,7 @@ final class MealScreen {
     private void weekly(){
         text(week+"からの献立");button("前の週",()->leave(()->{week=LocalDate.parse(week).minusWeeks(1).toString();refresh();}));button("次の週",()->leave(()->{week=LocalDate.parse(week).plusWeeks(1).toString();refresh();}));
         JSONObject plan=overview.optJSONObject("plan");text(plan==null?"未作成":"CONFIRMED".equals(plan.optString("status"))?"確定済み":"下書き");
-        for(int i=0;i<7;i++){String date=LocalDate.parse(week).plusDays(i).toString();JSONObject item=item(date);text(date+" · "+mealName(item));if(item!=null)button(date+"の料理",()->cooking(item));}
+        for(int i=0;i<7;i++){String date=LocalDate.parse(week).plusDays(i).toString();JSONObject item=item(date);text(date+" · "+mealName(item)+(recorded(date)?" · ✓ 調理済み":""));if(item!=null)button(date+"の料理",()->cooking(item));}
         write("献立を編集",this::planEditor);button("AI献立・未登録の副菜提案（Web）",()->host.web("/app/meals.php?view=week&week="+week));
         button("買う食材を確認",()->request(()->get("?view=shopping_preview&week="+week),this::shopping));
     }
@@ -213,7 +214,7 @@ final class MealScreen {
         Runnable tick=new Runnable(){public void run(){if(closed||!host.active()||timer.getParent()==null)return;long seconds=Math.max(0,(deadline-SystemClock.elapsedRealtime()+999)/1000);timer.setText(seconds>0?"タイマー "+seconds/60+":"+String.format(java.util.Locale.ROOT,"%02d",seconds%60):"タイマー終了");if(seconds>0)clock.postDelayed(this,500);}};
         button("タイマー開始",()->{try{timerTick=tick;int duration=Integer.parseInt(value(minutes));if(duration<1||duration>180)throw new IllegalArgumentException();if(deadline>SystemClock.elapsedRealtime()){new AlertDialog.Builder(activity).setMessage("現在のタイマーを置き換えますか？").setPositiveButton("開始",(d,w)->{clock.removeCallbacksAndMessages(null);deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}).setNegativeButton("戻る",null).show();}else{deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}}catch(Exception e){say("タイマーは1〜180分で入力してください。");}});button("タイマー停止",()->{clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;timer.setText("タイマー停止中");});text("タイマーはこの画面を表示している間に確認できます。");
         button("Cooking Live・音声相談（ブラウザ）",()->{try{activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(ApiClient.ORIGIN+"/app/meals.php?view=cook&date="+item.optString("date"))));}catch(android.content.ActivityNotFoundException e){say("Webブラウザを利用できません。");}});
-        write("作った記録と在庫を確認",()->request(()->get("?view=cooking_preview&date="+item.optString("date")),r->cooked(r.getJSONObject("preview"))));button("戻る",this::draw);
+        if(recorded(item.optString("date")))text("✓ 調理済み・在庫の再差引きは行いません。");else write("作った記録と在庫を確認",()->request(()->get("?view=cooking_preview&date="+item.optString("date")),r->cooked(r.getJSONObject("preview"))));button("戻る",this::draw);
     }
     private void cooked(JSONObject preview){
         body.removeAllViews();text("作った記録と在庫を確認");JSONArray needs=array(preview,"needs"),allocations=array(preview,"allocations");for(int i=0;i<needs.length();i++){JSONObject row=needs.optJSONObject(i);text(row.optString("name")+" · 使用量 "+amount(row,1));}text("在庫から減らす購入分：");for(int i=0;i<allocations.length();i++){JSONObject row=allocations.optJSONObject(i);text(row.optString("name")+"："+amount(row,1));}
