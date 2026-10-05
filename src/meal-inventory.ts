@@ -1,6 +1,6 @@
 import type {AppContext} from './app-context';
 import {BadRequest} from './errors';
-import {mealText,mealDate,mealId,mealHash,mealShoppingNeeds,type MealIngredient} from './meal-domain';
+import {mealText,mealDate,mealId,mealHash,mealShoppingNeeds,mealUnit,type MealIngredient} from './meal-domain';
 import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
 import {readMealPlan} from './meal-repository';
 import {mealWeek} from './meal-domain';
@@ -39,7 +39,7 @@ export async function changeMealInventory(ctx:AppContext,raw:any,kind:'ADD'|'ADJ
 }
 const usable=(lot:Lot,date:string)=>lot.tracking==='EXACT'&&lot.remaining_ticks>0&&lot.purchased_on<=date&&(!lot.expires_on||lot.expires_on>=date);
 export function inventoryNeeds(needs:MealIngredient[],lots:Lot[],date:string){
- return needs.map(n=>{if(n.quantity===null)return {...n,required_quantity:null,available_quantity:null};const available=lots.filter(l=>usable(l,date)&&l.name===n.name&&l.unit===n.unit).reduce((sum,l)=>sum+l.remaining_ticks,0),required=Math.round(n.quantity*10000),used=Math.min(required,available);return {...n,required_quantity:n.quantity,available_quantity:available/10000,quantity:(required-used)/10000};});
+ return needs.map(n=>{if(n.quantity===null)return {...n,required_quantity:null,available_quantity:null};const available=lots.filter(l=>usable(l,date)&&l.name===n.name&&mealUnit(l.unit).unit===n.unit).reduce((sum,l)=>sum+l.remaining_ticks*mealUnit(l.unit).factor,0),required=Math.round(n.quantity*10000),used=Math.min(required,available);return {...n,required_quantity:n.quantity,available_quantity:available/10000,quantity:(required-used)/10000};});
 }
 export async function mealShoppingInventory(ctx:AppContext,plan:any){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id),[inventory,cooked]=await Promise.all([readMealInventory(db,familyId),db.prepare('SELECT meal_date FROM cooked_events WHERE family_id=? AND plan_revision=?').bind(familyId,plan.revision).all<{meal_date:string}>()]);
@@ -49,8 +49,8 @@ export async function mealShoppingInventory(ctx:AppContext,plan:any){
 export async function mealCookingPreview(ctx:AppContext,date:string){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id),plan=await readMealPlan(db,familyId,mealWeek(date)),item=plan?.items.find((i:any)=>i.date===date);
  if(!item||plan!.status!=='CONFIRMED')throw new BadRequest('この日の献立を確定してください。');
- const inventory=await readMealInventory(db,familyId),today=inventoryToday(ctx),useDate=date>today?date:today,needs=mealShoppingNeeds([item]),allocations:Array<{id:string;revision:string;name:string;unit:string;quantity:number;before_ticks:number;ticks:number}>=[];
- for(const n of needs){if(n.quantity===null)continue;let remaining=Math.round(n.quantity*10000);for(const lot of inventory.lots){if(!remaining||allocations.length>=16)break;if(usable(lot,useDate)&&lot.name===n.name&&lot.unit===n.unit){const amount=Math.min(remaining,lot.remaining_ticks);allocations.push({id:lot.id,revision:lot.revision,name:lot.name,unit:lot.unit,quantity:amount/10000,before_ticks:lot.remaining_ticks,ticks:amount});remaining-=amount;}}}
+ const inventory=await readMealInventory(db,familyId),today=inventoryToday(ctx),useDate=date>today?date:today,needs=mealShoppingNeeds([item]),allocations:Array<{id:string;revision:string;name:string;unit:string;quantity:number;before_ticks:number;ticks:number;required_unit:string;required_quantity:number}>=[];
+ for(const n of needs){if(n.quantity===null)continue;let remaining=Math.round(n.quantity*10000);for(const lot of inventory.lots){if(!remaining||allocations.length>=16)break;if(usable(lot,useDate)&&lot.name===n.name&&mealUnit(lot.unit).unit===n.unit){const factor=mealUnit(lot.unit).factor,amount=Math.min(Math.floor(remaining/factor),lot.remaining_ticks);if(!amount)continue;allocations.push({id:lot.id,revision:lot.revision,name:lot.name,unit:lot.unit,quantity:amount/10000,before_ticks:lot.remaining_ticks,ticks:amount,required_unit:n.unit,required_quantity:amount*factor/10000});remaining-=amount*factor;}}}
  const contents={date,revision:plan!.revision,inventory_revision:inventory.revision,needs,allocations,allocation_limited:allocations.length>=16};return {...contents,preview_hash:await mealHash(contents)};
 }
 export async function completeMealCooking(ctx:AppContext,raw:any){
