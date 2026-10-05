@@ -34,3 +34,8 @@ test('concurrent cron consumes a content version once; unchanged evidence makes 
  let calls=0;const old=globalThis.fetch;globalThis.fetch=async()=>{calls++;return Response.json({candidates:[{content:{parts:[{text:'自宅で過ごしました。'}]}}]});};
  try{const env={DB,GEMINI_API_KEY:'synthetic'};await Promise.all([generateFamilyDailyJournalAi(env),generateFamilyDailyJournalAi(env)]);await generateFamilyDailyJournalAi(env);assert.equal(calls,1);assert.equal(sql.prepare('SELECT ai_status FROM family_daily_journals').get().ai_status,'AI_OK');}finally{globalThis.fetch=old;}
 });
+test('video recipe extraction gets a bounded 30 second wait while existing features retain 10 seconds',async()=>{
+ const {DB}=database(),env={DB,GEMINI_API_KEY:'synthetic'},realFetch=globalThis.fetch,realTimer=globalThis.setTimeout,delays=[];
+ globalThis.fetch=async()=>new Response('{}',{headers:{'content-type':'application/json'}});globalThis.setTimeout=(fn,ms,...args)=>{delays.push(ms);return realTimer(fn,ms,...args);};
+ try{await geminiFetch(env,'gemini-test',{}, {familyId:1,feature:'FAMILY_AI',trigger:'user'});await geminiFetch(env,'gemini-test',{}, {familyId:1,feature:'MEAL_RECIPE_EXTRACT',trigger:'user'});assert.deepEqual(delays,[10000,30000]);}finally{globalThis.fetch=realFetch;globalThis.setTimeout=realTimer;}
+});

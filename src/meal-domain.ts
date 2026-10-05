@@ -1,6 +1,6 @@
 import {BadRequest} from './errors';
 export type MealIngredient={name:string;quantity:number;unit:string};
-export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string};
+export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
 export type MealPlanItem={date:string;servings:number;recipe:MealRecipe};
 export const mealEnabled=(env:Env)=>env.MEALS_ENABLED==='true'&&!!env.MEALS_DB;
 export const mealText=(value:unknown,max:number)=>{if(typeof value!=='string')throw new BadRequest('文字を入力してください。');const s=value.normalize('NFKC').trim();if(!s||s.length>max)throw new BadRequest('入力の長さを確認してください。');return s;};
