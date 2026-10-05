@@ -42,7 +42,8 @@ const ensureNav=()=>{
     let anchor=existing.get(target.pathname);
     if(!anchor){anchor=document.createElement('a');nav.appendChild(anchor);existing.set(target.pathname,anchor);}
     anchor.href=href;anchor.textContent=label;
-    const active=target.pathname===location.pathname&&(target.pathname!=='/app/family_log.php'||target.searchParams.has('dashboard'));
+    if(target.pathname==='/app/family_log.php')anchor.dataset.familyLogSummaryLink='1';
+    const active=target.pathname===location.pathname&&(target.pathname!=='/app/family_log.php'||new URL(location.href).searchParams.get('dashboard')==='1');
     anchor.classList.toggle('active',active);
     if(active)anchor.setAttribute('aria-current','page');else anchor.removeAttribute('aria-current');
   }
@@ -75,7 +76,7 @@ setTimeout(ensureNav,0);setTimeout(ensureNav,250);setTimeout(ensureNav,700);
 // only missing/duplicate bars, so our own link updates cannot trigger a loop.
 const navObserver=new MutationObserver(()=>{
  const navs=document.querySelectorAll('.family-log-bottom-journal');
- if(navs.length!==1||!navs[0].classList.contains('family-log-persistent-journal'))ensureNav();
+ if(navs.length!==1||!navs[0].classList.contains('family-log-persistent-journal')||navs[0].querySelectorAll('a[href]').length!==4)ensureNav();
 });
 navObserver.observe(document.body,{childList:true,subtree:true});
 
