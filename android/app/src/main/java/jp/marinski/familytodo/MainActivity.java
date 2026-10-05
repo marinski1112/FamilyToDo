@@ -129,13 +129,14 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        if(mealScreen!=null)mealScreen.resumeTimer();
         if(BuildConfig.UI_TEST_MODE)return;
         if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null){
             if(goodsCompletionThreshold!=GoodsCompletion.threshold(System.currentTimeMillis()))render();else scheduleGoodsCompletionBoundary();
         }
         if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
-    @Override protected void onPause(){completionClock.removeCallbacks(completionBoundary);super.onPause();}
+    @Override protected void onPause(){if(mealScreen!=null)mealScreen.pauseTimer();completionClock.removeCallbacks(completionBoundary);super.onPause();}
     private void scheduleGoodsCompletionBoundary(){
         completionClock.removeCallbacks(completionBoundary);
         completionClock.postDelayed(completionBoundary,Math.max(1,GoodsCompletion.nextBoundary(System.currentTimeMillis())-System.currentTimeMillis()));

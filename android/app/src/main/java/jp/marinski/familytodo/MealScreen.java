@@ -38,6 +38,8 @@ final class MealScreen {
     private boolean busy,dirty;
     private volatile boolean closed;
     private long deadline;
+    private String requestCsrf="";
+    private Runnable timerTick;
     private final String session=SnapshotCache.currentSessionBinding();
     MealScreen(Activity activity,Host host){this.activity=activity;this.host=host;}
     static String today(){return LocalDate.now(ZoneId.of("Asia/Tokyo")).toString();}
@@ -52,12 +54,14 @@ final class MealScreen {
         body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);root.addView(body);
         if(overview==null)refresh();else draw();
     }
+    void pauseTimer(){clock.removeCallbacksAndMessages(null);}
+    void resumeTimer(){if(timerTick!=null&&!closed)timerTick.run();}
     void close(){closed=true;generation++;clock.removeCallbacksAndMessages(null);io.shutdownNow();overview=null;root=null;body=null;}
     private interface Work {JSONObject run()throws Exception;}
     private interface Done {void accept(JSONObject result)throws Exception;}
     private void request(Work work,Done done){
         if(busy||closed)return;
-        int request=++generation;busy=true;say("読み込み・保存中…");java.util.IdentityHashMap<View,Boolean> enabled=new java.util.IdentityHashMap<>();remember(body,enabled);enable(body,false);
+        int request=++generation;requestCsrf=host.csrf();busy=true;say("読み込み・保存中…");java.util.IdentityHashMap<View,Boolean> enabled=new java.util.IdentityHashMap<>();remember(body,enabled);enable(body,false);
         io.execute(()->{
             try{if(!valid(request))return;JSONObject result=work.run();activity.runOnUiThread(()->{
                 if(!valid(request))return;busy=false;restore(enabled);
@@ -76,8 +80,8 @@ final class MealScreen {
     private JSONObject get(String query)throws Exception{return ApiClient.request("/api/meals/v1"+query,null);}
     private JSONObject post(JSONObject value)throws Exception{
         if(closed||!host.active()||!java.util.Objects.equals(session,SnapshotCache.currentSessionBinding()))throw new SecurityException("ログインしてください。");
-        if(host.csrf().isEmpty())throw new IllegalStateException("ホームを更新してから開き直してください。");
-        return ApiClient.request("/api/meals/v1",value.put("csrf",host.csrf()));
+        if(requestCsrf.isEmpty())throw new IllegalStateException("ホームを更新してから開き直してください。");
+        return ApiClient.request("/api/meals/v1",value.put("csrf",requestCsrf));
     }
     private static JSONObject object(){return new JSONObject();}
     private static JSONObject put(JSONObject object,String key,Object value){try{return object.put(key,value);}catch(Exception e){throw new IllegalArgumentException(e);}}
@@ -94,7 +98,7 @@ final class MealScreen {
     private JSONObject item(String date){for(int i=0;i<array(overview.optJSONObject("plan"),"items").length();i++){JSONObject item=array(overview.optJSONObject("plan"),"items").optJSONObject(i);if(date.equals(item.optString("date")))return item;}return null;}
     private String mealName(JSONObject item){if(item==null)return "まだ決まっていません";String name=item.optJSONObject("recipe").optString("name");JSONArray sides=array(item,"sides");for(int i=0;i<sides.length();i++)name+=" ＋ "+sides.optJSONObject(i).optString("name");return name;}
     private void draw(){
-        if(body==null||closed)return;clock.removeCallbacksAndMessages(null);deadline=0;body.removeAllViews();dirty=false;
+        if(body==null||closed)return;clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;body.removeAllViews();dirty=false;
         if(overview==null){text("献立を読み込めませんでした。");button("再試行",this::refresh);return;}
         if(page.equals("recipes")){recipes();return;}
         if(page.equals("wishlist")){wishes();return;}
@@ -207,7 +211,7 @@ final class MealScreen {
         text("自由入力の分量は人数で換算していません。");JSONArray steps=array(recipe,"steps");final int[] position={0};TextView step=host.text("");body.addView(step);Runnable update=()->step.setText("手順 "+(position[0]+1)+" / "+steps.length()+"\n"+steps.optString(position[0]));update.run();button("前の手順",()->{position[0]=Math.max(0,position[0]-1);update.run();});button("次の手順",()->{position[0]=Math.min(steps.length()-1,position[0]+1);update.run();});
         EditText minutes=input("タイマー（1〜180分）","5",true);TextView timer=host.text("タイマー停止中");body.addView(timer);
         Runnable tick=new Runnable(){public void run(){if(closed||!host.active()||timer.getParent()==null)return;long seconds=Math.max(0,(deadline-SystemClock.elapsedRealtime()+999)/1000);timer.setText(seconds>0?"タイマー "+seconds/60+":"+String.format(java.util.Locale.ROOT,"%02d",seconds%60):"タイマー終了");if(seconds>0)clock.postDelayed(this,500);}};
-        button("タイマー開始",()->{try{int duration=Integer.parseInt(value(minutes));if(duration<1||duration>180)throw new IllegalArgumentException();if(deadline>SystemClock.elapsedRealtime()){new AlertDialog.Builder(activity).setMessage("現在のタイマーを置き換えますか？").setPositiveButton("開始",(d,w)->{clock.removeCallbacksAndMessages(null);deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}).setNegativeButton("戻る",null).show();}else{deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}}catch(Exception e){say("タイマーは1〜180分で入力してください。");}});button("タイマー停止",()->{clock.removeCallbacksAndMessages(null);deadline=0;timer.setText("タイマー停止中");});text("タイマーはこの画面を表示している間に確認できます。");
+        button("タイマー開始",()->{try{timerTick=tick;int duration=Integer.parseInt(value(minutes));if(duration<1||duration>180)throw new IllegalArgumentException();if(deadline>SystemClock.elapsedRealtime()){new AlertDialog.Builder(activity).setMessage("現在のタイマーを置き換えますか？").setPositiveButton("開始",(d,w)->{clock.removeCallbacksAndMessages(null);deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}).setNegativeButton("戻る",null).show();}else{deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}}catch(Exception e){say("タイマーは1〜180分で入力してください。");}});button("タイマー停止",()->{clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;timer.setText("タイマー停止中");});text("タイマーはこの画面を表示している間に確認できます。");
         button("Cooking Live・音声相談（Web）",()->host.web("/app/meals.php?view=cook&date="+item.optString("date")));
         write("作った記録と在庫を確認",()->request(()->get("?view=cooking_preview&date="+item.optString("date")),r->cooked(r.getJSONObject("preview"))));button("戻る",this::draw);
     }
