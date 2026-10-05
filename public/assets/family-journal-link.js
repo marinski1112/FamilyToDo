@@ -25,15 +25,18 @@ if(head&&!head.querySelector('a[href="/app/family_journal.php"]')){
 }
 
 const ensureNav=()=>{
-  let nav=document.querySelector('.family-log-bottom-journal');
+  const navs=[...document.querySelectorAll('.family-log-bottom-journal')];
+  let nav=navs.find(node=>page?.contains(node))||navs[0];
+  for(const duplicate of navs)if(duplicate!==nav)duplicate.remove();
   if(!nav){
     nav=document.createElement('nav');
     nav.className='family-log-bottom-journal family-log-persistent-journal';
     nav.setAttribute('aria-label','家族ログメニュー');
-    document.body.appendChild(nav);
+    (document.querySelector('.wrap')||document.body).appendChild(nav);
   }
   nav.classList.add('family-log-persistent-journal');
-  const existing=new Map([...nav.querySelectorAll('a[href]')].map(a=>[new URL(a.href,location.origin).pathname,a]));
+  const existing=new Map();
+  for(const anchor of nav.querySelectorAll('a[href]')){const path=new URL(anchor.href,location.origin).pathname;if(existing.has(path))anchor.remove();else existing.set(path,anchor);}
   for(const [href,label] of links){
     const target=new URL(href,location.origin);
     let anchor=existing.get(target.pathname);
@@ -48,7 +51,7 @@ const ensureNav=()=>{
 
 const style=document.createElement('style');
 style.textContent=`
-.family-log-persistent-journal{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb;box-shadow:0 -2px 12px rgba(0,0,0,.06);z-index:95}
+.family-log-persistent-journal{width:min(760px,100%);margin-inline:auto;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:rgba(255,255,255,.96);border-top:1px solid #e5e7eb;box-shadow:0 -2px 12px rgba(0,0,0,.06);z-index:95}
 .family-log-persistent-journal>a{display:flex!important;align-items:center;justify-content:center;min-width:0;padding:9px 4px;color:#6b7280;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}
 .family-log-persistent-journal>a.active,.family-log-persistent-journal>a[aria-current="page"]{color:#4f46e5}
 .family-log-growth-day{margin-top:14px!important;padding:12px!important}
@@ -68,6 +71,13 @@ style.textContent=`
 `;
 document.head.appendChild(style);
 setTimeout(ensureNav,0);setTimeout(ensureNav,250);setTimeout(ensureNav,700);
+// Compact daily controls can arrive after the deferred script loader. Reconcile
+// only missing/duplicate bars, so our own link updates cannot trigger a loop.
+const navObserver=new MutationObserver(()=>{
+ const navs=document.querySelectorAll('.family-log-bottom-journal');
+ if(navs.length!==1||!navs[0].classList.contains('family-log-persistent-journal'))ensureNav();
+});
+navObserver.observe(document.body,{childList:true,subtree:true});
 
 const loadMedia=async logId=>{
   try{

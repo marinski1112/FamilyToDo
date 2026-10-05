@@ -53,6 +53,8 @@ jobs:
         if: always()
       - run: npm run check:location-long-term-history
         if: always()
+      - run: node --test scripts/family-journal-navigation.test.mjs
+        if: always()
       - run: npm run check:family-daily-journal
         if: always()
       - run: npm run check:family-daily-journal-ai
