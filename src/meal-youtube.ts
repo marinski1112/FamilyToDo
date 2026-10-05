@@ -1,3 +1,4 @@
+import {mealLiteralAmount} from './meal-domain';
 import type {AppContext} from './app-context';
 import {BadRequest} from './errors';
 import {mealHash,mealId,mealText} from './meal-domain';
@@ -23,7 +24,7 @@ export function validateVideoRecipe(raw:any){
   if(!keys(raw,'confidence,ingredients,minutes,name,servings,steps')||!['HIGH','MEDIUM','LOW'].includes(raw.confidence)||!(raw.servings===null||(Number.isSafeInteger(raw.servings)&&raw.servings>=1&&raw.servings<=30))||!(raw.minutes===null||(Number.isSafeInteger(raw.minutes)&&raw.minutes>=1&&raw.minutes<=1440))||!Array.isArray(raw.ingredients)||!raw.ingredients.length||raw.ingredients.length>50||!Array.isArray(raw.steps)||!raw.steps.length||raw.steps.length>50)return null;
   const ingredients=raw.ingredients.map((x:any)=>{
    if(!keys(x,'name,original,quantity,unit')||!(x.quantity===null||(typeof x.quantity==='number'&&Number.isFinite(x.quantity)&&x.quantity>=0.0001&&x.quantity<=100000))||typeof x.unit!=='string'||(x.quantity===null?x.unit!=='':!x.unit.trim()))throw new Error();
-   return {name:mealText(x.name,100),quantity:x.quantity===null?null:Math.round(x.quantity*10000)/10000,unit:x.quantity===null?'':mealText(x.unit,20),original:mealText(x.original,200)};
+   const literal=x.quantity===null?mealLiteralAmount(x.original):null;return {name:mealText(x.name,100),...(literal?{quantity_text:literal.quantity_text}:{}),quantity:x.quantity===null?null:Math.round(x.quantity*10000)/10000,unit:x.quantity===null?'':mealText(x.unit,20),original:mealText(x.original,200)};
   });
   return {name:mealText(raw.name,120),servings:raw.servings as number|null,minutes:raw.minutes as number|null,ingredients,steps:raw.steps.map((s:unknown)=>mealText(s,1000)),confidence:raw.confidence as string};
  }catch{return null;}
