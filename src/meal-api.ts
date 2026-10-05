@@ -28,6 +28,14 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const db=ctx.env.MEALS_DB!,familyId=Number(m.family_id),url=new URL(request.url);
  if(request.method==='GET'){
   const view=url.searchParams.get('view')||'overview',week=mealWeek(url.searchParams.get('week')||new Date().toISOString().slice(0,10));
+  if(view==='ai_status'){
+   if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase()))return out({ok:false,error:'管理者のみ利用できます。'},403);
+   const [guidance,live]=await Promise.all([
+    db.prepare('SELECT status,result_json,created_at FROM meal_baby_guidance WHERE family_id=? ORDER BY created_at DESC LIMIT 10').bind(familyId).all<any>(),
+    db.prepare('SELECT status,model,error_code,created_at FROM meal_live_sessions WHERE family_id=? ORDER BY created_at DESC LIMIT 10').bind(familyId).all<any>()
+   ]);
+   return out({ok:true,guidance:guidance.results.map(r=>{let result:any={};try{result=JSON.parse(r.result_json||'{}');}catch{}return {status:r.status,mode:result.mode||'',reason:result.reason||'',created_at:r.created_at};}),live:live.results});
+  }
   if(view==='baby')return out({ok:true,baby:await readMealBaby(ctx)});
   if(view==='receipt')return out({ok:true,receipt:await readMealReceipt(ctx,mealId(url.searchParams.get('id')))});
   if(view==='receipts')return out({ok:true,receipts:(await db.prepare('SELECT id,mode,status,error_code,created_at FROM receipt_imports WHERE family_id=? ORDER BY created_at DESC LIMIT 30').bind(familyId).all()).results});

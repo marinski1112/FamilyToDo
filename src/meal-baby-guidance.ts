@@ -29,15 +29,17 @@ export async function guideMealBaby(ctx:AppContext,raw:any){
   const route=await resolveFeatureModels(ctx.env.DB,familyId,'MEAL_BABY_GUIDANCE',ctx.member!.role);
   const body={systemInstruction:{parts:[{text:'Order up to three supplied baby meal checklist codes to help a caregiver organize pending checks. Select exactly min(3, number of supplied codes) distinct codes. These are checklist types, not medical patient data. Do not infer age, readiness, allergies, ingredients, suitability or safety. Return ONLY JSON {"codes":["code"]}, with no explanation or extra fields. Never approve feeding or remove checklist requirements.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({pending_codes:codes})}]}],generationConfig:{responseMimeType:'application/json',temperature:0,maxOutputTokens:256}};
   const response=await geminiFetch(ctx.env,route.models[0],body,{familyId,feature:'MEAL_BABY_GUIDANCE',trigger:'user',attempt:0});
-  guidance.reason=response.status===429?'RATE_LIMIT_OR_BUDGET':'AI_UNAVAILABLE';
+  guidance.reason=response.status===429?'RATE_LIMIT_OR_BUDGET':response.status===404?'MODEL_UNAVAILABLE':response.status===400?'INVALID_REQUEST':'AI_UNAVAILABLE';
   if(response.ok){
    // Bound body consumption independently of the provider token limit.
    const reader=response.body?.getReader();let bytes=0,text='';const decoder=new TextDecoder(),timer=setTimeout(()=>{void reader?.cancel();},10_000);
    try{if(reader)for(;;){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>16384)throw new Error();text+=decoder.decode(chunk.value,{stream:true});}text+=decoder.decode();}finally{clearTimeout(timer);await reader?.cancel().catch(()=>{});}
    const data=JSON.parse(text),candidate=data?.candidates?.[0];
    const content=candidate?.content?.parts?.filter((p:any)=>!p.thought&&typeof p.text==='string').map((p:any)=>p.text).join('')||'';
-   const chosen=!data?.promptFeedback?.blockReason&&(!candidate?.finishReason||candidate.finishReason==='STOP')&&content.length<=2048?validateBabyGuidance(JSON.parse(content),codes):null;
-   guidance=chosen?{mode:'AI',reason:'',codes:chosen}:{mode:'RULES',reason:'INVALID_OUTPUT',codes:[]};
+   guidance.reason=candidate?.finishReason==='MAX_TOKENS'?'OUTPUT_LIMIT':data?.promptFeedback?.blockReason?'SAFETY_BLOCK':'INVALID_OUTPUT';
+   let parsed:unknown;try{parsed=JSON.parse(content);}catch{parsed=null;}
+   const chosen=!data?.promptFeedback?.blockReason&&(!candidate?.finishReason||candidate.finishReason==='STOP')&&content.length<=2048?validateBabyGuidance(parsed,codes):null;
+   guidance=chosen?{mode:'AI',reason:'',codes:chosen}:{mode:'RULES',reason:guidance.reason,codes:[]};
   }else await response.body?.cancel().catch(()=>{});
  }catch{guidance={mode:'RULES',reason:'AI_UNAVAILABLE',codes:[]};}
  await db.prepare("UPDATE meal_baby_guidance SET status='READY',result_json=? WHERE family_id=? AND id=? AND payload_hash=? AND status='RUNNING'").bind(JSON.stringify(guidance),familyId,id,hash).run();
