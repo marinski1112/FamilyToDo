@@ -46,7 +46,7 @@
     "test:legacy": "npm run check:legacy-regression",
     "check:calendar-mobile-detail-activation": "node scripts/calendar-mobile-detail-activation-contract.mjs",
     "check:calendar-stickers": "node scripts/calendar-sticker-contract.mjs",
-    "check:meals": "esbuild scripts/meals-web.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meals-test.mjs && node --test /tmp/familytodo-meals-test.mjs && node --check public/assets/meals-cooking.js && node --check public/assets/meals.js",
+    "check:meals": "esbuild scripts/meals-web.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meals-test.mjs && node --test /tmp/familytodo-meals-test.mjs && node --check public/assets/meals-cooking.js && node --check public/assets/meals.js && node --check public/assets/meals-live.js && node --check public/assets/meals-live-worklet.js",
     "check:ai-call-budget": "esbuild scripts/ai-call-budget.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-ai-call-test.mjs && node --test /tmp/familytodo-ai-call-test.mjs",
     "check:meal-ai-routes": "esbuild scripts/meal-ai-routes.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meal-ai-routes-test.mjs && node --test /tmp/familytodo-meal-ai-routes-test.mjs",
     "migrate:meals": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply MEALS_DB --remote",
