@@ -56,11 +56,14 @@ export async function geminiFetch(env:Env,model:string,body:unknown,scope:AiCall
  const key=String(env.GEMINI_API_KEY||'');
  if(!key)throw new Error('Gemini is not configured');
  if(!await reserveAiCall(env,scope,model))return new Response(JSON.stringify({error:{status:'RESOURCE_EXHAUSTED'}}),{status:429,headers:{'content-type':'application/json'}});
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),['MEAL_RECIPE_EXTRACT','MEAL_BABY_GUIDANCE'].includes(scope.feature)?30_000:10_000);
+ const longVideo=scope.feature==='MEAL_RECIPE_EXTRACT'&&Number(scope.videoDurationSeconds)>600&&Number(scope.videoDurationSeconds)<=1800;
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),longVideo?60_000:['MEAL_RECIPE_EXTRACT','MEAL_BABY_GUIDANCE'].includes(scope.feature)?30_000:10_000);
  try{const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:controller.signal});
  if(response.status===429)await blockAiQuota(env.DB).catch(()=>{});
+ // Long-video deadline includes the response body, not just HTTP headers.
+ const result=longVideo?new Response(await response.text(),{status:response.status,statusText:response.statusText,headers:response.headers}):response;
  await recordAiCall(env.DB,scope,model,response.ok?'success':response.status===429?'rate_limit':'upstream_error').catch(()=>{});
- return response;}
+ return result;}
  catch{await recordAiCall(env.DB,scope,model,'upstream_error').catch(()=>{});const error=new Error('Gemini upstream unavailable');if(controller.signal.aborted)error.name='AbortError';throw error;}finally{clearTimeout(timer);}
 }
 class InvalidPlanError extends Error{}
