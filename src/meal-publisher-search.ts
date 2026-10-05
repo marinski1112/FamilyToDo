@@ -4,7 +4,7 @@ import {mealText,mealId,mealHash} from './meal-domain';
 import {mealImportUrl} from './meal-url-import';
 export type RecipePublisher='KURASHIRU'|'DELISH';
 export function publisherSearch(raw:any){
- if(!['KURASHIRU','DELISH'].includes(raw.publisher))throw new BadRequest('検索するサイトを選択してください。');
+ if(!raw||typeof raw!=='object'||Array.isArray(raw)||!['KURASHIRU','DELISH'].includes(raw.publisher))throw new BadRequest('検索するサイトを選択してください。');
  const query=mealText(raw.query,100);if(/[\u0000-\u001f\u007f]/u.test(query))throw new BadRequest('検索語は1行で入力してください。');
  const publisher=raw.publisher as RecipePublisher,url=new URL(publisher==='KURASHIRU'?'https://www.kurashiru.com/search':'https://delishkitchen.tv/search');url.searchParams.set(publisher==='KURASHIRU'?'query':'q',query);
  return {publisher,query,url:url.href};

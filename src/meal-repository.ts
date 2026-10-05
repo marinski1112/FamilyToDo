@@ -28,4 +28,4 @@ export async function saveMealPlan(db:D1Database,familyId:number,memberId:number
  const saved=await db.prepare('SELECT payload_hash FROM weekly_plans WHERE family_id=? AND week_start=?').bind(familyId,week).first<Row>();if(!saved||saved.payload_hash!==hash)throw new BadRequest('献立が更新されています。開き直して確認してください。');return (await readMealPlan(db,familyId,week))!;
 }
 
-export async function mealRecipeSummaries(db:D1Database,familyId:number):Promise<Row[]>{const r=await db.prepare('SELECT id,name,servings,minutes,revision,json_array_length(ingredients_json) ingredient_count FROM recipes WHERE family_id=? AND archived=0 ORDER BY updated_at DESC,id LIMIT 200').bind(familyId).all<Row>();return r.results;}
+export async function mealRecipeSummaries(db:D1Database,familyId:number):Promise<Row[]>{const r=await db.prepare('SELECT id,name,servings,minutes,source_url,revision,json_array_length(ingredients_json) ingredient_count FROM recipes WHERE family_id=? AND archived=0 ORDER BY updated_at DESC,id LIMIT 200').bind(familyId).all<Row>();return r.results;}
