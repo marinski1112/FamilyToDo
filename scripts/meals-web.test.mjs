@@ -1,4 +1,5 @@
 import {publisherSearch,extractPublisherResults} from '../src/meal-publisher-search.ts';
+import {reserveMealVideoDuration} from '../src/ai-call-budget.ts';
 import {mealYouTubeUrl,mealVideoClip,validateVideoRecipe} from '../src/meal-youtube.ts';
 import {babyAgeMonths,checkBabyMeal} from '../src/meal-baby.ts';
 import {validateReceiptItems} from '../src/meal-receipts.ts';
@@ -401,7 +402,8 @@ const videoResponse=(recipe=videoRecipe())=>new Response(JSON.stringify({candida
 test('YouTube normalizes exact public-video hosts/paths, rejects arbitrary links and bounds explicit clips',()=>{
  for(const u of [videoURL+'&list=secret#x','https://youtu.be/9hE5-98ZeCg?si=tracking','https://m.youtube.com/shorts/9hE5-98ZeCg','https://youtube.com/embed/9hE5-98ZeCg'])assert.equal(mealYouTubeUrl(u),videoURL);
  for(const u of ['http://youtu.be/9hE5-98ZeCg','https://youtube.com.evil.invalid/watch?v=9hE5-98ZeCg','https://user:pass@youtube.com/watch?v=9hE5-98ZeCg','https://youtube.com:8443/watch?v=9hE5-98ZeCg','https://youtu.be/short','https://youtube.com/watch?v=9hE5-98ZeCg&v=9hE5-98ZeCg','https://youtube.com/playlist?list=x','https://youtube.com/live/9hE5-98ZeCg','https://127.0.0.1/watch?v=9hE5-98ZeCg','https://youtube.com/redirect?q=https://evil.invalid','https://www.youtube-nocookie.com/embed/9hE5-98ZeCg'])assert.throws(()=>mealYouTubeUrl(u));
- assert.deepEqual(mealVideoClip({start_seconds:0,end_seconds:600}),{start_seconds:0,end_seconds:600});for(const clip of [{start_seconds:0,end_seconds:601},{start_seconds:-1,end_seconds:10},{start_seconds:10,end_seconds:10},{start_seconds:1.5,end_seconds:20},{start_seconds:'0',end_seconds:20},{start_seconds:86000,end_seconds:86401}])assert.throws(()=>mealVideoClip(clip));
+ for(const end of [601,900,1800])assert.equal(mealVideoClip({start_seconds:0,end_seconds:end}).end_seconds,end);assert.equal(mealVideoClip({start_seconds:84600,end_seconds:86400}).start_seconds,84600);
+ assert.deepEqual(mealVideoClip({start_seconds:0,end_seconds:600}),{start_seconds:0,end_seconds:600});for(const clip of [{start_seconds:0,end_seconds:1801},{start_seconds:-1,end_seconds:10},{start_seconds:10,end_seconds:10},{start_seconds:1.5,end_seconds:20},{start_seconds:'0',end_seconds:20},{start_seconds:86000,end_seconds:86401}])assert.throws(()=>mealVideoClip(clip));
 });
 test('video draft schema rejects invented actions, URL replacement and guessed numeric strings, preserving unknown amounts',()=>{
  assert.equal(validateVideoRecipe(videoRecipe()).ingredients[1].quantity,null);assert.equal(validateVideoRecipe(videoRecipe({source_url:'https://evil.invalid'})),null);assert.equal(validateVideoRecipe(videoRecipe({confidence:'SAFE'})),null);assert.equal(validateVideoRecipe(videoRecipe({ingredients:[{name:'塩',quantity:'少々',unit:'g',original:'塩少々'}]})),null);assert.equal(validateVideoRecipe(videoRecipe({ingredients:[{name:'塩',quantity:null,unit:'g',original:'塩少々'}]})),null);assert.equal(validateVideoRecipe(videoRecipe({steps:[]})),null);assert.equal(validateVideoRecipe(videoRecipe({servings:31})),null);assert.equal(validateVideoRecipe(videoRecipe({minutes:0})),null);assert.equal(validateVideoRecipe(videoRecipe({ingredients:Array(51).fill(videoRecipe().ingredients[0])})),null);assert.equal(validateVideoRecipe(videoRecipe({steps:['x'.repeat(1001)]})),null);
@@ -865,4 +867,33 @@ test('meal import, search and receipt Back preserve unsaved input when discard i
    discard=true;w.document.getElementById(cancelId).click();await waitFor(()=>!w.document.getElementById(formId));assert.equal(confirmations,2);assert.equal(posts,0);
   }finally{await w.happyDOM.close();}
  }
+});
+
+test('long video single request is bounded by duration, cached on lost response and failures, with no automatic recipe save',async()=>{
+ const real=globalThis.fetch;
+ try{
+  for(const seconds of [601,900,1800]){const {ctx,main,meals}=fixture();ctx.env.GEMINI_API_KEY='test';let n=0;
+   globalThis.fetch=async(_,options)=>{n++;const b=JSON.parse(options.body);assert.equal(b.contents[0].parts[0].mediaProcessing,'STATIC');assert.equal(b.generationConfig.mediaResolution,'MEDIA_RESOLUTION_LOW');assert.equal(b.contents[0].parts[0].videoMetadata.endOffset,seconds+'s');return videoResponse();};
+   const b={...videoBody('long-video-'+seconds),start_seconds:0,end_seconds:seconds};const results=await Promise.all([call(ctx,b),call(ctx,{...b,request_id:'long-duplicate-'+seconds})]);assert(results.some(x=>x.response.status===200));assert.equal((await call(ctx,b)).value.draft.analysis.end_seconds,seconds);assert.equal(n,1);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM recipes').get().c,0);assert.equal(main.sql.prepare("SELECT calls FROM ai_call_budgets WHERE scope='family:1:meal-long-video-seconds'").get().calls,seconds);
+  }
+  for(const outcome of ['503','429','invalid','LOW','abort','MAX_TOKENS','SAFETY']){const {ctx}=fixture();ctx.env.GEMINI_API_KEY='test';let n=0;globalThis.fetch=async()=>{n++;if(outcome==='abort')throw Error('synthetic interruption');if(outcome==='503'||outcome==='429')return new Response('{}',{status:Number(outcome)});if(outcome==='invalid')return videoResponse(null);if(outcome==='LOW')return videoResponse(videoRecipe({confidence:'LOW'}));return new Response(JSON.stringify({candidates:[{finishReason:outcome,content:{parts:[{text:JSON.stringify(videoRecipe())}]}}]}));};const b={...videoBody('long-fail-'+outcome.replaceAll('_','-')),start_seconds:0,end_seconds:900};assert.equal((await call(ctx,b)).response.status,outcome==='LOW'?200:400);await call(ctx,b);assert.equal(n,1);}
+  const {ctx,main}=fixture();ctx.env.GEMINI_API_KEY='test';let n=0;globalThis.fetch=async()=>{n++;return new Response('{}',{status:503});};for(let i=0;i<2;i++)await call(ctx,{...videoBody('long-budget-'+i),start_seconds:i*1800,end_seconds:(i+1)*1800});assert.equal(n,2);assert.equal((await call(ctx,{...videoBody('long-budget-third'),start_seconds:0,end_seconds:601})).response.status,400);assert.equal(n,2);assert.equal(main.sql.prepare("SELECT calls FROM ai_call_budgets WHERE scope='project:meal-long-video-seconds'").get().calls,3600);
+  const other={...ctx,member:{id:2,family_id:2,role:'OWNER'}};await call(other,{...videoBody('long-family-two'),start_seconds:0,end_seconds:900});assert.equal(n,3);
+ }finally{globalThis.fetch=real;}
+});
+
+test('long-video duration reservations are atomic across families and fail closed on storage errors',async()=>{
+ const {main}=fixture(),now='2026-10-05T12:00:00Z';
+ const family=await Promise.all(Array.from({length:4},()=>reserveMealVideoDuration(main.DB,1,1800,now)));assert.equal(family.filter(Boolean).length,2);
+ for(let id=2;id<=4;id++)for(let n=0;n<2;n++)assert.equal(await reserveMealVideoDuration(main.DB,id,1800,now),true);
+ assert.equal(await reserveMealVideoDuration(main.DB,5,601,now),false);
+ assert.equal(main.sql.prepare("SELECT calls FROM ai_call_budgets WHERE scope='project:meal-long-video-seconds'").get().calls,14400);
+ assert.equal(await reserveMealVideoDuration(main.DB,1,1800,'2026-10-06T00:00:00Z'),true);
+ await assert.rejects(()=>reserveMealVideoDuration({batch(){throw Error('synthetic storage');}},1,900,now));
+});
+test('long-video abort has a 60-second deadline including response body and does not restart the job',async()=>{
+ const realFetch=globalThis.fetch,realTimer=globalThis.setTimeout,realClear=globalThis.clearTimeout;let abort,cleared=false,n=0;
+ globalThis.setTimeout=(fn,ms,...args)=>{if(ms===60000){abort=fn;return 72345;}return realTimer(fn,ms,...args);};globalThis.clearTimeout=id=>{if(id===72345){cleared=true;return;}realClear(id);};
+ try{const {ctx}=fixture();ctx.env.GEMINI_API_KEY='test';globalThis.fetch=async(_,init)=>{n++;assert.equal(init.signal.aborted,false);return new Response(new ReadableStream({start(c){init.signal.addEventListener('abort',()=>c.error(new Error('synthetic abort')));abort();}}));};const b={...videoBody('long-body-timeout'),start_seconds:0,end_seconds:900};assert.equal((await call(ctx,b)).response.status,400);assert(cleared);await call(ctx,b);assert.equal(n,1);
+ }finally{globalThis.fetch=realFetch;globalThis.setTimeout=realTimer;globalThis.clearTimeout=realClear;}
 });

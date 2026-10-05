@@ -1,4 +1,4 @@
-export type AiCallScope={familyId:number;feature:string;trigger:'user'|'event'|'cron'|'diagnostic';attempt?:number};
+export type AiCallScope={familyId:number;feature:string;trigger:'user'|'event'|'cron'|'diagnostic';attempt?:number;videoDurationSeconds?:number};
 const day=(now:string)=>now.slice(0,10);
 const limit=(value:unknown,fallback:number)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0&&n<=100000?n:fallback;};
 export async function recordAiCall(db:D1Database,scope:AiCallScope,model:string,outcome:'calls'|'success'|'rate_limit'|'upstream_error'|'skipped_budget'|'skipped_dedupe',now=new Date().toISOString()):Promise<void>{
@@ -26,4 +26,16 @@ export async function blockAiQuota(db:D1Database,now=new Date().toISOString()):P
 export async function cleanupAiCallCounts(db:D1Database):Promise<void>{
  const cutoff=new Date(Date.now()-30*86400_000).toISOString().slice(0,10);
  await db.batch([db.prepare('DELETE FROM ai_call_daily WHERE day<?').bind(cutoff),db.prepare('DELETE FROM ai_call_budgets WHERE day<?').bind(cutoff)]);
+}
+
+/** Dedicated duration units, separate from call counters. Failed long jobs keep their reservation. */
+export async function reserveMealVideoDuration(db:D1Database,familyId:number,seconds:number,now=new Date().toISOString()):Promise<boolean>{
+ if(!Number.isSafeInteger(familyId)||familyId<1||!Number.isSafeInteger(seconds)||seconds<601||seconds>1800)throw new Error('Invalid video duration');
+ const d=day(now),global='project:meal-long-video-seconds',local=`family:${familyId}:meal-long-video-seconds`;
+ await db.batch([global,local].map(s=>db.prepare('INSERT OR IGNORE INTO ai_call_budgets(scope,day,updated_at) VALUES(?,?,?)').bind(s,d,now)));
+ const slot=await db.prepare('UPDATE ai_call_budgets SET calls=calls+?,updated_at=? WHERE scope=? AND day=? AND calls<=? RETURNING calls').bind(seconds,now,global,d,14400-seconds).first();
+ if(!slot)return false;
+ const family=await db.prepare('UPDATE ai_call_budgets SET calls=calls+?,updated_at=? WHERE scope=? AND day=? AND calls<=? RETURNING calls').bind(seconds,now,local,d,3600-seconds).first();
+ if(!family){await db.prepare('UPDATE ai_call_budgets SET calls=calls-? WHERE scope=? AND day=? AND calls>=?').bind(seconds,global,d,seconds).run();return false;}
+ return true;
 }
