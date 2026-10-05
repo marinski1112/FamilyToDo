@@ -1,3 +1,4 @@
+import {receiptShoppingName,receiptShoppingConfirmations} from './meal-receipt-shopping';
 import type {AppContext} from './app-context';
 import {BadRequest} from './errors';
 import {mealId,mealHash,mealText} from './meal-domain';
@@ -15,12 +16,11 @@ function receiptImage(raw:any){
  let bytes:string;try{bytes=atob(data);}catch{throw new BadRequest('画像形式が不正です。');}if(bytes.length>512000)throw new BadRequest('画像は500KB以下に縮小してください。');
  const valid=mime==='image/jpeg'?bytes.charCodeAt(0)===255&&bytes.charCodeAt(1)===216&&bytes.charCodeAt(2)===255:mime==='image/png'?bytes.slice(0,8)==='\x89PNG\r\n\x1a\n':bytes.startsWith('RIFF')&&bytes.slice(8,12)==='WEBP';if(!valid)throw new BadRequest('画像形式が不正です。');return {mimeType:mime,data};
 }
-const normalized=(name:string)=>name.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s/g,'');
 export async function readMealReceipt(ctx:AppContext,id:string){
  const familyId=Number(ctx.member!.family_id),db=ctx.env.MEALS_DB!,row=await db.prepare('SELECT id,status,mode,error_code,created_at FROM receipt_imports WHERE family_id=? AND id=?').bind(familyId,id).first<any>();if(!row)throw new BadRequest('レシートが見つかりません。');
  if(row.status!=='READY')throw new BadRequest('読み取り処理中です。少し待って同じ操作を再試行するか、手入力してください。');
- const [items,shopping]=await Promise.all([db.prepare('SELECT item_index,label,package_count,confidence,status,lot_id FROM receipt_items WHERE family_id=? AND import_id=? ORDER BY item_index LIMIT 40').bind(familyId,id).all<any>(),ctx.env.DB.prepare("SELECT id,name,quantity FROM shopping_items WHERE family_id=? AND status='pending' AND visibility_scope='FAMILY' ORDER BY id LIMIT 200").bind(familyId).all<{id:number;name:string;quantity:string}>()]);
- return {...row,error:row.error_code?messages[row.error_code]:null,items:items.results.map(i=>({...i,matches:shopping.results.filter(s=>normalized(s.name)===normalized(i.label)).map(s=>({id:s.id,name:s.name,quantity:s.quantity}))}))};
+ const [items,shopping,confirmed]=await Promise.all([db.prepare('SELECT item_index,label,package_count,confidence,status,lot_id FROM receipt_items WHERE family_id=? AND import_id=? ORDER BY item_index LIMIT 40').bind(familyId,id).all<any>(),ctx.env.DB.prepare("SELECT id,name,quantity,updated_at FROM shopping_items WHERE family_id=? AND status='pending' AND visibility_scope='FAMILY' ORDER BY id LIMIT 200").bind(familyId).all<{id:number;name:string;quantity:string;updated_at:string}>(),receiptShoppingConfirmations(ctx,id)]);
+ return {...row,error:row.error_code?messages[row.error_code]:null,items:items.results.map(i=>({...i,shopping_confirmation:confirmed.find(c=>c.item_index===i.item_index)||null,matches:shopping.results.filter(s=>receiptShoppingName(s.name)===receiptShoppingName(i.label)).map(s=>({id:s.id,name:s.name,quantity:s.quantity,updated_at:s.updated_at}))}))};
 }
 /** Only normalized purchased labels survive. No raw image, merchant/address, prompt or response storage. */
 export async function importMealReceipt(ctx:AppContext,raw:any){
