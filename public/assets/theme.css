@@ -318,3 +318,7 @@
 :root[data-theme="dark"] .invite-guide{background:var(--card)!important;border-color:var(--line)!important;color:var(--text)!important}
 :root[data-theme="dark"] .invite-guide strong,
 :root[data-theme="dark"] .invite-guide .small{color:var(--muted)!important}
+:root[data-theme="dark"] .food-table-wrap{background:var(--card)!important;color:var(--text)}
+:root[data-theme="dark"] .food-subjects [aria-current]{background:var(--primary-soft)!important}
+:root[data-theme="dark"] .food-table th,:root[data-theme="dark"] .food-table td{border-color:var(--line)}
+:root[data-theme="dark"] .food-table small{color:var(--muted)}
