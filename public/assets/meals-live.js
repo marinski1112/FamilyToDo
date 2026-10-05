@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-const SOCKET='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+const SOCKET='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 const encode=bytes=>{let s='';for(let at=0;at<bytes.length;at+=8192)s+=String.fromCharCode(...bytes.subarray(at,at+8192));return btoa(s);};
 function create({api,onState=()=>{},onText=()=>{},onRequest=()=>{},now=()=>Date.now()}){
  let socket=null,connecting=false,audio=null,stream=null,node=null,mute=null,ready=false,disposed=false,live=null,pending=null,epoch=0,lastInput=0,started=0,timer=null,setupTimer=null,playing=new Set(),nextAudio=0,callIds=new Set();

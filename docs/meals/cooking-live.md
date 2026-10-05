@@ -8,7 +8,7 @@ Cookingの同意チェック→「音声相談を開始」で、その日の保�
 
 MEALS_DB 0012にfamily/member/request/hash/model/status/期限を原子的にclaim。1家族4回/UTC日（失敗も数える）、同時発行は10分の枠1件まで。トークンは1使用、開始可能60秒、送受信期限10分。終了を申告してもproviderトークンを取り消せないため、発行した枠の期限までは次の発行を拒否します。通常AIの共通budget/circuit/台帳にもLive用feature/modelで発行1回を記録します（token発行HTTPの成否であり実音声成功数ではありません）。429はproject circuitに反映します。
 
-GEMINI_API_KEYはserverの固定HTTPS auth_tokens endpointへのheaderだけ。ブラウザには短命のtokenだけ返し、provider WebSocketのaccess_tokenとしてメモリ上で使用。D1の再送receiptはAPP_SECRETからpurposeを分離したAES-GCMとfamily/member/idのAADでtokenを暗号化し、同一メンバー・入力・期限内だけ同じtokenを返します。終了時にcipherを消去、期限後は新規開始操作時に自家族のcipherを消去。7日より古いmetadataは新規開始時に自家族最大20件削除。secretやprovider生エラーを返しません。raw responseは16KB/10秒に制限、redirect拒否。
+GEMINI_API_KEYはserverの固定HTTPS auth_tokens endpointへのheaderだけ。ブラウザには短命のtokenだけ返し、providerの専用BidiGenerateContentConstrained WebSocketのaccess_tokenとしてメモリ上で使用。v1betaは現行のephemeral guideに合わせ、専用メソッド名/リクエスト形状はSDKソースも照合しています。D1の再送receiptはAPP_SECRETからpurposeを分離したAES-GCMとfamily/member/idのAADでtokenを暗号化し、同一メンバー・入力・期限内だけ同じtokenを返します。終了時にcipherを消去、期限後は新規開始操作時に自家族のcipherを消去。7日より古いmetadataは新規開始時に自家族最大20件削除。secretやprovider生エラーを返しません。raw responseは16KB/10秒に制限、redirect拒否。
 
 clientは同意取り消し、最大10分、操作/発話なし2分、画面離脱、通信障害、goAway、過剰bufferで停止。マイクtrack・Worklet・再生buffer・AudioContext・WebSocketを閉じます。自動再接続・自動resumeはありません。idle終了は正規clientの制御、絶対10分はprovider token期限でも制限します。再送のtokenは1使用であり、接続済みtokenを使って2回目に接続できる保証はありません。
 
@@ -28,5 +28,6 @@ AudioWorkletでmono signed16-bit little-endian PCMを2,048 sampleずつ送り、
 - [Google Live WebSocket API](https://ai.google.dev/api/live)
 - [Google Live audio formats](https://ai.google.dev/gemini-api/docs/live-api/capabilities)
 - [Google SDK token wire conversion](https://github.com/googleapis/js-genai/blob/main/src/tokens.ts)（bidiGenerateContentSetupのflatten/lock仕様）
+- [Google SDK Live transport](https://github.com/googleapis/js-genai/blob/main/src/live.ts)（ephemeral token専用Constrained endpoint）
 
 新しい0012は既存npm run deployで自動適用します。previewはmigration未適用のためhealthが503となり得ます。LIFF入口/Androidのネイティブ音声対応、profile/在庫の追加同意共有は後続です。
