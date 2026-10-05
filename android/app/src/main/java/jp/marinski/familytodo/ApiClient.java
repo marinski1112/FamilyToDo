@@ -41,7 +41,7 @@ final class ApiClient {
         forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
         try {
-            connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
+            connection.setConnectTimeout(10_000); connection.setReadTimeout(path.startsWith("/api/meals/v1")?40_000:15_000);
             connection.setInstanceFollowRedirects(false);
             String cookies=CookieManager.getInstance().getCookie(ORIGIN);
             if(cookies!=null) connection.setRequestProperty("Cookie",cookies);
@@ -130,10 +130,10 @@ final class ApiClient {
     static JSONObject homeDashboard() throws Exception {
         if(BuildConfig.UI_TEST_MODE) {
             if(fixtureTransport==null)throw new IllegalStateException("No fixture transport");
-            return HomeDashboardParser.parse(fixtureTransport.request("/app/index.php",null,"GET").optString("html"));
+            return HomeDashboardParser.parse(fixtureTransport.request("/app/home.php",null,"GET").optString("html"));
         }
         forbidFixtureNetwork();
-        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/app/index.php").openConnection();
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+"/app/home.php").openConnection();
         try {
             connection.setConnectTimeout(10000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept","text/html");connection.setRequestProperty("Cache-Control","no-cache");
@@ -294,7 +294,7 @@ final class ApiClient {
         forbidFixtureNetwork();
         HttpURLConnection connection = (HttpURLConnection) new URL(ORIGIN + path).openConnection();
         try {
-            connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
+            connection.setConnectTimeout(10_000); connection.setReadTimeout(path.startsWith("/api/meals/v1")?40_000:15_000);
             connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept", "application/json");
             String cookies = CookieManager.getInstance().getCookie(ORIGIN);
