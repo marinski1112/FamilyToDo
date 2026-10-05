@@ -5,7 +5,7 @@ export function parseMealLineText(raw:unknown):{kind:'WISH'|'RECIPE_URL';content
  const text=raw.normalize('NFKC').trim();
  const wish=/^(.{1,120}?)\s*食べたい[!！。]*$/u.exec(text)||/^食べたい[\s:：]+(.{1,120})$/u.exec(text);
  if(wish&&wish[1].trim()&&!/[\r\n]/.test(wish[1])&&!/https?:\/\//i.test(wish[1]))return {kind:'WISH',content:wish[1].trim()};
- const candidate=text.replace(/^レシピ[\s:：]+/u,'');
+ const candidate=text.replace(/^(?:レシピ|食べたい)[\s:：]+/u,'').replace(/\s*食べたい[!！。]*$/u,'');
  try{const u=new URL(candidate);if(candidate.length<=2048&&['https:','http:'].includes(u.protocol)&&!u.username&&!u.password)return {kind:'RECIPE_URL',content:u.href};}catch{}
  return null;
 }
@@ -18,5 +18,5 @@ export async function receiveMealLine(env:Env,event:any,member:{id:number;family
  if(typeof eventId!=='string'||!eventId||eventId.length>256)return 'ごはんの受信箱に保存できませんでした。Webから登録してください。';
  const id='line-'+await mealHash([member.family_id,eventId]),now=new Date().toISOString();
  await env.MEALS_DB!.prepare('INSERT OR IGNORE INTO meal_inbox(family_id,id,kind,content,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(member.family_id,id,input.kind,input.content,member.id,now,now).run();
- return 'ごはんの受信箱に保存しました。Webの「ごはん → 受信箱」で確認してください。';
+ return input.kind==='RECIPE_URL'?'レシピURLをごはんの受信箱に保存しました。Webの「ごはん → 受信箱」で料理名を入力して「食べたいもの」に追加できます。':'ごはんの受信箱に保存しました。Webの「ごはん → 受信箱」で確認してください。';
 }

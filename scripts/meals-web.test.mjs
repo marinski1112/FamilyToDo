@@ -90,7 +90,7 @@ test('LINE inbox refuses group/unlinked/disabled events and isolates review by f
  await signedWebhook({...ctx.env,MEALS_ENABLED:'false'},[lineEvent()]);assert.equal(meals.sql.prepare('SELECT COUNT(*) c FROM meal_inbox').get().c,0);
  await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);const id=(await call(ctx,null,'?view=inbox')).value.inbox[0].id;
  const other={...ctx,member:{id:2,family_id:2}};assert.equal((await call(other,null,'?view=inbox')).value.inbox.length,0);await call(other,{action:'inbox_dismiss',id});assert.equal((await call(other,{action:'inbox_wish',id})).response.status,404);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,1);
- assert.equal((await call(ctx,{action:'inbox_wish',id})).response.status,404);await call(ctx,{action:'inbox_dismiss',id});await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,0);
+ assert.equal((await call(ctx,{action:'inbox_wish',id})).response.status,400);await call(ctx,{action:'inbox_dismiss',id});await signedWebhook(ctx.env,[lineEvent('url-event','https://example.invalid/recipe')]);assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,0);
 });
 test('LINE meal storage failure requests redelivery, with no provider or URL requests',async()=>{
  const {ctx}=fixture(),originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('unexpected HTTP');};
@@ -479,4 +479,27 @@ test('video provider content filters/rejections stop fallback and candidate adop
   const {ctx}=fixture();ctx.env.GEMINI_API_KEY='test';let count=0;globalThis.fetch=async()=>{count++;return count===1?videoResponse(videoRecipe({confidence:'LOW'})):new Response(JSON.stringify({candidates:[{finishReason:'SAFETY',content:{parts:[{text:JSON.stringify(videoRecipe())}]}}]}));};assert.equal((await call(ctx,videoBody())).response.status,400);assert.equal(count,2);
   const partial=fixture();partial.ctx.env.GEMINI_API_KEY='test';count=0;globalThis.fetch=async()=>{count++;return count===1?new Response(JSON.stringify({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:JSON.stringify(videoRecipe({name:'未完了'}) )}]}}]})):videoResponse();};const complete=await call(partial.ctx,videoBody());assert.equal(count,2);assert.equal(complete.value.draft.name,'動画のテスト料理');assert.equal(complete.value.draft.analysis.model,'gemini-3.5-flash');
  }finally{globalThis.fetch=real;}
+});
+
+test('LINE URL wishes preserve server-owned source, require a name, and cannot resurrect after retries',async()=>{
+ const {ctx}=fixture(),event=lineEvent('url-wish-test','https://example.invalid/recipe 食べたい');
+ const original=globalThis.fetch;let requests=0;globalThis.fetch=async()=>{requests++;throw new Error('unexpected external request');};
+ try{
+ await signedWebhook(ctx.env,[event,event]);const entries=(await call(ctx,null,'?view=inbox')).value.inbox;assert.equal(entries.length,1);assert.equal(entries[0].kind,'RECIPE_URL');const id=entries[0].id;
+ assert.equal((await call(ctx,{action:'inbox_wish',id,name:' '})).response.status,400);
+ assert.equal((await call({...ctx,member:{id:2,family_id:2}},{action:'inbox_wish',id,name:'カレー'})).response.status,404);
+ const body={action:'inbox_wish',id,name:' ハンバーグ ',source_url:'javascript:alert(1)'};await Promise.all([call(ctx,body),call(ctx,body)]);
+ const wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].name,'ハンバーグ');assert.equal(wishes[0].source_url,'https://example.invalid/recipe');assert.equal((await call(ctx,null,'?view=inbox')).value.inbox.length,0);
+ assert.equal(rankMealCandidates([recipe()],wishes.map(w=>w.name),new Set(),60)[0].wish,true);
+ await call(ctx,{action:'wishlist_delete',id});await signedWebhook(ctx.env,[event]);await call(ctx,body);assert.equal((await call(ctx,null)).value.wishlist.length,0);
+ await signedWebhook(ctx.env,[lineEvent('dismiss-url-wish','https://example.invalid/other')]);const dismissed=(await call(ctx,null,'?view=inbox')).value.inbox[0].id;await call(ctx,{action:'inbox_dismiss',id:dismissed});assert.equal((await call(ctx,{action:'inbox_wish',id:dismissed,name:'カレー'})).response.status,409);
+ assert.equal(requests,0);
+ }finally{globalThis.fetch=original;}
+ assert.equal(parseMealLineText('食べたい: https://example.invalid/recipe').kind,'RECIPE_URL');
+});
+test('Web URL wish form confirms escaped name and wishlist retains a recipe import entry',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture();await receiveMealLine(ctx.env,lineEvent('url-wish-ui','https://example.invalid/recipe'),ctx.member);
+ async function open(view){const w=new Window({url:'https://fixture.invalid/app/meals.php?view='+view});w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';w.fetch=(url,options={})=>mealApi(new Request(new URL(url,w.location.href),options),ctx);w.eval(fs.readFileSync('public/assets/meals-cooking.js','utf8'));w.eval(fs.readFileSync('public/assets/meals.js','utf8'));return w;}
+ const w=await open('inbox');try{await waitFor(()=>w.document.querySelector('[data-inbox-wish]'));const form=w.document.querySelector('[data-inbox-wish]');assert.equal((await call(ctx,null)).value.wishlist.length,0);form.querySelector('[name=name]').value='<img src=x onerror=alert(1)>';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>!w.document.querySelector('[data-inbox-wish]'));assert(w.document.querySelector('#mealStatus').textContent.includes('元のURL'));}finally{w.happyDOM.abort();w.close();}
+ const list=await open('wishlist');try{await waitFor(()=>list.document.querySelector('[data-wish-import]'));assert.equal(list.document.querySelector('#mealContent img'),null);assert.equal(list.document.querySelector('a[target=_blank]').href,'https://example.invalid/recipe');list.document.querySelector('[data-wish-import]').click();assert.equal(list.document.querySelector('[name=url]').value,'https://example.invalid/recipe');}finally{list.happyDOM.abort();list.close();}
 });
