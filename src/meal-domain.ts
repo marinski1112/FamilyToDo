@@ -3,6 +3,8 @@ export type MealIngredient={name:string;quantity:number;unit:string;quantity_tex
 export function mealAmountText(raw:unknown):string{const text=mealText(raw,80);if(/[\u0000-\u001f\u007f]/u.test(text)||!/[\p{L}\p{N}]/u.test(text)||/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)||/^(?:nan|[+-]?infinity)$/i.test(text))throw new BadRequest('数量は正の数か、少々・適量などの表記で入力してください。');return text;}
 /** Copies a literal qualitative suffix, never infers a numeric amount. */
 export function mealLiteralAmount(raw:string):{name:string;quantity_text:string}|null{const m=/^(.+?)\s*\(?\s*(少々|適量|適宜|お好みで|お好み|ひとつまみ|ふたつまみ)\s*\)?$/u.exec(raw.normalize('NFKC').trim());if(!m||/[~〜～–-]$/.test(m[1].trim()))return null;const name=m[1].trim().replace(/[:：]$/u,'').trim();return name?{name,quantity_text:m[2]}:null;}
+/** Only metric mass/volume, never counts, package weights, density or spoon measures. */
+export function mealUnit(unit:string):{unit:string;factor:number}{switch(unit){case 'kg':return {unit:'g',factor:1000};case 'g':return {unit:'g',factor:1};case 'L':return {unit:'ml',factor:1000};case 'mL':case 'ml':return {unit:'ml',factor:1};default:return {unit,factor:1};}}
 export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
 export type MealPlanItem={date:string;servings:number;recipe:MealRecipe};
 export const mealEnabled=(env:Env)=>env.MEALS_ENABLED==='true'&&!!env.MEALS_DB;
@@ -26,14 +28,15 @@ export function normalizeMealRecipe(raw:any):MealRecipe{
  if(!Array.isArray(raw.steps)||!raw.steps.length||raw.steps.length>50)throw new BadRequest('手順は1〜50件登録してください。');
  return {id:mealId(raw.id),name:mealText(raw.name,120),servings:mealInteger(raw.servings,30),minutes:mealInteger(raw.minutes,1440),source_url:url,ingredients,steps:raw.steps.map((s:unknown)=>mealText(s,2000))};
 }
-/** Different units stay separate. No AI arithmetic or undocumented conversion. */
+/** Metric mass/volume combine; counts and unspecified measures stay separate. */
 export function mealShoppingNeeds(items:MealPlanItem[]):MealIngredient[]{
  const result=new Map<string,MealIngredient>();
  for(const item of items)for(const ingredient of item.recipe.ingredients){
   if(ingredient.quantity===null){const key=JSON.stringify(['TEXT',ingredient.name,ingredient.quantity_text]);result.set(key,{...ingredient});continue;}
-  const key=JSON.stringify(['NUMBER',ingredient.name,ingredient.unit]),old=result.get(key),amount=ingredient.quantity*item.servings/item.recipe.servings;result.set(key,{name:ingredient.name,unit:ingredient.unit,quantity:(old?.quantity??0)+amount});
+  const base=mealUnit(ingredient.unit),key=JSON.stringify(['NUMBER',ingredient.name,base.unit]),old=result.get(key),amount=ingredient.quantity*base.factor*item.servings/item.recipe.servings;result.set(key,{name:ingredient.name,unit:base.unit,quantity:(old?.quantity??0)+amount});
  }
  const rows=[...result.values()].map(x=>x.quantity===null?x:{...x,quantity:Math.round(x.quantity*10000)/10000});
+ if(rows.some(x=>x.quantity!==null&&!Number.isSafeInteger(Math.round(x.quantity*10000))))throw new BadRequest('献立の数量が大きすぎます。人数・分量を確認してください。');
  if(rows.length>100)throw new BadRequest('食材が100件を超えています。献立を分けてください。');
  return rows;
 }
