@@ -1,3 +1,4 @@
+import {validateReceiptItems} from '../src/meal-receipts.ts';
 import {mealImportUrl,extractMealRecipe,parseImportedIngredient} from '../src/meal-url-import.ts';
 import {mealsHealth} from '../src/meal-health.ts';
 import test from 'node:test';
@@ -292,4 +293,62 @@ test('Web stock registration reuses receipt after lost response and cooking alwa
   const c=await browser('https://fixture.invalid/app/meals.php?view=cook&date=2026-10-05'),cd=c.document;await waitFor(()=>cd.querySelector('#cooked'));cd.querySelector('#cooked').click();await waitFor(()=>cd.querySelector('#confirmCooked'));assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM cooked_events').get().n,0);assert(cd.querySelector('#consumeInventory').checked);assert(cd.querySelector('#mealContent').textContent.includes('400g'));
   cd.querySelector('#cancelCooked').click();assert.equal((await stock(ctx)).lots[0].quantity,400);cd.querySelector('#cooked').click();await waitFor(()=>cd.querySelector('#confirmCooked'));cd.querySelector('#confirmCooked').click();await waitFor(()=>cd.querySelector('#cooked')?.disabled);assert.equal((await stock(ctx)).lots[0].quantity,0);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM cooked_events').get().n,1);
  }finally{windows.forEach(w=>{w.happyDOM.abort();w.close();});}
+});
+
+const receiptPNG='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jIh0AAAAASUVORK5CYII=';
+const photoBody={action:'receipt_import',request_id:'receipt-photo-0001',mime_type:'image/png',image_base64:receiptPNG};
+const receiptAI=items=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({items})}]}}]}),{headers:{'content-type':'application/json'}});
+test('receipt schema rejects invented fields/counts; manual import matches only pending shared items of this family',async()=>{
+ assert(validateReceiptItems({items:[{label:'ひき肉',count:2,confidence:'LOW'}]}));for(const value of [{items:[{label:'肉',count:-1,confidence:'HIGH'}]},{items:[{label:'肉',count:2.5,confidence:'HIGH'}]},{items:[{label:'肉',count:null,confidence:'HIGH',grams:300}]},{items:[],address:'private'}])assert.equal(validateReceiptItems(value),null);
+ const {ctx,main,meals}=fixture();main.sql.exec("INSERT INTO shopping_items(family_id,name,quantity,status,visibility_scope,private_owner_id,created_at,updated_at) VALUES(1,'ひき肉','300g','pending','FAMILY',NULL,'x','x'),(2,'ひき肉','900g','pending','FAMILY',NULL,'x','x'),(1,'玉ねぎ','1個','pending','PRIVATE',1,'x','x');");
+ const body={action:'receipt_import',request_id:'receipt-manual-01',manual_text:'ひき肉\n玉ねぎ'};const result=await call(ctx,body);assert.equal(result.value.receipt.items.length,2);assert.equal(result.value.receipt.items[0].matches.length,1);assert.equal(result.value.receipt.items[0].matches[0].quantity,'300g');assert.equal(result.value.receipt.items[1].matches.length,0);assert.equal((await stock(ctx)).lots.length,0);assert.equal(main.sql.prepare("SELECT COUNT(*) n FROM shopping_items WHERE status='pending'").get().n,3);
+ await call(ctx,body);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM receipt_items').get().n,2);assert.equal((await call(ctx,{...body,manual_text:'牛乳'})).response.status,400);
+});
+test('photo receipt is budgeted and claimed once; request retries retain only validated labels, never image or raw response',async()=>{
+ const {ctx,meals,main}=fixture(),real=globalThis.fetch;ctx.env.GEMINI_API_KEY='synthetic-key';ctx.env.FAMILY_AI_PROVIDER='GEMINI';let count=0;
+ globalThis.fetch=async(url,options)=>{count++;const body=JSON.parse(options.body);assert.equal(body.contents[0].parts[0].inlineData.data,receiptPNG);return receiptAI([{label:'ひき肉',count:2,confidence:'MEDIUM'}]);};
+ try{
+  assert.equal((await call({...ctx,member:null},photoBody)).response.status,401);assert.equal((await call(ctx,{...photoBody,csrf:'wrong'})).response.status,403);assert.equal(count,0);
+  const results=await Promise.all([call(ctx,photoBody),call(ctx,photoBody)]);assert(results.some(r=>r.response.status===200));assert.equal(count,1);const again=await call(ctx,photoBody);assert.equal(again.value.receipt.items[0].package_count,2);assert.equal(count,1);
+  const persisted=JSON.stringify(meals.sql.prepare('SELECT * FROM receipt_imports').get())+JSON.stringify(meals.sql.prepare('SELECT * FROM receipt_items').get());assert(!persisted.includes(receiptPNG));assert(!persisted.includes('synthetic-key'));assert(!persisted.includes('candidates'));assert.equal(main.sql.prepare("SELECT SUM(calls) n FROM ai_call_daily WHERE feature='MEAL_RECEIPT_PARSE'").get().n,1);assert.equal((await stock(ctx)).lots.length,0);
+ }finally{globalThis.fetch=real;}
+});
+test('receipt quota has no cross-model fallback/retry, malformed answers degrade, and manual remains usable',async()=>{
+ const {ctx}=fixture(),real=globalThis.fetch;ctx.env.GEMINI_API_KEY='synthetic-key';let count=0;
+ try{
+  globalThis.fetch=async()=>{count++;return new Response('private upstream body',{status:429});};const result=await call(ctx,photoBody);assert.equal(result.value.receipt.error_code,'RATE_LIMIT');await call(ctx,photoBody);assert.equal(count,1);assert.equal(result.value.receipt.items.length,0);assert(!JSON.stringify(result.value).includes('private'));
+  assert.equal((await call(ctx,{action:'receipt_import',request_id:'receipt-manual-quota',manual_text:'牛乳'})).response.status,200);
+  const f=fixture();f.ctx.env.GEMINI_API_KEY='synthetic-key';globalThis.fetch=async()=>{count++;return receiptAI([{label:'肉',count:300,confidence:'HIGH',grams:300}]);};const invalid=await call(f.ctx,photoBody);assert.equal(invalid.value.receipt.error_code,'INVALID_OUTPUT');assert.equal(invalid.value.receipt.items.length,0);
+  const missing=await call(fixture().ctx,photoBody);assert.equal(missing.value.receipt.error_code,'NOT_CONFIGURED');assert.equal(count,2);
+  const before=count;for(const override of [{mime_type:'image/svg+xml'},{image_base64:'bad'},{image_base64:Buffer.from('not a png image').toString('base64')}])assert.equal((await call(ctx,{...photoBody,...override,request_id:'receipt-invalid-image'})).response.status,400);assert.equal(count,before);
+ }finally{globalThis.fetch=real;}
+});
+test('receipt 5xx fallback is bounded and fresh import limit does not prevent old receipt retries',async()=>{
+ const {ctx}=fixture(),real=globalThis.fetch;ctx.env.GEMINI_API_KEY='synthetic-key';let count=0;
+ try{globalThis.fetch=async()=>{count++;return count===1?new Response('',{status:503}):receiptAI([{label:'牛乳',count:null,confidence:'LOW'}]);};assert.equal((await call(ctx,photoBody)).value.receipt.items.length,1);assert.equal(count,2);
+  for(let i=1;i<20;i++)assert.equal((await call(ctx,{action:'receipt_import',request_id:'receipt-daily-'+i,manual_text:'牛乳'})).response.status,200);
+  assert.equal((await call(ctx,{action:'receipt_import',request_id:'receipt-over-daily',manual_text:'牛乳'})).response.status,400);assert.equal((await call(ctx,photoBody)).response.status,200);assert.equal(count,2);
+ }finally{globalThis.fetch=real;}
+});
+test('receipt item confirmation and stock/audit are atomic, tenant scoped and retry-safe after removal',async()=>{
+ const {ctx,meals}=fixture();await call(ctx,{action:'receipt_import',request_id:'receipt-stock-0001',manual_text:'ひき肉'});const body={action:'receipt_confirm',id:'receipt-stock-0001',item_index:0,lot:lot()};assert.equal((await call({...ctx,member:{...ctx.member,id:2,family_id:2}},body)).response.status,400);
+ meals.sql.exec("CREATE TRIGGER receipt_fail BEFORE INSERT ON inventory_events BEGIN SELECT RAISE(ABORT,'synthetic receipt audit failure'); END");await assert.rejects(()=>call(ctx,body));assert.equal((await stock(ctx)).lots.length,0);assert.equal(meals.sql.prepare('SELECT status FROM receipt_items').get().status,'PENDING');meals.sql.exec('DROP TRIGGER receipt_fail');
+ const results=await Promise.all([call(ctx,body),call(ctx,body)]);assert(results.every(r=>r.response.status===200));const inventory=await stock(ctx);assert.equal(inventory.lots.length,1);assert.equal(inventory.lots[0].quantity,300);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM inventory_events').get().n,1);assert.equal(inventory.revision,1);
+ assert.equal((await call(ctx,{...body,lot:lot({quantity:900})})).response.status,400);await call(ctx,{action:'inventory_archive',request_id:'receipt-stock-archive',id:inventory.lots[0].id,revision:inventory.lots[0].revision});await call(ctx,body);assert.equal((await stock(ctx)).lots.length,0);
+});
+test('Web manual receipt leaves stock amount empty and requires explicit per-item confirmation',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view=receipts'});let lost=true,ids=[];
+ try{
+  w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null,response=await mealApi(new Request(new URL(url,w.location.href),options),ctx);if(body?.action==='receipt_import'){ids.push(body.request_id);if(lost){lost=false;throw new Error('synthetic lost response');}}return response;};w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const doc=w.document;
+  await waitFor(()=>doc.querySelector('#newReceipt'));doc.querySelector('#newReceipt').click();const form=doc.querySelector('#receiptForm');form.elements.manual_text.value='ひき肉';const submit=()=>{const e=new w.Event('submit',{bubbles:true,cancelable:true});Object.defineProperty(e,'submitter',{value:{value:'MANUAL'}});form.dispatchEvent(e);};submit();await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('synthetic lost response'));submit();await waitFor(()=>doc.querySelector('[data-receipt-item]'));assert.equal(ids[0],ids[1]);assert.equal((await stock(ctx)).lots.length,0);
+  doc.querySelector('[data-receipt-item]').click();const editor=doc.querySelector('#inventoryForm');assert.equal(editor.elements.quantity.value,'');assert.equal(editor.elements.unit.value,'');editor.elements.quantity.value='300';editor.elements.unit.value='g';editor.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('在庫を保存'));assert.equal((await stock(ctx)).lots[0].quantity,300);assert.equal(doc.querySelector('[data-receipt-item]'),null);assert.equal(meals.sql.prepare('SELECT status FROM receipt_items').get().status,'CONFIRMED');
+ }finally{w.happyDOM.abort();w.close();}
+});
+
+test('many shopping needs and receipt labels fit the Free D1 statement budget without partial insertion',async()=>{
+ const {ctx,main,meals}=fixture();const mainBatch=ctx.env.DB.batch,mealBatch=ctx.env.MEALS_DB.batch;ctx.env.DB.batch=stmts=>{assert(stmts.length<=50,'main free query budget');return mainBatch(stmts);};ctx.env.MEALS_DB.batch=stmts=>{assert(stmts.length<=50,'meal free query budget');return mealBatch(stmts);};
+ for(let i=0;i<2;i++)await call(ctx,{action:'save_recipe',recipe:{...recipe('recipe-many-'+i),ingredients:Array.from({length:30},(_,j)=>({name:'食材'+(i*30+j),quantity:1,unit:'個'}))}});
+ const plan=(await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',status:'CONFIRMED',items:[{date:'2026-10-05',recipe_id:'recipe-many-0',servings:2},{date:'2026-10-06',recipe_id:'recipe-many-1',servings:2}]}})).value.plan;
+ const preview=(await call(ctx,null,'?view=shopping_preview&week=2026-10-05')).value;assert.equal(preview.needs.length,60);const body={action:'shopping_confirm',week_start:'2026-10-05',revision:plan.revision,preview_hash:preview.preview_hash,selected:Array.from({length:60},(_,i)=>i)};assert.equal((await call(ctx,body)).response.status,200);await call(ctx,body);assert.equal(main.sql.prepare('SELECT COUNT(*) n FROM shopping_items').get().n,60);
+ const result=await call(ctx,{action:'receipt_import',request_id:'receipt-many-labels',manual_text:Array.from({length:40},(_,i)=>'食材'+i).join('\n')});assert.equal(result.value.receipt.items.length,40);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM receipt_items').get().n,40);
 });

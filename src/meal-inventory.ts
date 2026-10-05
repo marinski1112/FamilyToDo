@@ -7,7 +7,7 @@ import {mealWeek} from './meal-domain';
 type Lot={id:string;name:string;tracking:string;remaining_ticks:number;unit:string;present:number;storage:string;purchased_on:string;expires_on:string|null;revision:string;archived:number};
 export const inventoryToday=(ctx:AppContext)=>familyDate(String(ctx.member!.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE));
 const ticks=(value:unknown)=>{if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>100000)throw new BadRequest('在庫の数量は0〜100000で入力してください。');const n=Math.round(value*10000);if(value>0&&n===0)throw new BadRequest('数量は0.0001以上で入力してください。');return n;};
-function normalizeLot(raw:any){
+export function normalizeLot(raw:any){
  if(!raw||typeof raw!=='object')throw new BadRequest('在庫を入力してください。');
  const tracking=String(raw.tracking||'');if(!['EXACT','APPROXIMATE','PRESENCE','UNTRACKED'].includes(tracking))throw new BadRequest('在庫の管理方法を選んでください。');
  const quantified=['EXACT','APPROXIMATE'].includes(tracking),quantity=quantified?ticks(raw.quantity):0;
