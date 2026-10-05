@@ -75,6 +75,7 @@ final class MealScreen {
     private void say(String text){if(status!=null)status.setText(text);}
     private JSONObject get(String query)throws Exception{return ApiClient.request("/api/meals/v1"+query,null);}
     private JSONObject post(JSONObject value)throws Exception{
+        if(closed||!host.active()||!java.util.Objects.equals(session,SnapshotCache.currentSessionBinding()))throw new SecurityException("ログインしてください。");
         if(host.csrf().isEmpty())throw new IllegalStateException("ホームを更新してから開き直してください。");
         return ApiClient.request("/api/meals/v1",value.put("csrf",host.csrf()));
     }
@@ -93,7 +94,7 @@ final class MealScreen {
     private JSONObject item(String date){for(int i=0;i<array(overview.optJSONObject("plan"),"items").length();i++){JSONObject item=array(overview.optJSONObject("plan"),"items").optJSONObject(i);if(date.equals(item.optString("date")))return item;}return null;}
     private String mealName(JSONObject item){if(item==null)return "まだ決まっていません";String name=item.optJSONObject("recipe").optString("name");JSONArray sides=array(item,"sides");for(int i=0;i<sides.length();i++)name+=" ＋ "+sides.optJSONObject(i).optString("name");return name;}
     private void draw(){
-        if(body==null||closed)return;clock.removeCallbacksAndMessages(null);body.removeAllViews();dirty=false;
+        if(body==null||closed)return;clock.removeCallbacksAndMessages(null);deadline=0;body.removeAllViews();dirty=false;
         if(overview==null){text("献立を読み込めませんでした。");button("再試行",this::refresh);return;}
         if(page.equals("recipes")){recipes();return;}
         if(page.equals("wishlist")){wishes();return;}

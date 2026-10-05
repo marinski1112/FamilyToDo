@@ -41,7 +41,7 @@ final class ApiClient {
         forbidFixtureNetwork();
         HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
         try {
-            connection.setConnectTimeout(10_000); connection.setReadTimeout(path.startsWith("/api/meals/v1")?40_000:15_000);
+            connection.setConnectTimeout(10_000); connection.setReadTimeout(15_000);
             connection.setInstanceFollowRedirects(false);
             String cookies=CookieManager.getInstance().getCookie(ORIGIN);
             if(cookies!=null) connection.setRequestProperty("Cookie",cookies);

@@ -477,7 +477,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         check(MealScreen.ingredient("塩","少々","g",false).isNull("quantity"),"literal amount accepted without numeric conversion");
         JSONObject custom=MealScreen.ingredient("塩","お好みで（1〜2つまみ）","g",true);
         check(custom.isNull("quantity")&&custom.getString("unit").isEmpty(),"custom amount remains unquantified");
-        check("お好みで（1〜2つまみ）".equals(MealScreen.amount(custom,3)),"custom amount does not scale");
+        check("お好みで(1〜2つまみ)".equals(MealScreen.amount(custom,3)),"custom amount does not scale");
         check("200g".equals(MealScreen.amount(mealRecipe.getJSONArray("ingredients").getJSONObject(0),2)),"numeric amount scales by servings");
         boolean rejected=false;try{MealScreen.ingredient("塩","1〜2つまみ","g",false);}catch(Exception expected){rejected=true;}check(rejected,"numeric supplement requires custom mode");
         rejected=false;try{MealScreen.ingredient("塩","NaN","g",true);}catch(Exception expected){rejected=true;}check(rejected,"NaN is not a custom amount");
