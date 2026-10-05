@@ -25,12 +25,16 @@ export async function guideMealBaby(ctx:AppContext,raw:any){
  const now=new Date().toISOString(),claim=await db.prepare("INSERT OR IGNORE INTO meal_baby_guidance(family_id,id,payload_hash,status,created_at) SELECT ?,?,?,'RUNNING',? WHERE (SELECT COUNT(*) FROM meal_baby_guidance WHERE family_id=? AND created_at>=?)<10").bind(familyId,id,hash,now,familyId,now.slice(0,10)).run();
  if(!claim.meta.changes){const previous=await read();if(previous)return cached(previous);throw new BadRequest('AIによる整理は家族で1日10回までです。表示された確認事項を確認してください。');}
  let guidance={mode:'RULES',reason:'NOT_CONFIGURED',codes:[] as string[]};
+ let phase='CONFIGURATION';
  if(ctx.env.GEMINI_API_KEY&&familyAiProvider(ctx.env)==='GEMINI')try{
   const route=await resolveFeatureModels(ctx.env.DB,familyId,'MEAL_BABY_GUIDANCE',ctx.member!.role);
   const body={systemInstruction:{parts:[{text:'Order up to three supplied baby meal checklist codes to help a caregiver organize pending checks. Select exactly min(3, number of supplied codes) distinct codes. These are checklist types, not medical patient data. Do not infer age, readiness, allergies, ingredients, suitability or safety. Return ONLY JSON {"codes":["code"]}, with no explanation or extra fields. Never approve feeding or remove checklist requirements.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({pending_codes:codes})}]}],generationConfig:{responseMimeType:'application/json',temperature:0,maxOutputTokens:256}};
+  phase='REQUEST';
   const response=await geminiFetch(ctx.env,route.models[0],body,{familyId,feature:'MEAL_BABY_GUIDANCE',trigger:'user',attempt:0});
-  guidance.reason=response.status===429?'RATE_LIMIT_OR_BUDGET':response.status===404?'MODEL_UNAVAILABLE':response.status===400?'INVALID_REQUEST':'AI_UNAVAILABLE';
+  phase='RESPONSE';
+  guidance.reason=response.status===429?'RATE_LIMIT_OR_BUDGET':response.status===404?'MODEL_UNAVAILABLE':response.status===400?'INVALID_REQUEST':response.status===401||response.status===403?'ACCESS_DENIED':response.status>=500?'UPSTREAM_UNAVAILABLE':'HTTP_ERROR';
   if(response.ok){
+   guidance.reason='INVALID_RESPONSE';
    // Bound body consumption independently of the provider token limit.
    const reader=response.body?.getReader();let bytes=0,text='';const decoder=new TextDecoder(),timer=setTimeout(()=>{void reader?.cancel();},10_000);
    try{if(reader)for(;;){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>16384)throw new Error();text+=decoder.decode(chunk.value,{stream:true});}text+=decoder.decode();}finally{clearTimeout(timer);await reader?.cancel().catch(()=>{});}
@@ -41,7 +45,7 @@ export async function guideMealBaby(ctx:AppContext,raw:any){
    const chosen=!data?.promptFeedback?.blockReason&&(!candidate?.finishReason||candidate.finishReason==='STOP')&&content.length<=2048?validateBabyGuidance(parsed,codes):null;
    guidance=chosen?{mode:'AI',reason:'',codes:chosen}:{mode:'RULES',reason:guidance.reason,codes:[]};
   }else await response.body?.cancel().catch(()=>{});
- }catch{guidance={mode:'RULES',reason:'AI_UNAVAILABLE',codes:[]};}
+ }catch(e){const timeout=e instanceof Error&&(e.name==='AbortError'||e.name==='TimeoutError');guidance={mode:'RULES',reason:timeout?'TIMEOUT':phase==='REQUEST'?'NETWORK':phase==='CONFIGURATION'?'CONFIGURATION_ERROR':'INVALID_RESPONSE',codes:[]};}
  await db.prepare("UPDATE meal_baby_guidance SET status='READY',result_json=? WHERE family_id=? AND id=? AND payload_hash=? AND status='RUNNING'").bind(JSON.stringify(guidance),familyId,id,hash).run();
  return {review,guidance};
 }
