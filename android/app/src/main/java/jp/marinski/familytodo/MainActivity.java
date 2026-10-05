@@ -232,6 +232,7 @@ public final class MainActivity extends Activity {
             public Button button(String value,Runnable action){return MainActivity.this.button(value,action);}
             public void web(String path){mealScreen.close();mealScreen=null;showWebPage(path);}
             public void login(){showLogin();}
+            public void shoppingList(){openTodayChecklist("shopping");}
         });
         showNative();
     }
@@ -395,6 +396,10 @@ public final class MainActivity extends Activity {
         return nav;
     }
     private void navigate(String destination) {
+        if(mealScreen!=null){mealScreen.confirmLeave(()->navigateNow(destination));return;}
+        navigateNow(destination);
+    }
+    private void navigateNow(String destination) {
         if(destination.equals("meals")){openMeals();return;}
         if(mealScreen!=null){mealScreen.close();mealScreen=null;}
         if(destination.equals(tab)){if(pageWeb!=null){showNative();if(!BuildConfig.UI_TEST_MODE)load();}return;}
@@ -5605,7 +5610,8 @@ public final class MainActivity extends Activity {
         if(pageWeb!=null) {
             if(pageWeb.canGoBack())pageWeb.goBack();
             else returnFromWebPage();
-        } else if(login!=null&&login.canGoBack()) login.goBack();
+        } else if(mealScreen!=null){navigate("home");}
+        else if(login!=null&&login.canGoBack()) login.goBack();
         else super.onBackPressed();
     }
     @Override protected void onDestroy() { if(mealScreen!=null)mealScreen.close(); if(homeSpeaker!=null)homeSpeaker.close(); network.shutdownNow(); stampMedia.shutdown(); if (login!=null) login.destroy(); super.onDestroy(); }

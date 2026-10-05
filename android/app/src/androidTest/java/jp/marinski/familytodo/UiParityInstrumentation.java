@@ -448,11 +448,15 @@ public final class UiParityInstrumentation extends Instrumentation {
     private JSONObject mealRecipe,mealPlan;
     private String firstWishId,firstRecipeId;
     private boolean mealCooked;
+    private JSONArray mealLots=new JSONArray();
+    private int inventoryAdds,inventoryAdjusts;
+    private String inventoryFirstId;
     private JSONObject mealResponse(String path,JSONObject body)throws Exception {
         if(body!=null){
             check("synthetic".equals(body.optString("csrf")),"meal mutation uses session CSRF");
             mealWrites++;lastMealWrite=new JSONObject(body.toString());
             if("cooked".equals(body.optString("action")))mealCooked=true;
+            if(body.optString("action").startsWith("inventory_"))return inventoryResponse(body);
             if("wishlist_add".equals(body.optString("action"))){
                 wishAttempts++;if(wishAttempts==1){firstWishId=body.optString("id");throw new IllegalStateException("synthetic meal failure");}
                 check(firstWishId.equals(body.optString("id")),"wish retry keeps operation ID");
@@ -464,6 +468,7 @@ public final class UiParityInstrumentation extends Instrumentation {
             }
             return new JSONObject().put("ok",true);
         }
+        if(path.contains("view=inventory"))return new JSONObject().put("ok",true).put("inventory",new JSONObject().put("revision",1).put("lots",new JSONArray(mealLots.toString())));
         if(path.contains("view=recipe"))return new JSONObject().put("ok",true).put("recipe",mealRecipe);
         if(path.contains("view=inbox"))return new JSONObject().put("ok",true).put("line_receipts",new JSONArray()).put("inbox",new JSONArray().put(new JSONObject().put("id","00000000-0000-4000-8000-000000000003").put("kind","RECIPE_URL").put("content","https://example.com/recipe")));
         if(path.contains("view=shopping_preview"))return new JSONObject().put("ok",true).put("week_start",MealScreen.monday(MealScreen.today())).put("revision","synthetic-plan").put("preview_hash","synthetic-preview").put("needs",new JSONArray().put(new JSONObject().put("name","塩").put("quantity",JSONObject.NULL).put("quantity_text","お好みで").put("unit","")));
@@ -495,9 +500,56 @@ public final class UiParityInstrumentation extends Instrumentation {
         clickText("LINE受信箱");waitText("希望メニューにする");onUi(()->((EditText)findDescription(root(),"URLの料理名")).setText("架空のURL料理"));clickText("希望メニューにする");waitText("希望メニューにする");check("inbox_wish".equals(lastMealWrite.optString("action")),"LINE URL saved through inbox confirmation API");
         clickText("献立");clickText("買う食材を確認");waitText("買い物リストに追加");before=mealWrites;clickText("買い物リストに追加");check(mealWrites==before,"shopping without explicit selection cannot write");
         onUi(()->findText(root(),"塩：お好みで").performClick());clickText("買い物リストに追加");waitText("買い物リストに追加しました。");check(lastMealWrite.getJSONArray("selected").getInt(0)==0,"shopping only sends selected ingredient indices");
+        testInventoryAndMealNavigation();
         clickText("レシピ");before=mealWrites;onUi(()->ApiClient.setMutationsEnabled(false));clickText("＋ レシピを登録");check(hasText("通信の確認後に編集できます。ホームを更新してください。"),"offline meal editing is blocked");check(mealWrites==before,"read-only meals cannot mutate");
         onUi(()->ApiClient.setMutationsEnabled(true));navigate("ホーム");
         onUi(()->{try{check(value("mealScreen")==null,"leaving meals releases data and timer");}catch(Exception e){throw new RuntimeException(e);}});
+    }
+    private JSONObject inventoryResponse(JSONObject body)throws Exception {
+        String kind=body.optString("action");
+        if("inventory_add".equals(kind)){
+            inventoryAdds++;if(inventoryAdds==1){inventoryFirstId=body.optString("request_id");throw new IllegalStateException("synthetic inventory failure");}
+            check(inventoryFirstId.equals(body.optString("request_id")),"inventory retry uses stable request ID");
+            JSONObject lot=new JSONObject(body.getJSONObject("lot").toString()).put("id",body.getString("request_id")).put("revision","synthetic-inventory-v1").put("present",1);mealLots.put(lot);
+        }else if("inventory_adjust".equals(kind)){
+            inventoryAdjusts++;
+            JSONObject saved=mealLots.getJSONObject(0);check(saved.optString("id").equals(body.optString("id")),"inventory update targets selected purchase lot");
+            if(inventoryAdjusts==1){saved.put("revision","synthetic-inventory-v2");throw new IllegalStateException("在庫が更新されています。読み込み直してください。");}
+            check(saved.optString("revision").equals(body.optString("revision")),"inventory update uses refreshed revision");
+            JSONObject lot=new JSONObject(body.getJSONObject("lot").toString()).put("id",saved.optString("id")).put("revision","synthetic-inventory-v3").put("present",body.getJSONObject("lot").optBoolean("present")?1:0);mealLots.put(0,lot);
+        }else if("inventory_archive".equals(kind)){
+            check(body.optString("id").equals(mealLots.getJSONObject(0).optString("id")),"inventory archive targets original lot");
+            check(body.optString("revision").equals(mealLots.getJSONObject(0).optString("revision")),"archive includes current lot revision");mealLots.remove(0);
+        }else throw new AssertionError("Unexpected inventory action");
+        return new JSONObject().put("ok",true);
+    }
+    private void clickActiveDialog(String text)throws Exception {
+        for(int i=0;i<100;i++){
+            android.view.accessibility.AccessibilityNodeInfo window=getUiAutomation().getRootInActiveWindow();
+            if(window!=null){for(android.view.accessibility.AccessibilityNodeInfo node:window.findAccessibilityNodeInfosByText(text)){
+                if(text.contentEquals(node.getText()==null?"":node.getText())&&node.isClickable()&&node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){settle();return;}
+            }}Thread.sleep(30);
+        }throw new AssertionError("dialog action not found: "+text);
+    }
+    private void testInventoryAndMealNavigation()throws Exception {
+        JSONObject zero=MealScreen.lotValue("テスト","EXACT","0","g",false,"PANTRY",MealScreen.today(),"");check(zero.getDouble("quantity")==0,"zero stock remains a valid numeric quantity");
+        JSONObject presence=MealScreen.lotValue("テスト","PRESENCE","invalid","g",false,"PANTRY",MealScreen.today(),"");check(presence.getString("unit").isEmpty()&&!presence.getBoolean("present"),"presence mode ignores numeric fields and preserves absent state");
+        check(MealScreen.lotValue("テスト","APPROXIMATE","０．５","kg",true,"FREEZER",MealScreen.today(),"").getDouble("quantity")==0.5,"approximate quantity normalizes full width input");
+        check(MealScreen.lotValue("テスト","UNTRACKED","invalid","kg",true,"FREEZER",MealScreen.today(),"").getDouble("quantity")==0,"untracked stock does not send a numeric amount");
+        boolean rejected=false;try{MealScreen.lotValue("テスト","EXACT","NaN","g",true,"FRIDGE",MealScreen.today(),"");}catch(Exception expected){rejected=true;}check(rejected,"non-finite inventory quantity rejected");
+        rejected=false;try{MealScreen.lotValue("テスト","EXACT","1","g",true,"FRIDGE","2026-02-30","");}catch(Exception expected){rejected=true;}check(rejected,"invalid inventory date rejected");
+        clickText("在庫");waitText("＋ 在庫を登録");check(hasText("食材の在庫はまだありません。"),"empty native inventory is usable");clickText("＋ 在庫を登録");
+        onUi(()->{((EditText)findDescription(root(),"食材名")).setText("架空の在庫");((EditText)findDescription(root(),"在庫の数量")).setText("0.75");((EditText)findDescription(root(),"在庫の単位")).setText("kg");((android.widget.Spinner)findDescription(root(),"保存場所")).setSelection(1);});
+        onUi(()->{findText(root(),"在庫を保存").performClick();findText(root(),"在庫を保存").performClick();});waitText("synthetic inventory failure");check(inventoryAdds==1,"inventory double submission blocked");check(hasText("0.75"),"failed inventory save retains quantity");clickText("在庫を保存");waitText("調整：架空の在庫");check(inventoryAdds==2,"same inventory request can be retried");check(hasText("架空の在庫：0.75kg"),"native inventory displays precise fractional quantity");screenshot("meals-inventory");
+        clickText("調整：架空の在庫");onUi(()->{((android.widget.Spinner)findDescription(root(),"在庫の管理方法")).setSelection(2);});settle();
+        onUi(()->{check(!findDescription(root(),"在庫の数量").isEnabled()&&!findDescription(root(),"在庫の単位").isEnabled(),"presence mode disables numeric fields");((CheckBox)findText(root(),"食材がある")).setChecked(false);});
+        screenshot("meals-inventory-editor");clickText("在庫を保存");waitText("在庫が更新されています。読み込み直してください。");check(hasText("在庫を保存"),"conflicting stock edit stays open");clickText("戻る");clickActiveDialog("移動");waitText("調整：架空の在庫");
+        clickText("調整：架空の在庫");onUi(()->((android.widget.Spinner)findDescription(root(),"在庫の管理方法")).setSelection(2));settle();onUi(()->((CheckBox)findText(root(),"食材がある")).setChecked(false));clickText("在庫を保存");waitText("調整：架空の在庫");check(hasText("架空の在庫：ない"),"absence is preserved after adjusting refreshed stock");check(lastMealWrite.getJSONObject("lot").getString("unit").isEmpty(),"unquantified inventory never sends a numeric unit");
+        clickText("調整：架空の在庫");int before=mealWrites;clickText("この購入分を一覧から外す");clickActiveDialog("戻る");check(mealWrites==before,"archive cancellation does not mutate inventory");clickText("この購入分を一覧から外す");clickActiveDialog("一覧から外す");waitText("食材の在庫はまだありません。");check(mealLots.length()==0,"confirmed archive removes only selected lot");
+        onUi(()->ApiClient.setMutationsEnabled(false));before=mealWrites;clickText("＋ 在庫を登録");check(mealWrites==before&&hasText("通信の確認後に編集できます。ホームを更新してください。"),"read-only inventory editing blocked");onUi(()->ApiClient.setMutationsEnabled(true));
+        clickText("レシピ");clickText("＋ レシピを登録");onUi(()->((EditText)findDescription(root(),"料理名")).setText("消さない入力"));navigate("ホーム");
+        clickActiveDialog("入力に戻る");check(hasText("消さない入力"),"home navigation cancellation retains recipe input");onUi(()->activity.onBackPressed());clickActiveDialog("入力に戻る");check(hasText("消さない入力"),"system Back cancellation retains recipe input");
+        onUi(()->activity.onBackPressed());clickActiveDialog("移動");check(hasText("🍽 ごはん・献立管理"),"confirmed Back returns to household home");clickText("🍽 ごはん・献立管理");waitText("料理を始める");
     }
     private int countDescription(View view,String description){int count=description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription())?1:0;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)count+=countDescription(group.getChildAt(i),description);}return count;}
     private void testChecklistDates()throws Exception {
