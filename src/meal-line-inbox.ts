@@ -1,3 +1,4 @@
+import {receiveMealLineReceipt} from './meal-line-receipts';
 import {mealEnabled,mealHash} from './meal-domain';
 /** Explicit meal input only; no provider request, URL fetch or free-form inference. */
 export function parseMealLineText(raw:unknown):{kind:'WISH'|'RECIPE_URL';content:string}|null{
@@ -11,7 +12,9 @@ export function parseMealLineText(raw:unknown):{kind:'WISH'|'RECIPE_URL';content
 }
 /** Caller must verify the LINE signature and resolve an active linked member first. */
 export async function receiveMealLine(env:Env,event:any,member:{id:number;family_id:number}|null):Promise<string|null>{
- if(!mealEnabled(env)||!member||event?.type!=='message'||event?.message?.type!=='text'||event?.source?.type!=='user')return null;
+ if(!mealEnabled(env)||!member||event?.type!=='message'||event?.source?.type!=='user')return null;
+ const receiptReply=await receiveMealLineReceipt(env,event,member);if(receiptReply)return receiptReply;
+ if(event?.message?.type!=='text')return null;
  const input=parseMealLineText(event.message.text);if(!input)return null;
  // IDs are transport deduplication keys, never derived from user text or timestamps.
  const eventId=event.webhookEventId||event.message.id;

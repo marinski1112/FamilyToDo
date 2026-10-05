@@ -1,3 +1,4 @@
+import {readLineReceipts,prepareLineReceipt,dismissLineReceipt,completeLineReceipt} from './meal-line-receipts';
 import {importMealYouTube} from './meal-youtube';
 import {readMealBaby,saveMealBaby,previewMealBaby} from './meal-baby';
 import {importMealReceipt,readMealReceipt,confirmMealReceiptItem} from './meal-receipts';
@@ -28,7 +29,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(view==='receipts')return out({ok:true,receipts:(await db.prepare('SELECT id,mode,status,error_code,created_at FROM receipt_imports WHERE family_id=? ORDER BY created_at DESC LIMIT 30').bind(familyId).all()).results});
   if(view==='inventory')return out({ok:true,inventory:await readMealInventory(db,familyId)});
   if(view==='cooking_preview')return out({ok:true,preview:await mealCookingPreview(ctx,mealDate(url.searchParams.get('date')))});
-  if(view==='inbox')return out({ok:true,inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
+  if(view==='inbox')return out({ok:true,line_receipts:await readLineReceipts(ctx),inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
   if(view==='recipe'){const recipe=await mealRecipe(db,familyId,mealId(url.searchParams.get('id')));return out({ok:!!recipe,recipe},recipe?200:404);}
   if(view==='shopping_preview'){const plan=await readMealPlan(db,familyId,week);if(!plan||plan.status!=='CONFIRMED')return out({ok:false,error:'献立を確定してください。'},409);const {needs,inventory_revision}=await mealShoppingInventory(ctx,plan);return out({ok:true,week_start:week,revision:plan.revision,needs,inventory_revision,preview_hash:await mealHash({revision:plan.revision,needs,inventory_revision})});}
   const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),db.prepare('SELECT id,name,source_url FROM meal_wishlist WHERE family_id=? ORDER BY created_at DESC,id LIMIT 200').bind(familyId).all(),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
@@ -43,6 +44,9 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  if(text.length>150000&&b?.action!=='receipt_import')return out({ok:false,error:'入力が大きすぎます。'},413);
  if(!ctx.session.csrfToken||!b?.csrf||b.csrf!==ctx.session.csrfToken)return out({ok:false,error:'画面を開き直してください。'},403);
  try{
+  if(b.action==='line_receipt_image')return out({ok:true,...await prepareLineReceipt(ctx,b.id)});
+  if(b.action==='line_receipt_dismiss'){await dismissLineReceipt(ctx,mealId(b.id));return out({ok:true});}
+  if(b.action==='line_receipt_complete'){await completeLineReceipt(ctx,mealId(b.id));return out({ok:true});}
   if(b.action==='inbox_dismiss'){await db.prepare("UPDATE meal_inbox SET status='DISMISSED',updated_at=? WHERE family_id=? AND id=? AND status='PENDING'").bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='inbox_wish'){
    const id=mealId(b.id),row=await db.prepare('SELECT kind,status,content FROM meal_inbox WHERE family_id=? AND id=?').bind(familyId,id).first<{kind:string;status:string;content:string}>();
