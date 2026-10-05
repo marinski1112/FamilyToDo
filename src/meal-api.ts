@@ -1,3 +1,4 @@
+import {guideMealBaby} from './meal-baby-guidance';
 import {startMealLive,endMealLive} from './meal-live';
 import {searchMealPublisher} from './meal-publisher-search';
 import {confirmReceiptShopping} from './meal-receipt-shopping';
@@ -61,6 +62,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,source_url,created_by,created_at) SELECT family_id,id,?,?,?,? FROM meal_inbox WHERE family_id=? AND id=? AND status='PENDING'").bind(name,source,m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
   }
   if(b.action==='baby_save')return out({ok:true,profile:await saveMealBaby(ctx,b)});
+  if(b.action==='baby_guidance')return out({ok:true,...await guideMealBaby(ctx,b)});
   if(b.action==='baby_preview')return out({ok:true,review:await previewMealBaby(ctx,b)});
   if(b.action==='receipt_import')return out({ok:true,receipt:await importMealReceipt(ctx,b)});
   if(b.action==='receipt_shopping_confirm')return out({ok:true,...await confirmReceiptShopping(ctx,b)});
