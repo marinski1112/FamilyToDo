@@ -13,6 +13,8 @@ test('late compact daily navigation replaces the placeholder and keeps one bound
   const late=d.createElement('nav');late.className='family-log-bottom-journal';late.innerHTML='<a href="/app/child_journal.php">growth</a><a href="/app/family_journal.php">family</a><a href="/app/child_foods.php">food</a><a href="/app/child_foods.php">duplicate</a>';
   let clicks=0;const bound=late.querySelector('a');bound.addEventListener('click',e=>{e.preventDefault();clicks++;});d.querySelector('.family-log-page').append(late);
   await settle();assert.equal(d.querySelectorAll('.family-log-bottom-journal').length,1);assert.equal(d.querySelector('.family-log-bottom-journal'),late);assert.equal(late.querySelectorAll('a').length,4);assert(late.classList.contains('family-log-persistent-journal'));bound.click();assert.equal(clicks,1);
+  assert(late.querySelector('[data-family-log-summary-link]'));assert.equal(late.querySelector('[aria-current]'),null);
+  const extra=d.createElement('a');extra.href='/app/family_log.php?dashboard=1#familyLogSummary';late.append(extra);await settle();assert.equal(late.querySelectorAll('a').length,4);
   late.remove();await settle();assert.equal(d.querySelectorAll('.family-log-bottom-journal').length,1);
  }finally{await w.happyDOM.close();}
 });
