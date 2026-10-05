@@ -31,7 +31,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(view==='inbox')return out({ok:true,inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
   if(view==='recipe'){const recipe=await mealRecipe(db,familyId,mealId(url.searchParams.get('id')));return out({ok:!!recipe,recipe},recipe?200:404);}
   if(view==='shopping_preview'){const plan=await readMealPlan(db,familyId,week);if(!plan||plan.status!=='CONFIRMED')return out({ok:false,error:'献立を確定してください。'},409);const {needs,inventory_revision}=await mealShoppingInventory(ctx,plan);return out({ok:true,week_start:week,revision:plan.revision,needs,inventory_revision,preview_hash:await mealHash({revision:plan.revision,needs,inventory_revision})});}
-  const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),db.prepare('SELECT id,name FROM meal_wishlist WHERE family_id=? ORDER BY created_at DESC,id LIMIT 200').bind(familyId).all(),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
+  const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),db.prepare('SELECT id,name,source_url FROM meal_wishlist WHERE family_id=? ORDER BY created_at DESC,id LIMIT 200').bind(familyId).all(),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
   const today=familyDate(String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),tomorrowDate=shiftMealDate(today,1);let tomorrow_item=null;
   if(week===mealWeek(today)&&mealWeek(tomorrowDate)!==week){const next=await readMealPlan(db,familyId,mealWeek(tomorrowDate));tomorrow_item=next?.items.find((i:any)=>i.date===tomorrowDate)||null;}
   return out({ok:true,recipes,wishlist:wishlist.results,plan,cooked:cooked.results,week_start:week,tomorrow_item});
@@ -45,11 +45,13 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  try{
   if(b.action==='inbox_dismiss'){await db.prepare("UPDATE meal_inbox SET status='DISMISSED',updated_at=? WHERE family_id=? AND id=? AND status='PENDING'").bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='inbox_wish'){
-   const id=mealId(b.id),row=await db.prepare('SELECT kind,status FROM meal_inbox WHERE family_id=? AND id=?').bind(familyId,id).first<{kind:string;status:string}>();
-   if(!row||row.kind!=='WISH')return out({ok:false,error:'受信した料理が見つかりません。'},404);
+   const id=mealId(b.id),row=await db.prepare('SELECT kind,status,content FROM meal_inbox WHERE family_id=? AND id=?').bind(familyId,id).first<{kind:string;status:string;content:string}>();
+   if(!row||!['WISH','RECIPE_URL'].includes(row.kind))return out({ok:false,error:'受信した料理が見つかりません。'},404);
    if(row.status==='DISMISSED')return out({ok:false,error:'この受信内容は確認済みです。'},409);
-   const now=new Date().toISOString();
-   await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) SELECT family_id,id,content,?,? FROM meal_inbox WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
+   // A confirmed receipt remains consumed even if its wish is later deleted.
+   if(row.status==='CONFIRMED')return out({ok:true});
+   const name=row.kind==='WISH'?row.content:mealText(b.name,120),source=row.kind==='RECIPE_URL'?row.content:null,now=new Date().toISOString();
+   await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,source_url,created_by,created_at) SELECT family_id,id,?,?,?,? FROM meal_inbox WHERE family_id=? AND id=? AND status='PENDING'").bind(name,source,m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
   }
   if(b.action==='baby_save')return out({ok:true,profile:await saveMealBaby(ctx,b)});
   if(b.action==='baby_preview')return out({ok:true,review:await previewMealBaby(ctx,b)});
