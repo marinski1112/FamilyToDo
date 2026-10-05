@@ -78,7 +78,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    const week=mealWeek(b.week_start),plan=await readMealPlan(db,familyId,week);if(!plan||plan.status!=='CONFIRMED'||plan.revision!==b.revision) return out({ok:false,error:'献立が更新されています。食材を確認し直してください。'},409);
    const {needs,inventory_revision}=await mealShoppingInventory(ctx,plan);if(b.preview_hash!==await mealHash({revision:plan.revision,needs,inventory_revision}))return out({ok:false,error:'食材を確認し直してください。'},409);
    if(!Array.isArray(b.selected)||!b.selected.length||b.selected.some((x:unknown)=>!Number.isInteger(x)||Number(x)<0||Number(x)>=needs.length)||new Set(b.selected).size!==b.selected.length)throw new BadRequest('追加する食材を選択してください。');
-   const selected=[...b.selected].sort((a:number,c:number)=>a-c).map((i:number)=>({name:needs[i].name,quantity:needs[i].quantity,unit:needs[i].unit}));if(selected.some(p=>p.quantity<=0))throw new BadRequest('不足している食材だけを選択してください。');return out({ok:true,...await projectMealShopping(ctx.env.DB,familyId,m.id,week,selected)});
+   const selected=[...b.selected].sort((a:number,c:number)=>a-c).map((i:number)=>{const n=needs[i];return n.quantity===null?{name:n.name,quantity:null,unit:'' as const,quantity_text:n.quantity_text}:{name:n.name,quantity:n.quantity,unit:n.unit};});if(selected.some(p=>p.quantity!==null&&p.quantity<=0))throw new BadRequest('不足している食材だけを選択してください。');return out({ok:true,...await projectMealShopping(ctx.env.DB,familyId,m.id,week,selected)});
   }
   if(b.action==='cooked'){
    const date=mealDate(b.date),plan=await readMealPlan(db,familyId,mealWeek(date));if(!plan||plan.status!=='CONFIRMED'||plan.revision!==b.revision||!plan.items.some((i:any)=>i.date===date))return out({ok:false,error:'献立を開き直してください。'},409);
