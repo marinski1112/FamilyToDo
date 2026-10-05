@@ -824,3 +824,18 @@ test('baby guidance preserves safe transport and HTTP reasons without exposing s
   const {ctx,body}=await babyGuidanceFixture();let calls=0;globalThis.fetch=async()=>{calls++;return response();};try{const r=(await call(ctx,body)).value;assert.equal(r.guidance.reason,reason);assert(!JSON.stringify(r).includes('private'));await call(ctx,body);assert.equal(calls,1);}finally{globalThis.fetch=real;}
  }
 });
+
+
+test('meal AI waits up to 30 seconds once; Live abort state identifies timeout independently of exception inheritance',async()=>{
+ const realFetch=globalThis.fetch,realTimer=globalThis.setTimeout,realClear=globalThis.clearTimeout;let timer,delay,cleared=false,calls=0;
+ globalThis.setTimeout=(fn,ms,...args)=>{if(ms===30000){timer=fn;delay=ms;return 71234;}return realTimer(fn,ms,...args);};globalThis.clearTimeout=id=>{if(id===71234){cleared=true;return;}realClear(id);};
+ try{
+  const {ctx,body}=await babyGuidanceFixture();globalThis.fetch=async()=>{calls++;return babyAiReply();};assert.equal((await call(ctx,body)).value.guidance.mode,'AI');assert.equal(delay,30000);assert(cleared);assert.equal(calls,1);
+  const live=fixture();live.ctx.member.role='OWNER';live.ctx.env.GEMINI_API_KEY='test';cleared=false;delay=0;globalThis.fetch=async(url,init)=>{calls++;assert.equal(init.signal.aborted,false);timer();assert.equal(init.signal.aborted,true);throw {name:'Error',message:'private-runtime-abort'};};const request={action:'live_start',request_id:'timeout-diag-001',diagnostic:true,consent:true};assert.equal((await call(live.ctx,request)).response.status,400);assert.equal(delay,30000);assert(cleared);assert.equal(live.meals.sql.prepare('SELECT error_code FROM meal_live_sessions').get().error_code,'TIMEOUT');await call(live.ctx,request);assert.equal(calls,2);
+ }finally{globalThis.fetch=realFetch;globalThis.setTimeout=realTimer;globalThis.clearTimeout=realClear;}
+});
+
+
+test('Live rejects a token whose one-minute start window elapsed during provisioning',async()=>{
+ const {ctx}=fixture();ctx.member.role='OWNER';ctx.env.GEMINI_API_KEY='test';const realFetch=globalThis.fetch,realNow=Date.now;let t=realNow();Date.now=()=>t;globalThis.fetch=async()=>{t+=60001;return liveTokenResponse();};try{const r=await call(ctx,{action:'live_start',diagnostic:true,consent:true,request_id:'late-mint-diag-001'});assert.equal(r.response.status,400);assert(!JSON.stringify(r.value).includes('auth_tokens'));}finally{globalThis.fetch=realFetch;Date.now=realNow;}
+});

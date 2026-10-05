@@ -56,7 +56,7 @@ export async function geminiFetch(env:Env,model:string,body:unknown,scope:AiCall
  const key=String(env.GEMINI_API_KEY||'');
  if(!key)throw new Error('Gemini is not configured');
  if(!await reserveAiCall(env,scope,model))return new Response(JSON.stringify({error:{status:'RESOURCE_EXHAUSTED'}}),{status:429,headers:{'content-type':'application/json'}});
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),scope.feature==='MEAL_RECIPE_EXTRACT'?30_000:10_000);
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),['MEAL_RECIPE_EXTRACT','MEAL_BABY_GUIDANCE'].includes(scope.feature)?30_000:10_000);
  try{const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':key},body:JSON.stringify(body),signal:controller.signal});
  if(response.status===429)await blockAiQuota(env.DB).catch(()=>{});
  await recordAiCall(env.DB,scope,model,response.ok?'success':response.status===429?'rate_limit':'upstream_error').catch(()=>{});
