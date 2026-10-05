@@ -43,7 +43,11 @@ export async function importMealYouTube(ctx:AppContext,raw:any){
   for(let attempt=0;attempt<route.models.length;attempt++){
    const response=await geminiFetch(ctx.env,route.models[attempt],body,{familyId,feature:'MEAL_RECIPE_EXTRACT',trigger:'user',attempt});
    if(!response.ok){error=response.status===429?'RATE_LIMIT':'UNAVAILABLE';if(response.status>=500&&attempt+1<route.models.length)continue;break;}
-   const value=await response.json() as any,content=value?.candidates?.[0]?.content?.parts?.filter((p:any)=>!p.thought&&typeof p.text==='string').map((p:any)=>p.text).join('')||'';let parsed:unknown;
+   const value=await response.json() as any,finish=value?.candidates?.[0]?.finishReason;
+   // Content filters and explicit provider rejection are terminal, even with JSON text.
+   if(value?.promptFeedback?.blockReason||(finish&&!['STOP','MAX_TOKENS'].includes(finish))){draft=null;error='INVALID_OUTPUT';break;}
+   if(finish==='MAX_TOKENS'){error='INVALID_OUTPUT';if(attempt+1<route.models.length)continue;break;}
+   const content=value?.candidates?.[0]?.content?.parts?.filter((p:any)=>!p.thought&&typeof p.text==='string').map((p:any)=>p.text).join('')||'';let parsed:unknown;
    if(content.length<=64000)try{parsed=JSON.parse(content);}catch{}
    const valid=validateVideoRecipe(parsed);
    if(!valid){error='INVALID_OUTPUT';if(attempt+1<route.models.length)continue;break;}

@@ -4,7 +4,7 @@
 
 サーバーはYouTubeへfetchしない。スクレイピング、字幕の取得、動画ダウンロード、R2保存、YouTube OAuthは行わない。GeminiのgenerateContentにfileData.fileUriとvideoMetadata.startOffset/endOffset/fps:1を渡す。Google側が区間指定を適切に処理することに依存し、対応モデル・無料枠・実プロジェクトでの利用可否は実際の呼び出しによる確認が必要。
 
-MEAL_RECIPE_EXTRACT（OWNER/MEMBER）の既存モデル設定を使用。既定は3.5 Flash Lite→3.5 Flash。プロジェクト×モデル、家族×機能の既存AI予約を送信前に行う。最大2試行、5xxまたは不正な抽出・LOW確信度に限って次モデルへ進む。429・その他4xx・通信例外は再送しない。LOW候補が得られていれば、後続失敗時もLOW候補を確認用として返せる。429は既存のプロジェクト回路停止を行い、別モデルで回避しない。
+MEAL_RECIPE_EXTRACT（OWNER/MEMBER）の既存モデル設定を使用。既定は3.5 Flash Lite→3.5 Flash。プロジェクト×モデル、家族×機能の既存AI予約を送信前に行う。最大2試行、5xxまたは不正な抽出・LOW確信度に限って次モデルへ進む。429・その他4xx・通信例外は再送しない。promptFeedbackのブロック、SAFETY/RECITATION等の明示的な拒否・未知の終了理由は次モデルへ送らず、候補を採用しない。MAX_TOKENSの未完了回答も採用せず、許可された2試行以内でのみ次モデルへ進む。LOW候補が得られていれば、後続失敗時もLOW候補を確認用として返せる。429は既存のプロジェクト回路停止を行い、別モデルで回避しない。
 
 生成待ちの期限はMEAL_RECIPE_EXTRACTのみ30秒。既存機能とモデル一覧は10秒を維持。診断の合成検査以外で勝手に生成を試さない。結果や受付を失った場合は同一request_idで再試行できる。RUNNINGのジョブは再生成せず処理中として返し、別IDの手入力へ進める。HTML取り込みと共通のmeal_url_importsで、家族×UTC日20新規ジョブ（失敗を含む）まで。
 
