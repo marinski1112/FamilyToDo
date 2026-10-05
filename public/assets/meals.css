@@ -5,3 +5,5 @@
 .meal-app [hidden]{display:none!important}
 
 .meal-timer-value{font-size:36px;font-variant-numeric:tabular-nums;font-weight:750;line-height:1.4;overflow-wrap:anywhere}
+
+.meal-ingredient{grid-template-columns:minmax(0,1fr) 38px;padding:10px 0;border-bottom:1px solid var(--line)}.meal-amount-fields{grid-column:1 / -1;display:grid;grid-template-columns:110px minmax(0,1fr) 65px;gap:7px}.meal-amount-fields label{font-size:12px}.meal-amount-fields select{min-height:42px;padding:8px;font-size:14px}.meal-amount-fields.meal-custom-amount{grid-template-columns:110px minmax(0,1fr)}.meal-ingredient .meal-fine{grid-column:1 / -1}

@@ -1,3 +1,4 @@
+import {searchMealPublisher} from './meal-publisher-search';
 import {confirmReceiptShopping} from './meal-receipt-shopping';
 import {readLineReceipts,prepareLineReceipt,dismissLineReceipt,completeLineReceipt} from './meal-line-receipts';
 import {importMealYouTube} from './meal-youtube';
@@ -67,6 +68,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='inventory_adjust')return out({ok:true,...await changeMealInventory(ctx,b,'ADJUST')});
   if(b.action==='inventory_archive')return out({ok:true,...await changeMealInventory(ctx,b,'ARCHIVE')});
   if(b.action==='import_youtube')return out({ok:true,draft:await importMealYouTube(ctx,b)});
+  if(b.action==='search_recipes')return out({ok:true,search:await searchMealPublisher(ctx,b)});
   if(b.action==='import_url')return out({ok:true,draft:await importMealUrl(ctx,b)});
   if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
   if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe)});
