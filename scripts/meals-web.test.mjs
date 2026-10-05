@@ -467,3 +467,16 @@ test('Cooking UI persists steps/timer through reload, pause/resume/cancel makes 
  try{const before=meals.sql.prepare('SELECT total_changes() n').get().n,w=await open();w.document.getElementById('nextStep').click();assert.match(w.document.getElementById('mealStepProgress').textContent,/2 \/ 2/);const form=w.document.getElementById('cookingTimerForm');form.elements.minutes.value='2';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));assert.equal(w.document.getElementById('cookingTimerStatus').textContent,'計測中');w.document.getElementById('pauseCookingTimer').click();assert.equal(w.document.getElementById('cookingTimerStatus').textContent,'一時停止中');const key='familytodo.meal.cook.'+plan.revision+'.2026-10-05',reload=await open({[key]:w.localStorage.getItem(key)});assert.match(reload.document.getElementById('mealStepProgress').textContent,/2 \/ 2/);assert.equal(reload.document.getElementById('cookingTimerStatus').textContent,'一時停止中');reload.document.getElementById('resumeCookingTimer').click();assert.equal(reload.document.getElementById('cookingTimerStatus').textContent,'計測中');reload.document.getElementById('cancelCookingTimer').click();assert.equal(reload.document.getElementById('cookingTimerValue').textContent,'--:--');assert(requests.every(x=>x==='GET'));assert.equal(meals.sql.prepare('SELECT total_changes() n').get().n,before);
  }finally{for(const w of windows)await w.happyDOM.close();}
 });
+
+
+test('video provider content filters/rejections stop fallback and candidate adoption, even when JSON looks valid',async()=>{
+ const real=globalThis.fetch;
+ try{
+  for(const reason of ['SAFETY','RECITATION','BLOCKLIST','SPII','PROHIBITED_CONTENT','UNKNOWN_FUTURE_REASON','PROMPT_BLOCK']){
+   const {ctx,meals}=fixture();ctx.env.GEMINI_API_KEY='test';let count=0;globalThis.fetch=async()=>{count++;return new Response(JSON.stringify(reason==='PROMPT_BLOCK'?{promptFeedback:{blockReason:'SAFETY'},candidates:[]}:{candidates:[{finishReason:reason,content:{parts:[{text:JSON.stringify(videoRecipe())}]}}]}),{headers:{'content-type':'application/json'}});};
+   const b=videoBody('youtube-filter-'+reason.replaceAll('_','-'));assert.equal((await call(ctx,b)).response.status,400);await call(ctx,b);assert.equal(count,1);assert(!meals.sql.prepare('SELECT result_json FROM meal_url_imports').get().result_json.includes('動画のテスト料理'));
+  }
+  const {ctx}=fixture();ctx.env.GEMINI_API_KEY='test';let count=0;globalThis.fetch=async()=>{count++;return count===1?videoResponse(videoRecipe({confidence:'LOW'})):new Response(JSON.stringify({candidates:[{finishReason:'SAFETY',content:{parts:[{text:JSON.stringify(videoRecipe())}]}}]}));};assert.equal((await call(ctx,videoBody())).response.status,400);assert.equal(count,2);
+  const partial=fixture();partial.ctx.env.GEMINI_API_KEY='test';count=0;globalThis.fetch=async()=>{count++;return count===1?new Response(JSON.stringify({candidates:[{finishReason:'MAX_TOKENS',content:{parts:[{text:JSON.stringify(videoRecipe({name:'未完了'}) )}]}}]})):videoResponse();};const complete=await call(partial.ctx,videoBody());assert.equal(count,2);assert.equal(complete.value.draft.name,'動画のテスト料理');assert.equal(complete.value.draft.analysis.model,'gemini-3.5-flash');
+ }finally{globalThis.fetch=real;}
+});
