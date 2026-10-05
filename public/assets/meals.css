@@ -3,3 +3,5 @@
 .meal-ingredient .meal-fine{grid-column:1 / -1;margin:0;overflow-wrap:anywhere}.meal-app .page-head{flex-wrap:wrap}
 
 .meal-app [hidden]{display:none!important}
+
+.meal-timer-value{font-size:36px;font-variant-numeric:tabular-nums;font-weight:750;line-height:1.4;overflow-wrap:anywhere}
