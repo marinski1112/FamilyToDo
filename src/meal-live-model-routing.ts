@@ -1,4 +1,4 @@
-/** Design target only. Live transport/session issuance is deliberately not enabled. */
+/** Live transport is separate from generateContent routes. Availability is checked only on explicit start. */
 export const MEAL_LIVE_MODELS=['gemini-3.8-live'] as const;
 export type MealLiveModel=typeof MEAL_LIVE_MODELS[number];
 export type MealLiveRoute={transport:'LIVE';model:MealLiveModel;source:'FAMILY_SETTING'|'DESIGN_DEFAULT';availability:'UNVERIFIED'};
