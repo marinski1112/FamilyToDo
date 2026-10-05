@@ -6,7 +6,7 @@ export function mealLiteralAmount(raw:string):{name:string;quantity_text:string}
 /** Only metric mass/volume, never counts, package weights, density or spoon measures. */
 export function mealUnit(unit:string):{unit:string;factor:number}{switch(unit){case 'kg':return {unit:'g',factor:1000};case 'g':return {unit:'g',factor:1};case 'L':return {unit:'ml',factor:1000};case 'mL':case 'ml':return {unit:'ml',factor:1};default:return {unit,factor:1};}}
 export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
-export type MealPlanItem={date:string;servings:number;recipe:MealRecipe};
+export type MealPlanItem={date:string;servings:number;recipe:MealRecipe;sides?:MealRecipe[]};
 export const mealEnabled=(env:Env)=>env.MEALS_ENABLED==='true'&&!!env.MEALS_DB;
 export const mealText=(value:unknown,max:number)=>{if(typeof value!=='string')throw new BadRequest('文字を入力してください。');const s=value.normalize('NFKC').trim();if(!s||s.length>max)throw new BadRequest('入力の長さを確認してください。');return s;};
 export const mealId=(value:unknown)=>{if(typeof value!=='string'||! /^[a-zA-Z0-9-]{8,72}$/.test(value))throw new BadRequest('識別情報が不正です。');return value;};
@@ -31,9 +31,9 @@ export function normalizeMealRecipe(raw:any):MealRecipe{
 /** Metric mass/volume combine; counts and unspecified measures stay separate. */
 export function mealShoppingNeeds(items:MealPlanItem[]):MealIngredient[]{
  const result=new Map<string,MealIngredient>();
- for(const item of items)for(const ingredient of item.recipe.ingredients){
+ for(const item of items)for(const recipe of [item.recipe,...(item.sides||[])])for(const ingredient of recipe.ingredients){
   if(ingredient.quantity===null){const key=JSON.stringify(['TEXT',ingredient.name,ingredient.quantity_text]);result.set(key,{...ingredient});continue;}
-  const base=mealUnit(ingredient.unit),key=JSON.stringify(['NUMBER',ingredient.name,base.unit]),old=result.get(key),amount=ingredient.quantity*base.factor*item.servings/item.recipe.servings;result.set(key,{name:ingredient.name,unit:base.unit,quantity:(old?.quantity??0)+amount});
+  const base=mealUnit(ingredient.unit),key=JSON.stringify(['NUMBER',ingredient.name,base.unit]),old=result.get(key),amount=ingredient.quantity*base.factor*item.servings/recipe.servings;result.set(key,{name:ingredient.name,unit:base.unit,quantity:(old?.quantity??0)+amount});
  }
  const rows=[...result.values()].map(x=>x.quantity===null?x:{...x,quantity:Math.round(x.quantity*10000)/10000});
  if(rows.some(x=>x.quantity!==null&&!Number.isSafeInteger(Math.round(x.quantity*10000))))throw new BadRequest('献立の数量が大きすぎます。人数・分量を確認してください。');
