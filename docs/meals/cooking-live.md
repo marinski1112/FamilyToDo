@@ -31,3 +31,7 @@ AudioWorkletでmono signed16-bit little-endian PCMを2,048 sampleずつ送り、
 - [Google SDK Live transport](https://github.com/googleapis/js-genai/blob/main/src/live.ts)（ephemeral token専用Constrained endpoint）
 
 新しい0012は既存npm run deployで自動適用します。previewはmigration未適用のためhealthが503となり得ます。LIFF入口/Androidのネイティブ音声対応、profile/在庫の追加同意共有は後続です。
+
+## 管理者の固定データ接続診断
+
+ごはんのフッター「AI接続診断」はOWNER/ADMIN限定。固定の架空レシピと接続確認文のみを使い、献立・プロフィール・在庫を読まず、マイクを取得しない。Live診断は通常と同じ家族4回/UTC日・10分1枠・共通予算・暗号化レシートに含む。診断フラグはキャッシュ読出し前にも権限確認し、通常料理のリクエストとはハッシュを分離する。AI応答を受信したら終了する。自動再接続・失敗後の追加試行はない。トークン発行成功のみを会話成功とは表示しない。安全な状態表示にはモデル名・状態・固定エラー種別・日時だけを出し、トークン、ハッシュ、リクエストID、会話本文は出さない。献立・レシピ・在庫を診断用に作成する必要はない。
