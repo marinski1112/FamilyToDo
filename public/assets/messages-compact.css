@@ -21,3 +21,6 @@
 .message-options input,.message-options select,.message-options textarea{font-size:16px!important;min-width:0;max-width:100%}.message-options .checkrow{min-height:44px}.message-options .assignee-list{display:flex;flex-wrap:wrap;gap:6px}
 .message-list summary:focus-visible,.message-compose summary:focus-visible,.message-options summary:focus-visible,.message-expand:focus-visible{outline:3px solid #6366f1;outline-offset:2px}
 @media(max-width:520px){.message-task-backdrop,.message-shopping-backdrop,.message-edit-backdrop{align-items:flex-end!important;padding:8px!important}.message-list .converted-badge{font-size:12px}.message-list .message-row .message-actions{gap:6px}}
+
+/* Keep optional notification controls readable with either theme. */
+.message-options>summary,.message-more>summary{color:var(--text)}

@@ -310,3 +310,11 @@
 :root[data-theme="dark"] .checklist-page.reminders-ui .unified-goods-section .linked-shopping-row .checklist-row-action::after{
   border-radius:50%!important;
 }
+
+/* Authenticated UI QA: keep member disclosure controls and invite guidance readable. */
+:root[data-theme="dark"] .member-profile-details>summary,
+:root[data-theme="dark"] .member-profile-ai-permissions>summary,
+:root[data-theme="dark"] .invite-history>summary{color:var(--text)!important}
+:root[data-theme="dark"] .invite-guide{background:var(--card)!important;border-color:var(--line)!important;color:var(--text)!important}
+:root[data-theme="dark"] .invite-guide strong,
+:root[data-theme="dark"] .invite-guide .small{color:var(--muted)!important}
