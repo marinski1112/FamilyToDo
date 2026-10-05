@@ -10,6 +10,11 @@ import {importMealUrl} from './meal-url-import';
 import {suggestMealWeek} from './meal-weekly-suggestions';
 import {projectMealShopping} from './meal-shopping-service';
 const out=(value:unknown,status=200)=>json(value,status,{'cache-control':'private, no-store'});
+async function mealInputText(request:Request):Promise<string|null>{
+ const reader=request.body?.getReader();if(!reader)return '';const decoder=new TextDecoder();let size=0,text='';
+ try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>800000)return null;text+=decoder.decode(value,{stream:true});}return text+decoder.decode();}
+ finally{await reader.cancel().catch(()=>{});}
+}
 export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const m=ctx.member;if(!m)return out({ok:false,error:'ログインが必要です。'},401);
  if(!mealEnabled(ctx.env))return out({ok:false,error:'ごはん機能は準備中です。',code:'MEALS_NOT_CONFIGURED'},503);
@@ -30,7 +35,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  }
  if(request.method!=='POST')return out({ok:false,error:'POST only'},405);
  const length=Number(request.headers.get('content-length')||0);if(length>800000)return out({ok:false,error:'入力が大きすぎます。'},413);
- const text=await request.text();if(text.length>750000)return out({ok:false,error:'入力が大きすぎます。'},413);
+ const text=await mealInputText(request);if(text===null||text.length>750000)return out({ok:false,error:'入力が大きすぎます。'},413);
  let b:any;try{b=JSON.parse(text);}catch{return out({ok:false,error:'入力形式が不正です。'},400);}
  if(text.length>150000&&b?.action!=='receipt_import')return out({ok:false,error:'入力が大きすぎます。'},413);
  if(!ctx.session.csrfToken||!b?.csrf||b.csrf!==ctx.session.csrfToken)return out({ok:false,error:'画面を開き直してください。'},403);

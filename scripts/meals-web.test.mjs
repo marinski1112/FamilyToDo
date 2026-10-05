@@ -352,3 +352,8 @@ test('many shopping needs and receipt labels fit the Free D1 statement budget wi
  const preview=(await call(ctx,null,'?view=shopping_preview&week=2026-10-05')).value;assert.equal(preview.needs.length,60);const body={action:'shopping_confirm',week_start:'2026-10-05',revision:plan.revision,preview_hash:preview.preview_hash,selected:Array.from({length:60},(_,i)=>i)};assert.equal((await call(ctx,body)).response.status,200);await call(ctx,body);assert.equal(main.sql.prepare('SELECT COUNT(*) n FROM shopping_items').get().n,60);
  const result=await call(ctx,{action:'receipt_import',request_id:'receipt-many-labels',manual_text:Array.from({length:40},(_,i)=>'食材'+i).join('\n')});assert.equal(result.value.receipt.items.length,40);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM receipt_items').get().n,40);
 });
+
+test('receipt upload rejects oversized chunked input before buffering the entire stream or calling AI',async()=>{
+ const {ctx}=fixture();let canceled=false;const stream=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(450000));controller.enqueue(new Uint8Array(450000));},cancel(){canceled=true;}});
+ const request=new Request('https://fixture.invalid/api/meals/v1',{method:'POST',body:stream,duplex:'half'});assert.equal((await mealApi(request,ctx)).status,413);assert.equal(canceled,true);
+});

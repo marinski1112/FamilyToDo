@@ -16,8 +16,8 @@ MEAL_RECEIPT_PARSEの既存feature/audience routeを使用。既定は3.5 Flash-
 
 0006にreceipt_imports/itemsを追加。家族別request ID/payload hashによるclaimで同じジョブの並行生成を防止し、成功/失敗結果の再利用で再送時の余分な生成を防ぎます。新規は家族/UTC日20件（手入力も含む）。RUNNING途中中断の自動再生成はせず手入力を案内。保存するのはhash、処理状態、検証済み商品候補、確認済み在庫のドメインデータのみ。原画像、prompt、provider response本文、キーは保存/ログ出力せず、履歴は当面保持。商品ラベルに読み取り誤りが含まれる可能性は残るため確認画面を必須とします。
 
-HTTP入力の上限拡張はreceipt_importのみ（JSON750KB、画像500KB）。他の献立操作は従来の150KB上限を維持。receipt 40品と買い物の最大100品をjson_eachで各1SQLにまとめ、無料D1のstatement budget内で一括保存。既存買い物ledgerと操作tokenによる冪等/削除後再送防止を維持。新Cron/identity複製/外部設定変更なし。
+HTTP入力の上限拡張はreceipt_importのみ（JSON750KB、画像500KB、stream800KBで打ち切り）。他の献立操作は従来の150KB上限を維持。receipt 40品と買い物の最大100品をjson_eachで各1SQLにまとめ、無料D1のstatement budget内で一括保存。既存買い物ledgerと操作tokenによる冪等/削除後再送防止を維持。新Cron/identity複製/外部設定変更なし。
 
 ## 検証
 
-献立40件SQLite/API/DOM、型・JS構文・静的参照、既存143件active regressionを確認。photo MIME/サイズ/権限、budget/circuit/429停止、5xx最大2回、schema拒否、画像・raw response非保存、家族/共有買い物分離、確認前未変更、監査失敗時rollback、並行保存/除外後再送、手入力縮退、日上限、40品/60買い物のstatement budgetを含みます。Chromiumでsynthetic画像の縮小→stub読取り→共有買い物照合→数量補完→在庫保存、両通信の応答喪失からの再試行、320/390/768px overflowなしを確認。実AI呼出し/実レシート/本番家族データは検査に使用していません。
+献立41件SQLite/API/DOM、型・JS構文・静的参照、既存143件active regressionを確認。photo MIME/サイズ/権限、budget/circuit/429停止、5xx最大2回、schema拒否、画像・raw response非保存、家族/共有買い物分離、確認前未変更、監査失敗時rollback、並行保存/除外後再送、手入力縮退、日上限、40品/60買い物のstatement budgetを含みます。Chromiumでsynthetic画像の縮小→stub読取り→共有買い物照合→数量補完→在庫保存、両通信の応答喪失からの再試行、320/390/768px overflowなしを確認。実AI呼出し/実レシート/本番家族データは検査に使用していません。
