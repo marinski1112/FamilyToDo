@@ -46,6 +46,8 @@ const ensureNav=()=>{
     const active=target.pathname===location.pathname&&(target.pathname!=='/app/family_log.php'||new URL(location.href).searchParams.get('dashboard')==='1');
     anchor.classList.toggle('active',active);
     if(active)anchor.setAttribute('aria-current','page');else anchor.removeAttribute('aria-current');
+    // Move existing nodes (keeping listeners) into the same order on every page.
+    nav.appendChild(anchor);
   }
   document.documentElement.classList.add('family-log-persistent-nav-ready');
 };
