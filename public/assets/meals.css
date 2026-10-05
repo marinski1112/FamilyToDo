@@ -9,3 +9,31 @@
 .meal-ingredient{grid-template-columns:minmax(0,1fr) 38px;padding:10px 0;border-bottom:1px solid var(--line)}.meal-amount-fields{grid-column:1 / -1;display:grid;grid-template-columns:110px minmax(0,1fr) 65px;gap:7px}.meal-amount-fields label{font-size:12px}.meal-amount-fields select{min-height:42px;padding:8px;font-size:14px}.meal-amount-fields.meal-custom-amount{grid-template-columns:110px minmax(0,1fr)}.meal-ingredient .meal-fine{grid-column:1 / -1}
 
 .meal-side-choice{grid-column:1/-1;display:block}.meal-side-choice select{width:100%}
+
+/* Grid forms own their spacing; shared legacy form margins otherwise double it. */
+.meal-app form label{margin:0;font-size:14px}
+.meal-app form input:not([type=checkbox]):not([type=radio]),.meal-app form select,.meal-app form textarea{margin:0}
+.meal-app .meal-wish-form{align-items:center}
+.meal-app .meal-wish-form input{min-width:0}
+.meal-app .meal-wish-form button{min-height:44px}
+.meal-app .meal-day{padding:12px 0;border-bottom:1px solid var(--line)}
+.meal-app .meal-day:first-child{padding-top:0}
+.meal-app .meal-day>label:first-child{font-weight:750}
+.meal-app .meal-side-choice{font-size:13px}
+.meal-app fieldset{min-width:0;margin:0;padding:12px;border:1px solid var(--line);border-radius:12px}
+.meal-app legend{padding:0 5px;overflow-wrap:anywhere}
+.meal-app .meal-row{flex-wrap:wrap}
+.meal-app .meal-row>div{flex:1 1 170px}
+.meal-app .meal-row>button,.meal-app .meal-row>.btn{flex:0 0 auto;max-width:100%;white-space:normal;min-height:44px}
+.meal-app .meal-ingredient{grid-template-columns:minmax(0,1fr) 44px}
+.meal-app .meal-ingredient button{min-width:44px;min-height:44px}
+.meal-app a:focus-visible,.meal-app button:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+@media(max-width:400px){
+ .meal-app .meal-amount-fields{grid-template-columns:100px minmax(0,1fr) 60px}
+ .meal-app .meal-amount-fields.meal-custom-amount{grid-template-columns:100px minmax(0,1fr)}
+ .meal-app .meal-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .meal-app .meal-grid a{padding:12px;overflow-wrap:anywhere}
+ .meal-app .meal-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+
+.meal-app form hr{width:100%;margin:4px 0;border:0;border-top:1px solid var(--line)}

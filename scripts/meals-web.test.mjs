@@ -847,3 +847,22 @@ test('Live token provisioning uses Worker-compatible manual redirects and never 
  try{assert.equal((await (await mf.dispatchFetch('http://localhost')).json()).status,302);assert.equal(calls,1);}finally{await mf.dispose();}
  const {ctx,meals}=fixture();ctx.member.role='OWNER';ctx.env.GEMINI_API_KEY='synthetic';const real=globalThis.fetch;let requestCalls=0;globalThis.fetch=async()=>{requestCalls++;return new Response('',{status:302,headers:{location:'https://other.invalid/'}});};const request={action:'live_start',diagnostic:true,consent:true,request_id:'redirect-test-001'};try{assert.equal((await call(ctx,request)).response.status,400);assert.equal(meals.sql.prepare('SELECT error_code FROM meal_live_sessions').get().error_code,'REDIRECT_BLOCKED');await call(ctx,request);assert.equal(requestCalls,1);}finally{globalThis.fetch=real;}
 });
+
+
+test('meal import, search and receipt Back preserve unsaved input when discard is cancelled',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ for(const kind of ['import','search','receipt']){
+  const {ctx}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view='+ (kind==='receipt'?'receipts':'recipes')});
+  w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+  let posts=0,confirmations=0,discard=false;w.confirm=()=>{confirmations++;return discard;};
+  w.fetch=(url,options={})=>{if(options.method==='POST')posts++;return mealApi(new Request(new URL(url,w.location.href),options),ctx);};
+  try{
+   w.eval(fs.readFileSync('public/assets/meals.js','utf8'));
+   const launch={import:'importRecipe',search:'findRecipe',receipt:'newReceipt'}[kind];await waitFor(()=>w.document.getElementById(launch));w.document.getElementById(launch).click();
+   const formId={import:'importForm',search:'publisherSearchForm',receipt:'receiptForm'}[kind],cancelId={import:'cancelImport',search:'cancelDiscovery',receipt:'cancelReceipt'}[kind];
+   const form=w.document.getElementById(formId),field=form.elements[{import:'url',search:'query',receipt:'manual_text'}[kind]];field.value=kind==='import'?'https://www.youtube.com/watch?v=abcdefghijk':'合成入力';field.dispatchEvent(new w.Event('input',{bubbles:true}));
+   w.document.getElementById(cancelId).click();assert.equal(confirmations,1);assert.equal(w.document.getElementById(formId),form);assert(field.value);assert.equal(posts,0);
+   discard=true;w.document.getElementById(cancelId).click();await waitFor(()=>!w.document.getElementById(formId));assert.equal(confirmations,2);assert.equal(posts,0);
+  }finally{await w.happyDOM.close();}
+ }
+});
