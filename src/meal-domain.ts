@@ -1,6 +1,6 @@
 import {BadRequest} from './errors';
 export type MealIngredient={name:string;quantity:number;unit:string;quantity_text?:never}|{name:string;quantity:null;unit:'';quantity_text:string};
-export function mealAmountText(raw:unknown):string{const text=mealText(raw,40);if(/[0-9\r\n]/.test(text)||!/[\p{L}]/u.test(text)||/^(?:nan|[+-]?infinity)$/i.test(text))throw new BadRequest('数量は正の数か、少々・適量などの表記で入力してください。');return text;}
+export function mealAmountText(raw:unknown):string{const text=mealText(raw,80);if(/[\u0000-\u001f\u007f]/u.test(text)||!/[\p{L}\p{N}]/u.test(text)||/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)||/^(?:nan|[+-]?infinity)$/i.test(text))throw new BadRequest('数量は正の数か、少々・適量などの表記で入力してください。');return text;}
 /** Copies a literal qualitative suffix, never infers a numeric amount. */
 export function mealLiteralAmount(raw:string):{name:string;quantity_text:string}|null{const m=/^(.+?)\s*\(?\s*(少々|適量|適宜|お好みで|お好み|ひとつまみ|ふたつまみ)\s*\)?$/u.exec(raw.normalize('NFKC').trim());if(!m||/[~〜～–-]$/.test(m[1].trim()))return null;const name=m[1].trim().replace(/[:：]$/u,'').trim();return name?{name,quantity_text:m[2]}:null;}
 export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
