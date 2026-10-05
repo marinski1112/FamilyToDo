@@ -1,3 +1,4 @@
+import {importMealReceipt,readMealReceipt,confirmMealReceiptItem} from './meal-receipts';
 import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
 import type {AppContext} from './app-context';
 import {json} from './response';
@@ -9,12 +10,19 @@ import {importMealUrl} from './meal-url-import';
 import {suggestMealWeek} from './meal-weekly-suggestions';
 import {projectMealShopping} from './meal-shopping-service';
 const out=(value:unknown,status=200)=>json(value,status,{'cache-control':'private, no-store'});
+async function mealInputText(request:Request):Promise<string|null>{
+ const reader=request.body?.getReader();if(!reader)return '';const decoder=new TextDecoder();let size=0,text='';
+ try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>800000)return null;text+=decoder.decode(value,{stream:true});}return text+decoder.decode();}
+ finally{await reader.cancel().catch(()=>{});}
+}
 export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const m=ctx.member;if(!m)return out({ok:false,error:'ログインが必要です。'},401);
  if(!mealEnabled(ctx.env))return out({ok:false,error:'ごはん機能は準備中です。',code:'MEALS_NOT_CONFIGURED'},503);
  const db=ctx.env.MEALS_DB!,familyId=Number(m.family_id),url=new URL(request.url);
  if(request.method==='GET'){
   const view=url.searchParams.get('view')||'overview',week=mealWeek(url.searchParams.get('week')||new Date().toISOString().slice(0,10));
+  if(view==='receipt')return out({ok:true,receipt:await readMealReceipt(ctx,mealId(url.searchParams.get('id')))});
+  if(view==='receipts')return out({ok:true,receipts:(await db.prepare('SELECT id,mode,status,error_code,created_at FROM receipt_imports WHERE family_id=? ORDER BY created_at DESC LIMIT 30').bind(familyId).all()).results});
   if(view==='inventory')return out({ok:true,inventory:await readMealInventory(db,familyId)});
   if(view==='cooking_preview')return out({ok:true,preview:await mealCookingPreview(ctx,mealDate(url.searchParams.get('date')))});
   if(view==='inbox')return out({ok:true,inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
@@ -26,9 +34,10 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   return out({ok:true,recipes,wishlist:wishlist.results,plan,cooked:cooked.results,week_start:week,tomorrow_item});
  }
  if(request.method!=='POST')return out({ok:false,error:'POST only'},405);
- const length=Number(request.headers.get('content-length')||0);if(length>200000)return out({ok:false,error:'入力が大きすぎます。'},413);
- const text=await request.text();if(text.length>150000)return out({ok:false,error:'入力が大きすぎます。'},413);
+ const length=Number(request.headers.get('content-length')||0);if(length>800000)return out({ok:false,error:'入力が大きすぎます。'},413);
+ const text=await mealInputText(request);if(text===null||text.length>750000)return out({ok:false,error:'入力が大きすぎます。'},413);
  let b:any;try{b=JSON.parse(text);}catch{return out({ok:false,error:'入力形式が不正です。'},400);}
+ if(text.length>150000&&b?.action!=='receipt_import')return out({ok:false,error:'入力が大きすぎます。'},413);
  if(!ctx.session.csrfToken||!b?.csrf||b.csrf!==ctx.session.csrfToken)return out({ok:false,error:'画面を開き直してください。'},403);
  try{
   if(b.action==='inbox_dismiss'){await db.prepare("UPDATE meal_inbox SET status='DISMISSED',updated_at=? WHERE family_id=? AND id=? AND status='PENDING'").bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
@@ -39,6 +48,8 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    const now=new Date().toISOString();
    await db.batch([db.prepare("INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) SELECT family_id,id,content,?,? FROM meal_inbox WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(m.id,now,familyId,id),db.prepare("UPDATE meal_inbox SET status='CONFIRMED',updated_at=? WHERE family_id=? AND id=? AND kind='WISH' AND status='PENDING'").bind(now,familyId,id)]);return out({ok:true});
   }
+  if(b.action==='receipt_import')return out({ok:true,receipt:await importMealReceipt(ctx,b)});
+  if(b.action==='receipt_confirm')return out({ok:true,...await confirmMealReceiptItem(ctx,b)});
   if(b.action==='inventory_add')return out({ok:true,...await changeMealInventory(ctx,b,'ADD')});
   if(b.action==='inventory_adjust')return out({ok:true,...await changeMealInventory(ctx,b,'ADJUST')});
   if(b.action==='inventory_archive')return out({ok:true,...await changeMealInventory(ctx,b,'ARCHIVE')});
