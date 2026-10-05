@@ -5,7 +5,7 @@ import { listGeminiModels, familyAiModelCatalog } from './family-ai';
 import { ROUTED_AI_FEATURES, routeSettingKey, resolveFeatureModels, parseRouteModels, parseFeatureRouteModels, type RoutedAiFeature, type AiAudience } from './ai-model-routing';
 
 const esc=(v:unknown)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-const labels:Record<RoutedAiFeature,string>={ROUGH_INPUT:'タスク・買い物・持ち物のざっくり入力',MESSAGE_DRAFT:'伝言からのタスク下書き',FAMILY_DAILY_JOURNAL:'家族日誌のAI文章',MORNING_DIGEST:'朝のLINE報告',PERIODIC_DIGEST:'週次・月次のLINE報告',GOOGLE_VOICE_INQUIRY:'Google音声問い合わせの分類',CALENDAR_ICS_IMPORT:'カレンダー取込時の時刻整理',MEAL_INBOX:'料理LINE受信の解釈（準備中）',MEAL_RECIPE_EXTRACT:'レシピ構造化（準備中）',MEAL_RECEIPT_PARSE:'レシート写真の品目読み取り',MEAL_WEEKLY_PLAN:'週間献立の最終選択',MEAL_BABY_GUIDANCE:'離乳食の説明（準備中・安全判定は通常コード）'};
+const labels:Record<RoutedAiFeature,string>={ROUGH_INPUT:'タスク・買い物・持ち物のざっくり入力',MESSAGE_DRAFT:'伝言からのタスク下書き',FAMILY_DAILY_JOURNAL:'家族日誌のAI文章',MORNING_DIGEST:'朝のLINE報告',PERIODIC_DIGEST:'週次・月次のLINE報告',GOOGLE_VOICE_INQUIRY:'Google音声問い合わせの分類',CALENDAR_ICS_IMPORT:'カレンダー取込時の時刻整理',MEAL_INBOX:'料理LINE受信の解釈（準備中）',MEAL_RECIPE_EXTRACT:'YouTube動画のレシピ候補抽出',MEAL_RECEIPT_PARSE:'レシート写真の品目読み取り',MEAL_WEEKLY_PLAN:'週間献立の最終選択',MEAL_BABY_GUIDANCE:'離乳食の説明（準備中・安全判定は通常コード）'};
 const pageUrl='/app/settings_ai_models.php';
 const noStore=(response:Response)=>{response.headers.set('Cache-Control','private, no-store');return response;};
 

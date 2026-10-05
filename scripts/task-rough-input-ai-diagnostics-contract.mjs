@@ -88,7 +88,7 @@ for(const forbidden of ['body','parsed','fields','originalText','bodyForModel','
 assert.equal((api.match(/recordAiGenerationDiagnostic\(/g)||[]).length,1,'rough-input must keep one centralized diagnostic write call');
 assert.equal((api.match(/geminiFetch\(/g)||[]).length,1,'diagnostics must not add provider calls');
 assert.ok(!/reasonCode\s*:\s*(?:error|String\(error|String\(.*catch)/.test(api),'diagnostic reason codes must remain static coarse classifications');
-assert.ok(familyAi.includes('setTimeout(()=>controller.abort(),10_000)'),'diagnostics refinement must not change the Gemini 10-second timeout');
+assert.ok(familyAi.includes('setTimeout(()=>controller.abort(),10_000)'),'existing Gemini features retain the 10-second timeout; video extraction is bounded at 30 seconds');
 assert.equal((familyAi.match(/export async function geminiFetch\(/g)||[]).length,1,'Gemini fetch implementation must remain single');
 
 const readerColumns=['feature','final_status','ai_called','attempt_count','accepted_model','item_count','attempts_json','created_at'];

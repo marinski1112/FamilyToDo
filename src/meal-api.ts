@@ -1,3 +1,4 @@
+import {importMealYouTube} from './meal-youtube';
 import {readMealBaby,saveMealBaby,previewMealBaby} from './meal-baby';
 import {importMealReceipt,readMealReceipt,confirmMealReceiptItem} from './meal-receipts';
 import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
@@ -57,6 +58,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='inventory_add')return out({ok:true,...await changeMealInventory(ctx,b,'ADD')});
   if(b.action==='inventory_adjust')return out({ok:true,...await changeMealInventory(ctx,b,'ADJUST')});
   if(b.action==='inventory_archive')return out({ok:true,...await changeMealInventory(ctx,b,'ARCHIVE')});
+  if(b.action==='import_youtube')return out({ok:true,draft:await importMealYouTube(ctx,b)});
   if(b.action==='import_url')return out({ok:true,draft:await importMealUrl(ctx,b)});
   if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
   if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe)});
