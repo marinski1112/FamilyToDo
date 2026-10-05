@@ -1,3 +1,4 @@
+import {confirmReceiptShopping} from './meal-receipt-shopping';
 import {readLineReceipts,prepareLineReceipt,dismissLineReceipt,completeLineReceipt} from './meal-line-receipts';
 import {importMealYouTube} from './meal-youtube';
 import {readMealBaby,saveMealBaby,previewMealBaby} from './meal-baby';
@@ -60,6 +61,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='baby_save')return out({ok:true,profile:await saveMealBaby(ctx,b)});
   if(b.action==='baby_preview')return out({ok:true,review:await previewMealBaby(ctx,b)});
   if(b.action==='receipt_import')return out({ok:true,receipt:await importMealReceipt(ctx,b)});
+  if(b.action==='receipt_shopping_confirm')return out({ok:true,...await confirmReceiptShopping(ctx,b)});
   if(b.action==='receipt_confirm')return out({ok:true,...await confirmMealReceiptItem(ctx,b)});
   if(b.action==='inventory_add')return out({ok:true,...await changeMealInventory(ctx,b,'ADD')});
   if(b.action==='inventory_adjust')return out({ok:true,...await changeMealInventory(ctx,b,'ADJUST')});
