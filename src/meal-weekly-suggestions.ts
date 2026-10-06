@@ -57,6 +57,7 @@ export async function suggestMealWeek(ctx:AppContext,raw:any):Promise<Suggestion
  if(raw.prefer_hotcook!==undefined&&typeof raw.prefer_hotcook!=='boolean')throw new BadRequest('ホットクックの優先条件が不正です。');
  const preferHotcook=raw.prefer_hotcook===true;
  const purpose=raw.purpose===undefined?null:raw.purpose==='SIDE'?'SIDE':(()=>{throw new BadRequest('提案の種類が不正です。');})();
+ if(purpose&&preferHotcook)throw new BadRequest('ホットクック優先は主菜の週間提案で選択してください。');
  let mains:Array<{date:string;recipe_id:string}>=[];if(purpose){if(!external||!Array.isArray(raw.mains)||!raw.mains.length||raw.mains.length>5)throw new BadRequest('主菜を選び、外部サイトで副菜を探してください。');mains=raw.mains.map((i:any)=>({date:mealDate(i?.date),recipe_id:mealId(i?.recipe_id)})).sort((a:{date:string},b:{date:string})=>a.date.localeCompare(b.date));if(mains.some(i=>i.date<week||i.date>shiftMealDate(week,4))||new Set(mains.map(i=>i.date)).size!==mains.length)throw new BadRequest('平日の主菜を選択してください。');}
  const hash=await mealHash({week,servings,maxMinutes,...(preferHotcook?{prefer_hotcook:true}:{}),...(external?{external:{publisher:external.publisher,query:external.query}}:{}),...(purpose?{purpose,mains}:{})});
  const previous=await db.prepare('SELECT payload_hash,status,result_json FROM meal_weekly_suggestions WHERE family_id=? AND id=?').bind(familyId,id).first();

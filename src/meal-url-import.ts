@@ -77,7 +77,7 @@ export function extractHotcookRecipe(raw:unknown,sourceUrl:string){
   if(!method||typeof method.type?.type!=='string')fail();
   if(method.type.type.startsWith('image'))continue;
   if(!/^text(?:\.[A-Z])?$/.test(method.type.type)||typeof method.text!=='string'||method.text.length>2000)fail();
-  const step=text(method.text.replace(/#/g,' → '));if(step.replace(/[\u200b-\u200d\ufeff]/g,'').trim())steps.push(step);
+  const step=text(method.text.replace(/#/g,' '));if(step.replace(/[\u200b-\u200d\ufeff]/g,'').trim())steps.push(step);
  }
  if(!steps.length||steps.length>28)fail();
  const notes=r.material_appendices.map((note:unknown)=>{if(typeof note!=='string'||note.length>2000)fail();return text(note);}).filter(Boolean);
