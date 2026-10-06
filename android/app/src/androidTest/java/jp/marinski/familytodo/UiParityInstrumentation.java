@@ -438,9 +438,11 @@ public final class UiParityInstrumentation extends Instrumentation {
         navigate("チェックリスト");onUi(()->{try{Method select=MainActivity.class.getDeclaredMethod("selectChecklistDate",LocalDate.class);select.setAccessible(true);select.invoke(activity,past);}catch(Exception e){throw new RuntimeException(e);}});waitContainingText("保存済み未完了");
         check(hasContaining("その日の総括"),"past day renders native summary");check(!hasText("☑ タスク"),"summary has no checklist completion controls");
         onUi(()->check(findDescription(root(),"総括の日付を指定")!=null,"native summary date picker"));screenshot("day-summary");
+        onUi(()->{try{snapshot.put("month",YearMonth.from(today.minusDays(1)).toString());}catch(Exception e){throw new RuntimeException(e);}});
         clickDescription("翌日を表示");waitText("☑ タスク");check(!hasContaining("保存済み未完了"),"yesterday returns to checklist");
         daySummaryFailure=true;onUi(()->{try{Method select=MainActivity.class.getDeclaredMethod("selectChecklistDate",LocalDate.class);select.setAccessible(true);select.invoke(activity,past);}catch(Exception e){throw new RuntimeException(e);}});waitText("再読み込み");check(hasContaining("この日を読み込めませんでした"),"summary errors visible");
         daySummaryFailure=false;clickText("再読み込み");waitContainingText("保存済み未完了");check(daySummaryRequests>=4,"summary retry and date change read again");
+        onUi(()->{try{snapshot.put("month",YearMonth.from(today).toString());}catch(Exception e){throw new RuntimeException(e);}});
         clickText("今日");waitText("☑ タスク");daySummaryFixture=false;navigate("カレンダー");
     }
     private void testCalendarHeader()throws Exception{
