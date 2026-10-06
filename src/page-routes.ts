@@ -21,6 +21,8 @@ import { logsPage } from './activity-log-page';
 import { asDateOffset, DEFAULT_FAMILY_TIMEZONE } from './timezone';
 import { validateTaskEditRequestHierarchy } from './task-edit-hierarchy-guard';
 import { json } from './response';
+import {dailySummaryRedirect} from './daily-view-policy';
+import {redirect} from './response';
 import { settingsPwaBranding } from './settings-pwa-branding-page';
 import { familyPwaIcon, familyPwaManifest } from './family-pwa-branding';
 import { settingsAiModelRouting } from './settings-ai-model-routing';
@@ -44,6 +46,8 @@ export async function dispatchPageRoute(request:Request,context:any,env:any,url:
   if(url.pathname==='/app/tasks.php'){
     const timezone=String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE);
     const date=url.searchParams.get('date')||asDateOffset(url.searchParams.get('offset')==='1'?1:0,timezone);
+    const summary=dailySummaryRedirect(request,date,asDateOffset(0,timezone),Boolean(context.member));
+    if(summary)return redirect(summary);
     return await taskEvents(request,context,date);
   }
   if(url.pathname==='/app/calendar.php') return await calendar(request,context,url.searchParams.get('month')||asDateOffset(0,String(context.member?.family_timezone||env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)).slice(0,7));

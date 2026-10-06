@@ -7,7 +7,7 @@ const validDate=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFini
 
 export async function familyDailyJournalPageWithAi(request:Request,ctx:AppContext):Promise<Response>{
   const base=await familyDailyJournalPage(request,ctx);
-  if(!base.ok||!ctx.member)return base;
+  if(!base.ok||!ctx.member||new URL(request.url).searchParams.get('view')==='day')return base;
   const selected=String(new URL(request.url).searchParams.get('date')||'');
   if(!validDate(selected))return base;
   const familyId=Number(ctx.member.family_id);if(!Number.isSafeInteger(familyId)||familyId<=0)return base;
