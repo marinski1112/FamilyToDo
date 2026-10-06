@@ -150,6 +150,32 @@ final class ApiClient {
             }
         }finally{connection.disconnect();}
     }
+    /** The server chooses the family-calendar-day boundary; native code never assumes JST. */
+    static JSONObject daySummary(java.time.LocalDate date) throws Exception {
+        String path=DaySummaryParser.path(date);
+        if(BuildConfig.UI_TEST_MODE){
+            if(fixtureTransport==null)throw new IllegalStateException("No fixture transport");
+            JSONObject response=fixtureTransport.request(path,null,"GET");
+            return response.optBoolean("checklist")?new JSONObject().put("kind","CHECKLIST").put("date",date.toString()):DaySummaryParser.parse(response.optString("html"),date);
+        }
+        forbidFixtureNetwork();
+        HttpURLConnection connection=(HttpURLConnection)new URL(ORIGIN+path).openConnection();
+        try{
+            connection.setConnectTimeout(10000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("Accept","text/html");connection.setRequestProperty("Cache-Control","no-cache");
+            String cookie=CookieManager.getInstance().getCookie(ORIGIN);if(cookie!=null)connection.setRequestProperty("Cookie",cookie);
+            int status=connection.getResponseCode();
+            String setCookie=connection.getHeaderField("Set-Cookie");if(setCookie!=null){CookieManager.getInstance().setCookie(ORIGIN,setCookie);CookieManager.getInstance().flush();}
+            if(status==302&&DaySummaryParser.checklistRedirect(connection.getHeaderField("Location"),date))return new JSONObject().put("kind","CHECKLIST").put("date",date.toString());
+            if(status==401||status==302||status==303)throw new SecurityException("ログインしてください");
+            String type=connection.getContentType();if(status!=200||type==null||!type.startsWith("text/html"))throw new IllegalStateException("Journal unavailable");
+            try(var stream=connection.getInputStream()){
+                ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                while((n=stream.read(buffer))!=-1){bytes.write(buffer,0,n);if(bytes.size()>512000)throw new IllegalStateException("Journal too large");}
+                return DaySummaryParser.parse(new String(bytes.toByteArray(),StandardCharsets.UTF_8),date);
+            }
+        }finally{connection.disconnect();}
+    }
     static JSONObject request(String path, JSONObject body) throws Exception {
         return request(path,body,body==null?"GET":"POST");
     }
