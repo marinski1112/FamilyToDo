@@ -13,6 +13,7 @@ export const activeRegressionGroups=[
       ['family-log-one-shot-diagnostics','node scripts/family-log-diagnostics-contract.mjs'],
       ['family-log-success-recovery','node scripts/family-log-success-recovery-contract.mjs'],
       ['child-food-list','node scripts/child-food-list-contract.mjs'],
+      ['location-marker-presence','node scripts/location-marker-presence-contract.mjs'],
       ['family-log-input-dock','node scripts/family-log-input-dock-contract.mjs'],
       ['current-contracts','node scripts/core-contract-smoke.mjs'],
       ['task-rough-input-ai-cost-guard','node scripts/task-rough-input-ai-cost-guard-contract.mjs'],

@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {Window} from 'happy-dom';
+
+const window=new Window({url:'https://familytodo.test/app/location.php'});
+const doc=window.document;
+doc.body.innerHTML='<div class="location-member-row" data-member-id="1" data-state="STALE"><span class="location-member-name">Same</span><span class="location-member-meta">最終確認：🏠 自宅内 ・ 3日以上前</span></div><div class="location-member-row" data-member-id="2" data-state="SHARING_OFF"><span class="location-member-name">Same</span><span class="location-member-meta">自宅内</span></div><div class="location-family-map-marker" data-member-id="1"><span class="location-family-map-marker-label">Same</span></div><div class="location-family-map-marker" data-member-id="2"><span class="location-family-map-marker-label">Same</span></div>';
+window.localStorage.setItem('familytodo:location-marker-stay:1',JSON.stringify({context:'HOME',since:Date.now()-10*86400000}));
+let tick;
+window.setInterval=fn=>{tick=fn;return 1;};
+window.eval(readFileSync('public/assets/location-marker-presence.js','utf8'));
+doc.dispatchEvent(new window.Event('DOMContentLoaded'));
+const labels=()=>Array.from(doc.querySelectorAll('.location-family-map-marker-status')).map(x=>x.textContent);
+assert.deepEqual(labels(),['最終確認：滞在','共有OFF'],'stale fixes, old cache and identical names cannot prove prolonged stays');
+const row=doc.querySelector('.location-member-row');
+row.dataset.state='FRESH';tick();assert.equal(labels()[0],'滞在中');
+tick();assert.equal(labels()[0],'滞在中','elapsed page time never increases a stay duration');
+row.querySelector('.location-member-meta').textContent='外出中';tick();assert.equal(labels()[0],'位置更新あり','a fresh fix does not alone prove movement');
+row.dataset.state='STALE';tick();assert.equal(labels()[0],'位置情報待ち');
+row.dataset.state='NO_LOCATION';tick();assert.equal(labels()[0],'位置情報なし');
+await window.close();
+console.log('map markers use member IDs and never infer duration from stale fixes or browser clocks: ok');

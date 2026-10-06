@@ -323,3 +323,23 @@
 :root[data-theme="dark"] .food-subjects [aria-current]{background:var(--primary-soft)!important}
 :root[data-theme="dark"] .food-table th,:root[data-theme="dark"] .food-table td{border-color:var(--line)}
 :root[data-theme="dark"] .food-table small{color:var(--muted)}
+
+/* Unify dark checkbox states across legacy tasks and ordinary forms. */
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]),
+:root[data-theme="dark"] .checklist-page input.toggle[type="checkbox"],
+:root[data-theme="dark"] #done{
+  appearance:none!important;-webkit-appearance:none!important;
+  width:22px;height:22px;box-sizing:border-box;display:inline-grid!important;place-content:center;
+  border:2px solid #718198!important;border-radius:5px;background:var(--theme-input)!important;
+}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]):checked,
+:root[data-theme="dark"] .checklist-page input.toggle[type="checkbox"]:checked,
+:root[data-theme="dark"] #done:checked{background:var(--primary)!important;border-color:var(--primary)!important}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden])::after{content:none!important}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]):checked::after{
+  content:"✓"!important;color:#fff!important;position:static!important;transform:none!important;
+  border:0!important;width:auto!important;height:auto!important;font-size:15px;line-height:1;font-weight:900;
+}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]):indeterminate::after{content:"−"!important;color:var(--text);font-weight:900}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]):focus-visible{outline:3px solid var(--theme-link);outline-offset:3px}
+:root[data-theme="dark"] body input[type="checkbox"]:not([role="switch"]):not([hidden]):disabled{opacity:.5}
