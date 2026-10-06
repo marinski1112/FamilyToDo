@@ -26,6 +26,23 @@ function fixture(){const main=db('migrations'),meals=db('meals-migrations');main
 async function call(ctx,body,query=''){const response=await mealApi(new Request('https://fixture.invalid/api/meals/v1'+query,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify({csrf:'test',...body}):undefined}),ctx);return {response,value:await response.json()};}
 const recipe=(id='recipe-test-001')=>({id,name:'ハンバーグ',servings:2,minutes:25,source_url:'https://example.invalid/recipe',ingredients:[{name:'ひき肉',quantity:300,unit:'g'},{name:'玉ねぎ',quantity:1,unit:'個'}],steps:['玉ねぎを切る','ひき肉と混ぜて焼く']});
 async function seed(ctx){await call(ctx,{action:'save_recipe',recipe:recipe()});return (await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',status:'CONFIRMED',items:[{date:'2026-10-05',recipe_id:'recipe-test-001',servings:4},{date:'2026-10-06',recipe_id:'recipe-test-001',servings:2}]}})).value.plan;}
+test('wishlist recipe links support adoption, unlink, archive, isolation and legacy identity',async()=>{
+ const {ctx,meals}=fixture();await call(ctx,{action:'wishlist_add',id:'wish-existing',name:'Hope'});
+ const saved=await call(ctx,{action:'save_recipe',recipe:recipe(),wishlist_id:'wish-existing',add_to_wishlist:true});assert.equal(saved.response.status,200);
+ let wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].linked_recipe_id,recipe().id);
+ await call(ctx,{action:'save_recipe',recipe:{...saved.value.recipe,name:'Recipe rename'},add_to_wishlist:true});wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].name,'Hope');assert.equal(wishes[0].recipe_name,'Recipe rename');
+ assert.equal((await call({...ctx,member:{id:2,family_id:2,active:1}},{action:'wishlist_link',id:'wish-existing',recipe_id:recipe().id})).response.status,400);
+ await call(ctx,{action:'wishlist_link',id:'wish-existing',recipe_id:null,expected_recipe_id:recipe().id});assert.equal((await call(ctx,null)).value.wishlist[0].linked_recipe_id,null);
+ const link={action:'wishlist_link',id:'wish-existing',recipe_id:recipe().id,expected_recipe_id:null};assert.equal((await call(ctx,link)).response.status,200);assert.equal((await call(ctx,link)).response.status,200);
+ await call(ctx,{action:'archive_recipe',id:recipe().id});assert.equal((await call(ctx,null)).value.wishlist[0].recipe_available,false);
+ assert.equal((await call(ctx,link)).response.status,400);
+ await call(ctx,{action:'save_recipe',recipe:recipe('other-recipe')});
+ assert.equal((await call(ctx,{action:'wishlist_link',id:'wish-existing',recipe_id:'other-recipe',expected_recipe_id:'stale-recipe'})).response.status,409);
+ assert.equal((await call(ctx,{action:'save_recipe',recipe:recipe('orphan-recipe'),wishlist_id:'wish-existing'})).response.status,400);assert.equal(meals.sql.prepare("SELECT count(*) n FROM recipes WHERE id='orphan-recipe'").get().n,0);
+ await call(ctx,{action:'save_recipe',recipe:recipe('legacy-recipe'),add_to_wishlist:true});meals.sql.exec("UPDATE meal_wishlist SET recipe_id=NULL,recipe_link_set=0 WHERE id LIKE 'recipe-%'");
+ const legacy=(await call(ctx,null)).value.wishlist.find(w=>w.id.startsWith('recipe-'));assert.equal(legacy.linked_recipe_id,'legacy-recipe');
+ await call(ctx,{action:'wishlist_link',id:legacy.id,recipe_id:null});assert.equal((await call(ctx,null)).value.wishlist.find(w=>w.id===legacy.id).linked_recipe_id,null);
+});
 test('recipe and wishlist opt-in is atomic, family scoped and retry safe',async()=>{
  const {ctx,meals}=fixture();
  assert.equal((await call(ctx,{action:'save_recipe',recipe:recipe('recipe-only')})).response.status,200);
@@ -204,6 +221,17 @@ test('meal deployment readiness reports only booleans; enabled missing migration
 });
 
 async function waitFor(predicate){for(let i=0;i<400;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}assert.fail('UI did not finish');}
+test('wishlist UI opens linked recipes and preserves a failed manual link without AI/import',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view=wishlist'}),posts=[];let lose=true;
+ await call(ctx,{action:'save_recipe',recipe:recipe(),add_to_wishlist:true});await call(ctx,{action:'wishlist_add',id:'manual-wish',name:'Manual hope'});
+ try{w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null;if(body)posts.push(body);const r=await mealApi(new Request(new URL(url,w.location.href),options),ctx);if(body?.action==='wishlist_link'&&lose){lose=false;throw Error('lost link response');}return r;};w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const d=w.document;await waitFor(()=>d.querySelector('[data-wish-link="manual-wish"]'));assert.equal(d.querySelectorAll('[data-wish-import]').length,0);assert(d.querySelector('a[href*="view=recipe&id=recipe-test-001"]'));const f=d.querySelector('[data-wish-link="manual-wish"]');f.elements.recipe_id.value=recipe().id;const submit=()=>f.dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));submit();await waitFor(()=>d.querySelector('#mealStatus').textContent.includes('lost link response'));assert.equal(f.elements.recipe_id.value,recipe().id);submit();await waitFor(()=>d.querySelector('#mealStatus').textContent.includes('紐づけました'));assert.equal(posts.length,2);assert(posts.every(b=>b.action==='wishlist_link'));assert.equal((await call(ctx,null)).value.wishlist.length,2);
+ }finally{await w.happyDOM.close();}
+});
+test('wishlist manual import saves into the original wish without creating another wish',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view=wishlist'});await call(ctx,{action:'wishlist_add',id:'source-wish',name:'Source hope'});meals.sql.exec("UPDATE meal_wishlist SET source_url='https://example.invalid/source' WHERE id='source-wish'");
+ try{w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';w.fetch=async(url,options={})=>mealApi(new Request(new URL(url,w.location.href),options),ctx);w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const d=w.document;await waitFor(()=>d.querySelector('[data-wish-import]'));d.querySelector('[data-wish-import]').click();d.querySelector('#manualImport').click();const f=d.querySelector('#recipeForm');assert.equal(f.elements.add_to_wishlist,undefined);f.elements.name.value='Source recipe';f.elements.steps.value='Mix';d.querySelector('[data-field=name]').value='Synthetic ingredient';f.dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));await waitFor(()=>d.querySelector('#editRecipe'));const result=(await call(ctx,null)).value;assert.equal(result.wishlist.length,1);assert.equal(result.wishlist[0].id,'source-wish');assert.equal(result.wishlist[0].name,'Source hope');assert.equal(result.wishlist[0].linked_recipe_id,result.recipes[0].id);
+ }finally{await w.happyDOM.close();}
+});
 test('recipe editor wishlist opt-in keeps input and ID after a lost save response',async()=>{
  const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view=recipes'}),sent=[];let lose=true;
  try{
