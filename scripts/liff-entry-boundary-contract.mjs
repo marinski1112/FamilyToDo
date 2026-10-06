@@ -5,6 +5,7 @@ const oauth=fs.readFileSync('src/oauth-continuation.ts','utf8');
 const target=fs.readFileSync('src/liff-target.ts','utf8');
 const browser=fs.readFileSync('public/assets/liff-auth.js','utf8');
 const wrangler=fs.readFileSync('wrangler.jsonc','utf8');
+for(const marker of ["meals:'/app/meals.php'","shopping:'/app/tasks.php#shopping-checklist'"]){if(!browser.includes(marker))throw new Error('LIFF browser aliases must agree with retained server destinations: '+marker);}
 
 for(const marker of [
   "from './app-shell'",

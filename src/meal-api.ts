@@ -11,7 +11,7 @@ import type {AppContext} from './app-context';
 import {json} from './response';
 import {BadRequest} from './errors';
 import {mealEnabled,mealDate,mealWeek,mealId,mealText,mealHash,shiftMealDate} from './meal-domain';
-import {mealRecipeSummaries,mealRecipe,saveMealRecipe,readMealPlan,saveMealPlan} from './meal-repository';
+import {mealRecipeSummaries,mealRecipe,saveMealRecipe,readMealPlan,saveMealPlan,readMealWishlist} from './meal-repository';
 import {readMealInventory,changeMealInventory,mealShoppingInventory,mealCookingPreview,completeMealCooking} from './meal-inventory';
 import {importMealUrl} from './meal-url-import';
 import {suggestMealWeek} from './meal-weekly-suggestions';
@@ -44,10 +44,10 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(view==='inbox')return out({ok:true,line_receipts:await readLineReceipts(ctx),inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
   if(view==='recipe'){const recipe=await mealRecipe(db,familyId,mealId(url.searchParams.get('id')));return out({ok:!!recipe,recipe},recipe?200:404);}
   if(view==='shopping_preview'){const plan=await readMealPlan(db,familyId,week);if(!plan||plan.status!=='CONFIRMED')return out({ok:false,error:'献立を確定してください。'},409);const {needs,inventory_revision}=await mealShoppingInventory(ctx,plan);return out({ok:true,week_start:week,revision:plan.revision,needs,inventory_revision,preview_hash:await mealHash({revision:plan.revision,needs,inventory_revision})});}
-  const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),db.prepare('SELECT id,name,source_url FROM meal_wishlist WHERE family_id=? ORDER BY created_at DESC,id LIMIT 200').bind(familyId).all(),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
+  const [recipes,wishlist,plan,cooked]=await Promise.all([mealRecipeSummaries(db,familyId),readMealWishlist(db,familyId),readMealPlan(db,familyId,week),db.prepare('SELECT meal_date,plan_revision FROM cooked_events WHERE family_id=? AND meal_date BETWEEN ? AND ? LIMIT 100').bind(familyId,week,new Date(Date.parse(week+'T12:00:00Z')+6*86400000).toISOString().slice(0,10)).all()]);
   const today=familyDate(String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),tomorrowDate=shiftMealDate(today,1);let tomorrow_item=null;
   if(week===mealWeek(today)&&mealWeek(tomorrowDate)!==week){const next=await readMealPlan(db,familyId,mealWeek(tomorrowDate));tomorrow_item=next?.items.find((i:any)=>i.date===tomorrowDate)||null;}
-  return out({ok:true,recipes,wishlist:wishlist.results,plan,cooked:cooked.results,week_start:week,tomorrow_item});
+  return out({ok:true,recipes,wishlist,plan,cooked:cooked.results,week_start:week,tomorrow_item});
  }
  if(request.method!=='POST')return out({ok:false,error:'POST only'},405);
  const length=Number(request.headers.get('content-length')||0);if(length>800000)return out({ok:false,error:'入力が大きすぎます。'},413);
@@ -84,7 +84,16 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='live_start')return out({ok:true,live:await startMealLive(ctx,b)});
   if(b.action==='live_end')return out({ok:true,...await endMealLive(ctx,b)});
   if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
-  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist)});
+  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist,b.wishlist_id,b.wishlist_revision)});
+  if(b.action==='wishlist_link'){
+   const expectedRevision=b.expected_revision??0;if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new BadRequest('紐づけを読み込み直してください。');
+   const id=mealId(b.id),target=b.recipe_id==null?null:mealId(b.recipe_id),expected=b.expected_recipe_id==null?null:mealId(b.expected_recipe_id);
+   if(target&&!await mealRecipe(db,familyId,target))throw new BadRequest('この家族の表示中のレシピを選択してください。');
+   await db.prepare('UPDATE meal_wishlist SET recipe_id=?,recipe_link_set=1,recipe_link_revision=recipe_link_revision+1 WHERE family_id=? AND id=? AND (recipe_id IS ? OR recipe_id IS ?) AND (recipe_link_revision=? OR (recipe_id IS ? AND recipe_link_set=1)) AND (? IS NULL OR EXISTS(SELECT 1 FROM recipes WHERE family_id=? AND id=? AND archived=0))').bind(target,familyId,id,expected,target,expectedRevision,target,target,familyId,target).run();
+   const saved=await db.prepare('SELECT recipe_id FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<any>();
+   if(!saved||saved.recipe_id!==target)return out({ok:false,error:'紐づけが更新されています。読み込み直してください。'},409);
+   return out({ok:true});
+  }
   if(b.action==='archive_recipe'){await db.prepare('UPDATE recipes SET archived=1,updated_at=? WHERE family_id=? AND id=?').bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) VALUES(?,?,?,?,?)').bind(familyId,id,name,m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string}>();if(saved?.name!==name)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
   if(b.action==='wishlist_delete'){await db.prepare('DELETE FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,mealId(b.id)).run();return out({ok:true});}
