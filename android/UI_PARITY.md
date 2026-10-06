@@ -124,3 +124,13 @@ Google Homeのみ（常設中継なし）のため、外出先からの自動即
 
 ## セットの選択追加（2026-10-03）
 買い物・持ち物とも、セット呼び出しで日付・項目チェック・追加先カテゴリを選ぶ。初期選択なし、全選択/解除あり。未分類を明示でき、登録セットのカテゴリ/順序/内容は変えない。失敗時は画面・チェック・カテゴリと同じリクエストIDを保持し、内容を変えた場合だけ新しいIDを使う。新API action `reusable_set_invoke_selected` が必要。旧サーバーでは未対応エラーとなり、全件追加へフォールバックしない。サーバー公開前には配布しない。
+
+## Past-day summary and calendar date header (2026-10-06)
+
+Checklist dates now ask the canonical authenticated `/app/family_journal.php?view=day&date=...` whether to show a summary or a checklist. The server's same-date redirect preserves yesterday/current/future checklists; earlier days render read-only native cards. This uses the family-calendar-day boundary on production main (introduced by #1193/#1194), rather than duplicating a JST/48-hour cutoff in Android. Native previous/next/date-picker/today controls remain available; the summary's today date is taken from the server. Saved events, meals/cooking revisions, pending tasks, recurring history, logs and journal evidence are displayed from the bounded Web contract. Photo/full-record details use the existing authenticated in-app Web path. No AI calls, past occurrence generation, new backend store or persistent summary cache are added.
+
+The display adapter rejects login, wrong dates and missing contracts; it never executes scripts or loads HTML images. Links use an explicit same-origin path allowlist. Family/session changes and stale date replies cannot repopulate a different date. Failures show retry, not an invented empty summary. Earlier dates do not load `/api/android/v1/overview`, which can materialize recurring occurrences. Returning to an editable date uses the existing overview and mutation guards.
+
+Calendar holiday names share the date-number row. Ordinary days no longer reserve a 13dp holiday lane. Single-day chips, cross-day band offsets and bounded week-height calculations use the shortened header, retaining holiday names/accessible descriptions, multi-day lanes, overflow and stamps.
+
+API30/35 light/dark instrumentation adds summary parsing/date navigation/retry and calendar holiday/ordinary-day chip alignment and band positioning screenshots. These synthetic checks are not real login, Galaxy A21, production family-data or IME verification. The whole Android PR #1143 remains draft.

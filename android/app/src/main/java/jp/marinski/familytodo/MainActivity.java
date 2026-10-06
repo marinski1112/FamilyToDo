@@ -112,6 +112,10 @@ public final class MainActivity extends Activity {
     private String tab = "home";
     private String goodsKind = "shopping";
     private String calendarView="all";
+    private JSONObject dailyView;
+    private String dailyViewDate="",dailyViewError="";
+    private boolean dailyViewLoading;
+    private int dailyViewSerial;
     private JSONObject locationLatest;
     private String locationError="";
     private WebView pageWeb;
@@ -132,7 +136,8 @@ public final class MainActivity extends Activity {
         if(mealScreen!=null)mealScreen.resumeTimer();
         if(BuildConfig.UI_TEST_MODE)return;
         if(tab.equals("goods")&&snapshot!=null&&login==null&&pageWeb==null){
-            if(goodsCompletionThreshold!=GoodsCompletion.threshold(System.currentTimeMillis()))render();else scheduleGoodsCompletionBoundary();
+            clearDailyView();
+            if(goodsCompletionThreshold!=GoodsCompletion.threshold(System.currentTimeMillis()))render();else render();
         }
         if(content!=null && login==null && pageWeb==null && !java.util.Objects.equals(memorySessionBinding,SnapshotCache.currentSessionBinding())) load();
     }
@@ -241,7 +246,7 @@ public final class MainActivity extends Activity {
             ApiClient.setMutationsEnabled(false);
             stampGeneration++;
             login.destroy(); login = null;
-            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
         }
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
@@ -269,8 +274,8 @@ public final class MainActivity extends Activity {
     }
     private void selectChecklistDate(LocalDate date) {
         if(date.isBefore(LocalDate.of(2000,1,1))||date.isAfter(LocalDate.of(2100,12,31)))return;
-        selectedDay=date;month=YearMonth.from(date);
-        if(tab.equals("goods")&&snapshot!=null&&month.toString().equals(snapshot.optString("month")))render();else load();
+        selectedDay=date;month=YearMonth.from(date);clearDailyView();
+        if(tab.equals("goods"))render();else load();
     }
     private DatePickerDialog pickChecklistDate() {
         DatePickerDialog picker=new DatePickerDialog(this,(view,year,mon,day)->selectChecklistDate(LocalDate.of(year,mon+1,day)),selectedDay.getYear(),selectedDay.getMonthValue()-1,selectedDay.getDayOfMonth());
@@ -281,8 +286,8 @@ public final class MainActivity extends Activity {
     }
     private void renderChecklistDateControls() {
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-        Button date=flatButton("チェックリスト  "+selectedDay.getMonthValue()+"/"+selectedDay.getDayOfMonth(),()->pickChecklistDate());
-        date.setContentDescription("チェックリストの日付を指定");date.setTextSize(18);date.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);row.addView(date,new LinearLayout.LayoutParams(0,dp(40),1));
+        Button date=flatButton((isDaySummary()?"その日の総括  ":"チェックリスト  ")+selectedDay.getMonthValue()+"/"+selectedDay.getDayOfMonth(),()->pickChecklistDate());
+        date.setContentDescription(isDaySummary()?"総括の日付を指定":"チェックリストの日付を指定");date.setTextSize(18);date.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);row.addView(date,new LinearLayout.LayoutParams(0,dp(40),1));
         Button prev=button("‹",()->selectChecklistDate(selectedDay.minusDays(1))),next=button("›",()->selectChecklistDate(selectedDay.plusDays(1)));
         prev.setContentDescription("前日を表示");next.setContentDescription("翌日を表示");
         prev.setEnabled(selectedDay.isAfter(LocalDate.of(2000,1,1)));next.setEnabled(selectedDay.isBefore(LocalDate.of(2100,12,31)));
@@ -314,7 +319,7 @@ public final class MainActivity extends Activity {
         if(target.getYear()<2000||target.getYear()>2100)return;
         month=target;
         selectedDay=month.atDay(tab.equals("calendar")?1:Math.min(selectedDay.getDayOfMonth(),month.lengthOfMonth()));
-        load();
+        if(tab.equals("goods")){clearDailyView();render();}else load();
     }
     private final class MonthSwipeScroll extends ScrollView {
         private float startX,startY;
@@ -402,7 +407,7 @@ public final class MainActivity extends Activity {
     private void navigateNow(String destination) {
         if(destination.equals("meals")){openMeals();return;}
         if(mealScreen!=null){mealScreen.close();mealScreen=null;}
-        if(destination.equals(tab)){if(pageWeb!=null){showNative();if(!BuildConfig.UI_TEST_MODE)load();}return;}
+        if(destination.equals(tab)){if(pageWeb!=null){if(tab.equals("goods"))clearDailyView();showNative();if(!BuildConfig.UI_TEST_MODE&&!tab.equals("goods"))load();}return;}
         tab=destination;
         if(destination.equals("messages"))messageScrollLatest=true;
         if(destination.equals("home")) {
@@ -411,6 +416,7 @@ public final class MainActivity extends Activity {
         }
         if(destination.equals("location")&&!BuildConfig.UI_TEST_MODE){showWebPage("/app/location.php");return;}
         showNative();
+        if(destination.equals("goods"))return;
         if(BuildConfig.UI_TEST_MODE)return;
         if(destination.equals("messages"))loadMessages(0);
         else if(destination.equals("familylog"))loadFamilyLog();
@@ -426,12 +432,13 @@ public final class MainActivity extends Activity {
             if(mealScreen!=null){mealScreen.close();mealScreen=null;if(content!=null)content.removeAllViews();}
             sessionEpoch++;
             stampGeneration++;
-            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
+            monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); showingCached=false; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; locationLatest=null; locationError="";
             shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll();
             pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear();
             pendingPhoto=null; pendingFamilyLogPhoto=null;
             memorySessionBinding=binding;
         }
+        if(tab.equals("goods")&&(dailyView==null||!dailyViewDate.equals(selectedDay.toString())||isDaySummary())){render();return;}
         String requested = month.toString();
         int epoch=sessionEpoch;
         snapshot = monthCache.get(requested);
@@ -468,10 +475,10 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if(epoch!=sessionEpoch) return;
-                    if(accountChanged) { if(mealScreen!=null){mealScreen.close();mealScreen=null;if(content!=null)content.removeAllViews();} monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
+                    if(accountChanged) { if(mealScreen!=null){mealScreen.close();mealScreen=null;if(content!=null)content.removeAllViews();} monthCache.clear(); homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null; stampMonths.clear();stickerMonths.clear();decorationImageTargets.clear(); stampImages.evictAll(); pendingStampImages.clear(); scheduledFramePaths.clear(); scheduledAnimationPaths.clear(); }
                     monthCache.put(requested, data);
                     if (requested.equals(month.toString())) {
-                        snapshot=data; showingCached=false; ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
+                        snapshot=data; showingCached=false; memorySessionBinding=SnapshotCache.currentSessionBinding(); ApiClient.setMutationsEnabled(true); render();if(tab.equals("home"))loadHomeDashboard();
                     }
                 });
                 for (boolean shopping : new boolean[]{true,false}) {
@@ -521,9 +528,45 @@ public final class MainActivity extends Activity {
                     for(Map.Entry<String,JSONObject> entry:fetched.entrySet())
                         SnapshotCache.write(this,entry.getKey(),entry.getValue());
                 }
-            } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; SnapshotCache.clear(this); showLogin(); }); }
+            } catch (SecurityException e) { runOnUiThread(() -> { if(epoch!=sessionEpoch) return; monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); SnapshotCache.clear(this); showLogin(); }); }
             catch (Exception e) { runOnUiThread(() -> { if (snapshot == null) { content.removeAllViews(); content.addView(label("読み込めませんでした。更新を押してください。")); } }); }
         });
+    }
+    private void clearDailyView(){dailyViewSerial++;dailyView=null;dailyViewDate="";dailyViewError="";dailyViewLoading=false;}
+    private boolean isDaySummary(){return dailyView!=null&&dailyViewDate.equals(selectedDay.toString())&&"SUMMARY".equals(dailyView.optString("kind"));}
+    private void loadDailyView(){
+        if(dailyViewLoading||!dailyViewError.isEmpty())return;
+        dailyViewLoading=true;int serial=++dailyViewSerial,epoch=sessionEpoch;LocalDate day=selectedDay;
+        network.execute(()->{try{
+            String binding=SnapshotCache.currentSessionBinding();
+            JSONObject result=ApiClient.daySummary(day);
+            runOnUiThread(()->{if(serial!=dailyViewSerial||epoch!=sessionEpoch||!day.equals(selectedDay))return;
+                if(!BuildConfig.UI_TEST_MODE&&!java.util.Objects.equals(binding,SnapshotCache.currentSessionBinding())){clearDailyView();load();return;}
+                dailyViewLoading=false;dailyView=result;dailyViewDate=day.toString();
+                if(!tab.equals("goods"))return;
+                render();
+                if(!isDaySummary()&&(snapshot==null||!month.toString().equals(snapshot.optString("month"))||(!BuildConfig.UI_TEST_MODE&&!ApiClient.canMutate())))load();
+            });
+        }catch(SecurityException error){runOnUiThread(()->{if(serial==dailyViewSerial&&epoch==sessionEpoch){clearDailyView();showLogin();}});
+        }catch(Exception error){runOnUiThread(()->{if(serial!=dailyViewSerial||epoch!=sessionEpoch||!day.equals(selectedDay))return;
+            dailyViewLoading=false;dailyViewError="この日を読み込めませんでした。再読み込みして確認してください。";if(tab.equals("goods"))render();});}});
+    }
+    private void renderDaySummary(){
+        content.addView(label("昨日以降はチェックリスト、一昨日以前は総括。予定と記録を分けて表示します。"));
+        LinearLayout actions=new LinearLayout(this);
+        actions.addView(flatButton("今日",()->selectChecklistDate(LocalDate.parse(dailyView.optString("today")))),new LinearLayout.LayoutParams(0,dp(40),1));
+        actions.addView(flatButton("更新",()->{clearDailyView();render();}),new LinearLayout.LayoutParams(0,dp(40),1));content.addView(actions);
+        JSONArray cards=dailyView.optJSONArray("cards");if(cards!=null)for(int i=0;i<cards.length();i++){
+            JSONObject card=cards.optJSONObject(i);if(card==null)continue;
+            LinearLayout panel=panel();panel.addView(heading(card.optString("title")));panel.addView(label(card.optString("text")));
+            JSONArray links=card.optJSONArray("links");if(links!=null)for(int j=0;j<links.length();j++){
+                JSONObject link=links.optJSONObject(j);if(link==null||!DaySummaryParser.safeLink(link.optString("path")))continue;
+                String path=link.optString("path");panel.addView(flatButton(link.optString("label")+" ›",()->{
+                    if(path.startsWith("/app/tasks.php?date="))selectChecklistDate(LocalDate.parse(path.substring(path.indexOf('=')+1)));else showWebPage(path);
+                }));
+            }addPanel(panel);
+        }
+        content.addView(flatButton("Web版の日誌・写真を開く ›",()->showWebPage(DaySummaryParser.path(selectedDay))));
     }
     private void render() {
         if (content == null) return;
@@ -535,7 +578,13 @@ public final class MainActivity extends Activity {
         if (tab.equals("home")) { renderHome(); return; }
         if (tab.equals("goods")) {
             renderChecklistDateControls();
-            if(snapshot!=null)renderChecklistTasks();
+            if(!dailyViewDate.equals(selectedDay.toString())||dailyView==null){
+                content.addView(label(dailyViewError.isEmpty()?"日付の表示を確認しています…":dailyViewError));
+                if(dailyViewError.isEmpty())loadDailyView();else content.addView(button("再読み込み",()->{clearDailyView();render();}));
+                return;
+            }
+            if(isDaySummary()){renderDaySummary();return;}
+            if(snapshot!=null&&month.toString().equals(snapshot.optString("month")))renderChecklistTasks();
         } else renderCalendarDateControls();
         if (snapshot == null || !month.toString().equals(snapshot.optString("month"))) { content.addView(label("読み込み中…")); return; }
         if (showingCached) content.addView(label("保存済みデータを読み取り専用で表示中・更新を確認しています"));
@@ -727,7 +776,7 @@ public final class MainActivity extends Activity {
         if("/app/messages.php".equals(path))return "messages";
         return null;
     }
-    private void returnFromWebPage() { if(tab.equals("meals")){openMeals();return;}showNative();load(); }
+    private void returnFromWebPage() { if(tab.equals("meals")){openMeals();return;}if(tab.equals("goods")){clearDailyView();showNative();if(!BuildConfig.UI_TEST_MODE)load();return;}showNative();load(); }
     private void showWebPage(String path) {
         if((!path.startsWith("/app/")&&!path.startsWith("/task/new.php?"))||login!=null)return;
         if(BuildConfig.UI_TEST_MODE)return;
@@ -870,7 +919,7 @@ public final class MainActivity extends Activity {
                 hasStamps|=stampsOnDay(day.toString()).length()>0;
             }
             int available=(int)(getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density)-260;
-            int weekHeight=Math.max(Math.max(82,Math.min(120,available/weeks)),48+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?30:0));
+            int weekHeight=Math.max(Math.max(82,Math.min(120,available/weeks)),35+19*bandRows+17*eventRows+(hasOverflow?13:0)+(hasAccessory?13:0)+(hasStamps?30:0));
             LinearLayout week=new LinearLayout(this);
             for(int column=0;column<7;column++) {
                 int date=row*7+column-offset+1;
@@ -890,10 +939,11 @@ public final class MainActivity extends Activity {
                 number.setGravity(selected?Gravity.CENTER:Gravity.START|Gravity.CENTER_VERTICAL);number.setPadding(selected?0:dp(4),0,0,0);
                 number.setTextColor(selected?Color.WHITE:!inMonth?mutedColor():column==0||holiday!=null?Color.parseColor("#FB7185"):column==6?Color.parseColor("#93C5FD"):textColor());
                 if(selected)number.setBackground(shape(accentColor(),Color.TRANSPARENT,100));
-                cell.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
+                LinearLayout dayHeader=new LinearLayout(this);dayHeader.setGravity(Gravity.CENTER_VERTICAL);dayHeader.addView(number,new LinearLayout.LayoutParams(dp(28),dp(28)));
                 TextView holidayLabel=new TextView(this);holidayLabel.setText(holiday==null?"":holiday);holidayLabel.setTextSize(8);
                 holidayLabel.setTextColor(Color.parseColor("#FB7185"));holidayLabel.setSingleLine(true);holidayLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                cell.addView(holidayLabel,new LinearLayout.LayoutParams(-1,dp(13)));
+                if(holiday!=null){holidayLabel.setContentDescription(holiday);dayHeader.addView(holidayLabel,new LinearLayout.LayoutParams(0,dp(28),1));}
+                cell.addView(dayHeader,new LinearLayout.LayoutParams(-1,dp(28)));
                 android.view.View bandSpace=new android.view.View(this);cell.addView(bandSpace,new LinearLayout.LayoutParams(-1,dp(19*bandRows)));
                 ArrayList<JSONObject> dayRows=new ArrayList<>(),events=new ArrayList<>();
                 int taskCount=0,bandOverflow=0;ArrayList<JSONObject> checklistRows=new ArrayList<>();
@@ -964,7 +1014,7 @@ public final class MainActivity extends Activity {
                 band.setOnClickListener(v->{selectedDay=segmentStart;month=YearMonth.from(segmentStart);checklistEvents=true;navigate("goods");});
                 ArrayList<JSONObject> bandTasks=new ArrayList<>();for(int n=0;n<tasks.length();n++){JSONObject t=tasks.optJSONObject(n);if(t!=null&&taskOnDay(t,segmentStart.toString()))bandTasks.add(t);}
                 band.setOnLongClickListener(v->{showCalendarDecoration(segmentStart,bandTasks);return true;});calendarPress(band,()->showCalendarDayPreview(segmentStart,bandTasks));
-                android.widget.FrameLayout.LayoutParams position=new android.widget.FrameLayout.LayoutParams(0,dp(17));position.topMargin=dp(45+19*lane);frame.addView(band,position);
+                android.widget.FrameLayout.LayoutParams position=new android.widget.FrameLayout.LayoutParams(0,dp(17));position.topMargin=dp(32+19*lane);frame.addView(band,position);
                 frame.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
                     int width=right-left;android.widget.FrameLayout.LayoutParams lp=(android.widget.FrameLayout.LayoutParams)band.getLayoutParams();
                     int margin=width*from/7+dp(2),bandWidth=width*(from+span)/7-width*from/7-dp(4);
@@ -4335,7 +4385,7 @@ public final class MainActivity extends Activity {
                             .put("csrf",snapshot.optString("csrf")).put("ids",ids));
                     } catch(Exception ignored) { /* Retry on a later read. */ }
                 }
-            } catch(SecurityException e) { runOnUiThread(() -> {if(epoch==sessionEpoch) {monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; showLogin();}}); }
+            } catch(SecurityException e) { runOnUiThread(() -> {if(epoch==sessionEpoch) {monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); showLogin();}}); }
             catch(Exception e) { runOnUiThread(() -> {if(epoch==sessionEpoch&&tab.equals("messages")) {
                 content.removeAllViews(); content.addView(label("伝言を取得できませんでした"));
             }}); }
@@ -5073,7 +5123,7 @@ public final class MainActivity extends Activity {
                 stopService(new Intent(this,LocationService.class)); Credentials.clear(this);
                 SnapshotCache.clear(this);
                 stampMedia.execute(() -> SnapshotCache.clear(this));
-                monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
+                monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); messages=new JSONArray();messageReactions.clear();busyMessageReactions.clear();checklistQueries.clear();checklistSearchOpen.clear();calendarView="all"; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
                 pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
                 pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
                 pendingStampName="";
@@ -5107,7 +5157,7 @@ public final class MainActivity extends Activity {
         memorySessionBinding=null;
         SnapshotCache.clear(this);
         stampMedia.execute(() -> SnapshotCache.clear(this));
-        monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++; familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
+        monthCache.clear(); snapshot=null;homeDashboard=null;homeLoading=false;homeRequestSerial++;clearDailyView(); familyLog=null; familyLogCached=false; shoppingCategories=null; itemCategories=null;
         pendingPhoto=null; photoSending=false; pendingPhotoCaption=""; pendingPhotoReminder="";
         pendingFamilyLogPhoto=null; pendingFamilyLogPhotoId=0; familyPhotoSending=false;
         pendingStampName="";

@@ -173,12 +173,14 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->{View stamp=findDescription(root(),"スタンプ カレンダーテスト");check(stamp!=null,"calendar contains stamp thumbnail");
                 View summary=findText(root(),"✅ 1件");int[] stampAt=new int[2],summaryAt=new int[2];stamp.getLocationOnScreen(stampAt);summary.getLocationOnScreen(summaryAt);
                 check(stampAt[1]>=summaryAt[1]+summary.getHeight(),"calendar stamps do not cover checklist count with four events and bands");});
+            testCalendarHeader();
             testCalendarPresses();
             testCalendarDates();
             testCalendarFilters();
             testCalendarOrder();
             testNavigationBounds();
             testMonthSwipes("calendar");
+            testDaySummary();
             screenshot("calendar");
             testBackgroundSave(LocalDate.parse(day),"PRIVATE",99,false);
             check("PRIVATE".equals(lastBackgroundScope),"background retains scope on failed save");
@@ -411,8 +413,64 @@ public final class UiParityInstrumentation extends Instrumentation {
             onUi(()->check(!popup.get().isShowing(),"successful set closes chooser"));
         }
     }
+    private volatile boolean daySummaryFixture,daySummaryFailure;
+    private volatile int daySummaryRequests;
+    private String daySummaryHtml(LocalDate date){
+        String today=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).toString();
+        return "<div class=\"daily-head\"><h1>📘 その日の総括</h1><div class=\"date-nav\"><strong>"+date+"</strong><a href=\"/app/tasks.php?date="+today+"\">今日</a></div></div>"+
+            "<section class=\"card\"><h2>📅 予定</h2><p>参加の記録ではありません。</p></section>"+
+            "<section class=\"card\"><h2>📝 未完了タスク</h2><p>保存済み未完了</p><a href=\"/task/view.php?id=10\">詳細</a><a href=\"https://evil.invalid\">外部</a></section>"+
+            "<section class=\"card\"><h2>🍚 献立</h2><p>別の版の調理記録</p></section>"+
+            "<section class=\"card\"><h2>👪 家族ログ</h2><p>日誌 &amp; 記録</p></section>"+
+            "<section class=\"card\"><h2>📍 移動・滞在</h2><p>取得できない時間は不明</p><script>unsafe()</script><img src=\"https://evil.invalid/photo\"></section>";
+    }
+    private void testDaySummary()throws Exception{
+        LocalDate today=LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")),past=today.minusDays(2);
+        JSONObject parsed=DaySummaryParser.parse(daySummaryHtml(past),past);check(parsed.optJSONArray("cards").length()==5,"native summary parses canonical sections");
+        check(parsed.optJSONArray("cards").getJSONObject(1).optJSONArray("links").length()==1,"summary excludes foreign links");
+        check(parsed.optJSONArray("cards").getJSONObject(3).optString("text").equals("日誌 & 記録"),"summary decodes text");
+        check(!parsed.toString().contains("unsafe()")&&!parsed.toString().contains("evil.invalid/photo"),"summary never executes scripts or loads HTML images");
+        boolean rejected=false;try{DaySummaryParser.parse(daySummaryHtml(past),past.minusDays(1));}catch(Exception expected){rejected=true;}check(rejected,"wrong-date summary rejected");
+        rejected=false;try{DaySummaryParser.parse("<html>login</html>",past);}catch(Exception expected){rejected=true;}check(rejected,"login cannot be native summary");
+        check(DaySummaryParser.checklistRedirect("/app/tasks.php?date="+today,today),"canonical current-day redirect accepted");
+        check(!DaySummaryParser.checklistRedirect("https://evil.invalid/app/tasks.php?date="+today,today),"foreign redirect rejected");
+        daySummaryFixture=true;daySummaryFailure=false;
+        navigate("チェックリスト");onUi(()->{try{Method select=MainActivity.class.getDeclaredMethod("selectChecklistDate",LocalDate.class);select.setAccessible(true);select.invoke(activity,past);}catch(Exception e){throw new RuntimeException(e);}});waitContainingText("保存済み未完了");
+        check(hasContaining("その日の総括"),"past day renders native summary");check(!hasText("☑ タスク"),"summary has no checklist completion controls");
+        onUi(()->check(findDescription(root(),"総括の日付を指定")!=null,"native summary date picker"));screenshot("day-summary");
+        onUi(()->{try{snapshot.put("month",YearMonth.from(today.minusDays(1)).toString());}catch(Exception e){throw new RuntimeException(e);}});
+        clickDescription("翌日を表示");waitText("☑ タスク");check(!hasContaining("保存済み未完了"),"yesterday returns to checklist");
+        daySummaryFailure=true;onUi(()->{try{Method select=MainActivity.class.getDeclaredMethod("selectChecklistDate",LocalDate.class);select.setAccessible(true);select.invoke(activity,past);}catch(Exception e){throw new RuntimeException(e);}});waitText("再読み込み");check(hasContaining("この日を読み込めませんでした"),"summary errors visible");
+        daySummaryFailure=false;clickText("再読み込み");waitContainingText("保存済み未完了");check(daySummaryRequests>=4,"summary retry and date change read again");
+        onUi(()->{try{snapshot.put("month",YearMonth.from(today).toString());}catch(Exception e){throw new RuntimeException(e);}});
+        clickText("今日");waitText("☑ タスク");daySummaryFixture=false;navigate("カレンダー");
+    }
+    private void testCalendarHeader()throws Exception{
+        AtomicReference<Object> oldMonth=new AtomicReference<>(),oldDay=new AtomicReference<>();AtomicReference<JSONArray> oldTasks=new AtomicReference<>();String oldSnapshotMonth=snapshot.optString("month");
+        onUi(()->{try{
+            oldMonth.set(value("month"));oldDay.set(value("selectedDay"));oldTasks.set(snapshot.optJSONArray("tasks"));field("month",YearMonth.of(2026,5));field("selectedDay",LocalDate.of(2026,5,7));snapshot.put("month","2026-05").put("tasks",new JSONArray()
+                .put(new JSONObject().put("id",901).put("title","祝日の予定位置").put("task_kind","EVENT").put("start_at","2026-05-06 09:00:00"))
+                .put(new JSONObject().put("id",902).put("title","平日の予定位置").put("task_kind","EVENT").put("start_at","2026-05-07 09:00:00"))
+                .put(new JSONObject().put("id",903).put("title","帯の位置テスト").put("task_kind","EVENT").put("start_at","2026-05-06").put("end_at","2026-05-07")));invoke("render");
+        }catch(Exception e){throw new RuntimeException(e);}});settle();
+        onUi(()->{
+            View normal=findDescription(root(),"2026-05-07 予定2件"),holiday=findDescription(root(),"2026-05-06 予定2件"),normalEvent=findContaining(normal,"平日の予定位置"),holidayEvent=findContaining(holiday,"祝日の予定位置");
+            check(normalEvent!=null&&holidayEvent!=null,"holiday and normal-day events render");int[] n=new int[2],h=new int[2],c=new int[2];normalEvent.getLocationOnScreen(n);holidayEvent.getLocationOnScreen(h);normal.getLocationOnScreen(c);
+            check(n[1]==h[1],"holiday does not push events below ordinary-day events");
+            ViewGroup cell=(ViewGroup)((ViewGroup)normal).getChildAt(0);View header=cell.getChildAt(0);check(cell.getChildAt(1).getTop()==header.getBottom(),"no reserved holiday spacer below date");
+            TextView label=findText(holiday,"振替休日");check(label!=null,"holiday name remains visible");ViewGroup holidayCell=(ViewGroup)((ViewGroup)holiday).getChildAt(0);check(label.getParent()==holidayCell.getChildAt(0),"holiday label shares date header");
+            View band=findContaining(root(),"帯の位置テスト");check(((android.widget.FrameLayout.LayoutParams)band.getLayoutParams()).topMargin==(int)(32*activity.getResources().getDisplayMetrics().density+0.5f),"cross-day band follows date without holiday lane");
+        });screenshot("calendar-holiday-header");
+        onUi(()->{try{field("month",oldMonth.get());field("selectedDay",oldDay.get());snapshot.put("month",oldSnapshotMonth).put("tasks",oldTasks.get());invoke("render");}catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
     private volatile int settingsWrites;
     private JSONObject response(String path,JSONObject body,String method)throws Exception{
+        if(path.startsWith("/app/family_journal.php?view=day&date=")){
+            daySummaryRequests++;if(daySummaryFailure)throw new IllegalStateException("synthetic summary failure");
+            LocalDate date=LocalDate.parse(path.substring(path.lastIndexOf('=')+1));
+            if(!daySummaryFixture||date.isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")).minusDays(2)))return new JSONObject().put("checklist",true);
+            return new JSONObject().put("html",daySummaryHtml(date));
+        }
         if(path.startsWith("/api/meals/v1"))return mealResponse(path,body);
         if(path.startsWith("/api/android/v1/family-log-summary?")){summaryRequests++;summaryStarted.countDown();summaryRelease.await(5,java.util.concurrent.TimeUnit.SECONDS);return new JSONObject().put("totals",new JSONObject()).put("daily",new JSONArray());}
 
@@ -736,6 +794,7 @@ public final class UiParityInstrumentation extends Instrumentation {
     }
     private CheckBox findBox(ViewGroup view){for(int i=0;i<view.getChildCount();i++)if(view.getChildAt(i) instanceof CheckBox)return (CheckBox)view.getChildAt(i);throw new AssertionError("checkbox missing");}
     private void check(boolean value,String name){if(!value)throw new AssertionError(name);checks++;}
+    private void waitContainingText(String text)throws Exception{for(int i=0;i<100;i++){AtomicReference<Boolean> ready=new AtomicReference<>(false);onUi(()->ready.set(findContaining(root(),text)!=null));if(ready.get())return;Thread.sleep(30);waitForIdleSync();}throw new AssertionError("timeout: "+text);}
     private void waitText(String text)throws Exception{for(int i=0;i<100;i++){AtomicReference<Boolean> ready=new AtomicReference<>(false);onUi(()->{TextView node=findText(root(),text);ready.set(node!=null&&node.isEnabled());});if(ready.get())return;Thread.sleep(30);waitForIdleSync();}throw new AssertionError("timeout: "+text);}
     private void settle()throws Exception{waitForIdleSync();Thread.sleep(250);waitForIdleSync();}
     private Object value(String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
