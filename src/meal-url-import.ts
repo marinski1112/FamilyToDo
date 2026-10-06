@@ -3,12 +3,16 @@ import {BadRequest} from './errors';
 import type {AppContext} from './app-context';
 import {mealHash,mealId} from './meal-domain';
 const MAX_BYTES=2_000_000;
-const unsupported='URL取り込みはクラシル・デリッシュキッチンのレシピページに対応しています。他のリンクは出典を見ながら手入力してください。';
+const unsupported='URL取り込みはクラシル・デリッシュキッチン・SHARP公式ホットクックのレシピページに対応しています。他のリンクは出典を見ながら手入力してください。';
+export function hotcookSource(raw:unknown):{model:string;code:string}|null{
+ if(typeof raw!=='string')return null;
+ try{const u=new URL(raw),m=/^\/kitchen\/recipe\/hotcook\/(KN-[A-Z]{2}\d{2}[A-Z])\/(R\d{4,15})\/?$/.exec(u.pathname);return u.protocol==='https:'&&u.hostname==='cocoroplus.jp.sharp'&&!u.username&&!u.password&&!u.port&&m?{model:m[1],code:m[2]}:null;}catch{return null;}
+}
 /** Exact publishers and recipe paths only. Never follow arbitrary redirects or fetch cookies. */
 export function mealImportUrl(raw:unknown):string{
  if(typeof raw!=='string'||raw.length>2048)throw new BadRequest(unsupported);
  let u:URL;try{u=new URL(raw);}catch{throw new BadRequest(unsupported);}
- const allowed=(u.hostname==='www.kurashiru.com'&&/^\/recipes\/[0-9a-f-]{36}\/?$/i.test(u.pathname))||(['delishkitchen.tv','www.delishkitchen.tv'].includes(u.hostname)&&/^\/recipes\/\d{8,25}\/?$/.test(u.pathname));
+ const allowed=!!hotcookSource(raw)||(u.hostname==='www.kurashiru.com'&&/^\/recipes\/[0-9a-f-]{36}\/?$/i.test(u.pathname))||(['delishkitchen.tv','www.delishkitchen.tv'].includes(u.hostname)&&/^\/recipes\/\d{8,25}\/?$/.test(u.pathname));
  if(u.protocol!=='https:'||u.username||u.password||u.port||!allowed)throw new BadRequest(unsupported);
  u.search='';u.hash='';return u.href;
 }
@@ -55,13 +59,42 @@ export function extractMealRecipe(html:string,sourceUrl:string){
  const minutes=duration(r.totalTime),ingredients=raw.map(parseImportedIngredient);
  return {name,servings,minutes,source_url:sourceUrl,ingredients,steps};
 }
+/** Public recipe JSON used by the official page. No cookies, script execution or device commands. */
+export function extractHotcookRecipe(raw:unknown,sourceUrl:string){
+ const source=hotcookSource(sourceUrl),r=raw as any;
+ const fail=()=>{throw new BadRequest('公式レシピの形式・対応機種を確認できませんでした。出典を見ながら手入力してください。');};
+ if(!source)throw new BadRequest(unsupported);
+ if(!r||r.appliance!=='hotcook'||r.redirectModel||r.models?.[source.model]!==source.code||typeof r.name!=='string'||r.name.length>120||!r.name.trim()||!Array.isArray(r.materials)||!r.materials.length||r.materials.length>50||!Array.isArray(r.methods)||r.methods.length>100||!Array.isArray(r.material_appendices)||r.material_appendices.length>20||!Array.isArray(r.materialGroupTexts)||r.materialGroupTexts.length)fail();
+ // Group headings and multiple dishes need manual review instead of silently combining quantities.
+ if(r.alternative_recipes?.length)fail();
+ const ingredients=r.materials.map((m:any)=>{
+  if(!m||typeof m.name!=='string'||!m.name.trim()||m.name.length>100||typeof m.quantity!=='string'||m.quantity.length>80||m.group||m.set_menu)fail();
+  const name=text(m.name,100),amount=text(m.quantity,80),parsed=parseImportedIngredient(name+' '+amount);
+  return {...parsed,name,original:name+' '+amount,...(parsed.quantity===null&&amount&&amount!=='-'?{quantity_text:amount}:{})};
+ });
+ const steps:string[]=[];
+ for(const method of r.methods){
+  if(!method||typeof method.type?.type!=='string')fail();
+  if(method.type.type.startsWith('image'))continue;
+  if(!/^text(?:\.[A-Z])?$/.test(method.type.type)||typeof method.text!=='string'||method.text.length>2000)fail();
+  const step=text(method.text.replace(/#/g,' → '));if(step.replace(/[\u200b-\u200d\ufeff]/g,'').trim())steps.push(step);
+ }
+ if(!steps.length||steps.length>28)fail();
+ const notes=r.material_appendices.map((note:unknown)=>{if(typeof note!=='string'||note.length>2000)fail();return text(note);}).filter(Boolean);
+ const yieldMatch=/^材料[:：]\s*(\d{1,2})人分$/.exec(text(r.quantity)),time=/^(?:約)?(\d{1,4})分$/.exec(text(r.cookingTime));
+ const servings=yieldMatch&&Number(yieldMatch[1])>=1&&Number(yieldMatch[1])<=30?Number(yieldMatch[1]):null,minutes=time&&Number(time[1])>=1&&Number(time[1])<=1440?Number(time[1]):null;
+ const menu=typeof r.menuNum==='string'&&/^\d{1,4}$/.test(r.menuNum)?' · メニュー番号 '+r.menuNum:'';
+ return {name:text(r.name,120),servings,minutes,source_url:sourceUrl,ingredients,steps:[`SHARP公式ホットクック ${source.model}${menu}。お使いの機種・人数・付属品を出典で確認してください。`,...notes,...steps]};
+}
 async function fetchRecipe(url:string):Promise<{html:string;url:string}>{
  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),10000);let current=url;
  try{
   for(let hop=0;hop<4;hop++){
-   const response=await fetch(current,{redirect:'manual',signal:abort.signal,headers:{accept:'text/html'}});
+   const sharp=hotcookSource(current),requestUrl=sharp?`https://cocoroplus.jp.sharp/kitchen/recipe/api/recipe/${sharp.code}/${sharp.model}`:current;
+   const response=await fetch(requestUrl,{redirect:'manual',signal:abort.signal,headers:{accept:sharp?'application/json':'text/html'}});
+   if(sharp&&[301,302,303,307,308].includes(response.status)){await response.body?.cancel();throw new BadRequest('公式レシピの対応機種が変わっています。出典を開いてURLを確認してください。');}
    if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');await response.body?.cancel();if(!location)throw new BadRequest('出典を読み込めませんでした。');current=mealImportUrl(new URL(location,current).href);continue;}
-   if(!response.ok||!/^text\/html\b/i.test(response.headers.get('content-type')||'')||Number(response.headers.get('content-length')||0)>MAX_BYTES){await response.body?.cancel();throw new BadRequest('出典を読み込めませんでした。手入力で登録できます。');}
+   if(!response.ok||!(sharp?/^application\/json\b/i:/^text\/html\b/i).test(response.headers.get('content-type')||'')||Number(response.headers.get('content-length')||0)>MAX_BYTES){await response.body?.cancel();throw new BadRequest('出典を読み込めませんでした。手入力で登録できます。');}
    const reader=response.body?.getReader();if(!reader)throw new BadRequest('出典を読み込めませんでした。');
    const chunks:Uint8Array[]=[];let size=0;
    try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>MAX_BYTES)throw new BadRequest('ページが大きすぎます。手入力で登録してください。');chunks.push(value);}}finally{await reader.cancel().catch(()=>{});}
@@ -77,6 +110,6 @@ export async function importMealUrl(ctx:AppContext,raw:any){
  const previous=await read();if(previous)return cached(previous,hash);
  const now=new Date().toISOString();const claim=await db.prepare("INSERT OR IGNORE INTO meal_url_imports(family_id,id,payload_hash,status,created_by,created_at) SELECT ?,?,?,'RUNNING',?,? WHERE (SELECT COUNT(*) FROM meal_url_imports WHERE family_id=? AND created_at>=?)<20").bind(familyId,id,hash,m.id,now,familyId,now.slice(0,10)).run();
  if(!claim.meta.changes){const previous=await read();if(previous)return cached(previous,hash);throw new BadRequest('今日の新しいURL取り込みは20回までです。手入力で登録できます。');}
- let result:any;try{const page=await fetchRecipe(url);result={draft:extractMealRecipe(page.html,page.url)};}catch(e){if(!(e instanceof BadRequest))throw e;result={error:e.message};}
+ let result:any;try{const page=await fetchRecipe(url);if(hotcookSource(page.url)){let data:unknown;try{data=JSON.parse(page.html);}catch{throw new BadRequest('公式レシピを読み込めませんでした。手入力で登録できます。');}result={draft:extractHotcookRecipe(data,page.url)};}else result={draft:extractMealRecipe(page.html,page.url)};}catch(e){if(!(e instanceof BadRequest))throw e;result={error:e.message};}
  await db.prepare("UPDATE meal_url_imports SET status='READY',result_json=? WHERE family_id=? AND id=? AND status='RUNNING'").bind(JSON.stringify(result),familyId,id).run();return cached({payload_hash:hash,status:'READY',result_json:JSON.stringify(result)},hash);
 }
