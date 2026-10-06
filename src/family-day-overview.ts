@@ -44,6 +44,15 @@ export async function familyDayOverview(ctx:AppContext,date:string,today:string)
     const actual=empty(matching?'現在の献立に対する調理済みの記録があります。':cooked.results.length?'別の版の献立に対する調理済みの記録があります。料理名は現在の献立と一致するとは限りません。':'調理済みの記録はありません。食べた実績を示すものではありません。');
     return card('🍚 献立',planned+actual+`<a class="btn gray small" href="/app/meals.php?view=week&week=${mealWeek(date)}">この週の献立へ</a>`);
   };
+  const recurring=async()=>{
+    const rows=await db.prepare(`SELECT t.id,t.title,t.task_kind,t.visibility_scope,
+      EXISTS(SELECT 1 FROM recurrence_occurrence_completions c JOIN members cm ON cm.id=c.member_id AND cm.family_id=o.family_id WHERE c.occurrence_id=o.id) completed
+      FROM recurrence_occurrences o JOIN recurrence_rules r ON r.id=o.recurrence_rule_id AND r.family_id=o.family_id
+      JOIN tasks t ON t.id=r.task_id AND t.family_id=o.family_id
+      WHERE o.family_id=? AND o.occurrence_date=? AND o.status<>'excluded' AND o.exception_task_id IS NULL
+      AND ${taskVisibilitySql('t')} ORDER BY o.id LIMIT 101`).bind(familyId,date,m.id).all<Row>();
+    return card('🔁 定期タスク・予定の記録',empty('保存済みの繰り返し分です。未作成の過去分は、ここで新規生成しません。')+(rows.results.length?`<ul>${rows.results.slice(0,100).map(x=>`<li><a href="/task/view.php?id=${Number(x.id)}">${x.visibility_scope==='PRIVATE'?'🔒 ':''}${esc(x.title)}</a> <small>・${String(x.task_kind).toLowerCase()==='event'?'予定（参加の記録ではありません）':x.completed?'完了の記録あり':'完了の記録なし'}</small></li>`).join('')}</ul>${rows.results.length>100?empty('先頭100件を表示しています。'):''}`:empty('保存済みの定期タスク・予定はありません。')));
+  };
   const logs=async()=>{
     const rows=await db.prepare(`SELECT l.occurred_at,l.log_type,l.value_text,l.note,s.name subject_name FROM family_logs l
       LEFT JOIN family_log_subjects s ON s.id=l.subject_id AND s.family_id=l.family_id
@@ -53,6 +62,6 @@ export async function familyDayOverview(ctx:AppContext,date:string,today:string)
     const entries=rows.results.length?`<ul>${rows.results.slice(0,limit).map(x=>{const meta=FAMILY_LOG_TYPE_META[x.log_type];return `<li>${esc(String(x.occurred_at).slice(11,16))} ${esc(meta?.icon||'📝')} ${esc(x.subject_name||'家族')}・${esc(meta?.label||x.log_type)}${x.value_text||x.note?`<p>${esc(String(x.value_text||x.note).slice(0,160))}</p>`:''}</li>`;}).join('')}</ul>${rows.results.length>limit?empty('先頭50件を表示しています。続きは家族ログで確認できます。'):''}`:empty('この日の家族ログはありません。');
     return card('👪 家族ログ',entries+`<a class="btn gray small" href="/app/family_log.php?date=${date}">家族ログの詳細・訂正</a>`);
   };
-  const sections=await Promise.allSettled([tasks(),meals(),logs()]);
-  return sections.map((result,i)=>result.status==='fulfilled'?result.value:card(['📅 予定・未完了タスク','🍚 献立','👪 家族ログ'][i],'<p role="status">読み込めませんでした。再読み込みして確認してください。</p>')).join('');
+  const sections=await Promise.allSettled([tasks(),meals(),recurring(),logs()]);
+  return sections.map((result,i)=>result.status==='fulfilled'?result.value:card(['📅 予定・未完了タスク','🍚 献立','🔁 定期タスク・予定の記録','👪 家族ログ'][i],'<p role="status">読み込めませんでした。再読み込みして確認してください。</p>')).join('');
 }

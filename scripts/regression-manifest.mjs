@@ -7,7 +7,7 @@ export const activeRegressionGroups=[
       ['goods-category-dom','node scripts/goods-category-dom-contract.mjs'],
       ['task-entry-destination-boundary','node scripts/task-entry-destination-boundary-contract.mjs'],
       ['calendar-day-checklist','node scripts/calendar-day-checklist-contract.mjs'],
-      ['family-day-overview','esbuild scripts/family-day-overview.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-day-overview-test.mjs && node --test /tmp/familytodo-day-overview-test.mjs'],
+      ['family-day-overview','node_modules/.bin/esbuild scripts/family-day-overview.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-day-overview-test.mjs && node --test /tmp/familytodo-day-overview-test.mjs'],
       ['calendar-summary-count','node scripts/calendar-summary-count-contract.mjs'],
       ['checklist-hierarchy','node scripts/checklist-hierarchy-followup-contract.mjs'],
       ['family-log-photo-form','node scripts/family-log-photo-form-contract.mjs'],
