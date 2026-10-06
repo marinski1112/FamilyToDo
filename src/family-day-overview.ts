@@ -13,7 +13,7 @@ const empty=(text:string)=>`<p class="small">${text}</p>`;
 const limit=50;
 
 export function familyDayHeader(date:string,today:string):string{
-  return `<div class="daily-head"><h1>📘 その日の総括</h1><div class="date-nav"><a class="btn gray small" aria-label="前日を表示" href="/app/tasks.php?date=${addCalendarDays(date,-1)}">‹</a><strong>${esc(date)}</strong><a class="btn gray small" aria-label="翌日を表示" href="/app/tasks.php?date=${addCalendarDays(date,1)}">›</a><a class="btn gray small" href="/app/tasks.php?date=${today}">今日</a></div></div><form method="get" class="family-day-picker"><input type="hidden" name="view" value="day"><label>日付 <input type="date" name="date" value="${date}" required></label><button class="btn small">表示</button></form><p class="small">昨日以降はチェックリスト、一昨日以前は総括を表示します。予定と記録を分けて振り返れます。</p>`;
+  return `<div class="daily-head"><h1>📘 その日の総括</h1><div class="date-nav"><a class="btn gray small" aria-label="前日を表示" href="/app/tasks.php?date=${addCalendarDays(date,-1)}">‹</a><strong>${esc(date)}</strong><a class="btn gray small" aria-label="翌日を表示" href="/app/tasks.php?date=${addCalendarDays(date,1)}">›</a><a class="btn gray small" href="/app/tasks.php?date=${today}">今日</a></div></div><form method="get" class="family-day-picker"><input type="hidden" name="view" value="day"><label><span class="family-day-label">日付</span> <input type="date" name="date" value="${date}" required></label><button class="btn small">表示</button></form><p class="small">昨日以降はチェックリスト、一昨日以前は総括を表示します。予定と記録を分けて振り返れます。</p>`;
 }
 
 /** Read projections only. Never completes, deletes, generates AI, or repairs journals. */
