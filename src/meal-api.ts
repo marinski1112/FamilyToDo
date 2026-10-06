@@ -84,11 +84,12 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='live_start')return out({ok:true,live:await startMealLive(ctx,b)});
   if(b.action==='live_end')return out({ok:true,...await endMealLive(ctx,b)});
   if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
-  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist,b.wishlist_id)});
+  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist,b.wishlist_id,b.wishlist_revision)});
   if(b.action==='wishlist_link'){
+   const expectedRevision=b.expected_revision??0;if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new BadRequest('紐づけを読み込み直してください。');
    const id=mealId(b.id),target=b.recipe_id==null?null:mealId(b.recipe_id),expected=b.expected_recipe_id==null?null:mealId(b.expected_recipe_id);
    if(target&&!await mealRecipe(db,familyId,target))throw new BadRequest('この家族の表示中のレシピを選択してください。');
-   await db.prepare('UPDATE meal_wishlist SET recipe_id=?,recipe_link_set=1 WHERE family_id=? AND id=? AND (recipe_id IS ? OR recipe_id IS ?) AND (? IS NULL OR EXISTS(SELECT 1 FROM recipes WHERE family_id=? AND id=? AND archived=0))').bind(target,familyId,id,expected,target,target,familyId,target).run();
+   await db.prepare('UPDATE meal_wishlist SET recipe_id=?,recipe_link_set=1,recipe_link_revision=recipe_link_revision+1 WHERE family_id=? AND id=? AND (recipe_id IS ? OR recipe_id IS ?) AND (recipe_link_revision=? OR (recipe_id IS ? AND recipe_link_set=1)) AND (? IS NULL OR EXISTS(SELECT 1 FROM recipes WHERE family_id=? AND id=? AND archived=0))').bind(target,familyId,id,expected,target,expectedRevision,target,target,familyId,target).run();
    const saved=await db.prepare('SELECT recipe_id FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<any>();
    if(!saved||saved.recipe_id!==target)return out({ok:false,error:'紐づけが更新されています。読み込み直してください。'},409);
    return out({ok:true});

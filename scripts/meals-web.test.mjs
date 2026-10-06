@@ -32,8 +32,8 @@ test('wishlist recipe links support adoption, unlink, archive, isolation and leg
  let wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].linked_recipe_id,recipe().id);
  await call(ctx,{action:'save_recipe',recipe:{...saved.value.recipe,name:'Recipe rename'},add_to_wishlist:true});wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].name,'Hope');assert.equal(wishes[0].recipe_name,'Recipe rename');
  assert.equal((await call({...ctx,member:{id:2,family_id:2,active:1}},{action:'wishlist_link',id:'wish-existing',recipe_id:recipe().id})).response.status,400);
- await call(ctx,{action:'wishlist_link',id:'wish-existing',recipe_id:null,expected_recipe_id:recipe().id});assert.equal((await call(ctx,null)).value.wishlist[0].linked_recipe_id,null);
- const link={action:'wishlist_link',id:'wish-existing',recipe_id:recipe().id,expected_recipe_id:null};assert.equal((await call(ctx,link)).response.status,200);assert.equal((await call(ctx,link)).response.status,200);
+ await call(ctx,{action:'wishlist_link',id:'wish-existing',recipe_id:null,expected_recipe_id:recipe().id,expected_revision:1});assert.equal((await call(ctx,null)).value.wishlist[0].linked_recipe_id,null);const latestRecipe=(await call(ctx,null,'?view=recipe&id=recipe-test-001')).value.recipe;assert.equal((await call(ctx,{action:'save_recipe',recipe:latestRecipe,wishlist_id:'wish-existing',wishlist_revision:0})).response.status,400);assert.equal((await call(ctx,null)).value.wishlist[0].linked_recipe_id,null);
+ const link={action:'wishlist_link',id:'wish-existing',recipe_id:recipe().id,expected_recipe_id:null,expected_revision:2};assert.equal((await call(ctx,link)).response.status,200);assert.equal((await call(ctx,link)).response.status,200);
  await call(ctx,{action:'archive_recipe',id:recipe().id});assert.equal((await call(ctx,null)).value.wishlist[0].recipe_available,false);
  assert.equal((await call(ctx,link)).response.status,400);
  await call(ctx,{action:'save_recipe',recipe:recipe('other-recipe')});
