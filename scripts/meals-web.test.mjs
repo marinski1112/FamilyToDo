@@ -26,6 +26,24 @@ function fixture(){const main=db('migrations'),meals=db('meals-migrations');main
 async function call(ctx,body,query=''){const response=await mealApi(new Request('https://fixture.invalid/api/meals/v1'+query,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify({csrf:'test',...body}):undefined}),ctx);return {response,value:await response.json()};}
 const recipe=(id='recipe-test-001')=>({id,name:'ハンバーグ',servings:2,minutes:25,source_url:'https://example.invalid/recipe',ingredients:[{name:'ひき肉',quantity:300,unit:'g'},{name:'玉ねぎ',quantity:1,unit:'個'}],steps:['玉ねぎを切る','ひき肉と混ぜて焼く']});
 async function seed(ctx){await call(ctx,{action:'save_recipe',recipe:recipe()});return (await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',status:'CONFIRMED',items:[{date:'2026-10-05',recipe_id:'recipe-test-001',servings:4},{date:'2026-10-06',recipe_id:'recipe-test-001',servings:2}]}})).value.plan;}
+test('recipe and wishlist opt-in is atomic, family scoped and retry safe',async()=>{
+ const {ctx,meals}=fixture();
+ assert.equal((await call(ctx,{action:'save_recipe',recipe:recipe('recipe-only')})).response.status,200);
+ assert.equal((await call(ctx,null)).value.wishlist.length,0);
+ const body={action:'save_recipe',recipe:recipe(),add_to_wishlist:true};
+ const saved=await call(ctx,body);assert.equal(saved.response.status,200);
+ assert.equal((await call(ctx,body)).response.status,200);
+ const wishes=(await call(ctx,null)).value.wishlist;assert.equal(wishes.length,1);assert.equal(wishes[0].name,body.recipe.name);assert.equal(wishes[0].source_url,body.recipe.source_url);
+ assert.equal((await call({...ctx,member:{id:2,family_id:2,active:1}},null)).value.wishlist.length,0);
+ await call(ctx,{action:'wishlist_delete',id:wishes[0].id});
+ assert.equal((await call(ctx,{...body,recipe:{...body.recipe,name:'Changed',revision:'stale'}})).response.status,400);
+ assert.equal((await call(ctx,null)).value.wishlist.length,0);
+ assert.equal((await call(ctx,{...body,recipe:recipe('invalid-flag'),add_to_wishlist:'true'})).response.status,400);
+ assert.equal(meals.sql.prepare("SELECT count(*) n FROM recipes WHERE id='invalid-flag'").get().n,0);
+ meals.sql.exec("CREATE TRIGGER fail_wishlist BEFORE INSERT ON meal_wishlist BEGIN SELECT RAISE(ABORT,'synthetic wishlist failure'); END;");
+ await assert.rejects(call(ctx,{...body,recipe:recipe('atomic-failure')}),/synthetic wishlist failure/);
+ assert.equal(meals.sql.prepare("SELECT count(*) n FROM recipes WHERE id='atomic-failure'").get().n,0);
+});
 test('unauthenticated/CSRF/disabled calls do not expose meals; family from request is ignored',async()=>{
  const {ctx}=fixture();assert.equal((await call({...ctx,member:null},null)).response.status,401);assert.equal((await call(ctx,{csrf:'wrong',action:'wishlist_add',id:'wishlist-0001',name:'カレー'})).response.status,403);assert.equal((await call({...ctx,env:{...ctx.env,MEALS_ENABLED:'false'}},null)).response.status,503);
  await call(ctx,{action:'wishlist_add',id:'wishlist-0001',name:'カレー',family_id:2});assert.equal((await call(ctx,null)).value.wishlist.length,1);assert.equal((await call({...ctx,member:{...ctx.member,id:2,family_id:2}},null)).value.wishlist.length,0);
@@ -186,6 +204,15 @@ test('meal deployment readiness reports only booleans; enabled missing migration
 });
 
 async function waitFor(predicate){for(let i=0;i<400;i++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}assert.fail('UI did not finish');}
+test('recipe editor wishlist opt-in keeps input and ID after a lost save response',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture(),w=new Window({url:'https://fixture.invalid/app/meals.php?view=recipes'}),sent=[];let lose=true;
+ try{
+  w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+  w.fetch=async(url,options={})=>{const body=options.body?JSON.parse(options.body):null;const response=await mealApi(new Request(new URL(url,w.location.href),options),ctx);if(body?.action==='save_recipe'){sent.push(body);if(lose){lose=false;throw Error('synthetic lost response');}}return response;};
+  w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const d=w.document;await waitFor(()=>d.querySelector('#newRecipe'));d.querySelector('#newRecipe').click();const f=d.querySelector('#recipeForm');assert.equal(f.elements.add_to_wishlist.checked,false);f.elements.add_to_wishlist.checked=true;f.elements.name.value='Synthetic recipe';f.elements.steps.value='Mix';d.querySelector('[data-field=name]').value='Synthetic ingredient';
+  const submit=()=>f.dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));submit();await waitFor(()=>d.querySelector('#mealStatus').textContent.includes('synthetic lost response'));assert.equal(f.elements.name.value,'Synthetic recipe');assert.equal(f.elements.add_to_wishlist.checked,true);submit();await waitFor(()=>d.querySelector('#editRecipe'));assert.equal(sent[0].recipe.id,sent[1].recipe.id);assert.equal(sent[1].add_to_wishlist,true);assert.equal((await call(ctx,null)).value.wishlist.length,1);assert(d.querySelector('#mealStatus').textContent.includes('食べたいものにも追加'));
+ }finally{await w.happyDOM.close();}
+});
 const importURL='https://delishkitchen.tv/recipes/166742173524427155';
 const importHTML=(overrides={})=>'<script type="application/ld+json">'+JSON.stringify({'@context':'https://schema.org','@graph':[{'@type':'Recipe',name:'テスト料理',recipeYield:'2人分',totalTime:'PT1800S',recipeIngredient:['ひき肉 200g','玉ねぎ 1/2個','塩 少々'],recipeInstructions:[{'@type':'HowToSection',itemListElement:[{'@type':'HowToStep',text:'切る'},{'@type':'HowToStep',text:'焼く'}]}],...overrides}]})+'</script>';
 test('URL import allows exact HTTPS recipe pages only; structured extraction leaves ambiguous fields empty',()=>{

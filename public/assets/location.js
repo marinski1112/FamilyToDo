@@ -181,6 +181,7 @@
     const wrap=document.createElement('div');
     wrap.className='location-family-map-marker';
     wrap.dataset.state=String(member?.state||'NO_LOCATION');
+    wrap.dataset.memberId=String(member?.memberId||'');
     wrap.dataset.viewer=member?.isViewer?'true':'false';
     wrap.style.display='grid';
     wrap.style.justifyItems='center';

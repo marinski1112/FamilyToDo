@@ -84,7 +84,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='live_start')return out({ok:true,live:await startMealLive(ctx,b)});
   if(b.action==='live_end')return out({ok:true,...await endMealLive(ctx,b)});
   if(b.action==='suggest_week')return out({ok:true,suggestion:await suggestMealWeek(ctx,b)});
-  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe)});
+  if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist)});
   if(b.action==='archive_recipe'){await db.prepare('UPDATE recipes SET archived=1,updated_at=? WHERE family_id=? AND id=?').bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) VALUES(?,?,?,?,?)').bind(familyId,id,name,m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string}>();if(saved?.name!==name)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
   if(b.action==='wishlist_delete'){await db.prepare('DELETE FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,mealId(b.id)).run();return out({ok:true});}
