@@ -41,7 +41,7 @@ test('wishlist recipe links support adoption, unlink, archive, isolation and leg
  assert.equal((await call(ctx,{action:'save_recipe',recipe:recipe('orphan-recipe'),wishlist_id:'wish-existing'})).response.status,400);assert.equal(meals.sql.prepare("SELECT count(*) n FROM recipes WHERE id='orphan-recipe'").get().n,0);
  await call(ctx,{action:'save_recipe',recipe:recipe('legacy-recipe'),add_to_wishlist:true});meals.sql.exec("UPDATE meal_wishlist SET recipe_id=NULL,recipe_link_set=0 WHERE id LIKE 'recipe-%'");
  const legacy=(await call(ctx,null)).value.wishlist.find(w=>w.id.startsWith('recipe-'));assert.equal(legacy.linked_recipe_id,'legacy-recipe');
- await call(ctx,{action:'wishlist_link',id:legacy.id,recipe_id:null});assert.equal((await call(ctx,null)).value.wishlist.find(w=>w.id===legacy.id).linked_recipe_id,null);
+ await call(ctx,{action:'wishlist_link',id:legacy.id,recipe_id:null});assert.equal((await call(ctx,null)).value.wishlist.find(w=>w.id===legacy.id).linked_recipe_id,null);await call(ctx,{action:'save_recipe',recipe:recipe('legacy-recipe'),add_to_wishlist:true});assert.equal((await call(ctx,null)).value.wishlist.find(w=>w.id===legacy.id).linked_recipe_id,null,'generic recipe opt-in cannot override an explicit unlink');
 });
 test('recipe and wishlist opt-in is atomic, family scoped and retry safe',async()=>{
  const {ctx,meals}=fixture();
