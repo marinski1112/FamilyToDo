@@ -65,26 +65,33 @@ export function extractHotcookRecipe(raw:unknown,sourceUrl:string){
  const fail=()=>{throw new BadRequest('公式レシピの形式・対応機種を確認できませんでした。出典を見ながら手入力してください。');};
  if(!source)throw new BadRequest(unsupported);
  if(!r||r.appliance!=='hotcook'||r.redirectModel||r.models?.[source.model]!==source.code||typeof r.name!=='string'||r.name.length>120||!r.name.trim()||!Array.isArray(r.materials)||!r.materials.length||r.materials.length>50||!Array.isArray(r.methods)||r.methods.length>100||!Array.isArray(r.material_appendices)||r.material_appendices.length>20||!Array.isArray(r.materialGroupTexts)||r.materialGroupTexts.length)fail();
- // Group headings and multiple dishes need manual review instead of silently combining quantities.
+ // Multiple dishes and unknown group-heading schemas still need manual review.
+ const groups=new Map<string,string[]>();
  if(r.alternative_recipes?.length)fail();
  const ingredients=r.materials.map((m:any)=>{
-  if(!m||typeof m.name!=='string'||!m.name.trim()||m.name.length>100||typeof m.quantity!=='string'||m.quantity.length>80||m.group||m.set_menu)fail();
+  if(!m||typeof m.name!=='string'||!m.name.trim()||m.name.length>100||typeof m.quantity!=='string'||m.quantity.length>80||m.set_menu)fail();
   const name=text(m.name,100),amount=text(m.quantity,80),parsed=parseImportedIngredient(name+' '+amount);
+  if(m.group!=null&&m.group!==''){if(typeof m.group!=='string'||m.group.length>20)fail();const group=text(m.group);if(!/^[A-Z]$/.test(group))fail();if(!groups.has(group))groups.set(group,[]);groups.get(group)!.push(name);}
   return {...parsed,name,original:name+' '+amount,...(parsed.quantity===null&&amount&&amount!=='-'?{quantity_text:amount}:{})};
  });
- const steps:string[]=[];
+ const steps:string[]=[],supplements:string[]=[];let supplementSection=false;
  for(const method of r.methods){
   if(!method||typeof method.type?.type!=='string')fail();
   if(method.type.type.startsWith('image'))continue;
-  if(!/^text(?:\.[A-Z])?$/.test(method.type.type)||typeof method.text!=='string'||method.text.length>2000)fail();
-  const step=text(method.text.replace(/#/g,' '));if(step.replace(/[\u200b-\u200d\ufeff]/g,'').trim())steps.push(step);
+  if(!/^text(?:\.[A-Z]|\.BK|\.BT)?$/.test(method.type.type)||typeof method.text!=='string'||method.text.length>2000)fail();
+  if(['text.BK','text.BT'].includes(method.type.type))supplementSection=true;
+  const step=text(method.text.replace(/#/g,' '));if(step.replace(/[\u200b-\u200d\ufeff]/g,'').trim())(supplementSection?supplements:steps).push(step);
  }
  if(!steps.length||steps.length>28)fail();
  const notes=r.material_appendices.map((note:unknown)=>{if(typeof note!=='string'||note.length>2000)fail();return text(note);}).filter(Boolean);
- const yieldMatch=/^材料[:：]\s*(\d{1,2})人分$/.exec(text(r.quantity)),time=/^(?:約)?(\d{1,4})分$/.exec(text(r.cookingTime));
- const servings=yieldMatch&&Number(yieldMatch[1])>=1&&Number(yieldMatch[1])<=30?Number(yieldMatch[1]):null,minutes=time&&Number(time[1])>=1&&Number(time[1])<=1440?Number(time[1]):null;
+ const groupNotes=Array.from(groups,([group,names])=>`材料グループ ${group}: ${names.join('、')}`);
+ const extraNotes=[...notes,...groupNotes,...supplements.map(s=>`出典の補足: ${s}`)];
+ if(1+extraNotes.length+steps.length>50||extraNotes.some(s=>s.length>2000))fail();
+ const yieldMatch=/^材料[:：]\s*(\d{1,2})人分$/.exec(text(r.quantity)),time=/^(?:約)?(?:(\d{1,4})時間)?(?:(\d{1,4})分)?$/.exec(text(r.cookingTime));
+ const totalMinutes=time?Number(time[1]||0)*60+Number(time[2]||0):0;
+ const servings=yieldMatch&&Number(yieldMatch[1])>=1&&Number(yieldMatch[1])<=30?Number(yieldMatch[1]):null,minutes=totalMinutes>=1&&totalMinutes<=1440?totalMinutes:null;
  const menu=typeof r.menuNum==='string'&&/^\d{1,4}$/.test(r.menuNum)?' · メニュー番号 '+r.menuNum:'';
- return {name:text(r.name,120),servings,minutes,source_url:sourceUrl,ingredients,steps:[`SHARP公式ホットクック ${source.model}${menu}。お使いの機種・人数・付属品を出典で確認してください。`,...notes,...steps]};
+ return {name:text(r.name,120),servings,minutes,source_url:sourceUrl,ingredients,steps:[`SHARP公式ホットクック ${source.model}${menu}。お使いの機種・人数・付属品を出典で確認してください。`,...groupNotes,...notes,...steps,...supplements.map(s=>`出典の補足: ${s}`)]};
 }
 async function fetchRecipe(url:string):Promise<{html:string;url:string}>{
  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),10000);let current=url;
