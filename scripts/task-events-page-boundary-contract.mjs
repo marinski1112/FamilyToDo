@@ -100,7 +100,7 @@ for(const marker of [
   "data-type=\"${taskId<0?'recurrence':'task'}\"",
   "const mainHtml=isEvent?",
   "class=\"checklist-row-action\" href=\"/app/shopping_edit.php?id=${esc(item.id)}\"",
-  "const detailAction=!isEvent&&taskId>=0?",
+  "const detailAction=taskId>=0?",
   ".checklist-page .checklist-row-action{display:inline-flex",
   ".checklist-page .task-children{margin:8px 0 0 30px",
   "id=\"shopping-checklist\"",
@@ -134,6 +134,20 @@ for(const marker of [
   'ON shopping_items(family_id, status, completed_at)',
   'WHERE task_id IS NULL AND due_date IS NULL',
 ])if(!undatedRetentionMigration.includes(marker))throw new Error(`undated Shopping retention index marker missing: ${marker}`);
+
+
+const renderer=page.slice(page.indexOf('const renderRootTask='),page.indexOf('const taskRows=rootTasks.map')).replace('(task:Row)','(task)');
+const renderRoot=new Function('esc','childTasksByParent','renderChildTask','childComposer','taskMeta',renderer+';return renderRootTask;')(
+  value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
+  new Map(),()=>'',()=>'',()=>''
+);
+const eventRow=renderRoot({id:42,task_kind:'EVENT',title:'家族の予定'});
+if(!eventRow.includes('class="checklist-row-action" href="/task/view.php?id=42"')||!eventRow.includes('>詳細・編集</a>'))throw new Error('stored event must expose a visible existing detail/edit route');
+if(eventRow.includes('type="checkbox"'))throw new Error('event navigation must not add a completion checkbox');
+const virtualEvent=renderRoot({id:-42,task_kind:'EVENT',title:'定期予定'});
+if(virtualEvent.includes('/task/view.php?id=-42')||virtualEvent.includes('class="checklist-row-action"'))throw new Error('virtual recurrence must not get an invalid physical task route');
+const ordinaryTask=renderRoot({id:42,task_kind:'TASK',title:'家族のタスク'});
+if(!ordinaryTask.includes('type="checkbox"')||!ordinaryTask.includes('>詳細</a>'))throw new Error('ordinary task must retain separate completion and detail controls');
 
 for(const match of page.matchAll(/<label class="(?:task-main|shopping-check-row|expired-task-main)"[\s\S]*?<\/label>/g)){
   if(match[0].includes('<a '))throw new Error('completion checkbox labels must not contain navigation/edit anchors');
