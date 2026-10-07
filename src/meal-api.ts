@@ -11,7 +11,7 @@ import {familyDate,DEFAULT_FAMILY_TIMEZONE} from './timezone';
 import type {AppContext} from './app-context';
 import {json} from './response';
 import {BadRequest} from './errors';
-import {mealEnabled,mealDate,mealWeek,mealId,mealText,mealHash,shiftMealDate} from './meal-domain';
+import {mealEnabled,mealMain,mealDate,mealWeek,mealId,mealText,mealHash,shiftMealDate} from './meal-domain';
 import {mealRecipeSummaries,mealRecipe,saveMealRecipe,readMealPlan,saveMealPlan,readMealWishlist} from './meal-repository';
 import {readMealInventory,changeMealInventory,mealShoppingInventory,mealCookingPreview,completeMealCooking} from './meal-inventory';
 import {importMealUrl} from './meal-url-import';
@@ -97,6 +97,12 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(b.action==='queue_cooked')return out({ok:true,...await completeQueueCooking(ctx,b)});
   if(b.action==='queue_shopping_confirm'||b.action==='queue_shopping_resume')return out({ok:true,...await confirmQueueShopping(ctx,b)});
   if(b.action==='save_recipe')return out({ok:true,recipe:await saveMealRecipe(db,familyId,m.id,b.recipe,b.add_to_wishlist,b.wishlist_id,b.wishlist_revision)});
+  if(b.action==='wishlist_main'){
+   const id=mealId(b.id),main=mealMain(b.is_main),revision=b.expected_revision;if(!Number.isSafeInteger(revision)||revision<0)throw new BadRequest('内容を読み込み直してください。');
+   await db.prepare("UPDATE meal_wishlist SET is_main=?,recipe_link_revision=recipe_link_revision+1 WHERE family_id=? AND id=? AND status='PENDING' AND recipe_link_revision=?").bind(Number(main),familyId,id,revision).run();
+   const saved=await db.prepare("SELECT is_main,recipe_link_revision FROM meal_wishlist WHERE family_id=? AND id=? AND status='PENDING'").bind(familyId,id).first<any>();
+   if(!saved||!!saved.is_main!==main||saved.recipe_link_revision!==revision+1)return out({ok:false,error:'内容が更新されています。読み込み直してください。'},409);return out({ok:true});
+  }
   if(b.action==='wishlist_link'){
    const expectedRevision=b.expected_revision??0;if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new BadRequest('紐づけを読み込み直してください。');
    const id=mealId(b.id),target=b.recipe_id==null?null:mealId(b.recipe_id),expected=b.expected_recipe_id==null?null:mealId(b.expected_recipe_id);
@@ -107,7 +113,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    return out({ok:true});
   }
   if(b.action==='archive_recipe'){await db.prepare('UPDATE recipes SET archived=1,updated_at=? WHERE family_id=? AND id=?').bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
-  if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,created_by,created_at) VALUES(?,?,?,?,?)').bind(familyId,id,name,m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string}>();if(saved?.name!==name)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
+  if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120),main=mealMain(b.is_main);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,is_main,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(familyId,id,name,Number(main),m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name,is_main FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string;is_main:number}>();if(saved?.name!==name||!!saved?.is_main!==main)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
   if(b.action==='wishlist_delete'){await db.prepare("UPDATE meal_wishlist SET status='REJECTED',decision_at=?,recipe_link_revision=recipe_link_revision+1 WHERE family_id=? AND id=? AND status='PENDING'").bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='save_plan')return out({ok:true,plan:await saveMealPlan(db,familyId,m.id,b.plan)});
   if(b.action==='shopping_confirm'){
