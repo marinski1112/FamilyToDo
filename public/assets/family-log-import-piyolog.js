@@ -16,7 +16,7 @@ const mediaNotice=document.createElement('div');
 mediaNotice.className='notice';
 mediaNotice.textContent='ぴよログPDF自体はFamilyToDoへ送信・解析しません。このチャットで変換した標準JSONと、必要に応じて抽出済みの離乳食・成長日記の写真を選択してください。写真は端末内で最大辺800pxのJPEGに変換して送信します。';
 file.parentElement?.insertBefore(mediaNotice,file);
-const mediaLabel=document.createElement('label');mediaLabel.textContent='記録写真（変換データに写真指定がある場合・複数選択可）';
+const mediaLabel=document.createElement('label');mediaLabel.htmlFor='importMediaFiles';mediaLabel.textContent='記録写真（変換データに写真指定がある場合・複数選択可）';
 const mediaFiles=document.createElement('input');mediaFiles.id='importMediaFiles';mediaFiles.type='file';mediaFiles.multiple=true;mediaFiles.accept='image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 const mediaStatus=document.createElement('div');mediaStatus.id='importMediaStatus';mediaStatus.className='small';mediaStatus.setAttribute('aria-live','polite');
 file.insertAdjacentElement('afterend',mediaStatus);file.insertAdjacentElement('afterend',mediaFiles);file.insertAdjacentElement('afterend',mediaLabel);
