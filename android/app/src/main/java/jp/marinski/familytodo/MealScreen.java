@@ -23,6 +23,9 @@ final class MealScreen {
         boolean active();
         TextView text(String value);
         Button button(String value,Runnable action);
+        CheckBox checkbox(String value);
+        void styleInput(EditText field);
+        void tab(Button button,boolean active);
         void web(String path);
         void login();
         void shoppingList();
@@ -33,6 +36,9 @@ final class MealScreen {
     private final Handler clock=new Handler(android.os.Looper.getMainLooper());
     private LinearLayout root,body;
     private TextView status;
+    private final java.util.Map<String,Button> tabs=new java.util.LinkedHashMap<>();
+    private int dp(float value){return Math.round(value*activity.getResources().getDisplayMetrics().density);}
+    private LinearLayout.LayoutParams compactAction(){LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,LinearLayout.LayoutParams.WRAP_CONTENT);params.setMargins(0,dp(3),0,dp(3));return params;}
     private JSONObject overview;
     private String week=monday(today()),page="today";
     private int generation;
@@ -49,9 +55,9 @@ final class MealScreen {
     private boolean valid(int request){return !closed&&request==generation&&host.active()&&java.util.Objects.equals(session,SnapshotCache.currentSessionBinding());}
     void attach(LinearLayout target){
         root=target;root.removeAllViews();root.addView(host.text("ごはん・献立管理"));
-        HorizontalScrollView scroll=new HorizontalScrollView(activity);LinearLayout nav=new LinearLayout(activity);
+        HorizontalScrollView scroll=new HorizontalScrollView(activity);scroll.setHorizontalScrollBarEnabled(false);LinearLayout nav=new LinearLayout(activity);tabs.clear();
         String[] keys={"today","week","recipes","wishlist","inbox","inventory","more"},names={"今日","献立","レシピ","食べたい","LINE受信箱","在庫","その他"};
-        for(int i=0;i<keys.length;i++){String key=keys[i];nav.addView(host.button(names[i],()->leave(()->{page=key;draw();})));}
+        for(int i=0;i<keys.length;i++){String key=keys[i];Button tab=host.button(names[i],()->leave(()->{page=key;draw();}));tabs.put(key,tab);nav.addView(tab);}
         scroll.addView(nav);root.addView(scroll);status=host.text("");status.setVisibility(View.GONE);root.addView(status);
         body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);root.addView(body);
         if(overview==null)refresh();else draw();
@@ -90,9 +96,9 @@ final class MealScreen {
     private static JSONObject action(String name){return put(object(),"action",name);}
     private static JSONArray array(JSONObject value,String key){JSONArray a=value==null?null:value.optJSONArray(key);return a==null?new JSONArray():a;}
     private void text(String value){body.addView(host.text(value));}
-    private Button button(String value,Runnable run){Button button=host.button(value,run);body.addView(button);return button;}
+    private Button button(String value,Runnable run){Button button=host.button(value,run);body.addView(button,compactAction());return button;}
     private Button write(String value,Runnable run){return button(value,()->{if(!ApiClient.canMutate()){say("通信の確認後に編集できます。ホームを更新してください。");return;}run.run();});}
-    private EditText input(LinearLayout into,String name,String value,boolean number){into.addView(host.text(name));EditText field=new EditText(activity);field.setContentDescription(name);field.setText(value);field.setInputType(number?InputType.TYPE_CLASS_NUMBER:InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);into.addView(field);if(!name.startsWith("タイマー"))field.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){dirty=true;}public void afterTextChanged(android.text.Editable value){}});return field;}
+    private EditText input(LinearLayout into,String name,String value,boolean number){TextView label=host.text(name);label.setTextSize(13);label.setPadding(dp(8),dp(6),dp(8),dp(3));EditText field=new EditText(activity);field.setId(View.generateViewId());field.setContentDescription(name);field.setText(value);field.setInputType(number?InputType.TYPE_CLASS_NUMBER:InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);host.styleInput(field);label.setLabelFor(field.getId());label.setOnClickListener(v->field.requestFocus());into.addView(label);into.addView(field);if(!name.startsWith("タイマー"))field.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){dirty=true;}public void afterTextChanged(android.text.Editable value){}});return field;}
     private EditText input(String name,String value,boolean number){return input(body,name,value,number);}
     private static String value(EditText field){return field.getText().toString().trim();}
     AlertDialog confirmLeave(Runnable action){
@@ -107,7 +113,7 @@ final class MealScreen {
     private boolean recorded(String date){JSONObject plan=overview.optJSONObject("plan");if(plan==null)return false;JSONArray cooked=array(overview,"cooked");for(int i=0;i<cooked.length();i++){JSONObject row=cooked.optJSONObject(i);if(date.equals(row.optString("meal_date"))&&plan.optString("revision").equals(row.optString("plan_revision")))return true;}return false;}
     private String mealName(JSONObject item){if(item==null)return "まだ決まっていません";String name=item.optJSONObject("recipe").optString("name");JSONArray sides=array(item,"sides");for(int i=0;i<sides.length();i++)name+=" ＋ "+sides.optJSONObject(i).optString("name");return name;}
     private void draw(){
-        if(body==null||closed)return;clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;body.removeAllViews();dirty=false;
+        if(body==null||closed)return;for(java.util.Map.Entry<String,Button> tab:tabs.entrySet())host.tab(tab.getValue(),tab.getKey().equals(page));clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;body.removeAllViews();dirty=false;
         if(overview==null){text("献立を読み込めませんでした。");button("再試行",this::refresh);return;}
         if(page.equals("recipes")){recipes();return;}
         if(page.equals("wishlist")){wishes();return;}
@@ -161,9 +167,9 @@ final class MealScreen {
             field.name=input(row,"材料名",initial==null?"":initial.optString("name"),false);
             field.amount=input(row,"数量・分量",initial==null?"":initial.isNull("quantity")?initial.optString("quantity_text"):initial.optString("quantity"),false);
             field.unit=input(row,"単位",initial==null?"g":initial.optString("unit"),false);
-            field.custom=new CheckBox(activity);field.custom.setText("自由入力（例：お好みで（1〜2つまみ））");row.addView(field.custom);
+            field.custom=host.checkbox("自由入力（例：お好みで（1〜2つまみ））");row.addView(field.custom);
             field.custom.setOnCheckedChangeListener((b,c)->field.unit.setEnabled(!c));field.custom.setChecked(initial!=null&&initial.isNull("quantity"));
-            row.addView(host.button("材料を削除",()->{rows.removeView(row);fields.remove(field);}));
+            row.addView(host.button("材料を削除",()->{rows.removeView(row);fields.remove(field);dirty=true;}),compactAction());
         };
         JSONArray original=array(recipe,"ingredients");if(original.length()==0)add.accept(null);else for(int i=0;i<original.length();i++)add.accept(original.optJSONObject(i));
         button("＋ 材料を追加",()->add.accept(null));
@@ -213,7 +219,7 @@ final class MealScreen {
     }
     private void shopping(JSONObject preview){
         body.removeAllViews();text("買う食材を確認");text("正確な在庫を差し引いた不足量です。自由入力の分量は計算しません。追加する食材を選んでください。同じ週の追加は1回までです。");ArrayList<CheckBox> boxes=new ArrayList<>();JSONArray needs=array(preview,"needs");
-        for(int i=0;i<needs.length();i++){JSONObject need=needs.optJSONObject(i);CheckBox box=new CheckBox(activity);box.setText(need.optString("name")+"："+amount(need,1));box.setEnabled(need.isNull("quantity")||need.optDouble("quantity")>0);body.addView(box);boxes.add(box);}
+        for(int i=0;i<needs.length();i++){JSONObject need=needs.optJSONObject(i);CheckBox box=host.checkbox(need.optString("name")+"："+amount(need,1));box.setEnabled(need.isNull("quantity")||need.optDouble("quantity")>0);body.addView(box);boxes.add(box);}
         write("買い物リストに追加",()->{JSONArray selected=new JSONArray();for(int i=0;i<boxes.size();i++)if(boxes.get(i).isChecked())selected.put(i);if(selected.length()==0){say("追加する食材を選択してください。");return;}JSONObject payload=put(put(put(put(action("shopping_confirm"),"week_start",preview.optString("week_start")),"revision",preview.optString("revision")),"preview_hash",preview.optString("preview_hash")),"selected",selected);request(()->post(payload),r->{dirty=false;body.removeAllViews();text("買い物リストに追加しました。");button("買い物リストを開く",host::shoppingList);button("献立へ戻る",this::draw);});});button("戻る",this::draw);
     }
     private void cooking(JSONObject item){
@@ -227,7 +233,7 @@ final class MealScreen {
     }
     private void cooked(JSONObject preview){
         body.removeAllViews();text("作った記録と在庫を確認");JSONArray needs=array(preview,"needs"),allocations=array(preview,"allocations");for(int i=0;i<needs.length();i++){JSONObject row=needs.optJSONObject(i);text(row.optString("name")+" · 使用量 "+amount(row,1));}text("在庫から減らす購入分：");for(int i=0;i<allocations.length();i++){JSONObject row=allocations.optJSONObject(i);text(row.optString("name")+"："+amount(row,1));}
-        text("自由入力・おおよその在庫・ある／なしは自動で減らしません。表示した購入分だけを減らします。");CheckBox consume=new CheckBox(activity);consume.setText("表示した数量を在庫から減らす");consume.setEnabled(allocations.length()>0);body.addView(consume);
+        text("自由入力・おおよその在庫・ある／なしは自動で減らしません。表示した購入分だけを減らします。");CheckBox consume=host.checkbox("表示した数量を在庫から減らす");consume.setEnabled(allocations.length()>0);body.addView(consume);
         write("作った記録を保存",()->{JSONObject payload=put(put(put(put(action("cooked"),"date",preview.optString("date")),"revision",preview.optString("revision")),"preview_hash",preview.optString("preview_hash")),"consume_inventory",consume.isChecked());request(()->post(payload),r->refresh());});button("戻る",this::draw);
     }
 
@@ -274,7 +280,7 @@ final class MealScreen {
         Spinner tracking=choice("在庫の管理方法",new ArrayList<>(java.util.Arrays.asList(TRACKING_LABELS)),original==null?0:index(TRACKING,original.optString("tracking")));
         EditText quantity=input("在庫の数量",original==null?"1":original.optString("quantity"),true);quantity.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
         EditText unit=input("在庫の単位",original==null?"g":original.optString("unit"),false);
-        CheckBox present=new CheckBox(activity);present.setText("食材がある");present.setChecked(original==null||original.optInt("present")==1);body.addView(present);
+        CheckBox present=host.checkbox("食材がある");present.setChecked(original==null||original.optInt("present")==1);body.addView(present);
         Spinner storage=choice("保存場所",new ArrayList<>(java.util.Arrays.asList(STORAGE_LABELS)),original==null?0:index(STORAGE,original.optString("storage")));
         EditText purchased=input("購入日（YYYY-MM-DD）",original==null?today():original.optString("purchased_on"),false);
         EditText expires=input("期限（YYYY-MM-DD・空欄可）",original==null||original.isNull("expires_on")?"":original.optString("expires_on"),false);
