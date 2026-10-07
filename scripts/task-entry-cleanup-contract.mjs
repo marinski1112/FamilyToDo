@@ -51,8 +51,8 @@ for(const marker of [
   "is_event:eventMode,",
   "noDate:eventMode?false:Boolean(noDate?.checked),",
   "completion_mode:'ANY',",
-  'assignees:[],',
 ])assert.ok(manual.includes(marker),`manual task/event contract missing: ${marker}`);
+assert.ok(!/\bassignees\s*:/.test(manual),'manual task/event submission must not restore the retired assignee field');
 assert.ok(taskApi.includes("if(isEvent&&!date)return json({ok:false,error:'イベントには日付を指定してください。'},400);"),'server must reject EVENT creation without a date');
 assert.ok(roughSave.includes("if(item.destination==='event'&&!item.startDate)return `イベント「${item.title}」には開始日が必要です。`;"),'rough EVENT save must require a start date');
 assert.ok(roughSave.includes("noDate:item.destination!=='event'&&!(item.startDate||item.dueDate)"),'rough EVENT save must never use no-deadline mode');
@@ -74,7 +74,7 @@ assert.ok(serverNormalize.includes('export function normalizeEventDateTitleText'
 assert.ok(serverNormalize.includes("String(body.primaryType||'')!=='event'"),'server normalization must be scoped to explicit EVENT primary type');
 assert.ok(serverNormalize.includes('toIsoDate(current,referenceDate)'),'server normalization must retain a yearless EVENT date without requiring AI');
 assert.ok(serverNormalize.includes('DUE_DATE_LINE'),'server normalization must upgrade the client metadata form as well as raw date/title input');
-assert.ok(apiRoutes.includes("taskRoughInputApi(await normalizeEventRoughInputRequest(request),context)"),'rough-input API must apply server EVENT normalization before canonical parsing');
+assert.ok(apiRoutes.includes("taskRoughInputApi(await normalizeEventRoughInputRequest(request,familyDate(String(context.member?.family_timezone||context.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE))),context)"),'rough-input API must apply server EVENT normalization with the family reference date before canonical parsing');
 const dateOnly=/^(?:\d{4}[\/.\-])?\d{1,2}[\/.\-]\d{1,2}$|^\d{1,2}\s*月\s*\d{1,2}\s*日$/u;
 const metadata=/^(?:説明|メモ|備考|note|url|リンク|数量|個数|カテゴリー|カテゴリ|期限|締切)\s*[:：]/iu;
 const urlOnly=/^https?:\/\/\S+$/iu;
