@@ -40,13 +40,13 @@ async function readLocation(db:D1Database,familyId:number,date:string):Promise<L
 
 /** Address labels may be added to archived stays after the daily snapshot was saved. */
 async function displayLocation(db:D1Database,familyId:number,date:string,snapshot:LocationSummary[]):Promise<LocationSummary[]>{
-  if(!snapshot.some(member=>member.stays.some(stay=>stay.place==='未登録地点付近')))return snapshot;
-  const rows=await db.prepare(`SELECT member_id,started_at,ended_at,address_label FROM location_history_stays
-    WHERE family_id=? AND local_date=? AND place_label='未登録地点付近' AND address_label IS NOT NULL AND address_label<>''
+  if(!snapshot.some(member=>member.stays.length))return snapshot;
+  const rows=await db.prepare(`SELECT member_id,started_at,ended_at,CASE WHEN (place_label IN ('自宅','家','我が家','職場','会社','勤務先') OR place_label LIKE '自宅付近%' OR place_label LIKE '職場付近%') THEN place_label ELSE address_label END address_label FROM location_history_stays
+    WHERE family_id=? AND local_date=? AND address_label IS NOT NULL AND address_label<>''
     ORDER BY member_id,started_at,id LIMIT 300`).bind(familyId,date).all<Row>();
   const labels=new Map(rows.results.map(row=>[`${row.member_id}|${row.started_at}|${row.ended_at}`,String(row.address_label)]));
   return snapshot.map(member=>({...member,stays:member.stays.map(stay=>({...stay,
-    place:stay.place==='未登録地点付近'?labels.get(`${member.memberId}|${stay.from}|${stay.to}`)||stay.place:stay.place,
+    place:/^(自宅|家|我が家|職場|会社|勤務先)(付近.*)?$/.test(stay.place)?stay.place:labels.get(`${member.memberId}|${stay.from}|${stay.to}`)||stay.place,
   }))}));
 }
 
@@ -157,6 +157,10 @@ export async function familyDailyJournalPage(request:Request,ctx:AppContext):Pro
     const overview=await familyDayOverview(ctx,selectedDate,today);
     const evidence=selected?detail.replace(`<p>${esc(safeSelectedSummary)}</p>`,`<p class="small">保存済みの完了・家事・位置の記録です。位置は取得できた区間のみで、取得できない時間の滞在を示しません。</p>`):`<section class="card"><h2>保存済みの日誌</h2><p class="small">この日の保存済み総括を取得できません。未生成・保存対象外・アーカイブ済みの場合があります。移動や完了の記録がないとは限りません。</p></section>`;
     body=`${familyDayHeader(selectedDate,today)}${overview}${evidence}${imported.html.replaceAll('href="?month=','href="?view=day&amp;month=')}<details class="card"><summary>月ごとの家族日記を開く</summary><a class="btn gray small" href="/app/family_journal.php?month=${month}&date=${selectedDate}">${esc(month)} の家族日記</a></details><script type="application/json" id="mitenyaSharePayload">${JSON.stringify({csrf:ctx.session.csrfToken||''}).replaceAll('<','\\u003c')}</script><script src="/assets/mitenya-photo-share.js?v=1" defer></script><style>.daily-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between}.daily-head h1{font-size:1.3rem}.date-nav,.family-day-picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.family-day-picker label{display:flex;align-items:center;gap:8px;white-space:nowrap}.family-day-label{flex-shrink:0}.family-day-picker input{max-width:100%;min-width:0}.card li,.journal-member p{overflow-wrap:anywhere}.card li{margin:8px 0}.card li p{margin:4px 0}.card ul{padding-left:1.3em}.journal-member{padding:8px 0;border-bottom:1px solid var(--line)}.journal-member p{margin:5px 0}</style>`;
+  }
+  if(selected&&selectedDate&&location.some(member=>member.stays.length)){
+    const payload={date:selectedDate,members:location.filter(member=>member.stays.length).map(member=>member.memberId),csrf:ctx.session.csrfToken||'',mapsKey:ctx.env.GOOGLE_MAPS_BROWSER_API_KEY||''};
+    body+=`<section class="card"><button type="button" class="btn gray small" id="journalLocationNames">位置名を確認して保存</button><p class="small" id="journalLocationNamesStatus" aria-live="polite">未取得の場所は、共有中の滞在記録から住所・地名を確認して日誌に保存できます。自宅・職場は登録名を残します。</p></section><script type="application/json" id="journalLocationPayload">${JSON.stringify(payload).replaceAll('<','\\u003c')}</script><script defer src="/assets/family-journal-location.js?v=1"></script>`;
   }
   const response=html(layout(dayView?'その日の総括':'家族日記',body,dayView?'/app/tasks.php':'/app/family_log.php'));response.headers.set('cache-control','no-store');return response;
 }

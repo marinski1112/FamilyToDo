@@ -13,13 +13,14 @@ class Target{
   setPointerCapture(){}focus(){this.focused=true;}
 }
 const root=new Target(),sheet=new Target(),handle=new Target(),win=new Target(),doc=new Target(),refresh=new Target(),home=new Target();
-root.querySelector=()=>sheet;sheet.querySelector=()=>handle;
+const tools=new Target(),list=new Target(),status=new Target();
+root.querySelector=selector=>selector==='.location-tools'?tools:sheet;sheet.querySelector=()=>handle;
 const nav={getBoundingClientRect:()=>({top:600})};doc.querySelector=()=>nav;doc.hidden=false;
 win.innerHeight=700;win.visualViewport=new Target();win.visualViewport.height=700;win.visualViewport.offsetTop=0;
 let timerId=0,requests=[],lines=[],mapLoads=0;
 const timers=new Map();
 const maps={Map:class{fitBounds(){this.fitted=true;}},LatLngBounds:class{extend(){}},Polyline:class{constructor(value){lines.push(value);}setMap(){}}};
-const context=vm.createContext({root,sheet,window:win,document:doc,navigator:{onLine:true},refreshEl:refresh,homeEtaEl:home,
+const context=vm.createContext({root,sheet,listEl:list,statusEl:status,window:win,document:doc,navigator:{onLine:true},refreshEl:refresh,homeEtaEl:home,
   refreshTimer:null,currentSharedMembers:new Set([1]),historyMemberId:0,historyGeneration:0,historyLines:[],mapsKey:'fixture',mapsMapId:'',map:null,mapEl:{hidden:true},mapStateEl:{hidden:false},
   load:async refocus=>{requests.push(refocus);},requestHomeEta:async()=>{},setStatus:()=>{},
   loadGoogleMaps:async()=>{mapLoads++;return maps;},validPoint:p=>({lat:p.latitude,lng:p.longitude}),
@@ -30,6 +31,7 @@ const source=fs.readFileSync('public/assets/location.js','utf8');
 vm.runInContext(source.slice(source.indexOf("  const sheet=root.querySelector(")).replace(/\}\)\(\);\s*$/,''),context);
 assert.equal(root.style['--location-viewport-height'],'600px');
 assert.equal(handle.attributes['aria-expanded'],'false');
+assert.equal(list.hidden,false);tools.open=true;await tools.emit('toggle');assert.equal(list.hidden,true);assert.equal(status.hidden,true);assert.equal(sheet.open,false,'route controls do not force the outer sheet open');tools.open=false;await tools.emit('toggle');assert.equal(list.hidden,false);assert.equal(status.hidden,false);
 await handle.emit('pointerdown',{button:0,pointerId:1,clientY:560});
 await handle.emit('pointermove',{pointerId:1,clientY:380});
 assert.equal(sheet.open,true);assert.equal(sheet.style.height,'234px','sheet follows the drag');
