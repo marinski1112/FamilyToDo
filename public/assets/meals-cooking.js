@@ -3,7 +3,7 @@
 const maximum=180*60*1000,lifetime=7*86400000;
 function create({key,maxStep,storage=window.localStorage,now=()=>Date.now(),onChange=()=>{},schedule=fn=>setInterval(fn,1000),unschedule=id=>clearInterval(id)}){
  let state={step:0,end_at:0,paused_ms:0,touched_at:now()},persistent=true,disposed=false;
- const validKey=/^familytodo\.meal\.cook\.[a-zA-Z0-9-]{8,72}\.\d{4}-\d{2}-\d{2}$/.test(key);
+ const validKey=/^familytodo\.meal\.cook\.[a-zA-Z0-9-]{8,72}\.(?:\d{4}-\d{2}-\d{2}|queue-[a-zA-Z0-9-]{8,72})$/.test(key);
  if(!validKey)throw Error('料理の識別情報が不正です。');
  try{const raw=storage.getItem(key);let v=null;try{v=raw?JSON.parse(raw):null;}catch{}if(v&&Number.isInteger(v.step)&&v.step>=0&&v.step<=maxStep&&Number.isSafeInteger(v.end_at)&&v.end_at>=0&&v.end_at<=now()+maximum&&Number.isSafeInteger(v.paused_ms)&&v.paused_ms>=0&&v.paused_ms<=maximum&&!(v.end_at&&v.paused_ms)&&Number.isSafeInteger(v.touched_at)&&v.touched_at<=now()&&now()-v.touched_at<=lifetime)state={step:v.step,end_at:v.end_at,paused_ms:v.paused_ms,touched_at:v.touched_at};}catch{persistent=false;}
  const snapshot=()=>({step:state.step,persistent,status:state.end_at?(state.end_at<=now()?'FINISHED':'RUNNING'):state.paused_ms?'PAUSED':'IDLE',remaining_seconds:Math.max(0,Math.ceil((state.end_at?state.end_at-now():state.paused_ms)/1000))});

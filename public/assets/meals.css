@@ -69,3 +69,5 @@
 .meal-app .meal-wish-menu form{gap:8px}
 .meal-wish-menu select{width:100%;box-sizing:border-box}
 .meal-wish-menu .btn{justify-self:start}
+
+.meal-queue-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}.meal-queue-actions .meal-wish-actions{flex-shrink:0}.meal-row>div:first-child{min-width:0}.meal-queue-actions>.btn{white-space:nowrap}

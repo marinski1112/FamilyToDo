@@ -1,3 +1,4 @@
+import {queueCookingItem} from './meal-queue';
 import type {AppContext} from './app-context';
 import {BadRequest} from './errors';
 import {mealDate,mealWeek,mealId,mealInteger,mealHash} from './meal-domain';
@@ -15,7 +16,7 @@ const notice='音声相談を開始できませんでした。手順・タイマ
 export async function startMealLive(ctx:AppContext,raw:any){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id),memberId=Number(ctx.member!.id),id=mealId(raw.request_id),diagnostic=raw.diagnostic===true;
  if(diagnostic&&!['OWNER','ADMIN'].includes(String(ctx.member!.role||'').toUpperCase()))throw new BadRequest('接続診断は管理者のみ利用できます。');
- const date=diagnostic?'2000-01-03':mealDate(raw.date),step=diagnostic?1:mealInteger(raw.step,100),now=Date.now(),hash=await mealHash(diagnostic?{diagnostic:'fixed-context-v1'}:{date,revision:raw.revision,step});
+ const queueId=!diagnostic&&raw.queue_id!=null?mealId(raw.queue_id):null,date=diagnostic||queueId?'2000-01-03':mealDate(raw.date),step=diagnostic?1:mealInteger(raw.step,100),now=Date.now(),hash=await mealHash(diagnostic?{diagnostic:'fixed-context-v1'}:{date,...(queueId?{queue_id:queueId}:{}),revision:raw.revision,step});
  if(raw.consent!==true)throw new BadRequest('料理の内容と音声をGoogle Geminiへ送信することを確認してください。');
  const read=()=>db.prepare('SELECT * FROM meal_live_sessions WHERE family_id=? AND id=?').bind(familyId,id).first<any>();
  const scope={familyId,feature:FEATURE,trigger:'user' as const};
@@ -26,8 +27,8 @@ export async function startMealLive(ctx:AppContext,raw:any){
  let context:unknown;
  if(diagnostic)context={diagnostic:true,servings:1,current_step:1,recipes:[{name:'接続確認用の架空レシピ',servings:1,ingredients:[{name:'水',quantity:100,unit:'ml'}],steps:['接続確認の応答を返す']}],current_instruction:{recipe:'接続確認用の架空レシピ',text:'接続確認の応答を返す'}};
  else{
- const plan=await readMealPlan(db,familyId,mealWeek(date)),item=plan?.items.find((i:any)=>i.date===date);
- if(!item||plan!.revision!==raw.revision)throw new BadRequest('献立が更新されています。料理画面を開き直してください。');
+ const plan=queueId?null:await readMealPlan(db,familyId,mealWeek(date)),item=queueId?await queueCookingItem(ctx,queueId,raw.revision):plan?.items.find((i:any)=>i.date===date);
+ if(!item||(!queueId&&plan!.revision!==raw.revision))throw new BadRequest('献立が更新されています。料理画面を開き直してください。');
  const recipes=[item.recipe,...(item.sides||[])],steps=recipes.flatMap((r:any)=>r.steps.map((text:string)=>({recipe:r.name,text})));if(step>steps.length)throw new BadRequest('現在の手順を確認してください。');
  context={servings:item.servings,current_step:step,recipes:recipes.map((r:any)=>({name:r.name,servings:r.servings,ingredients:r.ingredients,steps:r.steps})),current_instruction:steps[step-1]};
  }
