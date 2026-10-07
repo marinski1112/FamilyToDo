@@ -2,12 +2,13 @@ import type {AppContext} from './app-context';
 import {BadRequest} from './errors';
 import {mealText,mealId,mealHash} from './meal-domain';
 import {mealImportUrl,hotcookSource} from './meal-url-import';
-export type RecipePublisher='KURASHIRU'|'DELISH'|'HOTCOOK';
+export type RecipePublisher='KURASHIRU'|'DELISH'|'HOTCOOK'|'COOKPAD';
 export function publisherSearch(raw:any){
- if(!raw||typeof raw!=='object'||Array.isArray(raw)||!['KURASHIRU','DELISH','HOTCOOK'].includes(raw.publisher))throw new BadRequest('検索するサイトを選択してください。');
+ if(!raw||typeof raw!=='object'||Array.isArray(raw)||!['KURASHIRU','DELISH','HOTCOOK','COOKPAD'].includes(raw.publisher))throw new BadRequest('検索するサイトを選択してください。');
  const query=mealText(raw.query,100);if(/[\u0000-\u001f\u007f]/u.test(query))throw new BadRequest('検索語は1行で入力してください。');
  const publisher=raw.publisher as RecipePublisher;
  if(publisher==='HOTCOOK'){const model=raw.model==null||raw.model===''?'':raw.model;if(typeof model!=='string'||(model&&!/^KN-[A-Z]{2}\d{2}[A-Z]$/.test(model)))throw new BadRequest('ホットクックの機種を選択してください。');const reference_model=model||'KN-HW24G',url=new URL('https://cocoroplus.jp.sharp/kitchen/recipe/searchresults/');for(const [k,v] of Object.entries({offset:'0',limit:'12',search:query,models:reference_model,cooktime:'',reservation:'false',ignore_text:''}))url.searchParams.set(k,v);return {publisher,query,model,reference_model,url:url.href};}
+ if(publisher==='COOKPAD')return {publisher,query,url:'https://cookpad.com/jp/search/'+encodeURIComponent(query)};
  const url=new URL(publisher==='KURASHIRU'?'https://www.kurashiru.com/search':'https://delishkitchen.tv/search');url.searchParams.set(publisher==='KURASHIRU'?'query':'q',query);
  return {publisher,query,url:url.href};
 }
