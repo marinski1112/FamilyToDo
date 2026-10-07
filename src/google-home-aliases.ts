@@ -5,10 +5,43 @@ export type HomeScene={id:string;name:{name:string;nicknames:string[]}};
 export type HomeAlias={scene_id:string;phrase:string;phrase_key:string};
 const esc=(v:unknown)=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 export const aliasKey=(v:string)=>v.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s+/g,'');
+/** A phrase must identify one Scene, including automatically generated names. */
+export function homeSceneNameConflicts(scenes:HomeScene[]){
+  const owners=new Map<string,{phrase:string;sceneIds:Set<string>}>();
+  for(const s of scenes)for(const phrase of [s.name.name,...s.name.nicknames]){
+    const key=aliasKey(phrase);if(!key)continue;
+    if(!owners.has(key))owners.set(key,{phrase,sceneIds:new Set()});
+    owners.get(key)!.sceneIds.add(s.id);
+  }
+  return [...owners.values()].filter(row=>row.sceneIds.size>1);
+}
+export function resolveHomeSceneNames<T extends HomeScene>(scenes:T[]):T[]{
+  const conflicts=new Set(homeSceneNameConflicts(scenes).map(row=>aliasKey(row.phrase)));
+  const names=new Map<string,string[]>();
+  for(const s of scenes){const key=aliasKey(s.name.name);names.set(key,[...(names.get(key)||[]),s.id]);}
+  // Reserve existing names too, so a generated suffix cannot take another Scene's name.
+  const reserved=new Set(scenes.flatMap(s=>[s.name.name,...s.name.nicknames]).map(aliasKey));
+  const renamed=new Map<string,string>();
+  for(const s of [...scenes].sort((a,b)=>a.id.localeCompare(b.id))){
+    if(names.get(aliasKey(s.name.name))!.length<2)continue;
+    let index=1,candidate='';
+    do{const suffix=`（操作${index++}）`;candidate=Array.from(s.name.name).slice(0,60-Array.from(suffix).length).join('')+suffix;}while(reserved.has(aliasKey(candidate)));
+    reserved.add(aliasKey(candidate));renamed.set(s.id,candidate);
+  }
+  return scenes.map(s=>{
+    const name=renamed.get(s.id)||s.name.name,seen=new Set([aliasKey(name)]);
+    const nicknames=s.name.nicknames.filter(phrase=>{
+      const key=aliasKey(phrase);if(!key||conflicts.has(key)||seen.has(key))return false;
+      seen.add(key);return true;
+    });
+    return {...s,name:{...s.name,name,nicknames}};
+  });
+}
 export async function readHomeAliases(env:Env,familyId:unknown){
   return (await env.DB.prepare('SELECT scene_id,phrase,phrase_key FROM google_home_aliases WHERE family_id=? ORDER BY scene_id,phrase_key').bind(familyId).all<HomeAlias>()).results;
 }
 export function validateHomeAliases(scenes:HomeScene[],sceneId:string,input:string){
+  scenes=resolveHomeSceneNames(scenes);
   const target=scenes.find(s=>s.id===sceneId);if(!target)throw Error('操作が無効です。選び直してください。');
   if(input.length>500)throw Error('入力が長すぎます。');
   const phrases=input.split(/\r?\n/).map(v=>v.normalize('NFKC').replace(/\s+/g,' ').trim()).filter(Boolean);
@@ -19,8 +52,9 @@ export function validateHomeAliases(scenes:HomeScene[],sceneId:string,input:stri
   if(unique.some(v=>reserved.has(aliasKey(v))))throw Error('その言い方は自動生成された操作名に使われています。');
   return unique;
 }
-/** Preserve all built-in aliases; suppress stale aliases if the automatic catalog changes. */
+/** Preserve unambiguous built-in aliases; suppress stale aliases when the catalog changes. */
 export function mergeHomeAliases<T extends HomeScene>(scenes:T[],rows:HomeAlias[]):T[]{
+  scenes=resolveHomeSceneNames(scenes);
   const reserved=new Set(scenes.flatMap(s=>[s.name.name,...s.name.nicknames]).map(aliasKey));
   return scenes.map(s=>{
     const extra:string[]=[];
@@ -51,9 +85,12 @@ export async function homeAliasEditor(ctx:AppContext,scenes:HomeScene[]):Promise
   if(!ctx.member||!['OWNER','ADMIN'].includes(String(ctx.member.role||'').toUpperCase()))return '';
   const rows=await readHomeAliases(ctx.env,ctx.member.family_id).catch(()=>null);
   if(!rows)return '<section class="card"><h2>音声の言い方</h2><p>DB migration 0071の適用後に編集できます。</p></section>';
+  const conflicts=homeSceneNameConflicts(scenes);
+  scenes=resolveHomeSceneNames(scenes);
+  const conflictNotice=conflicts.length?`<p role="status">複数の操作で同じ言い方が使われています。同名の操作には番号を付け、重複した標準の別名は公開しません。クイック操作名や追加の言い方を変更して区別してください：${conflicts.map(row=>esc(row.phrase)).join(' ／ ')}</p>`:'';
   const url=new URL(ctx.request.url),target=scenes.find(s=>s.id===url.searchParams.get('edit_scene'))||scenes[0];
   if(!target)return '<section class="card"><h2>音声の言い方</h2><p>先に家事または子供のクイック操作を登録してください。</p></section>';
   const custom=rows.filter(r=>r.scene_id===target.id),merged=mergeHomeAliases(scenes,rows).find(s=>s.id===target.id)!;
   const inactive=custom.some(r=>!merged.name.nicknames.includes(r.phrase));
-  return `<section class="card"><h2>音声の言い方</h2>${url.searchParams.get('aliases')==='saved'?'<p role="status">保存しました。次に「Google Homeへ操作一覧を再同期」を押してください。</p>':''}<p>家事・子供クイックは自動で操作一覧に入ります。ここでは同じ操作に別の言い方を追加できます。</p><details${url.searchParams.has('edit_scene')?' open':''}><summary>言い方を追加・編集</summary><form method="get"><label for="alias-scene">操作を選ぶ</label><select id="alias-scene" name="edit_scene">${scenes.map(s=>`<option value="${esc(s.id)}"${s.id===target.id?' selected':''}>${esc(s.name.name)}</option>`).join('')}</select><button class="btn gray">この操作を編集</button></form><p><strong>${esc(target.name.name)}</strong><br>標準の言い方：${target.name.nicknames.map(esc).join(' ／ ')||'なし'}</p>${inactive?'<p role="status">自動生成名との重複・上限により公開されない言い方があります。別の表現に変更してください。</p>':''}<form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="action" value="save_aliases"><input type="hidden" name="scene_id" value="${esc(target.id)}"><label for="home-alias-lines">追加の言い方（1行1件・最大${Math.max(0,4-target.name.nicknames.length)}件）</label><textarea id="home-alias-lines" name="aliases" rows="3" maxlength="500" aria-describedby="alias-help" placeholder="例：ワイパーかけたよ">${esc(custom.map(r=>r.phrase).join('\n'))}</textarea><p id="alias-help">空欄で保存すると追加分を削除します。標準の言い方は残ります。「OK Google」は入れません。</p><button class="btn">言い方を保存</button></form></details><p class="small">保存後は操作一覧を再同期してください。認識できる言い方はGoogle Home側にも依存します。自由文の聞き返しや話者の識別を追加する機能ではありません。</p></section>`;
+  return `<section class="card"><h2>音声の言い方</h2>${conflictNotice}${url.searchParams.get('aliases')==='saved'?'<p role="status">保存しました。次に「Google Homeへ操作一覧を再同期」を押してください。</p>':''}<p>家事・子供クイックは自動で操作一覧に入ります。ここでは同じ操作に別の言い方を追加できます。</p><details${url.searchParams.has('edit_scene')?' open':''}><summary>言い方を追加・編集</summary><form method="get"><label for="alias-scene">操作を選ぶ</label><select id="alias-scene" name="edit_scene">${scenes.map(s=>`<option value="${esc(s.id)}"${s.id===target.id?' selected':''}>${esc(s.name.name)}</option>`).join('')}</select><button class="btn gray">この操作を編集</button></form><p><strong>${esc(target.name.name)}</strong><br>標準の言い方：${target.name.nicknames.map(esc).join(' ／ ')||'なし'}</p>${inactive?'<p role="status">自動生成名との重複・上限により公開されない言い方があります。別の表現に変更してください。</p>':''}<form method="post"><input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}"><input type="hidden" name="action" value="save_aliases"><input type="hidden" name="scene_id" value="${esc(target.id)}"><label for="home-alias-lines">追加の言い方（1行1件・最大${Math.max(0,4-target.name.nicknames.length)}件）</label><textarea id="home-alias-lines" name="aliases" rows="3" maxlength="500" aria-describedby="alias-help" placeholder="例：ワイパーかけたよ">${esc(custom.map(r=>r.phrase).join('\n'))}</textarea><p id="alias-help">空欄で保存すると追加分を削除します。標準の言い方は残ります。「OK Google」は入れません。</p><button class="btn">言い方を保存</button></form></details><p class="small">保存後は操作一覧を再同期してください。認識できる言い方はGoogle Home側にも依存します。自由文の聞き返しや話者の識別を追加する機能ではありません。</p></section>`;
 }
