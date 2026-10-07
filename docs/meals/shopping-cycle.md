@@ -12,7 +12,7 @@
 
 ## データと再試行
 
-MEALS_DB migration 0016（既存のGitHubデプロイ経由）。wishlist.status は PENDING / ADOPTED / REJECTED。採用と候補の非表示は同一transaction。queue は ACTIVE / COOKED / DROPPED、家族ごと100件まで。採用のrequest_idとpayload hash、編集revision、完了token・在庫revisionで二重処理と古い上書きを防ぐ。履歴を物理削除しない。
+MEALS_DB migration 0016（既存のGitHubデプロイ経由）。wishlist.status は PENDING / ADOPTED / REJECTED。採用と候補の非表示は同一transaction。queue は ACTIVE / COOKED / DROPPED、家族ごと100件まで。採用のrequest_idとpayload hash、編集revision、完了token・在庫revisionで二重処理と古い上書きを防ぐ。履歴を物理削除しない。一覧はレシピ要約のみ返し、材料・手順は個別の調理時に取得する。全レシピsnapshotを毎ページで転送しない。
 
 買い物は既存DBの shopping_items が正本。MEALS_DBで有限の対象集合と選択済みproductsの不変jobを確保し、既存DBの meal_shopping_projections へ `cycle-<job id>` で冪等反映する。途中障害は PENDING job から同じ内容を再開。商品を人が削除した後の再試行で再生成しない。異なるjobが同じ料理を二重に確保しない。job確保後の料理変更や完了でも、再開内容は確認済み内容のまま。
 

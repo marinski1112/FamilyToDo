@@ -7,7 +7,7 @@ import {projectMealShopping} from './meal-shopping-service';
 type Row=Record<string,any>;
 const changed=()=>new BadRequest('内容が更新されています。読み込み直して確認してください。');
 const family=(ctx:AppContext)=>Number(ctx.member!.family_id);
-const decode=(r:Row):Row=>({...r,recipe:r.recipe_json?JSON.parse(r.recipe_json):null,recipe_json:undefined,inventory_result_json:undefined,completion_token:undefined});
+const decode=(r:Row,full=false):Row=>{const recipe=r.recipe_json?JSON.parse(r.recipe_json):null;return {...r,recipe:recipe&&(full?recipe:{id:recipe.id,name:recipe.name,servings:recipe.servings,minutes:recipe.minutes,source_url:recipe.source_url}),recipe_json:undefined,inventory_result_json:undefined,completion_token:undefined,adoption_hash:undefined,edit_hash:undefined};};
 export async function readMealQueue(ctx:AppContext){
  const db=ctx.env.MEALS_DB!,f=family(ctx);
  const [active,history,rejected,jobs]=await Promise.all([
@@ -15,7 +15,7 @@ export async function readMealQueue(ctx:AppContext){
   db.prepare("SELECT * FROM meal_cooking_queue WHERE family_id=? AND status!='ACTIVE' ORDER BY updated_at DESC,id LIMIT 50").bind(f).all<Row>(),
   db.prepare("SELECT id,name,recipe_link_revision FROM meal_wishlist WHERE family_id=? AND status='REJECTED' ORDER BY decision_at DESC,id LIMIT 50").bind(f).all<Row>(),
   db.prepare("SELECT id FROM meal_queue_shopping_jobs WHERE family_id=? AND status='PENDING' ORDER BY created_at LIMIT 10").bind(f).all<Row>()]);
- return {items:active.results.map(decode),history:history.results.map(decode),rejected:rejected.results,pending_shopping:jobs.results};
+ return {items:active.results.map(r=>decode(r)),history:history.results.map(r=>decode(r)),rejected:rejected.results,pending_shopping:jobs.results};
 }
 async function queueRow(ctx:AppContext,id:unknown){const r=await ctx.env.MEALS_DB!.prepare('SELECT * FROM meal_cooking_queue WHERE family_id=? AND id=?').bind(family(ctx),mealId(id)).first<Row>();if(!r)throw changed();return r;}
 async function recipeSnapshot(ctx:AppContext,id:unknown):Promise<MealRecipe|null>{if(id==null)return null;const r=await mealRecipe(ctx.env.MEALS_DB!,family(ctx),mealId(id));if(!r)throw new BadRequest('表示中の家族のレシピを選択してください。');const {source,revision,...snapshot}=r;return snapshot;}
@@ -82,3 +82,5 @@ export async function confirmQueueShopping(ctx:AppContext,b:any){
 }
 
 export async function queueCookingItem(ctx:AppContext,id:unknown,revision:unknown){const row=await queueRow(ctx,id);if(row.status!=='ACTIVE'||row.revision!==revision||!row.recipe_json)throw changed();return {recipe:JSON.parse(row.recipe_json),servings:row.servings};}
+
+export async function readQueueItem(ctx:AppContext,id:unknown){const row=await queueRow(ctx,id);if(row.status!=='ACTIVE')throw changed();return decode(row,true);}

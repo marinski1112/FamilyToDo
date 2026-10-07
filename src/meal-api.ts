@@ -1,4 +1,4 @@
-import {readMealQueue,adoptMealWish,decideMealWish,editMealQueue,returnMealQueue,queueCookingPreview,completeQueueCooking,queueShoppingPreview,confirmQueueShopping} from './meal-queue';
+import {readQueueItem,readMealQueue,adoptMealWish,decideMealWish,editMealQueue,returnMealQueue,queueCookingPreview,completeQueueCooking,queueShoppingPreview,confirmQueueShopping} from './meal-queue';
 import {guideMealBaby} from './meal-baby-guidance';
 import {startMealLive,endMealLive} from './meal-live';
 import {searchMealPublisher} from './meal-publisher-search';
@@ -44,6 +44,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   if(view==='cooking_preview')return out({ok:true,preview:await mealCookingPreview(ctx,mealDate(url.searchParams.get('date')))});
   if(view==='inbox')return out({ok:true,line_receipts:await readLineReceipts(ctx),inbox:(await db.prepare("SELECT id,kind,content,created_at FROM meal_inbox WHERE family_id=? AND status='PENDING' ORDER BY created_at DESC,id LIMIT 100").bind(familyId).all()).results});
   if(view==='recipe'){const recipe=await mealRecipe(db,familyId,mealId(url.searchParams.get('id')));return out({ok:!!recipe,recipe},recipe?200:404);}
+  if(view==='queue_item')return out({ok:true,item:await readQueueItem(ctx,url.searchParams.get('id'))});
   if(view==='queue')return out({ok:true,queue:await readMealQueue(ctx)});
   if(view==='queue_shopping_preview')return out({ok:true,...await queueShoppingPreview(ctx)});
   if(view==='queue_cooking_preview')return out({ok:true,preview:await queueCookingPreview(ctx,url.searchParams.get('id'))});
