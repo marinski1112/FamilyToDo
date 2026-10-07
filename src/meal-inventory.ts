@@ -49,9 +49,12 @@ export async function mealShoppingInventory(ctx:AppContext,plan:any){
 export async function mealCookingPreview(ctx:AppContext,date:string){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id),plan=await readMealPlan(db,familyId,mealWeek(date)),item=plan?.items.find((i:any)=>i.date===date);
  if(!item||plan!.status!=='CONFIRMED')throw new BadRequest('この日の献立を確定してください。');
- const inventory=await readMealInventory(db,familyId),today=inventoryToday(ctx),useDate=date>today?date:today,needs=mealShoppingNeeds([item]),allocations:Array<{id:string;revision:string;name:string;unit:string;quantity:number;before_ticks:number;ticks:number;required_unit:string;required_quantity:number}>=[];
+ return mealCookingAllocations(ctx,{...item,revision:plan!.revision},date);
+}
+export async function mealCookingAllocations(ctx:AppContext,item:any,date:string){
+ const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id);const inventory=await readMealInventory(db,familyId),today=inventoryToday(ctx),useDate=date>today?date:today,needs=mealShoppingNeeds([item]),allocations:Array<{id:string;revision:string;name:string;unit:string;quantity:number;before_ticks:number;ticks:number;required_unit:string;required_quantity:number}>=[];
  for(const n of needs){if(n.quantity===null)continue;let remaining=Math.round(n.quantity*10000);for(const lot of inventory.lots){if(!remaining||allocations.length>=16)break;if(usable(lot,useDate)&&lot.name===n.name&&mealUnit(lot.unit).unit===n.unit){const factor=mealUnit(lot.unit).factor,amount=Math.min(Math.floor(remaining/factor),lot.remaining_ticks);if(!amount)continue;allocations.push({id:lot.id,revision:lot.revision,name:lot.name,unit:lot.unit,quantity:amount/10000,before_ticks:lot.remaining_ticks,ticks:amount,required_unit:n.unit,required_quantity:amount*factor/10000});remaining-=amount*factor;}}}
- const contents={date,revision:plan!.revision,inventory_revision:inventory.revision,needs,allocations,allocation_limited:allocations.length>=16};return {...contents,preview_hash:await mealHash(contents)};
+ const contents={date,revision:item.revision,inventory_revision:inventory.revision,needs,allocations,allocation_limited:allocations.length>=16};return {...contents,preview_hash:await mealHash(contents)};
 }
 export async function completeMealCooking(ctx:AppContext,raw:any){
  const db=ctx.env.MEALS_DB!,m=ctx.member!,familyId=Number(m.family_id),date=mealDate(raw.date),revision=mealId(raw.revision);
