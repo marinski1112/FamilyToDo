@@ -48,6 +48,7 @@ final class MealScreen {
     private String requestCsrf="";
     private Runnable timerTick;
     private AlertDialog leaveDialog;
+    private PopupMenu wishMenu;
     private final String session=SnapshotCache.currentSessionBinding();
     MealScreen(Activity activity,Host host){this.activity=activity;this.host=host;}
     static String today(){return LocalDate.now(ZoneId.of("Asia/Tokyo")).toString();}
@@ -64,7 +65,7 @@ final class MealScreen {
     }
     void pauseTimer(){clock.removeCallbacksAndMessages(null);}
     void resumeTimer(){if(timerTick!=null&&!closed)timerTick.run();}
-    void close(){if(leaveDialog!=null)leaveDialog.dismiss();closed=true;generation++;clock.removeCallbacksAndMessages(null);io.shutdownNow();overview=null;root=null;body=null;}
+    void close(){if(wishMenu!=null)wishMenu.dismiss();if(leaveDialog!=null)leaveDialog.dismiss();closed=true;generation++;clock.removeCallbacksAndMessages(null);io.shutdownNow();overview=null;root=null;body=null;}
     private interface Work {JSONObject run()throws Exception;}
     private interface Done {void accept(JSONObject result)throws Exception;}
     private void request(Work work,Done done){
@@ -188,8 +189,38 @@ final class MealScreen {
     private void wishes(){
         EditText wish=input("食べたい料理", "",false);final String[] last={"",""};
         write("食べたいものに追加",()->{String name=value(wish);if(name.isEmpty()){say("料理名を入力してください。");return;}if(!last[0].equals(name)){last[0]=name;last[1]=UUID.randomUUID().toString();}JSONObject payload=put(put(action("wishlist_add"),"id",last[1]),"name",name);request(()->post(payload),r->refresh());});
-        JSONArray wishes=array(overview,"wishlist");for(int i=0;i<wishes.length();i++){JSONObject row=wishes.optJSONObject(i);text(row.optString("name"));if(!row.isNull("source_url"))text(row.optString("source_url"));write("削除："+row.optString("name"),()->new AlertDialog.Builder(activity).setMessage("食べたいものから削除しますか？").setPositiveButton("削除",(d,w)->request(()->post(put(action("wishlist_delete"),"id",row.optString("id"))),r->refresh())).setNegativeButton("戻る",null).show());}
+        JSONArray wishes=array(overview,"wishlist");if(wishes.length()==0)text("家族が食べたい料理をここに集められます。");
+        for(int i=0;i<wishes.length();i++){
+            JSONObject row=wishes.optJSONObject(i);if(row==null)continue;
+            LinearLayout line=new LinearLayout(activity);line.setGravity(android.view.Gravity.TOP);LinearLayout labels=new LinearLayout(activity);labels.setOrientation(LinearLayout.VERTICAL);
+            labels.addView(host.text(row.optString("name")));String linked=nullable(row,"linked_recipe_id");JSONObject recipe=findRecipe(linked);
+            if(!linked.isEmpty()){
+                labels.addView(host.text("📖 "+(nullable(row,"recipe_name").isEmpty()?(recipe==null?"紐づけ先のレシピ":recipe.optString("name")):nullable(row,"recipe_name"))+(row.optBoolean("recipe_available")?"":"（非表示）")));
+                String model=hotcookModel((nullable(row,"recipe_source_url").isEmpty()?(recipe==null?"":recipe.optString("source_url")):nullable(row,"recipe_source_url")));if(!model.isEmpty())labels.addView(host.text("ホットクック · "+model));
+            }
+            line.addView(labels,new LinearLayout.LayoutParams(0,-2,1));Button menu=host.button("⋯",()->wishActions(row));menu.setContentDescription(row.optString("name")+"の操作");line.addView(menu,new LinearLayout.LayoutParams(dp(44),dp(44)));body.addView(line);
+        }
     }
+    private static String nullable(JSONObject row,String key){return row.isNull(key)?"":row.optString(key);}
+    private JSONObject findRecipe(String id){JSONArray recipes=array(overview,"recipes");for(int i=0;i<recipes.length();i++){JSONObject recipe=recipes.optJSONObject(i);if(recipe!=null&&id.equals(recipe.optString("id")))return recipe;}return null;}
+    static String hotcookModel(String source){
+        try{java.net.URI uri=new java.net.URI(source);java.util.regex.Matcher match=java.util.regex.Pattern.compile("^/kitchen/recipe/hotcook/(KN-[A-Z]{2}\\d{2}[A-Z])/R\\d{4,15}/?$").matcher(uri.getPath());return "https".equals(uri.getScheme())&&"cocoroplus.jp.sharp".equals(uri.getHost())&&uri.getUserInfo()==null&&uri.getPort()==-1&&match.matches()?match.group(1):"";}catch(Exception error){return "";}
+    }
+    private void wishActions(JSONObject row){
+        if(busy)return;Button anchor=(Button)findWishAction(body,row.optString("name")+"の操作");if(anchor==null)return;
+        wishMenu=new PopupMenu(activity,anchor);if(row.optBoolean("recipe_available"))wishMenu.getMenu().add(0,1,0,"レシピを開く");wishMenu.getMenu().add(0,2,1,"紐づけを変更");wishMenu.getMenu().add(0,3,2,"食べたいものから削除");
+        wishMenu.setOnMenuItemClickListener(item->{if(busy)return true;if(item.getItemId()==1)leave(()->request(()->get("?view=recipe&id="+nullable(row,"linked_recipe_id")),r->detail(r.getJSONObject("recipe"))));else if(!ApiClient.canMutate())say("通信の確認後に編集できます。ホームを更新してください。");else if(item.getItemId()==2)leave(()->wishLinkEditor(row));else new AlertDialog.Builder(activity).setMessage("食べたいものから削除しますか？ レシピは残ります。").setPositiveButton("削除",(d,w)->{if(!ApiClient.canMutate())return;request(()->post(put(action("wishlist_delete"),"id",row.optString("id"))),r->refresh());}).setNegativeButton("戻る",null).show();return true;});wishMenu.show();
+    }
+    private static View findWishAction(View view,String description){if(description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findWishAction(group.getChildAt(i),description);if(found!=null)return found;}}return null;}
+    private void wishLinkEditor(JSONObject row){
+        body.removeAllViews();text(row.optString("name")+" · 紐づけを変更");ArrayList<String> names=new ArrayList<>(),ids=new ArrayList<>();names.add("紐づけなし");ids.add("");JSONArray recipes=array(overview,"recipes");String linked=nullable(row,"linked_recipe_id");
+        for(int i=0;i<recipes.length();i++){JSONObject recipe=recipes.optJSONObject(i);if(recipe==null)continue;ids.add(recipe.optString("id"));names.add(recipe.optString("name")+(hotcookModel(recipe.optString("source_url")).isEmpty()?"":" · ホットクック"));}
+        if(!linked.isEmpty()&&!ids.contains(linked)){ids.add(linked);names.add(row.optString("recipe_name","紐づけ先のレシピ")+(row.optBoolean("recipe_available")?"":"（非表示）"));}
+        Spinner selection=choice("紐づけ先のレシピ",names,ids.indexOf(linked));dirty=true;
+        write("紐づけを保存",()->{String id=ids.get(selection.getSelectedItemPosition());JSONObject payload=put(put(put(put(action("wishlist_link"),"id",row.optString("id")),"recipe_id",id.isEmpty()?JSONObject.NULL:id),"expected_recipe_id",row.isNull("recipe_id")?JSONObject.NULL:row.optString("recipe_id")),"expected_revision",row.optInt("recipe_link_revision"));request(()->post(payload),r->{dirty=false;refresh();});});
+        button("戻る",()->leave(this::draw));button("最新の紐づけを読み直す",()->leave(this::refresh));
+    }
+
     private void inbox(){
         request(()->get("?view=inbox"),r->{body.removeAllViews();JSONArray inbox=array(r,"inbox");if(inbox.length()==0)text("未確認の希望メニュー・URLはありません。");
             for(int i=0;i<inbox.length();i++){JSONObject row=inbox.optJSONObject(i);text(row.optString("content"));boolean url="RECIPE_URL".equals(row.optString("kind"));EditText name=url?input("URLの料理名","",false):null;
