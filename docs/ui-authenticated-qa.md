@@ -155,3 +155,10 @@ ICS取込は「日付指定」で開始・終了欄が表示されること、�
 追加点検: 買い物編集と個別伝言入力にも実認証で到達（上記と合わせ40画面・入口）。買い物編集で項目名の欠落を確認し、タスク・持ち物・買い物の編集、個別伝言、定期タスクの隣接入力ラベルも修正する。今回タスク編集と持ち物編集は対象を選択しておらず、本番の修正後確認は未。登録済みデータの値は変更していない。
 
 ブラウザ実行エラー: 個別伝言画面の message-immediate-ui.js が日時入力のnative-control-shellを無視してform直下へ insertBefore し、NotFoundErrorで初期化を中断する。日時の囲み要素/隣接ラベルを基準に挿入するよう修正。直接入力・囲み付き・ラベルなし・二重初期化、および即時通知/予約日時の切替を合成DOMで回帰検証。通知の実送信は行わない。
+
+
+### 2026-10-07 — Month controls and compact wish actions
+
+Authenticated production inspection reproduced the month-control bug: after moving from October to November, the calendar heading, grid and URL changed, while the visible compact month select remained on October. Calendar month application now synchronizes the visible year/month selects, native month input and jump form with the applied month, including year transitions. Synthetic client tests exercise both script-loading orders, arrow navigation and touch swipes.
+
+Wish rows show their linked recipe name and HotCook model when the linked recipe has an official source. The source is obtained through the existing family-scoped recipe join, rather than guessing from the wish's original URL. One 44px `⋯` disclosure contains recipe navigation, link editing and deletion; Escape closes it and restores focus. Current links remain selected even if the recipe falls outside the bounded list or is archived. Existing link revisions, retry/confirmation guards and persistence operations are retained. Fixture tests verify escaped recipe names, correct linked source, no mutation from reading/menu use and archived/list-missing states. Production display/menu verification is recorded with the release comment; no live wish/link/delete operation is needed for this UI change.
