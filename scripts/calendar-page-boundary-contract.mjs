@@ -27,7 +27,7 @@ for(const marker of [
   'recurrence_rule_id:t.recurrence_rule_id??0',
   'recurrence_occurrence_id:t.recurrence_occurrence_id??0',
   'id="calendarPayload"',
-  '/assets/calendar.js?v=${APP_VERSION}',
+  '/assets/calendar.js?v=${APP_VERSION}-month2',
   'id="calendarMonthPicker"',
   'id="calendarFab"',
   "layout('カレンダー',body,'/app/calendar.php')",
