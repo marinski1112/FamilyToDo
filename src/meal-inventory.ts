@@ -17,9 +17,10 @@ export function normalizeLot(raw:any){
 }
 export async function readMealInventory(db:D1Database,familyId:number){
  // One SQL statement gives revision and rows from the same database snapshot.
- const rows=await db.prepare('SELECT COALESCE(s.revision,0) inventory_revision,l.id,l.name,l.tracking,l.remaining_ticks,l.unit,l.present,l.storage,l.purchased_on,l.expires_on,l.revision,l.archived FROM (SELECT ? family_id) f LEFT JOIN meal_inventory_state s ON s.family_id=f.family_id LEFT JOIN inventory_lots l ON l.family_id=f.family_id AND l.archived=0 ORDER BY l.expires_on IS NULL,l.expires_on,l.purchased_on,l.id LIMIT 200').bind(familyId).all<Lot&{inventory_revision:number}>();
- return {revision:Number(rows.results[0]?.inventory_revision||0),lots:rows.results.filter(l=>l.id).map(({inventory_revision,...l})=>({...l,quantity:l.remaining_ticks/10000}))};
+ const rows=await db.prepare('SELECT COALESCE(s.revision,0) inventory_revision,l.id,l.name,l.tracking,l.remaining_ticks,l.unit,l.present,l.storage,l.purchased_on,l.expires_on,l.revision,l.archived FROM (SELECT ? family_id) f LEFT JOIN meal_inventory_state s ON s.family_id=f.family_id LEFT JOIN (SELECT * FROM inventory_lots WHERE family_id=? AND archived=0 ORDER BY expires_on IS NULL,expires_on,purchased_on,id LIMIT 201) l ON l.family_id=f.family_id ORDER BY l.expires_on IS NULL,l.expires_on,l.purchased_on,l.id').bind(familyId,familyId).all<Lot&{inventory_revision:number}>();
+ return {revision:Number(rows.results[0]?.inventory_revision||0),truncated:rows.results.filter(l=>l.id).length>200,lots:rows.results.filter(l=>l.id).slice(0,200).map(({inventory_revision,...l})=>({...l,quantity:l.remaining_ticks/10000}))};
 }
+export function assertCompleteMealInventory(inventory:{truncated:boolean}){if(inventory.truncated)throw new BadRequest('在庫が200件を超えています。一部だけで計算しないため、在庫画面で使わない購入分を一覧から外してから確認してください。');}
 /** The operation claim, lot write, revision trigger and audit event share one D1 transaction. */
 export async function changeMealInventory(ctx:AppContext,raw:any,kind:'ADD'|'ADJUST'|'ARCHIVE'){
  const db=ctx.env.MEALS_DB!,m=ctx.member!,familyId=Number(m.family_id),id=mealId(raw.request_id),lotId=kind==='ADD'?id:mealId(raw.id),value=kind==='ARCHIVE'?null:normalizeLot(raw.lot),revision=kind==='ADD'?'':mealId(raw.revision);
@@ -43,6 +44,7 @@ export function inventoryNeeds(needs:MealIngredient[],lots:Lot[],date:string){
 }
 export async function mealShoppingInventory(ctx:AppContext,plan:any){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id),[inventory,cooked]=await Promise.all([readMealInventory(db,familyId),db.prepare('SELECT meal_date FROM cooked_events WHERE family_id=? AND plan_revision=?').bind(familyId,plan.revision).all<{meal_date:string}>()]);
+ assertCompleteMealInventory(inventory);
  const done=new Set(cooked.results.map(x=>x.meal_date)),needs=inventoryNeeds(mealShoppingNeeds(plan.items.filter((i:any)=>!done.has(i.date))),inventory.lots,inventoryToday(ctx));
  return {needs,inventory_revision:inventory.revision};
 }
@@ -53,6 +55,7 @@ export async function mealCookingPreview(ctx:AppContext,date:string){
 }
 export async function mealCookingAllocations(ctx:AppContext,item:any,date:string){
  const db=ctx.env.MEALS_DB!,familyId=Number(ctx.member!.family_id);const inventory=await readMealInventory(db,familyId),today=inventoryToday(ctx),useDate=date>today?date:today,needs=mealShoppingNeeds([item]),allocations:Array<{id:string;revision:string;name:string;unit:string;quantity:number;before_ticks:number;ticks:number;required_unit:string;required_quantity:number}>=[];
+ assertCompleteMealInventory(inventory);
  for(const n of needs){if(n.quantity===null)continue;let remaining=Math.round(n.quantity*10000);for(const lot of inventory.lots){if(!remaining||allocations.length>=16)break;if(usable(lot,useDate)&&lot.name===n.name&&mealUnit(lot.unit).unit===n.unit){const factor=mealUnit(lot.unit).factor,amount=Math.min(Math.floor(remaining/factor),lot.remaining_ticks);if(!amount)continue;allocations.push({id:lot.id,revision:lot.revision,name:lot.name,unit:lot.unit,quantity:amount/10000,before_ticks:lot.remaining_ticks,ticks:amount,required_unit:n.unit,required_quantity:amount*factor/10000});remaining-=amount*factor;}}}
  const contents={date,revision:item.revision,inventory_revision:inventory.revision,needs,allocations,allocation_limited:allocations.length>=16};return {...contents,preview_hash:await mealHash(contents)};
 }

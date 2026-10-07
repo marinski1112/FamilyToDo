@@ -27,7 +27,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const m=ctx.member;if(!m)return out({ok:false,error:'ログインが必要です。'},401);
  if(!mealEnabled(ctx.env))return out({ok:false,error:'ごはん機能は準備中です。',code:'MEALS_NOT_CONFIGURED'},503);
  const db=ctx.env.MEALS_DB!,familyId=Number(m.family_id),url=new URL(request.url);
- if(request.method==='GET'){
+ if(request.method==='GET'){try{
   const view=url.searchParams.get('view')||'overview',week=mealWeek(url.searchParams.get('week')||new Date().toISOString().slice(0,10));
   if(view==='ai_status'){
    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase()))return out({ok:false,error:'管理者のみ利用できます。'},403);
@@ -53,6 +53,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
   const today=familyDate(String(m.family_timezone||ctx.env.APP_TIMEZONE||DEFAULT_FAMILY_TIMEZONE)),tomorrowDate=shiftMealDate(today,1);let tomorrow_item=null;
   if(week===mealWeek(today)&&mealWeek(tomorrowDate)!==week){const next=await readMealPlan(db,familyId,mealWeek(tomorrowDate));tomorrow_item=next?.items.find((i:any)=>i.date===tomorrowDate)||null;}
   return out({ok:true,queue,recipes,wishlist,plan,cooked:cooked.results,week_start:week,tomorrow_item});
+ }catch(e){if(e instanceof BadRequest)return out({ok:false,error:e.message},400);throw e;}
  }
  if(request.method!=='POST')return out({ok:false,error:'POST only'},405);
  const length=Number(request.headers.get('content-length')||0);if(length>800000)return out({ok:false,error:'入力が大きすぎます。'},413);
