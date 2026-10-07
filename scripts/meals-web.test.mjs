@@ -251,6 +251,25 @@ test('URL import allows exact HTTPS recipe pages only; structured extraction lea
  assert.equal(extractMealRecipe(importHTML({totalTime:undefined,recipeYield:'10枚分'}),importURL).servings,null);
  assert.throws(()=>extractMealRecipe(importHTML()+importHTML(),importURL));assert.throws(()=>extractMealRecipe('<script type="application/ld+json">broken</script>',importURL));assert.throws(()=>extractMealRecipe(importHTML({recipeInstructions:['x'.repeat(2001)]}),importURL));
 });
+const cookpadURL='https://cookpad.com/jp/recipes/26622092';
+const cookpadHTML=()=>importHTML({name:'Cookpad形式のテスト料理',recipeYield:undefined,totalTime:undefined,recipeIngredient:['ゴーヤ 1,2本','ハム(刻む) 2枚','卵 1個','油 大1','塩コショウ 少々']});
+test('Cookpad accepts only public Japanese recipe URLs and preserves ambiguous amounts',async()=>{
+ assert.equal(mealImportUrl(cookpadURL+'?ref=search&search_term=ハム#ingredients'),cookpadURL);
+ for(const url of ['http://cookpad.com/jp/recipes/26622092','https://cookpad.com.evil.invalid/jp/recipes/26622092','https://user:pass@cookpad.com/jp/recipes/26622092','https://cookpad.com:8443/jp/recipes/26622092','https://cookpad.com/jp/search/ハム','https://cookpad.com/jp/recipes/26622092/comments','https://cookpad.com/jp/recipes/not-a-number'])assert.throws(()=>mealImportUrl(url));
+ for(const raw of ['ゴーヤ 1,2本','ゴーヤ 1，2本','ゴーヤ 1、2本','肉 1,000g','ゴーヤ 1・2本','しょうゆ 大さじ1,2']){
+  const ingredient=parseImportedIngredient(raw);assert.equal(ingredient.quantity,null,raw);assert.equal(ingredient.unit,'',raw);assert.equal(ingredient.name,ingredient.original,raw);
+ }
+ assert.equal(parseImportedIngredient('肉（もも、むね） 200g').quantity,200);
+ assert.equal(parseImportedIngredient('牛乳 1.5L').quantity,1.5);
+ const {ctx,meals}=fixture(),real=globalThis.fetch;let count=0;
+ globalThis.fetch=async(url,options)=>{count++;assert.equal(url,cookpadURL);assert.equal(options.redirect,'manual');assert.deepEqual(options.headers,{accept:'text/html'});return new Response(cookpadHTML(),{headers:{'content-type':'text/html'}});};
+ try{
+  const body={action:'import_url',request_id:'cookpad-import-01',url:cookpadURL+'?ref=search'};
+  const result=await call(ctx,body);assert.equal(result.response.status,200);
+  const d=result.value.draft;assert.equal(d.source_url,cookpadURL);assert.equal(d.servings,null);assert.equal(d.minutes,null);assert.equal(d.ingredients.length,5);assert.equal(d.ingredients[0].quantity,null);assert.equal(d.ingredients[0].original,'ゴーヤ 1,2本');assert.equal(d.ingredients[1].quantity,2);assert.equal(d.ingredients[2].quantity,1);assert.equal(d.ingredients[3].quantity,null);assert.equal(d.ingredients[4].quantity_text,'少々');
+  assert.equal((await call(ctx,body)).response.status,200);assert.equal(count,1);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,0);
+ }finally{globalThis.fetch=real;}
+});
 test('URL import is tenant scoped, claimed once, retryable without another fetch, and never saves recipes or calls AI',async()=>{
  const {ctx,meals}=fixture(),real=globalThis.fetch;let count=0;
  globalThis.fetch=async(url,options)=>{count++;assert.equal(url,importURL);assert.equal(options.redirect,'manual');assert.deepEqual(options.headers,{accept:'text/html'});return new Response(importHTML(),{headers:{'content-type':'text/html'}});};
@@ -290,6 +309,25 @@ test('Web URL import reuses request after lost response, leaves uncertain quanti
   rows[2].querySelector('[data-field=name]').value='塩';rows[2].querySelector('[data-field=quantity]').value='1';rows[2].querySelector('[data-field=unit]').value='g';
   doc.querySelector('#recipeForm').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>doc.querySelector('#mealStatus').textContent.includes('保存しました'));assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,1);assert.equal(count,1);
  }finally{globalThis.fetch=real;window.happyDOM.abort();window.close();}
+});
+
+test('Cookpad confirmation keeps missing fields blank and saves after user correction',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture(),real=globalThis.fetch,w=new Window({url:'https://fixture.invalid/app/meals.php?view=recipes'});
+ try{
+  globalThis.fetch=async()=>new Response(cookpadHTML(),{headers:{'content-type':'text/html'}});
+  w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+  w.fetch=(url,options={})=>mealApi(new Request(new URL(url,w.location.href),options),ctx);
+  w.eval(fs.readFileSync('public/assets/meals-cooking.js','utf8'));w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const d=w.document;
+  await waitFor(()=>d.querySelector('#importRecipe'));d.querySelector('#importRecipe').click();assert(d.querySelector('#mealContent').textContent.includes('クックパッド'));d.querySelector('#importForm [name=url]').value=cookpadURL;
+  d.querySelector('#importForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>d.querySelector('#recipeForm'));
+  const f=d.querySelector('#recipeForm'),rows=d.querySelectorAll('.meal-ingredient');assert.equal(f.elements.servings.value,'');assert.equal(f.elements.minutes.value,'');assert.equal(rows[0].querySelector('[data-field=quantity]').value,'');assert(rows[0].textContent.includes('ゴーヤ 1,2本'));assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,0);
+  assert.equal(f.checkValidity(),false);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,0);
+  f.elements.servings.value='2';f.elements.minutes.value='15';
+  rows[0].querySelector('[data-field=name]').value='ゴーヤ';rows[0].querySelector('[data-field=quantity]').value='1';rows[0].querySelector('[data-field=unit]').value='本';
+  rows[3].querySelector('[data-field=name]').value='油';rows[3].querySelector('[data-field=quantity]').value='1';rows[3].querySelector('[data-field=unit]').value='大さじ';
+  for(const row of [rows[0],rows[3]])row.querySelector('[data-field=quantity]').dispatchEvent(new w.Event('input',{bubbles:true}));assert.equal(f.checkValidity(),true);await waitFor(()=>!f.querySelector('button').disabled);
+  f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await waitFor(()=>d.querySelector('#mealStatus').textContent.includes('保存しました'));assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM recipes').get().n,1);
+ }finally{globalThis.fetch=real;w.happyDOM.abort();w.close();}
 });
 
 test('URL import follows only approved recipe redirects and stops after three transfers',async()=>{

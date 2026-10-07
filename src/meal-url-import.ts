@@ -3,7 +3,7 @@ import {BadRequest} from './errors';
 import type {AppContext} from './app-context';
 import {mealHash,mealId} from './meal-domain';
 const MAX_BYTES=2_000_000;
-const unsupported='URL取り込みはクラシル・デリッシュキッチン・SHARP公式ホットクックのレシピページに対応しています。他のリンクは出典を見ながら手入力してください。';
+const unsupported='URL取り込みはクックパッド・クラシル・デリッシュキッチン・SHARP公式ホットクックのレシピページに対応しています。他のリンクは出典を見ながら手入力してください。';
 export function hotcookSource(raw:unknown):{model:string;code:string}|null{
  if(typeof raw!=='string')return null;
  try{const u=new URL(raw),m=/^\/kitchen\/recipe\/hotcook\/(KN-[A-Z]{2}\d{2}[A-Z])\/(R\d{4,15})\/?$/.exec(u.pathname);return u.protocol==='https:'&&u.hostname==='cocoroplus.jp.sharp'&&!u.username&&!u.password&&!u.port&&m?{model:m[1],code:m[2]}:null;}catch{return null;}
@@ -12,7 +12,7 @@ export function hotcookSource(raw:unknown):{model:string;code:string}|null{
 export function mealImportUrl(raw:unknown):string{
  if(typeof raw!=='string'||raw.length>2048)throw new BadRequest(unsupported);
  let u:URL;try{u=new URL(raw);}catch{throw new BadRequest(unsupported);}
- const allowed=!!hotcookSource(raw)||(u.hostname==='www.kurashiru.com'&&/^\/recipes\/[0-9a-f-]{36}\/?$/i.test(u.pathname))||(['delishkitchen.tv','www.delishkitchen.tv'].includes(u.hostname)&&/^\/recipes\/\d{8,25}\/?$/.test(u.pathname));
+ const allowed=!!hotcookSource(raw)||(u.hostname==='cookpad.com'&&/^\/jp\/recipes\/\d{1,25}\/?$/.test(u.pathname))||(u.hostname==='www.kurashiru.com'&&/^\/recipes\/[0-9a-f-]{36}\/?$/i.test(u.pathname))||(['delishkitchen.tv','www.delishkitchen.tv'].includes(u.hostname)&&/^\/recipes\/\d{8,25}\/?$/.test(u.pathname));
  if(u.protocol!=='https:'||u.username||u.password||u.port||!allowed)throw new BadRequest(unsupported);
  u.search='';u.hash='';return u.href;
 }
@@ -32,7 +32,8 @@ export function parseImportedIngredient(raw:string){
  const original=text(raw,200),num='(\\d+(?:\\.\\d+)?(?:\\/\\d+)?)',unit='(g|kg|ml|mL|L|個|本|枚|袋|缶|丁|束|片|尾|匹|合|カップ)';
  const suffix=new RegExp('^(.+?)\\s*'+num+'\\s*'+unit+'$').exec(original),spoon=/^(.+?)\s*(大さじ|小さじ)\s*(\d+(?:\.\d+)?(?:\/\d+)?)$/.exec(original);
  const m=suffix||spoon;let quantity:number|null=null,name=original,units='';
- if(m&&!/(?:[\d/+.~〜–≈-]|約|およそ)$/.test(m[1].trim())){const amount=suffix?m[2]:m[3],parts=amount.split('/').map(Number),n=parts.length===2?parts[0]/parts[1]:parts[0];if(Number.isFinite(n)&&n>=0.0001&&n<=100000){quantity=Math.round(n*10000)/10000;name=m[1].trim();units=suffix?m[3]:m[2];}}
+ // Do not treat the trailing number of a range or comma-separated amount as the entire quantity.
+ if(m&&!/(?:[\d/+,、.・~〜–≈-]|約|およそ)$/.test(m[1].trim())){const amount=suffix?m[2]:m[3],parts=amount.split('/').map(Number),n=parts.length===2?parts[0]/parts[1]:parts[0];if(Number.isFinite(n)&&n>=0.0001&&n<=100000){quantity=Math.round(n*10000)/10000;name=m[1].trim();units=suffix?m[3]:m[2];}}
  const literal=quantity===null?mealLiteralAmount(original):null;
  return {name:(literal?.name||name).slice(0,100),quantity,unit:units,original,...(literal?{quantity_text:literal.quantity_text}:{})};
 }
