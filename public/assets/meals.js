@@ -68,7 +68,7 @@ function showRecipe(recipe){
  bind('editRecipe','click',()=>editor(recipe));bind('archiveRecipe','click',()=>{if(confirm('レシピを一覧から外しますか？ 保存済みの献立は残ります。'))action(async()=>{await api({action:'archive_recipe',id:recipe.id});data=await api(null,'?week='+week);recipes();say('レシピを一覧から外しました。');});});
 }
 function wishlist(){
- let pendingId=crypto.randomUUID();
+ let pendingId=crypto.randomUUID(),pendingKey=null;
  const wishRow=w=>{
   const recipe=data.recipes.find(r=>r.id===w.linked_recipe_id),name=w.recipe_name||recipe?.name,source=w.recipe_source_url||recipe?.source_url,model=hotcookModel(source);
   const options=data.recipes.slice();if(w.linked_recipe_id&&!options.some(r=>r.id===w.linked_recipe_id))options.push({id:w.linked_recipe_id,name:name||'紐づけ先のレシピ（非表示）',source_url:source});
@@ -85,7 +85,7 @@ function wishlist(){
   menu.addEventListener('toggle',()=>{if(menu.open)root.querySelectorAll('.meal-wish-actions').forEach(other=>{if(other!==menu)other.open=false;});});
   menu.addEventListener('keydown',e=>{if(e.key==='Escape'){menu.open=false;menu.querySelector('summary').focus();}});
  });
- bind('wishForm','submit',e=>{e.preventDefault();const fields=new FormData(e.target),name=fields.get('name');action(async()=>{await api({action:'wishlist_add',id:pendingId,name,is_main:fields.has('is_main')});dirty=false;data=await api(null,'?week='+week);wishlist();say('食べたいものに追加しました。');});});
+ bind('wishForm','submit',e=>{e.preventDefault();const fields=new FormData(e.target),name=fields.get('name'),key=JSON.stringify([name,fields.has('is_main')]);if(pendingKey!==null&&pendingKey!==key)pendingId=crypto.randomUUID();pendingKey=key;action(async()=>{await api({action:'wishlist_add',id:pendingId,name,is_main:fields.has('is_main')});dirty=false;data=await api(null,'?week='+week);wishlist();say('食べたいものに追加しました。');});});
  root.querySelectorAll('[data-wish-import]').forEach(b=>b.onclick=()=>importer(data.wishlist.find(w=>w.id===b.dataset.wishImport).source_url,b.dataset.wishImport));
  root.querySelectorAll('[data-wish-link]').forEach(f=>f.onsubmit=e=>{e.preventDefault();const w=data.wishlist.find(w=>w.id===f.dataset.wishLink),target=new FormData(f).get('recipe_id')||null;action(async()=>{await api({action:'wishlist_link',id:w.id,recipe_id:target,expected_recipe_id:w.recipe_id||null,expected_revision:w.recipe_link_revision||0});dirty=false;data=await api(null,'?week='+week);wishlist();say(target?'登録済みレシピに紐づけました。':'紐づけを解除しました。');});});
  root.querySelectorAll('[data-wish]').forEach(b=>b.onclick=()=>{if(!confirm('この食べたいものを却下しますか？レシピは残り、却下履歴から戻せます。'))return;action(async()=>{const w=data.wishlist.find(w=>w.id===b.dataset.wish);await api({action:'wish_reject',id:w.id,expected_revision:w.recipe_link_revision||0});data=await api(null,'?week='+week);wishlist();say('却下しました。レシピは残っています。');});});

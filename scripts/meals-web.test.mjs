@@ -1219,3 +1219,9 @@ test('Web main toggles recover from failed saves and importer forwards explicit 
 test('weekly main proposals cannot select registered desserts or other unchecked recipes',async()=>{
  const {ctx}=fixture();await call(ctx,{action:'save_recipe',recipe:{...recipe('dessert-candidate'),is_main:false,name:'クッキー'}});assert.equal((await call(ctx,proposalBody('no-main-proposal'))).response.status,400);await call(ctx,{action:'save_recipe',recipe:recipe()});const result=(await call(ctx,proposalBody('main-only-proposal'))).value.suggestion;assert(result.items.every(i=>i.recipe.id===recipe().id));
 });
+
+test('seven days with ten sides use one family-scoped recipe read, not 77 per-dish queries',async()=>{
+ const {ctx,meals}=fixture();const ids=[];for(let i=0;i<11;i++){const id='bounded-dish-'+String(i).padStart(3,'0');ids.push(id);await call(ctx,{action:'save_recipe',recipe:{...recipe(id),is_main:i===0,ingredients:[{name:'共通食材',quantity:1,unit:'g'}]}});}
+ const original=ctx.env.MEALS_DB.prepare;let reads=0;ctx.env.MEALS_DB.prepare=q=>{if(/^SELECT \* FROM recipes/.test(q))reads++;return original(q);};const items=Array.from({length:7},(_,i)=>({date:shiftTestDate('2026-10-05',i),recipe_id:ids[0],side_recipe_ids:ids.slice(1),servings:2}));function shiftTestDate(d,n){return new Date(Date.parse(d+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);}
+ const result=await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',items}});assert.equal(result.response.status,200);assert.equal(reads,1);assert(result.value.plan.items.every(i=>i.sides.length===10));assert.equal(mealShoppingNeeds(result.value.plan.items)[0].quantity,77);assert.equal(meals.sql.prepare('SELECT COUNT(*) n FROM weekly_plans').get().n,1);
+});
