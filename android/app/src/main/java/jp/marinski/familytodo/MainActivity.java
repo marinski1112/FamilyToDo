@@ -233,8 +233,11 @@ public final class MainActivity extends Activity {
         mealScreen=new MealScreen(this,new MealScreen.Host(){
             public String csrf(){return snapshot==null||showingCached?"":snapshot.optString("csrf");}
             public boolean active(){return tab.equals("meals")&&login==null&&!isFinishing()&&pageWeb==null;}
-            public TextView text(String value){return label(value);}
+            public TextView text(String value){TextView view=label(value);view.setPadding(dp(8),dp(6),dp(8),dp(6));return view;}
             public Button button(String value,Runnable action){return MainActivity.this.button(value,action);}
+            public CheckBox checkbox(String value){CheckBox box=new CheckBox(MainActivity.this);box.setText(value);styleCheckBox(box);return box;}
+            public void styleInput(EditText field){field.setTextSize(16);field.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_enabled},new int[]{}},new int[]{textColor(),mutedColor()}));field.setHintTextColor(mutedColor());field.setMinHeight(dp(44));field.setPadding(dp(10),dp(8),dp(10),dp(8));field.setBackground(shape(surfaceColor(),lineColor(),9));}
+            public void tab(Button button,boolean active){segment(button,active);button.setSelected(active);}
             public void web(String path){mealScreen.close();mealScreen=null;showWebPage(path);}
             public void login(){showLogin();}
             public void shoppingList(){openTodayChecklist("shopping");}
