@@ -1086,3 +1086,21 @@ test('Web Hot Cook model preference survives reload, is shared by search/proposa
  const blocked=await create('recipes',undefined,true),bf=blocked.document.querySelector('#publisherSearchForm');bf.elements.model.value='KN-HW24H';bf.elements.model.dispatchEvent(new blocked.Event('change',{bubbles:true}));blocked.confirm=()=>true;blocked.document.querySelector('#cancelDiscovery').click();await waitFor(()=>blocked.document.querySelector('#findRecipe'));blocked.document.querySelector('#findRecipe').click();assert.equal(blocked.document.querySelector('#publisherSearchForm').elements.model.value,'KN-HW24H');
  }finally{for(const w of windows)await w.happyDOM.close();}
 });
+
+test('wishlist shows the linked recipe identity and HotCook model with one compact disclosure',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx,meals}=fixture();
+ const source='https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4765';
+ await call(ctx,{action:'save_recipe',recipe:{...recipe('hotcook-linked'),name:'架空 <料理>',source_url:source},add_to_wishlist:true});
+ const wish=(await call(ctx,null)).value.wishlist[0];meals.sql.prepare('UPDATE meal_wishlist SET source_url=? WHERE id=?').run('https://example.invalid/different-source',wish.id);
+ const read=(await call(ctx,null)).value;assert.equal(read.wishlist[0].recipe_source_url,source);
+ const w=new Window({url:'https://fixture.invalid/app/meals.php?view=wishlist'});let writes=0;
+ try{
+  w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+  w.fetch=async(url,options={})=>{if(options.body)writes++;const r=await mealApi(new Request(new URL(url,w.location.href),options),ctx);if(!options.body){const data=await r.json();if(data.recipes)data.recipes=[];return Response.json(data);}return r;};
+  w.eval(fs.readFileSync('public/assets/meals.js','utf8'));const d=w.document;await waitFor(()=>d.querySelector('.meal-wish-actions'));
+  assert(d.querySelector('.meal-wish-recipe').textContent.includes('架空 <料理>'));assert(d.querySelector('.meal-wish-row').textContent.includes('ホットクック · KN-HW24H'));assert.equal(d.querySelector('.meal-wish-recipe').children.length,0,'recipe name is escaped');
+  const menu=d.querySelector('.meal-wish-actions');assert.equal(menu.open,false);assert.equal(d.querySelectorAll('.meal-wish-row>button,.meal-wish-row>a').length,0);assert.equal(d.querySelectorAll('.meal-wish-row summary').length,1);assert(menu.querySelector('a[href*="id=hotcook-linked"]'));assert.equal(menu.querySelector('select').value,'hotcook-linked','a linked recipe outside the bounded list stays selected');
+  menu.open=true;menu.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(menu.open,false);assert.equal(d.activeElement,menu.querySelector('summary'));assert.equal(writes,0,'opening/closing and reading do not change family data');
+  await call(ctx,{action:'archive_recipe',id:'hotcook-linked'});w.eval(fs.readFileSync('public/assets/meals.js','utf8'));await waitFor(()=>d.querySelector('.meal-wish-recipe')?.textContent.includes('非表示'));assert.equal(d.querySelector('.meal-wish-actions a[href*="view=recipe"]'),null);assert.equal(d.querySelector('.meal-wish-actions select').value,'hotcook-linked');
+ }finally{await w.happyDOM.close();}
+});

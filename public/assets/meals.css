@@ -56,3 +56,16 @@
 .meal-app .meal-toolbar h2{margin:0}
 .meal-app .meal-ingredient button{min-width:44px;min-height:44px}
 @media(max-width:520px){.meal-app .actions :is(button,.btn),.meal-app .meal-row>:is(button,.btn),.meal-app form>button,.meal-app .meal-toolbar button{font-size:13px;padding:6px 9px}}
+
+/* Keep each wish compact; expose recipe/link/delete actions from one disclosure. */
+.meal-app .meal-wish-row{align-items:flex-start}
+.meal-wish-recipe{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.meal-wish-actions{position:relative;flex:0 0 auto}
+.meal-wish-actions>summary{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:44px;height:44px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);font-size:24px;cursor:pointer;list-style:none}
+.meal-wish-actions>summary::-webkit-details-marker{display:none}
+.meal-wish-actions>summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.meal-wish-actions[open]>summary{background:var(--primary-soft)}
+.meal-wish-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:20;box-sizing:border-box;width:min(280px,calc(100vw - 56px));display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);box-shadow:0 6px 20px #0002}
+.meal-app .meal-wish-menu form{gap:8px}
+.meal-wish-menu select{width:100%;box-sizing:border-box}
+.meal-wish-menu .btn{justify-self:start}

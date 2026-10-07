@@ -30,11 +30,11 @@ export async function saveMealRecipe(db:D1Database,familyId:number,memberId:numb
 }
 
 export async function readMealWishlist(db:D1Database,familyId:number):Promise<Row[]>{
- const rows=(await db.prepare('SELECT w.id,w.name,w.source_url,w.recipe_id,w.recipe_link_set,w.recipe_link_revision,r.name recipe_name,r.archived recipe_archived FROM meal_wishlist w LEFT JOIN recipes r ON r.family_id=w.family_id AND r.id=w.recipe_id WHERE w.family_id=? ORDER BY w.created_at DESC,w.id LIMIT 200').bind(familyId).all<Row>()).results;
+ const rows=(await db.prepare('SELECT w.id,w.name,w.source_url,w.recipe_id,w.recipe_link_set,w.recipe_link_revision,r.name recipe_name,r.source_url recipe_source_url,r.archived recipe_archived FROM meal_wishlist w LEFT JOIN recipes r ON r.family_id=w.family_id AND r.id=w.recipe_id WHERE w.family_id=? ORDER BY w.created_at DESC,w.id LIMIT 200').bind(familyId).all<Row>()).results;
  // #1191 generated IDs carry an exact identity even before the column existed.
  const recipes=await mealRecipeSummaries(db,familyId),legacy=new Map<string,Row>();
  await Promise.all(recipes.map(async r=>legacy.set('recipe-'+await mealHash({recipe_id:r.id}),r)));
- return rows.map(w=>{const known=w.recipe_link_set?undefined:legacy.get(w.id);return {...w,linked_recipe_id:w.recipe_id||known?.id||null,recipe_name:w.recipe_name||known?.name||null,recipe_available:w.recipe_id?!!w.recipe_name&&!w.recipe_archived:!!known};});
+ return rows.map(w=>{const known=w.recipe_link_set?undefined:legacy.get(w.id);return {...w,linked_recipe_id:w.recipe_id||known?.id||null,recipe_name:w.recipe_name||known?.name||null,recipe_source_url:w.recipe_source_url||known?.source_url||null,recipe_available:w.recipe_id?!!w.recipe_name&&!w.recipe_archived:!!known};});
 }
 export async function readMealPlan(db:D1Database,familyId:number,week:string):Promise<Row|null>{const r=await db.prepare('SELECT * FROM weekly_plans WHERE family_id=? AND week_start=?').bind(familyId,mealWeek(week)).first<Row>();return r?{week_start:r.week_start,revision:r.revision,status:r.status,items:JSON.parse(r.items_json)}:null;}
 export async function saveMealPlan(db:D1Database,familyId:number,memberId:number,raw:any):Promise<Row>{
