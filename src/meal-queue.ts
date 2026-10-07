@@ -60,7 +60,7 @@ export async function completeQueueCooking(ctx:AppContext,b:any){
  const final=await queueRow(ctx,r.id);if(final.status!=='COOKED')throw changed();return {deduplicated:final.completion_token!==token,consumed:JSON.parse(final.inventory_result_json||'[]')};
 }
 export async function queueShoppingPreview(ctx:AppContext){
- const items=(await readMealQueue(ctx)).items.filter(r=>!r.shopping_job_id),inventory=await readMealInventory(ctx.env.MEALS_DB!,family(ctx));
+ const rows=await ctx.env.MEALS_DB!.prepare("SELECT * FROM meal_cooking_queue WHERE family_id=? AND status='ACTIVE' AND shopping_job_id IS NULL ORDER BY created_at,id LIMIT 100").bind(family(ctx)).all<Row>();const items=rows.results.map(r=>decode(r,true)),inventory=await readMealInventory(ctx.env.MEALS_DB!,family(ctx));
  const recipes=items.filter(r=>r.recipe).map(r=>({date:inventoryToday(ctx),recipe:r.recipe,servings:r.servings})),vague=items.filter(r=>!r.recipe).map(r=>({name:r.shopping_text,quantity:null,unit:'' as const,quantity_text:'必要なら購入'}));
  const needs=inventoryNeeds(mealShoppingNeeds(recipes),inventory.lots,inventoryToday(ctx));for(const n of vague)if(!needs.some(x=>x.name===n.name&&x.quantity===null&&x.quantity_text===n.quantity_text))needs.push({...n,required_quantity:null,available_quantity:null});
  if(needs.length>100)throw new BadRequest('食材が100件を超えています。料理を分けてください。');const entries=items.map(r=>({id:r.id,revision:r.revision})),contents={entries,needs,inventory_revision:inventory.revision};return {...contents,preview_hash:await mealHash(contents)};
