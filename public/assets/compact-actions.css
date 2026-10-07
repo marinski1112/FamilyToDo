@@ -1,0 +1,17 @@
+/* Shared action density. Keep date cells, check rows, navigation and custom
+ * gesture surfaces under their own sizing rules. Never clip button labels. */
+.wrap :is(.btn,button:not([class])):not(.fab),
+.wrap .actions :is(.btn,button):not(.fab){
+ box-sizing:border-box;min-height:36px;padding:6px 10px;border-radius:8px;
+ font-size:14px;font-weight:650;line-height:1.25;max-width:100%;
+ white-space:normal;word-break:keep-all;overflow-wrap:anywhere;
+}
+.wrap :is(.btn.small,button.small){min-height:32px;padding:5px 8px;font-size:13px}
+.wrap .actions{gap:6px 8px}
+.wrap .actions :is(.btn,button){flex:0 0 auto}
+.wrap :is(.btn,button):focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+@media(max-width:520px){
+ .wrap .actions :is(.btn,button):not(.fab){font-size:13px;padding:6px 9px}
+ .wrap .member-row .actions{width:auto;justify-content:flex-end}
+ .wrap .member-row .actions .btn{flex:0 0 auto}
+}
