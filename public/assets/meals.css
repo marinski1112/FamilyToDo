@@ -37,3 +37,22 @@
 }
 
 .meal-app form hr{width:100%;margin:4px 0;border:0;border-top:1px solid var(--line)}
+
+/* Compact actions: wrap whole buttons, rather than squeezing each label. */
+.meal-app .actions{gap:6px 8px}
+.meal-app .actions :is(button,.btn),.meal-app .meal-row>:is(button,.btn),.meal-app form>button,.meal-app .meal-toolbar button{
+ min-height:36px;padding:6px 10px;border-radius:8px;font-size:14px;font-weight:650;line-height:1.25;
+ flex:0 0 auto;max-width:100%;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;
+}
+.meal-app form>button{justify-self:start;width:auto}
+.meal-app .meal-tabs{gap:6px}
+.meal-app .meal-tabs a{min-height:36px;padding:6px 9px;border-radius:9px;font-size:13px;white-space:nowrap}
+.meal-app .meal-list{gap:6px}
+.meal-app .meal-list .meal-row{padding:8px 0;gap:8px}
+.meal-app .meal-row>div{flex:1 1 130px}
+.meal-app .meal-row h3{font-size:16px;line-height:1.4}
+.meal-app .meal-row p{margin:3px 0}
+.meal-app .meal-toolbar{gap:8px;flex-wrap:wrap}
+.meal-app .meal-toolbar h2{margin:0}
+.meal-app .meal-ingredient button{min-width:44px;min-height:44px}
+@media(max-width:520px){.meal-app .actions :is(button,.btn),.meal-app .meal-row>:is(button,.btn),.meal-app form>button,.meal-app .meal-toolbar button{font-size:13px;padding:6px 9px}}
