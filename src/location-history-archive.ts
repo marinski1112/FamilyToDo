@@ -103,7 +103,7 @@ async function archiveOneDay(db:D1Database,group:ArchiveGroup):Promise<boolean>{
   const route=simplifyRoute(points);
   const statements=[] as D1PreparedStatement[];
   for(const stay of stays){
-    const anchor=anchors.get(stay.from);
+    const anchor=stay.anchor||anchors.get(stay.from);
     statements.push(db.prepare(`
       INSERT OR IGNORE INTO location_history_stays(
         family_id,member_id,local_date,started_at,ended_at,duration_minutes,

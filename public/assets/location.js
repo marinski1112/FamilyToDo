@@ -553,6 +553,9 @@
   };
 
   const sheet=root.querySelector('[data-location-family-sheet]');
+  const tools=root.querySelector('.location-tools');
+  const syncTools=()=>{if(listEl)listEl.hidden=Boolean(tools?.open);if(statusEl)statusEl.hidden=Boolean(tools?.open);};
+  tools?.addEventListener('toggle',syncTools);syncTools();
   root.addEventListener('family-location-members',event=>{
     const members=Array.isArray(event.detail?.members)?event.detail.members:[];
     currentSharedMembers=new Set(members.filter(member=>member?.sharingEnabled).map(member=>Number(member.memberId)));
