@@ -604,6 +604,10 @@ public final class UiParityInstrumentation extends Instrumentation {
         return new JSONObject().put("ok",true);
     }
     private void clickActiveDialog(String text)throws Exception {
+        if(text.equals("移動")||text.equals("入力に戻る")){
+            AtomicReference<android.app.AlertDialog> pending=new AtomicReference<>();onUi(()->{try{Object screen=value("mealScreen");if(screen!=null){java.lang.reflect.Field field=MealScreen.class.getDeclaredField("leaveDialog");field.setAccessible(true);pending.set((android.app.AlertDialog)field.get(screen));}}catch(Exception e){throw new RuntimeException(e);}});
+            android.app.AlertDialog dialog=pending.get();if(dialog!=null){onUi(()->{check(dialog.isShowing(),"meal discard confirmation is visible");android.widget.Button button=dialog.getButton(text.equals("移動")?android.app.AlertDialog.BUTTON_POSITIVE:android.app.AlertDialog.BUTTON_NEGATIVE);check(text.contentEquals(button.getText()),"meal discard action label");button.performClick();});settle();return;}
+        }
         for(int i=0;i<100;i++){
             android.view.accessibility.AccessibilityNodeInfo window=getUiAutomation().getRootInActiveWindow();
             if(window!=null){for(android.view.accessibility.AccessibilityNodeInfo node:window.findAccessibilityNodeInfosByText(text)){
