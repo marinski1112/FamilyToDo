@@ -64,3 +64,7 @@ API #1148はmain 82b266e17c3d5f7de4847a90c99ddf7a63b33865へマージ済み、�
 献立の残件はAI・公開サイト検索・URL/動画取り込み・レシート・離乳食のネイティブ移植、バックグラウンドタイマー通知、ネイティブCooking Live、実機の認証・マイク・同期確認。現時点では対応するWebへの入口を利用する。その他Android機能の実機確認、固定署名更新・オフライン編集キューも継続。
 
 2026-10-06 follow-up: native past-day summary uses the production Web day-view contract from #1193/#1194. Yesterday onward remains checklist; the server determines the family-timezone calendar boundary. Earlier dates show bounded native read-only journal cards without overview generation. Retry, date navigation and stale-request guards are included. Photos/full detail remain authenticated in-app Web links. Calendar holiday labels now share the date row; the always-reserved 13dp lane and the corresponding multi-day band offset are removed. API30/35 synthetic screenshots and checks must pass on exact feature head before numbered APK publication. Real Android login/IME/device checks remain unverified; #1143 stays draft.
+
+## 主菜チェック・複数副菜 (2026-10-08)
+
+レシピ/希望にis_main、希望チェックのrevision更新と失敗時の復帰。日付別献立は副菜など0〜10品、保存/再表示で全品を保持。旧APKの1副菜エディタは新しい複数副菜を減らすため、編集はこの変更後のAPKを使う。Web/APIの同機能PRが本番公開済みであることを配布前に確認する。取り込みは引き続きWeb、そこで主菜指定も可能。既存の未分類データを名前から自動判定しない。実認証native確認は未実施で、CIのmain role/multi-side screenshotsは合成データのみ。
