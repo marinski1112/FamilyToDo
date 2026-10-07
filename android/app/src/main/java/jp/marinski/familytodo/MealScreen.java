@@ -169,7 +169,7 @@ final class MealScreen {
             field.unit=input(row,"単位",initial==null?"g":initial.optString("unit"),false);
             field.custom=host.checkbox("自由入力（例：お好みで（1〜2つまみ））");row.addView(field.custom);
             field.custom.setOnCheckedChangeListener((b,c)->field.unit.setEnabled(!c));field.custom.setChecked(initial!=null&&initial.isNull("quantity"));
-            row.addView(host.button("材料を削除",()->{rows.removeView(row);fields.remove(field);dirty=true;}),compactAction());
+            row.addView(host.button("材料を削除",()->{rows.removeView(row);fields.remove(field);}),compactAction());
         };
         JSONArray original=array(recipe,"ingredients");if(original.length()==0)add.accept(null);else for(int i=0;i<original.length();i++)add.accept(original.optJSONObject(i));
         button("＋ 材料を追加",()->add.accept(null));
