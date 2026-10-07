@@ -29,10 +29,11 @@ export async function saveMealRecipe(db:D1Database,familyId:number,memberId:numb
  if(!saved||saved.payload_hash!==hash)throw new BadRequest('レシピが更新されています。開き直して確認してください。');return {...recipeFrom(saved),source:await recipeSource(db,familyId,r.id,r.source_url)};
 }
 
-export async function readMealWishlist(db:D1Database,familyId:number):Promise<Row[]>{
- const rows=(await db.prepare("SELECT w.id,w.name,w.source_url,w.recipe_id,w.recipe_link_set,w.recipe_link_revision,w.status,r.name recipe_name,r.source_url recipe_source_url,r.archived recipe_archived FROM meal_wishlist w LEFT JOIN recipes r ON r.family_id=w.family_id AND r.id=w.recipe_id WHERE w.family_id=? AND w.status='PENDING' ORDER BY w.created_at DESC,w.id LIMIT 200").bind(familyId).all<Row>()).results;
+export async function readMealWishlist(db:D1Database,familyId:number,id?:string):Promise<Row[]>{
+ const rows=(await db.prepare("SELECT w.id,w.name,w.source_url,w.recipe_id,w.recipe_link_set,w.recipe_link_revision,w.status,r.name recipe_name,r.source_url recipe_source_url,r.archived recipe_archived FROM meal_wishlist w LEFT JOIN recipes r ON r.family_id=w.family_id AND r.id=w.recipe_id WHERE w.family_id=? AND w.status='PENDING'"+(id?" AND w.id=?":"")+" ORDER BY w.created_at DESC,w.id LIMIT 200").bind(familyId,...(id?[mealId(id)]:[])).all<Row>()).results;
  // #1191 generated IDs carry an exact identity even before the column existed.
- const recipes=await mealRecipeSummaries(db,familyId),legacy=new Map<string,Row>();
+ const needsLegacy=rows.some(w=>!w.recipe_link_set&&!w.recipe_id&&/^recipe-[a-f0-9]{64}$/.test(w.id));
+ const recipes=needsLegacy?await mealRecipeSummaries(db,familyId):[],legacy=new Map<string,Row>();
  await Promise.all(recipes.map(async r=>legacy.set('recipe-'+await mealHash({recipe_id:r.id}),r)));
  return rows.map(w=>{const known=w.recipe_link_set?undefined:legacy.get(w.id);return {...w,linked_recipe_id:w.recipe_id||known?.id||null,recipe_name:w.recipe_name||known?.name||null,recipe_source_url:w.recipe_source_url||known?.source_url||null,recipe_available:w.recipe_id?!!w.recipe_name&&!w.recipe_archived:!!known};});
 }

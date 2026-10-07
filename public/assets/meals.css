@@ -73,3 +73,6 @@
 .meal-queue-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}.meal-queue-actions .meal-wish-actions{flex-shrink:0}.meal-row>div:first-child{min-width:0}.meal-queue-actions>.btn{white-space:nowrap}
 
 .meal-app .meal-row>.meal-queue-actions{flex:0 0 auto;max-width:100%}
+
+/* Primary adoption action keeps a solid, readable treatment in dark mode. */
+:root[data-theme="dark"] .meal-app [data-wish-adopt]{background:#4f46e5;color:#fff!important;border:1px solid #818cf8;box-shadow:none}
