@@ -32,7 +32,7 @@ const recipeLink=id=>`/app/meals.php?view=recipe&id=${encodeURIComponent(id)}`;
 const mealName=item=>item?esc([item.recipe.name,...(item.sides||[]).map(r=>r.name)].join(' + ')):'まだ決まっていません';
 const itemFor=date=>data.plan?.items.find(i=>i.date===date);
 function queueRoute(){view='today';url.search='';window.history.replaceState(null,'',url.pathname);document.querySelectorAll('.meal-tabs a').forEach(a=>{if(new URL(a.href).searchParams.get('view'))a.removeAttribute('aria-current');else a.setAttribute('aria-current','page');});}
-const queueUi=window.FamilyTodoMealQueue.create({onShow:queueRoute,root,paint,api,action,say,esc,getData:()=>data,reload:async()=>{data=await api(null,'?week='+week);},leaveForm,cookRecipe:r=>action(async()=>cooking((await api(null,'?view=queue_item&id='+encodeURIComponent(r.id))).item)),hotcookModel});
+const queueUi=window.FamilyTodoMealQueue.create({onShow:queueRoute,timeZone:boot.timeZone,root,paint,api,action,say,esc,getData:()=>data,reload:async()=>{data=await api(null,'?week='+week);},leaveForm,cookRecipe:r=>action(async()=>cooking((await api(null,'?view=queue_item&id='+encodeURIComponent(r.id))).item)),hotcookModel});
 function today(){queueUi.show();}
 
 function recipes(){
