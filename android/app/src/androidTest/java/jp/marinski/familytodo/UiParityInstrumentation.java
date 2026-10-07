@@ -506,7 +506,9 @@ public final class UiParityInstrumentation extends Instrumentation {
     private JSONObject mealRecipe,mealPlan;
     private String firstWishId,firstRecipeId;
     private boolean mealCooked;
-    private JSONArray mealLots=new JSONArray();
+    private JSONArray mealLots=new JSONArray(),mealWishes=new JSONArray();
+    private int wishLinkAttempts;
+    private boolean wishRecipeOutsideList;
     private int inventoryAdds,inventoryAdjusts;
     private String inventoryFirstId;
     private JSONObject mealResponse(String path,JSONObject body)throws Exception {
@@ -518,6 +520,11 @@ public final class UiParityInstrumentation extends Instrumentation {
             if("wishlist_add".equals(body.optString("action"))){
                 wishAttempts++;if(wishAttempts==1){firstWishId=body.optString("id");throw new IllegalStateException("synthetic meal failure");}
                 check(firstWishId.equals(body.optString("id")),"wish retry keeps operation ID");
+            }
+            if("wishlist_link".equals(body.optString("action"))){
+                wishLinkAttempts++;if(wishLinkAttempts==1)throw new IllegalStateException("synthetic link failure");
+                JSONObject wish=mealWishes.getJSONObject(0);check(body.optInt("expected_revision")==wish.optInt("recipe_link_revision"),"wish link submits revision");check(java.util.Objects.equals(body.opt("expected_recipe_id"),wish.opt("recipe_id")),"wish link submits stored identity");
+                wish.put("recipe_id",body.opt("recipe_id")).put("linked_recipe_id",body.opt("recipe_id")).put("recipe_link_revision",wish.optInt("recipe_link_revision")+1).put("recipe_available",!body.isNull("recipe_id"));
             }
             if("save_recipe".equals(body.optString("action"))){
                 recipeAttempts++;if(recipeAttempts==1){firstRecipeId=body.getJSONObject("recipe").optString("id");throw new IllegalStateException("synthetic recipe failure");}
@@ -531,7 +538,7 @@ public final class UiParityInstrumentation extends Instrumentation {
         if(path.contains("view=inbox"))return new JSONObject().put("ok",true).put("line_receipts",new JSONArray()).put("inbox",new JSONArray().put(new JSONObject().put("id","00000000-0000-4000-8000-000000000003").put("kind","RECIPE_URL").put("content","https://example.com/recipe")));
         if(path.contains("view=shopping_preview"))return new JSONObject().put("ok",true).put("week_start",MealScreen.monday(MealScreen.today())).put("revision","synthetic-plan").put("preview_hash","synthetic-preview").put("needs",new JSONArray().put(new JSONObject().put("name","塩").put("quantity",JSONObject.NULL).put("quantity_text","お好みで").put("unit","")));
         if(path.contains("view=cooking_preview"))return new JSONObject().put("ok",true).put("preview",new JSONObject().put("date",MealScreen.today()).put("revision","synthetic-plan").put("preview_hash","synthetic-cooking").put("needs",mealRecipe.getJSONArray("ingredients")).put("allocations",new JSONArray()));
-        return new JSONObject().put("ok",true).put("recipes",new JSONArray().put(mealRecipe)).put("plan",mealPlan).put("wishlist",new JSONArray()).put("cooked",mealCooked?new JSONArray().put(new JSONObject().put("meal_date",MealScreen.today()).put("plan_revision","synthetic-plan")):new JSONArray());
+        return new JSONObject().put("ok",true).put("recipes",wishRecipeOutsideList?new JSONArray():new JSONArray().put(mealRecipe)).put("plan",mealPlan).put("wishlist",mealWishes).put("cooked",mealCooked?new JSONArray().put(new JSONObject().put("meal_date",MealScreen.today()).put("plan_revision","synthetic-plan")):new JSONArray());
     }
     private void testMeals()throws Exception {
         String id="00000000-0000-4000-8000-000000000001";
@@ -560,9 +567,23 @@ public final class UiParityInstrumentation extends Instrumentation {
         clickText("献立");clickText("買う食材を確認");waitText("買い物リストに追加");before=mealWrites;clickText("買い物リストに追加");check(mealWrites==before,"shopping without explicit selection cannot write");
         onUi(()->findText(root(),"塩：お好みで").performClick());clickText("買い物リストに追加");waitText("買い物リストに追加しました。");check(lastMealWrite.getJSONArray("selected").getInt(0)==0,"shopping only sends selected ingredient indices");
         testInventoryAndMealNavigation();
+        testWishlistLinks();
         clickText("レシピ");before=mealWrites;onUi(()->ApiClient.setMutationsEnabled(false));clickText("＋ レシピを登録");check(hasText("通信の確認後に編集できます。ホームを更新してください。"),"offline meal editing is blocked");check(mealWrites==before,"read-only meals cannot mutate");
         onUi(()->ApiClient.setMutationsEnabled(true));navigate("ホーム");
         onUi(()->{try{check(value("mealScreen")==null,"leaving meals releases data and timer");}catch(Exception e){throw new RuntimeException(e);}});
+    }
+    private void chooseWishAction(int id)throws Exception {
+        clickDescription("架空の希望カレーの操作");onUi(()->{try{Object screen=value("mealScreen");java.lang.reflect.Field menu=MealScreen.class.getDeclaredField("wishMenu");menu.setAccessible(true);android.widget.PopupMenu popup=(android.widget.PopupMenu)menu.get(screen);popup.getMenu().performIdentifierAction(id,0);popup.dismiss();}catch(Exception e){throw new RuntimeException(e);}});settle();
+    }
+    private void testWishlistLinks()throws Exception {
+        String source="https://cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4765";
+        check("KN-HW24H".equals(MealScreen.hotcookModel(source)),"native HotCook model accepts official recipe source");check(MealScreen.hotcookModel("https://evil.example/kitchen/recipe/hotcook/KN-HW24H/R4765").isEmpty(),"HotCook label rejects unrelated hosts");check(MealScreen.hotcookModel("https://user@cocoroplus.jp.sharp/kitchen/recipe/hotcook/KN-HW24H/R4765").isEmpty(),"HotCook label rejects credentials");
+        mealWishes.put(new JSONObject().put("id","00000000-0000-4000-8000-000000000009").put("name","架空の希望カレー").put("recipe_id",mealRecipe.getString("id")).put("linked_recipe_id",mealRecipe.getString("id")).put("recipe_name","架空のホットクックレシピ").put("recipe_source_url",source).put("source_url","https://example.com/unrelated").put("recipe_available",true).put("recipe_link_revision",3));wishRecipeOutsideList=true;
+        clickText("食べたい");clickText("今日");clickText("更新");waitText("料理を始める");clickText("食べたい");check(hasText("📖 架空のホットクックレシピ")&&hasText("ホットクック · KN-HW24H"),"wishlist identifies linked recipe and source model outside recipe list");onUi(()->{View icon=findDescription(root(),"架空の希望カレーの操作");check(icon.getWidth()==Math.round(44*activity.getResources().getDisplayMetrics().density),"wish action is compact 44dp icon");});screenshot("meals-wishlist-links");
+        int before=mealWrites;chooseWishAction(1);waitText("レシピを編集");check(mealWrites==before,"opening linked recipe performs no mutation");clickText("一覧に戻る");
+        chooseWishAction(2);onUi(()->{android.widget.Spinner spinner=(android.widget.Spinner)findDescription(root(),"紐づけ先のレシピ");check(spinner.getSelectedItemPosition()==1,"linked recipe outside bounded list stays selected");spinner.setSelection(0);});screenshot("meals-wishlist-link-editor");onUi(()->{findText(root(),"紐づけを保存").performClick();findText(root(),"紐づけを保存").performClick();});waitText("synthetic link failure");check(wishLinkAttempts==1,"wish link double submission is blocked");onUi(()->check(((android.widget.Spinner)findDescription(root(),"紐づけ先のレシピ")).getSelectedItemPosition()==0,"failed link retains explicit selection"));clickText("紐づけを保存");waitText("食べたいものに追加");check(lastMealWrite.isNull("recipe_id")&&wishLinkAttempts==2,"explicit unlink is retryable and sends null");
+        onUi(()->ApiClient.setMutationsEnabled(false));before=mealWrites;chooseWishAction(2);check(hasText("通信の確認後に編集できます。ホームを更新してください。")&&mealWrites==before,"read-only wish link is blocked");onUi(()->ApiClient.setMutationsEnabled(true));
+        mealWishes.getJSONObject(0).put("linked_recipe_id",mealRecipe.getString("id")).put("recipe_id",mealRecipe.getString("id")).put("recipe_available",false);clickText("今日");clickText("更新");waitText("料理を始める");clickText("食べたい");check(hasText("📖 架空のホットクックレシピ（非表示）"),"archived recipe keeps wish identity");clickDescription("架空の希望カレーの操作");onUi(()->{try{Object screen=value("mealScreen");java.lang.reflect.Field menu=MealScreen.class.getDeclaredField("wishMenu");menu.setAccessible(true);android.widget.PopupMenu popup=(android.widget.PopupMenu)menu.get(screen);check(popup.getMenu().findItem(1)==null,"archived recipe cannot be opened from menu");popup.dismiss();}catch(Exception e){throw new RuntimeException(e);}});mealWishes=new JSONArray();wishRecipeOutsideList=false;clickText("レシピ");
     }
     private JSONObject inventoryResponse(JSONObject body)throws Exception {
         String kind=body.optString("action");
@@ -733,9 +754,10 @@ public final class UiParityInstrumentation extends Instrumentation {
         onUi(()->{try{initial.set((YearMonth)value("month"));field("selectedDay",initial.get().atEndOfMonth());}catch(Exception e){throw new RuntimeException(e);}});
         swipePage(0.80f,0.20f,12,12);
         onUi(()->{try{check(value("month").equals(initial.get().plusMonths(1)),screen+" left swipe advances month");
+            if(screen.equals("calendar"))check(((TextView)findDescription(root(),"カレンダーの年月を指定")).getText().toString().equals(initial.get().plusMonths(1).getYear()+"年 "+initial.get().plusMonths(1).getMonthValue()+"月 ⌄"),"calendar visible month label follows swipe");
             LocalDate day=(LocalDate)value("selectedDay");check(day.getDayOfMonth()==(screen.equals("calendar")?1:Math.min(initial.get().lengthOfMonth(),initial.get().plusMonths(1).lengthOfMonth())),screen+" month boundary date valid");}catch(Exception e){throw new RuntimeException(e);}});
         swipePage(0.20f,0.80f,12,12);
-        onUi(()->{try{check(value("month").equals(initial.get()),screen+" right swipe returns month");}catch(Exception e){throw new RuntimeException(e);}});
+        onUi(()->{try{check(value("month").equals(initial.get()),screen+" right swipe returns month");if(screen.equals("calendar"))check(((TextView)findDescription(root(),"カレンダーの年月を指定")).getText().toString().equals(initial.get().getYear()+"年 "+initial.get().getMonthValue()+"月 ⌄"),"calendar visible month label follows return swipe");}catch(Exception e){throw new RuntimeException(e);}});
         swipePage(0.50f,0.54f,12,12);
         swipePage(0.50f,0.50f,12,100);
         onUi(()->{try{check(value("month").equals(initial.get()),screen+" short and vertical gestures keep month");field("selectedDay",LocalDate.now(java.time.ZoneId.of("Asia/Tokyo")));invoke("render");((android.widget.ScrollView)value("pageScroll")).scrollTo(0,0);}catch(Exception e){throw new RuntimeException(e);}});settle();
