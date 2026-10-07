@@ -71,15 +71,15 @@ export async function suggestMealWeek(ctx:AppContext,raw:any):Promise<Suggestion
   (async()=>db.prepare("SELECT DISTINCT json_extract(recipe_json,'$.id') recipe_id FROM meal_cooking_queue WHERE family_id=? AND status='COOKED' AND completed_at>=? AND completed_at<? AND recipe_json IS NOT NULL LIMIT 200").bind(familyId,recentRange.start,recentRange.endExclusive).all<{recipe_id:string}>())()
  ]);
  if(purpose&&mains.some(i=>!recipes.some(r=>r.id===i.recipe_id)))throw new BadRequest('この家族の主菜を選択してください。');
- let candidates=rankMealCandidates(purpose?[]:recipes,wishlist.results.map(w=>w.name),new Set([...cooked.results,...queueCooked.results].map(c=>c.recipe_id)),maxMinutes,preferHotcook);
- if(!external&&!candidates.length)throw new BadRequest('この時間内の登録レシピがありません。時間を広げるかレシピを登録してください。');
+ let candidates=rankMealCandidates(purpose?[]:recipes.filter(r=>r.is_main),wishlist.results.map(w=>w.name),new Set([...cooked.results,...queueCooked.results].map(c=>c.recipe_id)),maxMinutes,preferHotcook);
+ if(!external&&!candidates.length)throw new BadRequest('この時間内の主菜レシピがありません。レシピの「主菜」をチェックするか、時間を広げてください。');
  const now=new Date().toISOString(),day=now.slice(0,10);
  // One atomic insert owns this request. Cap all proposals, including rule-only ones.
  const claim=await db.prepare("INSERT OR IGNORE INTO meal_weekly_suggestions(family_id,id,payload_hash,status,created_by,created_at) SELECT ?,?,?,'RUNNING',?,? WHERE (SELECT COUNT(*) FROM meal_weekly_suggestions WHERE family_id=? AND created_at>=?)<20")
  .bind(familyId,id,hash,m.id,now,familyId,day).run();
  if(!claim.meta.changes){const row=await db.prepare('SELECT payload_hash,status,result_json FROM meal_weekly_suggestions WHERE family_id=? AND id=?').bind(familyId,id).first();if(row)return reviewedRecipes(db,familyId,cached(row,hash));throw new BadRequest('今日の新しい提案は20回までです。手入力で献立を編集できます。');}
  let externalInfo:Suggestion['external'];
- if(external){try{const fetched=await externalCandidates(ctx,external,id,recipes);externalInfo=fetched.info;candidates=rankMealCandidates([...(purpose?[]:recipes),...fetched.recipes],wishlist.results.map(w=>w.name),new Set([...cooked.results,...queueCooked.results].map(c=>c.recipe_id)),maxMinutes,preferHotcook);}catch{externalInfo={publisher:external.publisher,found:0,usable:0,failed:1,...(external.publisher==='HOTCOOK'?{model:external.reference_model,model_confirmed:!!external.model}:{})};}}
+ if(external){try{const fetched=await externalCandidates(ctx,external,id,recipes);externalInfo=fetched.info;candidates=rankMealCandidates([...(purpose?[]:recipes.filter(r=>r.is_main)),...fetched.recipes],wishlist.results.map(w=>w.name),new Set([...cooked.results,...queueCooked.results].map(c=>c.recipe_id)),maxMinutes,preferHotcook);}catch{externalInfo={publisher:external.publisher,found:0,usable:0,failed:1,...(external.publisher==='HOTCOOK'?{model:external.reference_model,model_confirmed:!!external.model}:{})};}}
  if(!candidates.length){const error='条件に合うレシピを取得できませんでした。検索語・時間を変えるか、レシピ画面から取り込んでください。';await db.prepare("UPDATE meal_weekly_suggestions SET status='READY',result_json=? WHERE family_id=? AND id=? AND payload_hash=? AND status='RUNNING'").bind(JSON.stringify({error}),familyId,id,hash).run();throw new BadRequest(error);}
  if(preferHotcook&&candidates.filter(c=>c.hotcook).length>=5)candidates=candidates.filter(c=>c.hotcook);
  let selected=Array.from({length:5},(_,i)=>candidates[i%candidates.length].id),mode:'AI'|'RULES'='RULES',reason='AI_UNAVAILABLE';

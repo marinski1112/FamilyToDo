@@ -76,3 +76,5 @@
 
 /* Primary adoption action keeps a solid, readable treatment in dark mode. */
 :root[data-theme="dark"] .meal-app [data-wish-adopt]{background:#4f46e5;color:#fff!important;border:1px solid #818cf8;box-shadow:none}
+
+.meal-role-check{display:inline-flex!important;align-items:center;gap:5px;font-size:12px;color:var(--muted);white-space:nowrap}.meal-app .meal-role-check input{width:16px;min-height:16px;height:16px;flex:0 0 16px;margin:0;accent-color:var(--primary)}.meal-side-row{display:flex;align-items:center;gap:6px;margin-top:5px}.meal-side-row select{min-width:0;flex:1}.meal-app .meal-side-row button{width:36px;min-height:36px;padding:4px;flex:0 0 auto}.meal-side-choice>button{margin-top:6px}.meal-wish-form{flex-wrap:wrap}.meal-wish-form>input{flex:1;min-width:120px}

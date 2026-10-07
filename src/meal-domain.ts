@@ -5,7 +5,8 @@ export function mealAmountText(raw:unknown):string{const text=mealText(raw,80);i
 export function mealLiteralAmount(raw:string):{name:string;quantity_text:string}|null{const m=/^(.+?)\s*\(?\s*(少々|適量|適宜|お好みで|お好み|ひとつまみ|ふたつまみ)\s*\)?$/u.exec(raw.normalize('NFKC').trim());if(!m||/[~〜～–-]$/.test(m[1].trim()))return null;const name=m[1].trim().replace(/[:：]$/u,'').trim();return name?{name,quantity_text:m[2]}:null;}
 /** Only metric mass/volume, never counts, package weights, density or spoon measures. */
 export function mealUnit(unit:string):{unit:string;factor:number}{switch(unit){case 'kg':return {unit:'g',factor:1000};case 'g':return {unit:'g',factor:1};case 'L':return {unit:'ml',factor:1000};case 'mL':case 'ml':return {unit:'ml',factor:1};default:return {unit,factor:1};}}
-export type MealRecipe={id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
+export function mealMain(value:unknown):boolean{if(value!==undefined&&typeof value!=='boolean')throw new BadRequest('主菜のチェックを確認してください。');return value===true;}
+export type MealRecipe={is_main?:boolean;id:string;name:string;servings:number;minutes:number;source_url:string;ingredients:MealIngredient[];steps:string[];revision?:string;source?:{kind:string;model:string;extracted_at:string;confidence:string;start_seconds:number;end_seconds:number}|null};
 export type MealPlanItem={date:string;servings:number;recipe:MealRecipe;sides?:MealRecipe[]};
 export const mealEnabled=(env:Env)=>env.MEALS_ENABLED==='true'&&!!env.MEALS_DB;
 export const mealText=(value:unknown,max:number)=>{if(typeof value!=='string')throw new BadRequest('文字を入力してください。');const s=value.normalize('NFKC').trim();if(!s||s.length>max)throw new BadRequest('入力の長さを確認してください。');return s;};
@@ -26,7 +27,7 @@ export function normalizeMealRecipe(raw:any):MealRecipe{
   const quantity=Math.round(x.quantity*10000)/10000;if(!quantity)throw new BadRequest('数量が小さすぎます。');return {name:mealText(x.name,100),quantity,unit:mealText(x.unit,20)};
  });
  if(!Array.isArray(raw.steps)||!raw.steps.length||raw.steps.length>50)throw new BadRequest('手順は1〜50件登録してください。');
- return {id:mealId(raw.id),name:mealText(raw.name,120),servings:mealInteger(raw.servings,30),minutes:mealInteger(raw.minutes,1440),source_url:url,ingredients,steps:raw.steps.map((s:unknown)=>mealText(s,2000))};
+ return {...(raw.is_main===undefined?{}:{is_main:mealMain(raw.is_main)}),id:mealId(raw.id),name:mealText(raw.name,120),servings:mealInteger(raw.servings,30),minutes:mealInteger(raw.minutes,1440),source_url:url,ingredients,steps:raw.steps.map((s:unknown)=>mealText(s,2000))};
 }
 /** Metric mass/volume combine; counts and unspecified measures stay separate. */
 export function mealShoppingNeeds(items:MealPlanItem[]):MealIngredient[]{
