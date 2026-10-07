@@ -98,11 +98,15 @@ if(/recurrence_rules|recurring_occurrence|auto.?generate/iu.test(reusableSetApi)
 for(const sentinel of [
   "UPDATE items SET name=?,memo=?,url=?,category=?,due_at=?,updated_at=?",
   "SELECT name FROM item_category_catalog WHERE family_id=? AND enabled=1",
-  '<label>カテゴリ</label>',
   'name="category" list="itemCategoryOptions"',
-  '<label>URL</label>',
   'type="url" name="url"',
 ])if(!itemEdit.includes(sentinel))throw new Error(`item edit category/url marker missing: ${sentinel}`);
+
+for(const [label,name] of [['カテゴリ','category'],['URL','url']]){
+  const linked=itemEdit.match(new RegExp(`<label for="([^"<>]+)">${label}</label>`));
+  const control=itemEdit.match(new RegExp(`<input\\b[^>]*name="${name}"[^>]*>`));
+  if(!linked||!control?.[0].includes(`id="${linked[1]}"`))throw new Error(`item edit input label is not associated: ${name}`);
+}
 
 if(taskEvents.includes("script.id='belongingsCategoryChecklistScript'"))throw new Error('duplicate Goods asset loader returned');
 
