@@ -15,3 +15,12 @@
  .wrap .member-row .actions{width:auto;justify-content:flex-end}
  .wrap .member-row .actions .btn{flex:0 0 auto}
 }
+
+/* Form options must keep their full explanation visible at narrow widths. */
+.wrap :is(.form-card,.member-profile-form,#notificationForm) .checkrow{
+  white-space:normal!important;align-items:flex-start!important;
+}
+.wrap :is(.form-card,.member-profile-form,#notificationForm) .checkrow span{
+  white-space:normal!important;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;
+}
+.meal-app #mealContent>a.btn{justify-self:start}

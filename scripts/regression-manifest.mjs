@@ -47,6 +47,7 @@ export const activeRegressionGroups=[
       ['home-page-boundary','node scripts/home-page-boundary-contract.mjs'],
       ['daily-fortune','node scripts/daily-fortune-contract.mjs'],
       ['message-new-page-boundary','node scripts/message-new-page-boundary-contract.mjs'],
+      ['message-immediate-ui','node --test scripts/message-immediate-ui.test.mjs'],
       ['messages-chat-bounded-read','node scripts/messages-chat-bounded-read-contract.mjs'],
       ['message-photos','node scripts/message-photos-contract.mjs'],
       ['shopping-new-page-boundary','node scripts/shopping-new-page-boundary-contract.mjs'],

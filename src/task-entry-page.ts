@@ -30,15 +30,15 @@ export async function taskEntryPage(
   const categoryOptions=resolveShoppingCategoryOptions(categoryRows.results as any[]);
   const body=`<div class="card form-card"><h1>📝 追加</h1><form id="taskForm" class="compact-form" autocomplete="off">
     <input type="hidden" name="csrf" value="${esc(ctx.session.csrfToken||'')}">
-    <label>タイトル</label><input name="title" required maxlength="255" autofocus>
-    <label>説明</label><textarea name="description" maxlength="5000"></textarea>
+    <label for="task-entry-page-field-1">タイトル</label><input id="task-entry-page-field-1" name="title" required maxlength="255" autofocus>
+    <label for="task-entry-page-field-2">説明</label><textarea id="task-entry-page-field-2" name="description" maxlength="5000"></textarea>
     <label class="checkrow private-task-option"><input id="isPrivate" type="checkbox" name="is_private"><span>🔒 自分専用</span></label><p class="small private-task-help">他の家族にはタスク・カレンダー・詳細を表示しません</p>
-    <label>日付</label><div class="date-option-row date-range-grid task-date-row"><div><span class="small">開始日</span><input id="taskDate" type="date" name="dateOnly" value="${esc(date)}"></div><div id="endDateWrap"><span class="small">終了日</span><input id="taskEndDate" type="date" name="endDateOnly" value="${esc(date)}"></div><label id="taskNoDateWrap" class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div>
-    <label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="task-time-fields" style="display:none"><div class="field-block"><label>開始時刻</label><input type="time" name="startTime"></div><div class="field-block"><label>終了時刻</label><input type="time" name="endTime"></div></div>
-    <label>場所</label><input name="location" maxlength="500">
+    <label>日付</label><div class="date-option-row date-range-grid task-date-row"><div><label class="small" for="taskDate">開始日</label><input id="taskDate" type="date" name="dateOnly" value="${esc(date)}"></div><div id="endDateWrap"><label class="small" for="taskEndDate">終了日</label><input id="taskEndDate" type="date" name="endDateOnly" value="${esc(date)}"></div><label id="taskNoDateWrap" class="checkrow"><input id="noDate" type="checkbox" name="noDate"><span>期限なし（未整理）</span></label></div>
+    <label class="checkrow"><input id="allDay" type="checkbox" name="allDay" checked><span>終日</span></label><div id="dateTimes" class="task-time-fields" style="display:none"><div class="field-block"><label for="task-entry-page-field-3">開始時刻</label><input id="task-entry-page-field-3" type="time" name="startTime"></div><div class="field-block"><label for="task-entry-page-field-4">終了時刻</label><input id="task-entry-page-field-4" type="time" name="endTime"></div></div>
+    <label for="task-entry-page-field-5">場所</label><input id="task-entry-page-field-5" name="location" maxlength="500">
     <div id="taskCalendarControls"><label>カレンダー表示</label><label class="checkrow"><input id="taskCalendarVisible" type="checkbox" name="calendar_visible" checked><span>カレンダーに表示する</span></label>
-    <div id="taskCalendarColorWrap"><label>カレンダー色</label><select name="calendar_color">${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}">${esc(option.label)}</option>`).join('')}</select><label class="small" for="taskCalendarCustomColor">カスタム色</label><input id="taskCalendarCustomColor" type="color" value="${CALENDAR_COLOR_OPTIONS[0].value}" aria-label="カレンダーのカスタム色"></div></div>
-    <label>通知日時（任意）</label><input type="datetime-local" name="reminderAt"><p class="small">指定するとタスク・イベントの詳細を設定した通知方法で通知します。</p>
+    <div id="taskCalendarColorWrap"><label for="task-entry-page-field-6">カレンダー色</label><select id="task-entry-page-field-6" name="calendar_color">${CALENDAR_COLOR_OPTIONS.map(option=>`<option value="${option.value}">${esc(option.label)}</option>`).join('')}</select><label class="small" for="taskCalendarCustomColor">カスタム色</label><input id="taskCalendarCustomColor" type="color" value="${CALENDAR_COLOR_OPTIONS[0].value}" aria-label="カレンダーのカスタム色"></div></div>
+    <label for="task-entry-page-field-7">通知日時（任意）</label><input id="task-entry-page-field-7" type="datetime-local" name="reminderAt"><p class="small">指定するとタスク・イベントの詳細を設定した通知方法で通知します。</p>
     <button type="submit">登録する</button>
   </form></div>
   <script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo,categoryOptions,initialType}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script>

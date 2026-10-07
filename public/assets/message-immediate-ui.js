@@ -11,8 +11,9 @@ for(const form of forms){
   const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.name='notify_now';checkbox.value='1';
   const text=document.createElement('span');text.textContent='🔔 今すぐ通知';
   row.append(checkbox,text);
-  const reminderLabel=reminder.previousElementSibling;
-  if(reminderLabel instanceof HTMLLabelElement)form.insertBefore(row,reminderLabel);else form.insertBefore(row,reminder);
+  const reminderControl=reminder.closest('.native-control-shell')||reminder;
+  const reminderLabel=reminderControl.previousElementSibling;
+  (reminderLabel instanceof HTMLLabelElement?reminderLabel:reminderControl).before(row);
   const sync=()=>{
     if(checkbox.checked){reminder.value='';reminder.disabled=true;}
     else reminder.disabled=false;
