@@ -33,7 +33,7 @@ export function parseImportedIngredient(raw:string){
  const suffix=new RegExp('^(.+?)\\s*'+num+'\\s*'+unit+'$').exec(original),spoon=/^(.+?)\s*(大さじ|小さじ)\s*(\d+(?:\.\d+)?(?:\/\d+)?)$/.exec(original);
  const m=suffix||spoon;let quantity:number|null=null,name=original,units='';
  // Do not treat the trailing number of a range or comma-separated amount as the entire quantity.
- if(m&&!/(?:[\d/+,、.・~〜–≈-]|約|およそ)$/.test(m[1].trim())){const amount=suffix?m[2]:m[3],parts=amount.split('/').map(Number),n=parts.length===2?parts[0]/parts[1]:parts[0];if(Number.isFinite(n)&&n>=0.0001&&n<=100000){quantity=Math.round(n*10000)/10000;name=m[1].trim();units=suffix?m[3]:m[2];}}
+ if(m&&!/(?:[\d/⁄+,、.・~〜–—−≈-]|\d[eE]|約|およそ)$/.test(m[1].trim())){const amount=suffix?m[2]:m[3],parts=amount.split('/').map(Number),n=parts.length===2?parts[0]/parts[1]:parts[0];if(Number.isFinite(n)&&n>=0.0001&&n<=100000){quantity=Math.round(n*10000)/10000;name=m[1].trim();units=suffix?m[3]:m[2];}}
  const literal=quantity===null?mealLiteralAmount(original):null;
  return {name:(literal?.name||name).slice(0,100),quantity,unit:units,original,...(literal?{quantity_text:literal.quantity_text}:{})};
 }

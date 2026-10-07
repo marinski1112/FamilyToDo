@@ -253,6 +253,13 @@ test('URL import allows exact HTTPS recipe pages only; structured extraction lea
 });
 const cookpadURL='https://cookpad.com/jp/recipes/26622092';
 const cookpadHTML=()=>importHTML({name:'Cookpad形式のテスト料理',recipeYield:undefined,totalTime:undefined,recipeIngredient:['ゴーヤ 1,2本','ハム(刻む) 2枚','卵 1個','油 大1','塩コショウ 少々']});
+test('Imported Unicode fractions, signs, ranges and exponent notation never become trailing numeric quantities',()=>{
+ for(const raw of ['玉ねぎ ½個','牛乳 ⅔カップ','玉ねぎ 1½個','玉ねぎ 1⁄2個','肉 −200g','肉 1—2g','肉 1e3g','肉 1E3g']){
+  const x=parseImportedIngredient(raw);assert.equal(x.quantity,null,raw);assert.equal(x.unit,'',raw);assert.equal(x.name,x.original,raw);
+ }
+ for(const [raw,n] of [['玉ねぎ 1/2個',0.5],['肉 200g',200],['牛乳 1.5L',1.5],['しょうゆ 大さじ1/2',0.5]])assert.equal(parseImportedIngredient(raw).quantity,n,raw);
+ const d=extractMealRecipe(importHTML({recipeIngredient:['玉ねぎ ½個','肉 −200g']}),importURL);assert(d.ingredients.every(x=>x.quantity===null));
+});
 test('Cookpad accepts only public Japanese recipe URLs and preserves ambiguous amounts',async()=>{
  assert.equal(mealImportUrl(cookpadURL+'?ref=search&search_term=ハム#ingredients'),cookpadURL);
  for(const url of ['http://cookpad.com/jp/recipes/26622092','https://cookpad.com.evil.invalid/jp/recipes/26622092','https://user:pass@cookpad.com/jp/recipes/26622092','https://cookpad.com:8443/jp/recipes/26622092','https://cookpad.com/jp/search/ハム','https://cookpad.com/jp/recipes/26622092/comments','https://cookpad.com/jp/recipes/not-a-number'])assert.throws(()=>mealImportUrl(url));
