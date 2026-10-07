@@ -146,3 +146,11 @@ This is fixture-based CI verification, not real authentication or a complete all
 ## Wishlist recipe links (2026-10-07)
 
 Native wishlist rows identify the linked recipe and its official HotCook model, using linked-recipe metadata rather than the original wish URL. A single 44dp disclosure opens recipe/link/delete actions. Link editing retains identities outside the bounded recipe list, submits the existing stored identity and link revision, preserves selection on save failure, and has explicit reload/unlink and unsaved-input confirmation. Archived recipes remain identified without an open action. No backend, storage or authentication changes. Synthetic instrumentation covers linked names/model, bounded-list fallback, read-only mode, failed-save retry/double submission and null unlink. Calendar swipe assertions also check the visible month heading. CI/device results must be recorded separately; no real-auth native QA is claimed.
+
+## 2026-10-07 日付なしの今回作るもの
+
+- 食べたいものを採用 / 却下。保留は操作不要。レシピなしでも採用し、漠然とした買い物内容を保持できる。
+- 今回作るものは次の買い物までの日付なし一覧。レシピ・人数の後付け、候補へ戻す、まとめた買い物選択、料理完了・履歴、却下の復元。
+- APIは既存 `/api/meals/v1` のqueue操作。保存失敗時の入力・再試行ID保持、連打防止、revision、読取り専用、未保存移動確認を維持。端末永続キャッシュや本番fixtureは追加しない。
+- レシピ付きは既存ネイティブ調理手順・前景タイマー。Cooking Liveはqueue IDを含む外部ブラウザへ。レシピなしの完了では在庫量を推測しない。
+- CIは合成データで採用失敗/再試行/連打、買い物失敗/再試行、レシピなし料理完了/履歴と明暗の画像を確認する。実ログイン、Galaxy A21のIME・外部ブラウザ復帰・端末間同期は別途未検証。

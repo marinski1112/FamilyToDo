@@ -57,7 +57,7 @@ final class MealScreen {
     void attach(LinearLayout target){
         root=target;root.removeAllViews();root.addView(host.text("ごはん・献立管理"));
         HorizontalScrollView scroll=new HorizontalScrollView(activity);scroll.setHorizontalScrollBarEnabled(false);LinearLayout nav=new LinearLayout(activity);tabs.clear();
-        String[] keys={"today","week","recipes","wishlist","inbox","inventory","more"},names={"今日","献立","レシピ","食べたい","LINE受信箱","在庫","その他"};
+        String[] keys={"today","week","recipes","wishlist","inbox","inventory","more"},names={"今回作る","献立","レシピ","食べたい","LINE受信箱","在庫","その他"};
         for(int i=0;i<keys.length;i++){String key=keys[i];Button tab=host.button(names[i],()->leave(()->{page=key;draw();}));tabs.put(key,tab);nav.addView(tab);}
         scroll.addView(nav);root.addView(scroll);status=host.text("");status.setVisibility(View.GONE);root.addView(status);
         body=new LinearLayout(activity);body.setOrientation(LinearLayout.VERTICAL);root.addView(body);
@@ -123,10 +123,12 @@ final class MealScreen {
         if(page.equals("inventory")){inventory();return;}
         if(page.equals("week")){weekly();return;}
         if(!week.equals(monday(today()))){week=monday(today());overview=null;refresh();return;}
-        text("今日のごはん · "+today());JSONObject item=item(today());text(mealName(item));
+        queueList();
+        if(overview.optJSONObject("plan")!=null&&array(overview.optJSONObject("plan"),"items").length()>0){text("日付を決めた献立 · "+today());JSONObject item=item(today());text(mealName(item));
         if(item!=null){if(recorded(item.optString("date")))text("✓ 調理済み");button("料理を始める",()->cooking(item));}
         JSONObject tomorrow=item(LocalDate.parse(today()).plusDays(1).toString());if(tomorrow==null&&week.equals(monday(today())))tomorrow=overview.optJSONObject("tomorrow_item");text("明日："+mealName(tomorrow));
         JSONObject plan=overview.optJSONObject("plan");text(plan==null?"今週の献立は未作成です。":"CONFIRMED".equals(plan.optString("status"))?"今週の献立：確定済み":"今週の献立：下書き");
+        }
         button("1週間の献立を開く",()->{page="week";draw();});button("更新",this::refresh);
     }
     private void recipes(){
@@ -198,9 +200,11 @@ final class MealScreen {
                 labels.addView(host.text("📖 "+(nullable(row,"recipe_name").isEmpty()?(recipe==null?"紐づけ先のレシピ":recipe.optString("name")):nullable(row,"recipe_name"))+(row.optBoolean("recipe_available")?"":"（非表示）")));
                 String model=hotcookModel((nullable(row,"recipe_source_url").isEmpty()?(recipe==null?"":recipe.optString("source_url")):nullable(row,"recipe_source_url")));if(!model.isEmpty())labels.addView(host.text("ホットクック · "+model));
             }
-            line.addView(labels,new LinearLayout.LayoutParams(0,-2,1));Button menu=host.button("⋯",()->wishActions(row));menu.setContentDescription(row.optString("name")+"の操作");line.addView(menu,new LinearLayout.LayoutParams(dp(44),dp(44)));body.addView(line);
+            line.addView(labels,new LinearLayout.LayoutParams(0,-2,1));Button adopt=host.button("採用",()->{if(!ApiClient.canMutate()){say("通信の確認後に編集できます。ホームを更新してください。");return;}leave(()->queueAdopt(row));});line.addView(adopt,compactAction());Button menu=host.button("⋯",()->wishActions(row));menu.setContentDescription(row.optString("name")+"の操作");line.addView(menu,new LinearLayout.LayoutParams(dp(44),dp(44)));body.addView(line);
         }
+        rejectedWishes();
     }
+    private void rejectedWishes(){JSONArray rejected=array(overview.optJSONObject("queue"),"rejected");if(rejected.length()>0)button("却下したもの",()->{body.removeAllViews();for(int i=0;i<rejected.length();i++){JSONObject row=rejected.optJSONObject(i);text(row.optString("name"));write("候補に戻す",()->request(()->post(put(put(action("wish_restore"),"id",row.optString("id")),"expected_revision",row.optInt("recipe_link_revision"))),r->refresh()));}button("戻る",this::draw);});}
     private static String nullable(JSONObject row,String key){return row.isNull(key)?"":row.optString(key);}
     private JSONObject findRecipe(String id){JSONArray recipes=array(overview,"recipes");for(int i=0;i<recipes.length();i++){JSONObject recipe=recipes.optJSONObject(i);if(recipe!=null&&id.equals(recipe.optString("id")))return recipe;}return null;}
     static String hotcookModel(String source){
@@ -208,8 +212,8 @@ final class MealScreen {
     }
     private void wishActions(JSONObject row){
         if(busy)return;Button anchor=(Button)findWishAction(body,row.optString("name")+"の操作");if(anchor==null)return;
-        wishMenu=new PopupMenu(activity,anchor);if(row.optBoolean("recipe_available"))wishMenu.getMenu().add(0,1,0,"レシピを開く");wishMenu.getMenu().add(0,2,1,"紐づけを変更");wishMenu.getMenu().add(0,3,2,"食べたいものから削除");
-        wishMenu.setOnMenuItemClickListener(item->{if(busy)return true;if(item.getItemId()==1)leave(()->request(()->get("?view=recipe&id="+nullable(row,"linked_recipe_id")),r->detail(r.getJSONObject("recipe"))));else if(!ApiClient.canMutate())say("通信の確認後に編集できます。ホームを更新してください。");else if(item.getItemId()==2)leave(()->wishLinkEditor(row));else new AlertDialog.Builder(activity).setMessage("食べたいものから削除しますか？ レシピは残ります。").setPositiveButton("削除",(d,w)->{if(!ApiClient.canMutate())return;request(()->post(put(action("wishlist_delete"),"id",row.optString("id"))),r->refresh());}).setNegativeButton("戻る",null).show();return true;});wishMenu.show();
+        wishMenu=new PopupMenu(activity,anchor);if(row.optBoolean("recipe_available"))wishMenu.getMenu().add(0,1,0,"レシピを開く");wishMenu.getMenu().add(0,2,1,"紐づけを変更");wishMenu.getMenu().add(0,3,2,"却下");
+        wishMenu.setOnMenuItemClickListener(item->{if(busy)return true;if(item.getItemId()==1)leave(()->request(()->get("?view=recipe&id="+nullable(row,"linked_recipe_id")),r->detail(r.getJSONObject("recipe"))));else if(!ApiClient.canMutate())say("通信の確認後に編集できます。ホームを更新してください。");else if(item.getItemId()==2)leave(()->wishLinkEditor(row));else new AlertDialog.Builder(activity).setMessage("却下しますか？ レシピは残り、却下履歴から戻せます。").setPositiveButton("却下",(d,w)->{if(!ApiClient.canMutate())return;request(()->post(put(put(action("wish_reject"),"id",row.optString("id")),"expected_revision",row.optInt("recipe_link_revision"))),r->refresh());}).setNegativeButton("戻る",null).show();return true;});wishMenu.show();
     }
     private static View findWishAction(View view,String description){if(description.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findWishAction(group.getChildAt(i),description);if(found!=null)return found;}}return null;}
     private void wishLinkEditor(JSONObject row){
@@ -259,13 +263,40 @@ final class MealScreen {
         EditText minutes=input("タイマー（1〜180分）","5",true);TextView timer=host.text("タイマー停止中");body.addView(timer);
         Runnable tick=new Runnable(){public void run(){if(closed||!host.active()||timer.getParent()==null)return;long seconds=Math.max(0,(deadline-SystemClock.elapsedRealtime()+999)/1000);timer.setText(seconds>0?"タイマー "+seconds/60+":"+String.format(java.util.Locale.ROOT,"%02d",seconds%60):"タイマー終了");if(seconds>0)clock.postDelayed(this,500);}};
         button("タイマー開始",()->{try{timerTick=tick;int duration=Integer.parseInt(value(minutes));if(duration<1||duration>180)throw new IllegalArgumentException();if(deadline>SystemClock.elapsedRealtime()){new AlertDialog.Builder(activity).setMessage("現在のタイマーを置き換えますか？").setPositiveButton("開始",(d,w)->{clock.removeCallbacksAndMessages(null);deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}).setNegativeButton("戻る",null).show();}else{deadline=SystemClock.elapsedRealtime()+duration*60000L;tick.run();}}catch(Exception e){say("タイマーは1〜180分で入力してください。");}});button("タイマー停止",()->{clock.removeCallbacksAndMessages(null);deadline=0;timerTick=null;timer.setText("タイマー停止中");});text("タイマーはこの画面を表示している間に確認できます。");
-        button("Cooking Live・音声相談（ブラウザ）",()->{try{activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(ApiClient.ORIGIN+"/app/meals.php?view=cook&date="+item.optString("date"))));}catch(android.content.ActivityNotFoundException e){say("Webブラウザを利用できません。");}});
-        if(recorded(item.optString("date")))text("✓ 調理済み・在庫の再差引きは行いません。");else write("作った記録と在庫を確認",()->request(()->get("?view=cooking_preview&date="+item.optString("date")),r->cooked(r.getJSONObject("preview"))));button("戻る",this::draw);
+        button("Cooking Live・音声相談（ブラウザ）",()->{try{activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(ApiClient.ORIGIN+(item.has("wish_id")?"/app/meals.php?view=cook&queue="+item.optString("id"):"/app/meals.php?view=cook&date="+item.optString("date")))));}catch(android.content.ActivityNotFoundException e){say("Webブラウザを利用できません。");}});
+        if(item.has("wish_id"))write("料理完了と在庫を確認",()->request(()->get("?view=queue_cooking_preview&id="+item.optString("id")),r->queueComplete(r.getJSONObject("preview"))));else if(recorded(item.optString("date")))text("✓ 調理済み・在庫の再差引きは行いません。");else write("作った記録と在庫を確認",()->request(()->get("?view=cooking_preview&date="+item.optString("date")),r->cooked(r.getJSONObject("preview"))));button("戻る",this::draw);
     }
     private void cooked(JSONObject preview){
         body.removeAllViews();text("作った記録と在庫を確認");JSONArray needs=array(preview,"needs"),allocations=array(preview,"allocations");for(int i=0;i<needs.length();i++){JSONObject row=needs.optJSONObject(i);text(row.optString("name")+" · 使用量 "+amount(row,1));}text("在庫から減らす購入分：");for(int i=0;i<allocations.length();i++){JSONObject row=allocations.optJSONObject(i);text(row.optString("name")+"："+amount(row,1));}
         text("自由入力・おおよその在庫・ある／なしは自動で減らしません。表示した購入分だけを減らします。");CheckBox consume=host.checkbox("表示した数量を在庫から減らす");consume.setEnabled(allocations.length()>0);body.addView(consume);
         write("作った記録を保存",()->{JSONObject payload=put(put(put(put(action("cooked"),"date",preview.optString("date")),"revision",preview.optString("revision")),"preview_hash",preview.optString("preview_hash")),"consume_inventory",consume.isChecked());request(()->post(payload),r->refresh());});button("戻る",this::draw);
+    }
+
+
+    private void queueList(){
+        JSONObject queue=overview.optJSONObject("queue");text("今回作るもの · 次の買い物まで");text("日付・レシピなしでも採用できます。買い物が済んでも未調理のものは残ります。");JSONArray items=array(queue,"items");if(items.length()==0)text("食べたいものから採用してください。");
+        for(int i=0;i<items.length();i++){
+            JSONObject row=items.optJSONObject(i);JSONObject recipe=row.optJSONObject("recipe");LinearLayout line=new LinearLayout(activity);LinearLayout labels=new LinearLayout(activity);labels.setOrientation(LinearLayout.VERTICAL);labels.addView(host.text(row.optString("name")));labels.addView(host.text(recipe==null?"買い物："+row.optString("shopping_text"):"📖 "+recipe.optString("name")+" · "+row.optInt("servings")+"人分"));if(recipe!=null&&!hotcookModel(recipe.optString("source_url")).isEmpty())labels.addView(host.text("ホットクック · "+hotcookModel(recipe.optString("source_url"))));if(!nullable(row,"shopping_job_id").isEmpty())labels.addView(host.text("買い物追加の選択済み · 変更分は買い物で調整"));line.addView(labels,new LinearLayout.LayoutParams(0,-2,1));Button cook=host.button(recipe==null?"完了":"調理",()->{if(recipe==null)request(()->get("?view=queue_cooking_preview&id="+row.optString("id")),r->queueComplete(r.getJSONObject("preview")));else request(()->get("?view=queue_item&id="+row.optString("id")),r->cooking(r.getJSONObject("item")));});line.addView(cook,compactAction());Button menu=host.button("⋯",()->{});menu.setContentDescription(row.optString("name")+"の今回作る操作");menu.setOnClickListener(v->{if(busy)return;PopupMenu popup=new PopupMenu(activity,menu);wishMenu=popup;popup.getMenu().add(0,1,0,"レシピ・買うものを変更");popup.getMenu().add(0,2,1,"食べたいものに戻す");popup.setOnMenuItemClickListener(a->{if(busy||!ApiClient.canMutate())return true;if(a.getItemId()==1)leave(()->queueEdit(row));else new AlertDialog.Builder(activity).setMessage("食べたいものに戻しますか？追加済みの買い物は残ります。").setPositiveButton("戻す",(d,w)->request(()->post(put(put(action("queue_return"),"id",row.optString("id")),"revision",row.optString("revision"))),r->refresh())).setNegativeButton("取消",null).show();return true;});popup.show();});line.addView(menu,new LinearLayout.LayoutParams(dp(44),dp(44)));body.addView(line);
+        }
+        if(items.length()>0)button("買うものをまとめて確認",()->request(()->get("?view=queue_shopping_preview"),this::queueShopping));
+        JSONArray pending=array(queue,"pending_shopping");for(int i=0;i<pending.length();i++){JSONObject job=pending.optJSONObject(i);write("買い物追加を再試行",()->request(()->post(put(action("queue_shopping_resume"),"request_id",job.optString("id"))),r->refresh()));}
+        button("食べたいものから選ぶ",()->{page="wishlist";draw();});JSONArray history=array(queue,"history");if(history.length()>0)button("料理・取り消しの履歴",()->{body.removeAllViews();for(int i=0;i<history.length();i++){JSONObject row=history.optJSONObject(i);text(row.optString("name")+" · "+("COOKED".equals(row.optString("status"))?"料理完了":"候補に戻した"));}button("戻る",this::draw);});
+    }
+    private void queueAdopt(JSONObject row){
+        body.removeAllViews();text(row.optString("name")+" · 今回作るものに採用");boolean linked=row.optBoolean("recipe_available");JSONObject recipe=findRecipe(nullable(row,"linked_recipe_id"));if(linked)text("📖 "+nullable(row,"recipe_name"));EditText servings=linked?input("人数",recipe==null?"2":recipe.optString("servings","2"),true):null;EditText shopping=linked?null:input("買い物に追加する内容",row.optString("name"),false);text("買い物への追加は採用後にまとめて確認できます。");String id=UUID.randomUUID().toString();dirty=true;
+        write("採用する",()->{try{JSONObject payload=put(put(put(put(put(action("wish_adopt"),"request_id",id),"id",row.optString("id")),"expected_revision",row.optInt("recipe_link_revision")),"servings",linked?Integer.parseInt(value(servings)):2),"shopping_text",linked?row.optString("name"):value(shopping));request(()->post(payload),r->{dirty=false;page="today";refresh();});}catch(Exception e){say("人数・買うものを確認してください。");}});button("戻る",()->leave(this::draw));
+    }
+    private void queueEdit(JSONObject row){
+        body.removeAllViews();text(row.optString("name")+" · レシピ・買うものを変更");ArrayList<String> names=new ArrayList<>(),ids=new ArrayList<>();names.add("レシピなし");ids.add("");JSONArray recipes=array(overview,"recipes");for(int i=0;i<recipes.length();i++){JSONObject recipe=recipes.optJSONObject(i);names.add(recipe.optString("name"));ids.add(recipe.optString("id"));}JSONObject current=row.optJSONObject("recipe");if(current!=null&&!ids.contains(current.optString("id"))){ids.add(current.optString("id"));names.add(current.optString("name"));}Spinner selection=choice("今回作るレシピ",names,current==null?0:ids.indexOf(current.optString("id")));EditText servings=input("人数",row.optString("servings"),true),shopping=input("レシピなしの場合の買うもの",row.optString("shopping_text").isEmpty()?row.optString("name"):row.optString("shopping_text"),false);if(!nullable(row,"shopping_job_id").isEmpty())text("追加済みの買い物は変更しません。変更分は買い物リストで調整してください。");dirty=true;
+        write("今回作るものを保存",()->{try{String id=ids.get(selection.getSelectedItemPosition());JSONObject payload=put(put(put(put(put(action("queue_edit"),"id",row.optString("id")),"revision",row.optString("revision")),"recipe_id",id.isEmpty()?JSONObject.NULL:id),"servings",Integer.parseInt(value(servings))),"shopping_text",value(shopping));request(()->post(payload),r->{dirty=false;refresh();});}catch(Exception e){say("人数・買うものを確認してください。");}});button("戻る",()->leave(this::draw));
+    }
+    private void queueShopping(JSONObject preview){
+        body.removeAllViews();text("買うものをまとめて確認");text("未追加の料理をまとめ、正確な在庫を差し引きます。選ばなかったものは買い物で後から追加できます。");ArrayList<CheckBox> boxes=new ArrayList<>();JSONArray needs=array(preview,"needs");for(int i=0;i<needs.length();i++){JSONObject need=needs.optJSONObject(i);CheckBox box=host.checkbox(need.optString("name")+"："+amount(need,1));boolean needed=need.isNull("quantity")||need.optDouble("quantity")>0;box.setEnabled(needed);box.setChecked(needed);body.addView(box);boxes.add(box);}String id=UUID.randomUUID().toString();dirty=true;
+        write("選択分を買い物に追加",()->{JSONArray selected=new JSONArray();for(int i=0;i<boxes.size();i++)if(boxes.get(i).isChecked())selected.put(i);if(selected.length()==0){say("追加するものを選んでください。");return;}JSONObject payload=put(put(put(action("queue_shopping_confirm"),"request_id",id),"preview_hash",preview.optString("preview_hash")),"selected",selected);request(()->post(payload),r->{dirty=false;body.removeAllViews();text("買い物リストに追加しました。");button("買い物リストを開く",host::shoppingList);button("今回作るものへ戻る",()->{page="today";refresh();});});});button("戻る",()->leave(this::draw));
+    }
+    private void queueComplete(JSONObject preview){
+        body.removeAllViews();text("料理完了 · 在庫の確認");JSONArray allocations=array(preview,"allocations");for(int i=0;i<allocations.length();i++){JSONObject row=allocations.optJSONObject(i);text(row.optString("name")+"："+amount(row,1));}CheckBox consume=host.checkbox("表示した数量を在庫から減らす");consume.setEnabled(allocations.length()>0);body.addView(consume);text("完了すると今回作るものから外れ、履歴に残ります。");dirty=true;
+        write("料理完了を保存",()->{JSONObject payload=put(put(put(put(action("queue_cooked"),"id",preview.optString("id")),"revision",preview.optString("revision")),"preview_hash",preview.optString("preview_hash")),"consume_inventory",consume.isChecked());request(()->post(payload),r->{dirty=false;page="today";refresh();});});button("戻る",()->leave(this::draw));
     }
 
     private static final String[] TRACKING={"EXACT","APPROXIMATE","PRESENCE","UNTRACKED"};
