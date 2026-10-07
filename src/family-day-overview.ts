@@ -3,6 +3,7 @@ import {addCalendarDays} from './timezone';
 import {taskVisibilitySql} from './task-visibility';
 import {mealEnabled,mealWeek} from './meal-domain';
 import {readMealPlan} from './meal-repository';
+import {mealQueueHistoryRange} from './meal-queue-history';
 import {FAMILY_LOG_TYPE_META} from './family-log-type-meta';
 import {IMPORTED_FAMILY_DIARY_SQL} from './imported-family-diary';
 
@@ -36,13 +37,16 @@ export async function familyDayOverview(ctx:AppContext,date:string,today:string)
     if(!mealEnabled(ctx.env))return card('🍚 献立',empty('献立機能は利用できません。'));
     const mealsDb=ctx.env.MEALS_DB!;
     const loadCooked=async()=>mealsDb.prepare('SELECT plan_revision FROM cooked_events WHERE family_id=? AND meal_date=? LIMIT 101').bind(familyId,date).all<Row>();
-    const [plan,cooked]=await Promise.all([readMealPlan(mealsDb,familyId,mealWeek(date)),loadCooked()]);
+    const range=mealQueueHistoryRange(ctx,date,date);
+    const loadQueue=async()=>mealsDb.prepare("SELECT name FROM meal_cooking_queue WHERE family_id=? AND status='COOKED' AND completed_at>=? AND completed_at<? ORDER BY completed_at,id LIMIT 101").bind(familyId,range.start,range.endExclusive).all<Row>();
+    const [plan,cooked,queue]=await Promise.all([readMealPlan(mealsDb,familyId,mealWeek(date)),loadCooked(),loadQueue()]);
     const item=plan?.items.find((x:Row)=>x.date===date);
     const matching=cooked.results.some(x=>x.plan_revision===plan?.revision);
     const names=item?[item.recipe,...(item.sides||[])].map((r:Row)=>esc(r.name)).join(' ／ '):'';
     const planned=item?`<p><strong>${names}</strong></p><p class="small">${plan?.status==='CONFIRMED'?'確定した予定':'下書きの予定'}・${Number(item.servings)}人分</p>`:empty('現在の週間献立に、この日の予定はありません。');
-    const actual=empty(matching?'現在の献立に対する調理済みの記録があります。':cooked.results.length?'別の版の献立に対する調理済みの記録があります。料理名は現在の献立と一致するとは限りません。':'調理済みの記録はありません。食べた実績を示すものではありません。');
-    return card('🍚 献立',planned+actual+`<a class="btn gray small" href="/app/meals.php?view=week&week=${mealWeek(date)}">この週の献立へ</a>`);
+    const queueActual=queue.results.length?`<p class="small">今回作るものから、料理完了を記録したものです。食べた実績を示すものではありません。</p><ul>${queue.results.slice(0,100).map(x=>`<li>${esc(x.name)}</li>`).join('')}</ul>${queue.results.length>100?empty('先頭100件を表示しています。'):''}`:'';
+    const actual=empty(matching?'現在の献立に対する調理済みの記録があります。':cooked.results.length?'別の版の献立に対する調理済みの記録があります。料理名は現在の献立と一致するとは限りません。':queue.results.length?'週間献立に対する調理済みの記録はありません。':'調理済みの記録はありません。食べた実績を示すものではありません。');
+    return card('🍚 献立',planned+actual+queueActual+`<a class="btn gray small" href="/app/meals.php?view=week&week=${mealWeek(date)}">この週の献立へ</a>`);
   };
   const recurring=async()=>{
     const rows=await db.prepare(`SELECT t.id,t.title,t.task_kind,t.visibility_scope,
