@@ -146,6 +146,7 @@ export const activeRegressionGroups=[
     checks:[
       ['google-tasks-routing','node scripts/google-tasks-routing-contract.mjs'],
       ['google-home-aliases','node scripts/google-home-aliases-contract.mjs'],
+      ['google-home-catalog','node scripts/google-home-catalog-contract.mjs'],
       ['feature-contracts','node scripts/feature-contract-bundle.mjs google-integrations'],
       ['google-calendar-inbound-fence','python3 scripts/google-calendar-inbound-fence-contract.py'],
       ['google-voice-inquiry-gemini-fallback','node scripts/google-voice-inquiry-gemini-fallback-contract.mjs'],
