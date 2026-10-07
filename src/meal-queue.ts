@@ -5,14 +5,15 @@ import {mealRecipe,readMealWishlist} from './meal-repository';
 import {readMealInventory,inventoryNeeds,inventoryToday,mealCookingAllocations} from './meal-inventory';
 import {projectMealShopping} from './meal-shopping-service';
 type Row=Record<string,any>;
+const queueSummary="id,wish_id,name,servings,shopping_text,revision,status,shopping_job_id,created_at,updated_at,completed_at,completed_by,CASE WHEN recipe_json IS NULL THEN NULL ELSE json_object('id',json_extract(recipe_json,'$.id'),'name',json_extract(recipe_json,'$.name'),'servings',json_extract(recipe_json,'$.servings'),'minutes',json_extract(recipe_json,'$.minutes'),'source_url',json_extract(recipe_json,'$.source_url')) END recipe_json";
 const changed=()=>new BadRequest('内容が更新されています。読み込み直して確認してください。');
 const family=(ctx:AppContext)=>Number(ctx.member!.family_id);
 const decode=(r:Row,full=false):Row=>{const recipe=r.recipe_json?JSON.parse(r.recipe_json):null;return {...r,recipe:recipe&&(full?recipe:{id:recipe.id,name:recipe.name,servings:recipe.servings,minutes:recipe.minutes,source_url:recipe.source_url}),recipe_json:undefined,inventory_result_json:undefined,completion_token:undefined,adoption_hash:undefined,edit_hash:undefined};};
 export async function readMealQueue(ctx:AppContext){
  const db=ctx.env.MEALS_DB!,f=family(ctx);
  const [active,history,rejected,jobs]=await Promise.all([
-  db.prepare("SELECT * FROM meal_cooking_queue WHERE family_id=? AND status='ACTIVE' ORDER BY created_at,id LIMIT 100").bind(f).all<Row>(),
-  db.prepare("SELECT * FROM meal_cooking_queue WHERE family_id=? AND status!='ACTIVE' ORDER BY updated_at DESC,id LIMIT 50").bind(f).all<Row>(),
+  db.prepare(`SELECT ${queueSummary} FROM meal_cooking_queue WHERE family_id=? AND status='ACTIVE' ORDER BY created_at,id LIMIT 100`).bind(f).all<Row>(),
+  db.prepare(`SELECT ${queueSummary} FROM meal_cooking_queue WHERE family_id=? AND status!='ACTIVE' ORDER BY updated_at DESC,id LIMIT 50`).bind(f).all<Row>(),
   db.prepare("SELECT id,name,recipe_link_revision FROM meal_wishlist WHERE family_id=? AND status='REJECTED' ORDER BY decision_at DESC,id LIMIT 50").bind(f).all<Row>(),
   db.prepare("SELECT id FROM meal_queue_shopping_jobs WHERE family_id=? AND status='PENDING' ORDER BY created_at LIMIT 10").bind(f).all<Row>()]);
  return {items:active.results.map(r=>decode(r)),history:history.results.map(r=>decode(r)),rejected:rejected.results,pending_shopping:jobs.results};
@@ -60,7 +61,7 @@ export async function completeQueueCooking(ctx:AppContext,b:any){
  const final=await queueRow(ctx,r.id);if(final.status!=='COOKED')throw changed();return {deduplicated:final.completion_token!==token,consumed:JSON.parse(final.inventory_result_json||'[]')};
 }
 export async function queueShoppingPreview(ctx:AppContext){
- const rows=await ctx.env.MEALS_DB!.prepare("SELECT * FROM meal_cooking_queue WHERE family_id=? AND status='ACTIVE' AND shopping_job_id IS NULL ORDER BY created_at,id LIMIT 100").bind(family(ctx)).all<Row>();const items=rows.results.map(r=>decode(r,true)),inventory=await readMealInventory(ctx.env.MEALS_DB!,family(ctx));
+ const rows=await ctx.env.MEALS_DB!.prepare("SELECT id,revision,servings,shopping_text,CASE WHEN recipe_json IS NULL THEN NULL ELSE json_object('id',json_extract(recipe_json,'$.id'),'name',json_extract(recipe_json,'$.name'),'servings',json_extract(recipe_json,'$.servings'),'ingredients',json_extract(recipe_json,'$.ingredients')) END recipe_json FROM meal_cooking_queue WHERE family_id=? AND status='ACTIVE' AND shopping_job_id IS NULL ORDER BY created_at,id LIMIT 100").bind(family(ctx)).all<Row>();const items=rows.results.map(r=>decode(r,true)),inventory=await readMealInventory(ctx.env.MEALS_DB!,family(ctx));
  const recipes=items.filter(r=>r.recipe).map(r=>({date:inventoryToday(ctx),recipe:r.recipe,servings:r.servings})),vague=items.filter(r=>!r.recipe).map(r=>({name:r.shopping_text,quantity:null,unit:'' as const,quantity_text:'必要なら購入'}));
  const needs=inventoryNeeds(mealShoppingNeeds(recipes),inventory.lots,inventoryToday(ctx));for(const n of vague)if(!needs.some(x=>x.name===n.name&&x.quantity===null&&x.quantity_text===n.quantity_text))needs.push({...n,required_quantity:null,available_quantity:null});
  if(needs.length>100)throw new BadRequest('食材が100件を超えています。料理を分けてください。');const entries=items.map(r=>({id:r.id,revision:r.revision})),contents={entries,needs,inventory_revision:inventory.revision};return {...contents,preview_hash:await mealHash(contents)};
