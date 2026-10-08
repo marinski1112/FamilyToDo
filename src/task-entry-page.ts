@@ -42,7 +42,7 @@ export async function taskEntryPage(
     <button type="submit">登録する</button>
   </form></div>
   <script type="application/json" id="taskNewPayload">${JSON.stringify({returnTo,categoryOptions,initialType}).replaceAll('<','\u003c').replaceAll('>','\u003e').replaceAll('&','\u0026')}</script>
-  <script src="/assets/task-rough-input-ui.js?v=${APP_VERSION}-entry-type2"></script>
-  <script src="/assets/task-entry-manual.js?v=${APP_VERSION}-task-idem2-entry-type2"></script>`;
+  <script src="/assets/task-rough-input-ui.js?v=${APP_VERSION}-entry-type2-draft1"></script>
+  <script src="/assets/task-entry-manual.js?v=${APP_VERSION}-task-idem2-entry-type2-draft1"></script>`;
   return new Response(layout('追加',body,''),{headers:{'content-type':'text/html; charset=utf-8'}});
 }

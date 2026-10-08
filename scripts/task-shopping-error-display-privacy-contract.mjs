@@ -16,7 +16,7 @@ for(const [name,asset,fixedText] of [
 }
 
 assert.match(taskCreate,/if\(!response\.ok\|\|!data\?\.ok\)throw new Error\('登録に失敗しました。'\)/,'task create must fail closed on HTTP/API/non-JSON responses');
-assert.match(taskCreate,/catch\(_error\)\{alert\('登録に失敗しました。'\)/,'task create transport failures must use fixed browser-safe text');
+assert.match(taskCreate,/catch\(_error\)\{guard\.failed\(\);alert\('登録に失敗しました。入力は残っています。'\)/,'task create transport failures must use fixed browser-safe text');
 assert.match(taskEdit,/if\(!r\.ok\|\|d\?\.ok!==true\)throw new Error\('更新に失敗しました'\)/,'task edit must fail closed on HTTP/API error responses');
 assert.match(taskEdit,/catch\(_err\)\{guard\.failed\(\);alert\('更新に失敗しました。入力は残っています。'\)/,'task edit transport failures must use fixed browser-safe text');
 assert.match(serviceWorker,/const STATIC_CACHE='familytodo-static-shopping-task-fallback'/,'Task privacy deployment must remain covered by the current static cache generation so stale vulnerable assets are evicted');
