@@ -29,7 +29,9 @@ try {
   let dirty=[...form.querySelectorAll('input:not([type=hidden]),textarea,select')].some(el=>{
     if(el.tagName==='SELECT'){const selected=[...el.options].findIndex(o=>o.defaultSelected);return el.selectedIndex!==(selected<0?0:selected);}
     return ['checkbox','radio'].includes(el.type)?el.checked!==el.defaultChecked:el.value!==el.defaultValue;
-  }),saving=false;
+  }),saving=false,uncertain=false;
+  const saveStatus=document.createElement('p');saveStatus.className='error';saveStatus.setAttribute('role','alert');saveStatus.hidden=true;form.append(saveStatus);
+  document.addEventListener('submit',event=>{if(saving&&event.target!==form){event.preventDefault();event.stopImmediatePropagation();alert('保存が終わるまでお待ちください。');}},true);
   form.addEventListener('input',()=>dirty=true);
   form.addEventListener('change',()=>dirty=true);
   window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
@@ -97,7 +99,7 @@ try {
   document.addEventListener('click',e=>{const target=e.target instanceof Element?e.target:null;if(!target||target.closest('#shoppingProducts'))return;closeAll();});
   form.onsubmit=async e=>{
     e.preventDefault();
-    if(saving)return;
+    if(saving||uncertain)return;
     if(!csrf||csrf.length>MAX_CSRF_UNITS){alert('追加に失敗しました。ページを再読み込みしてください。');return;}
     const rows=[...list.querySelectorAll('[data-product-row]')];
     if(!rows.length||rows.length>MAX_BATCH_PRODUCTS){alert(`商品は一度に1〜${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
@@ -121,19 +123,27 @@ try {
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
     const body={action:'add_batch',csrf,products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,memo:memo};
-    saving=true;
-    const controls=[...form.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);
+    saving=true;saveStatus.hidden=true;
+    let shoppingSubmitted=false,rejectedBeforeSave=false;
+    const controls=[...document.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);
     try{
       if(registerCategory){
         const categoryResponse=await fetch('/api/shopping-categories',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,name:category})});
         const categoryData=await categoryResponse.json().catch(()=>null);
         if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
       }
-      const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');
+      shoppingSubmitted=true;
+      const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});rejectedBeforeSave=[400,401,403,404,405,422].includes(r.status);const d=await r.json().catch(()=>null);if(!r.ok||d?.ok!==true)throw new Error('追加に失敗しました。');
       dirty=false;saving=false;location.replace(returnTarget);
     }
-    catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
-    finally{saving=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});}
+    catch(err){
+      uncertain=shoppingSubmitted&&!rejectedBeforeSave;
+      if(uncertain){
+        saveStatus.textContent='保存結果を確認できません。入力は残っています。二重登録を避けるため、買い物一覧で保存結果を確認してください。';
+        const link=document.createElement('a');link.href=fallbackReturn();link.textContent='買い物一覧を確認';link.className='btn gray';saveStatus.append(' ',link);saveStatus.hidden=false;
+      }else alert(err instanceof Error?err.message:'追加に失敗しました。');
+    }
+    finally{saving=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});if(uncertain)form.querySelectorAll('button[type=submit]').forEach(button=>button.disabled=true);}
   };
 } catch {
   root.dataset.shoppingNewJs='error';

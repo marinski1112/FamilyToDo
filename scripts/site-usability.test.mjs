@@ -101,9 +101,24 @@ test('shopping draft survives cancelled navigation and failed save; saving block
  const submit=()=>f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));submit();submit();assert.equal(calls,1);assert.equal(name.disabled,true);
  allow=true;const during=new w.MouseEvent('click',{bubbles:true,cancelable:true});back.dispatchEvent(during);assert.equal(during.defaultPrevented,true);
  const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
- finish({ok:false,json:async()=>({ok:false})});await settle();assert.equal(name.disabled,false);assert.equal(name.value,'synthetic item');assert.equal(unload(),true);
+ finish({ok:false,status:400,json:async()=>({ok:false})});await settle();assert.equal(name.disabled,false);assert.equal(name.value,'synthetic item');assert.equal(unload(),true);
  submit();finish({ok:true,json:async()=>({ok:true})});await settle();assert.equal(calls,2);assert.equal(unload(),false);assert.equal(redirect,'/app/tasks.php#shopping-checklist');
  }finally{await w.happyDOM.close();}
+});
+
+test('shopping response loss, server errors and authentication HTML never permit blind duplicate creation',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ for(const result of ['network',500,200]){
+  const w=new Window({url:'https://fixture.invalid/app/shopping_new.php'});
+  try{
+   const stmt={bind(){return this;},async all(){return {results:[]};}};w.document.body.innerHTML=await (await shoppingNew({member:{id:1,family_id:1},session:{csrfToken:'synthetic'},env:{DB:{prepare(){return stmt;}}}})).text();
+   const other=w.document.createElement('form');other.innerHTML='<input name="other" value="other draft"><button type="submit">other</button>';w.document.body.append(other);
+   let calls=0,finish;w.alert=()=>{};w.confirm=()=>false;w.fetch=()=>{calls++;return new Promise((resolve,reject)=>finish=result==='network'?()=>reject(Error('response lost')):()=>resolve({ok:result===200,status:result,json:async()=>{throw Error('HTML');}}));};w.eval(fs.readFileSync('public/assets/shopping-new.js','utf8'));
+   const f=w.document.getElementById('shopBatchForm'),name=f.querySelector('[name="product_name[]"]');name.value='fixture draft';name.dispatchEvent(new w.Event('input',{bubbles:true}));const submit=()=>f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));submit();assert.equal(other.elements.other.disabled,true);const event=new w.Event('submit',{bubbles:true,cancelable:true});other.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+   finish();for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));assert.equal(other.elements.other.disabled,false);assert.equal(name.value,'fixture draft');assert.equal(name.disabled,false);assert.equal(f.querySelector('button[type=submit]').disabled,true);submit();assert.equal(calls,1);
+   const status=f.querySelector('[role=alert]');assert.match(status.textContent,/二重登録/);const link=status.querySelector('a'),click=new w.MouseEvent('click',{bubbles:true,cancelable:true});assert.equal(link.getAttribute('href'),'/app/tasks.php#shopping-checklist');link.dispatchEvent(click);assert.equal(click.defaultPrevented,true);const unload=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+  }finally{await w.happyDOM.close();}
+ }
 });
 
 test('calendar date jumps contain real dates and today leads to the daily checklist',async()=>{
