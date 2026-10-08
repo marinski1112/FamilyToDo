@@ -126,6 +126,7 @@ export async function taskEdit(request:Request,ctx:AppContext,id:number):Promise
     }
 
     try{await (await import('./google-calendar')).queueCalendarProjectionAfterMutation(ctx.env.DB,m.family_id,id);}catch{/* task save succeeds independently of Google */}
+    if(request.headers.get('accept')?.includes('application/json'))return json({ok:true,redirect:`/task/view.php?id=${id}`});
     return redirect(`/task/view.php?id=${id}`);
   }
 
