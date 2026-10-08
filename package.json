@@ -50,7 +50,8 @@
     "check:ai-call-budget": "esbuild scripts/ai-call-budget.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-ai-call-test.mjs && node --test /tmp/familytodo-ai-call-test.mjs",
     "check:meal-ai-routes": "esbuild scripts/meal-ai-routes.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-meal-ai-routes-test.mjs && node --test /tmp/familytodo-meal-ai-routes-test.mjs",
     "migrate:meals": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply MEALS_DB --remote",
-    "deploy:meals": "npm run deploy"
+    "deploy:meals": "npm run deploy",
+    "check:site-usability": "esbuild scripts/site-usability.test.mjs --bundle --platform=node --format=esm --packages=external --outfile=/tmp/familytodo-site-ui-test.mjs && node --test /tmp/familytodo-site-ui-test.mjs"
   },
   "devDependencies": {
     "happy-dom": "^20.14.5",
