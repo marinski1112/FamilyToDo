@@ -42,7 +42,7 @@ function shoppingBatchForm(ctx:AppContext,date='',categoryOptions:string[]=[]):s
     </form>
   </div>
   <script type="application/json" id="shoppingNewPayload">${JSON.stringify({csrf}).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026')}</script>
-  <script src="/assets/shopping-new.js?v=${APP_VERSION}-category-register-1"></script>`;
+  <script src="/assets/shopping-new.js?v=${APP_VERSION}-unsaved-2"></script>`;
 }
 
 /** Canonical server-rendered shopping-new page independent from the legacy app.ts monolith. */

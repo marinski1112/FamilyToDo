@@ -7,6 +7,29 @@ import {pathToFileURL} from 'node:url';
 import {contentListing} from '../src/content-listing.ts';
 import {messagesChatPage} from '../src/messages-chat-page.ts';
 import {calendar} from '../src/calendar-page.ts';
+import {shoppingNew} from '../src/shopping-new-page.ts';
+
+test('shopping draft survives cancelled navigation and failed save; saving blocks duplicate requests and edits',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ const w=new Window({url:'https://fixture.invalid/app/shopping_new.php'});
+ try{
+ const stmt={bind(){return this;},async all(){return {results:[]};},async first(){return null;}};
+ const ctx={member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(){return stmt;}}},request:new Request(w.location.href)};
+ w.document.body.innerHTML=await (await shoppingNew(ctx)).text();
+ let allow=false,calls=0,finish,redirect='';w.confirm=()=>allow;w.alert=()=>{};
+ w.location.replace=url=>{redirect=url;};w.fetch=()=>{calls++;return new Promise(resolve=>finish=resolve);};
+ w.eval(fs.readFileSync('public/assets/shopping-new.js','utf8'));
+ const f=w.document.getElementById('shopBatchForm'),name=f.querySelector('[name="product_name[]"]');name.value='synthetic item';name.dispatchEvent(new w.Event('input',{bubbles:true}));
+ const back=w.document.querySelector('.page-head a');
+ const click=new w.MouseEvent('click',{bubbles:true,cancelable:true});back.dispatchEvent(click);assert.equal(click.defaultPrevented,true);assert.equal(name.value,'synthetic item');
+ const unload=()=>{const event=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(event);return event.defaultPrevented;};assert.equal(unload(),true);
+ const submit=()=>f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));submit();submit();assert.equal(calls,1);assert.equal(name.disabled,true);
+ allow=true;const during=new w.MouseEvent('click',{bubbles:true,cancelable:true});back.dispatchEvent(during);assert.equal(during.defaultPrevented,true);
+ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
+ finish({ok:false,json:async()=>({ok:false})});await settle();assert.equal(name.disabled,false);assert.equal(name.value,'synthetic item');assert.equal(unload(),true);
+ submit();finish({ok:true,json:async()=>({ok:true})});await settle();assert.equal(calls,2);assert.equal(unload(),false);assert.equal(redirect,'/app/tasks.php#shopping-checklist');
+ }finally{await w.happyDOM.close();}
+});
 
 test('calendar date jumps contain real dates and today leads to the daily checklist',async()=>{
  const stmt={bind(){return this;},async all(){return {results:[]};},async first(){return null;}};
