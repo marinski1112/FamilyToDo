@@ -25,12 +25,18 @@ try{
   };
   const enhance=select=>{
     if(!(select instanceof HTMLSelectElement))return;
+    const customAtStart=customInputFor(select),earlyCustom=customAtStart&&customAtStart.value!==customAtStart.defaultValue;
     for(const option of select.options)option.textContent=stripLegacyLabel(option.textContent||option.value);
     if(select.dataset.calendarColorUi!=='1'){
       select.dataset.calendarColorUi='1';
       if(isCreatePage()&&select.name==='calendar_color'){
         let stored='';try{stored=localStorage.getItem(STORAGE_KEY)||'';}catch{}
-        if(valid(stored)){ensureOption(select,stored);select.value=normalized(stored);}
+        const initial=[...select.options].find(option=>option.defaultSelected)||select.options[0];
+        if(earlyCustom){ensureOption(select,customAtStart.value);select.value=normalized(customAtStart.value);}
+        else if(valid(stored)&&select.value===initial?.value){
+          const option=ensureOption(select,stored);select.value=normalized(stored);
+          for(const entry of select.options)entry.defaultSelected=entry===option;
+        }
       }
       select.addEventListener('change',()=>{
         const value=normalized(select.value),custom=customInputFor(select);
@@ -46,7 +52,7 @@ try{
         });
       }
     }
-    const value=normalized(select.value),custom=customInputFor(select);if(custom&&valid(value))custom.value=value;
+    const value=normalized(select.value),custom=customInputFor(select);if(custom&&valid(value)&&!earlyCustom){const unchanged=custom.value===custom.defaultValue;custom.value=value;if(unchanged&&isCreatePage())custom.defaultValue=value;}
     syncSwatch(select);
   };
   const scan=root=>{

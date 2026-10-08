@@ -43,6 +43,14 @@ test('new task event initialization is clean and AI input is guarded without cal
   change(w,w.document.getElementById('roughMainInput'),'fixture event');assert.equal(unloading(w),true);w.confirm=()=>false;const link=w.document.querySelector('a[href="/app/tasks.php"]'),click=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(click);assert.equal(click.defaultPrevented,true);assert.equal(w.document.getElementById('roughMainInput').value,'fixture event');
  }finally{await w.happyDOM.close();}
 });
+test('remembered calendar color is a clean default and early custom color input survives initialization',async()=>{
+ for(const early of [false,true]){
+  const w=await windowFor('https://fixture.invalid/task/new.php');
+  try{
+   const {ctx}=fixture(new Request(w.location.href));w.document.body.innerHTML=await (await taskEntryPage(ctx,'2026-10-08','','event')).text();w.localStorage.setItem('familytodo:lastCalendarColor','#123456');const custom=w.document.getElementById('taskCalendarCustomColor');if(early)custom.value='#abcdef';load(w,'form-draft-guard.js');load(w,'task-rough-input-ui.js');load(w,'calendar-color-ui.js');load(w,'task-entry-manual.js');await settle();assert.equal(w.document.documentElement.dataset.calendarColorUi,'ready');assert.equal(custom.value,early?'#abcdef':'#123456');assert.equal(w.document.querySelector('select[name=calendar_color]').value,custom.value);assert.equal(unloading(w),early);
+  }finally{await w.happyDOM.close();}
+ }
+});
 test('AI draft save locks manual saves, retains uncertain drafts and clears guard only after success',async()=>{
  for(const success of [false,true]){
   const w=await windowFor('https://fixture.invalid/task/new.php');
