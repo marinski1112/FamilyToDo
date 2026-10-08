@@ -1,4 +1,5 @@
 import {readQueueItem,readMealQueue,adoptMealWish,decideMealWish,editMealQueue,returnMealQueue,queueCookingPreview,completeQueueCooking,queueShoppingPreview,confirmQueueShopping} from './meal-queue';
+import {readRecipeCatalog,restoreRecipe} from './meal-recipe-catalog';
 import {guideMealBaby} from './meal-baby-guidance';
 import {startMealLive,endMealLive} from './meal-live';
 import {searchMealPublisher} from './meal-publisher-search';
@@ -29,6 +30,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
  const db=ctx.env.MEALS_DB!,familyId=Number(m.family_id),url=new URL(request.url);
  if(request.method==='GET'){try{
   const view=url.searchParams.get('view')||'overview',week=mealWeek(url.searchParams.get('week')||new Date().toISOString().slice(0,10));
+  if(view==='recipe_catalog')return out({ok:true,catalog:await readRecipeCatalog(db,familyId,url)});
   if(view==='ai_status'){
    if(!['OWNER','ADMIN'].includes(String(m.role||'').toUpperCase()))return out({ok:false,error:'管理者のみ利用できます。'},403);
    const [guidance,live]=await Promise.all([
@@ -112,6 +114,7 @@ export async function mealApi(request:Request,ctx:AppContext):Promise<Response>{
    if(!saved||saved.recipe_id!==target)return out({ok:false,error:'紐づけが更新されています。読み込み直してください。'},409);
    return out({ok:true});
   }
+  if(b.action==='restore_recipe')return out({ok:true,...await restoreRecipe(db,familyId,b)});
   if(b.action==='archive_recipe'){await db.prepare('UPDATE recipes SET archived=1,updated_at=? WHERE family_id=? AND id=?').bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}
   if(b.action==='wishlist_add'){const id=mealId(b.id),name=mealText(b.name,120),main=mealMain(b.is_main);await db.prepare('INSERT OR IGNORE INTO meal_wishlist(family_id,id,name,is_main,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(familyId,id,name,Number(main),m.id,new Date().toISOString()).run();const saved=await db.prepare('SELECT name,is_main FROM meal_wishlist WHERE family_id=? AND id=?').bind(familyId,id).first<{name:string;is_main:number}>();if(saved?.name!==name||!!saved?.is_main!==main)return out({ok:false,error:'食べたいものは既に保存されています。画面を開き直してください。'},409);return out({ok:true});}
   if(b.action==='wishlist_delete'){await db.prepare("UPDATE meal_wishlist SET status='REJECTED',decision_at=?,recipe_link_revision=recipe_link_revision+1 WHERE family_id=? AND id=? AND status='PENDING'").bind(new Date().toISOString(),familyId,mealId(b.id)).run();return out({ok:true});}

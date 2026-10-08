@@ -27,6 +27,71 @@ function fixture(){const main=db('migrations'),meals=db('meals-migrations');main
 async function call(ctx,body,query=''){const response=await mealApi(new Request('https://fixture.invalid/api/meals/v1'+query,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify({csrf:'test',...body}):undefined}),ctx);return {response,value:await response.json()};}
 const recipe=(id='recipe-test-001')=>({id,is_main:true,name:'ハンバーグ',servings:2,minutes:25,source_url:'https://example.invalid/recipe',ingredients:[{name:'ひき肉',quantity:300,unit:'g'},{name:'玉ねぎ',quantity:1,unit:'個'}],steps:['玉ねぎを切る','ひき肉と混ぜて焼く']});
 async function seed(ctx){await call(ctx,{action:'save_recipe',recipe:recipe()});return (await call(ctx,{action:'save_plan',plan:{week_start:'2026-10-05',status:'CONFIRMED',items:[{date:'2026-10-05',recipe_id:'recipe-test-001',servings:4},{date:'2026-10-06',recipe_id:'recipe-test-001',servings:2}]}})).value.plan;}
+test('recipe catalog searches beyond the overview limit and paginates without family leakage',async()=>{
+ const {ctx,meals}=fixture();await call({...ctx,member:{...ctx.member,family_id:2}},{action:'save_recipe',recipe:{...recipe('foreign-catalog-001'),name:'料理 999'}});
+ const saved=(await call(ctx,{action:'save_recipe',recipe:recipe('catalog-template-001')})).value.recipe;
+ const insert=meals.sql.prepare('INSERT INTO recipes(family_id,id,name,is_main,servings,minutes,ingredients_json,steps_json,revision,payload_hash,created_by,created_at,updated_at,archived) SELECT family_id,?, ?,is_main,servings,minutes,ingredients_json,steps_json,revision,payload_hash,created_by,created_at,updated_at,0 FROM recipes WHERE id=?');
+ for(let i=0;i<215;i++)insert.run('catalog-recipe-'+String(i).padStart(3,'0'),'料理 '+String(i).padStart(3,'0'),saved.id);
+ const seen=[];let cursor='';do{const {value}=await call(ctx,null,'?view=recipe_catalog&q='+encodeURIComponent('料理')+(cursor?'&after='+encodeURIComponent(cursor):''));assert.ok(value.catalog.recipes.length<=30);seen.push(...value.catalog.recipes.map(r=>r.id));cursor=value.catalog.next_cursor;}while(cursor);
+ assert.equal(seen.length,215);assert.equal(new Set(seen).size,215);assert.ok(seen.includes('catalog-recipe-000'));
+ const matched=(await call(ctx,null,'?view=recipe_catalog&q='+encodeURIComponent('料理 214'))).value.catalog.recipes;assert.deepEqual(matched.map(r=>r.id),['catalog-recipe-214']);
+ assert.equal((await call(ctx,null,'?view=recipe_catalog&after='+encodeURIComponent('["x","bad"]'))).response.status,400);
+});
+test('archived recipe restoration is family scoped, revision checked, retryable and preserves saved plans',async()=>{
+ const {ctx,meals}=fixture(),plan=await seed(ctx),r=(await call(ctx,null,'?view=recipe&id=recipe-test-001')).value.recipe;
+ await call(ctx,{action:'archive_recipe',id:r.id});assert.equal((await call(ctx,null,'?view=recipe&id='+r.id)).response.status,404);
+ const hidden=(await call(ctx,null,'?view=recipe_catalog&archived=1')).value.catalog.recipes;assert.equal(hidden.length,1);
+ assert.equal((await call({...ctx,member:{...ctx.member,family_id:2}},{action:'restore_recipe',id:r.id,revision:r.revision})).response.status,400);
+ assert.equal((await call(ctx,{action:'restore_recipe',id:r.id,revision:'stale-revision'})).response.status,400);
+ assert.equal(meals.sql.prepare('SELECT archived FROM recipes WHERE id=?').get(r.id).archived,1);
+ for(let i=0;i<2;i++)assert.equal((await call(ctx,{action:'restore_recipe',id:r.id,revision:r.revision})).response.status,200);
+ assert.equal((await call(ctx,null,'?view=recipe&id='+r.id)).value.recipe.name,r.name);
+ assert.deepEqual((await call(ctx,null,'?week=2026-10-05')).value.plan.items,plan.items);
+});
+test('recipe-to-plan navigation selects the requested recipe and preserves other days without saving',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture();await seed(ctx);await call(ctx,{action:'save_recipe',recipe:{...recipe('new-plan-recipe-001'),name:'新しい料理'}});
+ const w=new Window({url:'https://fixture.invalid/app/meals.php?view=week&week=2026-10-05&plan_date=2026-10-07&add_recipe=new-plan-recipe-001'}),posts=[];
+ try{
+ w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+ w.fetch=(u,o={})=>{if(o.method==='POST')posts.push(JSON.parse(o.body));return mealApi(new Request(new URL(u,w.location.href),o),ctx);};
+ w.eval(fs.readFileSync('public/assets/meals-cooking.js','utf8'));w.eval(fs.readFileSync('public/assets/meals-queue.js','utf8'));w.eval(fs.readFileSync('public/assets/meals.js','utf8'));
+ for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(w.document.querySelector('select[name=recipe2]').value,'new-plan-recipe-001');assert.equal(w.document.querySelector('select[name=recipe0]').value,'recipe-test-001');assert.equal(posts.length,0);assert.equal(new URL(w.location.href).searchParams.has('add_recipe'),false);
+ assert.equal((await call(ctx,null,'?week=2026-10-05')).value.plan.items.length,2);
+ }finally{await w.happyDOM.close();}
+});
+test('recipe catalogue ignores stale search responses and cannot replace a newly opened editor',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture();await seed(ctx);
+ const w=new Window({url:'https://fixture.invalid/app/meals.php?view=recipes'}),pending=[];
+ try{
+ w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+ w.fetch=(u,o={})=>String(u).includes('view=recipe_catalog')?new Promise(resolve=>pending.push({u,resolve})):mealApi(new Request(new URL(u,w.location.href),o),ctx);
+ w.eval(fs.readFileSync('public/assets/meals-cooking.js','utf8'));w.eval(fs.readFileSync('public/assets/meals-queue.js','utf8'));w.eval(fs.readFileSync('public/assets/meals.js','utf8'));
+ const tick=async()=>{for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));};
+ const respond=async(p)=>p.resolve(await mealApi(new Request(new URL(p.u,w.location.href)),ctx));
+ await tick();await respond(pending.shift());await tick();
+ const search=w.document.getElementById('recipeSearch');search.elements.q.value='old';search.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+ search.elements.q.value='ハンバーグ';search.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+ const old=pending.shift(),latest=pending.shift();await respond(latest);await tick();await respond(old);await tick();
+ assert.equal(w.document.getElementById('recipeSearch').elements.q.value,'ハンバーグ');
+ w.document.getElementById('recipeSearch').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+ w.document.getElementById('newRecipe').click();await respond(pending.shift());await tick();
+ assert.ok(w.document.getElementById('recipeForm'));assert.equal(w.document.getElementById('recipeSearch'),null);
+ }finally{await w.happyDOM.close();}
+});
+test('public discovery remembers the selected publisher and restores matching Hotcook fields',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href),{ctx}=fixture();
+ const w=new Window({url:'https://fixture.invalid/app/meals.php?view=search'});
+ try{
+ w.localStorage.setItem('familytodo:meals:publisher:v1','HOTCOOK');w.localStorage.setItem('familytodo:meals:hotcook-model:v1','KN-HW24H');
+ w.document.body.innerHTML='<script id="mealPayload" type="application/json">{"csrf":"test","today":"2026-10-05"}</script><p id="mealStatus"></p><section id="mealContent"></section>';
+ w.fetch=(u,o={})=>mealApi(new Request(new URL(u,w.location.href),o),ctx);
+ w.eval(fs.readFileSync('public/assets/meals-cooking.js','utf8'));w.eval(fs.readFileSync('public/assets/meals-queue.js','utf8'));w.eval(fs.readFileSync('public/assets/meals.js','utf8'));
+ for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));
+ const f=w.document.getElementById('publisherSearchForm');assert.equal(f.elements.publisher.value,'HOTCOOK');assert.equal(f.elements.model.value,'KN-HW24H');assert.equal(w.document.getElementById('hotcookSearchFields').hidden,false);
+ f.elements.publisher.value='COOKPAD';f.elements.publisher.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(w.localStorage.getItem('familytodo:meals:publisher:v1'),'COOKPAD');assert.equal(f.elements.model.disabled,true);
+ }finally{await w.happyDOM.close();}
+});
 test('wishlist recipe links support adoption, unlink, archive, isolation and legacy identity',async()=>{
  const {ctx,meals}=fixture();await call(ctx,{action:'wishlist_add',id:'wish-existing',name:'Hope'});
  const saved=await call(ctx,{action:'save_recipe',recipe:recipe(),wishlist_id:'wish-existing',add_to_wishlist:true});assert.equal(saved.response.status,200);
