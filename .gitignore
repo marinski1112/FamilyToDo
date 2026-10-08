@@ -7,3 +7,4 @@ dist/
 .env.*
 *.log
 worker-configuration.d.ts.tmp
+wrangler.android-e2e.generated.jsonc
