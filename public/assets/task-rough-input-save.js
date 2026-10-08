@@ -128,7 +128,8 @@ try{
       actions=document.createElement('div');actions.className='rough-save-actions';actions.innerHTML='<button type="button" class="btn" id="roughConfirmSave">この内容で保存</button><p class="rough-save-status" role="status" aria-live="polite"></p>';preview.appendChild(actions);
       const saveButton=actions.querySelector('#roughConfirmSave');
       saveButton.addEventListener('click',async()=>{
-        if(preview.dataset.saving==='1'||guard.isSaving()||analysisButton?.disabled)return;
+        if(preview.dataset.saving==='1')return;
+        if(guard.isSaving()||analysisButton?.disabled)return;
         const status=actions.querySelector('.rough-save-status');
         const rows=[...preview.querySelectorAll('.rough-draft-row')].map(readRow),validation=validateRows(rows);
         if(validation){status.textContent=validation;return;}

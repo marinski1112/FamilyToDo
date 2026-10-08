@@ -7,7 +7,9 @@ assert.ok(start>0&&end>start);
 const button={disabled:false,textContent:'保存'},field={disabled:false},parse={disabled:false},status={textContent:''},links=[];
 const preview={dataset:{},querySelectorAll:selector=>selector==='.rough-draft-row'?[{}]:[button,field]};
 let calls=0,uncertain=true,pendingResolve=null,destination='task';
-const context=vm.createContext({preview,saveButton:button,actions:{querySelector:()=>status,append:link=>links.push(link)},form:{querySelectorAll:()=>[parse]},readRow:()=>({title:'fixture',destination}),validateRows:()=>'',
+let guarding=false;
+const guard={isSaving:()=>guarding,startSaving:()=>{if(guarding)return false;guarding=true;return true;},failed:()=>{guarding=false;},saved:()=>{guarding=false;}};
+const context=vm.createContext({guard,analysisButton:{disabled:false},preview,saveButton:button,actions:{querySelector:()=>status,append:link=>links.push(link)},form:{elements:{},querySelectorAll:()=>[parse]},readRow:()=>({title:'fixture',destination}),validateRows:()=>'',
   document:{createElement:()=>({})},setTimeout:()=>0,redirectAfterSave:()=>{},
   saveRows:async()=>{calls++;if(pendingResolve)await new Promise(resolve=>{pendingResolve=resolve;});throw Object.assign(new Error('fixture failure'),{uncertain});}
 });
