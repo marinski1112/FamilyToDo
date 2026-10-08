@@ -6,6 +6,19 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {contentListing} from '../src/content-listing.ts';
 import {messagesChatPage} from '../src/messages-chat-page.ts';
+import {calendar} from '../src/calendar-page.ts';
+
+test('calendar date jumps contain real dates and today leads to the daily checklist',async()=>{
+ const stmt={bind(){return this;},async all(){return {results:[]};},async first(){return null;}};
+ const ctx={member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(){return stmt;}}}};
+ const response=await calendar(new Request('https://fixture.invalid/app/calendar.php?month=2026-11'),ctx,'2026-11');
+ const html=await response.text(),payload=JSON.parse(html.match(/id="calendarPayload">([^<]+)</)[1]),today=payload.today;
+ assert.match(today,/^\d{4}-\d{2}-\d{2}$/);assert.ok(!html.includes('${dateOnly'));assert.ok(!html.includes('${openDate'));
+ assert.ok(html.includes('value="'+today+'"'));assert.ok(html.includes('href="/app/calendar.php?month='+today.slice(0,7)+'"'));
+ assert.ok(html.includes('href="/app/calendar.php?month='+today.slice(0,7)+'&open='+today+'"'));
+ const jump=await calendar(new Request('https://fixture.invalid/app/calendar.php?open='+today),ctx,today.slice(0,7));
+ assert.equal(jump.status,302);assert.equal(jump.headers.get('location'),'/app/tasks.php?date='+today);
+});
 
 // Synthetic data only. Execute the real reader SQL to catch binding and visibility errors.
 function query(sql,values){
