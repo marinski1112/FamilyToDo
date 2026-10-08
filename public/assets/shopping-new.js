@@ -26,6 +26,18 @@ try {
   const fallbackReturn=()=>{const date=new URL(location.href).searchParams.get('date')||'';return date?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';};
   const safeReturnTarget=()=>{try{if(!document.referrer)return fallbackReturn();const url=new URL(document.referrer);if(url.origin!==location.origin)return fallbackReturn();if(url.pathname==='/app/shopping_new.php'||url.pathname==='/app/shopping.php')return fallbackReturn();return url.pathname+url.search+url.hash;}catch{return fallbackReturn();}};
   const returnTarget=safeReturnTarget();
+  let dirty=false,saving=false;
+  form.addEventListener('input',()=>dirty=true);
+  form.addEventListener('change',()=>dirty=true);
+  window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
+  document.addEventListener('click',e=>{
+    const link=e.target instanceof Element?e.target.closest('a[href]'):null;
+    if(!link||e.defaultPrevented||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||link.hasAttribute('download')||(link.target&&link.target!=='_self'))return;
+    const target=new URL(link.href,location.href);
+    if(target.origin===location.origin&&target.pathname===location.pathname&&target.search===location.search)return;
+    if(saving){e.preventDefault();alert('保存が終わるまでお待ちください。');return;}
+    if(dirty){if(!confirm('未保存の買い物入力を破棄して移動しますか？'))e.preventDefault();else dirty=false;}
+  },true);
   const backLink=[...document.querySelectorAll('.page-head a[href]')].find(a=>String(a.textContent||'').trim()==='戻る');
   if(backLink)backLink.setAttribute('href',returnTarget);
   const safeEntityId=value=>{const id=Number(value);return Number.isSafeInteger(id)&&id>0?id:0};
@@ -69,7 +81,7 @@ try {
   function closeAll(except=null){list.querySelectorAll('[data-product-row]').forEach(row=>{if(row!==except)closeUrl(row);});}
   add.onclick=()=>{
     if(list.querySelectorAll('[data-product-row]').length>=MAX_BATCH_PRODUCTS){alert(`商品は一度に${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
-    sequence++;
+    sequence++;dirty=true;
     const row=document.createElement('div');row.className='product-row batch-product';row.dataset.productRow='';row.dataset.rowNumber=String(sequence);row.innerHTML=rowHtml();list.appendChild(row);
   };
   list.onclick=e=>{
@@ -77,11 +89,12 @@ try {
     const toggle=target.closest('.product-url-toggle');
     if(toggle){const row=toggle.closest('[data-product-row]');const pop=row?.querySelector('.product-url-popover');if(!row||!pop)return;const open=pop.hidden;closeAll(row);pop.hidden=!open;toggle.setAttribute('aria-expanded',open?'true':'false');return;}
     const close=target.closest('.product-url-close');if(close){closeUrl(close.closest('[data-product-row]'));return;}
-    const remove=target.closest('.remove-product');if(remove){if(list.querySelectorAll('[data-product-row]').length>1)remove.closest('[data-product-row]')?.remove();return;}
+    const remove=target.closest('.remove-product');if(remove){if(list.querySelectorAll('[data-product-row]').length>1){remove.closest('[data-product-row]')?.remove();dirty=true;}return;}
   };
   document.addEventListener('click',e=>{const target=e.target instanceof Element?e.target:null;if(!target||target.closest('#shoppingProducts'))return;closeAll();});
   form.onsubmit=async e=>{
     e.preventDefault();
+    if(saving)return;
     if(!csrf||csrf.length>MAX_CSRF_UNITS){alert('追加に失敗しました。ページを再読み込みしてください。');return;}
     const rows=[...list.querySelectorAll('[data-product-row]')];
     if(!rows.length||rows.length>MAX_BATCH_PRODUCTS){alert(`商品は一度に1〜${MAX_BATCH_PRODUCTS}件まで追加できます。`);return;}
@@ -105,7 +118,8 @@ try {
     const memo=String(fd.get('memo')||'').trim();
     if(memo.length>MAX_MEMO_UNITS){alert(`メモは${MAX_MEMO_UNITS}文字以内で入力してください。`);return;}
     const body={action:'add_batch',csrf,products:names.map((name,j)=>({name,quantity:quantities[j]||'1',url:safeUrls[j]||''})),category,due_date:dueDate,memo:memo};
-    const button=form.querySelector('button[type="submit"]');if(button)button.disabled=true;
+    saving=true;
+    const controls=[...form.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);
     try{
       if(registerCategory){
         const categoryResponse=await fetch('/api/shopping-categories',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,name:category})});
@@ -113,10 +127,10 @@ try {
         if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
       }
       const r=await fetch('/api/shopping',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>null);if(!r.ok||!d?.ok)throw new Error('追加に失敗しました。');
-      location.replace(returnTarget);
+      dirty=false;saving=false;location.replace(returnTarget);
     }
     catch(err){alert(err instanceof Error?err.message:'追加に失敗しました。');}
-    finally{if(button)button.disabled=false;}
+    finally{saving=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});}
   };
 } catch {
   root.dataset.shoppingNewJs='error';
