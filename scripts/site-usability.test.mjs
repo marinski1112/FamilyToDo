@@ -9,6 +9,21 @@ import {messagesChatPage} from '../src/messages-chat-page.ts';
 import {calendar} from '../src/calendar-page.ts';
 import {shoppingNew} from '../src/shopping-new-page.ts';
 
+test('shopping form preserves input entered before bootstrap and matches the server fifty-item limit',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ const w=new Window({url:'https://fixture.invalid/app/shopping_new.php'});
+ try{
+ const stmt={bind(){return this;},async all(){return {results:[]};}};
+ const response=await shoppingNew({member:{id:1,family_id:1},session:{csrfToken:'synthetic'},env:{DB:{prepare(){return stmt;}}}});
+ const markup=await response.text();assert.ok(markup.includes('-return-origin3'));w.document.body.innerHTML=markup;
+ w.document.querySelector('[name="product_name[]"]').value='typed before script loads';let alert='';w.alert=text=>alert=text;
+ w.eval(fs.readFileSync('public/assets/shopping-new.js','utf8'));
+ const unload=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+ const add=w.document.getElementById('addProduct');for(let i=0;i<49;i++)add.click();assert.equal(w.document.querySelectorAll('[data-product-row]').length,50);
+ add.click();assert.equal(w.document.querySelectorAll('[data-product-row]').length,50);assert.match(alert,/50件/);
+ }finally{await w.happyDOM.close();}
+});
+
 test('shopping draft survives cancelled navigation and failed save; saving blocks duplicate requests and edits',async()=>{
  const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
  const w=new Window({url:'https://fixture.invalid/app/shopping_new.php'});

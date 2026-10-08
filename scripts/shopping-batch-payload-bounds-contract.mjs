@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync('public/assets/shopping-new.js','utf8');
 
-assert.match(source,/const MAX_BATCH_PRODUCTS=64;/,'Shopping batch create must retain an explicit bounded product count');
+assert.match(source,/const MAX_BATCH_PRODUCTS=50;/,'Shopping batch create must retain an explicit bounded product count');
 assert.match(source,/const MAX_PRODUCT_NAME_UNITS=255;/,'Shopping batch create must retain the persisted product-name bound');
 assert.match(source,/const MAX_PRODUCT_QUANTITY_UNITS=128;/,'Shopping batch create must bound free-form quantity text');
 assert.match(source,/const MAX_CATEGORY_UNITS=255;/,'Shopping batch create must bound free-form category text');
