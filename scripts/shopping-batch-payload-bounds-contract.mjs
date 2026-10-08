@@ -47,7 +47,7 @@ assert.match(source,/names\.some\(name=>name\.length>MAX_PRODUCT_NAME_UNITS\)/,'
 assert.match(source,/quantities\.some\(quantity=>quantity\.length>MAX_PRODUCT_QUANTITY_UNITS\)/,'programmatic bypass of quantity maxlength must fail closed');
 assert.match(source,/const safeUrls=urls\.map\(safeProductUrl\)/,'bounded batch submission must retain product URL validation');
 assert.doesNotMatch(source,/task_id:|assignees:/,'batch submission must not restore retired task or assignee fields');
-assert.match(source,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('追加に失敗しました。'\)/,'Shopping batch API failures must fall back to a fixed client-safe message even when the response body is malformed');
+assert.match(source,/const d=await r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|d\?\.ok!==true\)throw new Error\('追加に失敗しました。'\)/,'Shopping batch API failures must fall back to a fixed client-safe message even when the response body is malformed');
 assert.doesNotMatch(source,/new Error\(d\?\.error|new Error\(d\.error|alert\(d\?\.error|alert\(d\.error/,'Shopping batch create must not surface arbitrary server error detail in the browser');
 
 assert.match(source,/\} catch \{\s*root\.dataset\.shoppingNewJs='error';\s*console\.error\('\[shopping-new\] initialization failed'\);\s*\}/,'Shopping batch initialization failures must log only a fixed non-content-bearing diagnostic');

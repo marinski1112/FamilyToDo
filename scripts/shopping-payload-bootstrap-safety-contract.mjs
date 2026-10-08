@@ -9,7 +9,7 @@ assert.match(source,/const csrf=String\(payload\.csrf\|\|''\)/,'Shopping create 
 assert.match(source,/if\(!csrf\|\|csrf\.length>MAX_CSRF_UNITS\)\{alert\('追加に失敗しました。ページを再読み込みしてください。'\);return;\}/,'missing or oversized CSRF payload must fail closed before network I/O');
 assert.doesNotMatch(source,/console\.(?:log|warn|error)\([^\n]*(?:shoppingNewPayload|payload|csrf)/i,'payload bootstrap must not log persisted Shopping payload or CSRF values');
 assert.doesNotMatch(source,/dataset\.shoppingNewJs\s*=\s*(?:payload|csrf)/,'diagnostic dataset state must never contain parsed private payload data');
-assert.match(source,/const r=await fetch\('\/api\/shopping',[\s\S]*?r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|!d\?\.ok\)throw new Error\('追加に失敗しました。'\)/,'Shopping create submission must fail closed on malformed responses and server failures');
+assert.match(source,/const r=await fetch\('\/api\/shopping',[\s\S]*?r\.json\(\)\.catch\(\(\)=>null\);if\(!r\.ok\|\|d\?\.ok!==true\)throw new Error\('追加に失敗しました。'\)/,'Shopping create submission must fail closed on malformed responses and server failures');
 assert.doesNotMatch(source,/calendar_perf|\/app\/calendar\.php|CALENDAR_PERF_DIAGNOSTICS/,'Shopping create payload hardening must remain isolated from Calendar diagnostics');
 
 console.log('shopping payload bootstrap safety contract: active create payload and CSRF bootstrap fail closed without logging private payload data');
