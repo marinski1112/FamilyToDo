@@ -3,6 +3,7 @@
 try{
   const form=document.getElementById('taskForm'),preview=document.getElementById('roughPreview');
   if(!form||!preview)return;
+  const guard=window.FamilyTodoDraftGuard.attach(form);
   const payload=JSON.parse(document.getElementById('taskNewPayload')?.textContent||'{}');
   const csrf=()=>String(form.elements.csrf?.value||'');
   const primary=()=>String(form.querySelector('[name=rough_primary_type]:checked')?.value||'task');
@@ -128,15 +129,19 @@ try{
       const saveButton=actions.querySelector('#roughConfirmSave');
       saveButton.addEventListener('click',async()=>{
         if(preview.dataset.saving==='1')return;
+        if(guard.isSaving()||analysisButton?.disabled)return;
         const status=actions.querySelector('.rough-save-status');
         const rows=[...preview.querySelectorAll('.rough-draft-row')].map(readRow),validation=validateRows(rows);
         if(validation){status.textContent=validation;return;}
+        if(['title','description','location'].some(name=>String(form.elements[name]?.value||'').trim())&&!confirm('手入力欄の内容は保存されません。下書きだけを保存して移動しますか？'))return;
         const controls=[...preview.querySelectorAll('input,select,textarea,button'),...form.querySelectorAll('.task-rough-input input,.task-rough-input textarea,#roughPreviewButton')],disabled=controls.map(control=>control.disabled);
+        if(!guard.startSaving())return;
         preview.dataset.saving='1';controls.forEach(control=>control.disabled=true);status.textContent='保存しています…';const old=saveButton.textContent;saveButton.textContent='保存中…';
-        try{const result=await saveRows(rows);saveButton.textContent='保存しました';setTimeout(()=>redirectAfterSave(result),200);}
+        try{const result=await saveRows(rows);saveButton.textContent='保存しました';guard.saved();redirectAfterSave(result);}
         catch(error){
+          guard.failed();
           status.textContent=String(error?.message||'保存に失敗しました。内容を確認して再度お試しください。');
-          if(error?.uncertain){saveButton.textContent='一覧で保存結果を確認してください';const link=document.createElement('a');const shoppingOnly=rows.every(item=>item.destination==='shopping');link.href=shoppingOnly?'/app/tasks.php#shopping-checklist':'/app/tasks.php';link.textContent=shoppingOnly?'買い物一覧を確認':'チェックリストを確認';link.className='btn gray';actions.append(link);}
+          if(error?.uncertain){controls.forEach(control=>control.disabled=true);saveButton.textContent='一覧で保存結果を確認してください';const link=document.createElement('a');const shoppingOnly=rows.every(item=>item.destination==='shopping');link.href=shoppingOnly?'/app/tasks.php#shopping-checklist':'/app/tasks.php';link.textContent=shoppingOnly?'買い物一覧を確認':'チェックリストを確認';link.className='btn gray';actions.append(link);}
           else{preview.dataset.saving='0';controls.forEach((control,index)=>control.disabled=disabled[index]);saveButton.textContent=old;}
         }
       });

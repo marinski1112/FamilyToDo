@@ -55,7 +55,7 @@ assert.ok(taskEditServer.includes("if(reminderAt&&String(reminderTask?.status||'
 // Task creation transport failure handling
 assert.match(taskEntryManual,/await response\.json\(\)\.catch\(\(\)=>null\)/,'task creation must tolerate non-JSON error responses');
 assert.match(taskEntryManual,/if\(!response\.ok\|\|!data\?\.ok\)throw new Error\('登録に失敗しました。'\)/,'task creation must treat HTTP and API failures as fixed-detail failures');
-assert.match(taskEntryManual,/catch\(_error\)\{alert\('登録に失敗しました。'\)/,'task creation network failures must reach the privacy-safe user-visible error path');
+assert.match(taskEntryManual,/catch\(_error\)\{guard\.failed\(\);alert\('登録に失敗しました。入力は残っています。'\)/,'task creation network failures must reach the privacy-safe user-visible error path');
 assert.doesNotMatch(taskEntryManual,/data\?\.error|_error\.message|error\.message|console\.(?:log|warn|error)\(/,'task creation failures must not surface or log arbitrary server/exception detail');
 assert.match(taskEntryManual,/payload\.returnTo==='calendar'/,'successful task creation must preserve the existing calendar return flow');
 assert.match(taskEntryManual,/document\.referrer/,'Calendar task creation must recover the originating Calendar navigation state');

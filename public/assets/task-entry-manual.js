@@ -20,7 +20,8 @@ const init=()=>{
     const requestedInitial=String(payload.initialType||'task');
     const initialRadio=form.querySelector(`[name=rough_primary_type][value="${['task','event','shopping','item'].includes(requestedInitial)?requestedInitial:'task'}"]`);
     if(initialRadio&&!initialRadio.checked){initialRadio.checked=true;initialRadio.dispatchEvent(new Event('change',{bubbles:true}));}
-    let taskCreateKey=crypto.randomUUID();
+    let taskCreateKey='';
+    const initialDirty=window.FamilyTodoDraftGuard.initialChanged(form);
 
     const calendarReturnView=(()=>{try{const u=new URL(document.referrer);if(u.origin===location.origin&&u.pathname==='/app/calendar.php'){const v=String(u.searchParams.get('view')||'');if(['all','family','private'].includes(v))return v;}}catch{}return 'all';})();
     const syncDate=()=>{
@@ -78,13 +79,17 @@ const init=()=>{
     isPrivate?.addEventListener('change',syncType);
     calendarVisible?.addEventListener('change',syncCalendar);
     syncType();syncCalendar();
+    const guard=window.FamilyTodoDraftGuard.attach(form,{initialDirty});
 
     form.addEventListener('submit',async event=>{
       event.preventDefault();
+      if(guard.isSaving()||document.getElementById('roughPreview')?.dataset.saving==='1')return;
+      if(document.getElementById('roughPreviewButton')?.disabled){alert('下書きの作成が終わるまでお待ちください。');return;}
       const mode=primary();
       if(mode!=='task'&&mode!=='event'){alert('買い物・持ち物は専用の手入力欄を使用してください。');return;}
       const rangeError=validateRange();if(rangeError){alert(rangeError);return;}
       const title=String(form.elements.title?.value||'').trim();if(!title){alert('タイトルを入力してください。');form.elements.title?.focus();return;}
+      if(['roughMainInput','roughChildTaskInput'].some(id=>String(document.getElementById(id)?.value||'').trim())&&!confirm('AI入力の内容は保存されません。手入力の1件だけを登録して移動しますか？'))return;
       const eventMode=mode==='event';
       const body={
         csrf:String(form.elements.csrf?.value||''),
@@ -106,18 +111,21 @@ const init=()=>{
         shopping:[],
         items:[],
       };
+      taskCreateKey=guard.retryKey(JSON.stringify(body),'manual');
+      if(!guard.startSaving())return;
       const submit=form.querySelector('button[type=submit]'),old=submit?.textContent||'登録する';if(submit){submit.disabled=true;submit.textContent='登録中…';}
       try{
         const response=await fetch('/api/task',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':taskCreateKey},body:JSON.stringify(body)}),data=await response.json().catch(()=>null);
         if(!response.ok||!data?.ok){
           const code=String(data?.code||'');
-          if(response.status<500&&!['IDEMPOTENCY_IN_PROGRESS','IDEMPOTENCY_LEASE_LOST'].includes(code))taskCreateKey=crypto.randomUUID();
+          if(!response.ok&&response.status>=400&&response.status<500&&!['IDEMPOTENCY_IN_PROGRESS','IDEMPOTENCY_LEASE_LOST'].includes(code))guard.forgetRetry('manual');
         }
         if(!response.ok||!data?.ok)throw new Error('登録に失敗しました。');
+        guard.saved();
         const savedDate=String(body.dateOnly||'');
         if(payload.returnTo==='calendar')location.href=!body.noDate&&savedDate?'/app/calendar.php?view='+encodeURIComponent(calendarReturnView)+'&month='+encodeURIComponent(savedDate.slice(0,7))+'&date='+encodeURIComponent(savedDate):'/app/calendar.php?view='+encodeURIComponent(calendarReturnView);
         else location.href=body.noDate?'/app/tasks.php':'/app/tasks.php?date='+encodeURIComponent(savedDate);
-      }catch(_error){alert('登録に失敗しました。');if(submit){submit.disabled=false;submit.textContent=old;}}
+      }catch(_error){guard.failed();alert('登録に失敗しました。入力は残っています。');if(submit){submit.disabled=false;submit.textContent=old;}}
     });
     document.documentElement.dataset.taskEntryManual='ready';
   }catch{document.documentElement.dataset.taskEntryManual='error';}

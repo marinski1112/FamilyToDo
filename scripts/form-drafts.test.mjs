@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {itemNew} from '../src/new-entry-pages.ts';
+import {taskEntryPage} from '../src/task-entry-page.ts';
 import {itemEdit} from '../src/item-edit-page.ts';
 import {taskEdit} from '../src/task-edit-page.ts';
 import {childJournalApi,childJournalPage} from '../src/child-journal.ts';
@@ -21,6 +22,47 @@ function load(w,file){w.eval(fs.readFileSync('public/assets/'+file,'utf8'));}
 function unloading(w){const e=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(e);return e.defaultPrevented;}
 function submit(w,f){const e=new w.Event('submit',{bubbles:true,cancelable:true});f.dispatchEvent(e);return e;}
 function change(w,el,value){el.value=value;el.dispatchEvent(new w.Event('input',{bubbles:true}));}
+test('task entry retains early manual and AI input, serializes saves and reuses only matching request keys',async()=>{
+ const w=await windowFor('https://fixture.invalid/task/new.php');
+ try{
+  const {ctx}=fixture(new Request(w.location.href));const markup=await (await taskEntryPage(ctx,'2026-10-08')).text();assert.match(markup,/task-entry-manual.js\?v=[^"]+-draft1/);w.document.body.innerHTML=markup;
+  load(w,'form-draft-guard.js');load(w,'task-rough-input-ui.js');const f=w.document.getElementById('taskForm');let calls=0,finish,confirmations=0;const keys=[];
+  w.alert=()=>{};w.confirm=()=>{confirmations++;return false;};w.fetch=(url,options)=>{calls++;keys.push(options.headers['Idempotency-Key']);return new Promise(r=>finish=r);};
+  f.elements.title.value='early draft';load(w,'task-entry-manual.js');await settle();assert.equal(w.document.documentElement.dataset.taskEntryManual,'ready');assert.equal(unloading(w),true);
+  change(w,w.document.getElementById('roughMainInput'),'AI draft');submit(w,f);assert.equal(calls,0);assert.equal(confirmations,1);w.confirm=()=>true;
+  submit(w,f);submit(w,f);assert.equal(calls,1);assert.equal(f.elements.title.disabled,true);assert.equal(w.document.getElementById('roughPreviewButton').disabled,true);
+  finish({ok:true,status:200,json:async()=>{throw Error('auth HTML');}});await settle();assert.equal(f.elements.title.value,'early draft');assert.equal(f.elements.title.disabled,false);assert.equal(unloading(w),true);
+  submit(w,f);finish({ok:false,status:500,json:async()=>({ok:false})});await settle();assert.equal(keys[0],keys[1]);
+  change(w,f.elements.title,'changed draft');submit(w,f);assert.notEqual(keys[1],keys[2]);finish({ok:true,json:async()=>({ok:true,id:8})});await settle();assert.equal(unloading(w),false);assert.equal(w.location.pathname,'/app/tasks.php');
+ }finally{await w.happyDOM.close();}
+});
+test('new task event initialization is clean and AI input is guarded without calling analysis',async()=>{
+ const w=await windowFor('https://fixture.invalid/task/new.php');
+ try{
+  const {ctx}=fixture(new Request(w.location.href));w.document.body.innerHTML=await (await taskEntryPage(ctx,'2026-10-08','','event')).text();load(w,'form-draft-guard.js');load(w,'task-rough-input-ui.js');load(w,'task-entry-manual.js');await settle();assert.equal(unloading(w),false);
+  change(w,w.document.getElementById('roughMainInput'),'fixture event');assert.equal(unloading(w),true);w.confirm=()=>false;const link=w.document.querySelector('a[href="/app/tasks.php"]'),click=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(click);assert.equal(click.defaultPrevented,true);assert.equal(w.document.getElementById('roughMainInput').value,'fixture event');
+ }finally{await w.happyDOM.close();}
+});
+test('remembered calendar color is a clean default and early custom color input survives initialization',async()=>{
+ for(const early of [false,true]){
+  const w=await windowFor('https://fixture.invalid/task/new.php');
+  try{
+   const {ctx}=fixture(new Request(w.location.href));w.document.body.innerHTML=await (await taskEntryPage(ctx,'2026-10-08','','event')).text();w.localStorage.setItem('familytodo:lastCalendarColor','#123456');const custom=w.document.getElementById('taskCalendarCustomColor');if(early)custom.value='#abcdef';load(w,'form-draft-guard.js');load(w,'task-rough-input-ui.js');load(w,'calendar-color-ui.js');load(w,'task-entry-manual.js');await settle();assert.equal(w.document.documentElement.dataset.calendarColorUi,'ready');assert.equal(custom.value,early?'#abcdef':'#123456');assert.equal(w.document.querySelector('select[name=calendar_color]').value,custom.value);assert.equal(unloading(w),early);
+  }finally{await w.happyDOM.close();}
+ }
+});
+test('AI draft save locks manual saves, retains uncertain drafts and clears guard only after success',async()=>{
+ for(const success of [false,true]){
+  const w=await windowFor('https://fixture.invalid/task/new.php');
+  try{
+   const {ctx}=fixture(new Request(w.location.href));w.document.body.innerHTML=await (await taskEntryPage(ctx,'2026-10-08')).text();load(w,'form-draft-guard.js');load(w,'task-rough-input-ui.js');load(w,'task-entry-manual.js');await settle();const f=w.document.getElementById('taskForm'),preview=w.document.getElementById('roughPreview');
+   change(w,w.document.getElementById('roughMainInput'),'fixture AI draft');change(w,f.elements.title,'separate manual draft');preview.innerHTML='<div class="rough-draft-row" data-destination="item"><input class="rough-draft-destination" value="item"><input class="rough-draft-title" value="fixture item"><input class="rough-draft-due-date" value="2026-10-08"><div class="rough-row-details"></div></div>';preview.hidden=false;
+   let calls=0,finish;w.alert=()=>{};w.confirm=()=>false;w.fetch=()=>{calls++;return new Promise(r=>finish=r);};load(w,'task-rough-input-save.js');const button=w.document.getElementById('roughConfirmSave');button.click();assert.equal(calls,0);w.confirm=()=>true;button.click();submit(w,f);assert.equal(calls,1);assert.equal(f.elements.title.disabled,true);
+   finish(success?{ok:true,json:async()=>({ok:true,id:8})}:{ok:true,json:async()=>{throw Error('HTML');}});await settle();assert.equal(unloading(w),!success);
+   if(!success){assert.equal(f.elements.title.value,'separate manual draft');assert.equal(f.elements.title.disabled,false);assert.equal(button.disabled,true);submit(w,f);button.click();assert.equal(calls,1);assert.match(preview.textContent,/一覧を確認/);const link=preview.querySelector('a'),click=new w.MouseEvent('click',{bubbles:true,cancelable:true});w.confirm=()=>false;link.dispatchEvent(click);assert.equal(click.defaultPrevented,true);}
+  }finally{await w.happyDOM.close();}
+ }
+});
 test('draft guard preserves cancelling, ignores same-page links and locks all other forms during saving',async()=>{
  const w=await windowFor('https://fixture.invalid/edit');
  try{
