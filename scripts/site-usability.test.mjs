@@ -9,6 +9,7 @@ import {messagesChatPage} from '../src/messages-chat-page.ts';
 import {calendar} from '../src/calendar-page.ts';
 import {shoppingNew} from '../src/shopping-new-page.ts';
 import {shoppingEdit} from '../src/shopping-edit-page.ts';
+import './form-drafts.test.mjs';
 
 function shoppingEditContext(request){
  let writes=0;
