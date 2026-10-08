@@ -1,10 +1,10 @@
 # つちだけ Android テスト版
 
-最新版: **v0.1.233**
+最新版: **v0.1.236**
 
-[APKをダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.233.apk)
+[APKをダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/FamilyToDo-test-v0.1.236.apk)
 
-検証対象コミット: `016f0487834948d8405ecdd1135a0c89b99fad9c`
+検証対象コミット: `209a0684482e6168c3c7fbd853ab27dfb9ec322a`
 
 Android CI のビルド・Android 11/15 の明色/暗色ネイティブ画面テストがすべて成功したテスト版です。LINEログイン・GPS・権限・Cooking Liveの実機確認は別途必要です。
 
