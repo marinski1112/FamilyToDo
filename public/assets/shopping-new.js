@@ -16,7 +16,7 @@ try {
   try{payload=JSON.parse(payloadNode?.textContent||'{}');}catch{payload={};}
   root.dataset.shoppingNewJs='ready';
   let sequence=list.querySelectorAll('[data-product-row]').length;
-  const MAX_BATCH_PRODUCTS=64;
+  const MAX_BATCH_PRODUCTS=50;
   const MAX_PRODUCT_NAME_UNITS=255;
   const MAX_PRODUCT_QUANTITY_UNITS=128;
   const MAX_CATEGORY_UNITS=255;
@@ -26,7 +26,10 @@ try {
   const fallbackReturn=()=>{const date=new URL(location.href).searchParams.get('date')||'';return date?`/app/tasks.php?date=${encodeURIComponent(date)}#shopping-checklist`:'/app/tasks.php#shopping-checklist';};
   const safeReturnTarget=()=>{try{if(!document.referrer)return fallbackReturn();const url=new URL(document.referrer);if(url.origin!==location.origin)return fallbackReturn();if(url.pathname==='/app/shopping_new.php'||url.pathname==='/app/shopping.php')return fallbackReturn();return url.pathname+url.search+url.hash;}catch{return fallbackReturn();}};
   const returnTarget=safeReturnTarget();
-  let dirty=false,saving=false;
+  let dirty=[...form.querySelectorAll('input:not([type=hidden]),textarea,select')].some(el=>{
+    if(el.tagName==='SELECT'){const selected=[...el.options].findIndex(o=>o.defaultSelected);return el.selectedIndex!==(selected<0?0:selected);}
+    return ['checkbox','radio'].includes(el.type)?el.checked!==el.defaultChecked:el.value!==el.defaultValue;
+  }),saving=false;
   form.addEventListener('input',()=>dirty=true);
   form.addEventListener('change',()=>dirty=true);
   window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();e.returnValue='';}});
