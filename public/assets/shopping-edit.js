@@ -7,6 +7,25 @@
   const categoryValue=document.getElementById('shoppingEditCategoryValue');
   if(!form||!categorySelect||!categoryCustomWrap||!categoryCustom||!categoryRegister||!categoryValue)return;
 
+  let dirty=[...form.querySelectorAll('input:not([type=hidden]),textarea,select')].some(el=>{
+    if(el.tagName==='SELECT'){const selected=[...el.options].findIndex(o=>o.defaultSelected);return el.selectedIndex!==(selected<0?0:selected);}
+    return ['checkbox','radio'].includes(el.type)?el.checked!==el.defaultChecked:el.value!==el.defaultValue;
+  }),saving=false;
+  form.addEventListener('input',()=>dirty=true);
+  form.addEventListener('change',()=>dirty=true);
+  window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
+  document.addEventListener('click',event=>{
+    const link=event.target instanceof Element?event.target.closest('a[href]'):null;
+    if(!link||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||link.hasAttribute('download')||(link.target&&link.target!=='_self'))return;
+    const target=new URL(link.href,location.href);
+    if(target.origin===location.origin&&target.pathname===location.pathname&&target.search===location.search)return;
+    if(saving){event.preventDefault();alert('保存が終わるまでお待ちください。');return;}
+    if(dirty){if(!confirm('未保存の買い物編集を破棄して移動しますか？'))event.preventDefault();else dirty=false;}
+  },true);
+  document.addEventListener('submit',event=>{
+    if(saving&&event.target!==form){event.preventDefault();event.stopImmediatePropagation();alert('保存が終わるまでお待ちください。');}
+  },true);
+
   const urlInput=form.querySelector('input[name="url"]');
   const urlLabel=urlInput?[...form.querySelectorAll('label')].find(label=>label.nextElementSibling===urlInput):null;
   if(urlInput&&urlLabel){
@@ -67,6 +86,8 @@
   syncCategory();
 
   form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(saving)return;
     const category=syncCategory();
     if(categorySelect.value==='__custom__'&&!category){
       event.preventDefault();
@@ -80,20 +101,27 @@
       return;
     }
     const registerCategory=categorySelect.value==='__custom__'&&categoryRegister.checked;
-    if(!registerCategory)return;
-
-    event.preventDefault();
-    const csrf=String(new FormData(form).get('csrf')||'');
-    const button=form.querySelector('button[type="submit"],button[name="action"]');
-    if(button)button.disabled=true;
+    const fields=new FormData(form);
+    fields.set('action','save');
+    const csrf=String(fields.get('csrf')||'');
+    const controls=[...document.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]);
+    saving=true;controls.forEach(([el])=>el.disabled=true);
     try{
-      const response=await fetch('/api/shopping-categories',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,name:category})});
+      if(registerCategory){
+        const categoryResponse=await fetch('/api/shopping-categories',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csrf,name:category})});
+        const categoryData=await categoryResponse.json().catch(()=>null);
+        if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
+      }
+      const response=await fetch(form.action,{method:'POST',headers:{accept:'application/json'},body:fields});
       const data=await response.json().catch(()=>null);
-      if(!response.ok||!data?.ok)throw new Error(data?.error||'カテゴリーの登録に失敗しました。');
-      form.submit();
+      if(!response.ok||!data?.ok)throw new Error(data?.error||'保存に失敗しました。入力は残っています。');
+      const target=new URL(data.redirect,location.href);
+      if(target.origin!==location.origin||target.pathname!=='/app/tasks.php')throw new Error('保存結果の移動先を確認できませんでした。');
+      dirty=false;saving=false;location.replace(target.pathname+target.search+target.hash);
     }catch(error){
-      alert(error instanceof Error?error.message:'カテゴリーの登録に失敗しました。');
-      if(button)button.disabled=false;
+      saving=false;
+      alert(error instanceof Error?error.message:'保存に失敗しました。入力は残っています。');
+      controls.forEach(([el,disabled])=>el.disabled=disabled);
     }
   });
 })();

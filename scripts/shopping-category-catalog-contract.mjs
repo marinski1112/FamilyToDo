@@ -68,7 +68,7 @@ for(const pattern of [
   /normalizeShoppingCategoryName\(b\.category\)/,
   /category&&!isValidShoppingCategoryName\(category\)/,
   /category\|\|null/,
-  /\/assets\/shopping-edit\.js\?v=\$\{APP_VERSION\}-category-picker-1/,
+  /\/assets\/shopping-edit\.js\?v=\$\{APP_VERSION\}-unsaved-edit-1/,
 ]) requireMatch(editPage,pattern,'Shopping edit page must preserve the current category while using the family dropdown/free-input contract');
 
 for(const pattern of [
@@ -80,7 +80,9 @@ for(const pattern of [
   /categorySelect\.value==='__custom__'&&!category/,
   /const registerCategory=categorySelect\.value==='__custom__'&&categoryRegister\.checked/,
   /fetch\('\/api\/shopping-categories'/,
-  /form\.submit\(\)/,
+  /fetch\(form\.action/,
+  /fields\.set\('action','save'\)/,
+  /if\(!response\.ok\|\|!data\?\.ok\)/,
 ]) requireMatch(editJs,pattern,'Shopping edit browser helper must register only explicitly checked custom categories before preserving the existing form save');
 
 for(const pattern of [

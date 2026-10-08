@@ -8,6 +8,65 @@ import {contentListing} from '../src/content-listing.ts';
 import {messagesChatPage} from '../src/messages-chat-page.ts';
 import {calendar} from '../src/calendar-page.ts';
 import {shoppingNew} from '../src/shopping-new-page.ts';
+import {shoppingEdit} from '../src/shopping-edit-page.ts';
+
+function shoppingEditContext(request){
+ let writes=0;
+ const ctx={request,member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(sql){return {bind(){return this;},async first(){return {id:7,family_id:1,created_by:1,name:'fixture item',category:null,quantity:'1',memo:'',due_date:null};},async all(){return {results:[]};},async run(){writes++;return {success:true};}};}}}};
+ return {ctx,writes:()=>writes};
+}
+test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
+ for(const accept of ['application/json','text/html']){
+   const fields=new FormData();fields.set('csrf','synthetic');fields.set('name','fixture edited');fields.set('due_date','2026-10-09');
+   const request=new Request('https://fixture.invalid/app/shopping_edit.php?id=7',{method:'POST',headers:{accept},body:fields});
+   const {ctx,writes}=shoppingEditContext(request),response=await shoppingEdit(request,ctx,7);
+   assert.equal(writes(),1);
+   if(accept==='application/json')assert.deepEqual(await response.json(),{ok:true,redirect:'/app/tasks.php?date=2026-10-09#shopping-checklist'});
+   else {assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/app/tasks.php?date=2026-10-09#shopping-checklist');}
+ }
+ const fields=new FormData();fields.set('csrf','wrong');fields.set('name','fixture edited');
+ const request=new Request('https://fixture.invalid/app/shopping_edit.php?id=7',{method:'POST',headers:{accept:'application/json'},body:fields});
+ const {ctx,writes}=shoppingEditContext(request);assert.equal((await shoppingEdit(request,ctx,7)).status,403);assert.equal(writes(),0);
+});
+test('shopping edit keeps early input and failed saves, blocks duplicate saves and navigation until success',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ const w=new Window({url:'https://fixture.invalid/app/shopping_edit.php?id=7'});
+ try{
+   const request=new Request(w.location.href),{ctx}=shoppingEditContext(request);
+   w.document.body.innerHTML=await (await shoppingEdit(request,ctx,7)).text();
+   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-1/);
+   const form=w.document.getElementById('shoppingEditForm'),memo=form.querySelector('[name=memo]');memo.value='early fixture draft';
+   let allow=false,calls=0,finish,redirect='';w.confirm=()=>allow;w.alert=()=>{};w.location.replace=url=>redirect=url;
+   w.fetch=(url,options)=>{calls++;assert.equal(options.headers.accept,'application/json');assert.equal(options.body.get('memo'),'early fixture draft');assert.equal(options.body.get('action'),'save');return new Promise(resolve=>finish=resolve);};
+   w.eval(fs.readFileSync('public/assets/shopping-edit.js','utf8'));
+   const unload=()=>{const e=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(e);return e.defaultPrevented;};
+   assert.equal(unload(),true);
+   const link=w.document.querySelector('.bottom-nav a'),click=()=>{const e=new w.MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(e);return e.defaultPrevented;};
+   assert.equal(click(),true);assert.equal(memo.value,'early fixture draft');
+   const submit=()=>form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));submit();submit();assert.equal(calls,1);assert.equal(memo.disabled,true);
+   allow=true;assert.equal(click(),true);
+   const other=w.document.querySelector('form:not(#shoppingEditForm)'),otherSubmit=new w.Event('submit',{bubbles:true,cancelable:true});other.dispatchEvent(otherSubmit);assert.equal(otherSubmit.defaultPrevented,true);
+   const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
+   finish({ok:false,json:async()=>({ok:false,error:'fixture failure'})});await settle();assert.equal(memo.disabled,false);assert.equal(memo.value,'early fixture draft');assert.equal(unload(),true);
+   submit();finish({ok:true,json:async()=>{throw Error('expired session HTML');}});await settle();assert.equal(memo.disabled,false);assert.equal(unload(),true);assert.equal(redirect,'');
+   submit();finish({ok:true,json:async()=>({ok:true,redirect:'/app/tasks.php#shopping-checklist'})});await settle();assert.equal(unload(),false);assert.equal(redirect,'/app/tasks.php#shopping-checklist');
+ }finally{await w.happyDOM.close();}
+});
+test('shopping edit does not save the item if optional category registration fails',async()=>{
+ const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
+ const w=new Window({url:'https://fixture.invalid/app/shopping_edit.php?id=7'});
+ try{
+  const request=new Request(w.location.href),{ctx}=shoppingEditContext(request);w.document.body.innerHTML=await (await shoppingEdit(request,ctx,7)).text();
+  w.alert=()=>{};w.eval(fs.readFileSync('public/assets/shopping-edit.js','utf8'));
+  const select=w.document.getElementById('shoppingEditCategorySelect'),custom=w.document.getElementById('shoppingEditCategoryCustom'),register=w.document.getElementById('shoppingEditCategoryRegister');
+  select.value='__custom__';select.dispatchEvent(new w.Event('change',{bubbles:true}));custom.value='fixture category';custom.dispatchEvent(new w.Event('input',{bubbles:true}));register.checked=true;
+  let calls=[];w.fetch=async url=>{calls.push(url);return {ok:false,json:async()=>({ok:false,error:'fixture failure'})};};
+  w.document.getElementById('shoppingEditForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));
+  assert.deepEqual(calls,['/api/shopping-categories']);assert.equal(custom.value,'fixture category');assert.equal(register.checked,true);assert.equal(custom.disabled,false);
+  const unload=new w.Event('beforeunload',{cancelable:true});w.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+ }finally{await w.happyDOM.close();}
+});
 
 test('shopping form preserves input entered before bootstrap and matches the server fifty-item limit',async()=>{
  const {Window}=await import(pathToFileURL(createRequire(process.cwd()+'/package.json').resolve('happy-dom')).href);
