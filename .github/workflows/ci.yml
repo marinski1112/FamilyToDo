@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/selected-set-invoke-contract.mjs
+      - run: npm run check:site-usability
       - run: npm run check:meals
       - run: npm run check:meal-ai-routes
       - run: npm run check:ai-call-budget
