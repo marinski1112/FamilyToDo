@@ -1,0 +1,185 @@
+name: Android CI
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-ci.yml'
+      - 'scripts/android-e2e-config.mjs'
+      - 'wrangler.jsonc'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+      - name: Build numbered production test APK
+        run: |
+          gradle -p android :app:assembleDebug -PfamilytodoVersionCode="${GITHUB_RUN_NUMBER}" --no-daemon
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            "android/app/build/outputs/apk/debug/FamilyToDo-test-v0.1.${GITHUB_RUN_NUMBER}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FamilyToDo-test-v0.1.${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/FamilyToDo-test-v0.1.*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Check isolated preview build
+        run: gradle -p android :app:assembleDebug -PfamilytodoVersionCode="${GITHUB_RUN_NUMBER}" -PfamilytodoDebugOrigin=https://preview-familytodo.marinski1112.workers.dev --no-daemon
+      - name: Check isolated Worker config guard
+        run: |
+          ANDROID_E2E_DB_ID=00000000-0000-4000-8000-000000000001 node scripts/android-e2e-config.mjs
+          node -e "const c=JSON.parse(require('fs').readFileSync('wrangler.android-e2e.generated.jsonc','utf8')); if(c.name!=='familytodo-android-e2e'||c.d1_databases[0].database_id==='9d9d6de8-ff45-4dd6-9fec-0de70ee1d093'||c.r2_buckets[0].bucket_name==='familytodo'||c.triggers||c.services||c.ai||c.observability?.enabled) process.exit(1)"
+          if ANDROID_E2E_DB_ID=9d9d6de8-ff45-4dd6-9fec-0de70ee1d093 node scripts/android-e2e-config.mjs; then exit 1; fi
+      - name: Check writable isolated E2E build
+        run: gradle -p android :app:assembleDebug -PfamilytodoVersionCode="${GITHUB_RUN_NUMBER}" -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --no-daemon
+      - name: Name isolated E2E APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "android/app/build/outputs/apk/debug/FamilyToDo-e2e-unverified-v0.1.${GITHUB_RUN_NUMBER}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FamilyToDo-e2e-unverified-v0.1.${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/FamilyToDo-e2e-unverified-v0.1.*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Check unsigned internal release build
+        run: |
+          gradle -p android :app:assembleRelease -PfamilytodoVersionCode=1001 --no-daemon
+          test -f android/app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Verify release signing with a disposable CI key
+        run: |
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/ci-only.jks" \
+            -storepass ci-only-password -keypass ci-only-password -alias ci-only \
+            -dname "CN=CI" -keyalg RSA -keysize 2048 -validity 1
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks "$RUNNER_TEMP/ci-only.jks" --ks-key-alias ci-only \
+            --ks-pass pass:ci-only-password --key-pass pass:ci-only-password \
+            --out "$RUNNER_TEMP/ci-only.apk" \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$RUNNER_TEMP/ci-only.apk"
+
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+      - name: Enable emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Check isolated fixture build guard
+        run: |
+          if gradle -p android :app:assembleDebug -PfamilytodoUiTest=true --no-daemon; then exit 1; fi
+      - name: Native page and interaction tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb shell wm size 720x1600
+            adb shell wm density 320
+            adb shell cmd uimode night no
+            gradle -p android :app:connectedDebugAndroidTest -PfamilytodoVersionCode=1001 -PfamilytodoUiTest=true -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --no-daemon
+            adb shell cmd uimode night yes
+            gradle -p android :app:connectedDebugAndroidTest -PfamilytodoVersionCode=1001 -PfamilytodoUiTest=true -PfamilytodoDebugOrigin=https://familytodo-android-e2e.marinski1112.workers.dev -PfamilytodoIsolatedE2E=true --rerun-tasks --no-daemon
+            adb pull /sdcard/Download/familytodo-ui-fixture android-ui-screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-ui-api-${{ matrix.api }}
+          path: |
+            android-ui-screenshots/**
+            android/app/build/reports/androidTests/**
+            android/app/build/outputs/androidTest-results/**
+          retention-days: 7
+
+  publish-test-apk:
+    needs: [build, ui]
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.number == 1143 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/android-location-starter'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    concurrency:
+      group: android-test-downloads
+      cancel-in-progress: false
+    steps:
+      - name: Verify Android draft still points to tested head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(gh api repos/${GITHUB_REPOSITORY}/pulls/1143 --jq '.head.sha')" = "$EXPECTED_HEAD"
+      - uses: actions/checkout@v4
+        with:
+          ref: android-test-downloads
+      - uses: actions/download-artifact@v4
+        with:
+          name: FamilyToDo-test-v0.1.${{ github.run_number }}
+          path: verified-apk
+      - name: Publish tested numbered APK and checksum
+        env:
+          APK_VERSION: ${{ github.run_number }}
+          TESTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api repos/${GITHUB_REPOSITORY}/pulls/1143 --jq '.head.sha')" = "$TESTED_HEAD"
+          python - <<'PY'
+          import os, pathlib, re, shutil, hashlib
+          version = int(os.environ['APK_VERSION'])
+          folder = pathlib.Path('downloads')
+          folder.mkdir(exist_ok=True)
+          prior = [int(m.group(1)) for p in folder.glob('FamilyToDo-test-v0.1.*.apk') if (m := re.fullmatch(r'FamilyToDo-test-v0\.1\.(\d+)\.apk', p.name))]
+          if prior and max(prior) >= version:
+              raise SystemExit('A newer or equal APK is already published')
+          filename = f'FamilyToDo-test-v0.1.{version}.apk'
+          target = folder / filename
+          shutil.copyfile(pathlib.Path('verified-apk') / filename, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          (folder / (filename + '.sha256')).write_text(digest + '  ' + filename + '\n')
+          (folder / 'README.md').write_text(
+              '# つちだけ Android テスト版\n\n'
+              f'最新版: **v0.1.{version}**\n\n'
+              f'[APKをダウンロード](https://raw.githubusercontent.com/marinski1112/FamilyToDo/android-test-downloads/downloads/{filename})\n\n'
+              f'検証対象コミット: `{os.environ["TESTED_HEAD"]}`\n\n'
+              'Android CI のビルド・Android 11/15 の明色/暗色ネイティブ画面テストがすべて成功したテスト版です。'
+              'LINEログイン・GPS・権限・Cooking Liveの実機確認は別途必要です。\n\n'
+              'CIのデバッグ署名のため、既存版と署名が異なる場合はアンインストール後にインストールしてください。'
+              'アンインストールすると端末内の設定が消えます。再ログインし、位置共有を再確認してください。\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads
+          git commit -m "Publish verified Android test v0.1.${APK_VERSION}"
+          git push origin HEAD:android-test-downloads
