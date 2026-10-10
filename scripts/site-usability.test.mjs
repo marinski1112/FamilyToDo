@@ -35,7 +35,7 @@ test('shopping edit keeps early input and failed saves, blocks duplicate saves a
  try{
    const request=new Request(w.location.href),{ctx}=shoppingEditContext(request);
    w.document.body.innerHTML=await (await shoppingEdit(request,ctx,7)).text();
-   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-1/);
+   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-2/);
    const form=w.document.getElementById('shoppingEditForm'),memo=form.querySelector('[name=memo]');memo.value='early fixture draft';
    let allow=false,calls=0,finish,redirect='';w.confirm=()=>allow;w.alert=()=>{};w.location.replace=url=>redirect=url;
    w.fetch=(url,options)=>{calls++;assert.equal(options.headers.accept,'application/json');assert.equal(options.body.get('memo'),'early fixture draft');assert.equal(options.body.get('action'),'save');return new Promise(resolve=>finish=resolve);};
