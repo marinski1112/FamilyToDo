@@ -52,7 +52,7 @@ const boot=async()=>{
  const unclassified=document.createElement('button');unclassified.type='button';unclassified.className='zero-unclassified-add';host.append(unclassified);
  const groups=kind=>[...host.querySelectorAll(':scope>[data-goods-kind][data-category]')].filter(g=>g.dataset.goodsKind===kind&&!g.classList.contains('shopping-category-draft'));
  const rows=g=>[...g.querySelectorAll(':scope>.linked-shopping-row,:scope>.belongings-category-body>.belongings-category-row')];
- const name=g=>String(g.dataset.category||U);
+ const name=g=>{const value=String(g?.dataset?.category??'').trim();return value||U;};
  const setText=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value;};
  const openedEmpty=new WeakSet();
  const ensureGroup=(kind,category)=>{
