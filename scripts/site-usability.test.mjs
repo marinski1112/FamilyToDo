@@ -16,6 +16,19 @@ function shoppingEditContext(request){
  const ctx={request,member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(sql){return {bind(){return this;},async first(){return {id:7,family_id:1,created_by:1,name:'fixture item',category:null,quantity:'1',memo:'',due_date:null};},async all(){return {results:[]};},async run(){writes++;return {success:true};}};}}}};
  return {ctx,writes:()=>writes};
 }
+test('shopping edit form pins POST route and archived empty categories remain renameable',async()=>{
+ const {ctx}=shoppingEditContext(new Request('https://fixture.invalid/app/shopping_edit.php?id=7'));
+ const response=await shoppingEdit(new Request('https://fixture.invalid/app/shopping_edit.php?id=7'),ctx,7);
+ const html=await response.text();
+ assert.match(html,/<form method="post" action="\/app\/shopping_edit\.php\?id=7" id="shoppingEditForm">/);
+ const controller=fs.readFileSync('public/assets/goods-category-controller.js','utf8');
+ const renameAt=controller.indexOf("if(action.dataset.goodsAction==='rename'&&category!==U&&!deleteMode)");
+ const groupLookupAt=controller.indexOf("const g=groups(kind).find(group=>key(name(group))===key(category))",renameAt);
+ assert.ok(renameAt>=0&&groupLookupAt>renameAt,'rename is handled before resolving the backing group for archived empty-category rows');
+ const shell=fs.readFileSync('src/app-shell.ts','utf8');
+ assert.match(shell,/goods-category-controller\.js\?v=\$\{APP_VERSION\}-goods3/);
+ assert.match(shell,/checklist-category-drag\.js\?v=\$\{APP_VERSION\}-category-drag9/);
+});
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
    const fields=new FormData();fields.set('csrf','synthetic');fields.set('name','fixture edited');fields.set('due_date','2026-10-09');
