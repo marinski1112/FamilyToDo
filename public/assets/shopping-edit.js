@@ -112,9 +112,11 @@
         const categoryData=await categoryResponse.json().catch(()=>null);
         if(!categoryResponse.ok||!categoryData?.ok)throw new Error(categoryData?.error||'カテゴリーの登録に失敗しました。');
       }
-      const response=await fetch(form.action,{method:'POST',headers:{accept:'application/json'},body:fields});
-      const data=await response.json().catch(()=>null);
-      if(!response.ok||!data?.ok)throw new Error(data?.error||'保存に失敗しました。入力は残っています。');
+      const response=await fetch(form.action,{method:'POST',credentials:'same-origin',headers:{accept:'application/json'},body:fields});
+      const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+      const data=contentType.includes('application/json')?await response.json().catch(()=>null):null;
+      if(response.redirected&&new URL(response.url).pathname.startsWith('/login'))throw new Error('ログイン状態が切れています。入力内容は残しています。別タブでログインし直してから、再度保存してください。');
+      if(!response.ok||!data?.ok)throw new Error(data?.error||`保存に失敗しました（HTTP ${response.status}）。入力は残っています。${contentType.includes('text/html')?' ログイン画面などHTML応答が返りました。':''}`);
       const target=new URL(data.redirect,location.href);
       if(target.origin!==location.origin||target.pathname!=='/app/tasks.php')throw new Error('保存結果の移動先を確認できませんでした。');
       dirty=false;saving=false;location.replace(target.pathname+target.search+target.hash);
