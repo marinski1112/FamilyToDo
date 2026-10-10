@@ -136,7 +136,7 @@ const boot=async()=>{
  const compose=async g=>{if(host.dataset.statusTab==='completed')host.dataset.statusTab='pending';openedEmpty.add(g);g.classList.remove('category-collapsed');refresh();for(let i=0;i<4&&!g.querySelector('.shopping-category-add-item');i++)await new Promise(requestAnimationFrame);g.querySelector('.shopping-category-add-item')?.click();openedEmpty.delete(g);refresh();g.scrollIntoView({block:'nearest'});};
  host.addEventListener('keydown',e=>{if(e.target.matches('[role=button][data-goods-action]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.click();}});
  host.addEventListener('click',e=>{
-  const action=e.target.closest('[data-goods-action]');if(!action)return;const row=action.closest('[data-goods-kind][data-category]');if(!row)return;const kind=row.dataset.goodsKind,category=row.dataset.category,g=groups(kind).find(g=>key(name(g))===key(category));if(!g)return;
+  const action=e.target.closest('[data-goods-action]')||e.target.closest('.zero-category-cluster-row')?.querySelector('[data-goods-action="rename"]');if(!action)return;const row=action.closest('[data-goods-kind][data-category]');if(!row)return;const kind=row.dataset.goodsKind,category=row.dataset.category,g=groups(kind).find(g=>key(name(g))===key(category));if(!g)return;
   if(action.dataset.goodsAction==='toggle'){g.classList.toggle('category-collapsed');refresh();}
   if(action.dataset.goodsAction==='rename'&&category!==U&&!deleteMode)editName(kind,category,action);
   if(action.dataset.goodsAction==='compose')void compose(g);
