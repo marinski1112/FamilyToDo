@@ -68,7 +68,7 @@ for(const pattern of [
   /normalizeShoppingCategoryName\(b\.category\)/,
   /category&&!isValidShoppingCategoryName\(category\)/,
   /category\|\|null/,
-  /\/assets\/shopping-edit\.js\?v=\$\{APP_VERSION\}-unsaved-edit-1/,
+  /\/assets\/shopping-edit\.js\?v=\$\{APP_VERSION\}-unsaved-edit-2/,
 ]) requireMatch(editPage,pattern,'Shopping edit page must preserve the current category while using the family dropdown/free-input contract');
 
 for(const pattern of [
