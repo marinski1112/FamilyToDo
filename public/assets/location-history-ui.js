@@ -190,8 +190,8 @@
     row.textContent=`住所診断: Maps=${diag.maps} / Geocoder=${diag.library} / API試行=${diag.attempted} / 成功=${diag.succeeded} / 失敗=${diag.failed} / キャッシュ=${diag.cacheHits} / anchorなし=${diag.noAnchor} / 最終=${diag.lastFailure}`;reportEl.append(row);
   };
   const persistArchivedAddress=async(entry,address)=>{
-    const archiveStayId=Number(entry?.archiveStayId);if(!Number.isSafeInteger(archiveStayId)||archiveStayId<=0||!csrf||entry?.place!=='未登録地点付近')return;
-    try{await fetch('/api/location/stay-address',{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf},credentials:'same-origin',cache:'no-store',body:JSON.stringify({archiveStayId,addressLabel:address}),signal:AbortSignal.timeout(5000)});}catch{}
+    const archiveStayId=Number(entry?.archiveStayId);if(!Number.isSafeInteger(archiveStayId)||archiveStayId<=0||!csrf)return;
+    try{const response=await fetch('/api/location/stay-address',{method:'POST',headers:{'content-type':'application/json','x-csrf-token':csrf},credentials:'same-origin',cache:'no-store',body:JSON.stringify({archiveStayId,addressLabel:address}),signal:AbortSignal.timeout(15000)});return response.ok;}catch{return false;}
   };
   const enrichStayAddresses=async(rows,points,requestId)=>{
     const byTime=new Map(points.map(point=>[String(point?.recordedAt||''),point]));const diag=newAddressDiagnostic();let lookups=0;
@@ -200,7 +200,7 @@
       if(entry.address)continue;
       const point=entry.anchor||byTime.get(String(entry.from||''));if(!point){diag.noAnchor+=1;diag.lastFailure='NO_ANCHOR_POINT';continue;}
       lookups+=1;const address=await reverseAddress(point,diag);if(requestId!==historyRequest)return;
-      if(address){row.textContent=reportRowText(entry,address);void persistArchivedAddress(entry,address);}
+      if(address){row.textContent=reportRowText(entry,address);if(Number(entry.archiveStayId)>0){const saved=await persistArchivedAddress(entry,address);if(requestId!==historyRequest)return;if(!saved)row.textContent+='（位置名を保存できませんでした。再試行してください）';}}
     }
     if(requestId===historyRequest&&lookups)appendAddressDiagnostic(diag);
   };

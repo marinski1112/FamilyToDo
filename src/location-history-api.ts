@@ -3,6 +3,7 @@ import { D1LocationQueryService } from './location-query-service';
 import {readKnownLocationPlaces} from './location-places-api';
 import {buildLocationStayReport} from './location-stay-report';
 import {constantTimeEqual} from './security';
+import {repairFamilyDailyJournal} from './family-daily-journal';
 import { json } from './response';
 import type {LocationPoint} from './location-providers';
 
@@ -110,7 +111,7 @@ async function archivedResponse(ctx:AppContext,familyId:number,subjectMemberId:n
       kind:'STAY',from:String(stay.started_at),to:String(stay.ended_at),minutes:Number(stay.duration_minutes)||0,
       place:String(stay.place_label),archiveStayId:Number(stay.id),
       ...(stay.address_label?{address:String(stay.address_label)}:{}),
-      ...(Number.isFinite(Number(stay.anchor_latitude))&&Number.isFinite(Number(stay.anchor_longitude))?{anchor:{latitude:Number(stay.anchor_latitude),longitude:Number(stay.anchor_longitude)}}:{}),
+      ...(stay.anchor_latitude!==null&&stay.anchor_longitude!==null&&Number.isFinite(Number(stay.anchor_latitude))&&Number.isFinite(Number(stay.anchor_longitude))?{anchor:{latitude:Number(stay.anchor_latitude),longitude:Number(stay.anchor_longitude)}}:{}),
     })),
     reportAvailable:true,reportTruncated:stays.results.length>=100,
   },200,{'cache-control':'no-store'});
@@ -198,11 +199,18 @@ export async function locationStayAddressApi(request:Request,ctx:AppContext):Pro
   const familyId=Number(requester.family_id),memberId=Number(requester.id),archiveStayId=Number(body.archiveStayId);
   const addressLabel=typeof body.addressLabel==='string'?body.addressLabel.trim():'';
   if(!isPositiveId(familyId)||!isPositiveId(memberId)||!isPositiveId(archiveStayId)||!addressLabel||addressLabel.length>120||/[\r\n\x00-\x1f]/.test(addressLabel))return fail(400,'BAD_REQUEST','住所ラベルを確認してください。');
-  await ctx.env.DB.prepare(`
+  const updated=await ctx.env.DB.prepare(`
     UPDATE location_history_stays SET address_label=?,updated_at=CURRENT_TIMESTAMP
-    WHERE id=? AND family_id=? AND place_label='未登録地点付近'
+    WHERE id=? AND family_id=? AND address_label IS NOT ?
       AND EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.family_id=? AND m.active=1)
       AND EXISTS(SELECT 1 FROM location_devices d WHERE d.family_id=location_history_stays.family_id AND d.member_id=location_history_stays.member_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL)
-  `).bind(addressLabel,archiveStayId,familyId,memberId,familyId).run();
-  return json({ok:true},200,{'cache-control':'no-store'});
+  `).bind(addressLabel,archiveStayId,familyId,addressLabel,memberId,familyId).run();
+  // Persist a corrected location name into the journal too, including searchable evidence.
+  const stay=await ctx.env.DB.prepare(`SELECT local_date FROM location_history_stays WHERE id=? AND family_id=? AND address_label=?
+    AND EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.family_id=? AND m.active=1)
+    AND EXISTS(SELECT 1 FROM location_devices d WHERE d.family_id=location_history_stays.family_id AND d.member_id=location_history_stays.member_id AND d.enabled=1 AND d.sharing_enabled=1 AND d.revoked_at IS NULL)`)
+    .bind(archiveStayId,familyId,addressLabel,memberId,familyId).first<{local_date:string}>();
+  if(!stay)return fail(404,'STAY_NOT_AVAILABLE','位置名を保存できる滞在記録がありません。共有状態を確認してください。');
+  await repairFamilyDailyJournal(ctx.env.DB,familyId,stay.local_date);
+  return json({ok:true,updated:Boolean(updated.meta.changes)},200,{'cache-control':'no-store'});
 }
