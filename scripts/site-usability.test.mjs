@@ -48,9 +48,9 @@ test('shopping edit keeps early input and failed saves, blocks duplicate saves a
    allow=true;assert.equal(click(),true);
    const other=w.document.querySelector('form:not(#shoppingEditForm)'),otherSubmit=new w.Event('submit',{bubbles:true,cancelable:true});other.dispatchEvent(otherSubmit);assert.equal(otherSubmit.defaultPrevented,true);
    const settle=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
-   finish({ok:false,json:async()=>({ok:false,error:'fixture failure'})});await settle();assert.equal(memo.disabled,false);assert.equal(memo.value,'early fixture draft');assert.equal(unload(),true);
-   submit();finish({ok:true,json:async()=>{throw Error('expired session HTML');}});await settle();assert.equal(memo.disabled,false);assert.equal(unload(),true);assert.equal(redirect,'');
-   submit();finish({ok:true,json:async()=>({ok:true,redirect:'/app/tasks.php#shopping-checklist'})});await settle();assert.equal(unload(),false);assert.equal(redirect,'/app/tasks.php#shopping-checklist');
+   finish({ok:false,status:400,headers:{get:()=> 'application/json'},json:async()=>({ok:false,error:'fixture failure'})});await settle();assert.equal(memo.disabled,false);assert.equal(memo.value,'early fixture draft');assert.equal(unload(),true);
+   submit();finish({ok:true,status:200,headers:{get:()=> 'text/html'},json:async()=>{throw Error('expired session HTML');}});await settle();assert.equal(memo.disabled,false);assert.equal(unload(),true);assert.equal(redirect,'');
+   submit();finish({ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>({ok:true,redirect:'/app/tasks.php#shopping-checklist'})});await settle();assert.equal(unload(),false);assert.equal(redirect,'/app/tasks.php#shopping-checklist');
  }finally{await w.happyDOM.close();}
 });
 test('shopping edit does not save the item if optional category registration fails',async()=>{
