@@ -79,7 +79,18 @@ const boot=async()=>{
  for(const g of itemSource.querySelectorAll(':scope>.belongings-category-group')){g.dataset.goodsKind='item';zero.before(g);}
  for(const [i,kind] of KINDS.entries()){
   for(const category of data[i].categories||[])ensureGroup(kind,category);
-  ensureGroup(kind,U);
+  const unclassifiedGroup=ensureGroup(kind,U);unclassifiedGroup.dataset.category=U;
+  // Normalize legacy NULL/empty/whitespace categories and merge them into one
+  // visible Unclassified group so they cannot create a blank category header.
+  for(const g of [...groups(kind)]){
+   if(g===unclassifiedGroup||name(g)!==U)continue;
+   for(const row of rows(g)){
+    row.dataset.category=U;
+    if(kind==='item')unclassifiedGroup.querySelector('.belongings-composer')?.before(row);
+    else unclassifiedGroup.insertBefore(row,unclassifiedGroup.querySelector(':scope>.shopping-category-footer'));
+   }
+   g.remove();
+  }
   const all=groups(kind),byName=new Map(all.map(g=>[key(name(g)),g]));
   for(const category of data[i].order||[]){const g=byName.get(key(category));if(g){zero.before(g);byName.delete(key(category));}}
   for(const g of byName.values())zero.before(g);
