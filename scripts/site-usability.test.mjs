@@ -31,10 +31,10 @@ test('shopping edit form pins POST route and archived empty categories remain re
 });
 test('blank and whitespace category names normalize to Unclassified and merge into its group',async()=>{
  const controller=fs.readFileSync('public/assets/goods-category-controller.js','utf8');
- assert.match(controller,/const name=g=>\\{const value=String\\(g\\?\\.dataset\\?\\.category\\?\\?'\\'\\)\\.trim\\(\\);return value\\|\\|U;\\};/);
- assert.match(controller,/const unclassifiedGroup=ensureGroup\\(kind,U\\);unclassifiedGroup\\.dataset\\.category=U;/);
- assert.match(controller,/row\\.dataset\\.category=U;/);
- assert.match(controller,/g\\.remove\\(\\);/);
+ assert.ok(controller.includes("const name=g=>{const value=String(g?.dataset?.category??'').trim();return value||U;}"));
+ assert.ok(controller.includes("const unclassifiedGroup=ensureGroup(kind,U);unclassifiedGroup.dataset.category=U;"));
+ assert.ok(controller.includes("row.dataset.category=U;"));
+ assert.ok(controller.includes("g.remove();"));
 });
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
