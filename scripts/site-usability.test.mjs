@@ -26,8 +26,15 @@ test('shopping edit form pins POST route and archived empty categories remain re
  const groupLookupAt=controller.indexOf("const g=groups(kind).find(group=>key(name(group))===key(category))",renameAt);
  assert.ok(renameAt>=0&&groupLookupAt>renameAt,'rename is handled before resolving the backing group for archived empty-category rows');
  const shell=fs.readFileSync('src/app-shell.ts','utf8');
- assert.match(shell,/goods-category-controller\.js\?v=\$\{APP_VERSION\}-goods3/);
+ assert.match(shell,/goods-category-controller\.js\?v=\$\{APP_VERSION\}-goods4/);
  assert.match(shell,/checklist-category-drag\.js\?v=\$\{APP_VERSION\}-category-drag9/);
+});
+test('blank and whitespace category names normalize to Unclassified and merge into its group',async()=>{
+ const controller=fs.readFileSync('public/assets/goods-category-controller.js','utf8');
+ assert.match(controller,/const name=g=>\\{const value=String\\(g\\?\\.dataset\\?\\.category\\?\\?'\\'\\)\\.trim\\(\\);return value\\|\\|U;\\};/);
+ assert.match(controller,/const unclassifiedGroup=ensureGroup\\(kind,U\\);unclassifiedGroup\\.dataset\\.category=U;/);
+ assert.match(controller,/row\\.dataset\\.category=U;/);
+ assert.match(controller,/g\\.remove\\(\\);/);
 });
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
