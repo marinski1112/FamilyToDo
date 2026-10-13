@@ -29,6 +29,7 @@ test('meal navigation is compact and combines the current queue with adopt/rejec
  assert.match(queue,/action:"wish_reject"/);
  assert.match(queue,/action:"wishlist_add"/);
  assert.match(queue,/const links=r=>r\.recipe\?'':/);
+ assert.doesNotMatch(queue,/レシピ: \\$\\{esc\\(w\\.recipe_name\\)\\}/);
 });
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
