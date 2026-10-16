@@ -52,7 +52,7 @@ const boot=async()=>{
  const unclassified=document.createElement('button');unclassified.type='button';unclassified.className='zero-unclassified-add';host.append(unclassified);
  const groups=kind=>[...host.querySelectorAll(':scope>[data-goods-kind][data-category]')].filter(g=>g.dataset.goodsKind===kind&&!g.classList.contains('shopping-category-draft'));
  const rows=g=>[...g.querySelectorAll(':scope>.linked-shopping-row,:scope>.belongings-category-body>.belongings-category-row')];
- const name=g=>String(g.dataset.category||U);
+ const name=g=>{const value=String(g?.dataset?.category??'').trim();return value||U;};
  const setText=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value;};
  const openedEmpty=new WeakSet();
  const ensureGroup=(kind,category)=>{
@@ -79,7 +79,18 @@ const boot=async()=>{
  for(const g of itemSource.querySelectorAll(':scope>.belongings-category-group')){g.dataset.goodsKind='item';zero.before(g);}
  for(const [i,kind] of KINDS.entries()){
   for(const category of data[i].categories||[])ensureGroup(kind,category);
-  ensureGroup(kind,U);
+  const unclassifiedGroup=ensureGroup(kind,U);unclassifiedGroup.dataset.category=U;
+  // Normalize legacy NULL/empty/whitespace categories and merge them into one
+  // visible Unclassified group so they cannot create a blank category header.
+  for(const g of [...groups(kind)]){
+   if(g===unclassifiedGroup||name(g)!==U)continue;
+   for(const row of rows(g)){
+    row.dataset.category=U;
+    if(kind==='item')unclassifiedGroup.querySelector('.belongings-composer')?.before(row);
+    else unclassifiedGroup.insertBefore(row,unclassifiedGroup.querySelector(':scope>.shopping-category-footer'));
+   }
+   g.remove();
+  }
   const all=groups(kind),byName=new Map(all.map(g=>[key(name(g)),g]));
   for(const category of data[i].order||[]){const g=byName.get(key(category));if(g){zero.before(g);byName.delete(key(category));}}
   for(const g of byName.values())zero.before(g);
@@ -136,9 +147,13 @@ const boot=async()=>{
  const compose=async g=>{if(host.dataset.statusTab==='completed')host.dataset.statusTab='pending';openedEmpty.add(g);g.classList.remove('category-collapsed');refresh();for(let i=0;i<4&&!g.querySelector('.shopping-category-add-item');i++)await new Promise(requestAnimationFrame);g.querySelector('.shopping-category-add-item')?.click();openedEmpty.delete(g);refresh();g.scrollIntoView({block:'nearest'});};
  host.addEventListener('keydown',e=>{if(e.target.matches('[role=button][data-goods-action]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.click();}});
  host.addEventListener('click',e=>{
-  const action=e.target.closest('[data-goods-action]')||e.target.closest('.zero-category-cluster-row')?.querySelector('[data-goods-action="rename"]');if(!action)return;const row=action.closest('[data-goods-kind][data-category]');if(!row)return;const kind=row.dataset.goodsKind,category=row.dataset.category,g=groups(kind).find(g=>key(name(g))===key(category));if(!g)return;
+  const action=e.target.closest('[data-goods-action]')||e.target.closest('.zero-category-cluster-row')?.querySelector('[data-goods-action="rename"]');if(!action)return;const row=action.closest('[data-goods-kind][data-category]');if(!row)return;const kind=row.dataset.goodsKind,category=row.dataset.category;
+  // Archived empty-category labels live inside the "empty categories" details,
+  // so their nearest data-category row is not the hidden category group itself.
+  // Rename must not depend on resolving that backing group first.
+  if(action.dataset.goodsAction==='rename'&&category!==U&&!deleteMode){editName(kind,category,action);return;}
+  const g=groups(kind).find(group=>key(name(group))===key(category));if(!g)return;
   if(action.dataset.goodsAction==='toggle'){g.classList.toggle('category-collapsed');refresh();}
-  if(action.dataset.goodsAction==='rename'&&category!==U&&!deleteMode)editName(kind,category,action);
   if(action.dataset.goodsAction==='compose')void compose(g);
   if(action.dataset.goodsAction==='delete')void run(async()=>{const policy=await choosePolicy(category);if(policy){await request('/api/shopping-category-mutation',{action:'delete_many',kind,names:[category],item_policy:policy});reload();}});
  });

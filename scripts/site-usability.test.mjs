@@ -16,6 +16,26 @@ function shoppingEditContext(request){
  const ctx={request,member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(sql){return {bind(){return this;},async first(){return {id:7,family_id:1,created_by:1,name:'fixture item',category:null,quantity:'1',memo:'',due_date:null};},async all(){return {results:[]};},async run(){writes++;return {success:true};}};}}}};
  return {ctx,writes:()=>writes};
 }
+test('shopping edit form pins POST route and archived empty categories remain renameable',async()=>{
+ const {ctx}=shoppingEditContext(new Request('https://fixture.invalid/app/shopping_edit.php?id=7'));
+ const response=await shoppingEdit(new Request('https://fixture.invalid/app/shopping_edit.php?id=7'),ctx,7);
+ const html=await response.text();
+ assert.match(html,/<form method="post" action="\/app\/shopping_edit\.php\?id=7" id="shoppingEditForm">/);
+ const controller=fs.readFileSync('public/assets/goods-category-controller.js','utf8');
+ const renameAt=controller.indexOf("if(action.dataset.goodsAction==='rename'&&category!==U&&!deleteMode)");
+ const groupLookupAt=controller.indexOf("const g=groups(kind).find(group=>key(name(group))===key(category))",renameAt);
+ assert.ok(renameAt>=0&&groupLookupAt>renameAt,'rename is handled before resolving the backing group for archived empty-category rows');
+ const shell=fs.readFileSync('src/app-shell.ts','utf8');
+ assert.match(shell,/goods-category-controller\.js\?v=\$\{APP_VERSION\}-goods4/);
+ assert.match(shell,/checklist-category-drag\.js\?v=\$\{APP_VERSION\}-category-drag9/);
+});
+test('blank and whitespace category names normalize to Unclassified and merge into its group',async()=>{
+ const controller=fs.readFileSync('public/assets/goods-category-controller.js','utf8');
+ assert.ok(controller.includes("const name=g=>{const value=String(g?.dataset?.category??'').trim();return value||U;}"));
+ assert.ok(controller.includes("const unclassifiedGroup=ensureGroup(kind,U);unclassifiedGroup.dataset.category=U;"));
+ assert.ok(controller.includes("row.dataset.category=U;"));
+ assert.ok(controller.includes("g.remove();"));
+});
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
    const fields=new FormData();fields.set('csrf','synthetic');fields.set('name','fixture edited');fields.set('due_date','2026-10-09');
@@ -35,7 +55,9 @@ test('shopping edit keeps early input and failed saves, blocks duplicate saves a
  try{
    const request=new Request(w.location.href),{ctx}=shoppingEditContext(request);
    w.document.body.innerHTML=await (await shoppingEdit(request,ctx,7)).text();
-   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-2/);
+   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-3/);
+   const editScript=fs.readFileSync('public/assets/shopping-edit.js','utf8');
+   assert.match(editScript,/fetch\(form\.getAttribute\('action'\)\|\|location\.href/,'the named action button must not shadow the form POST URL');
    const form=w.document.getElementById('shoppingEditForm'),memo=form.querySelector('[name=memo]');memo.value='early fixture draft';
    let allow=false,calls=0,finish,redirect='';w.confirm=()=>allow;w.alert=()=>{};w.location.replace=url=>redirect=url;
    w.fetch=(url,options)=>{calls++;assert.equal(options.headers.accept,'application/json');assert.equal(options.body.get('memo'),'early fixture draft');assert.equal(options.body.get('action'),'save');return new Promise(resolve=>finish=resolve);};
