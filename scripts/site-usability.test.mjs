@@ -55,7 +55,7 @@ test('shopping edit keeps early input and failed saves, blocks duplicate saves a
  try{
    const request=new Request(w.location.href),{ctx}=shoppingEditContext(request);
    w.document.body.innerHTML=await (await shoppingEdit(request,ctx,7)).text();
-   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-2/);
+   assert.match(w.document.querySelector('script[src*="shopping-edit.js"]').src,/unsaved-edit-3/);
    const editScript=fs.readFileSync('public/assets/shopping-edit.js','utf8');
    assert.match(editScript,/fetch\(form\.getAttribute\('action'\)\|\|location\.href/,'the named action button must not shadow the form POST URL');
    const form=w.document.getElementById('shoppingEditForm'),memo=form.querySelector('[name=memo]');memo.value='early fixture draft';
