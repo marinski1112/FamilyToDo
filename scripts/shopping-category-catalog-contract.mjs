@@ -80,7 +80,7 @@ for(const pattern of [
   /categorySelect\.value==='__custom__'&&!category/,
   /const registerCategory=categorySelect\.value==='__custom__'&&categoryRegister\.checked/,
   /fetch\('\/api\/shopping-categories'/,
-  /fetch\(form\.action/,
+  /fetch\(form\.getAttribute\('action'\)\|\|location\.href/,
   /fields\.set\('action','save'\)/,
   /if\(!response\.ok\|\|!data\?\.ok\)/,
 ]) requireMatch(editJs,pattern,'Shopping edit browser helper must register only explicitly checked custom categories before preserving the existing form save');
