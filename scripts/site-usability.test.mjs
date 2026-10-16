@@ -16,6 +16,21 @@ function shoppingEditContext(request){
  const ctx={request,member:{id:1,family_id:1,role:'OWNER'},session:{csrfToken:'synthetic'},env:{DB:{prepare(sql){return {bind(){return this;},async first(){return {id:7,family_id:1,created_by:1,name:'fixture item',category:null,quantity:'1',memo:'',due_date:null};},async all(){return {results:[]};},async run(){writes++;return {success:true};}};}}}};
  return {ctx,writes:()=>writes};
 }
+test('meal navigation is compact and combines the current queue with adopt/reject wishlist actions',async()=>{
+ const page=fs.readFileSync('src/meal-page.ts','utf8');
+ const meals=fs.readFileSync('public/assets/meals.js','utf8');
+ const queue=fs.readFileSync('public/assets/meals-queue.js','utf8');
+ assert.match(page,/<a href="\/app\/meals\.php\?view=week">履歴<\/a>/);
+ assert.doesNotMatch(page,/<a href="\/app\/meals\.php\?view=wishlist">食べたい<\/a>/);
+ assert.match(meals,/else if\(view==='wishlist'\)wishlist\(\)/);
+ assert.match(queue,/id="queueWishForm"/);
+ assert.match(queue,/data-queue-wish-adopt/);
+ assert.match(queue,/data-queue-wish-reject/);
+ assert.match(queue,/action:"wish_reject"/);
+ assert.match(queue,/action:"wishlist_add"/);
+ assert.match(queue,/const links=r=>r\.recipe\?'':/);
+ assert.doesNotMatch(queue,/レシピ: \\$\\{esc\\(w\\.recipe_name\\)\\}/);
+});
 test('shopping edit JSON save confirms persistence; legacy redirect and CSRF boundary remain',async()=>{
  for(const accept of ['application/json','text/html']){
    const fields=new FormData();fields.set('csrf','synthetic');fields.set('name','fixture edited');fields.set('due_date','2026-10-09');
