@@ -22,7 +22,7 @@ test('meal navigation is compact and combines the current queue with adopt/rejec
  const queue=fs.readFileSync('public/assets/meals-queue.js','utf8');
  assert.match(page,/<a href="\/app\/meals\.php\?view=week">履歴<\/a>/);
  assert.doesNotMatch(page,/<a href="\/app\/meals\.php\?view=wishlist">食べたい<\/a>/);
- assert.match(meals,/else if\(view==='wishlist'\)queueUi\.show\(\)/);
+ assert.match(meals,/else if\(view==='wishlist'\)wishlist\(\)/);
  assert.match(queue,/id="queueWishForm"/);
  assert.match(queue,/data-queue-wish-adopt/);
  assert.match(queue,/data-queue-wish-reject/);
